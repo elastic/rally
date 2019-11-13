@@ -15,11 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import collections
 import csv
 import io
 import logging
-import statistics
 import sys
 
 import tabulate
@@ -38,14 +36,8 @@ FINAL_SCORE = r"""
             """
 
 
-def calculate_results(metrics_store, race):
-    calc = StatsCalculator(metrics_store, race.track, race.challenge)
-    return calc()
-
-
-def summarize(race, cfg):
-    results = race.results
-    SummaryReporter(results, cfg, race.revision).report()
+def summarize(results, cfg):
+    SummaryReporter(results, cfg).report()
 
 
 def compare(cfg):
@@ -99,341 +91,8 @@ def format_as_csv(headers, data):
         return out.getvalue()
 
 
-# helper function for encoding and decoding float keys so that the Elasticsearch metrics store can safe it.
-def encode_float_key(k):
-    # ensure that the key is indeed a float to unify the representation (e.g. 50 should be represented as "50_0")
-    return str(float(k)).replace(".", "_")
-
-
-def percentiles_for_sample_size(sample_size):
-    # if needed we can come up with something smarter but it'll do for now
-    if sample_size < 1:
-        raise AssertionError("Percentiles require at least one sample")
-    elif sample_size == 1:
-        return [100]
-    elif 1 < sample_size < 10:
-        return [50, 100]
-    elif 10 <= sample_size < 100:
-        return [50, 90, 100]
-    elif 100 <= sample_size < 1000:
-        return [50, 90, 99, 100]
-    elif 1000 <= sample_size < 10000:
-        return [50, 90, 99, 99.9, 100]
-    else:
-        return [50, 90, 99, 99.9, 99.99, 100]
-
-
-class StatsCalculator:
-    def __init__(self, store, track, challenge):
-        self.store = store
-        self.track = track
-        self.challenge = challenge
-        self.logger = logging.getLogger(__name__)
-
-    def __call__(self):
-        result = Stats()
-
-        for tasks in self.challenge.schedule:
-            for task in tasks:
-                if task.operation.include_in_reporting:
-                    t = task.name
-                    self.logger.debug("Gathering request metrics for [%s].", t)
-                    result.add_op_metrics(
-                        t,
-                        task.operation.name,
-                        self.summary_stats("throughput", t),
-                        self.single_latency(t),
-                        self.single_latency(t, metric_name="service_time"),
-                        self.error_rate(t),
-                        self.merge(
-                                self.track.meta_data,
-                                self.challenge.meta_data,
-                                task.operation.meta_data,
-                                task.meta_data)
-                    )
-        self.logger.debug("Gathering node startup time metrics.")
-        startup_times = self.store.get_raw("node_startup_time")
-        for startup_time in startup_times:
-            if "meta" in startup_time and "node_name" in startup_time["meta"]:
-                result.add_node_metrics(startup_time["meta"]["node_name"], startup_time["value"])
-            else:
-                self.logger.debug("Skipping incomplete startup time record [%s].", str(startup_time))
-
-        self.logger.debug("Gathering indexing metrics.")
-        result.total_time = self.sum("indexing_total_time")
-        result.total_time_per_shard = self.shard_stats("indexing_total_time")
-        result.indexing_throttle_time = self.sum("indexing_throttle_time")
-        result.indexing_throttle_time_per_shard = self.shard_stats("indexing_throttle_time")
-        result.merge_time = self.sum("merges_total_time")
-        result.merge_time_per_shard = self.shard_stats("merges_total_time")
-        result.merge_count = self.sum("merges_total_count")
-        result.refresh_time = self.sum("refresh_total_time")
-        result.refresh_time_per_shard = self.shard_stats("refresh_total_time")
-        result.refresh_count = self.sum("refresh_total_count")
-        result.flush_time = self.sum("flush_total_time")
-        result.flush_time_per_shard = self.shard_stats("flush_total_time")
-        result.flush_count = self.sum("flush_total_count")
-        result.merge_throttle_time = self.sum("merges_total_throttled_time")
-        result.merge_throttle_time_per_shard = self.shard_stats("merges_total_throttled_time")
-
-        self.logger.debug("Gathering ML max processing times.")
-        result.ml_processing_time = self.ml_processing_time_stats()
-
-        self.logger.debug("Gathering garbage collection metrics.")
-        result.young_gc_time = self.sum("node_total_young_gen_gc_time")
-        result.old_gc_time = self.sum("node_total_old_gen_gc_time")
-
-        self.logger.debug("Gathering segment memory metrics.")
-        result.memory_segments = self.median("segments_memory_in_bytes")
-        result.memory_doc_values = self.median("segments_doc_values_memory_in_bytes")
-        result.memory_terms = self.median("segments_terms_memory_in_bytes")
-        result.memory_norms = self.median("segments_norms_memory_in_bytes")
-        result.memory_points = self.median("segments_points_memory_in_bytes")
-        result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
-
-        # TODO: This cannot be done in the reporter anymore!
-        self.logger.debug("Gathering disk metrics.")
-        # This metric will only be written for the last iteration (as it can only be determined after the cluster has been shut down)
-        result.index_size = self.sum("final_index_size_bytes")
-
-        result.store_size = self.sum("store_size_in_bytes")
-        result.translog_size = self.sum("translog_size_in_bytes")
-        result.bytes_written = self.sum("disk_io_write_bytes")
-
-        # convert to int, fraction counts are senseless
-        median_segment_count = self.median("segments_count")
-        result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
-        return result
-
-    def merge(self, *args):
-        # This is similar to dict(collections.ChainMap(args)) except that we skip `None` in our implementation.
-        result = {}
-        for arg in args:
-            if arg is not None:
-                result.update(arg)
-        return result
-
-    def sum(self, metric_name):
-        values = self.store.get(metric_name)
-        if values:
-            return sum(values)
-        else:
-            return None
-
-    def one(self, metric_name):
-        return self.store.get_one(metric_name)
-
-    def summary_stats(self, metric_name, task_name):
-        mean = self.store.get_mean(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
-        median = self.store.get_median(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
-        unit = self.store.get_unit(metric_name, task=task_name)
-        stats = self.store.get_stats(metric_name, task=task_name, sample_type=metrics.SampleType.Normal)
-        if median and stats:
-            return {
-                "min": stats["min"],
-                "mean": mean,
-                "median": median,
-                "max": stats["max"],
-                "unit": unit
-            }
-        else:
-            return {
-                "min": None,
-                "median": None,
-                "max": None,
-                "unit": unit
-            }
-
-    def shard_stats(self, metric_name):
-        values = self.store.get_raw(metric_name, mapper=lambda doc: doc["per-shard"])
-        unit = self.store.get_unit(metric_name)
-        if values:
-            flat_values = [w for v in values for w in v]
-            return {
-                "min": min(flat_values),
-                "median": statistics.median(flat_values),
-                "max": max(flat_values),
-                "unit": unit
-            }
-        else:
-            return {}
-
-    def ml_processing_time_stats(self):
-        values = self.store.get_raw("ml_processing_time")
-        result = []
-        if values:
-            for v in values:
-                result.append({
-                    "job": v["job"],
-                    "min": v["min"],
-                    "mean": v["mean"],
-                    "median": v["median"],
-                    "max": v["max"],
-                    "unit": v["unit"]
-                })
-        return result
-
-    def error_rate(self, task_name):
-        return self.store.get_error_rate(task=task_name, sample_type=metrics.SampleType.Normal)
-
-    def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
-        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
-
-    def single_latency(self, task, metric_name="latency"):
-        sample_type = metrics.SampleType.Normal
-        sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type)
-        if sample_size > 0:
-            percentiles = self.store.get_percentiles(metric_name,
-                                                     task=task,
-                                                     sample_type=sample_type,
-                                                     percentiles=percentiles_for_sample_size(sample_size))
-            mean = self.store.get_mean(metric_name,
-                                       task=task,
-                                       sample_type=sample_type)
-            stats = collections.OrderedDict()
-            for k, v in percentiles.items():
-                # safely encode so we don't have any dots in field names
-                stats[encode_float_key(k)] = v
-            stats["mean"] = mean
-            return stats
-        else:
-            return {}
-
-
-class Stats:
-    def __init__(self, d=None):
-        self.op_metrics = self.v(d, "op_metrics", default=[])
-        self.node_metrics = self.v(d, "node_metrics", default=[])
-        self.total_time = self.v(d, "total_time")
-        self.total_time_per_shard = self.v(d, "total_time_per_shard", default={})
-        self.indexing_throttle_time = self.v(d, "indexing_throttle_time")
-        self.indexing_throttle_time_per_shard = self.v(d, "indexing_throttle_time_per_shard", default={})
-        self.merge_time = self.v(d, "merge_time")
-        self.merge_time_per_shard = self.v(d, "merge_time_per_shard", default={})
-        self.merge_count = self.v(d, "merge_count")
-        self.refresh_time = self.v(d, "refresh_time")
-        self.refresh_time_per_shard = self.v(d, "refresh_time_per_shard", default={})
-        self.refresh_count = self.v(d, "refresh_count")
-        self.flush_time = self.v(d, "flush_time")
-        self.flush_time_per_shard = self.v(d, "flush_time_per_shard", default={})
-        self.flush_count = self.v(d, "flush_count")
-        self.merge_throttle_time = self.v(d, "merge_throttle_time")
-        self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard", default={})
-        self.ml_processing_time = self.v(d, "ml_processing_time", default=[])
-
-        self.young_gc_time = self.v(d, "young_gc_time")
-        self.old_gc_time = self.v(d, "old_gc_time")
-
-        self.memory_segments = self.v(d, "memory_segments")
-        self.memory_doc_values = self.v(d, "memory_doc_values")
-        self.memory_terms = self.v(d, "memory_terms")
-        self.memory_norms = self.v(d, "memory_norms")
-        self.memory_points = self.v(d, "memory_points")
-        self.memory_stored_fields = self.v(d, "memory_stored_fields")
-
-        self.index_size = self.v(d, "index_size")
-        self.store_size = self.v(d, "store_size")
-        self.translog_size = self.v(d, "translog_size")
-        self.bytes_written = self.v(d, "bytes_written")
-
-        self.segment_count = self.v(d, "segment_count")
-
-    def as_dict(self):
-        return self.__dict__
-
-    def as_flat_list(self):
-        def op_metrics(op_item, key, single_value=False):
-            doc = {
-                "task": op_item["task"],
-                "operation": op_item["operation"],
-                "name": key
-            }
-            if single_value:
-                doc["value"] = {"single":  op_item[key]}
-            else:
-                doc["value"] = op_item[key]
-            if "meta" in op_item:
-                doc["meta"] = op_item["meta"]
-            return doc
-
-        all_results = []
-        for metric, value in self.as_dict().items():
-            if metric == "op_metrics":
-                for item in value:
-                    if "throughput" in item:
-                        all_results.append(op_metrics(item, "throughput"))
-                    if "latency" in item:
-                        all_results.append(op_metrics(item, "latency"))
-                    if "service_time" in item:
-                        all_results.append(op_metrics(item, "service_time"))
-                    if "error_rate" in item:
-                        all_results.append(op_metrics(item, "error_rate", single_value=True))
-            elif metric == "ml_processing_time":
-                for item in value:
-                    all_results.append({
-                        "job": item["job"],
-                        "name": "ml_processing_time",
-                        "value": {
-                            "min": item["min"],
-                            "mean": item["mean"],
-                            "median": item["median"],
-                            "max": item["max"]
-                        }
-                    })
-            elif metric == "node_metrics":
-                for item in value:
-                    if "startup_time" in item:
-                        all_results.append({"node": item["node"], "name": "startup_time", "value": {"single": item["startup_time"]}})
-            elif metric.endswith("_time_per_shard"):
-                if value:
-                    all_results.append({"name": metric, "value": value})
-            elif value is not None:
-                result = {
-                    "name": metric,
-                    "value": {
-                        "single": value
-                    }
-                }
-                all_results.append(result)
-        # sorting is just necessary to have a stable order for tests. As we just have a small number of metrics, the overhead is neglible.
-        return sorted(all_results, key=lambda m: m["name"])
-
-    def v(self, d, k, default=None):
-        return d.get(k, default) if d else default
-
-    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate, meta):
-        doc = {
-            "task": task,
-            "operation": operation,
-            "throughput": throughput,
-            "latency": latency,
-            "service_time": service_time,
-            "error_rate": error_rate,
-        }
-        if meta:
-            doc["meta"] = meta
-        self.op_metrics.append(doc)
-
-    def add_node_metrics(self, node, startup_time):
-        self.node_metrics.append({
-            "node": node,
-            "startup_time": startup_time
-        })
-
-    def tasks(self):
-        # ensure we can read race.json files before Rally 0.8.0
-        return [v.get("task", v["operation"]) for v in self.op_metrics]
-
-    def metrics(self, task):
-        # ensure we can read race.json files before Rally 0.8.0
-        for r in self.op_metrics:
-            if r.get("task", r["operation"]) == task:
-                return r
-        return None
-
-
 class SummaryReporter:
-    def __init__(self, results, config, revision):
+    def __init__(self, results, config):
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
@@ -441,8 +100,6 @@ class SummaryReporter:
         self.report_all_values = reporting_values == "all"
         self.report_all_percentile_values = reporting_values == "all-percentiles"
         self.cwd = config.opts("node", "rally.cwd")
-
-        self.revision = revision
 
     def report(self):
         print_header(FINAL_SCORE)
@@ -508,8 +165,9 @@ class SummaryReporter:
     def report_percentiles(self, name, task, value):
         lines = []
         if value:
-            for percentile in percentiles_for_sample_size(sys.maxsize):
-                a_line = self.line("%sth percentile %s" % (percentile, name), task, value.get(encode_float_key(percentile)), "ms",
+            for percentile in metrics.percentiles_for_sample_size(sys.maxsize):
+                percentile_value = value.get(metrics.encode_float_key(percentile))
+                a_line = self.line("%sth percentile %s" % (percentile, name), task, percentile_value, "ms",
                                    force=self.report_all_percentile_values)
                 self.append_non_empty(lines, a_line)
         return lines
@@ -578,8 +236,6 @@ class SummaryReporter:
         return self.join(
             self.line("Store size", "", stats.store_size, "GB", convert.bytes_to_gb),
             self.line("Translog size", "", stats.translog_size, "GB", convert.bytes_to_gb),
-            self.line("Index size", "", stats.index_size, "GB", convert.bytes_to_gb),
-            self.line("Total written", "", stats.bytes_written, "GB", convert.bytes_to_gb)
         )
 
     def report_segment_memory(self, stats):
@@ -625,8 +281,8 @@ class ComparisonReporter:
 
     def report(self, r1, r2):
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
-        baseline_stats = Stats(r1.results)
-        contender_stats = Stats(r2.results)
+        baseline_stats = metrics.GlobalStats(r1.results)
+        contender_stats = metrics.GlobalStats(r2.results)
 
         print_internal("")
         print_internal("Comparing baseline")
@@ -706,9 +362,9 @@ class ComparisonReporter:
 
     def report_percentiles(self, name, task, baseline_values, contender_values):
         lines = []
-        for percentile in percentiles_for_sample_size(sys.maxsize):
-            baseline_value = baseline_values.get(encode_float_key(percentile))
-            contender_value = contender_values.get(encode_float_key(percentile))
+        for percentile in metrics.percentiles_for_sample_size(sys.maxsize):
+            baseline_value = baseline_values.get(metrics.encode_float_key(percentile))
+            contender_value = contender_values.get(metrics.encode_float_key(percentile))
             self.append_non_empty(lines, self.line("%sth percentile %s" % (percentile, name),
                                                    baseline_value, contender_value, task, "ms", treat_increase_as_improvement=False))
         return lines
@@ -846,10 +502,6 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
             self.line("Translog size", baseline_stats.translog_size, contender_stats.translog_size, "", "GB",
                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-            self.line("Index size", baseline_stats.index_size, contender_stats.index_size, "", "GB",
-                      treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-            self.line("Total written", baseline_stats.bytes_written, contender_stats.bytes_written, "", "GB",
-                      treat_increase_as_improvement=False, formatter=convert.bytes_to_gb)
         )
 
     def report_segment_memory(self, baseline_stats, contender_stats):

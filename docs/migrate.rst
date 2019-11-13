@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 1.4.0
 ------------------------
 
+Index size and Total Written are not included in the command line report
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Elasticsearch nodes are now managed independently of benchmark execution and thus all system metrics ("index size" and "total written") may be determined after the command line report has been written. The corresponding metrics (``final_index_size_bytes`` and ``disk_io_write_bytes``) are still written to the Elasticsearch metrics store if one is configured.
+
 Node details are omitted from race metadata
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

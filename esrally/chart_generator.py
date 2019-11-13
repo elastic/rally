@@ -353,13 +353,10 @@ class BarCharts:
                 {
                     "id": "1",
                     "enabled": True,
-                    "type": "median",
+                    "type": "sum",
                     "schema": "metric",
                     "params": {
                         "field": "value.single",
-                        "percents": [
-                            50
-                        ],
                         "customLabel": "[Bytes]"
                     }
                 },
@@ -936,7 +933,7 @@ class TimeSeriesCharts:
                         "metrics": [
                             {
                                 "id": str(uuid.uuid4()),
-                                "type": "avg",
+                                "type": "sum",
                                 "field": "value.single"
                             }
                         ],

@@ -114,12 +114,6 @@ Total Old Gen GC
 * **Definition**: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
 * **Corresponding metrics key**: ``node_total_old_gen_gc_time``
 
-Index size
-----------
-
-* **Definition**: Final resulting index size on the file system after all nodes have been shutdown at the end of the benchmark. It includes all files in the nodes' data directories (actual index files and translog).
-* **Corresponding metrics key**: ``final_index_size_bytes``
-
 Store size
 ----------
 
@@ -131,12 +125,6 @@ Translog size
 
 * **Definition**: The size in bytes of the translog as reported by the indices stats API.
 * **Corresponding metrics key**: ``translog_size_in_bytes``
-
-Total written
----------------
-
-* **Definition**: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
-* **Corresponding metrics key**: ``disk_io_write_bytes``
 
 Heap used for ``X``
 -------------------

@@ -91,8 +91,13 @@ class EsClient:
         else:
             self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
 
-    def index(self, index, doc_type, item):
-        self.bulk_index(index, doc_type, [{"_source": item}])
+    def index(self, index, doc_type, item, id=None):
+        doc = {
+            "_source": item
+        }
+        if id:
+            doc["_id"] = id
+        self.bulk_index(index, doc_type, [doc])
 
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
@@ -241,6 +246,16 @@ class MetaInfoScope(Enum):
     """
     Node level meta-information is valid for a single node (e.g. GC times)
     """
+
+
+def calculate_results(store, race):
+    calc = GlobalStatsCalculator(store, race.track, race.challenge)
+    return calc()
+
+
+def calculate_system_results(store, node_name):
+    calc = SystemStatsCalculator(store, node_name)
+    return calc()
 
 
 def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, meta_info=None):
@@ -678,21 +693,22 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None):
+    def get_one(self, name, sample_type=None, node_name=None):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
         :param name: The metric name to query.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param node_name The name of the node where this metric was gathered. Optional.
         :return: The corresponding value for the given metric name or None if there is no value.
         """
-        return self._first_or_none(self.get(name=name, sample_type=sample_type))
+        return self._first_or_none(self.get(name=name, sample_type=sample_type, node_name=node_name))
 
     @staticmethod
     def _first_or_none(values):
         return values[0] if values else None
 
-    def get(self, name, task=None, operation_type=None, sample_type=None):
+    def get(self, name, task=None, operation_type=None, sample_type=None, node_name=None):
         """
         Gets all raw values for the given metric name.
 
@@ -700,11 +716,12 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param node_name The name of the node where this metric was gathered. Optional.
         :return: A list of all values for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, lambda doc: doc["value"])
+        return self._get(name, task, operation_type, sample_type, node_name, lambda doc: doc["value"])
 
-    def get_raw(self, name, task=None, operation_type=None, sample_type=None, mapper=lambda doc: doc):
+    def get_raw(self, name, task=None, operation_type=None, sample_type=None, node_name=None, mapper=lambda doc: doc):
         """
         Gets all raw records for the given metric name.
 
@@ -712,10 +729,11 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param node_name The name of the node where this metric was gathered. Optional.
         :param mapper A record mapper. By default, the complete record is returned.
         :return: A list of all raw records for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, mapper)
+        return self._get(name, task, operation_type, sample_type, node_name, mapper)
 
     def get_unit(self, name, task=None):
         """
@@ -726,9 +744,9 @@ class MetricsStore:
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, task, None, None, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, None, None, None, lambda doc: doc["unit"]))
 
-    def _get(self, name, task, operation_type, sample_type, mapper):
+    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         raise NotImplementedError("abstract method")
 
     def get_count(self, name, task=None, operation_type=None, sample_type=None):
@@ -883,9 +901,9 @@ class EsMetricsStore(MetricsStore):
     def _add(self, doc):
         self._docs.append(doc)
 
-    def _get(self, name, task, operation_type, sample_type, mapper):
+    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type)
+            "query": self._query_by_name(name, task, operation_type, sample_type, node_name)
         }
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
         result = self._client.search(index=self._index, body=query)
@@ -894,7 +912,7 @@ class EsMetricsStore(MetricsStore):
 
     def get_error_rate(self, task, operation_type=None, sample_type=None):
         query = {
-            "query": self._query_by_name("service_time", task, operation_type, sample_type),
+            "query": self._query_by_name("service_time", task, operation_type, sample_type, None),
             "size": 0,
             "aggs": {
                 "error_rate": {
@@ -936,7 +954,7 @@ class EsMetricsStore(MetricsStore):
         https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-metrics-stats-aggregation.html
         """
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type),
+            "query": self._query_by_name(name, task, operation_type, sample_type, None),
             "size": 0,
             "aggs": {
                 "metric_stats": {
@@ -954,7 +972,7 @@ class EsMetricsStore(MetricsStore):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type),
+            "query": self._query_by_name(name, task, operation_type, sample_type, None),
             "size": 0,
             "aggs": {
                 "percentile_stats": {
@@ -978,7 +996,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return None
 
-    def _query_by_name(self, name, task, operation_type, sample_type):
+    def _query_by_name(self, name, task, operation_type, sample_type, node_name):
         q = {
             "bool": {
                 "filter": [
@@ -1012,6 +1030,12 @@ class EsMetricsStore(MetricsStore):
             q["bool"]["filter"].append({
                 "term": {
                     "sample-type": sample_type.name.lower()
+                }
+            })
+        if node_name:
+            q["bool"]["filter"].append({
+                "term": {
+                    "meta.node_name": node_name
                 }
             })
         return q
@@ -1121,13 +1145,14 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return None
 
-    def _get(self, name, task, operation_type, sample_type, mapper):
+    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         return [mapper(doc)
                 for doc in self.docs
                 if doc["name"] == name and
                 (task is None or doc["task"] == task) and
                 (operation_type is None or doc["operation-type"] == operation_type.name) and
-                (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+                (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
+                (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
                 ]
 
     def __str__(self):
@@ -1140,12 +1165,28 @@ def race_store(cfg):
     :param cfg: Config object. Mandatory.
     :return: A race store implementation.
     """
+    logger = logging.getLogger(__name__)
     if cfg.opts("reporting", "datastore.type") == "elasticsearch":
-        logging.getLogger(__name__).info("Creating ES race store")
-        return CompositeRaceStore(EsRaceStore(cfg), EsResultsStore(cfg), FileRaceStore(cfg))
+        logger.info("Creating ES race store")
+        return CompositeRaceStore(EsRaceStore(cfg), FileRaceStore(cfg))
     else:
-        logging.getLogger(__name__).info("Creating file race store")
+        logger.info("Creating file race store")
         return FileRaceStore(cfg)
+
+
+def results_store(cfg):
+    """
+    Creates a proper race store based on the current configuration.
+    :param cfg: Config object. Mandatory.
+    :return: A race store implementation.
+    """
+    logger = logging.getLogger(__name__)
+    if cfg.opts("reporting", "datastore.type") == "elasticsearch":
+        logger.info("Creating ES results store")
+        return EsResultsStore(cfg)
+    else:
+        logger.info("Creating no-op results store")
+        return NoopResultsStore()
 
 
 def list_races(cfg):
@@ -1188,9 +1229,14 @@ def create_race(cfg, track, challenge, track_revision=None):
 class Race:
     def __init__(self, rally_version, environment_name, race_id, race_timestamp, pipeline, user_tags, track,
                  track_params, challenge, car, car_params, plugin_params, track_revision=None, team_revision=None,
-                 distribution_version=None, distribution_flavor=None, revision=None, results=None):
+                 distribution_version=None, distribution_flavor=None, revision=None, results=None, meta_data=None):
         if results is None:
             results = {}
+        # this happens when the race is created initially
+        if meta_data is None:
+            meta_data = {}
+            meta_data.update(track.meta_data)
+            meta_data.update(challenge.meta_data)
         self.rally_version = rally_version
         self.environment_name = environment_name
         self.race_id = race_id
@@ -1209,6 +1255,7 @@ class Race:
         self.distribution_flavor = distribution_flavor
         self.revision = revision
         self.results = results
+        self.meta_data = meta_data
 
     @property
     def track_name(self):
@@ -1221,14 +1268,6 @@ class Race:
     @property
     def car_name(self):
         return "+".join(self.car) if isinstance(self.car, list) else self.car
-
-    @property
-    def meta_data(self):
-        meta = {}
-        meta.update(self.track.meta_data)
-        if self.challenge:
-            meta.update(self.challenge.meta_data)
-        return meta
 
     def add_results(self, results):
         self.results = results
@@ -1254,9 +1293,10 @@ class Race:
                 "distribution-version": self.distribution_version,
                 "distribution-flavor": self.distribution_flavor,
                 "team-revision": self.team_revision,
-            },
-            "results": self.results.as_dict()
+            }
         }
+        if self.results:
+            d["results"] = self.results.as_dict()
         if self.track_revision:
             d["track-revision"] = self.track_revision
         if not self.challenge.auto_generated:
@@ -1286,6 +1326,7 @@ class Race:
             "distribution-major-version": versions.major_version(self.distribution_version),
             "user-tags": self.user_tags,
             "track": self.track_name,
+            "challenge": self.challenge_name,
             "car": self.car_name,
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result
             "active": True
@@ -1294,8 +1335,6 @@ class Race:
             result_template["team-revision"] = self.team_revision
         if self.track_revision:
             result_template["track-revision"] = self.track_revision
-        if not self.challenge.auto_generated:
-            result_template["challenge"] = self.challenge_name
         if self.track_params:
             result_template["track-params"] = self.track_params
         if self.car_params:
@@ -1333,7 +1372,7 @@ class Race:
                     team_revision=cluster.get("team-revision"),
                     distribution_version=cluster.get("distribution-version"),
                     distribution_flavor=cluster.get("distribution-flavor"),
-                    revision=cluster.get("revision"), results=d["results"])
+                    revision=cluster.get("revision"), results=d.get("results"), meta_data=d.get("meta", {}))
 
 
 class RaceStore:
@@ -1367,9 +1406,8 @@ class CompositeRaceStore:
 
     It provides the same API as RaceStore. It delegates writes to all stores and all read operations only the Elasticsearch race store.
     """
-    def __init__(self, es_store, es_results_store, file_store):
+    def __init__(self, es_store, file_store):
         self.es_store = es_store
-        self.es_results_store = es_results_store
         self.file_store = file_store
 
     def find_by_race_id(self, race_id):
@@ -1378,7 +1416,6 @@ class CompositeRaceStore:
     def store_race(self, race):
         self.file_store.store_race(race)
         self.es_store.store_race(race)
-        self.es_results_store.store_results(race)
 
     def list(self):
         return self.es_store.list()
@@ -1445,7 +1482,7 @@ class EsRaceStore(RaceStore):
     def _store(self, doc):
         # always update the mapping to the latest version
         self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(index=self.index_name(), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc)
+        self.client.index(index=self.index_name(), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc, id=doc["race-id"])
 
     def index_name(self):
         return "%s%04d-%02d" % (EsRaceStore.INDEX_PREFIX, self.race_timestamp.year, self.race_timestamp.month)
@@ -1544,3 +1581,362 @@ class EsResultsStore:
 
     def index_name(self):
         return "%s%04d-%02d" % (EsResultsStore.INDEX_PREFIX, self.race_timestamp.year, self.race_timestamp.month)
+
+
+class NoopResultsStore:
+    """
+    Does not store any results separately as these are stored as part of the race on the file system.
+    """
+    def store_results(self, race):
+        pass
+
+
+# helper function for encoding and decoding float keys so that the Elasticsearch metrics store can save them.
+def encode_float_key(k):
+    # ensure that the key is indeed a float to unify the representation (e.g. 50 should be represented as "50_0")
+    return str(float(k)).replace(".", "_")
+
+
+def percentiles_for_sample_size(sample_size):
+    # if needed we can come up with something smarter but it'll do for now
+    if sample_size < 1:
+        raise AssertionError("Percentiles require at least one sample")
+    elif sample_size == 1:
+        return [100]
+    elif 1 < sample_size < 10:
+        return [50, 100]
+    elif 10 <= sample_size < 100:
+        return [50, 90, 100]
+    elif 100 <= sample_size < 1000:
+        return [50, 90, 99, 100]
+    elif 1000 <= sample_size < 10000:
+        return [50, 90, 99, 99.9, 100]
+    else:
+        return [50, 90, 99, 99.9, 99.99, 100]
+
+
+class GlobalStatsCalculator:
+    def __init__(self, store, track, challenge):
+        self.store = store
+        self.logger = logging.getLogger(__name__)
+        self.track = track
+        self.challenge = challenge
+
+    def __call__(self):
+        result = GlobalStats()
+
+        for tasks in self.challenge.schedule:
+            for task in tasks:
+                if task.operation.include_in_reporting:
+                    t = task.name
+                    self.logger.debug("Gathering request metrics for [%s].", t)
+                    result.add_op_metrics(
+                        t,
+                        task.operation.name,
+                        self.summary_stats("throughput", t),
+                        self.single_latency(t),
+                        self.single_latency(t, metric_name="service_time"),
+                        self.error_rate(t),
+                        self.merge(
+                            self.track.meta_data,
+                            self.challenge.meta_data,
+                            task.operation.meta_data,
+                            task.meta_data)
+                    )
+        self.logger.debug("Gathering indexing metrics.")
+        result.total_time = self.sum("indexing_total_time")
+        result.total_time_per_shard = self.shard_stats("indexing_total_time")
+        result.indexing_throttle_time = self.sum("indexing_throttle_time")
+        result.indexing_throttle_time_per_shard = self.shard_stats("indexing_throttle_time")
+        result.merge_time = self.sum("merges_total_time")
+        result.merge_time_per_shard = self.shard_stats("merges_total_time")
+        result.merge_count = self.sum("merges_total_count")
+        result.refresh_time = self.sum("refresh_total_time")
+        result.refresh_time_per_shard = self.shard_stats("refresh_total_time")
+        result.refresh_count = self.sum("refresh_total_count")
+        result.flush_time = self.sum("flush_total_time")
+        result.flush_time_per_shard = self.shard_stats("flush_total_time")
+        result.flush_count = self.sum("flush_total_count")
+        result.merge_throttle_time = self.sum("merges_total_throttled_time")
+        result.merge_throttle_time_per_shard = self.shard_stats("merges_total_throttled_time")
+
+        self.logger.debug("Gathering ML max processing times.")
+        result.ml_processing_time = self.ml_processing_time_stats()
+
+        self.logger.debug("Gathering garbage collection metrics.")
+        result.young_gc_time = self.sum("node_total_young_gen_gc_time")
+        result.old_gc_time = self.sum("node_total_old_gen_gc_time")
+
+        self.logger.debug("Gathering segment memory metrics.")
+        result.memory_segments = self.median("segments_memory_in_bytes")
+        result.memory_doc_values = self.median("segments_doc_values_memory_in_bytes")
+        result.memory_terms = self.median("segments_terms_memory_in_bytes")
+        result.memory_norms = self.median("segments_norms_memory_in_bytes")
+        result.memory_points = self.median("segments_points_memory_in_bytes")
+        result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
+        result.store_size = self.sum("store_size_in_bytes")
+        result.translog_size = self.sum("translog_size_in_bytes")
+
+        # convert to int, fraction counts are senseless
+        median_segment_count = self.median("segments_count")
+        result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
+        return result
+
+    def merge(self, *args):
+        # This is similar to dict(collections.ChainMap(args)) except that we skip `None` in our implementation.
+        result = {}
+        for arg in args:
+            if arg is not None:
+                result.update(arg)
+        return result
+
+    def sum(self, metric_name):
+        values = self.store.get(metric_name)
+        if values:
+            return sum(values)
+        else:
+            return None
+
+    def one(self, metric_name):
+        return self.store.get_one(metric_name)
+
+    def summary_stats(self, metric_name, task_name):
+        mean = self.store.get_mean(metric_name, task=task_name, sample_type=SampleType.Normal)
+        median = self.store.get_median(metric_name, task=task_name, sample_type=SampleType.Normal)
+        unit = self.store.get_unit(metric_name, task=task_name)
+        stats = self.store.get_stats(metric_name, task=task_name, sample_type=SampleType.Normal)
+        if median and stats:
+            return {
+                "min": stats["min"],
+                "mean": mean,
+                "median": median,
+                "max": stats["max"],
+                "unit": unit
+            }
+        else:
+            return {
+                "min": None,
+                "median": None,
+                "max": None,
+                "unit": unit
+            }
+
+    def shard_stats(self, metric_name):
+        values = self.store.get_raw(metric_name, mapper=lambda doc: doc["per-shard"])
+        unit = self.store.get_unit(metric_name)
+        if values:
+            flat_values = [w for v in values for w in v]
+            return {
+                "min": min(flat_values),
+                "median": statistics.median(flat_values),
+                "max": max(flat_values),
+                "unit": unit
+            }
+        else:
+            return {}
+
+    def ml_processing_time_stats(self):
+        values = self.store.get_raw("ml_processing_time")
+        result = []
+        if values:
+            for v in values:
+                result.append({
+                    "job": v["job"],
+                    "min": v["min"],
+                    "mean": v["mean"],
+                    "median": v["median"],
+                    "max": v["max"],
+                    "unit": v["unit"]
+                })
+        return result
+
+    def error_rate(self, task_name):
+        return self.store.get_error_rate(task=task_name, sample_type=SampleType.Normal)
+
+    def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
+        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
+
+    def single_latency(self, task, metric_name="latency"):
+        sample_type = SampleType.Normal
+        sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type)
+        if sample_size > 0:
+            percentiles = self.store.get_percentiles(metric_name,
+                                                     task=task,
+                                                     sample_type=sample_type,
+                                                     percentiles=percentiles_for_sample_size(sample_size))
+            mean = self.store.get_mean(metric_name,
+                                       task=task,
+                                       sample_type=sample_type)
+            stats = collections.OrderedDict()
+            for k, v in percentiles.items():
+                # safely encode so we don't have any dots in field names
+                stats[encode_float_key(k)] = v
+            stats["mean"] = mean
+            return stats
+        else:
+            return {}
+
+
+class GlobalStats:
+    def __init__(self, d=None):
+        self.op_metrics = self.v(d, "op_metrics", default=[])
+        self.total_time = self.v(d, "total_time")
+        self.total_time_per_shard = self.v(d, "total_time_per_shard", default={})
+        self.indexing_throttle_time = self.v(d, "indexing_throttle_time")
+        self.indexing_throttle_time_per_shard = self.v(d, "indexing_throttle_time_per_shard", default={})
+        self.merge_time = self.v(d, "merge_time")
+        self.merge_time_per_shard = self.v(d, "merge_time_per_shard", default={})
+        self.merge_count = self.v(d, "merge_count")
+        self.refresh_time = self.v(d, "refresh_time")
+        self.refresh_time_per_shard = self.v(d, "refresh_time_per_shard", default={})
+        self.refresh_count = self.v(d, "refresh_count")
+        self.flush_time = self.v(d, "flush_time")
+        self.flush_time_per_shard = self.v(d, "flush_time_per_shard", default={})
+        self.flush_count = self.v(d, "flush_count")
+        self.merge_throttle_time = self.v(d, "merge_throttle_time")
+        self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard", default={})
+        self.ml_processing_time = self.v(d, "ml_processing_time", default=[])
+
+        self.young_gc_time = self.v(d, "young_gc_time")
+        self.old_gc_time = self.v(d, "old_gc_time")
+
+        self.memory_segments = self.v(d, "memory_segments")
+        self.memory_doc_values = self.v(d, "memory_doc_values")
+        self.memory_terms = self.v(d, "memory_terms")
+        self.memory_norms = self.v(d, "memory_norms")
+        self.memory_points = self.v(d, "memory_points")
+        self.memory_stored_fields = self.v(d, "memory_stored_fields")
+        self.store_size = self.v(d, "store_size")
+        self.translog_size = self.v(d, "translog_size")
+        self.segment_count = self.v(d, "segment_count")
+
+    def as_dict(self):
+        return self.__dict__
+
+    def as_flat_list(self):
+        def op_metrics(op_item, key, single_value=False):
+            doc = {
+                "task": op_item["task"],
+                "operation": op_item["operation"],
+                "name": key
+            }
+            if single_value:
+                doc["value"] = {"single":  op_item[key]}
+            else:
+                doc["value"] = op_item[key]
+            if "meta" in op_item:
+                doc["meta"] = op_item["meta"]
+            return doc
+
+        all_results = []
+        for metric, value in self.as_dict().items():
+            if metric == "op_metrics":
+                for item in value:
+                    if "throughput" in item:
+                        all_results.append(op_metrics(item, "throughput"))
+                    if "latency" in item:
+                        all_results.append(op_metrics(item, "latency"))
+                    if "service_time" in item:
+                        all_results.append(op_metrics(item, "service_time"))
+                    if "error_rate" in item:
+                        all_results.append(op_metrics(item, "error_rate", single_value=True))
+            elif metric == "ml_processing_time":
+                for item in value:
+                    all_results.append({
+                        "job": item["job"],
+                        "name": "ml_processing_time",
+                        "value": {
+                            "min": item["min"],
+                            "mean": item["mean"],
+                            "median": item["median"],
+                            "max": item["max"]
+                        }
+                    })
+            elif metric.endswith("_time_per_shard"):
+                if value:
+                    all_results.append({"name": metric, "value": value})
+            elif value is not None:
+                result = {
+                    "name": metric,
+                    "value": {
+                        "single": value
+                    }
+                }
+                all_results.append(result)
+        # sorting is just necessary to have a stable order for tests. As we just have a small number of metrics, the overhead is neglible.
+        return sorted(all_results, key=lambda m: m["name"])
+
+    def v(self, d, k, default=None):
+        return d.get(k, default) if d else default
+
+    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate, meta):
+        doc = {
+            "task": task,
+            "operation": operation,
+            "throughput": throughput,
+            "latency": latency,
+            "service_time": service_time,
+            "error_rate": error_rate,
+        }
+        if meta:
+            doc["meta"] = meta
+        self.op_metrics.append(doc)
+
+    def tasks(self):
+        # ensure we can read race.json files before Rally 0.8.0
+        return [v.get("task", v["operation"]) for v in self.op_metrics]
+
+    def metrics(self, task):
+        # ensure we can read race.json files before Rally 0.8.0
+        for r in self.op_metrics:
+            if r.get("task", r["operation"]) == task:
+                return r
+        return None
+
+
+class SystemStatsCalculator:
+    def __init__(self, store, node_name):
+        self.store = store
+        self.logger = logging.getLogger(__name__)
+        self.node_name = node_name
+
+    def __call__(self):
+        result = SystemStats()
+        self.logger.debug("Calculating system metrics for [%s]", self.node_name)
+        self.logger.debug("Gathering disk metrics.")
+        self.add(result, "final_index_size_bytes", "index_size")
+        self.add(result, "disk_io_write_bytes", "bytes_written")
+        self.logger.debug("Gathering node startup time metrics.")
+        self.add(result, "node_startup_time", "startup_time")
+        return result
+
+    def add(self, result, raw_metric_key, summary_metric_key):
+        metric_value = self.store.get_one(raw_metric_key, node_name=self.node_name)
+        if metric_value:
+            self.logger.debug("Adding record for [%s] with value [%s].", raw_metric_key, str(metric_value))
+            result.add_node_metrics(self.node_name, summary_metric_key, metric_value)
+        else:
+            self.logger.debug("Skipping incomplete [%s] record.", raw_metric_key)
+
+
+class SystemStats:
+    def __init__(self, d=None):
+        self.node_metrics = self.v(d, "node_metrics", default=[])
+
+    def v(self, d, k, default=None):
+        return d.get(k, default) if d else default
+
+    def add_node_metrics(self, node, name, value):
+        metric = {
+            "node": node,
+            "name": name,
+            "value": value
+        }
+        self.node_metrics.append(metric)
+
+    def as_flat_list(self):
+        all_results = []
+        for v in self.node_metrics:
+            all_results.append({"node": v["node"], "name": v["name"], "value": {"single": v["value"]}})
+        # Sort for a stable order in tests.
+        return sorted(all_results, key=lambda m: m["name"])
