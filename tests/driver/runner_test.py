@@ -1769,7 +1769,7 @@ class CreateMlDatafeedTests(TestCase):
         r(es, params)
 
         es.transport.perform_request.assert_called_once_with("PUT",
-                                                             "/_xpack/ml/datafeeds/" + datafeed_id,
+                                                             "/_xpack/ml/datafeeds/%s" % datafeed_id,
                                                              body=body,
                                                              params=params)
 
