@@ -21,6 +21,7 @@ import unittest.mock as mock
 from unittest import TestCase
 
 import elasticsearch
+import pytest
 
 from esrally import exceptions
 from esrally.driver import runner
@@ -1859,9 +1860,11 @@ class StartMlDatafeedTests(TestCase):
                                                            timeout=params["timeout"])
 
 
-class StopMlDatafeedTests(TestCase):
+class StopMlDatafeedTests:
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_stop_ml_datafeed(self, es):
+    @pytest.mark.parametrize("seed", range(20))
+    def test_stop_ml_datafeed(self, es, seed):
+        random.seed(seed)
         params = {
             "datafeed-id": "some-data-feed",
             "force": random.choice([False, True]),
@@ -1876,7 +1879,9 @@ class StopMlDatafeedTests(TestCase):
                                                           timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_stop_ml_datafeed_fallback(self, es):
+    @pytest.mark.parametrize("seed", range(20))
+    def test_stop_ml_datafeed_fallback(self, es, seed):
+        random.seed(seed)
         es.xpack.ml.stop_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
         params = {
             "datafeed-id": "some-data-feed",
@@ -2015,9 +2020,11 @@ class OpenMlJobTests(TestCase):
                                                              params=params)
 
 
-class CloseMlJobTests(TestCase):
+class CloseMlJobTests:
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_close_ml_job(self, es):
+    @pytest.mark.parametrize("seed", range(20))
+    def test_close_ml_job(self, es, seed):
+        random.seed(seed)
         params = {
             "job-id": "an-ml-job",
             "force": random.choice([False, True]),
@@ -2030,7 +2037,9 @@ class CloseMlJobTests(TestCase):
         es.xpack.ml.close_job.assert_called_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_close_ml_job_fallback(self, es):
+    @pytest.mark.parametrize("seed", range(20))
+    def test_close_ml_job_fallback(self, es, seed):
+        random.seed(seed)
         es.xpack.ml.close_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
 
         params = {
