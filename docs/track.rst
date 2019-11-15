@@ -857,7 +857,7 @@ With the operation ``wait-for-recovery`` you can wait until an ongoing shard rec
 
 .. warning::
 
-    By default this operation will run unthrottled (like any other) but you should limit the number of calls by specifying the ``target-throughput`` property on the corresponding task::
+    By default this operation will run unthrottled (like any other) but you should limit the number of calls by specifying one of the ``target-throughput`` or ``target-interval`` properties on the corresponding task::
 
         {
           "operation": {
@@ -865,7 +865,7 @@ With the operation ``wait-for-recovery`` you can wait until an ongoing shard rec
             "completion-recheck-attempts": 2,
             "completion-recheck-wait-period": 5
           },
-          "target-throughput": 10
+          "target-interval": 10
         }
 
     In this example, Rally will check the progress of shard recovery every ten seconds (as specified by ``target-throughput``). When the index recovery API reports that there are no active recoveries, it will still check this twice (``completion-recheck-attempts``), waiting for five seconds in between those calls (``completion-recheck-wait-period``).
