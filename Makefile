@@ -32,6 +32,7 @@ prereq: make-requirements.txt
 	pyenv install --skip-existing $(PY35)
 	pyenv install --skip-existing $(PY36)
 	pyenv install --skip-existing $(PY37)
+	pyenv install --skip-existing $(PY38)
 	pyenv global system $(PY35) $(PY36) $(PY37) $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@awk -F'=' '{print $$2}' make-requirements.txt > .python-version
