@@ -195,7 +195,11 @@ class BenchmarkActor(actor.RallyActor):
         # cases (external pipeline and user did not specify the distribution version) where we need to derive it ourselves. For source
         # builds we always assume "master"
         if not msg.sources and not self.cfg.exists("mechanic", "distribution.version"):
-            distribution_version = mechanic.cluster_distribution_version(self.cfg)
+            import elasticsearch
+            try:
+                distribution_version = mechanic.cluster_distribution_version(self.cfg)
+            except elasticsearch.ConnectionError:
+                raise exceptions.SystemSetupError("Could not connect to cluster at specified address, please check your connection.")
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
         
