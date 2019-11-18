@@ -22,6 +22,7 @@ import logging.config
 import os
 import time
 
+from esrally import paths
 from esrally.utils import io
 
 
@@ -42,13 +43,6 @@ def log_config_path():
     return os.path.join(os.path.expanduser("~"), ".rally", "logging.json")
 
 
-def default_log_path():
-    """
-    :return: The absolute path to the directory that contains Rally's log file.
-    """
-    return os.path.join(os.path.expanduser("~"), ".rally", "logs")
-
-
 def remove_obsolete_default_log_config():
     """
     Log rotation is problematic because Rally uses multiple processes and there is a lurking race condition when
@@ -61,7 +55,7 @@ def remove_obsolete_default_log_config():
     if io.exists(log_config):
         source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging_1_0_0.json"))
         with open(source_path, "r", encoding="UTF-8") as src:
-            contents = src.read().replace("${LOG_PATH}", default_log_path())
+            contents = src.read().replace("${LOG_PATH}", paths.logs())
             source_hash = hashlib.sha512(contents.encode()).hexdigest()
         with open(log_config, "r", encoding="UTF-8") as target:
             target_hash = hashlib.sha512(target.read().encode()).hexdigest()
@@ -83,9 +77,9 @@ def install_default_log_config():
         source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
         with open(log_config, "w", encoding="UTF-8") as target:
             with open(source_path, "r", encoding="UTF-8") as src:
-                contents = src.read().replace("${LOG_PATH}", default_log_path())
+                contents = src.read().replace("${LOG_PATH}", paths.logs())
                 target.write(contents)
-    io.ensure_dir(default_log_path())
+    io.ensure_dir(paths.logs())
 
 
 def load_configuration():

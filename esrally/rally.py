@@ -420,11 +420,11 @@ def print_help_on_errors():
     heading = "Getting further help:"
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
-    console.println("* Check the log files in {} for errors.".format(log.default_log_path()))
+    console.println("* Check the log files in {} for errors.".format(paths.logs()))
     console.println("* Read the documentation at {}".format(console.format.link(doc_link())))
     console.println("* Ask a question on the forum at {}".format(console.format.link("https://discuss.elastic.co/c/elasticsearch/rally")))
     console.println("* Raise an issue at {} and include the log files in {}."
-                    .format(console.format.link("https://github.com/elastic/rally/issues"), log.default_log_path()))
+                    .format(console.format.link("https://github.com/elastic/rally/issues"), paths.logs()))
 
 
 def race(cfg):

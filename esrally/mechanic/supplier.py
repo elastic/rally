@@ -21,7 +21,7 @@ import os
 import re
 import urllib.error
 
-from esrally import exceptions, PROGRAM_NAME
+from esrally import exceptions, paths, PROGRAM_NAME
 from esrally.exceptions import BuildError, SystemSetupError
 from esrally.utils import git, io, process, net, jvm, convert, sysstats
 
@@ -29,7 +29,7 @@ from esrally.utils import git, io, process, net, jvm, convert, sysstats
 REVISION_PATTERN = r"(\w.*?):(.*)"
 
 
-def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=None):
+def create(cfg, sources, distribution, build, car, plugins=None):
     logger = logging.getLogger(__name__)
     if plugins is None:
         plugins = []
@@ -43,7 +43,7 @@ def create(cfg, sources, distribution, build, challenge_root_path, car, plugins=
     if build_needed:
         java_home = _java_home(car)
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        builder = Builder(es_src_dir, java_home, challenge_root_path)
+        builder = Builder(es_src_dir, java_home, paths.logs())
     else:
         builder = None
 

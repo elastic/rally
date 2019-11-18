@@ -4,6 +4,21 @@ Migration Guide
 Migrating to Rally 1.4.0
 ------------------------
 
+Build logs are stored in Rally's log directory
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you benchmark source builds of Elasticsearch, Rally has previously stored the build output log in a race-specific directory. With this release, Rally will store build logs in ``/home/user/.rally/logs/build.log``. We recommend to rotate logs with `logrotate <https://linux.die.net/man/8/logrotate>`_. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/build.log`` with the proper one::
+
+    /home/user/.rally/logs/build.log {
+            daily                   # rotate daily
+            rotate 7                # keep the last seven log files
+            maxage 14               # remove logs older than 14 days
+            compress                # compress old logs ...
+            delaycompress           # ... after moving them
+            missingok               # ignore missing log files
+            notifempty              # don't attempt to rotate empty ones
+    }
+
 Index size and Total Written are not included in the command line report
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

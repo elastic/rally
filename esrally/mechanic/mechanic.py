@@ -30,11 +30,9 @@ METRIC_FLUSH_INTERVAL_SECONDS = 30
 
 
 def download(cfg):
-    challenge_root_path = paths.race_root(cfg)
     car, plugins = load_team(cfg, external=False)
 
-    s = supplier.create(cfg, sources=False, distribution=True, build=False,
-                        challenge_root_path=challenge_root_path, car=car, plugins=plugins)
+    s = supplier.create(cfg, sources=False, distribution=True, build=False, car=car, plugins=plugins)
     binaries = s()
     console.println(json.dumps(binaries, indent=2), force=True)
 
@@ -506,15 +504,15 @@ def load_team(cfg, external):
 def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None, sources=False, build=False, distribution=False, external=False,
            docker=False):
     races_root = paths.races_root(cfg)
-    challenge_root_path = paths.race_root(cfg)
+    race_root_path = paths.race_root(cfg)
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
     car, plugins = load_team(cfg, external)
 
     if sources or distribution:
-        s = supplier.create(cfg, sources, distribution, build, challenge_root_path, car, plugins)
+        s = supplier.create(cfg, sources, distribution, build, car, plugins)
         p = []
         for node_id in node_ids:
-            p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, challenge_root_path, node_id))
+            p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, race_root_path, node_id))
         l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
     elif external:
         raise exceptions.RallyAssertionError("Externally provisioned clusters should not need to be managed by Rally's mechanic")
@@ -525,7 +523,7 @@ def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None
         s = lambda: None
         p = []
         for node_id in node_ids:
-            p.append(provisioner.docker_provisioner(cfg, car, cluster_settings, challenge_root_path, node_id))
+            p.append(provisioner.docker_provisioner(cfg, car, cluster_settings, race_root_path, node_id))
         l = launcher.DockerLauncher(cfg, metrics_store)
     else:
         # It is a programmer error (and not a user error) if this function is called with wrong parameters

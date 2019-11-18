@@ -135,6 +135,18 @@ The log file will not be rotated automatically as this is problematic due to Ral
             notifempty              # don't attempt to rotate empty ones
     }
 
+If you are benchmarking source builds of Elasticsearch, Rally will write the log output of the build to ``~/.rally/logs/build.log``. Similarly to the configuration for ``rally.log``, you can use the following ``logrotate`` configuration as a starting point::
+
+    /home/user/.rally/logs/build.log {
+            daily                   # rotate daily
+            rotate 7                # keep the last seven log files
+            maxage 14               # remove logs older than 14 days
+            compress                # compress old logs ...
+            delaycompress           # ... after moving them
+            missingok               # ignore missing log files
+            notifempty              # don't attempt to rotate empty ones
+    }
+
 Example
 ~~~~~~~
 
