@@ -26,6 +26,7 @@ from esrally import paths
 from esrally.utils import io
 
 
+# pylint: disable=unused-argument
 def configure_utc_formatter(*args, **kwargs):
     """
     Logging formatter that renders timestamps in UTC to ensure consistent

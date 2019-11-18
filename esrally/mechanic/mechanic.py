@@ -501,8 +501,8 @@ def load_team(cfg, external):
     return car, plugins
 
 
-def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None, sources=False, build=False, distribution=False, external=False,
-           docker=False):
+def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None, sources=False, build=False,
+           distribution=False, external=False, docker=False):
     races_root = paths.races_root(cfg)
     race_root_path = paths.race_root(cfg)
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
@@ -512,7 +512,8 @@ def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None
         s = supplier.create(cfg, sources, distribution, build, car, plugins)
         p = []
         for node_id in node_ids:
-            p.append(provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, race_root_path, node_id))
+            p.append(
+                provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, race_root_path, node_id))
         l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
     elif external:
         raise exceptions.RallyAssertionError("Externally provisioned clusters should not need to be managed by Rally's mechanic")
