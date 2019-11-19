@@ -392,7 +392,7 @@ class CreateSupplierTests(TestCase):
 
         car = team.Car("default", root_path=None, config_paths=[])
 
-        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", car=car)
+        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, car=car)
 
         self.assertEqual(1, len(composite_supplier.suppliers))
         self.assertIsInstance(composite_supplier.suppliers[0], supplier.ElasticsearchDistributionSupplier)
@@ -414,7 +414,7 @@ class CreateSupplierTests(TestCase):
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False, variables={"enabled": True})
 
         # --pipeline=from-sources-skip-build
-        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=False, challenge_root_path="/", car=car, plugins=[
+        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=False, car=car, plugins=[
             core_plugin,
             external_plugin
         ])
@@ -446,7 +446,7 @@ class CreateSupplierTests(TestCase):
 
         # --from-sources-skip-build --revision="community-plugin:current" (distribution version is missing!)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            supplier.create(cfg, sources=True, distribution=False, build=False, challenge_root_path="/", car=car, plugins=[
+            supplier.create(cfg, sources=True, distribution=False, build=False, car=car, plugins=[
                 core_plugin,
                 external_plugin
             ])
@@ -472,7 +472,7 @@ class CreateSupplierTests(TestCase):
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --revision="community-plugin:effab" --distribution-version="6.0.0"
-        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, challenge_root_path="/", car=car, plugins=[
+        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, car=car, plugins=[
             core_plugin,
             external_plugin
         ])
@@ -508,7 +508,7 @@ class CreateSupplierTests(TestCase):
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --revision="elasticsearch:abc,community-plugin:effab"
-        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=True, challenge_root_path="/", car=car, plugins=[
+        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=True, car=car, plugins=[
             core_plugin,
             external_plugin
         ])
