@@ -126,13 +126,20 @@ By default, Rally will log all output to ``~/.rally/logs/rally.log``.
 The log file will not be rotated automatically as this is problematic due to Rally's multi-process architecture. Setup an external tool like `logrotate <https://linux.die.net/man/8/logrotate>`_ to achieve that. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
 
     /home/user/.rally/logs/rally.log {
-            daily                   # rotate daily
-            rotate 7                # keep the last seven log files
-            maxage 14               # remove logs older than 14 days
-            compress                # compress old logs ...
-            delaycompress           # ... after moving them
-            missingok               # ignore missing log files
-            notifempty              # don't attempt to rotate empty ones
+            # rotate daily
+            daily
+            # keep the last seven log files
+            rotate 7
+            # remove logs older than 14 days
+            maxage 14
+            # compress old logs ...
+            compress
+            # ... after moving them
+            delaycompress
+            # ignore missing log files
+            missingok
+            # don't attempt to rotate empty ones
+            notifempty
     }
 
 Example
