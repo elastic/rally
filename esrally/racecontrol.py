@@ -195,8 +195,6 @@ class BenchmarkActor(actor.RallyActor):
         # builds we always assume "master"
         if not msg.sources and not self.cfg.exists("mechanic", "distribution.version"):
             distribution_version = mechanic.cluster_distribution_version(self.cfg)
-            if not distribution_version:
-                raise exceptions.SystemSetupError("A distribution version is required. Please specify it with --distribution-version.")
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
         

@@ -136,12 +136,7 @@ def cluster_distribution_version(cfg, client_factory=client.EsClientFactory):
     hosts = cfg.opts("client", "hosts").default
     client_options = cfg.opts("client", "options").default
     es = client_factory(hosts, client_options).create()
-    # noinspection PyBroadException
-    try:
-        return es.info()["version"]["number"]
-    except BaseException:
-        logging.getLogger(__name__).exception("Could not retrieve cluster distribution version")
-        return None
+    return es.info()["version"]["number"]
 
 
 def to_ip_port(hosts):
