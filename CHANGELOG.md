@@ -1,4 +1,4 @@
-### 1.3.0
+### 1.3.0 DUMMY COMMIT I WILL REMOVE IN A SUBSEQUENT COMMIT
 
 #### Enhancements
 
