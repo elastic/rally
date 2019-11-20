@@ -16,15 +16,16 @@ services:
     container_name: es01
     environment:
       - discovery.type=single-node
+      - http.port=19200
       - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     volumes:
       - esdata1:/usr/share/elasticsearch/data
     ports:
-      - 19200:9200
+      - 19200:19200
     networks:
       - esnet
     healthcheck:
-          test: curl -f http://localhost:9200
+          test: curl -f http://localhost:19200
           interval: 5s
           timeout: 2s
           retries: 10
