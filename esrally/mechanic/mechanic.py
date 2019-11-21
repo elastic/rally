@@ -17,6 +17,8 @@
 
 import json
 import logging
+import os
+import pickle
 import sys
 from collections import defaultdict
 
@@ -35,6 +37,131 @@ def download(cfg):
     s = supplier.create(cfg, sources=False, distribution=True, build=False, car=car, plugins=plugins)
     binaries = s()
     console.println(json.dumps(binaries, indent=2), force=True)
+
+
+def install(cfg):
+    root_path = paths.install_root(cfg)
+    car, plugins = load_team(cfg, external=False)
+
+    # A non-empty distribution-version is provided
+    distribution = bool(cfg.opts("mechanic", "distribution.version", mandatory=False))
+    sources = not distribution
+    build = not cfg.opts("mechanic", "skip.build")
+    build_type = cfg.opts("mechanic", "build.type")
+
+    # TODO: Hack to get started with node configuration but we should really turn this into a provisioner parameter
+    cfg.add(config.Scope.applicationOverride, "provisioning", "node.ip", cfg.opts("mechanic", "network.host"))
+    node_name = cfg.opts("mechanic", "node.name")
+    master_nodes = cfg.opts("mechanic", "master.nodes")
+    seed_hosts = cfg.opts("mechanic", "seed.hosts")
+
+    if build_type == "tar":
+        binary_supplier = supplier.create(cfg, sources, distribution, build, car, plugins)
+        p = provisioner.local(cfg=cfg, car=car, plugins=plugins, cluster_settings={}, all_node_ips=seed_hosts,
+                              all_node_names=master_nodes, target_root=root_path, node_name=node_name)
+        node_config = p.prepare(binary=binary_supplier())
+    elif build_type == "docker":
+        if len(plugins) > 0:
+            raise exceptions.SystemSetupError("You cannot specify any plugins for Docker clusters. Please remove "
+                                              "\"--elasticsearch-plugins\" and try again.")
+        p = provisioner.docker(cfg=cfg, car=car, cluster_settings={}, target_root=root_path, node_name=node_name)
+        # there is no binary for Docker that can be downloaded / built upfront
+        node_config = p.prepare(binary=None)
+    else:
+        raise exceptions.SystemSetupError("Unknown build type [{}]".format(build_type))
+
+    provisioner.save_node_configuration(root_path, node_config)
+    # TODO: Dump as JSON (property: "installation-id") -> makes it easier to understand the start command.
+    console.println(cfg.opts("system", "install.id"), force=True)
+
+
+# TODO: Have a convenience mode where "start" implicitly invokes "install" (when no installation id is given)
+def start(cfg):
+    # TODO: Store race here so we have all the metadata that we need later on (see also race control)
+    # TODO: Do we need status checks whether no node from this install id is currently running?
+    root_path = paths.install_root(cfg)
+    node_config = provisioner.load_node_configuration(root_path)
+
+    if node_config.build_type == "tar":
+        node_launcher = launcher.ProcessLauncher(cfg)
+    elif node_config.build_type == "docker":
+        node_launcher = launcher.DockerLauncher(cfg)
+    else:
+        raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
+    nodes = node_launcher.start([node_config])
+    # TODO: NOCOMMIT - this is only here to quickly kill the node in local tests
+    print(nodes[0].pid)
+    # TODO: Protect against the case where there is already a node meta-data file and abort the start?
+    # TODO: Using pickle feels a bit like a hack - can we have something more appropriate? The main reason is that
+    #       writing telemetry to JSON might be tricky
+    with open(os.path.join(root_path, "node"), "wb") as f:
+        pickle.dump(nodes, f)
+
+
+def stop(cfg):
+    root_path = paths.install_root(cfg)
+    node_config = provisioner.load_node_configuration(root_path)
+    node_file = os.path.join(root_path, "node")
+    with open(node_file, "rb") as f:
+        nodes = pickle.load(f)
+
+    cls = metrics.metrics_store_class(cfg)
+    metrics_store = cls(cfg)
+
+    race_store = metrics.race_store(cfg)
+    race_id = cfg.opts("system", "race.id")
+    try:
+        current_race = race_store.find_by_race_id(race_id)
+    except exceptions.NotFound:
+        logging.getLogger(__name__).info("Could not find race [%s] most likely because an in-memory metrics store is "
+                                         "used across multiple machines. Use an Elasticsearch metrics store to persist "
+                                         "results.", race_id)
+        # we are assuming here that we use an Elasticsearch metrics store... . If we use a file race store (across
+        # multiple machines) we will not be able to retrieve a race. In that case we open our in-memory metrics store
+        # with settings derived from startup parameters (because we can't store system metrics persistently anyway).
+        current_race = metrics.create_race(cfg, track=None, challenge=None)
+
+    metrics_store.open(
+        race_id=current_race.race_id,
+        race_timestamp=current_race.race_timestamp,
+        track_name=current_race.track_name,
+        challenge_name=current_race.challenge_name
+    )
+
+    if node_config.build_type == "tar":
+        node_launcher = launcher.ProcessLauncher(cfg)
+    elif node_config.build_type == "docker":
+        node_launcher = launcher.DockerLauncher(cfg)
+    else:
+        raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
+
+    node_launcher.stop(nodes, metrics_store)
+    metrics_store.flush(refresh=True)
+    for node in nodes:
+        results = metrics.calculate_system_results(metrics_store, node.node_name)
+        current_race.add_results(results)
+        metrics.results_store(cfg).store_results(current_race)
+
+    metrics_store.close()
+    os.remove(node_file)
+
+    # TODO: Do we need to define a new property for the install directory for Docker? Can we maybe solve this somehow else?
+
+    # 2019-11-21 09:19:16,628 -not-actor-/PID:16005 esrally.mechanic.provisioner ERROR Could not delete [/Users/daniel/.rally/benchmarks/races/c720e177-42e3-46d3-9a1e-110012dc6c22/rally-node-0/install/docker-compose.yml]. Skipping...
+    # Traceback (most recent call last):
+    # File "/Users/daniel/Projects/rally/esrally/mechanic/provisioner.py", line 138, in cleanup
+    # shutil.rmtree(install_dir)
+    # File "/usr/local/var/pyenv/versions/3.5.6/lib/python3.5/shutil.py", line 480, in rmtree
+    # _rmtree_safe_fd(fd, path, onerror)
+    # File "/usr/local/var/pyenv/versions/3.5.6/lib/python3.5/shutil.py", line 402, in _rmtree_safe_fd
+    # onerror(os.listdir, path, sys.exc_info())
+    # File "/usr/local/var/pyenv/versions/3.5.6/lib/python3.5/shutil.py", line 399, in _rmtree_safe_fd
+    # names = os.listdir(topfd)
+    # NotADirectoryError: [Errno 20] Not a directory: '/Users/daniel/.rally/benchmarks/races/c720e177-42e3-46d3-9a1e-110012dc6c22/rally-node-0/install/docker-compose.yml'
+
+    provisioner.cleanup(preserve=cfg.opts("mechanic", "preserve.install"),
+                        install_dir=node_config.binary_path,
+                        data_paths=node_config.data_paths)
 
 
 ##############################
@@ -503,18 +630,20 @@ def load_team(cfg, external):
 
 def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None, sources=False, build=False,
            distribution=False, external=False, docker=False):
-    races_root = paths.races_root(cfg)
     race_root_path = paths.race_root(cfg)
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
+    node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     car, plugins = load_team(cfg, external)
 
     if sources or distribution:
         s = supplier.create(cfg, sources, distribution, build, car, plugins)
         p = []
+        all_node_names = ["%s-%s" % (node_name_prefix, n) for n in all_node_ids]
         for node_id in node_ids:
+            node_name = "%s-%s" % (node_name_prefix, node_id)
             p.append(
-                provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, race_root_path, node_id))
-        l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
+                provisioner.local(cfg, car, plugins, cluster_settings, all_node_ips, all_node_names, race_root_path, node_name))
+        l = launcher.ProcessLauncher(cfg)
     elif external:
         raise exceptions.RallyAssertionError("Externally provisioned clusters should not need to be managed by Rally's mechanic")
     elif docker:
@@ -524,8 +653,9 @@ def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None
         s = lambda: None
         p = []
         for node_id in node_ids:
-            p.append(provisioner.docker_provisioner(cfg, car, cluster_settings, race_root_path, node_id))
-        l = launcher.DockerLauncher(cfg, metrics_store)
+            node_name = "%s-%s" % (node_name_prefix, node_id)
+            p.append(provisioner.docker(cfg, car, cluster_settings, race_root_path, node_name))
+        l = launcher.DockerLauncher(cfg)
     else:
         # It is a programmer error (and not a user error) if this function is called with wrong parameters
         raise RuntimeError("One of sources, distribution, docker or external must be True")
@@ -566,7 +696,7 @@ class Mechanic:
 
     def stop_engine(self):
         self.logger.info("Stopping nodes %s.", self.nodes)
-        self.launcher.stop(self.nodes)
+        self.launcher.stop(self.nodes, self.metrics_store)
         self.flush_metrics(refresh=True)
         try:
             current_race = self._current_race()

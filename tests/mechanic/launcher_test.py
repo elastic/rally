@@ -23,9 +23,8 @@ from unittest import TestCase, mock
 import psutil
 
 from esrally import config, paths, telemetry
-from esrally.mechanic import launcher, team
+from esrally.mechanic import launcher
 from esrally.mechanic.provisioner import NodeConfiguration
-from esrally.mechanic.team import Car
 from esrally.metrics import InMemoryMetricsStore
 
 
@@ -157,41 +156,37 @@ class ProcessLauncherTests(TestCase):
     def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home, kill):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
-        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "telemetry", "devices", [])
         cfg.add(config.Scope.application, "telemetry", "params", None)
         cfg.add(config.Scope.application, "system", "env.name", "test")
 
         ms = get_metrics_store(cfg)
-        proc_launcher = launcher.ProcessLauncher(cfg, ms, paths.races_root(cfg))
+        proc_launcher = launcher.ProcessLauncher(cfg)
 
-        node_config = NodeConfiguration(car=Car("default", root_path=None, config_paths=[]), ip="127.0.0.1", node_name="testnode",
-                                        node_root_path="/tmp", binary_path="/tmp", log_path="/tmp", data_paths="/tmp")
+        node_config = NodeConfiguration(car_env={}, car_runtime_jdks="12,11", ip="127.0.0.1", node_name="testnode",
+                                        node_root_path="/tmp", binary_path="/tmp", data_paths="/tmp")
 
         nodes = proc_launcher.start([node_config])
         self.assertEqual(len(nodes), 1)
         self.assertEqual(nodes[0].pid, MOCK_PID_VALUE)
 
-        proc_launcher.stop(nodes)
+        proc_launcher.stop(nodes, ms)
         self.assertTrue(kill.called)
              
     def test_env_options_order(self):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "system", "env.name", "test")
 
-        ms = get_metrics_store(cfg)
-        proc_launcher = launcher.ProcessLauncher(cfg, ms, races_root_dir="/home")
-        default_car = team.Car(names="default-car", root_path=None, config_paths=["/tmp/rally-config"])
-        
+        proc_launcher = launcher.ProcessLauncher(cfg)
+
         node_telemetry = [
             telemetry.FlightRecorder(telemetry_params={}, log_root="/tmp/telemetry", java_major_version=8)
             ]
         t = telemetry.Telemetry(["jfr"], devices=node_telemetry)
-        env = proc_launcher._prepare_env(car=default_car, node_name="node0", java_home="/java_home", t=t)
+        env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home="/java_home", t=t)
 
         self.assertEqual("/java_home/bin" + os.pathsep + os.environ["PATH"], env["PATH"])
         self.assertEqual("-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints " 
                          "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
-                         "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/default-car-node0.jfr "
+                         "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr "
                          "-XX:StartFlightRecording=defaultrecording=true", env["ES_JAVA_OPTS"])

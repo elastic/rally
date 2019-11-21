@@ -86,20 +86,6 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
     return command_line_process.returncode
 
 
-def kill_running_es_instances(trait):
-    """
-    Kills all instances of Elasticsearch that are currently running on the local machine by sending SIGKILL.
-
-    :param trait some trait of the process in the command line.
-    """
-
-    def elasticsearch_process(p):
-        return p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any(trait in e for e in p.cmdline())
-
-    logging.getLogger(__name__).info("Killing all processes which match [java], [elasticsearch] and [%s]", trait)
-    kill_all(elasticsearch_process)
-
-
 def is_rally_process(p):
     return p.name() == "esrally" or \
            p.name() == "rally" or \

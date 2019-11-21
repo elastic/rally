@@ -16,6 +16,7 @@
 # under the License.
 
 import glob
+import json
 import logging
 import os
 import shutil
@@ -27,18 +28,15 @@ from esrally.mechanic import team, java_resolver
 from esrally.utils import console, io, process, versions
 
 
-def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, target_root, node_id):
+def local(cfg, car, plugins, cluster_settings, all_node_ips, all_node_names, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
-    node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     preserve = cfg.opts("mechanic", "preserve.install")
 
-    node_name = "%s-%d" % (node_name_prefix, node_id)
-    node_root_dir = "%s/%s" % (target_root, node_name)
-    all_node_names = ["%s-%d" % (node_name_prefix, n) for n in all_node_ids]
+    node_root_dir = os.path.join(target_root, node_name)
 
-    _, java_home = java_resolver.java_home(car, cfg)
+    _, java_home = java_resolver.java_home(car.mandatory_var("runtime.jdk"), cfg)
     
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
@@ -46,30 +44,56 @@ def local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_nod
     return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
 
 
-def docker_provisioner(cfg, car, cluster_settings, target_root, node_id):
+def docker(cfg, car, cluster_settings, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     ip = cfg.opts("provisioning", "node.ip")
     http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
-    node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     preserve = cfg.opts("mechanic", "preserve.install")
 
-    node_name = "%s-%d" % (node_name_prefix, node_id)
-    node_root_dir = "%s/%s" % (target_root, node_name)
+    node_root_dir = os.path.join(target_root, node_name)
 
     return DockerProvisioner(car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version,
                              rally_root, preserve)
 
 
 class NodeConfiguration:
-    def __init__(self, car, ip, node_name, node_root_path, binary_path, log_path, data_paths):
-        self.car = car
+    def __init__(self, build_type, car_env, car_runtime_jdks, ip, node_name, node_root_path, binary_path, data_paths):
+        self.build_type = build_type
+        self.car_env = car_env
+        self.car_runtime_jdks = car_runtime_jdks
         self.ip = ip
         self.node_name = node_name
         self.node_root_path = node_root_path
         self.binary_path = binary_path
-        self.log_path = log_path
         self.data_paths = data_paths
+
+    def as_dict(self):
+        return {
+            "build-type": self.build_type,
+            "car-env": self.car_env,
+            "car-runtime-jdks": self.car_runtime_jdks,
+            "ip": self.ip,
+            "node-name": self.node_name,
+            "node-root-path": self.node_root_path,
+            "binary-path": self.binary_path,
+            "data-paths": self.data_paths
+        }
+
+    @staticmethod
+    def from_dict(d):
+        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["ip"], d["node-name"],
+                                 d["node-root-path"], d["binary-path"], d["data-paths"])
+
+
+def save_node_configuration(path, n):
+    with open(os.path.join(path, "node-config.json"), "wt") as f:
+        json.dump(n.as_dict(), f, indent=2)
+
+
+def load_node_configuration(path):
+    with open(os.path.join(path, "node-config.json"), "rt") as f:
+        return NodeConfiguration.from_dict(json.load(f))
 
 
 class ConfigLoader:
@@ -176,9 +200,10 @@ class BareProvisioner:
         for installer in self.plugin_installers:
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
-        return NodeConfiguration(self.es_installer.car, self.es_installer.node_ip, self.es_installer.node_name,
+        return NodeConfiguration("tar", self.es_installer.car.env, self.es_installer.car.mandatory_var("runtime.jdk"),
+                                 self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path,
-                                 self.es_installer.node_log_dir, self.es_installer.data_paths)
+                                 self.es_installer.data_paths)
 
     def cleanup(self):
         self.es_installer.cleanup(self.preserve)
@@ -398,7 +423,7 @@ class DockerProvisioner:
         self.config_vars.update(self.car.variables)
         self.config_vars.update(provisioner_defaults)
 
-    def prepare(self, binaries):
+    def prepare(self, binary):
         # we need to allow other users to write to these directories due to Docker.
         #
         # Although os.mkdir passes 0o777 by default, mkdir(2) uses `mode & ~umask & 0777` to determine the final flags and
@@ -440,8 +465,8 @@ class DockerProvisioner:
         with open(self.binary_path, mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration(self.car, self.node_ip, self.node_name, self.node_root_dir, self.binary_path,
-                                 self.node_log_dir, self.data_paths)
+        return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"), self.node_ip,
+                                 self.node_name, self.node_root_dir, self.binary_path, self.data_paths)
 
     def cleanup(self):
         # do not attempt to cleanup data paths. It does not work due to different permissions. As:

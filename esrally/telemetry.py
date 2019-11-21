@@ -46,11 +46,11 @@ class Telemetry:
         self.enabled_devices = enabled_devices
         self.devices = devices
 
-    def instrument_candidate_java_opts(self, car, candidate_id):
+    def instrument_candidate_java_opts(self):
         opts = []
         for device in self.devices:
             if self._enabled(device):
-                additional_opts = device.instrument_java_opts(car, candidate_id)
+                additional_opts = device.instrument_java_opts()
                 # properly merge values with the same key
                 opts.extend(additional_opts)
         return opts
@@ -80,6 +80,11 @@ class Telemetry:
             if self._enabled(device):
                 device.on_benchmark_stop()
 
+    def store_system_metrics(self, node, metrics_store):
+        for device in self.devices:
+            if self._enabled(device):
+                device.store_system_metrics(node, metrics_store)
+
     def _enabled(self, device):
         return device.internal or device.command in self.enabled_devices
 
@@ -94,7 +99,7 @@ class TelemetryDevice:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def instrument_java_opts(self, car, candidate_id):
+    def instrument_java_opts(self):
         return {}
 
     def on_pre_node_start(self, node_name):
@@ -111,6 +116,18 @@ class TelemetryDevice:
 
     def on_benchmark_stop(self):
         pass
+
+    def store_system_metrics(self, node, metrics_store):
+        pass
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state["logger"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.logger = logging.getLogger(__name__)
 
 
 class InternalTelemetryDevice(TelemetryDevice):
@@ -149,9 +166,9 @@ class FlightRecorder(TelemetryDevice):
         self.log_root = log_root
         self.java_major_version = java_major_version
 
-    def instrument_java_opts(self, car, candidate_id):
+    def instrument_java_opts(self):
         io.ensure_dir(self.log_root)
-        log_file = "%s/%s-%s.jfr" % (self.log_root, car.safe_name, candidate_id)
+        log_file = os.path.join(self.log_root, "profile.jfr")
 
         # JFR was integrated into OpenJDK 11 and is not a commercial feature anymore.
         if self.java_major_version < 11:
@@ -209,9 +226,9 @@ class JitCompiler(TelemetryDevice):
         super().__init__()
         self.log_root = log_root
 
-    def instrument_java_opts(self, car, candidate_id):
+    def instrument_java_opts(self):
         io.ensure_dir(self.log_root)
-        log_file = "%s/%s-%s.jit.log" % (self.log_root, car.safe_name, candidate_id)
+        log_file = os.path.join(self.log_root, "jit.log")
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=self.logger)
         return ["-XX:+UnlockDiagnosticVMOptions", "-XX:+TraceClassLoading", "-XX:+LogCompilation",
                 "-XX:LogFile={}".format(log_file), "-XX:+PrintAssembly"]
@@ -228,9 +245,9 @@ class Gc(TelemetryDevice):
         self.log_root = log_root
         self.java_major_version = java_major_version
 
-    def instrument_java_opts(self, car, candidate_id):
+    def instrument_java_opts(self):
         io.ensure_dir(self.log_root)
-        log_file = "%s/%s-%s.gc.log" % (self.log_root, car.safe_name, candidate_id)
+        log_file = os.path.join(self.log_root, "gc.log")
         console.info("%s: Writing GC log to [%s]" % (self.human_name, log_file), logger=self.logger)
         return self.java_opts(log_file)
 
@@ -697,9 +714,8 @@ class NodeStatsRecorder:
 
 
 class StartupTime(InternalTelemetryDevice):
-    def __init__(self, metrics_store, stopwatch=time.StopWatch):
+    def __init__(self, stopwatch=time.StopWatch):
         super().__init__()
-        self.metrics_store = metrics_store
         self.timer = stopwatch()
 
     def on_pre_node_start(self, node_name):
@@ -707,47 +723,46 @@ class StartupTime(InternalTelemetryDevice):
 
     def attach_to_node(self, node):
         self.timer.stop()
-        self.metrics_store.put_value_node_level(node.node_name, "node_startup_time", self.timer.total_time(), "s")
+
+    def store_system_metrics(self, node, metrics_store):
+        metrics_store.put_value_node_level(node.node_name, "node_startup_time", self.timer.total_time(), "s")
 
 
 class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
-    def __init__(self, metrics_store, node_count_on_host, log_root, node_name):
+    def __init__(self, node_count_on_host, log_root, node_name):
         super().__init__()
-        self.metrics_store = metrics_store
         self.node_count_on_host = node_count_on_host
         self.log_root = log_root
         self.node_name = node_name
-        self.node = None
-        self.process = None
-        self.disk_start = None
-        self.process_start = None
+        self.read_bytes = None
+        self.write_bytes = None
 
     def attach_to_node(self, node):
-        self.node = node
-        self.process = sysstats.setup_process_stats(node.pid)
-        self.process_start = sysstats.process_io_counters(self.process)
+        es_process = sysstats.setup_process_stats(node.pid)
+        process_start = sysstats.process_io_counters(es_process)
         read_bytes = 0
         write_bytes = 0
         io.ensure_dir(self.log_root)
+        # TODO: Eliminate need for a temporary file - we persist state differently now (pickle for all telemetry)
         tmp_io_file = os.path.join(self.log_root, "{}.io".format(self.node_name))
-        if self.process_start:
-            read_bytes = self.process_start.read_bytes
-            write_bytes = self.process_start.write_bytes
+        if process_start:
+            read_bytes = process_start.read_bytes
+            write_bytes = process_start.write_bytes
             self.logger.info("Using more accurate process-based I/O counters.")
         else:
             try:
-                self.disk_start = sysstats.disk_io_counters()
-                read_bytes = self.disk_start.read_bytes
-                write_bytes = self.disk_start.write_bytes
-                self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less accurate disk "
-                                    "I/O counters.")
+                disk_start = sysstats.disk_io_counters()
+                read_bytes = disk_start.read_bytes
+                write_bytes = disk_start.write_bytes
+                self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less "
+                                    "accurate disk I/O counters.")
             except RuntimeError:
                 self.logger.exception("Could not determine I/O stats at benchmark start.")
         with open(tmp_io_file, "wt", encoding="utf-8") as f:
-            json.dump({"pid": self.node.pid, "read_bytes": read_bytes, "write_bytes": write_bytes}, f)
+            json.dump({"pid": node.pid, "read_bytes": read_bytes, "write_bytes": write_bytes}, f)
 
     def detach_from_node(self, node, running):
         if running:
@@ -760,28 +775,31 @@ class DiskIo(InternalTelemetryDevice):
                 with open(tmp_io_file, "rt", encoding="utf-8") as f:
                     io_stats = json.load(f)
                 os.remove(tmp_io_file)
-                self.process = sysstats.setup_process_stats(io_stats["pid"])
-                process_end = sysstats.process_io_counters(self.process)
+                es_process = sysstats.setup_process_stats(io_stats["pid"])
+                process_end = sysstats.process_io_counters(es_process)
                 disk_end = sysstats.disk_io_counters()
                 # we have process-based disk counters, no need to worry how many nodes are on this host
                 if process_end:
-                    read_bytes = process_end.read_bytes - io_stats["read_bytes"]
-                    write_bytes = process_end.write_bytes - io_stats["write_bytes"]
+                    self.read_bytes = process_end.read_bytes - io_stats["read_bytes"]
+                    self.write_bytes = process_end.write_bytes - io_stats["write_bytes"]
                 elif disk_end:
                     if self.node_count_on_host > 1:
-                        self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. Attributing [1/%d] "
-                                         "of total I/O to [%s].", self.node_count_on_host, self.node_count_on_host, self.node_name)
+                        self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. "
+                                         "Attributing [1/%d] of total I/O to [%s].",
+                                         self.node_count_on_host, self.node_count_on_host, self.node_name)
 
-                    read_bytes = (disk_end.read_bytes - io_stats['read_bytes']) // self.node_count_on_host
-                    write_bytes = (disk_end.write_bytes - io_stats['write_bytes']) // self.node_count_on_host
+                    self.read_bytes = (disk_end.read_bytes - io_stats['read_bytes']) // self.node_count_on_host
+                    self.write_bytes = (disk_end.write_bytes - io_stats['write_bytes']) // self.node_count_on_host
                 else:
                     raise RuntimeError("Neither process nor disk I/O counters are available")
-
-                self.metrics_store.put_count_node_level(self.node_name, "disk_io_write_bytes", write_bytes, "byte")
-                self.metrics_store.put_count_node_level(self.node_name, "disk_io_read_bytes", read_bytes, "byte")
-            # Catching RuntimeException is not sufficient as psutil might raise AccessDenied et.al. which is derived from Exception
+            # Catching RuntimeException is not sufficient: psutil might raise AccessDenied (derived from Exception)
             except BaseException:
                 self.logger.exception("Could not determine I/O stats at benchmark end.")
+
+    def store_system_metrics(self, node, metrics_store):
+        if self.write_bytes and self.read_bytes:
+            metrics_store.put_count_node_level(self.node_name, "disk_io_write_bytes", self.write_bytes, "byte")
+            metrics_store.put_count_node_level(self.node_name, "disk_io_read_bytes", self.read_bytes, "byte")
 
 
 def store_node_attribute_metadata(metrics_store, nodes_info):
@@ -1192,11 +1210,11 @@ class IndexSize(InternalTelemetryDevice):
     """
     Measures the final size of the index
     """
-    def __init__(self, data_paths, metrics_store):
+    def __init__(self, data_paths):
         super().__init__()
         self.data_paths = data_paths
-        self.metrics_store = metrics_store
         self.attached = False
+        self.index_size_bytes = None
 
     def attach_to_node(self, node):
         self.attached = True
@@ -1208,4 +1226,8 @@ class IndexSize(InternalTelemetryDevice):
             index_size_bytes = 0
             for data_path in self.data_paths:
                 index_size_bytes += io.get_size(data_path)
-            self.metrics_store.put_count_node_level(node.node_name, "final_index_size_bytes", index_size_bytes, "byte")
+            self.index_size_bytes = index_size_bytes
+
+    def store_system_metrics(self, node, metrics_store):
+        if self.index_size_bytes:
+            metrics_store.put_count_node_level(node.node_name, "final_index_size_bytes", self.index_size_bytes, "byte")

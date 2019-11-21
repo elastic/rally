@@ -21,27 +21,21 @@ class Node:
     Represents an Elasticsearch cluster node.
     """
 
-    def __init__(self, pid, host_name, node_name, telemetry):
+    def __init__(self, pid, binary_path, host_name, node_name, telemetry):
         """
         Creates a new node.
 
         :param pid: PID for this node.
+        :param binary_path: The local path to the binaries for this node.
         :param host_name: The name of the host where this node is running.
         :param node_name: The name of this node.
         :param telemetry: The attached telemetry.
         """
         self.pid = pid
+        self.binary_path = binary_path
         self.host_name = host_name
         self.node_name = node_name
-        self.ip = None
         self.telemetry = telemetry
-        # populated by telemetry
-        self.os = {}
-        self.jvm = {}
-        self.cpu = {}
-        self.memory = {}
-        self.fs = []
-        self.plugins = []
 
     def __repr__(self):
         return self.node_name
