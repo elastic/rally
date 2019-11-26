@@ -16,7 +16,6 @@
 # under the License.
 
 import collections
-import json
 import logging
 import os
 import threading

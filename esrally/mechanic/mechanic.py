@@ -71,8 +71,7 @@ def install(cfg):
         raise exceptions.SystemSetupError("Unknown build type [{}]".format(build_type))
 
     provisioner.save_node_configuration(root_path, node_config)
-    # TODO: Dump as JSON (property: "installation-id") -> makes it easier to understand the start command.
-    console.println(cfg.opts("system", "install.id"), force=True)
+    console.println(json.dumps({"installation-id": cfg.opts("system", "install.id")}, indent=2), force=True)
 
 
 # TODO: Have a convenience mode where "start" implicitly invokes "install" (when no installation id is given)
