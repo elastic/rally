@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import hashlib
 import json
 import logging
 import logging.config
@@ -42,26 +41,6 @@ def log_config_path():
     :return: The absolute path to Rally's log configuration file.
     """
     return os.path.join(os.path.expanduser("~"), ".rally", "logging.json")
-
-
-def remove_obsolete_default_log_config():
-    """
-    Log rotation is problematic because Rally uses multiple processes and there is a lurking race condition when
-    rolling log files. Hence, we do not rotate logs from within Rally and leverage established tools like logrotate for that.
-
-    Checks whether the user has a problematic out-of-the-box logging configuration delivered with Rally 1.0.0 which
-    used log rotation and removes it so it can be replaced by a new one in a later step.
-    """
-    log_config = log_config_path()
-    if io.exists(log_config):
-        source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging_1_0_0.json"))
-        with open(source_path, "r", encoding="UTF-8") as src:
-            contents = src.read().replace("${LOG_PATH}", paths.logs())
-            source_hash = hashlib.sha512(contents.encode()).hexdigest()
-        with open(log_config, "r", encoding="UTF-8") as target:
-            target_hash = hashlib.sha512(target.read().encode()).hexdigest()
-        if source_hash == target_hash:
-            os.rename(log_config, "{}.bak".format(log_config))
 
 
 def install_default_log_config():

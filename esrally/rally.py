@@ -549,7 +549,6 @@ def dispatch_sub_command(cfg, sub_command):
 
 def main():
     check_python_version()
-    log.remove_obsolete_default_log_config()
     log.install_default_log_config()
     log.configure_logging()
     logger = logging.getLogger(__name__)
