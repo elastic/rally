@@ -151,7 +151,7 @@ class ProcessLauncher:
             telemetry.JitCompiler(node_telemetry_dir),
             telemetry.Gc(node_telemetry_dir, java_major_version),
             telemetry.Heapdump(node_telemetry_dir),
-            telemetry.DiskIo(node_count_on_host, node_telemetry_dir, node_name),
+            telemetry.DiskIo(node_count_on_host),
             telemetry.IndexSize(data_paths),
             telemetry.StartupTime(),
         ]
