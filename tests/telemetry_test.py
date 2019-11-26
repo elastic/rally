@@ -85,7 +85,7 @@ class StartupTimeTests(TestCase):
     def test_store_calculated_metrics(self, metrics_store_put_value, stop_watch):
         stop_watch.total_time.return_value = 2
         metrics_store = metrics.EsMetricsStore(create_config())
-        node = cluster.Node(None, "io", "rally0", None)
+        node = cluster.Node(None, "/bin", "io", "rally0", None)
         startup_time = telemetry.StartupTime()
         # replace with mock
         startup_time.timer = stop_watch
@@ -232,7 +232,7 @@ class HeapdumpTests(TestCase):
         run_subprocess_with_logging.return_value = 0
         heapdump = telemetry.Heapdump("/var/log")
         t = telemetry.Telemetry(enabled_devices=[heapdump.command], devices=[heapdump])
-        node = cluster.Node(pid="1234", host_name="localhost", node_name="rally0", telemetry=t)
+        node = cluster.Node(pid="1234", binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.detach_from_node(node, running=True)
         run_subprocess_with_logging.assert_called_with("jmap -dump:format=b,file=/var/log/heap_at_exit_1234.hprof 1234")
@@ -2517,7 +2517,7 @@ class IndexSizeTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.IndexSize(["/var/elasticsearch/data/1", "/var/elasticsearch/data/2"])
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
-        node = cluster.Node(pid=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
+        node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally-node-0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -2540,7 +2540,7 @@ class IndexSizeTests(TestCase):
         metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.IndexSize(data_paths=[])
         t = telemetry.Telemetry(devices=[device])
-        node = cluster.Node(pid=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
+        node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally-node-0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
         t.on_benchmark_stop()

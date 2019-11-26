@@ -42,7 +42,7 @@ class BareProvisionerTests(TestCase):
             names="unit-test-car",
             root_path=None,
             config_paths=[HOME_DIR + "/.rally/benchmarks/teams/default/my-car"],
-            variables={"heap": "4g"}),
+            variables={"heap": "4g", "runtime.jdk": "8"}),
             java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
             node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
@@ -58,7 +58,8 @@ class BareProvisionerTests(TestCase):
                                         apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
-        self.assertEqual(installer.car, node_config.car)
+        self.assertEqual({}, node_config.car_env)
+        self.assertEqual("8", node_config.car_runtime_jdks)
         self.assertEqual("/opt/elasticsearch-5.0.0", node_config.binary_path)
         self.assertEqual(["/opt/elasticsearch-5.0.0/data"], node_config.data_paths)
 
@@ -72,6 +73,7 @@ class BareProvisionerTests(TestCase):
                 "indices.query.bool.max_clause_count": 50000,
             },
             "heap": "4g",
+            "runtime.jdk": "8",
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
             "data_paths": ["/opt/elasticsearch-5.0.0/data"],
@@ -149,7 +151,7 @@ class BareProvisionerTests(TestCase):
             names="unit-test-car",
             root_path=None,
             config_paths=[HOME_DIR + "/.rally/benchmarks/teams/default/my-car"],
-            variables={"heap": "4g"}),
+            variables={"heap": "4g", "runtime.jdk": "8"}),
             java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
             node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
@@ -170,7 +172,8 @@ class BareProvisionerTests(TestCase):
                                         apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
-        self.assertEqual(installer.car, node_config.car)
+        self.assertEqual({}, node_config.car_env)
+        self.assertEqual("8", node_config.car_runtime_jdks)
         self.assertEqual("/opt/elasticsearch-5.0.0", node_config.binary_path)
         self.assertEqual(["/opt/elasticsearch-5.0.0/data"], node_config.data_paths)
 
@@ -188,6 +191,7 @@ class BareProvisionerTests(TestCase):
                 "plugin.mandatory": ["x-pack-security"]
             },
             "heap": "4g",
+            "runtime.jdk": "8",
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
             "data_paths": ["/opt/elasticsearch-5.0.0/data"],
@@ -228,7 +232,7 @@ class BareProvisionerTests(TestCase):
             names="unit-test-car",
             root_path=None,
             config_paths=[HOME_DIR + "/.rally/benchmarks/teams/default/my-car"],
-            variables={"heap": "4g"}),
+            variables={"heap": "4g", "runtime.jdk": "8"}),
             java_home="/usr/local/javas/java8",
             node_name="rally-node-0",
             node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
@@ -249,7 +253,8 @@ class BareProvisionerTests(TestCase):
                                         apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-6.3.0.tar.gz"})
-        self.assertEqual(installer.car, node_config.car)
+        self.assertEqual({}, node_config.car_env)
+        self.assertEqual("8", node_config.car_runtime_jdks)
         self.assertEqual("/opt/elasticsearch-6.3.0", node_config.binary_path)
         self.assertEqual(["/opt/elasticsearch-6.3.0/data"], node_config.data_paths)
 
@@ -267,6 +272,7 @@ class BareProvisionerTests(TestCase):
                 "plugin.mandatory": ["x-pack"]
             },
             "heap": "4g",
+            "runtime.jdk": "8",
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
             "data_paths": ["/opt/elasticsearch-6.3.0/data"],

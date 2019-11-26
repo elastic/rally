@@ -100,7 +100,7 @@ class MechanicTests(TestCase):
             self.started = True
             return [MechanicTests.Node("rally-node-{}".format(n)) for n in range(len(node_configs))]
 
-        def stop(self, nodes):
+        def stop(self, nodes, metrics_store):
             self.started = False
 
     # We stub irrelevant methods for the test
