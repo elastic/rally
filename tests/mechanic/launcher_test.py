@@ -16,14 +16,15 @@
 # under the License.
 import io
 import os
+import sys
 import uuid
 from datetime import datetime
 from unittest import TestCase, mock
 
 import psutil
 
-from esrally import config, paths, telemetry
-from esrally.mechanic import launcher
+from esrally import config, exceptions, telemetry
+from esrally.mechanic import launcher, cluster
 from esrally.mechanic.provisioner import NodeConfiguration
 from esrally.metrics import InMemoryMetricsStore
 
@@ -173,7 +174,7 @@ class ProcessLauncherTests(TestCase):
 
         proc_launcher.stop(nodes, ms)
         self.assertTrue(kill.called)
-             
+
     def test_env_options_order(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "test")
@@ -182,12 +183,100 @@ class ProcessLauncherTests(TestCase):
 
         node_telemetry = [
             telemetry.FlightRecorder(telemetry_params={}, log_root="/tmp/telemetry", java_major_version=8)
-            ]
+        ]
         t = telemetry.Telemetry(["jfr"], devices=node_telemetry)
         env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home="/java_home", t=t)
 
         self.assertEqual("/java_home/bin" + os.pathsep + os.environ["PATH"], env["PATH"])
-        self.assertEqual("-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints " 
+        self.assertEqual("-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
                          "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr "
                          "-XX:StartFlightRecording=defaultrecording=true", env["ES_JAVA_OPTS"])
+
+
+class DockerLauncherTests(TestCase):
+    class IterationBasedStopWatch:
+        def __init__(self, max_iterations):
+            self.iterations = 0
+            self.max_iterations = max_iterations
+
+        def start(self):
+            self.iterations = 0
+
+        def split_time(self):
+            if self.iterations < self.max_iterations:
+                self.iterations += 1
+                return 0
+            else:
+                return sys.maxsize
+
+    class TestClock:
+        def __init__(self, stop_watch):
+            self._stop_watch = stop_watch
+
+        def stop_watch(self):
+            return self._stop_watch
+
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
+    def test_starts_container_successfully(self, run_subprocess_with_output, run_subprocess_with_logging):
+        run_subprocess_with_logging.return_value = 0
+        # Docker container id (from docker-compose ps), Docker container id (from docker ps --filter ...)
+        run_subprocess_with_output.side_effect = [["de604d0d"], ["de604d0d"]]
+        cfg = config.Config()
+        docker = launcher.DockerLauncher(cfg)
+
+        node_config = NodeConfiguration(build_type="docker", car_env={}, car_runtime_jdks="12,11", ip="127.0.0.1",
+                                        node_name="testnode", node_root_path="/tmp", binary_path="/bin",
+                                        data_paths="/tmp")
+
+        nodes = docker.start([node_config])
+        self.assertEqual(1, len(nodes))
+        node = nodes[0]
+
+        self.assertEqual(0, node.pid)
+        self.assertEqual("/bin", node.binary_path)
+        self.assertEqual("127.0.0.1", node.host_name)
+        self.assertEqual("testnode", node.node_name)
+        self.assertIsNotNone(node.telemetry)
+
+        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml up -d")
+        run_subprocess_with_output.assert_has_calls([
+            mock.call("docker-compose -f /bin/docker-compose.yml ps -q"),
+            mock.call('docker ps -a --filter "id=de604d0d" --filter "status=running" --filter "health=healthy" -q')
+        ])
+
+    @mock.patch("esrally.time.sleep")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
+    def test_container_not_started(self, run_subprocess_with_output, run_subprocess_with_logging, sleep):
+        run_subprocess_with_logging.return_value = 0
+        # Docker container id (from docker-compose ps), but NO Docker container id (from docker ps --filter...) twice
+        run_subprocess_with_output.side_effect = [["de604d0d"], [], []]
+        cfg = config.Config()
+        # ensure we only check the status two times
+        stop_watch = DockerLauncherTests.IterationBasedStopWatch(max_iterations=2)
+        docker = launcher.DockerLauncher(cfg, clock=DockerLauncherTests.TestClock(stop_watch=stop_watch))
+
+        node_config = NodeConfiguration(build_type="docker", car_env={}, car_runtime_jdks="12,11", ip="127.0.0.1",
+                                        node_name="testnode", node_root_path="/tmp", binary_path="/bin",
+                                        data_paths="/tmp")
+
+        with self.assertRaisesRegex(exceptions.LaunchError, "No healthy running container after 600 seconds!"):
+            docker.start([node_config])
+
+    @mock.patch("esrally.telemetry.add_metadata_for_node")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_stops_container_successfully(self, run_subprocess_with_logging, add_metadata_for_node):
+        cfg = config.Config()
+        metrics_store = None
+        docker = launcher.DockerLauncher(cfg)
+
+        nodes = [cluster.Node(0, "/bin", "127.0.0.1", "testnode", telemetry.Telemetry())]
+
+        docker.stop(nodes, metrics_store=metrics_store)
+
+        add_metadata_for_node.assert_called_once_with(metrics_store, "testnode", "127.0.0.1")
+
+        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml down")

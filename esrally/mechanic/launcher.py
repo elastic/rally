@@ -16,10 +16,7 @@
 # under the License.
 import logging
 import os
-import shlex
 import signal
-import subprocess
-from time import monotonic as _time
 
 import psutil
 
@@ -28,37 +25,13 @@ from esrally.mechanic import cluster, java_resolver
 from esrally.utils import process
 
 
-def _get_container_id(compose_config):
-    compose_ps_cmd = _get_docker_compose_cmd(compose_config, "ps -q")
-
-    output = subprocess.check_output(args=shlex.split(compose_ps_cmd))
-    return output.decode("utf-8").rstrip()
-
-
-def _wait_for_healthy_running_container(container_id, timeout=60):
-    cmd = 'docker ps -a --filter "id={}" --filter "status=running" --filter "health=healthy" -q'.format(container_id)
-    endtime = _time() + timeout
-    while _time() < endtime:
-        output = subprocess.check_output(shlex.split(cmd))
-        containers = output.decode("utf-8").rstrip()
-        if len(containers) > 0:
-            return
-        time.sleep(0.5)
-    msg = "No healthy running container after {} seconds!".format(timeout)
-    logging.error(msg)
-    raise exceptions.LaunchError(msg)
-
-
-def _get_docker_compose_cmd(compose_config, cmd):
-    return "docker-compose -f {} {}".format(os.path.join(compose_config, "docker-compose.yml"), cmd)
-
-
 class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, clock=time.Clock):
         self.cfg = cfg
+        self.clock = clock
         self.logger = logging.getLogger(__name__)
 
     def start(self, node_configurations):
@@ -79,16 +52,36 @@ class DockerLauncher:
         return nodes
 
     def _start_process(self, binary_path):
-        compose_cmd = _get_docker_compose_cmd(binary_path, "up -d")
+        compose_cmd = self._docker_compose(binary_path, "up -d")
 
         ret = process.run_subprocess_with_logging(compose_cmd)
         if ret != 0:
-            msg = "Docker daemon startup failed with exit code[{}]".format(ret)
+            msg = "Docker daemon startup failed with exit code [{}]".format(ret)
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 
-        container_id = _get_container_id(binary_path)
-        _wait_for_healthy_running_container(container_id)
+        container_id = self._get_container_id(binary_path)
+        self._wait_for_healthy_running_container(container_id, DockerLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
+
+    def _docker_compose(self, compose_config, cmd):
+        return "docker-compose -f {} {}".format(os.path.join(compose_config, "docker-compose.yml"), cmd)
+
+    def _get_container_id(self, compose_config):
+        compose_ps_cmd = self._docker_compose(compose_config, "ps -q")
+        return process.run_subprocess_with_output(compose_ps_cmd)[0]
+
+    def _wait_for_healthy_running_container(self, container_id, timeout):
+        cmd = 'docker ps -a --filter "id={}" --filter "status=running" --filter "health=healthy" -q'.format(container_id)
+        stop_watch = self.clock.stop_watch()
+        stop_watch.start()
+        while stop_watch.split_time() < timeout:
+            containers = process.run_subprocess_with_output(cmd)
+            if len(containers) > 0:
+                return
+            time.sleep(0.5)
+        msg = "No healthy running container after {} seconds!".format(timeout)
+        logging.error(msg)
+        raise exceptions.LaunchError(msg)
 
     def stop(self, nodes, metrics_store):
         self.logger.info("Shutting down [%d] nodes running in Docker on this host.", len(nodes))
@@ -99,14 +92,15 @@ class DockerLauncher:
             self.logger.info("Stopping node [%s].", node.node_name)
             telemetry.add_metadata_for_node(metrics_store, node.node_name, node.host_name)
             node.telemetry.detach_from_node(node, running=True)
-            process.run_subprocess_with_logging(_get_docker_compose_cmd(node.binary_path, "down"))
+            process.run_subprocess_with_logging(self._docker_compose(node.binary_path, "down"))
             node.telemetry.detach_from_node(node, running=False)
             node.telemetry.store_system_metrics(node, metrics_store)
 
 
-def wait_for_pidfile(pidfilename, timeout=60):
-    endtime = _time() + timeout
-    while _time() < endtime:
+def wait_for_pidfile(pidfilename, timeout=60, clock=time.Clock):
+    stop_watch = clock.stop_watch()
+    stop_watch.start()
+    while stop_watch.split_time() < timeout:
         try:
             with open(pidfilename, "rb") as f:
                 return int(f.read())
