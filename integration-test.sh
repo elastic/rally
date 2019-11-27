@@ -22,6 +22,7 @@ set -e
 readonly CONFIGURATIONS=(integration-test es-integration-test)
 
 readonly DISTRIBUTIONS=(2.4.6 5.6.16 6.8.0 7.1.1)
+readonly BUILD_TYPES=(tar docker)
 readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
 readonly ES_METRICS_STORE_JAVA_HOME="${JAVA8_HOME}"
@@ -208,6 +209,11 @@ function random_track {
 function random_distribution {
     local num_distributions=${#DISTRIBUTIONS[*]}
     eval "$1='${DISTRIBUTIONS[$((RANDOM%num_distributions))]}'"
+}
+
+function random_build_type {
+    local num_build_types=${#BUILD_TYPES[*]}
+    eval "$1='${BUILD_TYPES[$((RANDOM%num_build_types))]}'"
 }
 
 function test_configure {
@@ -470,13 +476,20 @@ function test_docker_dev_image {
 function test_node_management_commands {
     local cfg
     local dist
+    local build_type
     random_configuration cfg
     random_distribution dist
+    random_build_type build_type
 
-    info "test install [--configuration-name=${cfg}]"
+    # for Docker we force the most recent distribution as we don't have Docker images for all versions that are tested
+    if [[ "$build_type" == "docker" ]]; then
+      dist="${DISTRIBUTIONS[${#DISTRIBUTIONS[@]}-1]}"
+    fi
+
+    info "test install [--configuration-name=${cfg}] [--build-type=${build_type}]"
     kill_rally_processes
 
-    raw_install_id=$(esrally install --quiet --configuration-name="${cfg}" --distribution-version="${dist}" --build-type=tar --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
+    raw_install_id=$(esrally install --quiet --configuration-name="${cfg}" --distribution-version="${dist}" --build-type="${build_type}" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
     install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)
 
     info "test start [--configuration-name=${cfg}]"
