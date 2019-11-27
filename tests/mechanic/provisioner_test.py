@@ -54,7 +54,6 @@ class BareProvisionerTests(TestCase):
         p = provisioner.BareProvisioner(cluster_settings={"indices.query.bool.max_clause_count": 50000},
                                         es_installer=installer,
                                         plugin_installers=[],
-                                        preserve=True,
                                         apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
@@ -167,7 +166,6 @@ class BareProvisionerTests(TestCase):
                                                                         java_home="/usr/local/javas/java8",
                                                                         hook_handler_class=BareProvisionerTests.NoopHookHandler)
                                         ],
-                                        preserve=True,
                                         distribution_version="6.2.3",
                                         apply_config=null_apply_config)
 
@@ -248,7 +246,6 @@ class BareProvisionerTests(TestCase):
                                                                         java_home="/usr/local/javas/java8",
                                                                         hook_handler_class=BareProvisionerTests.NoopHookHandler)
                                         ],
-                                        preserve=True,
                                         distribution_version="6.3.0",
                                         apply_config=null_apply_config)
 
@@ -307,46 +304,6 @@ class NoopHookHandler:
 
 
 class ElasticsearchInstallerTests(TestCase):
-    @mock.patch("shutil.rmtree")
-    @mock.patch("os.path.exists")
-    def test_cleanup_nothing_on_preserve(self, mock_path_exists, mock_rm):
-        mock_path_exists.return_value = False
-
-        installer = provisioner.ElasticsearchInstaller(car=team.Car("defaults", None, "/tmp"),
-                                                       java_home="/usr/local/javas/java8",
-                                                       node_name="rally-node-0",
-                                                       all_node_ips={"127.0.0.1"},
-                                                       all_node_names=["rally-node-0"],
-                                                       ip="127.0.0.1",
-                                                       http_port=9200,
-                                                       node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest")
-        installer.cleanup(preserve=True)
-
-        self.assertEqual(0, mock_path_exists.call_count)
-        self.assertEqual(0, mock_rm.call_count)
-
-    @mock.patch("shutil.rmtree")
-    @mock.patch("os.path.exists")
-    def test_cleanup(self, mock_path_exists, mock_rm):
-        mock_path_exists.return_value = True
-
-        installer = provisioner.ElasticsearchInstaller(car=team.Car(names="defaults",
-                                                                    root_path=None,
-                                                                    config_paths="/tmp",
-                                                                    variables={"data_paths": "/tmp/some/data-path-dir"}),
-                                                       java_home="/usr/local/javas/java8",
-                                                       node_name="rally-node-0",
-                                                       all_node_ips={"127.0.0.1"},
-                                                       all_node_names=["rally-node-0"],
-                                                       ip="127.0.0.1",
-                                                       http_port=9200,
-                                                       node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest")
-        installer.cleanup(preserve=True)
-
-        expected_dir_calls = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/challenge/es-bin")]
-        mock_path_exists.mock_calls = expected_dir_calls
-        mock_rm.mock_calls = expected_dir_calls
-
     @mock.patch("glob.glob", lambda p: ["/install/elasticsearch-5.0.0-SNAPSHOT"])
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -567,8 +524,7 @@ class DockerProvisionerTests(TestCase):
                                                http_port=39200,
                                                node_root_dir=node_root_dir,
                                                distribution_version="6.3.0",
-                                               rally_root=rally_root,
-                                               preserve=False)
+                                               rally_root=rally_root)
 
         self.assertDictEqual({
             "cluster_name": "rally-benchmark",
@@ -646,8 +602,7 @@ services:
                                                http_port=39200,
                                                node_root_dir=node_root_dir,
                                                distribution_version="6.3.0",
-                                               rally_root=rally_root,
-                                               preserve=False)
+                                               rally_root=rally_root)
 
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
@@ -676,3 +631,26 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10""" % (data_dir, log_dir, heap_dump_dir), docker_cfg)
+
+
+class CleanupTests(TestCase):
+    @mock.patch("shutil.rmtree")
+    @mock.patch("os.path.exists")
+    def test_preserves(self, mock_path_exists, mock_rm):
+        mock_path_exists.return_value = True
+
+        provisioner.cleanup(preserve=True, install_dir="./rally/races/install", data_paths=["./rally/races/data"])
+
+        self.assertEqual(mock_path_exists.call_count, 0)
+        self.assertEqual(mock_rm.call_count, 0)
+
+    @mock.patch("shutil.rmtree")
+    @mock.patch("os.path.exists")
+    def test_cleanup(self, mock_path_exists, mock_rm):
+        mock_path_exists.return_value = True
+
+        provisioner.cleanup(preserve=False, install_dir="./rally/races/install", data_paths=["./rally/races/data"])
+
+        expected_dir_calls = [mock.call("/tmp/some/data-path-dir"), mock.call("/rally-root/track/challenge/es-bin")]
+        mock_path_exists.mock_calls = expected_dir_calls
+        mock_rm.mock_calls = expected_dir_calls

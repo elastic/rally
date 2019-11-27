@@ -28,11 +28,8 @@ from esrally.mechanic import team, java_resolver
 from esrally.utils import console, io, process, versions
 
 
-def local(cfg, car, plugins, cluster_settings, all_node_ips, all_node_names, target_root, node_name):
+def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    ip = cfg.opts("provisioning", "node.ip")
-    http_port = cfg.opts("provisioning", "node.http.port")
-    preserve = cfg.opts("mechanic", "preserve.install")
 
     node_root_dir = os.path.join(target_root, node_name)
 
@@ -41,20 +38,17 @@ def local(cfg, car, plugins, cluster_settings, all_node_ips, all_node_names, tar
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
-    return BareProvisioner(cluster_settings, es_installer, plugin_installers, preserve, distribution_version=distribution_version)
+    return BareProvisioner(cluster_settings, es_installer, plugin_installers, distribution_version=distribution_version)
 
 
-def docker(cfg, car, cluster_settings, target_root, node_name):
+def docker(cfg, car, cluster_settings, ip, http_port, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    ip = cfg.opts("provisioning", "node.ip")
-    http_port = cfg.opts("provisioning", "node.http.port")
     rally_root = cfg.opts("node", "rally.root")
-    preserve = cfg.opts("mechanic", "preserve.install")
 
     node_root_dir = os.path.join(target_root, node_name)
 
     return DockerProvisioner(car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version,
-                             rally_root, preserve)
+                             rally_root)
 
 
 class NodeConfiguration:
@@ -121,23 +115,23 @@ def plain_text(file):
 
 
 def cleanup(preserve, install_dir, data_paths):
+    def delete_path(p):
+        if os.path.exists(p):
+            try:
+                logger.debug("Deleting [%s].", p)
+                shutil.rmtree(p)
+            except OSError:
+                logger.exception("Could not delete [%s]. Skipping...", p)
+
     logger = logging.getLogger(__name__)
     if preserve:
         console.info("Preserving benchmark candidate installation at [{}].".format(install_dir), logger=logger)
     else:
         logger.info("Wiping benchmark candidate installation at [%s].", install_dir)
         for path in data_paths:
-            if os.path.exists(path):
-                try:
-                    shutil.rmtree(path)
-                except OSError:
-                    logger.exception("Could not delete [%s]. Skipping...", path)
+            delete_path(path)
 
-        if os.path.exists(install_dir):
-            try:
-                shutil.rmtree(install_dir)
-            except OSError:
-                logger.exception("Could not delete [%s]. Skipping...", install_dir)
+        delete_path(install_dir)
 
 
 def _apply_config(source_root_path, target_root_path, config_vars):
@@ -168,8 +162,7 @@ class BareProvisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, cluster_settings, es_installer, plugin_installers, preserve, distribution_version=None, apply_config=_apply_config):
-        self.preserve = preserve
+    def __init__(self, cluster_settings, es_installer, plugin_installers, distribution_version=None, apply_config=_apply_config):
         self._cluster_settings = cluster_settings
         self.es_installer = es_installer
         self.plugin_installers = plugin_installers
@@ -178,8 +171,6 @@ class BareProvisioner:
         self.logger = logging.getLogger(__name__)
 
     def prepare(self, binary):
-        if not self.preserve:
-            self.logger.info("Rally will delete the benchmark candidate after the benchmark")
         self.es_installer.install(binary["elasticsearch"])
         # we need to immediately delete it as plugins may copy their configuration during installation.
         self.es_installer.delete_pre_bundled_configuration()
@@ -204,10 +195,6 @@ class BareProvisioner:
                                  self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path,
                                  self.es_installer.data_paths)
-
-    def cleanup(self):
-        self.es_installer.cleanup(self.preserve)
-
 
     def _provisioner_variables(self):
         plugin_variables = {}
@@ -250,9 +237,9 @@ class ElasticsearchInstaller:
         self.java_home = java_home
         self.node_name = node_name
         self.node_root_dir = node_root_dir
-        self.install_dir = "%s/install" % node_root_dir
-        self.node_log_dir = "%s/logs/server" % node_root_dir
-        self.heap_dump_dir = "%s/heapdump" % node_root_dir
+        self.install_dir = os.path.join(node_root_dir, "install")
+        self.node_log_dir = os.path.join(node_root_dir, "logs", "server")
+        self.heap_dump_dir = os.path.join(node_root_dir, "heapdump")
         self.all_node_ips = all_node_ips
         self.all_node_names = all_node_names
         self.node_ip = ip
@@ -272,7 +259,7 @@ class ElasticsearchInstaller:
 
         self.logger.info("Unzipping %s to %s", binary, self.install_dir)
         io.decompress(binary, self.install_dir)
-        self.es_home_path = glob.glob("%s/elasticsearch*" % self.install_dir)[0]
+        self.es_home_path = glob.glob(os.path.join(self.install_dir, "elasticsearch*"))[0]
         self.data_paths = self._data_paths()
 
     def delete_pre_bundled_configuration(self):
@@ -282,9 +269,6 @@ class ElasticsearchInstaller:
 
     def invoke_install_hook(self, phase, variables):
         self.hook_handler.invoke(phase.name, variables=variables, env={"JAVA_HOME": self.java_home})
-
-    def cleanup(self, preserve):
-        cleanup(preserve, self.install_dir, self.data_paths)
 
     @property
     def variables(self):
@@ -385,22 +369,20 @@ class PluginInstaller:
 
 
 class DockerProvisioner:
-    def __init__(self, car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version, rally_root, preserve):
+    def __init__(self, car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version, rally_root):
         self.car = car
         self.node_name = node_name
         self.node_ip = ip
         self.http_port = http_port
         self.node_root_dir = node_root_dir
-        self.node_log_dir = "%s/logs/server" % node_root_dir
-        self.heap_dump_dir = "%s/heapdump" % node_root_dir
+        self.node_log_dir = os.path.join(node_root_dir, "logs", "server")
+        self.heap_dump_dir = os.path.join(node_root_dir, "heapdump")
         self.distribution_version = distribution_version
         self.rally_root = rally_root
-        self.install_dir = "%s/install" % node_root_dir
+        self.binary_path = os.path.join(node_root_dir, "install")
         # use a random subdirectory to isolate multiple runs because an external (non-root) user cannot clean it up.
         import uuid
-        self.data_paths = ["%s/data/%s" % (node_root_dir, uuid.uuid4())]
-        self.preserve = preserve
-        self.binary_path = "%s/docker-compose.yml" % self.install_dir
+        self.data_paths = [os.path.join(node_root_dir, "data", str(uuid.uuid4()))]
         self.logger = logging.getLogger(__name__)
 
         provisioner_defaults = {
@@ -430,7 +412,7 @@ class DockerProvisioner:
         # hence we need to modify the process' umask here. For details see https://linux.die.net/man/2/mkdir.
         previous_umask = os.umask(0)
         try:
-            io.ensure_dir(self.install_dir)
+            io.ensure_dir(self.binary_path)
             io.ensure_dir(self.node_log_dir)
             io.ensure_dir(self.heap_dump_dir)
             io.ensure_dir(self.data_paths[0])
@@ -444,7 +426,7 @@ class DockerProvisioner:
                 env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
 
                 relative_root = root[len(car_config_path) + 1:]
-                absolute_target_root = os.path.join(self.install_dir, relative_root)
+                absolute_target_root = os.path.join(self.binary_path, relative_root)
                 io.ensure_dir(absolute_target_root)
 
                 for name in files:
@@ -462,20 +444,11 @@ class DockerProvisioner:
         docker_cfg = self._render_template_from_file(self.docker_vars(mounts))
         self.logger.info("Starting Docker container with configuration:\n%s", docker_cfg)
 
-        with open(self.binary_path, mode="wt", encoding="utf-8") as f:
+        with open(os.path.join(self.binary_path, "docker-compose.yml"), mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
         return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"), self.node_ip,
                                  self.node_name, self.node_root_dir, self.binary_path, self.data_paths)
-
-    def cleanup(self):
-        # do not attempt to cleanup data paths. It does not work due to different permissions. As:
-        #
-        # (a) Docker is unsupported and not meant to be used by everybody, and
-        # (b) the volume is recreated before each race
-        #
-        # this is not a major problem.
-        cleanup(self.preserve, self.install_dir, [])
 
     def docker_vars(self, mounts):
         v = {
@@ -509,7 +482,7 @@ class DockerProvisioner:
             raise exceptions.SystemSetupError("%s in %s" % (str(e), template_name))
 
     def _render_template_from_file(self, variables):
-        compose_file = "%s/resources/docker-compose.yml.j2" % self.rally_root
+        compose_file = os.path.join(self.rally_root, "resources", "docker-compose.yml.j2")
         return self._render_template(loader=jinja2.FileSystemLoader(io.dirname(compose_file)),
                                      template_name=io.basename(compose_file),
                                      variables=variables)

@@ -50,7 +50,7 @@ def _wait_for_healthy_running_container(container_id, timeout=60):
 
 
 def _get_docker_compose_cmd(compose_config, cmd):
-    return "docker-compose -f {} {}".format(compose_config, cmd)
+    return "docker-compose -f {} {}".format(os.path.join(compose_config, "docker-compose.yml"), cmd)
 
 
 class DockerLauncher:
@@ -161,6 +161,7 @@ class ProcessLauncher:
         env = self._prepare_env(node_configuration.car_env, node_name, java_home, t)
         t.on_pre_node_start(node_name)
         node_pid = self._start_process(binary_path, env)
+        self.logger.info("Successfully started node [%s] with PID [%s].", node_name, node_pid)
         node = cluster.Node(node_pid, binary_path, host_name, node_name, t)
 
         self.logger.info("Attaching telemetry devices to node [%s].", node_name)
@@ -202,7 +203,7 @@ class ProcessLauncher:
         cmd.extend(["-d", "-p", "pid"])
         ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env)
         if ret != 0:
-            msg = "Daemon startup failed with exit code[{}]".format(ret)
+            msg = "Daemon startup failed with exit code [{}]".format(ret)
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 

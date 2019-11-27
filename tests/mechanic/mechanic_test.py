@@ -114,12 +114,14 @@ class MechanicTests(TestCase):
         def _add_results(self, current_race, node):
             pass
 
-    def test_start_stop_nodes(self):
+    @mock.patch("esrally.mechanic.provisioner.cleanup")
+    def test_start_stop_nodes(self, cleanup):
         supplier = lambda: "/home/user/src/elasticsearch/es.tar.gz"
         provisioners = [mock.Mock(), mock.Mock()]
         launcher = MechanicTests.TestLauncher()
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "race.id", "17")
+        cfg.add(config.Scope.application, "mechanic", "preserve.install", False)
         metrics_store = mock.Mock()
         m = MechanicTests.TestMechanic(cfg, metrics_store, supplier, provisioners, launcher)
         m.start_engine()
@@ -129,5 +131,4 @@ class MechanicTests(TestCase):
 
         m.stop_engine()
         self.assertFalse(launcher.started)
-        for p in provisioners:
-            self.assertTrue(p.cleanup.called)
+        self.assertEqual(cleanup.call_count, 2)

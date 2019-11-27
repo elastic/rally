@@ -234,6 +234,12 @@ def create_arg_parser():
         help="The IP address to bind to and publish",
         default="127.0.0.1"
     )
+    install_parser.add_argument(
+        "--http-port",
+        help="The port to expose for HTTP traffic",
+        default="9200"
+    )
+
     # TODO: Should this be required (without a default)? For the simple case (local single-node cluster, we can provide a default)
     install_parser.add_argument(
         "--node-name",
@@ -804,6 +810,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
     if sub_command == "install":
         cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
         cfg.add(config.Scope.applicationOverride, "mechanic", "skip.build", args.skip_build)
         cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
         cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)

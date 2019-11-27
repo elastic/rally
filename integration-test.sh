@@ -467,6 +467,34 @@ function test_docker_dev_image {
     tests_for_all_docker_images
 }
 
+function test_node_management_commands {
+    local cfg
+    local dist
+    random_configuration cfg
+    random_distribution dist
+
+    info "test install [--configuration-name=${cfg}]"
+    kill_rally_processes
+
+    raw_install_id=$(esrally install --quiet --configuration-name="${cfg}" --distribution-version="${dist}" --build-type=tar --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
+    install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)
+
+    info "test start [--configuration-name=${cfg}]"
+    esrally start --quiet --configuration-name="${cfg}" --installation-id="${install_id}" --race-id="rally-integration-test"
+
+    esrally --target-host="localhost:39200" \
+            --configuration-name="${cfg}" \
+            --race-id="rally-integration-test" \
+            --on-error=abort \
+            --pipeline=benchmark-only \
+            --track=geonames \
+            --test-mode \
+            --challenge=append-no-conflicts-index-only
+
+    info "test stop [--configuration-name=${cfg}]"
+    esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}" --race-id="rally-integration-test"
+}
+
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
     if [[ -z "${RALLY_VERSION}" ]]; then
@@ -524,6 +552,8 @@ function run_test {
     test_benchmark_only
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
     test_docker_dev_image
+    echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
+    test_node_management_commands
 }
 
 function tear_down {
