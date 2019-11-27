@@ -22,7 +22,7 @@ import psutil
 
 from esrally import time, exceptions, telemetry
 from esrally.mechanic import cluster, java_resolver
-from esrally.utils import process
+from esrally.utils import io, process
 
 
 class DockerLauncher:
@@ -193,7 +193,7 @@ class ProcessLauncher:
         if os.name == "posix" and os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         os.chdir(binary_path)
-        cmd = ["bin/elasticsearch"]
+        cmd = [io.escape_path(os.path.join(".", "bin", "elasticsearch"))]
         cmd.extend(["-d", "-p", "pid"])
         ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env)
         if ret != 0:
@@ -201,7 +201,7 @@ class ProcessLauncher:
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 
-        return wait_for_pidfile("./pid")
+        return wait_for_pidfile(io.escape_path(os.path.join(".", "pid")))
 
     def stop(self, nodes, metrics_store):
         self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
