@@ -190,7 +190,7 @@ class ProcessLauncher:
 
     @staticmethod
     def _start_process(binary_path, env):
-        if os.geteuid() == 0:
+        if os.name == "posix" and os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         os.chdir(binary_path)
         cmd = ["bin/elasticsearch"]
