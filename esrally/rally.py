@@ -171,7 +171,6 @@ def create_arg_parser():
     )
 
     # TODO: Annotate all required arguments as required
-    # TODO: Node IP (-> to which interface / port to bind to)
     install_parser = subparsers.add_parser("install", help="Installs an Elasticsearch node locally")
     install_parser.add_argument(
         "--revision",
@@ -237,7 +236,7 @@ def create_arg_parser():
     install_parser.add_argument(
         "--http-port",
         help="The port to expose for HTTP traffic",
-        default="9200"
+        default="39200"
     )
 
     # TODO: Should this be required (without a default)? For the simple case (local single-node cluster, we can provide a default)
@@ -710,7 +709,7 @@ def main():
         cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.utcnow())
         cfg.add(config.Scope.application, "system", "time.start.user_provided", False)
 
-    # TODO: This will be different when nodes are provisioned separately
+    # The installation id is overridden later on if nodes are managed via Rally subcommands (install / start / stop)
     cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
     cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)

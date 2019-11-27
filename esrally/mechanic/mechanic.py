@@ -561,10 +561,6 @@ class NodeMechanicActor(actor.RallyActor):
             # set root path (normally done by the main entry point)
             cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
             if not msg.external:
-                # TODO: Test with provisioned and external / with defaults and overrides whether everything works
-                #cfg.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
-                # we need to override the port with the value that the user has specified instead of using the default value (39200)
-                #cfg.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
                 cfg.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
 
             cls = metrics.metrics_store_class(cfg)

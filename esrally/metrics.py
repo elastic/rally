@@ -357,16 +357,6 @@ class MetricsStore:
         self._stop_watch = self._clock.stop_watch()
         self.logger = logging.getLogger(__name__)
 
-    # TODO: Delete me before pushing
-    # def __getstate__(self):
-    #     state = self.__dict__.copy()
-    #     del state["logger"]
-    #     return state
-    #
-    # def __setstate__(self, state):
-    #     self.__dict__.update(state)
-    #     self.logger = logging.getLogger(__name__)
-    #
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
         Opens a metrics store for a specific race, track, challenge and car.
@@ -394,10 +384,6 @@ class MetricsStore:
             self._car = car_name
         assert self._race_id is not None, "Attempting to open metrics store without a race id"
         assert self._race_timestamp is not None, "Attempting to open metrics store without a race timestamp"
-        # TODO: Double-check but it is probably ok to skip this
-        #assert self._track is not None, "Attempting to open metrics store without a track"
-        #assert self._challenge is not None, "Attempting to open metrics store without a challenge"
-        #assert self._car is not None, "Attempting to open metrics store without a car"
 
         self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
