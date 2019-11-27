@@ -68,19 +68,19 @@ class ConfigFile:
     def backup(self):
         config_file = self.location
         logging.getLogger(__name__).info("Creating a backup of the current config file at [%s].", config_file)
-        shutil.copyfile(config_file, "%s.bak" % config_file)
+        shutil.copyfile(config_file, "{}.bak".format(config_file))
 
     @property
     def config_dir(self):
-        return "%s/.rally" % os.path.expanduser("~")
+        return os.path.join(os.path.expanduser("~"), ".rally")
 
     @property
     def location(self):
         if self.config_name:
-            config_name_suffix = "-%s" % self.config_name
+            config_name_suffix = "-{}".format(self.config_name)
         else:
             config_name_suffix = ""
-        return "%s/rally%s.ini" % (self.config_dir, config_name_suffix)
+        return os.path.join(self.config_dir, "rally{}.ini".format(config_name_suffix))
 
 
 def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs):

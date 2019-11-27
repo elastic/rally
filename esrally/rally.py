@@ -19,6 +19,7 @@ import argparse
 import datetime
 import logging
 import os
+import platform
 import sys
 import time
 import uuid
@@ -683,7 +684,6 @@ def dispatch_sub_command(cfg, sub_command):
 
 def main():
     check_python_version()
-    log.remove_obsolete_default_log_config()
     log.install_default_log_config()
     log.configure_logging()
     logger = logging.getLogger(__name__)
@@ -818,7 +818,7 @@ def main():
     if sub_command in ["start", "stop"]:
         cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
 
-    logger.info("OS [%s]", str(os.uname()))
+    logger.info("OS [%s]", str(platform.uname()))
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
     logger.debug("Command line arguments: %s", args)

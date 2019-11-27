@@ -249,9 +249,19 @@ def normalize_path(path, cwd="."):
     normalized = os.path.normpath(os.path.expanduser(path))
     # user specified only a file name? -> treat as relative to the current directory
     if dirname(normalized) == "":
-        return "%s/%s" % (cwd, normalized)
+        return os.path.join(cwd, normalized)
     else:
         return normalized
+
+
+def escape_path(path):
+    """
+    Escapes any characters that might be problematic in shell interactions.
+
+    :param path: The original path.
+    :return: A potentially modified version of the path with all problematic characters escaped.
+    """
+    return path.replace("\\", "\\\\")
 
 
 def splitext(file_name):

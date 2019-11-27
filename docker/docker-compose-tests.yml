@@ -30,6 +30,7 @@ services:
           retries: 10
 networks:
   esnet:
+    name: rally-tests
 
 volumes:
   esdata1:

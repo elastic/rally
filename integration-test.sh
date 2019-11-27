@@ -282,7 +282,7 @@ function test_docker {
     random_configuration cfg
     info "test docker [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=geonames], [--car=4gheap]"
     kill_rally_processes
-    esrally --configuration-name="${cfg}" --on-error=abort --pipeline="docker" --distribution-version="${dist}" --track="geonames" --challenge="append-no-conflicts-index-only" --test-mode --car=4gheap
+    esrally --configuration-name="${cfg}" --on-error=abort --pipeline="docker" --distribution-version="${dist}" --track="geonames" --challenge="append-no-conflicts-index-only" --test-mode --car=4gheap --target-hosts=127.0.0.1:19200
 }
 
 function test_distribution_fails_with_wrong_track_params {
