@@ -92,7 +92,7 @@ def init(quiet=False):
 
     QUIET = quiet
     RALLY_RUNNING_IN_DOCKER = os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE"
-    if os.environ.get("TERM") == "dumb":
+    if os.environ.get("TERM") == "dumb" or sys.platform == "win32":
         PLAIN = True
         format = PlainFormat
     else:

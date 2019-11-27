@@ -57,7 +57,11 @@ def install_default_log_config():
         source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
         with open(log_config, "w", encoding="UTF-8") as target:
             with open(source_path, "r", encoding="UTF-8") as src:
-                contents = src.read().replace("${LOG_PATH}", paths.logs())
+                # Ensure we have a trailing path separator as after LOG_PATH there will only be the file name
+                log_path = os.path.join(paths.logs(), "")
+                # the logging path might contain backslashes that we need to escape
+                log_path = io.escape_path(log_path)
+                contents = src.read().replace("${LOG_PATH}", log_path)
                 target.write(contents)
     io.ensure_dir(paths.logs())
 

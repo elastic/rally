@@ -19,6 +19,7 @@ import argparse
 import datetime
 import logging
 import os
+import platform
 import sys
 import time
 import uuid
@@ -677,7 +678,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
 
-    logger.info("OS [%s]", str(os.uname()))
+    logger.info("OS [%s]", str(platform.uname()))
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
     logger.debug("Command line arguments: %s", args)
