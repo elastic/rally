@@ -286,9 +286,6 @@ class Car:
     def safe_name(self):
         return "_".join(self.names)
 
-    def as_dict(self):
-        return self.__dict__
-
     def __str__(self):
         return self.name
 

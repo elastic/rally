@@ -171,7 +171,6 @@ def create_arg_parser():
         default=""
     )
 
-    # TODO: Annotate all required arguments as required
     install_parser = subparsers.add_parser("install", help="Installs an Elasticsearch node locally")
     install_parser.add_argument(
         "--revision",
@@ -239,14 +238,11 @@ def create_arg_parser():
         help="The port to expose for HTTP traffic",
         default="39200"
     )
-
-    # TODO: Should this be required (without a default)? For the simple case (local single-node cluster, we can provide a default)
     install_parser.add_argument(
         "--node-name",
         help="The name of this Elasticsearch node",
         default="rally-node-0"
     )
-    # TODO: What if a user wants to benchmark with a discovery plugin? Does it make sense we define a parameter for this?
     install_parser.add_argument(
         "--master-nodes",
         help="A comma-separated list of the initial master node names",
