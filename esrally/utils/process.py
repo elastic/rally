@@ -29,6 +29,8 @@ def run_subprocess(command_line):
 
 
 def run_subprocess_with_output(command_line):
+    logger = logging.getLogger(__name__)
+    logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
     with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as command_line_process:
         has_output = True
@@ -73,7 +75,6 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
     command_line_args = shlex.split(command_line)
     if header is not None:
         logger.info(header)
-    logger.debug("Invoking subprocess '%s'", command_line)
     with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
         has_output = True
         while has_output:
