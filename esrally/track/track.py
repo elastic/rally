@@ -441,6 +441,7 @@ class OperationType(Enum):
     CreateSnapshotRepository = 1020
     RestoreSnapshot = 1021
     WaitForRecovery = 1022
+    PutSettings = 1023
 
     @property
     def admin_op(self):
@@ -502,6 +503,8 @@ class OperationType(Enum):
             return OperationType.RestoreSnapshot
         elif v == "wait-for-recovery":
             return OperationType.WaitForRecovery
+        elif v == "put-settings":
+            return OperationType.PutSettings
         else:
             raise KeyError("No enum value for [%s]" % v)
 

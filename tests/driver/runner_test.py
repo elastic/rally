@@ -2477,6 +2477,27 @@ class ShrinkIndexTests(TestCase):
         })
 
 
+class PutSettingsTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_put_settings(self, es):
+        params = {
+            "body": {
+                "transient": {
+                    "indices.recovery.max_bytes_per_sec": "20mb"
+                }
+            }
+        }
+
+        r = runner.PutSettings()
+        r(es, params)
+
+        es.cluster.put_settings.assert_called_once_with(body={
+            "transient": {
+                "indices.recovery.max_bytes_per_sec": "20mb"
+            }
+        })
+
+
 class RetryTests(TestCase):
     def test_is_transparent_on_success_when_no_retries(self):
         delegate = mock.Mock()

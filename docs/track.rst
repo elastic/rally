@@ -435,6 +435,29 @@ This example requires that the ``ingest-geoip`` Elasticsearch plugin is installe
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+put-settings
+~~~~~~~~~~~~
+
+With the operation-type ``put-settings`` you can execute the `cluster update settings API <http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html>`_. It supports the following properties:
+
+* `body` (mandatory): The cluster settings to apply.
+
+Example::
+
+    {
+      "name": "increase-watermarks",
+      "operation-type": "put-settings",
+      "body": {
+        "transient" : {
+            "cluster.routing.allocation.disk.watermark.low" : "95%",
+            "cluster.routing.allocation.disk.watermark.high" : "97%",
+            "cluster.routing.allocation.disk.watermark.flood_stage" : "99%"
+        }
+      }
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
 cluster-health
 ~~~~~~~~~~~~~~
 
