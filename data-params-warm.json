@@ -1,9 +1,0 @@
-{
-  "additional_cluster_settings": {
-    "node.master": false,
-    "node.data": true,
-    "node.ingest": false,
-    "cluster.remote.connect": false,
-    "node.attr.box_type": "warm"
-  }
-}
