@@ -84,6 +84,11 @@ function restore_rally_log {
     set -e
 }
 
+function stop_and_clean_docker_container {
+    docker stop ${1} > /dev/null
+    docker rm ${1} > /dev/null
+}
+
 function kill_rally_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
@@ -113,7 +118,7 @@ function kill_related_es_processes {
     if [ -n "${RUNNING_DOCKER_CONTAINERS}" ]; then
         for container in "${RUNNING_DOCKER_CONTAINERS}"
         do
-            docker stop ${container}
+            stop_and_clean_docker_container ${container}
         done
     fi
     set -e
@@ -589,7 +594,7 @@ function tear_down {
     # stop Docker container for tests
     if [ "${PROXY_CONTAINER_ID}" != "-1" ]; then
         info "Stopping Docker container [${PROXY_CONTAINER_ID}]"
-        docker stop ${PROXY_CONTAINER_ID} > /dev/null
+        stop_and_clean_docker_container ${PROXY_CONTAINER_ID}
     fi
 
     rm -f ~/.rally/rally*integration-test.ini
