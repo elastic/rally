@@ -1,7 +1,7 @@
 Setting up a Cluster
 ====================
 
-In this section we cover how to setup an Elasticsearch cluster with Rally. It is by no means required to use Rally for this and you can also use existing tooling like Ansible to achieve the same goal. The main difference between standard tools and and Rally is that Rally is capable of setting up a :doc:`wide range of Elasticsearch versions </versions>`.
+In this section we cover how to setup an Elasticsearch cluster with Rally. It is by no means required to use Rally for this and you can also use existing tooling like Ansible to achieve the same goal. The main difference between standard tools and Rally is that Rally is capable of setting up a :doc:`wide range of Elasticsearch versions </versions>`.
 
 .. warning::
 
@@ -16,7 +16,7 @@ You can use the following subcommands in Rally to manage Elasticsearch nodes:
 * ``start`` to start a previously installed Elasticsearch node
 * ``stop`` to stop a running Elasticsearch node and remove the installation
 
-Each command needs to be executed locally on the machine where the Elasticsearch node should run. To setup more complex clusters remotely, we recommend to use a tool like Ansible to connect to remote machines and issue these commands via Rally.
+Each command needs to be executed locally on the machine where the Elasticsearch node should run. To setup more complex clusters remotely, we recommend using a tool like Ansible to connect to remote machines and issue these commands via Rally.
 
 Getting Started: Benchmarking a Single Node
 -------------------------------------------
@@ -27,7 +27,7 @@ First we need to install Elasticearch::
 
     esrally install --quiet --distribution-version=7.4.2 --node-name="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
 
-The parameter ``--network-host`` defines to which network interface this node will bind to and ``--http-port`` defines which port will be exposed for HTTP traffic. Rally will automatically choose the transport port range as 100 above (39300). The parameters ``--master-nodes`` and ``--seed-hosts`` are necessary for the discovery process. Please see the respective Elasticsearch documentation on `discovery <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery.html>`_ for more details.
+The parameter ``--network-host`` defines the network interface this node will bind to and ``--http-port`` defines which port will be exposed for HTTP traffic. Rally will automatically choose the transport port range as 100 above (39300). The parameters ``--master-nodes`` and ``--seed-hosts`` are necessary for the discovery process. Please see the respective Elasticsearch documentation on `discovery <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery.html>`_ for more details.
 
 This produces the following output (the value will vary for each invocation)::
 

@@ -86,9 +86,6 @@ class DockerLauncher:
     def stop(self, nodes, metrics_store):
         self.logger.info("Shutting down [%d] nodes running in Docker on this host.", len(nodes))
         for node in nodes:
-            # readd meta-data - we already did this on startup but in case dedicated subcommands are used for
-            # handling the node lifecycle, we are handed a different metrics store instance and thus need to add
-            # metadata again.
             self.logger.info("Stopping node [%s].", node.node_name)
             telemetry.add_metadata_for_node(metrics_store, node.node_name, node.host_name)
             node.telemetry.detach_from_node(node, running=True)
