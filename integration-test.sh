@@ -108,6 +108,14 @@ function kill_related_es_processes {
             kill -9 ${p}
         done
     fi
+    # kill all lingering Elasticsearch Docker containers launched by Rally
+    RUNNING_DOCKER_CONTAINERS=$(docker ps --filter "label=io.rally.description" --format "{{.ID}}")
+    if [ -n "${RUNNING_DOCKER_CONTAINERS}" ]; then
+        for container in "${RUNNING_DOCKER_CONTAINERS}"
+        do
+            docker stop ${container}
+        done
+    fi
     set -e
 }
 
