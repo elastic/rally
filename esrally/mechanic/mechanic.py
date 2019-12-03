@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import contextlib
 import json
 import logging
 import os
@@ -77,17 +78,13 @@ def install(cfg):
 
 def start(cfg):
     root_path = paths.install_root(cfg)
-    # avoid double-launching
-    try:
+    race_id = cfg.opts("system", "race.id")
+    # avoid double-launching - we expect that the node file is absent
+    with contextlib.suppress(FileNotFoundError):
         _load_node_file(root_path)
         install_id = cfg.opts("system", "install.id")
-        race_id = cfg.opts("system", "race.id")
         raise exceptions.SystemSetupError("A node with this installation id is already running. Please stop it first "
-                                          "with {} stop --installation-id={} --race-id={}"
-                                          .format(PROGRAM_NAME, install_id, race_id))
-    except FileNotFoundError:
-        # expected - the file should not be present for a successful launch
-        pass
+                                          "with {} stop --installation-id={}".format(PROGRAM_NAME, install_id))
 
     node_config = provisioner.load_node_configuration(root_path)
 
@@ -98,19 +95,18 @@ def start(cfg):
     else:
         raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
     nodes = node_launcher.start([node_config])
-    _store_node_file(root_path, nodes)
+    _store_node_file(root_path, (nodes, race_id))
 
 
 def stop(cfg):
     root_path = paths.install_root(cfg)
     node_config = provisioner.load_node_configuration(root_path)
-    nodes = _load_node_file(root_path)
+    nodes, race_id = _load_node_file(root_path)
 
     cls = metrics.metrics_store_class(cfg)
     metrics_store = cls(cfg)
 
     race_store = metrics.race_store(cfg)
-    race_id = cfg.opts("system", "race.id")
     try:
         current_race = race_store.find_by_race_id(race_id)
     except exceptions.NotFound:
@@ -157,9 +153,9 @@ def _load_node_file(root_path):
         return pickle.load(f)
 
 
-def _store_node_file(root_path, nodes):
+def _store_node_file(root_path, data):
     with open(os.path.join(root_path, "node"), "wb") as f:
-        pickle.dump(nodes, f)
+        pickle.dump(data, f)
 
 
 def _delete_node_file(root_path):

@@ -513,7 +513,7 @@ function test_node_management_commands {
             --challenge=append-no-conflicts-index-only
 
     info "test stop [--configuration-name=${cfg}]"
-    esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}" --race-id="rally-integration-test"
+    esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}"
 }
 
 # This function gets called by release-docker.sh and assumes the image has been already built

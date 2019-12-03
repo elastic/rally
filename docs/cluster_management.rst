@@ -54,7 +54,7 @@ After the Elasticsearch node has started, we can run a benchmark. Be sure to pas
 
 When the benchmark has finished, we can stop the node again::
 
-    esrally stop --installation-id="69ffcfee-6378-4090-9e93-87c9f8ee59a7" --race-id="${RACE_ID}"
+    esrally stop --installation-id="69ffcfee-6378-4090-9e93-87c9f8ee59a7"
 
 If you only want to shutdown the node but don't want to delete the node and the data, pass ``--preserve-install`` additionally.
 
@@ -94,5 +94,5 @@ Now we can start the benchmark on the load generator machine (remember to set th
 
 Similarly to the single-node benchmark, we can now shutdown the cluster again by issuing the following command on each node::
 
-    esrally stop --installation-id="${INSTALLATION_ID}" --race-id="${RACE_ID}"
+    esrally stop --installation-id="${INSTALLATION_ID}"
 

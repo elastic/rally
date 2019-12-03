@@ -107,9 +107,9 @@ Please see the :doc:`cluster management tutorial </cluster_management>` for the 
 
 This subcommand can be used to stop a single Elasticsearch node that has been previously started with the ``start`` subcommand. Example::
 
-    esrally stop --installation-id=INSTALLATION_ID --race-id=RACE_ID
+    esrally stop --installation-id=INSTALLATION_ID
 
-``INSTALLATION_ID`` is the installation id value as shown in the output of the ``install`` command. The ``RACE_ID`` can be chosen freely but is required be the same for all nodes in a cluster. It also needs to match the ``RACE_ID`` chosen upon node startup.
+``INSTALLATION_ID`` is the installation id value as shown in the output of the ``install`` command.
 
 Please see the :doc:`cluster management tutorial </cluster_management>` for the intended use and a complete walkthrough.
 

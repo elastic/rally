@@ -286,13 +286,8 @@ def create_arg_parser():
     stop_parser.add_argument(
         "--installation-id",
         required=True,
-        help="The id of the installation to start",
+        help="The id of the installation to stop",
         # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
-        default="")
-    stop_parser.add_argument(
-        "--race-id",
-        required=True,
-        help="Define a unique id for this race.",
         default="")
     stop_parser.add_argument(
         "--preserve-install",
