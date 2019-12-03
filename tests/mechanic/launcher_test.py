@@ -157,6 +157,7 @@ class ProcessLauncherTests(TestCase):
     def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home, kill):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
+        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "telemetry", "devices", [])
         cfg.add(config.Scope.application, "telemetry", "params", None)
         cfg.add(config.Scope.application, "system", "env.name", "test")
@@ -177,6 +178,7 @@ class ProcessLauncherTests(TestCase):
 
     def test_env_options_order(self):
         cfg = config.Config()
+        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "system", "env.name", "test")
 
         proc_launcher = launcher.ProcessLauncher(cfg)

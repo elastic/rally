@@ -121,6 +121,7 @@ class ProcessLauncher:
     def __init__(self, cfg, clock=time.Clock):
         self.cfg = cfg
         self._clock = clock
+        self.keep_running = self.cfg.opts("mechanic", "keep.running")
         self.logger = logging.getLogger(__name__)
 
     def start(self, node_configurations):
@@ -204,30 +205,31 @@ class ProcessLauncher:
         return wait_for_pidfile(io.escape_path(os.path.join(".", "pid")))
 
     def stop(self, nodes, metrics_store):
-        self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
+        if self.keep_running:
+            self.logger.info("Keeping [%d] nodes on this host running.", len(nodes))
+        else:
+            self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
         for node in nodes:
             proc = psutil.Process(pid=node.pid)
             node_name = node.node_name
-            # readd meta-data - we already did this on startup but in case dedicated subcommands are used for
-            # handling the node lifecycle, we are handed a different metrics store instance and thus need to add
-            # metadata again.
             telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
 
             node.telemetry.detach_from_node(node, running=True)
-            stop_watch = self._clock.stop_watch()
-            stop_watch.start()
-            try:
-                os.kill(proc.pid, signal.SIGTERM)
-                proc.wait(10.0)
-            except ProcessLookupError:
-                self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
-            except psutil.TimeoutExpired:
-                self.logger.info("kill -KILL node [%s]", node_name)
+            if not self.keep_running:
+                stop_watch = self._clock.stop_watch()
+                stop_watch.start()
                 try:
-                    # kill -9
-                    proc.kill()
+                    os.kill(proc.pid, signal.SIGTERM)
+                    proc.wait(10.0)
                 except ProcessLookupError:
                     self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
-            node.telemetry.detach_from_node(node, running=False)
-            node.telemetry.store_system_metrics(node, metrics_store)
-            self.logger.info("Done shutdown node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
+                except psutil.TimeoutExpired:
+                    self.logger.info("kill -KILL node [%s]", node_name)
+                    try:
+                        # kill -9
+                        proc.kill()
+                    except ProcessLookupError:
+                        self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
+                node.telemetry.detach_from_node(node, running=False)
+                node.telemetry.store_system_metrics(node, metrics_store)
+                self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())

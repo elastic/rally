@@ -474,6 +474,12 @@ def create_arg_parser():
             help=argparse.SUPPRESS,
             type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
             default=None)
+        # keeps the cluster running after the benchmark, only relevant if Rally provisions the cluster
+        p.add_argument(
+            "--keep-cluster-running",
+            help=argparse.SUPPRESS,
+            action="store_true",
+            default=False)
         # skips checking that the REST API is available before proceeding with the benchmark
         p.add_argument(
             "--skip-rest-api-check",
@@ -730,7 +736,13 @@ def main():
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
     cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
     cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+    if args.keep_cluster_running:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
+        # force-preserve the cluster nodes.
+        cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", True)
+    else:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
     cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", convert.to_bool(args.skip_rest_api_check))
     cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", opts.csv_to_list(args.telemetry))
