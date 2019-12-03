@@ -375,7 +375,11 @@ Note that it is still required to provide the parameter ``--elasticsearch-plugin
 ``distribution-version``
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you want to benchmark a binary distribution, you can specify the version here.
+If you want Rally to launch and benchmark a cluster using a binary distribution, you can specify the version here.
+
+.. note::
+
+    Do not use ``distribution-version`` when benchmarking a cluster that hasn't been setup by Rally (i.e. together with ``pipeline=benchmark-only``); Rally automatically derives and stores the version of the cluster in the metrics store regardless of the ``pipeline`` used.
 
 **Example**
 
