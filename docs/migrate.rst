@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 1.4.0
 ------------------------
 
+cluster-settings is deprecated in favor of the put-settings operation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Before Rally 1.4.0, cluster settings could be specified on the track with the ``cluster-settings`` property. This functionality is deprecated and you should set dynamic cluster settings via the new ``put-settings`` runner. Static settings should instead be set via ``--car-params``.
+
 Build logs are stored in Rally's log directory
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
