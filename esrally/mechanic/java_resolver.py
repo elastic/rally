@@ -21,22 +21,21 @@ from esrally import exceptions
 from esrally.utils import jvm
 
 
-def java_home(car, cfg):
-    def determine_runtime_jdks(car):
+def java_home(car_runtime_jdks, cfg):
+    def determine_runtime_jdks():
         override_runtime_jdk = cfg.opts("mechanic", "runtime.jdk")
         if override_runtime_jdk:
             return [override_runtime_jdk]
         else:
-            runtime_jdks = car.mandatory_var("runtime.jdk")
             try:
-                return [int(v) for v in runtime_jdks.split(",")]
+                return [int(v) for v in car_runtime_jdks.split(",")]
             except ValueError:
                 raise exceptions.SystemSetupError(
-                    "Car config key \"runtime.jdk\" is invalid: \"{}\" (must be int)".format(runtime_jdks))
+                    "Car config key \"runtime.jdk\" is invalid: \"{}\" (must be int)".format(car_runtime_jdks))
 
     logger = logging.getLogger(__name__)
 
-    runtime_jdk_versions = determine_runtime_jdks(car)
+    runtime_jdk_versions = determine_runtime_jdks()
     logger.info("Allowed JDK versions are %s.", runtime_jdk_versions)
     major, java_home = jvm.resolve_path(runtime_jdk_versions)
     logger.info("Detected JDK with major version [%s] in [%s].", major, java_home)

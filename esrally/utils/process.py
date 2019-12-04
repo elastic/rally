@@ -29,6 +29,8 @@ def run_subprocess(command_line):
 
 
 def run_subprocess_with_output(command_line):
+    logger = logging.getLogger(__name__)
+    logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
     with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as command_line_process:
         has_output = True
@@ -73,7 +75,6 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
     command_line_args = shlex.split(command_line)
     if header is not None:
         logger.info(header)
-    logger.debug("Invoking subprocess '%s'", command_line)
     with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
         has_output = True
         while has_output:
@@ -84,20 +85,6 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
                 has_output = False
     logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
     return command_line_process.returncode
-
-
-def kill_running_es_instances(trait):
-    """
-    Kills all instances of Elasticsearch that are currently running on the local machine by sending SIGKILL.
-
-    :param trait some trait of the process in the command line.
-    """
-
-    def elasticsearch_process(p):
-        return p.name() == "java" and any("elasticsearch" in e for e in p.cmdline()) and any(trait in e for e in p.cmdline())
-
-    logging.getLogger(__name__).info("Killing all processes which match [java], [elasticsearch] and [%s]", trait)
-    kill_all(elasticsearch_process)
 
 
 def is_rally_process(p):

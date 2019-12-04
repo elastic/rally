@@ -17,7 +17,6 @@
 
 import collections
 import random
-import tempfile
 import unittest.mock as mock
 from collections import namedtuple
 from unittest import TestCase
@@ -25,7 +24,7 @@ from unittest import TestCase
 import elasticsearch
 
 from esrally import config, metrics, exceptions, telemetry
-from esrally.mechanic import team, cluster
+from esrally.mechanic import cluster
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console
 
@@ -54,7 +53,7 @@ class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
         super().__init__()
         self.mock_java_opts = mock_java_opts
 
-    def instrument_java_opts(self, car, candidate_id):
+    def instrument_java_opts(self):
         return self.mock_java_opts
 
 
@@ -73,8 +72,7 @@ class TelemetryTests(TestCase):
 
         t = telemetry.Telemetry(enabled_devices=None, devices=devices)
 
-        default_car = team.Car(names="default-car", root_path=None, config_paths=["/tmp/rally-config"])
-        opts = t.instrument_candidate_java_opts(default_car, "default-node")
+        opts = t.instrument_candidate_java_opts()
 
         self.assertIsNotNone(opts)
         self.assertEqual(len(opts), 3)
@@ -87,14 +85,15 @@ class StartupTimeTests(TestCase):
     def test_store_calculated_metrics(self, metrics_store_put_value, stop_watch):
         stop_watch.total_time.return_value = 2
         metrics_store = metrics.EsMetricsStore(create_config())
-        node = cluster.Node(None, "io", "rally0", None)
-        startup_time = telemetry.StartupTime(metrics_store)
+        node = cluster.Node(None, "/bin", "io", "rally0", None)
+        startup_time = telemetry.StartupTime()
         # replace with mock
         startup_time.timer = stop_watch
 
         startup_time.on_pre_node_start(node.node_name)
         # ... nodes starts up ...
         startup_time.attach_to_node(node)
+        startup_time.store_system_metrics(node, metrics_store)
 
         metrics_store_put_value.assert_called_with("rally0", "node_startup_time", 2, "s")
 
@@ -233,7 +232,7 @@ class HeapdumpTests(TestCase):
         run_subprocess_with_logging.return_value = 0
         heapdump = telemetry.Heapdump("/var/log")
         t = telemetry.Telemetry(enabled_devices=[heapdump.command], devices=[heapdump])
-        node = cluster.Node(pid="1234", host_name="localhost", node_name="rally0", telemetry=t)
+        node = cluster.Node(pid="1234", binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.detach_from_node(node, running=True)
         run_subprocess_with_logging.assert_called_with("jmap -dump:format=b,file=/var/log/heap_at_exit_1234.hprof 1234")
@@ -1984,20 +1983,19 @@ class DiskIoTests(TestCase):
         process_stop = Diskio(11, 11)
         process_io_counters.side_effect = [process_start, process_stop]
 
-        tmp_dir = tempfile.mkdtemp()
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         
-        device = telemetry.DiskIo(metrics_store, node_count_on_host=1, log_root=tmp_dir, node_name="rally0")
+        device = telemetry.DiskIo(node_count_on_host=1)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
-        node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
+        node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
-        device2 = telemetry.DiskIo(metrics_store, node_count_on_host=1, log_root=tmp_dir, node_name="rally0")
-        t2 = telemetry.Telemetry(enabled_devices=[], devices=[device2])
-        t2.on_benchmark_stop()
-        t2.detach_from_node(node, running=True)
-        t2.detach_from_node(node, running=False)
+        # we assume that serializing and deserializing the telemetry device produces the same state
+        t.on_benchmark_stop()
+        t.detach_from_node(node, running=True)
+        t.detach_from_node(node, running=False)
+        t.store_system_metrics(node, metrics_store)
 
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
@@ -2015,20 +2013,19 @@ class DiskIoTests(TestCase):
         disk_io_counters.side_effect = [process_start, process_stop]
         process_io_counters.side_effect = [None, None]
         
-        tmp_dir = tempfile.mkdtemp()
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         
-        device = telemetry.DiskIo(metrics_store, node_count_on_host=2, log_root=tmp_dir, node_name="rally0")
+        device = telemetry.DiskIo(node_count_on_host=2)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
-        node = cluster.Node(pid=None, host_name="localhost", node_name="rally0", telemetry=t)
+        node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
-        device2 = telemetry.DiskIo(metrics_store, node_count_on_host=2, log_root=tmp_dir, node_name="rally0")
-        t2 = telemetry.Telemetry(enabled_devices=[], devices=[device2])
-        t2.on_benchmark_stop()
-        t2.detach_from_node(node, running=True)
-        t2.detach_from_node(node, running=False)
+        # we assume that serializing and deserializing the telemetry device produces the same state
+        t.on_benchmark_stop()
+        t.detach_from_node(node, running=True)
+        t.detach_from_node(node, running=False)
+        t.store_system_metrics(node, metrics_store)
 
         # expected result is 1 byte because there are two nodes on the machine. Result is calculated 
         # with total_bytes / node_count
@@ -2518,14 +2515,15 @@ class IndexSizeTests(TestCase):
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexSize(["/var/elasticsearch/data/1", "/var/elasticsearch/data/2"], metrics_store)
+        device = telemetry.IndexSize(["/var/elasticsearch/data/1", "/var/elasticsearch/data/2"])
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
-        node = cluster.Node(pid=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
+        node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally-node-0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
         t.on_benchmark_stop()
         t.detach_from_node(node, running=True)
         t.detach_from_node(node, running=False)
+        t.store_system_metrics(node, metrics_store)
 
         metrics_store_node_count.assert_has_calls([
             mock.call("rally-node-0", "final_index_size_bytes", 18432, "byte")
@@ -2540,14 +2538,15 @@ class IndexSizeTests(TestCase):
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.IndexSize(data_paths=[], metrics_store=metrics_store)
+        device = telemetry.IndexSize(data_paths=[])
         t = telemetry.Telemetry(devices=[device])
-        node = cluster.Node(pid=None, host_name="localhost", node_name="rally-node-0", telemetry=t)
+        node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally-node-0", telemetry=t)
         t.attach_to_node(node)
         t.on_benchmark_start()
         t.on_benchmark_stop()
         t.detach_from_node(node, running=True)
         t.detach_from_node(node, running=False)
+        t.store_system_metrics(node, metrics_store)
 
         self.assertEqual(0, run_subprocess.call_count)
         self.assertEqual(0, metrics_store_cluster_count.call_count)

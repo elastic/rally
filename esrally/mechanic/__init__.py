@@ -17,4 +17,4 @@
 
 # expose only the minimum API
 from .mechanic import StartEngine, EngineStarted, StopEngine, EngineStopped, ResetRelativeTime, MechanicActor, \
-    cluster_distribution_version, download
+    cluster_distribution_version, download, install, start, stop

@@ -22,6 +22,7 @@ set -e
 readonly CONFIGURATIONS=(integration-test es-integration-test)
 
 readonly DISTRIBUTIONS=(2.4.6 5.6.16 6.8.0 7.1.1)
+readonly BUILD_TYPES=(tar docker)
 readonly TRACKS=(geonames nyc_taxis http_logs nested)
 
 readonly ES_METRICS_STORE_JAVA_HOME="${JAVA8_HOME}"
@@ -83,6 +84,11 @@ function restore_rally_log {
     set -e
 }
 
+function stop_and_clean_docker_container {
+    docker stop ${1} > /dev/null
+    docker rm ${1} > /dev/null
+}
+
 function kill_rally_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
@@ -105,6 +111,14 @@ function kill_related_es_processes {
         for p in "${RUNNING_RALLY_ES_PROCESSES}"
         do
             kill -9 ${p}
+        done
+    fi
+    # kill all lingering Elasticsearch Docker containers launched by Rally
+    RUNNING_DOCKER_CONTAINERS=$(docker ps --filter "label=io.rally.description" --format "{{.ID}}")
+    if [ -n "${RUNNING_DOCKER_CONTAINERS}" ]; then
+        for container in "${RUNNING_DOCKER_CONTAINERS}"
+        do
+            stop_and_clean_docker_container ${container}
         done
     fi
     set -e
@@ -208,6 +222,11 @@ function random_track {
 function random_distribution {
     local num_distributions=${#DISTRIBUTIONS[*]}
     eval "$1='${DISTRIBUTIONS[$((RANDOM%num_distributions))]}'"
+}
+
+function random_build_type {
+    local num_build_types=${#BUILD_TYPES[*]}
+    eval "$1='${BUILD_TYPES[$((RANDOM%num_build_types))]}'"
 }
 
 function test_configure {
@@ -467,6 +486,41 @@ function test_docker_dev_image {
     tests_for_all_docker_images
 }
 
+function test_node_management_commands {
+    local cfg
+    local dist
+    local build_type
+    random_configuration cfg
+    random_distribution dist
+    random_build_type build_type
+
+    # for Docker we force the most recent distribution as we don't have Docker images for all versions that are tested
+    if [[ "$build_type" == "docker" ]]; then
+      dist="${DISTRIBUTIONS[${#DISTRIBUTIONS[@]}-1]}"
+    fi
+
+    info "test install [--configuration-name=${cfg}] [--build-type=${build_type}]"
+    kill_rally_processes
+
+    raw_install_id=$(esrally install --quiet --configuration-name="${cfg}" --distribution-version="${dist}" --build-type="${build_type}" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
+    install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)
+
+    info "test start [--configuration-name=${cfg}]"
+    esrally start --quiet --configuration-name="${cfg}" --installation-id="${install_id}" --race-id="rally-integration-test"
+
+    esrally --target-host="localhost:39200" \
+            --configuration-name="${cfg}" \
+            --race-id="rally-integration-test" \
+            --on-error=abort \
+            --pipeline=benchmark-only \
+            --track=geonames \
+            --test-mode \
+            --challenge=append-no-conflicts-index-only
+
+    info "test stop [--configuration-name=${cfg}]"
+    esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}"
+}
+
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
     if [[ -z "${RALLY_VERSION}" ]]; then
@@ -524,6 +578,8 @@ function run_test {
     test_benchmark_only
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
     test_docker_dev_image
+    echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
+    test_node_management_commands
 }
 
 function tear_down {
@@ -538,7 +594,7 @@ function tear_down {
     # stop Docker container for tests
     if [ "${PROXY_CONTAINER_ID}" != "-1" ]; then
         info "Stopping Docker container [${PROXY_CONTAINER_ID}]"
-        docker stop ${PROXY_CONTAINER_ID} > /dev/null
+        stop_and_clean_docker_container ${PROXY_CONTAINER_ID}
     fi
 
     rm -f ~/.rally/rally*integration-test.ini
