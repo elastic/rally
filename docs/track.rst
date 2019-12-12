@@ -399,6 +399,8 @@ For scroll queries, throughput will be reported as number of retrieved scroll pa
 
 For other queries, throughput will be reported as number of search requests per second, also measured as ops/s.
 
+.. _put_pipeline:
+
 put-pipeline
 ~~~~~~~~~~~~
 
@@ -425,6 +427,16 @@ Example::
                 "country_name",
                 "location"
               ]
+            }
+          }
+        ],
+        "on-failure": [
+          {
+            "set": {
+              "field": "_index",
+              {% raw %}
+              "value": "failed-{{ _index }}"
+              {% endraw %}
             }
           }
         ]
