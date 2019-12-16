@@ -2058,8 +2058,6 @@ class DiskIoTests(TestCase):
         t.detach_from_node(node, running=False)
         t.store_system_metrics(node, metrics_store)
 
-        # expected result is 1 byte because there are two nodes on the machine. Result is calculated
-        # with total_bytes / node_count
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 3, "byte"),
             mock.call("rally0", "disk_io_read_bytes", 0, "byte"),
