@@ -450,63 +450,64 @@ class OperationType(Enum):
     @classmethod
     def from_hyphenated_string(cls, v):
         if v == "force-merge":
-            return OperationType.ForceMerge
+            r = OperationType.ForceMerge
         elif v == "index-stats":
-            return OperationType.IndicesStats
+            r = OperationType.IndicesStats
         elif v == "node-stats":
-            return OperationType.NodesStats
+            r = OperationType.NodesStats
         elif v == "search":
-            return OperationType.Search
+            r = OperationType.Search
         elif v == "cluster-health":
-            return OperationType.ClusterHealth
+            r = OperationType.ClusterHealth
         elif v == "bulk":
-            return OperationType.Bulk
+            r = OperationType.Bulk
         elif v == "raw-request":
-            return OperationType.RawRequest
+            r = OperationType.RawRequest
         elif v == "put-pipeline":
-            return OperationType.PutPipeline
+            r = OperationType.PutPipeline
         elif v == "refresh":
-            return OperationType.Refresh
+            r = OperationType.Refresh
         elif v == "create-index":
-            return OperationType.CreateIndex
+            r = OperationType.CreateIndex
         elif v == "delete-index":
-            return OperationType.DeleteIndex
+            r = OperationType.DeleteIndex
         elif v == "create-index-template":
-            return OperationType.CreateIndexTemplate
+            r = OperationType.CreateIndexTemplate
         elif v == "delete-index-template":
-            return OperationType.DeleteIndexTemplate
+            r = OperationType.DeleteIndexTemplate
         elif v == "shrink-index":
-            return OperationType.ShrinkIndex
+            r = OperationType.ShrinkIndex
         elif v == "create-ml-datafeed":
-            return OperationType.CreateMlDatafeed
+            r = OperationType.CreateMlDatafeed
         elif v == "delete-ml-datafeed":
-            return OperationType.DeleteMlDatafeed
+            r = OperationType.DeleteMlDatafeed
         elif v == "start-ml-datafeed":
-            return OperationType.StartMlDatafeed
+            r = OperationType.StartMlDatafeed
         elif v == "stop-ml-datafeed":
-            return OperationType.StopMlDatafeed
+            r = OperationType.StopMlDatafeed
         elif v == "create-ml-job":
-            return OperationType.CreateMlJob
+            r = OperationType.CreateMlJob
         elif v == "delete-ml-job":
-            return OperationType.DeleteMlJob
+            r = OperationType.DeleteMlJob
         elif v == "open-ml-job":
-            return OperationType.OpenMlJob
+            r = OperationType.OpenMlJob
         elif v == "close-ml-job":
-            return OperationType.CloseMlJob
+            r = OperationType.CloseMlJob
         elif v == "sleep":
-            return OperationType.Sleep
+            r = OperationType.Sleep
         elif v == "delete-snapshot-repository":
-            return OperationType.DeleteSnapshotRepository
+            r = OperationType.DeleteSnapshotRepository
         elif v == "create-snapshot-repository":
-            return OperationType.CreateSnapshotRepository
+            r = OperationType.CreateSnapshotRepository
         elif v == "restore-snapshot":
-            return OperationType.RestoreSnapshot
+            r = OperationType.RestoreSnapshot
         elif v == "wait-for-recovery":
-            return OperationType.WaitForRecovery
+            r = OperationType.WaitForRecovery
         elif v == "put-settings":
-            return OperationType.PutSettings
+            r = OperationType.PutSettings
         else:
             raise KeyError("No enum value for [%s]" % v)
+        return r
 
 
 class TaskNameFilter:
