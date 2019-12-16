@@ -430,7 +430,7 @@ Example::
             }
           }
         ],
-        "on-failure": [
+        "on_failure": [
           {
             "set": {
               "field": "_index",
