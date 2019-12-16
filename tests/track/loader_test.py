@@ -1257,21 +1257,21 @@ class TrackPathTests(TestCase):
 
 class TrackFilterTests(TestCase):
     def test_create_filters_from_empty_included_tasks(self):
-        self.assertEqual(0, len(loader.filters_from_included_tasks(None)))
-        self.assertEqual(0, len(loader.filters_from_included_tasks([])))
+        self.assertEqual(0, len(loader.filters_from_filtered_tasks(None)))
+        self.assertEqual(0, len(loader.filters_from_filtered_tasks([])))
 
     def test_create_filters_from_mixed_included_tasks(self):
-        filters = loader.filters_from_included_tasks(["force-merge", "type:search"])
+        filters = loader.filters_from_filtered_tasks(["force-merge", "type:search"])
         self.assertListEqual([track.TaskNameFilter("force-merge"), track.TaskOpTypeFilter("search")], filters)
 
     def test_rejects_invalid_syntax(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            loader.filters_from_included_tasks(["valid", "a:b:c"])
-        self.assertEqual("Invalid format for included tasks: [a:b:c]", ctx.exception.args[0])
+            loader.filters_from_filtered_tasks(["valid", "a:b:c"])
+        self.assertEqual("Invalid format for filtered tasks: [a:b:c]", ctx.exception.args[0])
 
     def test_rejects_unknown_filter_type(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            loader.filters_from_included_tasks(["valid", "op-type:index"])
+            loader.filters_from_filtered_tasks(["valid", "op-type:index"])
         self.assertEqual("Invalid format for included tasks: [op-type:index]. Expected [type] but got [op-type].", ctx.exception.args[0])
 
     def test_filters_tasks(self):
@@ -1345,7 +1345,7 @@ class TrackFilterTests(TestCase):
         full_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(4, len(full_track.challenges[0].schedule))
 
-        filtered = loader.filter_included_tasks(full_track, [track.TaskNameFilter("index-3"),
+        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("index-3"),
                                                              track.TaskOpTypeFilter("search"),
                                                              # Filtering should also work for non-core operation types.
                                                              track.TaskOpTypeFilter("custom-operation-type")
@@ -1357,6 +1357,84 @@ class TrackFilterTests(TestCase):
         self.assertEqual("match-all-serial", schedule[1].name)
         self.assertEqual("cluster-stats", schedule[2].name)
 
+    def test_filters_exclude_tasks(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "bulk-index",
+                    "operation-type": "bulk"
+                },
+                {
+                    "name": "node-stats",
+                    "operation-type": "node-stats"
+                },
+                {
+                    "name": "cluster-stats",
+                    "operation-type": "custom-operation-type"
+                },
+                {
+                    "name": "match-all",
+                    "operation-type": "search",
+                    "body": {
+                        "query": {
+                            "match_all": {}
+                        }
+                    }
+                },
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "tasks": [
+                                    {
+                                        "name": "index-1",
+                                        "operation": "bulk-index",
+                                    },
+                                    {
+                                        "name": "index-2",
+                                        "operation": "bulk-index",
+                                    },
+                                    {
+                                        "name": "index-3",
+                                        "operation": "bulk-index",
+                                    },
+                                    {
+                                        "name": "match-all-parallel",
+                                        "operation": "match-all",
+                                    },
+                                ]
+                            }
+                        },
+                        {
+                            "operation": "node-stats"
+                        },
+                        {
+                            "name": "match-all-serial",
+                            "operation": "match-all"
+                        },
+                        {
+                            "operation": "cluster-stats"
+                        }
+                    ]
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(4, len(full_track.challenges[0].schedule))
+
+        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("index-3")], exclude=True)
+
+        schedule = filtered.challenges[0].schedule
+        self.assertEqual(3, len(schedule))
+        self.assertEqual("node-stats", schedule[0].name)
+        self.assertEqual("match-all-serial", schedule[1].name)
+        self.assertEqual("cluster-stats", schedule[2].name)
 
 class TrackSpecificationReaderTests(TestCase):
     def test_description_is_optional(self):
