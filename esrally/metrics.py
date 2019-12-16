@@ -384,9 +384,6 @@ class MetricsStore:
             self._car = car_name
         assert self._race_id is not None, "Attempting to open metrics store without a race id"
         assert self._race_timestamp is not None, "Attempting to open metrics store without a race timestamp"
-        assert self._track is not None, "Attempting to open metrics store without a track"
-        assert self._challenge is not None, "Attempting to open metrics store without a challenge"
-        assert self._car is not None, "Attempting to open metrics store without a car"
 
         self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
@@ -1235,8 +1232,10 @@ class Race:
         # this happens when the race is created initially
         if meta_data is None:
             meta_data = {}
-            meta_data.update(track.meta_data)
-            meta_data.update(challenge.meta_data)
+            if track:
+                meta_data.update(track.meta_data)
+            if challenge:
+                meta_data.update(challenge.meta_data)
         self.rally_version = rally_version
         self.environment_name = environment_name
         self.race_id = race_id

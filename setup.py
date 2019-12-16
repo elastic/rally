@@ -70,7 +70,7 @@ install_requires = [
     #   botocore: Apache 2.0
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
-    "boto3==1.9.120"
+    "boto3==1.10.32"
 ]
 
 tests_require = [

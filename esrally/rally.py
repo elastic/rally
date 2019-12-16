@@ -19,6 +19,7 @@ import argparse
 import datetime
 import logging
 import os
+import platform
 import sys
 import time
 import uuid
@@ -169,6 +170,130 @@ def create_arg_parser():
         help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
         default=""
     )
+
+    install_parser = subparsers.add_parser("install", help="Installs an Elasticsearch node locally")
+    install_parser.add_argument(
+        "--revision",
+        help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
+             " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
+             " The timestamp must be specified as: \"@ts\" where \"ts\" must be a valid ISO 8601 timestamp, "
+             "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
+        default="current")  # optimized for local usage, don't fetch sources
+    install_parser.add_argument(
+        "--skip-build",
+        help="Whether Rally should skip rebuilding Elasticsearch (default: false).",
+        default=False,
+        action="store_true")
+    # Intentionally undocumented as we do not consider Docker a fully supported option.
+    install_parser.add_argument(
+        "--build-type",
+        help=argparse.SUPPRESS,
+        choices=["tar", "docker"],
+        default="tar")
+    install_parser.add_argument(
+        "--team-repository",
+        help="Define the repository from where Rally will load teams and cars (default: default).",
+        default="default")
+    install_parser.add_argument(
+        "--team-revision",
+        help="Define a specific revision in the team repository that Rally should use.",
+        default=None)
+    install_parser.add_argument(
+        "--team-path",
+        help="Define the path to the car and plugin configurations to use.")
+    install_parser.add_argument(
+        "--distribution-repository",
+        help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
+        default="release")
+    install_parser.add_argument(
+        "--distribution-version",
+        help="Define the version of the Elasticsearch distribution to download. "
+             "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
+        default="")
+    install_parser.add_argument(
+        "--car",
+        help="Define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
+        default="defaults")  # optimized for local usage
+    install_parser.add_argument(
+        "--car-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
+        default=""
+    )
+    install_parser.add_argument(
+        "--elasticsearch-plugins",
+        help="Define the Elasticsearch plugins to install. (default: install no plugins).",
+        default="")
+    install_parser.add_argument(
+        "--plugin-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables.",
+        default=""
+    )
+    install_parser.add_argument(
+        "--network-host",
+        help="The IP address to bind to and publish",
+        default="127.0.0.1"
+    )
+    install_parser.add_argument(
+        "--http-port",
+        help="The port to expose for HTTP traffic",
+        default="39200"
+    )
+    install_parser.add_argument(
+        "--node-name",
+        help="The name of this Elasticsearch node",
+        default="rally-node-0"
+    )
+    install_parser.add_argument(
+        "--master-nodes",
+        help="A comma-separated list of the initial master node names",
+        default=""
+    )
+    install_parser.add_argument(
+        "--seed-hosts",
+        help="A comma-separated list of the initial seed host IPs",
+        default=""
+    )
+
+    start_parser = subparsers.add_parser("start", help="Starts an Elasticsearch node locally")
+    start_parser.add_argument(
+        "--installation-id",
+        required=True,
+        help="The id of the installation to start",
+        # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
+        default="")
+    start_parser.add_argument(
+        "--race-id",
+        required=True,
+        help="Define a unique id for this race.",
+        default="")
+    start_parser.add_argument(
+        "--runtime-jdk",
+        type=positive_number,
+        help="The major version of the runtime JDK to use.",
+        default=None)
+    start_parser.add_argument(
+        "--telemetry",
+        help="Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
+             "with `%s list telemetry`." % PROGRAM_NAME,
+        default="")
+    start_parser.add_argument(
+        "--telemetry-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to the telemetry devices as parameters.",
+        default=""
+    )
+
+    stop_parser = subparsers.add_parser("stop", help="Stops an Elasticsearch node locally")
+    stop_parser.add_argument(
+        "--installation-id",
+        required=True,
+        help="The id of the installation to stop",
+        # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
+        default="")
+    stop_parser.add_argument(
+        "--preserve-install",
+        help="Keep the benchmark candidate and its index. (default: %s)." % str(preserve_install).lower(),
+        default=preserve_install,
+        action="store_true")
 
     for p in [parser, list_parser, race_parser, generate_parser]:
         p.add_argument(
@@ -357,7 +482,8 @@ def create_arg_parser():
             action="store_true",
             default=False)
 
-    for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser]:
+    for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
+              start_parser, stop_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
@@ -516,6 +642,12 @@ def dispatch_sub_command(cfg, sub_command):
             dispatch_list(cfg)
         elif sub_command == "download":
             mechanic.download(cfg)
+        elif sub_command == "install":
+            mechanic.install(cfg)
+        elif sub_command == "start":
+            mechanic.start(cfg)
+        elif sub_command == "stop":
+            mechanic.stop(cfg)
         elif sub_command == "race":
             race(cfg)
         elif sub_command == "generate":
@@ -549,7 +681,6 @@ def dispatch_sub_command(cfg, sub_command):
 
 def main():
     check_python_version()
-    log.remove_obsolete_default_log_config()
     log.install_default_log_config()
     log.configure_logging()
     logger = logging.getLogger(__name__)
@@ -575,6 +706,8 @@ def main():
         cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.utcnow())
         cfg.add(config.Scope.application, "system", "time.start.user_provided", False)
 
+    # The installation id is overridden later on if nodes are managed via Rally subcommands (install / start / stop)
+    cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
     cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
@@ -612,7 +745,7 @@ def main():
 
     cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
     cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
-    
+
     cfg.add(config.Scope.applicationOverride, "track", "repository.revision", args.track_revision)
 
     # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
@@ -662,7 +795,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
-    if sub_command != "list":
+    if sub_command not in ("list", "install", "download"):
         # Also needed by mechanic (-> telemetry) - duplicate by module?
         target_hosts = opts.TargetHosts(args.target_hosts)
         cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
@@ -677,8 +810,18 @@ def main():
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
+    if sub_command == "install":
+        cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "skip.build", args.skip_build)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "master.nodes", opts.csv_to_list(args.master_nodes))
+        cfg.add(config.Scope.applicationOverride, "mechanic", "seed.hosts", opts.csv_to_list(args.seed_hosts))
+    if sub_command in ["start", "stop"]:
+        cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
 
-    logger.info("OS [%s]", str(os.uname()))
+    logger.info("OS [%s]", str(platform.uname()))
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
     logger.debug("Command line arguments: %s", args)

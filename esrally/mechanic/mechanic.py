@@ -15,14 +15,17 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import contextlib
 import json
 import logging
+import os
+import pickle
 import sys
 from collections import defaultdict
 
 import thespian.actors
 
-from esrally import actor, client, paths, config, metrics, exceptions
+from esrally import actor, client, paths, config, metrics, exceptions, PROGRAM_NAME
 from esrally.mechanic import supplier, provisioner, launcher, team
 from esrally.utils import net, console
 
@@ -35,6 +38,128 @@ def download(cfg):
     s = supplier.create(cfg, sources=False, distribution=True, build=False, car=car, plugins=plugins)
     binaries = s()
     console.println(json.dumps(binaries, indent=2), force=True)
+
+
+def install(cfg):
+    root_path = paths.install_root(cfg)
+    car, plugins = load_team(cfg, external=False)
+
+    # A non-empty distribution-version is provided
+    distribution = bool(cfg.opts("mechanic", "distribution.version", mandatory=False))
+    sources = not distribution
+    build = not cfg.opts("mechanic", "skip.build")
+    build_type = cfg.opts("mechanic", "build.type")
+    ip = cfg.opts("mechanic", "network.host")
+    http_port = int(cfg.opts("mechanic", "network.http.port"))
+    node_name = cfg.opts("mechanic", "node.name")
+    master_nodes = cfg.opts("mechanic", "master.nodes")
+    seed_hosts = cfg.opts("mechanic", "seed.hosts")
+
+    if build_type == "tar":
+        binary_supplier = supplier.create(cfg, sources, distribution, build, car, plugins)
+        p = provisioner.local(cfg=cfg, car=car, plugins=plugins, cluster_settings={}, ip=ip, http_port=http_port,
+                              all_node_ips=seed_hosts, all_node_names=master_nodes, target_root=root_path,
+                              node_name=node_name)
+        node_config = p.prepare(binary=binary_supplier())
+    elif build_type == "docker":
+        if len(plugins) > 0:
+            raise exceptions.SystemSetupError("You cannot specify any plugins for Docker clusters. Please remove "
+                                              "\"--elasticsearch-plugins\" and try again.")
+        p = provisioner.docker(cfg=cfg, car=car, cluster_settings={}, ip=ip, http_port=http_port,
+                               target_root=root_path, node_name=node_name)
+        # there is no binary for Docker that can be downloaded / built upfront
+        node_config = p.prepare(binary=None)
+    else:
+        raise exceptions.SystemSetupError("Unknown build type [{}]".format(build_type))
+
+    provisioner.save_node_configuration(root_path, node_config)
+    console.println(json.dumps({"installation-id": cfg.opts("system", "install.id")}, indent=2), force=True)
+
+
+def start(cfg):
+    root_path = paths.install_root(cfg)
+    race_id = cfg.opts("system", "race.id")
+    # avoid double-launching - we expect that the node file is absent
+    with contextlib.suppress(FileNotFoundError):
+        _load_node_file(root_path)
+        install_id = cfg.opts("system", "install.id")
+        raise exceptions.SystemSetupError("A node with this installation id is already running. Please stop it first "
+                                          "with {} stop --installation-id={}".format(PROGRAM_NAME, install_id))
+
+    node_config = provisioner.load_node_configuration(root_path)
+
+    if node_config.build_type == "tar":
+        node_launcher = launcher.ProcessLauncher(cfg)
+    elif node_config.build_type == "docker":
+        node_launcher = launcher.DockerLauncher(cfg)
+    else:
+        raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
+    nodes = node_launcher.start([node_config])
+    _store_node_file(root_path, (nodes, race_id))
+
+
+def stop(cfg):
+    root_path = paths.install_root(cfg)
+    node_config = provisioner.load_node_configuration(root_path)
+    nodes, race_id = _load_node_file(root_path)
+
+    cls = metrics.metrics_store_class(cfg)
+    metrics_store = cls(cfg)
+
+    race_store = metrics.race_store(cfg)
+    try:
+        current_race = race_store.find_by_race_id(race_id)
+    except exceptions.NotFound:
+        logging.getLogger(__name__).info("Could not find race [%s] most likely because an in-memory metrics store is "
+                                         "used across multiple machines. Use an Elasticsearch metrics store to persist "
+                                         "results.", race_id)
+        # we are assuming here that we use an Elasticsearch metrics store... . If we use a file race store (across
+        # multiple machines) we will not be able to retrieve a race. In that case we open our in-memory metrics store
+        # with settings derived from startup parameters (because we can't store system metrics persistently anyway).
+        current_race = metrics.create_race(cfg, track=None, challenge=None)
+
+    metrics_store.open(
+        race_id=current_race.race_id,
+        race_timestamp=current_race.race_timestamp,
+        track_name=current_race.track_name,
+        challenge_name=current_race.challenge_name
+    )
+
+    if node_config.build_type == "tar":
+        node_launcher = launcher.ProcessLauncher(cfg)
+    elif node_config.build_type == "docker":
+        node_launcher = launcher.DockerLauncher(cfg)
+    else:
+        raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
+
+    node_launcher.stop(nodes, metrics_store)
+    metrics_store.flush(refresh=True)
+    for node in nodes:
+        results = metrics.calculate_system_results(metrics_store, node.node_name)
+        current_race.add_results(results)
+        metrics.results_store(cfg).store_results(current_race)
+
+    metrics_store.close()
+    _delete_node_file(root_path)
+
+    # TODO: Do we need to expose this as a separate command as well?
+    provisioner.cleanup(preserve=cfg.opts("mechanic", "preserve.install"),
+                        install_dir=node_config.binary_path,
+                        data_paths=node_config.data_paths)
+
+
+def _load_node_file(root_path):
+    with open(os.path.join(root_path, "node"), "rb") as f:
+        return pickle.load(f)
+
+
+def _store_node_file(root_path, data):
+    with open(os.path.join(root_path, "node"), "wb") as f:
+        pickle.dump(data, f)
+
+
+def _delete_node_file(root_path):
+    os.remove(os.path.join(root_path, "node"))
 
 
 ##############################
@@ -427,9 +552,6 @@ class NodeMechanicActor(actor.RallyActor):
             # set root path (normally done by the main entry point)
             cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
             if not msg.external:
-                cfg.add(config.Scope.benchmark, "provisioning", "node.ip", msg.ip)
-                # we need to override the port with the value that the user has specified instead of using the default value (39200)
-                cfg.add(config.Scope.benchmark, "provisioning", "node.http.port", msg.port)
                 cfg.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
 
             cls = metrics.metrics_store_class(cfg)
@@ -437,8 +559,9 @@ class NodeMechanicActor(actor.RallyActor):
             metrics_store.open(ctx=msg.open_metrics_context)
             # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
 
-            self.mechanic = create(cfg, metrics_store, msg.all_node_ips, msg.all_node_ids, msg.cluster_settings,
-                                   msg.sources, msg.build, msg.distribution, msg.external, msg.docker)
+            self.mechanic = create(cfg, metrics_store, msg.ip, msg.port, msg.all_node_ips, msg.all_node_ids,
+                                   msg.cluster_settings, msg.sources, msg.build, msg.distribution,
+                                   msg.external, msg.docker)
             self.mechanic.start_engine()
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             self.send(getattr(msg, "reply_to", sender), NodesStarted())
@@ -496,20 +619,23 @@ def load_team(cfg, external):
     return car, plugins
 
 
-def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None, sources=False, build=False,
-           distribution=False, external=False, docker=False):
-    races_root = paths.races_root(cfg)
+def create(cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_ids, cluster_settings=None,
+           sources=False, build=False, distribution=False, external=False, docker=False):
     race_root_path = paths.race_root(cfg)
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
+    node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     car, plugins = load_team(cfg, external)
 
     if sources or distribution:
         s = supplier.create(cfg, sources, distribution, build, car, plugins)
         p = []
+        all_node_names = ["%s-%s" % (node_name_prefix, n) for n in all_node_ids]
         for node_id in node_ids:
+            node_name = "%s-%s" % (node_name_prefix, node_id)
             p.append(
-                provisioner.local_provisioner(cfg, car, plugins, cluster_settings, all_node_ips, all_node_ids, race_root_path, node_id))
-        l = launcher.ProcessLauncher(cfg, metrics_store, races_root)
+                provisioner.local(cfg, car, plugins, cluster_settings, node_ip, node_http_port, all_node_ips,
+                                  all_node_names, race_root_path, node_name))
+        l = launcher.ProcessLauncher(cfg)
     elif external:
         raise exceptions.RallyAssertionError("Externally provisioned clusters should not need to be managed by Rally's mechanic")
     elif docker:
@@ -519,8 +645,9 @@ def create(cfg, metrics_store, all_node_ips, all_node_ids, cluster_settings=None
         s = lambda: None
         p = []
         for node_id in node_ids:
-            p.append(provisioner.docker_provisioner(cfg, car, cluster_settings, race_root_path, node_id))
-        l = launcher.DockerLauncher(cfg, metrics_store)
+            node_name = "%s-%s" % (node_name_prefix, node_id)
+            p.append(provisioner.docker(cfg, car, cluster_settings, node_ip, node_http_port, race_root_path, node_name))
+        l = launcher.DockerLauncher(cfg)
     else:
         # It is a programmer error (and not a user error) if this function is called with wrong parameters
         raise RuntimeError("One of sources, distribution, docker or external must be True")
@@ -536,19 +663,21 @@ class Mechanic:
 
     def __init__(self, cfg, metrics_store, supply, provisioners, launcher):
         self.cfg = cfg
+        self.preserve_install = cfg.opts("mechanic", "preserve.install")
         self.metrics_store = metrics_store
         self.supply = supply
         self.provisioners = provisioners
         self.launcher = launcher
         self.nodes = []
+        self.node_configs = []
         self.logger = logging.getLogger(__name__)
 
     def start_engine(self):
         binaries = self.supply()
-        node_configs = []
+        self.node_configs = []
         for p in self.provisioners:
-            node_configs.append(p.prepare(binaries))
-        self.nodes = self.launcher.start(node_configs)
+            self.node_configs.append(p.prepare(binaries))
+        self.nodes = self.launcher.start(self.node_configs)
         return self.nodes
 
     def reset_relative_time(self):
@@ -561,7 +690,7 @@ class Mechanic:
 
     def stop_engine(self):
         self.logger.info("Stopping nodes %s.", self.nodes)
-        self.launcher.stop(self.nodes)
+        self.launcher.stop(self.nodes, self.metrics_store)
         self.flush_metrics(refresh=True)
         try:
             current_race = self._current_race()
@@ -572,8 +701,11 @@ class Mechanic:
 
         self.metrics_store.close()
         self.nodes = []
-        for p in self.provisioners:
-            p.cleanup()
+        for node_config in self.node_configs:
+            provisioner.cleanup(preserve=self.preserve_install,
+                                install_dir=node_config.binary_path,
+                                data_paths=node_config.data_paths)
+        self.node_configs = []
 
     def _current_race(self):
         race_id = self.cfg.opts("system", "race.id")

@@ -60,6 +60,7 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteSnapshotRepository.name, Retry(DeleteSnapshotRepository()))
     register_runner(track.OperationType.CreateSnapshotRepository.name, Retry(CreateSnapshotRepository()))
     register_runner(track.OperationType.WaitForRecovery.name, Retry(IndicesRecovery()))
+    register_runner(track.OperationType.PutSettings.name, Retry(PutSettings()))
 
 
 def runner_for(operation_type):
@@ -1363,6 +1364,18 @@ class IndicesRecovery(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "wait-for-recovery"
+
+
+class PutSettings(Runner):
+    """
+    Updates cluster settings with the
+    `cluster settings API <http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html>_.
+    """
+    def __call__(self, es, params):
+        es.cluster.put_settings(body=mandatory(params, "body", repr(self)))
+
+    def __repr__(self, *args, **kwargs):
+        return "put-settings"
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.

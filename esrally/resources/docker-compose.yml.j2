@@ -4,6 +4,8 @@ services:
     cap_add:
       - IPC_LOCK
     image: "{{docker_image}}:{{es_version}}"
+    labels:
+      io.rally.description: "elasticsearch-rally"
     {%- if docker_cpu_count is defined %}
     cpu_count: {{docker_cpu_count}}
     {%- endif %}

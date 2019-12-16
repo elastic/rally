@@ -40,6 +40,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    configuration
    race
    tournament
+   cluster_management
    recipes
 
 .. toctree::
