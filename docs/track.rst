@@ -447,6 +447,8 @@ This example requires that the ``ingest-geoip`` Elasticsearch plugin is installe
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+Please see `the pipeline documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/handling-failure-in-pipelines.html>`_ for details on handling failures in pipelines.
+
 cluster-health
 ~~~~~~~~~~~~~~
 
