@@ -449,7 +449,6 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 Please see `the pipeline documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/handling-failure-in-pipelines.html>`_ for details on handling failures in pipelines.
 
-=======
 put-settings
 ~~~~~~~~~~~~
 
