@@ -561,7 +561,7 @@ def race(cfg):
               "the same time. Please check and terminate these processes and retry again." % pids
         raise exceptions.RallyError(msg)
 
-    with_actor_system(lambda c: racecontrol.run(c), cfg)
+    with_actor_system(racecontrol.run, cfg)
 
 
 def with_actor_system(runnable, cfg):
