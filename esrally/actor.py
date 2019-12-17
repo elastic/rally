@@ -224,7 +224,7 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
                 coordinator_ip = None
                 local_ip = None
         else:
-            if system_base != "multiprocTCPBase" and system_base != "multiprocUDPBase":
+            if system_base not in ('multiprocTCPBase', 'multiprocUDPBase'):
                 raise exceptions.SystemSetupError("Rally requires a network-capable system base but got [%s]." % system_base)
             if not coordinator_ip:
                 raise exceptions.SystemSetupError("coordinator IP is required")
