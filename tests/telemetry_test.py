@@ -2032,7 +2032,35 @@ class DiskIoTests(TestCase):
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
             mock.call("rally0", "disk_io_read_bytes", 1, "byte")
-            
+        ])
+
+    @mock.patch("esrally.utils.sysstats.disk_io_counters")
+    @mock.patch("esrally.utils.sysstats.process_io_counters")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    def test_diskio_writes_metrics_if_available(self, metrics_store_node_count, process_io_counters, disk_io_counters):
+        Diskio = namedtuple("Diskio", "read_bytes write_bytes")
+        process_start = Diskio(10, 10)
+        process_stop = Diskio(10, 13)
+        disk_io_counters.side_effect = [process_start, process_stop]
+        process_io_counters.side_effect = [None, None]
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+
+        device = telemetry.DiskIo(node_count_on_host=1)
+        t = telemetry.Telemetry(enabled_devices=[], devices=[device])
+        node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
+        t.attach_to_node(node)
+        t.on_benchmark_start()
+        # we assume that serializing and deserializing the telemetry device produces the same state
+        t.on_benchmark_stop()
+        t.detach_from_node(node, running=True)
+        t.detach_from_node(node, running=False)
+        t.store_system_metrics(node, metrics_store)
+
+        metrics_store_node_count.assert_has_calls([
+            mock.call("rally0", "disk_io_write_bytes", 3, "byte"),
+            mock.call("rally0", "disk_io_read_bytes", 0, "byte"),
         ])
 
 

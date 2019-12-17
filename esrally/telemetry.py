@@ -783,8 +783,9 @@ class DiskIo(InternalTelemetryDevice):
                 self.write_bytes = None
 
     def store_system_metrics(self, node, metrics_store):
-        if self.write_bytes and self.read_bytes:
+        if self.write_bytes is not None:
             metrics_store.put_count_node_level(node.node_name, "disk_io_write_bytes", self.write_bytes, "byte")
+        if self.read_bytes is not None:
             metrics_store.put_count_node_level(node.node_name, "disk_io_read_bytes", self.read_bytes, "byte")
 
 
