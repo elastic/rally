@@ -409,6 +409,8 @@ With the operation-type ``put-pipeline`` you can execute the `put pipeline API <
 * `id` (mandatory): Pipeline id
 * `body` (mandatory): Pipeline definition
 
+In this example we setup a pipeline that adds location information to a ingested document as well as a pipeline failure block to change the index in which the document was supposed to be written. Note that we need to use the ``raw`` and ``endraw`` blocks to ensure that Rally does not attempt to resolve the Mustache template. See :ref:`template_language` for more information.
+
 Example::
 
     {
@@ -443,11 +445,11 @@ Example::
       }
     }
 
+Please see `the pipeline documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/handling-failure-in-pipelines.html>`_ for details on handling failures in pipelines.
+
 This example requires that the ``ingest-geoip`` Elasticsearch plugin is installed.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
-
-Please see `the pipeline documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/handling-failure-in-pipelines.html>`_ for details on handling failures in pipelines.
 
 put-settings
 ~~~~~~~~~~~~
