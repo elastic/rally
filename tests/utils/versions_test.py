@@ -76,4 +76,3 @@ class VersionsTests(TestCase):
         self.assertEqual("master", versions.best_match(["1.7", "2", "5.0.0-alpha1", "5", "master"], None),
                          "Assume master on unknown version")
         self.assertIsNone(versions.best_match(["1.7", "2", "5.0.0-alpha1", "5", "master"], "0.4"), "Reject versions that are too old")
-
