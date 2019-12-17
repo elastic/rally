@@ -179,18 +179,13 @@ class CompositeSupplier:
 
     def __call__(self, *args, **kwargs):
         binaries = {}
-        try:
-            for supplier in self.suppliers:
-                supplier.fetch()
-
-            for supplier in self.suppliers:
-                supplier.prepare()
-
-            for supplier in self.suppliers:
-                supplier.add(binaries)
-            return binaries
-        except BaseException:
-            raise
+        for supplier in self.suppliers:
+            supplier.fetch()
+        for supplier in self.suppliers:
+            supplier.prepare()
+        for supplier in self.suppliers:
+            supplier.add(binaries)
+        return binaries
 
 
 class ElasticsearchSourceSupplier:
