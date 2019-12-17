@@ -632,6 +632,8 @@ def filter_tasks(t, filters, exclude=False):
     def filter_out_match(task, filters, exclude):
         for f in filters:
             if task.matches(f):
+                if hasattr(task, 'tasks') and exclude:
+                    return False
                 return exclude
         return not exclude
 
@@ -673,7 +675,7 @@ def filters_from_filtered_tasks(filtered_tasks):
                     filters.append(track.TaskOpTypeFilter(spec[1]))
                 else:
                     raise exceptions.SystemSetupError(
-                        "Invalid format for included tasks: [%s]. Expected [type] but got [%s]." % (t, spec[0]))
+                        "Invalid format for filtered tasks: [%s]. Expected [type] but got [%s]." % (t, spec[0]))
             else:
                 raise exceptions.SystemSetupError("Invalid format for filtered tasks: [%s]" % t)
     return filters

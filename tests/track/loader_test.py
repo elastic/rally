@@ -1256,11 +1256,11 @@ class TrackPathTests(TestCase):
 
 
 class TrackFilterTests(TestCase):
-    def test_create_filters_from_empty_included_tasks(self):
+    def test_create_filters_from_empty_filtered_tasks(self):
         self.assertEqual(0, len(loader.filters_from_filtered_tasks(None)))
         self.assertEqual(0, len(loader.filters_from_filtered_tasks([])))
 
-    def test_create_filters_from_mixed_included_tasks(self):
+    def test_create_filters_from_mixed_filtered_tasks(self):
         filters = loader.filters_from_filtered_tasks(["force-merge", "type:search"])
         self.assertListEqual([track.TaskNameFilter("force-merge"), track.TaskOpTypeFilter("search")], filters)
 
@@ -1272,7 +1272,7 @@ class TrackFilterTests(TestCase):
     def test_rejects_unknown_filter_type(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             loader.filters_from_filtered_tasks(["valid", "op-type:index"])
-        self.assertEqual("Invalid format for included tasks: [op-type:index]. Expected [type] but got [op-type].", ctx.exception.args[0])
+        self.assertEqual("Invalid format for filtered tasks: [op-type:index]. Expected [type] but got [op-type].", ctx.exception.args[0])
 
     def test_filters_tasks(self):
         track_specification = {
@@ -1428,12 +1428,12 @@ class TrackFilterTests(TestCase):
         full_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(4, len(full_track.challenges[0].schedule))
 
-        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("index-3")], exclude=True)
+        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("index-3"), track.TaskOpTypeFilter("search")], exclude=True)
 
         schedule = filtered.challenges[0].schedule
         self.assertEqual(3, len(schedule))
-        self.assertEqual("node-stats", schedule[0].name)
-        self.assertEqual("match-all-serial", schedule[1].name)
+        self.assertEqual(["index-1",'index-2'], [t.name for t in schedule[0].tasks])
+        self.assertEqual("node-stats", schedule[1].name)
         self.assertEqual("cluster-stats", schedule[2].name)
 
 class TrackSpecificationReaderTests(TestCase):
