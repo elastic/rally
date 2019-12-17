@@ -469,7 +469,7 @@ class Dispatcher(actor.RallyActor):
         for (ip, port), node in all_nodes_by_host.items():
             submsg = startmsg.for_nodes(all_node_ips, all_node_ids, ip, port, node)
             submsg.reply_to = sender
-            if '127.0.0.1' == ip:
+            if ip == '127.0.0.1':
                 m = self.createActor(NodeMechanicActor,
                                      targetActorRequirements={"coordinator": True})
                 self.pending.append((m, submsg))
