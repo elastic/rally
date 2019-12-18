@@ -409,7 +409,7 @@ With the operation-type ``put-pipeline`` you can execute the `put pipeline API <
 * `id` (mandatory): Pipeline id
 * `body` (mandatory): Pipeline definition
 
-In this example we setup a pipeline that adds location information to a ingested document as well as a pipeline failure block to change the index in which the document was supposed to be written. Note that we need to use the ``raw`` and ``endraw`` blocks to ensure that Rally does not attempt to resolve the Mustache template. See :ref:`template_language` for more information.
+In this example we setup a pipeline that adds location information to a ingested document as well as a pipeline failure block to change the index in which the document was supposed to be written. Note that we need to use the ``raw`` and ``endraw`` blocks to ensure that Rally does not attempt to resolve the Mustache template. See :ref:`template language <template_language>` for more information.
 
 Example::
 
