@@ -152,6 +152,7 @@ class CmdLineProgressReporter:
     :param printer: allow use of a different print method to assist with patching in unittests
     """
 
+    # pylint: disable=E0601
     def __init__(self, width, plain_output=False, printer=print):
         self._width = width
         self._first_print = True
