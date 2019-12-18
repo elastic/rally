@@ -30,6 +30,48 @@ The ``list`` subcommand is used to list different configuration options:
 
 To list a specific configuration option, place it after the ``list`` subcommand. For example, ``esrally list pipelines`` will list all pipelines known to Rally.
 
+``info``
+~~~~~~~~
+
+The ``info`` subcommand prints details about a track. Example::
+
+    esrally info --track=noaa --challenge=append-no-conflicts
+
+This will print::
+
+    Showing details for track [noaa]:
+
+    * Description: Global daily weather measurements from NOAA
+    * Documents: 33,659,481
+    * Compressed Size: 947.3 MB
+    * Uncompressed Size: 9.0 GB
+
+    ================================================
+    Challenge [append-no-conflicts] (run by default)
+    ================================================
+
+    Indexes the whole document corpus using Elasticsearch default settings. We only adjust the number of replicas as we benchmark a single node cluster and Rally will only start the benchmark if the cluster turns green and we want to ensure that we don't use the query cache. Document ids are unique so all index operations are append only. After that a couple of queries are run.
+
+    Schedule:
+    ----------
+
+    1. delete-index
+    2. create-index
+    3. check-cluster-health
+    4. index (8 clients)
+    5. refresh-after-index
+    6. force-merge
+    7. refresh-after-force-merge
+    8. range_field_big_range
+    9. range_field_small_range
+    10. range_field_conjunction_big_range_small_term_query
+    11. range_field_conjunction_small_range_small_term_query
+    12. range_field_conjunction_small_range_big_term_query
+    13. range_field_conjunction_big_range_big_term_query
+    14. range_field_disjunction_small_range_small_term_query
+    15. range_field_disjunction_big_range_small_term_query
+
+It is also possible to use task filters (e.g. ``--include-tasks``) or to refer to a track via its path (``--track-path``) or use a different track repository (``--track-repository``).
 
 ``compare``
 ~~~~~~~~~~~

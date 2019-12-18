@@ -575,6 +575,7 @@ class Parallel:
     def __init__(self, tasks, clients=None):
         self.tasks = tasks
         self._clients = clients
+        self.nested = True
 
     @property
     def clients(self):
@@ -630,6 +631,7 @@ class Task:
         self.completes_parent = completes_parent
         self.schedule = schedule
         self.params = params if params else {}
+        self.nested = False
 
     def matches(self, task_filter):
         return task_filter.matches(self)
