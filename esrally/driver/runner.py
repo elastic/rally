@@ -717,7 +717,6 @@ class Query(Runner):
                 body = mandatory(params, "body", self)
                 sort = "_doc"
                 scroll = "10s"
-                size = size
                 doc_type = params.get("type")
                 params = request_params
                 if doc_type is not None:

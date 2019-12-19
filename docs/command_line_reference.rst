@@ -329,6 +329,19 @@ You can use ``--include-tasks`` to specify a comma-separated list of tasks that 
 * Execute only tasks of type ``search``: ``--include-tasks="type:search"``
 * You can also mix and match: ``--include-tasks="index,type:search"``
 
+``exclude-tasks``
+~~~~~~~~~~~~~~~~~
+
+Similarly to :ref:`include-tasks <clr_include_tasks>` when a challenge consists of one or more tasks you might be interested in excluding a single operations but include the rest.
+
+You can use ``--exclude-tasks`` to specify a comma-separated list of tasks that you want to skip. Each item in the list defines either the name of a task or the operation type of a task. Only the tasks that did not match will be executed.
+
+**Examples**:
+
+* Skip any tasks with the name ``index`` and ``term``: ``--exclude-tasks="index,term"``
+* Skip any tasks of type ``search``: ``--exclude-tasks="type:search"``
+* You can also mix and match: ``--exclude-tasks="index,type:search"``
+
 ``team-repository``
 ~~~~~~~~~~~~~~~~~~~
 

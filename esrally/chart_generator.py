@@ -1370,7 +1370,9 @@ class RaceConfigTrack:
     def __init__(self, cfg, name=None):
         self.cached_track = self.load_track(cfg, name)
 
-    def load_track(self, cfg, name=None, params={}):
+    def load_track(self, cfg, name=None, params=None):
+        if not params:
+            params = {}
         # hack to make this work with multiple tracks (Rally core is usually not meant to be used this way)
         if name:
             cfg.add(config.Scope.applicationOverride, "track", "track.name", name)
@@ -1378,7 +1380,7 @@ class RaceConfigTrack:
         cfg.add(config.Scope.applicationOverride, "track", "params", params)
         return track.load_track(cfg)
 
-    def get_track(self, cfg, name=None, params={}):
+    def get_track(self, cfg, name=None, params=None):
         if params:
             return self.load_track(cfg, name, params)
         # if no params specified, return the initially cached, (non-parametrized) track

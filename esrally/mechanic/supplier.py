@@ -144,6 +144,7 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
                 # * --pipeline=from-sources-skip-build --distribution-version=X.Y.Z where the plugin should not be built but ES should be
                 #   a distributed version.
                 # * --distribution-version=X.Y.Z --revision="my-plugin:abcdef" where the plugin should be built from sources.
+                # pylint: disable=consider-using-ternary
                 plugin_needs_build = (sources and build) or distribution
                 # be a bit more lenient when checking for plugin revisions. This allows users to specify `--revision="current"` and
                 # rely on Rally to do the right thing.
@@ -179,18 +180,13 @@ class CompositeSupplier:
 
     def __call__(self, *args, **kwargs):
         binaries = {}
-        try:
-            for supplier in self.suppliers:
-                supplier.fetch()
-
-            for supplier in self.suppliers:
-                supplier.prepare()
-
-            for supplier in self.suppliers:
-                supplier.add(binaries)
-            return binaries
-        except BaseException:
-            raise
+        for supplier in self.suppliers:
+            supplier.fetch()
+        for supplier in self.suppliers:
+            supplier.prepare()
+        for supplier in self.suppliers:
+            supplier.add(binaries)
+        return binaries
 
 
 class ElasticsearchSourceSupplier:

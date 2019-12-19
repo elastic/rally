@@ -447,6 +447,7 @@ class OperationType(Enum):
     def admin_op(self):
         return self.value > 1000
 
+    # pylint: disable=too-many-return-statements
     @classmethod
     def from_hyphenated_string(cls, v):
         if v == "force-merge":

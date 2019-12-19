@@ -334,7 +334,7 @@ To specify different workloads in the same track you can use so-called challenge
 
 When should you use challenges? Challenges are useful when you want to run completely different workloads based on the same track but for the majority of cases you should get away without using challenges:
 
-* To run only a subset of the tasks, you can use :ref:`task filtering <clr_include_tasks>`, e.g. ``--include-tasks="create-index,bulk"`` will only run these two tasks in the track above.
+* To run only a subset of the tasks, you can use :ref:`task filtering <clr_include_tasks>`, e.g. ``--include-tasks="create-index,bulk"`` will only run these two tasks in the track above or ``--exclude-tasks="bulk"`` will run all tasks except for ``bulk``.
 * To vary parameters, e.g. the number of clients, you can use :ref:`track parameters <clr_track_params>`
 
 Structuring your track
@@ -650,11 +650,14 @@ You've now mastered the basics of track development for Rally. It's time to pat 
 Advanced topics
 ---------------
 
+.. _template_language:
+
 Template Language
 ^^^^^^^^^^^^^^^^^
 
 Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as a template language so you can use Jinja2 expressions in track files.
 
+Elasticsearch utilizes Mustache formatting in a few places, notably in `search templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.4/search-template.html>`_ and `Watcher templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.4/actions-email.html>`_. If you are using Mustache in your Rally tracks you must `escape them properly <https://jinja.palletsprojects.com/en/2.10.x/templates/#escaping>`_. See :ref:`put_pipeline` for an example.
 
 Extensions
 """"""""""

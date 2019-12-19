@@ -806,6 +806,3 @@ class ConfigMigrationTests(TestCase):
         self.assertEqual("17", config_file.config["meta"]["config.version"])
         self.assertNotIn("runtime", config_file.config)
         self.assertEqual("/home/user/.rally/benchmarks/data", config_file.config["benchmarks"]["local.dataset.cache"])
-
-
-

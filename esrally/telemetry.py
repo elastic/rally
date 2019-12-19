@@ -393,8 +393,8 @@ class CcrStatsRecorder:
                     self.record_stats_per_index(indices["index"], indices["shards"])
                 except KeyError:
                     self.logger.warning(
-                        "The 'indices' key in {0} does not contain an 'index' or 'shards' key "
-                        "Maybe the output format of the {0} endpoint has changed. Skipping.".format(ccr_stats_api_endpoint)
+                        "The 'indices' key in %s does not contain an 'index' or 'shards' key "
+                        "Maybe the output format of the %s endpoint has changed. Skipping.", ccr_stats_api_endpoint, ccr_stats_api_endpoint
                     )
 
     def record_stats_per_index(self, name, stats):
