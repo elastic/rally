@@ -90,7 +90,10 @@ lint: check-venv
 	@find esrally benchmarks scripts tests -name "*.py" -exec pylint -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
 
 docs: check-venv
-	cd docs && $(MAKE) html
+	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
+
+serve-docs: check-venv
+	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
 
 test: check-venv
 	$(VEPYTHON) setup.py test
@@ -126,4 +129,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs test it it35 it36 it37 it38 benchmark coverage release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it35 it36 it37 it38 benchmark coverage release release-checks prereq venv-create check-env
