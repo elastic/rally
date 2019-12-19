@@ -399,6 +399,8 @@ For scroll queries, throughput will be reported as number of retrieved scroll pa
 
 For other queries, throughput will be reported as number of search requests per second, also measured as ops/s.
 
+.. _put_pipeline:
+
 put-pipeline
 ~~~~~~~~~~~~
 
@@ -406,6 +408,8 @@ With the operation-type ``put-pipeline`` you can execute the `put pipeline API <
 
 * `id` (mandatory): Pipeline id
 * `body` (mandatory): Pipeline definition
+
+In this example we setup a pipeline that adds location information to a ingested document as well as a pipeline failure block to change the index in which the document was supposed to be written. Note that we need to use the ``raw`` and ``endraw`` blocks to ensure that Rally does not attempt to resolve the Mustache template. See :ref:`template language <template_language>` for more information.
 
 Example::
 
@@ -427,9 +431,21 @@ Example::
               ]
             }
           }
+        ],
+        "on_failure": [
+          {
+            "set": {
+              "field": "_index",
+              {% raw %}
+              "value": "failed-{{ _index }}"
+              {% endraw %}
+            }
+          }
         ]
       }
     }
+
+Please see `the pipeline documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/handling-failure-in-pipelines.html>`_ for details on handling failures in pipelines.
 
 This example requires that the ``ingest-geoip`` Elasticsearch plugin is installed.
 

@@ -374,6 +374,7 @@ def _run(args, fallback=None, only_first_line=False):
             return result_lines[0]
         else:
             return result_lines
+    # pylint: disable=W0702
     except:
         return fallback
 

@@ -97,7 +97,7 @@ def is_rally_process(p):
 
 def find_all_other_rally_processes():
     others = []
-    for_all_other_processes(is_rally_process, lambda p: others.append(p))
+    for_all_other_processes(is_rally_process, others.append)
     return others
 
 

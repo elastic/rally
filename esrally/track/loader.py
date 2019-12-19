@@ -420,7 +420,7 @@ class DocumentSetPreparator:
             if self.is_locally_available(doc_path) and \
                     self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
                 break
-            elif document_set.has_compressed_corpus() and \
+            if document_set.has_compressed_corpus() and \
                     self.is_locally_available(archive_path) and \
                     self.has_expected_size(archive_path, document_set.compressed_size_in_bytes):
                 self.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
@@ -627,6 +627,9 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
 
 
 def filter_tasks(t, filters, exclude=False):
+    if not filters:
+        return t
+
     logger = logging.getLogger(__name__)
 
     def filter_out_match(task, filters, exclude):
@@ -637,29 +640,26 @@ def filter_tasks(t, filters, exclude=False):
                 return exclude
         return not exclude
 
-    if not filters:
-        return t
-    else:
-        # always include administrative tasks
-        complete_filters = [track.AdminTaskFilter()] + filters
+    # always include administrative tasks
+    complete_filters = [track.AdminTaskFilter()] + filters
 
-        for challenge in t.challenges:
-            # don't modify the schedule while iterating over it
-            tasks_to_remove = []
-            for task in challenge.schedule:
-                if filter_out_match(task, complete_filters, exclude):
-                    tasks_to_remove.append(task)
-                else:
-                    leafs_to_remove = []
-                    for leaf_task in task:
-                        if filter_out_match(leaf_task, complete_filters, exclude):
-                            leafs_to_remove.append(leaf_task)
-                    for leaf_task in leafs_to_remove:
-                        logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
-                        task.remove_task(leaf_task)
-            for task in tasks_to_remove:
-                logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
-                challenge.remove_task(task)
+    for challenge in t.challenges:
+        # don't modify the schedule while iterating over it
+        tasks_to_remove = []
+        for task in challenge.schedule:
+            if filter_out_match(task, complete_filters, exclude):
+                tasks_to_remove.append(task)
+            else:
+                leafs_to_remove = []
+                for leaf_task in task:
+                    if filter_out_match(leaf_task, complete_filters, exclude):
+                        leafs_to_remove.append(leaf_task)
+                for leaf_task in leafs_to_remove:
+                    logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
+                    task.remove_task(leaf_task)
+        for task in tasks_to_remove:
+            logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
+            challenge.remove_task(task)
 
     return t
 
