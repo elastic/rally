@@ -253,6 +253,18 @@ function test_list {
     esrally list telemetry --configuration-name="${cfg}"
 }
 
+function test_info {
+    local cfg
+    random_configuration cfg
+
+    info "test info [${cfg}]"
+    esrally info --configuration-name="${cfg}" --track=geonames --challenge=append-no-conflicts
+    info "test info can also use a track repository [${cfg}]"
+    esrally info --configuration-name="${cfg}" --track-repository=default --track=geonames
+    info "test info with task filter [${cfg}]"
+    esrally info --configuration-name="${cfg}" --track=geonames --challenge=append-no-conflicts --include-tasks="type:search"
+}
+
 function test_download {
     local cfg
     random_configuration cfg
@@ -564,6 +576,8 @@ function run_test {
     test_configure
     echo "**************************************** TESTING RALLY LIST COMMANDS *******************************************"
     test_list
+    echo "**************************************** TESTING RALLY INFO COMMAND ********************************************"
+    test_info
     echo "**************************************** TESTING RALLY FAILS WITH UNUSED TRACK-PARAMS **************************"
     test_distribution_fails_with_wrong_track_params
     echo "**************************************** TESTING RALLY DOWNLOAD COMMAND ***********************************"
