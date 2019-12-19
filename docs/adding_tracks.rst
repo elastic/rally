@@ -305,7 +305,7 @@ To specify different workloads in the same track you can use so-called challenge
 
 When should you use challenges? Challenges are useful when you want to run completely different workloads based on the same track but for the majority of cases you should get away without using challenges:
 
-* To run only a subset of the tasks, you can use :ref:`task filtering <clr_include_tasks>`, e.g. ``--include-tasks="create-index,bulk"`` will only run these two tasks in the track above.
+* To run only a subset of the tasks, you can use :ref:`task filtering <clr_include_tasks>`, e.g. ``--include-tasks="create-index,bulk"`` will only run these two tasks in the track above or ``--exclude-tasks="bulk"`` will run all tasks except for ``bulk``.
 * To vary parameters, e.g. the number of clients, you can use :ref:`track parameters <clr_track_params>`
 
 Structuring your track

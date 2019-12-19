@@ -419,9 +419,14 @@ def create_arg_parser():
             "--distribution-repository",
             help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
             default="release")
-        p.add_argument(
+        
+        task_filter_group = p.add_mutually_exclusive_group()
+        task_filter_group.add_argument(
             "--include-tasks",
             help="Defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
+        task_filter_group.add_argument(
+            "--exclude-tasks",
+            help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.")
         p.add_argument(
             "--user-tag",
             help="Define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
@@ -770,6 +775,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
     cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
     cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
+    cfg.add(config.Scope.applicationOverride, "track", "exclude.tasks", opts.csv_to_list(args.exclude_tasks))
     cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
 
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
