@@ -90,10 +90,10 @@ lint: check-venv
 	@find esrally benchmarks scripts tests -name "*.py" -exec pylint -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
 
 docs: check-venv
-	cd docs && $(MAKE) html
+	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
 
-serve-docs: docs
-	@cd docs/_build/html && python3 -m http.server
+serve-docs: check-venv
+	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
 
 test: check-venv
 	$(VEPYTHON) setup.py test
