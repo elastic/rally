@@ -81,6 +81,52 @@ def list_tracks(cfg):
     console.println(tabulate.tabulate(tabular_data=data, headers=headers))
 
 
+def track_info(cfg):
+    def format_task(t, indent="", num="", suffix=""):
+        msg = "{}{}{}".format(indent, num, str(t))
+        if t.clients > 1:
+            msg += " ({} clients)".format(t.clients)
+        msg += suffix
+        return msg
+
+    def challenge_info(c):
+        if not c.auto_generated:
+            msg = "Challenge [{}]".format(c.name)
+            if c.default:
+                msg += " (run by default)"
+            console.println(msg, underline="=", overline="=")
+            if c.description:
+                console.println("\n{}".format(c.description))
+
+        console.println("\nSchedule:", underline="-")
+        console.println("")
+        for num, task in enumerate(c.schedule, start=1):
+            if task.nested:
+                console.println(format_task(task, suffix=":", num="{}. ".format(num)))
+                for leaf_num, leaf_task in enumerate(task, start=1):
+                    console.println(format_task(leaf_task, indent="\t", num="{}.{} ".format(num, leaf_num)))
+            else:
+                console.println(format_task(task, num="{}. ".format(num)))
+
+    t = load_track(cfg)
+    console.println("Showing details for track [{}]:\n".format(t.name))
+    console.println("* Description: {}".format(t.description))
+    if t.number_of_documents:
+        console.println("* Documents: {}".format(convert.number_to_human_string(t.number_of_documents)))
+        console.println("* Compressed Size: {}".format(convert.bytes_to_human_string(t.compressed_size_in_bytes)))
+        console.println("* Uncompressed Size: {}".format(convert.bytes_to_human_string(t.uncompressed_size_in_bytes)))
+    console.println("")
+
+    challenge_name = cfg.opts("track", "challenge.name", mandatory=False)
+    if challenge_name:
+        challenge = t.find_challenge(challenge_name)
+        challenge_info(challenge)
+    else:
+        for challenge in t.challenges:
+            challenge_info(challenge)
+            console.println("")
+
+
 def load_track(cfg):
     """
 

@@ -72,6 +72,41 @@ def create_arg_parser():
         default=10,
     )
 
+    info_parser = subparsers.add_parser("info", help="Show info about a track")
+    info_track_source_group = info_parser.add_mutually_exclusive_group()
+    info_track_source_group.add_argument(
+        "--track-repository",
+        help="Define the repository from where Rally will load tracks (default: default).",
+        # argparse is smart enough to use this default only if the user did not use --track-path and also did not specify anything
+        default="default"
+    )
+    info_track_source_group.add_argument(
+        "--track-path",
+        help="Define the path to a track.")
+
+    info_parser.add_argument(
+        "--track",
+        help="Define the track to use. List possible tracks with `{} list tracks` (default: geonames).".format(PROGRAM_NAME)
+        # we set the default value later on because we need to determine whether the user has provided this value.
+        # default="geonames"
+    )
+    info_parser.add_argument(
+        "--track-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
+        default=""
+    )
+    info_parser.add_argument(
+        "--challenge",
+        help="Define the challenge to use. List possible challenges for tracks with `{} list tracks`.".format(PROGRAM_NAME)
+    )
+    info_task_filter_group = info_parser.add_mutually_exclusive_group()
+    info_task_filter_group.add_argument(
+        "--include-tasks",
+        help="Defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
+    info_task_filter_group.add_argument(
+        "--exclude-tasks",
+        help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.")
+
     generate_parser = subparsers.add_parser("generate", help="Generate artifacts")
     generate_parser.add_argument(
         "artifact",
@@ -488,7 +523,7 @@ def create_arg_parser():
             default=False)
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
-              start_parser, stop_parser]:
+              start_parser, stop_parser, info_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
@@ -657,6 +692,8 @@ def dispatch_sub_command(cfg, sub_command):
             race(cfg)
         elif sub_command == "generate":
             generate(cfg)
+        elif sub_command == "info":
+            track.track_info(cfg)
         else:
             raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
         return True

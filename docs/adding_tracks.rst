@@ -202,6 +202,35 @@ The new track appears when you run ``esrally list tracks --track-path=~/rally-tr
     ----------  ----------------------------- -----------  ---------------  -----------------
     tutorial    Tutorial benchmark for Rally      11658903  N/A              1.4 GB
 
+You can also show details about your track with ``esrally info --track-path=~/rally-tracks/tutorial``::
+
+    dm@io:~ $ esrally info --track-path=~/rally-tracks/tutorial
+
+        ____        ____
+       / __ \____ _/ / /_  __
+      / /_/ / __ `/ / / / / /
+     / _, _/ /_/ / / / /_/ /
+    /_/ |_|\__,_/_/_/\__, /
+                    /____/
+
+    Showing details for track [tutorial]:
+
+    * Description: Tutorial benchmark for Rally
+    * Documents: 11,658,903
+    * Compressed Size: N/A
+    * Uncompressed Size: 1.4 GB
+
+
+    Schedule:
+    ----------
+
+    1. delete-index
+    2. create-index
+    3. cluster-health
+    4. bulk (8 clients)
+    5. force-merge
+    6. query-match-all (8 clients)
+
 Congratulations, you have created your first track! You can test it with ``esrally --distribution-version=6.0.0 --track-path=~/rally-tracks/tutorial``.
 
 .. _add_track_test_mode:
