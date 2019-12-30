@@ -85,8 +85,8 @@ function restore_rally_log {
 }
 
 function stop_and_clean_docker_container {
-    docker stop ${1} > /dev/null
-    docker rm ${1} > /dev/null
+    docker stop ${1} > /dev/null || true
+    docker rm ${1} > /dev/null || true
 }
 
 function kill_rally_processes {
@@ -106,6 +106,7 @@ function kill_related_es_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
     # killall matching ES instances - we cannot use killall as we also want to ensure "rally" is "somewhere" in the command line.
+    # TODO: exclude Docker containers; in Linux, the following may result in Docker Elasticsearch containers getting killed too.
     RUNNING_RALLY_ES_PROCESSES=$(jps -v | egrep ".*java.*rally" | awk '{print $1}')
     if [ -n "${RUNNING_RALLY_ES_PROCESSES}" ]; then
         for p in "${RUNNING_RALLY_ES_PROCESSES}"
