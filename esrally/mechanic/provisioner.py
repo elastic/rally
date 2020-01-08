@@ -342,7 +342,7 @@ class PluginInstaller:
             self.logger.info("Installing [%s] into [%s]", self.plugin_name, es_home_path)
             install_cmd = '%s install --batch "%s"' % (installer_binary_path, self.plugin_name)
 
-        return_code = process.run_subprocess_with_logging(install_cmd, env={"JAVA_HOME": self.java_home})
+        return_code = process.run_subprocess_with_logging(install_cmd, env=self.env())
         # see: https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html
         if return_code == 0:
             self.logger.info("Successfully installed [%s].", self.plugin_name)
@@ -356,10 +356,13 @@ class PluginInstaller:
                                         (self.plugin_name, str(return_code)))
 
     def invoke_install_hook(self, phase, variables):
+        self.hook_handler.invoke(phase.name, variables=variables, env=self.env())
+
+    def env(self):
         env = {}
         if self.java_home:
             env["JAVA_HOME"] = self.java_home
-        self.hook_handler.invoke(phase.name, variables=variables, env=env)
+        return env
 
     @property
     def variables(self):

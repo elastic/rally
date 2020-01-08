@@ -438,6 +438,22 @@ class PluginInstallerTests(TestCase):
             env={"JAVA_HOME": "/usr/local/javas/java8"})
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_install_plugin_with_bundled_jdk(self, installer_subprocess):
+        installer_subprocess.return_value = 0
+
+        plugin = team.PluginDescriptor(name="unit-test-plugin", config="default", variables={"active": True})
+        installer = provisioner.PluginInstaller(plugin,
+                                                # bundled JDK
+                                                java_home=None,
+                                                hook_handler_class=NoopHookHandler)
+
+        installer.install(es_home_path="/opt/elasticsearch")
+
+        installer_subprocess.assert_called_with(
+            '/opt/elasticsearch/bin/elasticsearch-plugin install --batch "unit-test-plugin"',
+            env={})
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_unknown_plugin(self, installer_subprocess):
         # unknown plugin
         installer_subprocess.return_value = 64
