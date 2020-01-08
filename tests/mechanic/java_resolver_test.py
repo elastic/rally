@@ -57,5 +57,5 @@ class JavaResolverTests(TestCase):
 
         # assumes most recent JDK
         self.assertEqual(major, 12)
-        # does not extract JAVA_HOME for the bundled JDK
+        # does not set JAVA_HOME for the bundled JDK
         self.assertEqual(java_home, None)
