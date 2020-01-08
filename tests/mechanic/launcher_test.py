@@ -192,7 +192,7 @@ class ProcessLauncherTests(TestCase):
         self.assertEqual("/java_home/bin" + os.pathsep + os.environ["PATH"], env["PATH"])
         self.assertEqual("-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
                          "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
-                         "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr "
+                         "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr " # pylint: disable=line-too-long
                          "-XX:StartFlightRecording=defaultrecording=true", env["ES_JAVA_OPTS"])
 
 

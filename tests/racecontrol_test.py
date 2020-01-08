@@ -70,7 +70,8 @@ class RaceControlTests(TestCase):
         self.assertEqual(
             "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
             "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-            "For more details read the docs for the benchmark-only pipeline in https://esrally.readthedocs.io/en/latest/pipelines.html#benchmark-only\n",
+            "For more details read the docs for the benchmark-only pipeline in "
+            "https://esrally.readthedocs.io/en/latest/pipelines.html#benchmark-only\n",
             ctx.exception.args[0])
         del racecontrol.pipelines[test_pipeline_name]
 

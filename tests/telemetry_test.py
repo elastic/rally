@@ -162,8 +162,8 @@ class JfrTests(TestCase):
     def test_sets_options_for_pre_java_9_default_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(0, 8))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder",
-                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
+        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
+                          "-XX:+FlightRecorder", "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
                           "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true"], java_opts)
 
     def test_sets_options_for_java_9_or_10_default_recording_template(self):
@@ -185,9 +185,10 @@ class JfrTests(TestCase):
                                        log_root="/var/log",
                                        java_major_version=random.randint(0, 8))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder",
-                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
-                          "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true,settings=profile"], java_opts)
+        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
+                          "-XX:+FlightRecorder", "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
+                          "dumponexitpath=/var/log/test-recording.jfr",
+                          "-XX:StartFlightRecording=defaultrecording=true,settings=profile"], java_opts)
 
     def test_sets_options_for_java_9_or_10_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={"recording-template": "profile"},
@@ -213,8 +214,8 @@ class GcTests(TestCase):
         gc = telemetry.Gc("/var/log", java_major_version=random.randint(0, 8))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
         self.assertEqual(7, len(gc_java_opts))
-        self.assertEqual(["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
-                          "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
+        self.assertEqual(["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps",
+                          "-XX:+PrintGCTimeStamps", "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
                           "-XX:+PrintTenuringDistribution"], gc_java_opts)
 
     def test_sets_options_for_java_9_or_above(self):
@@ -1974,7 +1975,7 @@ class ExternalEnvironmentInfoTests(TestCase):
 
 
 class DiskIoTests(TestCase):
-    
+
     @mock.patch("esrally.utils.sysstats.process_io_counters")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
     def test_diskio_process_io_counters(self, metrics_store_node_count, process_io_counters):
@@ -1985,7 +1986,7 @@ class DiskIoTests(TestCase):
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        
+
         device = telemetry.DiskIo(node_count_on_host=1)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
@@ -2000,9 +2001,9 @@ class DiskIoTests(TestCase):
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
             mock.call("rally0", "disk_io_read_bytes", 1, "byte")
-            
+
         ])
-        
+
     @mock.patch("esrally.utils.sysstats.disk_io_counters")
     @mock.patch("esrally.utils.sysstats.process_io_counters")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
@@ -2012,10 +2013,10 @@ class DiskIoTests(TestCase):
         process_stop = Diskio(13, 13)
         disk_io_counters.side_effect = [process_start, process_stop]
         process_io_counters.side_effect = [None, None]
-        
+
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        
+
         device = telemetry.DiskIo(node_count_on_host=2)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
@@ -2027,7 +2028,7 @@ class DiskIoTests(TestCase):
         t.detach_from_node(node, running=False)
         t.store_system_metrics(node, metrics_store)
 
-        # expected result is 1 byte because there are two nodes on the machine. Result is calculated 
+        # expected result is 1 byte because there are two nodes on the machine. Result is calculated
         # with total_bytes / node_count
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
