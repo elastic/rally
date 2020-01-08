@@ -34,7 +34,7 @@ def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_
     node_root_dir = os.path.join(target_root, node_name)
 
     _, java_home = java_resolver.java_home(car.mandatory_var("runtime.jdk"), cfg)
-    
+
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
@@ -227,7 +227,7 @@ class BareProvisioner:
         provisioner_vars.update(self.es_installer.variables)
         provisioner_vars.update(plugin_variables)
         provisioner_vars["cluster_settings"] = cluster_settings
-        
+
         return provisioner_vars
 
 

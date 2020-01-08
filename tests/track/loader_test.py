@@ -732,6 +732,7 @@ class TemplateSource(TestCase):
         base_path = "~/.rally/benchmarks/tracks/default/geonames"
         template_file_name = "track.json"
         tmpl_src = loader.TemplateSource(base_path, template_file_name)
+        # pylint: disable=trailing-whitespace
         expected_response = textwrap.dedent('''                                    
             {% import "rally.helpers" as rally with context %}
             {
@@ -1896,9 +1897,9 @@ class TrackSpecificationReaderTests(TestCase):
             {
                 "settings": {
                     "number_of_shards": {{ number_of_shards }}
-                },            
+                },
                 "mappings": {
-                    "main": "empty-for-test", 
+                    "main": "empty-for-test",
                     "secondary": "empty-for-test"
                 }
             }
@@ -2068,8 +2069,8 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "index_patterns": [ "{{index_pattern}}"],
                     "settings": {
-                        "number_of_shards": {{ number_of_shards | default(1) }} 
-                    }                    
+                        "number_of_shards": {{ number_of_shards | default(1) }}
+                    }
                 }
                 """],
         }))

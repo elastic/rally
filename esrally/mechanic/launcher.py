@@ -169,7 +169,7 @@ class ProcessLauncher:
         # Don't merge here!
         env["JAVA_HOME"] = java_home
         env["ES_JAVA_OPTS"] = "-XX:+ExitOnOutOfMemoryError"
-        
+
         # we just blindly trust telemetry here...
         for v in t.instrument_candidate_java_opts():
             self._set_env(env, "ES_JAVA_OPTS", v)
