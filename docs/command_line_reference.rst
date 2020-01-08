@@ -510,6 +510,8 @@ Example::
    # Force to run with JDK 7
    esrally --distribution-version=2.4.0 --runtime-jdk=7
 
+There is also limited support to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. At the moment this only works on Linux. The JDK is bundled from Elasticsearch 7.0.0 onwards.
+
 .. _clr_revision:
 
 ``revision``

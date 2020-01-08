@@ -379,7 +379,7 @@ class ElasticsearchInstallerTests(TestCase):
 
         self.assertEqual(installer.data_paths, ["/tmp/some/data-path-dir"])
 
-    def test_invokes_hook(self):
+    def test_invokes_hook_with_java_home(self):
         installer = provisioner.ElasticsearchInstaller(car=team.Car(names="defaults",
                                                                     root_path="/tmp",
                                                                     config_paths="/tmp/templates",
@@ -399,6 +399,26 @@ class ElasticsearchInstallerTests(TestCase):
         self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
         self.assertEqual({"env": {"JAVA_HOME": "/usr/local/javas/java8"}},
                          installer.hook_handler.hook_calls["post_install"]["kwargs"])
+
+    def test_invokes_hook_no_java_home(self):
+        installer = provisioner.ElasticsearchInstaller(car=team.Car(names="defaults",
+                                                                    root_path="/tmp",
+                                                                    config_paths="/tmp/templates",
+                                                                    variables={"data_paths": "/tmp/some/data-path-dir"}),
+                                                       java_home=None,
+                                                       node_name="rally-node-0",
+                                                       all_node_ips=["10.17.22.22", "10.17.22.23"],
+                                                       all_node_names=["rally-node-0", "rally-node-1"],
+                                                       ip="10.17.22.23",
+                                                       http_port=9200,
+                                                       node_root_dir="~/.rally/benchmarks/races/unittest",
+                                                       hook_handler_class=NoopHookHandler)
+
+        self.assertEqual(0, len(installer.hook_handler.hook_calls))
+        installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
+        self.assertEqual(1, len(installer.hook_handler.hook_calls))
+        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
+        self.assertEqual({"env": {}}, installer.hook_handler.hook_calls["post_install"]["kwargs"])
 
 
 class PluginInstallerTests(TestCase):
@@ -485,7 +505,7 @@ class PluginInstallerTests(TestCase):
         self.assertEqual({"active": True}, installer.variables)
         self.assertEqual(["/etc/plugin"], installer.config_source_paths)
 
-    def test_invokes_hook(self):
+    def test_invokes_hook_with_java_home(self):
         plugin = team.PluginDescriptor(name="unit-test-plugin",
                                        config="default",
                                        config_paths=["/etc/plugin"],
@@ -500,6 +520,21 @@ class PluginInstallerTests(TestCase):
         self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
         self.assertEqual({"env": {"JAVA_HOME": "/usr/local/javas/java8"}},
                          installer.hook_handler.hook_calls["post_install"]["kwargs"])
+
+    def test_invokes_hook_no_java_home(self):
+        plugin = team.PluginDescriptor(name="unit-test-plugin",
+                                       config="default",
+                                       config_paths=["/etc/plugin"],
+                                       variables={"active": True})
+        installer = provisioner.PluginInstaller(plugin,
+                                                java_home=None,
+                                                hook_handler_class=NoopHookHandler)
+
+        self.assertEqual(0, len(installer.hook_handler.hook_calls))
+        installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
+        self.assertEqual(1, len(installer.hook_handler.hook_calls))
+        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
+        self.assertEqual({"env": {}}, installer.hook_handler.hook_calls["post_install"]["kwargs"])
 
 
 class DockerProvisionerTests(TestCase):

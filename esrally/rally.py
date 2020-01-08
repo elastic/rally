@@ -35,8 +35,17 @@ def create_arg_parser():
     def positive_number(v):
         value = int(v)
         if value <= 0:
-            raise argparse.ArgumentTypeError("must be positive but was %s" % value)
+            raise argparse.ArgumentTypeError("must be positive but was {}".format(value))
         return value
+
+    def runtime_jdk(v):
+        if v == "bundled":
+            return v
+        else:
+            try:
+                return positive_number(v)
+            except argparse.ArgumentTypeError:
+                raise argparse.ArgumentTypeError("must be a positive number or 'bundled' but was {}".format(v))
 
     # try to preload configurable defaults, but this does not work together with `--configuration-name` (which is undocumented anyway)
     cfg = config.Config()
@@ -303,7 +312,7 @@ def create_arg_parser():
         default="")
     start_parser.add_argument(
         "--runtime-jdk",
-        type=positive_number,
+        type=runtime_jdk,
         help="The major version of the runtime JDK to use.",
         default=None)
     start_parser.add_argument(
@@ -338,7 +347,7 @@ def create_arg_parser():
             default="")
         p.add_argument(
             "--runtime-jdk",
-            type=positive_number,
+            type=runtime_jdk,
             help="The major version of the runtime JDK to use.",
             default=None)
 
