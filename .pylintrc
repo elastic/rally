@@ -165,7 +165,39 @@ disable=print-statement,
         no-member,
         too-many-instance-attributes,
         too-many-statements,
-        inconsistent-return-statements
+        inconsistent-return-statements,
+        C0121,
+        C0301,
+        C0302,
+        C0303,
+        C0326,
+        C0330,
+        C0415,
+        C4001,
+        C4002,
+        E1120,
+        R0904,
+        R0916,
+        R1704,
+        R1707,
+        R1722,
+        W0104,
+        W0105,
+        W0106,
+        W0107,
+        W0143,
+        W0201,
+        W0212,
+        W0221,
+        W0235,
+        W0311,
+        W0404,
+        W0612,
+        W0613,
+        W0621,
+        W0631,
+        W1201
+
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -606,4 +638,3 @@ min-public-methods=2
 # "BaseException, Exception".
 overgeneral-exceptions=BaseException,
                        Exception
-
