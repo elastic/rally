@@ -197,6 +197,9 @@ def create_arg_parser():
         help="Define the repository from where Rally will load teams and cars (default: default).",
         default="default")
     download_parser.add_argument(
+        "--team-path",
+        help="Define the path to the car and plugin configurations to use.")
+    download_parser.add_argument(
         "--distribution-version",
         help="Define the version of the Elasticsearch distribution to download. "
              "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
@@ -213,6 +216,14 @@ def create_arg_parser():
         "--car-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
         default=""
+    )
+    download_parser.add_argument(
+        "--target-os",
+        help="The name of the target operating system for which an artifact should be downloaded (default: current OS)",
+    )
+    download_parser.add_argument(
+        "--target-arch",
+        help="The name of the CPU architecture for which an artifact should be downloaded (default: current architecture)",
     )
 
     install_parser = subparsers.add_parser("install", help="Installs an Elasticsearch node locally")
@@ -859,6 +870,9 @@ def main():
             console.println("--target-hosts and --client-options must define the same keys for multi cluster setups.")
             exit(1)
     # split by component?
+    if sub_command == "download":
+        cfg.add(config.Scope.applicationOverride, "mechanic", "target.os", args.target_os)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "target.arch", args.target_arch)
     if sub_command == "list":
         cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
         cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
