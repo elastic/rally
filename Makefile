@@ -23,6 +23,7 @@ VENV_NAME ?= .venv
 VENV_ACTIVATE_FILE = $(VENV_NAME)/bin/activate
 VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
 VEPYTHON = $(VENV_NAME)/bin/python3
+VEPYLINT = $(VENV_NAME)/bin/pylint
 PYENV_ERROR = "\033[0;31mIMPORTANT\033[0m: Please install pyenv.\n"
 PYENV_PATH_ERROR = "\033[0;31mIMPORTANT\033[0m: Please add $(HOME)/$(PYENV_REGEX) to your PATH env.\n"
 PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please add \033[0;31meval \"\$$(pyenv init -)\"\033[0m to your bash profile and restart your terminal before proceeding any further.\n"
@@ -87,7 +88,7 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: check-venv
-	@find esrally benchmarks scripts tests -name "*.py" -exec pylint -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
+	@find esrally benchmarks scripts tests -name "*.py" -exec $(VEPYLINT) -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
 
 docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
