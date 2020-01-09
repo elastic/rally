@@ -37,8 +37,13 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
     build_needed = any([build for _, _, build in supply_requirements.values()])
+    es_supplier_type, es_version, es_build = supply_requirements["elasticsearch"]
     src_config = cfg.all_opts("source")
     suppliers = []
+
+    target_os = cfg.opts("mechanic", "target.os", mandatory=False)
+    target_arch = cfg.opts("mechanic", "target.arch", mandatory=False)
+    template_renderer = TemplateRenderer(version=es_version, os_name=target_os, arch=target_arch)
 
     if build_needed:
         java_home = _java_home(car)
@@ -47,11 +52,16 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     else:
         builder = None
 
-    es_supplier_type, es_version, es_build = supply_requirements["elasticsearch"]
     if es_supplier_type == "source":
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
         suppliers.append(
-            ElasticsearchSourceSupplier(es_version, es_src_dir, remote_url=cfg.opts("source", "remote.repo.url"), car=car, builder=builder))
+            ElasticsearchSourceSupplier(es_version,
+                                        es_src_dir,
+                                        remote_url=cfg.opts("source", "remote.repo.url"),
+                                        car=car,
+                                        builder=builder,
+                                        template_renderer=template_renderer)
+        )
         repo = None
     else:
         es_src_dir = None
@@ -67,8 +77,8 @@ def create(cfg, sources, distribution, build, car, plugins=None):
         dist_cfg.update(cfg.all_opts("distributions"))
         repo = DistributionRepository(name=cfg.opts("mechanic", "distribution.repository"),
                                       distribution_config=dist_cfg,
-                                      version=es_version)
-        suppliers.append(ElasticsearchDistributionSupplier(repo, distributions_root))
+                                      template_renderer=template_renderer)
+        suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))
 
     for plugin in plugins:
         supplier_type, plugin_version, build_plugin = supply_requirements[plugin.name]
@@ -174,6 +184,30 @@ def _src_dir(cfg, mandatory=True):
                                           " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
 
 
+class TemplateRenderer:
+    def __init__(self, version, os_name=None, arch=None):
+        self.version = version
+        if os_name is not None:
+            self.os = os_name
+        else:
+            self.os = sysstats.os_name().lower()
+        if arch is not None:
+            self.arch = arch
+        else:
+            self.arch = sysstats.cpu_arch().lower()
+
+    def render(self, template):
+        substitutions = {
+            "{{VERSION}}": self.version,
+            "{{OSNAME}}": self.os,
+            "{{ARCH}}": self.arch
+        }
+        r = template
+        for key, replacement in substitutions.items():
+            r = r.replace(key, replacement)
+        return r
+
+
 class CompositeSupplier:
     def __init__(self, suppliers):
         self.suppliers = suppliers
@@ -190,26 +224,32 @@ class CompositeSupplier:
 
 
 class ElasticsearchSourceSupplier:
-    def __init__(self, revision, es_src_dir, remote_url, car, builder):
+    def __init__(self, revision, es_src_dir, remote_url, car, builder, template_renderer):
         self.revision = revision
         self.src_dir = es_src_dir
         self.remote_url = remote_url
         self.car = car
         self.builder = builder
+        self.template_renderer = template_renderer
 
     def fetch(self):
         SourceRepository("Elasticsearch", self.remote_url, self.src_dir).fetch(self.revision)
 
     def prepare(self):
         if self.builder:
-            self.builder.build([self.car.mandatory_var("clean_command"), self.car.mandatory_var("build_command")])
+            self.builder.build([
+                self.template_renderer.render(self.car.mandatory_var("clean_command")),
+                self.template_renderer.render(self.car.mandatory_var("system.build_command"))
+            ])
 
     def add(self, binaries):
         binaries["elasticsearch"] = self.resolve_binary()
 
     def resolve_binary(self):
         try:
-            return glob.glob("{}/{}".format(self.src_dir, self.car.mandatory_var("artifact_path_pattern")))[0]
+            path = os.path.join(self.src_dir,
+                                self.template_renderer.render(self.car.mandatory_var("system.artifact_path_pattern")))
+            return glob.glob(path)[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
 
@@ -295,9 +335,9 @@ class CorePluginSourceSupplier:
 
 
 class ElasticsearchDistributionSupplier:
-    def __init__(self, repo, distributions_root):
+    def __init__(self, repo, version, distributions_root):
         self.repo = repo
-        self.version = repo.version
+        self.version = version
         self.distributions_root = distributions_root
         # will be defined in the prepare phase
         self.distribution_path = None
@@ -484,15 +524,19 @@ class Builder:
 
 
 class DistributionRepository:
-    def __init__(self, name, distribution_config, version):
+    def __init__(self, name, distribution_config, template_renderer):
         self.name = name
         self.cfg = distribution_config
-        self.version = version
+        self.runtime_jdk_bundled = convert.to_bool(self.cfg.get("runtime.jdk.bundled", False))
+        self.template_renderer = template_renderer
 
     @property
     def download_url(self):
         # team repo
-        default_key = "{}_url".format(self.name)
+        if self.runtime_jdk_bundled:
+            default_key = "jdk.bundled.{}_url".format(self.name)
+        else:
+            default_key = "jdk.unbundled.{}_url".format(self.name)
         # rally.ini
         override_key = "{}.url".format(self.name)
         return self._url_for(override_key, default_key)
@@ -520,19 +564,7 @@ class DistributionRepository:
                 raise exceptions.SystemSetupError("Neither config key [{}] nor [{}] is defined.".format(user_defined_key, default_key))
             else:
                 return None
-        return self._substitute_vars(url_template)
-
-    def _substitute_vars(self, s):
-        substitutions = {
-            "{{VERSION}}": self.version,
-            "{{OSNAME}}": sysstats.os_name().lower(),
-            "{{ARCH}}": sysstats.cpu_arch().lower()
-        }
-        r = s
-        for key, replacement in substitutions.items():
-            r = r.replace(key, replacement)
-        return r
-
+        return self.template_renderer.render(url_template)
 
     @property
     def cache(self):

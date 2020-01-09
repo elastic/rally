@@ -195,6 +195,20 @@ class ProcessLauncherTests(TestCase):
                          "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr " # pylint: disable=line-too-long
                          "-XX:StartFlightRecording=defaultrecording=true", env["ES_JAVA_OPTS"])
 
+    def test_bundled_jdk_not_in_path(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
+
+        proc_launcher = launcher.ProcessLauncher(cfg)
+
+        t = telemetry.Telemetry()
+        # no JAVA_HOME -> use the bundled JDK
+        env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home=None, t=t)
+
+        # unmodified
+        self.assertEqual(os.environ["PATH"], env["PATH"])
+
 
 class DockerLauncherTests(TestCase):
     class IterationBasedStopWatch:

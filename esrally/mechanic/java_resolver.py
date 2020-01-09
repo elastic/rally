@@ -27,16 +27,23 @@ def java_home(car_runtime_jdks, cfg):
         if override_runtime_jdk:
             return [override_runtime_jdk]
         else:
-            try:
-                return [int(v) for v in car_runtime_jdks.split(",")]
-            except ValueError:
-                raise exceptions.SystemSetupError(
-                    "Car config key \"runtime.jdk\" is invalid: \"{}\" (must be int)".format(car_runtime_jdks))
+            return allowed_runtime_jdks
 
     logger = logging.getLogger(__name__)
 
+    try:
+        allowed_runtime_jdks = [int(v) for v in car_runtime_jdks.split(",")]
+    except ValueError:
+        raise exceptions.SystemSetupError(
+            "Car config key \"runtime.jdk\" is invalid: \"{}\" (must be int)".format(car_runtime_jdks))
+
     runtime_jdk_versions = determine_runtime_jdks()
-    logger.info("Allowed JDK versions are %s.", runtime_jdk_versions)
-    major, java_home = jvm.resolve_path(runtime_jdk_versions)
-    logger.info("Detected JDK with major version [%s] in [%s].", major, java_home)
-    return major, java_home
+    if runtime_jdk_versions[0] == "bundled":
+        logger.info("Using JDK bundled with Elasticsearch.")
+        # assume that the bundled JDK is the highest available; the path is irrelevant
+        return allowed_runtime_jdks[0], None
+    else:
+        logger.info("Allowed JDK versions are %s.", runtime_jdk_versions)
+        major, java_home = jvm.resolve_path(runtime_jdk_versions)
+        logger.info("Detected JDK with major version [%s] in [%s].", major, java_home)
+        return major, java_home

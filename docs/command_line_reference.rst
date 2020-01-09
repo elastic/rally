@@ -362,6 +362,21 @@ Example::
 
    esrally --team-path=~/Projects/es-teams
 
+``target-os``
+~~~~~~~~~~~~~
+
+Specifies the name of the target operating system for which an artifact should be downloaded. By default this value is automatically derived based on the operating system Rally is run. This command line flag is only applicable to the ``download`` subcommand and allows to download an artifact for a different operating system. Example::
+
+    esrally download --distribution-version=7.5.1 --target-os=linux
+
+``target-arch``
+~~~~~~~~~~~~~~~
+
+Specifies the name of the target CPU architecture for which an artifact should be downloaded. By default this value is automatically derived based on the CPU architecture Rally is run. This command line flag is only applicable to the ``download`` subcommand and allows to download an artifact for a different CPU architecture. Example::
+
+    esrally download --distribution-version=7.5.1 --target-arch=x86_64
+
+
 ``car``
 ~~~~~~~
 
@@ -509,6 +524,8 @@ Example::
    esrally --distribution-version=2.4.0
    # Force to run with JDK 7
    esrally --distribution-version=2.4.0 --runtime-jdk=7
+
+It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/current/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
 
 .. _clr_revision:
 
