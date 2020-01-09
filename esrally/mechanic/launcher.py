@@ -165,9 +165,10 @@ class ProcessLauncher:
         env = {}
         env.update(os.environ)
         env.update(car_env)
-        self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep, prepend=True)
-        # Don't merge here!
-        env["JAVA_HOME"] = java_home
+        if java_home:
+            self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep, prepend=True)
+            # Don't merge here!
+            env["JAVA_HOME"] = java_home
         env["ES_JAVA_OPTS"] = "-XX:+ExitOnOutOfMemoryError"
 
         # we just blindly trust telemetry here...

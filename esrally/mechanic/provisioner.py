@@ -25,7 +25,7 @@ import jinja2
 
 from esrally import exceptions
 from esrally.mechanic import team, java_resolver
-from esrally.utils import console, io, process, versions
+from esrally.utils import console, convert, io, process, versions
 
 
 def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
@@ -33,7 +33,12 @@ def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_
 
     node_root_dir = os.path.join(target_root, node_name)
 
-    _, java_home = java_resolver.java_home(car.mandatory_var("runtime.jdk"), cfg)
+    runtime_jdk_bundled = convert.to_bool(car.mandatory_var("runtime.jdk.bundled"))
+    if runtime_jdk_bundled:
+        java_home = None
+    else:
+        runtime_jdk = car.mandatory_var("runtime.jdk")
+        _, java_home = java_resolver.java_home(runtime_jdk, cfg)
 
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
@@ -268,7 +273,10 @@ class ElasticsearchInstaller:
         shutil.rmtree(config_path)
 
     def invoke_install_hook(self, phase, variables):
-        self.hook_handler.invoke(phase.name, variables=variables, env={"JAVA_HOME": self.java_home})
+        env = {}
+        if self.java_home:
+            env["JAVA_HOME"] = self.java_home
+        self.hook_handler.invoke(phase.name, variables=variables, env=env)
 
     @property
     def variables(self):
@@ -334,7 +342,7 @@ class PluginInstaller:
             self.logger.info("Installing [%s] into [%s]", self.plugin_name, es_home_path)
             install_cmd = '%s install --batch "%s"' % (installer_binary_path, self.plugin_name)
 
-        return_code = process.run_subprocess_with_logging(install_cmd, env={"JAVA_HOME": self.java_home})
+        return_code = process.run_subprocess_with_logging(install_cmd, env=self.env())
         # see: https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html
         if return_code == 0:
             self.logger.info("Successfully installed [%s].", self.plugin_name)
@@ -348,7 +356,13 @@ class PluginInstaller:
                                         (self.plugin_name, str(return_code)))
 
     def invoke_install_hook(self, phase, variables):
-        self.hook_handler.invoke(phase.name, variables=variables, env={"JAVA_HOME": self.java_home})
+        self.hook_handler.invoke(phase.name, variables=variables, env=self.env())
+
+    def env(self):
+        env = {}
+        if self.java_home:
+            env["JAVA_HOME"] = self.java_home
+        return env
 
     @property
     def variables(self):

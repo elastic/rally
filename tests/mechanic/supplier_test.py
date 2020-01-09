@@ -168,23 +168,49 @@ class BuilderTests(TestCase):
         mock_run_subprocess.assert_has_calls(calls)
 
 
+class TemplateRendererTests(TestCase):
+    def test_uses_provided_values(self):
+        renderer = supplier.TemplateRenderer(version="1.2.3", os_name="Windows", arch="arm7")
+        self.assertEqual("This is version 1.2.3 on Windows with a arm7 CPU.",
+                         renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."))
+
+    @mock.patch("esrally.utils.sysstats.os_name", return_value="Linux")
+    @mock.patch("esrally.utils.sysstats.cpu_arch", return_value="X86_64")
+    def test_uses_derived_values(self, os_name, cpu_arch):
+        renderer = supplier.TemplateRenderer(version="1.2.3")
+        self.assertEqual("This is version 1.2.3 on linux with a x86_64 CPU.",
+                         renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."))
+
+
 class ElasticsearchSourceSupplierTests(TestCase):
     def test_no_build(self):
         car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
-            "build_command": "./gradlew assemble"
+            "system.build_command": "./gradlew assemble"
         })
-        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None)
+        renderer = supplier.TemplateRenderer(version=None)
+        es = supplier.ElasticsearchSourceSupplier(revision="abc",
+                                                  es_src_dir="/src",
+                                                  remote_url="",
+                                                  car=car,
+                                                  builder=None,
+                                                  template_renderer=renderer)
         es.prepare()
         # nothing has happened (intentionally) because there is no builder
 
     def test_build(self):
         car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
-            "build_command": "./gradlew assemble"
+            "system.build_command": "./gradlew assemble"
         })
         builder = mock.create_autospec(supplier.Builder)
-        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder)
+        renderer = supplier.TemplateRenderer(version="abc")
+        es = supplier.ElasticsearchSourceSupplier(revision="abc",
+                                                  es_src_dir="/src",
+                                                  remote_url="",
+                                                  car=car,
+                                                  builder=builder,
+                                                  template_renderer=renderer)
         es.prepare()
 
         builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
@@ -192,12 +218,18 @@ class ElasticsearchSourceSupplierTests(TestCase):
     def test_raises_error_on_missing_car_variable(self):
         car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
-            # build_command is not defined
+            # system.build_command is not defined
         })
+        renderer = supplier.TemplateRenderer(version="abc")
         builder = mock.create_autospec(supplier.Builder)
-        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder)
+        es = supplier.ElasticsearchSourceSupplier(revision="abc",
+                                                  es_src_dir="/src",
+                                                  remote_url="",
+                                                  car=car,
+                                                  builder=builder,
+                                                  template_renderer=renderer)
         with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "Car \"default\" requires config key \"build_command\"."):
+                                    "Car \"default\" requires config key \"system.build_command\"."):
             es.prepare()
 
         self.assertEqual(0, builder.build.call_count)
@@ -206,10 +238,16 @@ class ElasticsearchSourceSupplierTests(TestCase):
     def test_add_elasticsearch_binary(self):
         car = team.Car("default", root_path=None, config_paths=[], variables={
             "clean_command": "./gradlew clean",
-            "build_command": "./gradlew assemble",
-            "artifact_path_pattern": "distribution/archives/tar/build/distributions/*.tar.gz"
+            "system.build_command": "./gradlew assemble",
+            "system.artifact_path_pattern": "distribution/archives/tar/build/distributions/*.tar.gz"
         })
-        es = supplier.ElasticsearchSourceSupplier(revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None)
+        renderer = supplier.TemplateRenderer(version="abc")
+        es = supplier.ElasticsearchSourceSupplier(revision="abc",
+                                                  es_src_dir="/src",
+                                                  remote_url="",
+                                                  car=car,
+                                                  builder=None,
+                                                  template_renderer=renderer)
         binaries = {}
         es.add(binaries=binaries)
         self.assertEqual(binaries, {"elasticsearch": "elasticsearch.tar.gz"})
@@ -305,9 +343,10 @@ class CorePluginSourceSupplierTests(TestCase):
 class PluginDistributionSupplierTests(TestCase):
     def test_resolve_plugin_url(self):
         v = {"plugin_custom-analyzer_release_url": "http://example.org/elasticearch/custom-analyzer-{{VERSION}}.zip"}
+        renderer = supplier.TemplateRenderer(version="6.3.0")
         s = supplier.PluginDistributionSupplier(repo=supplier.DistributionRepository(name="release",
                                                                                      distribution_config=v,
-                                                                                     version="6.3.0"),
+                                                                                     template_renderer=renderer),
                                                 plugin=team.PluginDescriptor("custom-analyzer"))
         binaries = {}
         s.add(binaries)
@@ -526,68 +565,85 @@ class DistributionRepositoryTests(TestCase):
     @mock.patch("esrally.utils.sysstats.os_name", return_value="Linux")
     @mock.patch("esrally.utils.sysstats.cpu_arch", return_value="X86_64")
     def test_release_repo_config_with_default_url(self, os_name, cpu_arch):
+        renderer = supplier.TemplateRenderer(version="7.3.2")
         repo = supplier.DistributionRepository(name="release", distribution_config={
-            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
+            "runtime.jdk.bundled": "true",
+            "jdk.bundled.release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
             "release.cache": "true"
-        }, version="7.3.2")
+        }, template_renderer=renderer)
         self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.download_url)
         self.assertEqual("elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.file_name)
         self.assertTrue(repo.cache)
 
     def test_release_repo_config_with_user_url(self):
+        renderer = supplier.TemplateRenderer(version="2.4.3")
         repo = supplier.DistributionRepository(name="release", distribution_config={
-            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "jdk.unbundled.release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "runtime.jdk.bundled": "false",
             # user override
             "release.url": "https://es-mirror.example.org/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
             "release.cache": "false"
-        }, version="2.4.3")
+        }, template_renderer=renderer)
         self.assertEqual("https://es-mirror.example.org/downloads/elasticsearch/elasticsearch-2.4.3.tar.gz", repo.download_url)
         self.assertEqual("elasticsearch-2.4.3.tar.gz", repo.file_name)
         self.assertFalse(repo.cache)
 
     def test_missing_url(self):
+        renderer = supplier.TemplateRenderer(version="2.4.3")
         repo = supplier.DistributionRepository(name="miss", distribution_config={
-            "release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "jdk.unbundled.release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "runtime.jdk.bundled": "false",
             "release.cache": "true"
-        }, version="2.4.3")
+        }, template_renderer=renderer)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             # noinspection PyStatementEffect
             repo.download_url
-        self.assertEqual("Neither config key [miss.url] nor [miss_url] is defined.", ctx.exception.args[0])
+        self.assertEqual("Neither config key [miss.url] nor [jdk.unbundled.miss_url] is defined.", ctx.exception.args[0])
 
     def test_missing_cache(self):
+        renderer = supplier.TemplateRenderer(version="2.4.3")
         repo = supplier.DistributionRepository(name="release", distribution_config={
-            "release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-        }, version="2.4.3")
+            "jdk.unbundled.release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "runtime.jdk.bundled": "false"
+        }, template_renderer=renderer)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             # noinspection PyStatementEffect
             repo.cache
         self.assertEqual("Mandatory config key [release.cache] is undefined.", ctx.exception.args[0])
 
     def test_invalid_cache_value(self):
+        renderer = supplier.TemplateRenderer(version="2.4.3")
         repo = supplier.DistributionRepository(name="release", distribution_config={
-            "release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "jdk.unbundled.release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+            "runtime.jdk.bundled": "false",
             "release.cache": "Invalid"
-        }, version="2.4.3")
+        }, template_renderer=renderer)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             # noinspection PyStatementEffect
             repo.cache
         self.assertEqual("Value [Invalid] for config key [release.cache] is not a valid boolean value.", ctx.exception.args[0])
 
     def test_plugin_config_with_default_url(self):
+        renderer = supplier.TemplateRenderer(version="5.5.0")
         repo = supplier.DistributionRepository(name="release", distribution_config={
+            "runtime.jdk.bundled": "false",
             "plugin_example_release_url": "https://artifacts.example.org/downloads/plugins/example-{{VERSION}}.zip"
-        }, version="5.5.0")
+        }, template_renderer=renderer)
         self.assertEqual("https://artifacts.example.org/downloads/plugins/example-5.5.0.zip", repo.plugin_download_url("example"))
 
     def test_plugin_config_with_user_url(self):
+        renderer = supplier.TemplateRenderer(version="5.5.0")
         repo = supplier.DistributionRepository(name="release", distribution_config={
+            "runtime.jdk.bundled": "false",
             "plugin_example_release_url": "https://artifacts.example.org/downloads/plugins/example-{{VERSION}}.zip",
             # user override
             "plugin.example.release.url": "https://mirror.example.org/downloads/plugins/example-{{VERSION}}.zip"
-        }, version="5.5.0")
+        }, template_renderer=renderer)
         self.assertEqual("https://mirror.example.org/downloads/plugins/example-5.5.0.zip", repo.plugin_download_url("example"))
 
     def test_missing_plugin_config(self):
-        repo = supplier.DistributionRepository(name="release", distribution_config={}, version="5.5.0")
+        renderer = supplier.TemplateRenderer(version="5.5.0")
+        repo = supplier.DistributionRepository(name="release", distribution_config={
+            "runtime.jdk.bundled": "false",
+        }, template_renderer=renderer)
         self.assertIsNone(repo.plugin_download_url("not existing"))
