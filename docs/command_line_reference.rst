@@ -362,6 +362,21 @@ Example::
 
    esrally --team-path=~/Projects/es-teams
 
+``target-os``
+~~~~~~~~~~~~~
+
+Specifies the name of the target operating system for which an artifact should be downloaded. By default this value is automatically derived based on the operating system Rally is run. This command line flag is only applicable to the ``download`` subcommand and allows to download an artifact for a different operating system. Example::
+
+    esrally download --distribution-version=7.5.1 --target-os=linux
+
+``target-arch``
+~~~~~~~~~~~~~~~
+
+Specifies the name of the target CPU architecture for which an artifact should be downloaded. By default this value is automatically derived based on the CPU architecture Rally is run. This command line flag is only applicable to the ``download`` subcommand and allows to download an artifact for a different CPU architecture. Example::
+
+    esrally download --distribution-version=7.5.1 --target-arch=x86_64
+
+
 ``car``
 ~~~~~~~
 
