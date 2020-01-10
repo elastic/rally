@@ -154,8 +154,8 @@ class PluginLoaderTests(TestCase):
             ], self.loader.plugins())
 
     def test_loads_core_plugin(self):
-        self.assertEqual(team.PluginDescriptor(name="my-analysis-plugin", core_plugin=True),
-                         self.loader.load_plugin("my-analysis-plugin", None))
+        self.assertEqual(team.PluginDescriptor(name="my-analysis-plugin", core_plugin=True, variables={"dbg": True}),
+                         self.loader.load_plugin("my-analysis-plugin", config_names=None, plugin_params={"dbg": True}))
 
     def test_cannot_load_plugin_with_missing_config(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
@@ -174,7 +174,7 @@ class PluginLoaderTests(TestCase):
                                                 r"elasticsearch-plugins --distribution-version=VERSION.")
 
     def test_loads_configured_plugin(self):
-        plugin = self.loader.load_plugin("complex-plugin", ["config-a", "config-b"])
+        plugin = self.loader.load_plugin("complex-plugin", ["config-a", "config-b"], plugin_params={"dbg": True})
         self.assertEqual("complex-plugin", plugin.name)
         self.assertCountEqual(["config-a", "config-b"], plugin.config)
 
@@ -191,7 +191,9 @@ class PluginLoaderTests(TestCase):
             "foo": "bar",
             "baz": "foo",
             "var": "0",
-            "hello": "true"
+            "hello": "true",
+            # from plugin params
+            "dbg": True
         }, plugin.variables)
 
 
