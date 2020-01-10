@@ -1508,6 +1508,9 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
 class RaceConfig:
     def __init__(self, track, cfg=None, flavor=None, es_license=None, challenge=None, car=None, node_count=None, charts=None):
         self.track = track
+        self.excluded_tasks = []
+        if cfg.get("exclude-tasks") is not None:
+            self.excluded_tasks =  cfg.get("exclude-tasks").split(",")
         if cfg:
             self.configuration = cfg
             self.configuration["flavor"] = flavor
@@ -1562,7 +1565,8 @@ class RaceConfig:
         for task in self.track.find_challenge_or_default(self.challenge).schedule:
             for sub_task in task:
                 if sub_task.operation.type == track.OperationType.Bulk.name:
-                    task_names.append(sub_task.name)
+                    if sub_task.name not in self.excluded_tasks:
+                        task_names.append(sub_task.name)
         return task_names
 
     @property
@@ -1572,7 +1576,8 @@ class RaceConfig:
             for sub_task in task:
                 # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
                 if "target-throughput" in sub_task.params or "target-interval" in sub_task.params:
-                    task_names.append(sub_task.name)
+                    if sub_task.name not in self.excluded_tasks:
+                        task_names.append(sub_task.name)
         return task_names
 
 
