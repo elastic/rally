@@ -99,7 +99,7 @@ serve-docs: check-venv
 test: check-venv
 	$(VEPYTHON) setup.py test
 
-precommit: lint test
+precommit: lint
 
 it: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox
