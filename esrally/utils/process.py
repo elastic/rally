@@ -60,13 +60,15 @@ def exit_status_as_bool(runnable, quiet=False):
         return False
 
 
-def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, env=None):
+def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, stdin=None, env=None):
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
 
     :param command_line: The command line of the subprocess to launch.
     :param header: An optional header line that should be logged (this will be logged on info level, regardless of the defined log level).
     :param level: The log level to use for output (default: logging.INFO).
+    :param stdin: The stdout object returned by subprocess.Popen(stdout=PIPE) allowing chaining of shell operations with pipes
+      (default: None).
     :param env: Use specific environment variables (default: None).
     :return: The process exit code as an int.
     """
@@ -75,14 +77,21 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
     command_line_args = shlex.split(command_line)
     if header is not None:
         logger.info(header)
-    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
-        has_output = True
-        while has_output:
-            line = command_line_process.stdout.readline()
-            if line:
-                logger.log(level=level, msg=line)
-            else:
-                has_output = False
+
+    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
+                          stdin=stdin if stdin else None) as command_line_process:
+        if stdin:
+            output = command_line_process.communicate()
+            logger.log(level=level, msg=output[0])
+        else:
+            has_output = True
+            while has_output:
+                line = command_line_process.stdout.readline()
+                if line:
+                    logger.log(level=level, msg=line)
+                else:
+                    has_output = False
+
     logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
     return command_line_process.returncode
 
