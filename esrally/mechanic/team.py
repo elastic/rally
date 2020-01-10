@@ -295,12 +295,12 @@ class PluginLoader:
         self.plugins_root_path = _path_for(team_root_path, "plugins")
         self.logger = logging.getLogger(__name__)
 
-    def plugins(self):
-        known_plugins = self._core_plugins() + self._configured_plugins()
+    def plugins(self, variables=None):
+        known_plugins = self._core_plugins(variables) + self._configured_plugins(variables)
         sorted(known_plugins, key=lambda p: p.name)
         return known_plugins
 
-    def _core_plugins(self):
+    def _core_plugins(self, variables=None):
         core_plugins = []
         core_plugins_path = os.path.join(self.plugins_root_path, "core-plugins.txt")
         if os.path.exists(core_plugins_path):
@@ -309,10 +309,10 @@ class PluginLoader:
                     if not line.startswith("#"):
                         # be forward compatible and allow additional values (comma-separated). At the moment, we only use the plugin name.
                         values = line.strip().split(",")
-                        core_plugins.append(PluginDescriptor(name=values[0], core_plugin=True))
+                        core_plugins.append(PluginDescriptor(name=values[0], core_plugin=True, variables=variables))
         return core_plugins
 
-    def _configured_plugins(self):
+    def _configured_plugins(self, variables=None):
         configured_plugins = []
         # each directory is a plugin, each .ini is a config (just go one level deep)
         for entry in os.listdir(self.plugins_root_path):
@@ -323,7 +323,7 @@ class PluginLoader:
                         f, _ = io.splitext(child_entry)
                         plugin_name = self._file_to_plugin_name(entry)
                         config = io.basename(f)
-                        configured_plugins.append(PluginDescriptor(name=plugin_name, config=config))
+                        configured_plugins.append(PluginDescriptor(name=plugin_name, config=config, variables=variables))
         return configured_plugins
 
     def _plugin_file(self, name, config):
@@ -343,8 +343,8 @@ class PluginLoader:
     def _plugin_name_to_file(self, plugin_name):
         return plugin_name.replace("-", "_")
 
-    def _core_plugin(self, name):
-        return next((p for p in self._core_plugins() if p.name == name and p.config is None), None)
+    def _core_plugin(self, name, variables=None):
+        return next((p for p in self._core_plugins(variables) if p.name == name and p.config is None), None)
 
     def load_plugin(self, name, config_names, plugin_params=None):
         if config_names is not None:
@@ -356,16 +356,16 @@ class PluginLoader:
         if not config_names:
             # maybe we only have a config folder but nothing else (e.g. if there is only an install hook)
             if io.exists(root_path):
-                return PluginDescriptor(name=name, config=config_names, root_path=root_path)
+                return PluginDescriptor(name=name, config=config_names, root_path=root_path, variables=plugin_params)
             else:
-                core_plugin = self._core_plugin(name)
+                core_plugin = self._core_plugin(name, plugin_params)
                 if core_plugin:
                     return core_plugin
                 # If we just have a plugin name then we assume that this is a community plugin and the user has specified a download URL
                 else:
                     self.logger.info("The plugin [%s] is neither a configured nor an official plugin. Assuming that this is a community "
                                      "plugin not requiring any configuration and you have set a proper download URL.", name)
-                    return PluginDescriptor(name)
+                    return PluginDescriptor(name, variables=plugin_params)
         else:
             variables = {}
             config_paths = []
