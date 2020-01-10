@@ -208,26 +208,33 @@ class ProcessLauncher:
         else:
             self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
         for node in nodes:
-            proc = psutil.Process(pid=node.pid)
             node_name = node.node_name
             telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
+            try:
+                es = psutil.Process(pid=node.pid)
+                node.telemetry.detach_from_node(node, running=True)
+            except psutil.NoSuchProcess:
+                self.logger.warning("No process found with PID [%s] for node [%s].", node.pid, node_name)
+                es = None
 
-            node.telemetry.detach_from_node(node, running=True)
             if not self.keep_running:
-                stop_watch = self._clock.stop_watch()
-                stop_watch.start()
-                try:
-                    os.kill(proc.pid, signal.SIGTERM)
-                    proc.wait(10.0)
-                except ProcessLookupError:
-                    self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
-                except psutil.TimeoutExpired:
-                    self.logger.info("kill -KILL node [%s]", node_name)
+                if es:
+                    stop_watch = self._clock.stop_watch()
+                    stop_watch.start()
                     try:
-                        # kill -9
-                        proc.kill()
+                        os.kill(es.pid, signal.SIGTERM)
+                        es.wait(10.0)
                     except ProcessLookupError:
-                        self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
+                        self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
+                    except psutil.TimeoutExpired:
+                        self.logger.info("kill -KILL node [%s]", node_name)
+                        try:
+                            # kill -9
+                            es.kill()
+                        except ProcessLookupError:
+                            self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
+                    self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
+
                 node.telemetry.detach_from_node(node, running=False)
-                node.telemetry.store_system_metrics(node, metrics_store)
-                self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
+            # store system metrics in any case (telemetry devices may derive system metrics while the node is running)
+            node.telemetry.store_system_metrics(node, metrics_store)

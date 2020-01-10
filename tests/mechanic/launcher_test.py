@@ -132,6 +132,11 @@ class MockProcess:
         self.killed = True
 
 
+class TerminatedProcess:
+    def __init__(self, pid):
+        raise psutil.NoSuchProcess(pid)
+
+
 def get_metrics_store(cfg):
     ms = InMemoryMetricsStore(cfg)
     ms.open(race_id=str(uuid.uuid4()),
@@ -175,6 +180,30 @@ class ProcessLauncherTests(TestCase):
 
         proc_launcher.stop(nodes, ms)
         self.assertTrue(kill.called)
+
+    @mock.patch('os.kill')
+    @mock.patch('psutil.Process', new=TerminatedProcess)
+    def test_daemon_stop_with_already_terminated_process(self, kill):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "node", "root.dir", "test")
+        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
+        cfg.add(config.Scope.application, "telemetry", "devices", [])
+        cfg.add(config.Scope.application, "telemetry", "params", None)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
+
+        ms = get_metrics_store(cfg)
+        proc_launcher = launcher.ProcessLauncher(cfg)
+
+        nodes = [
+            cluster.Node(pid=-1,
+                         binary_path="/bin",
+                         host_name="localhost",
+                         node_name="rally-0",
+                         telemetry=telemetry.Telemetry())
+        ]
+
+        proc_launcher.stop(nodes, ms)
+        self.assertEqual(0, kill.call_count)
 
     def test_env_options_order(self):
         cfg = config.Config()
