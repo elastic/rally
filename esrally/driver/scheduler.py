@@ -27,10 +27,10 @@ __SCHEDULERS = {}
 
 def scheduler_for(name, params):
     """
-    Creates a scheduler instance 
-    
+    Creates a scheduler instance
+
     :param name: The name under which the scheduler is registered.
-    :param params: A dict containing the parameters for this scheduler instance. 
+    :param params: A dict containing the parameters for this scheduler instance.
     :return: An initialized scheduler instance.
     """
     try:
@@ -43,10 +43,10 @@ def scheduler_for(name, params):
 def register_scheduler(name, scheduler):
     """
     Registers a new scheduler. Attempting to register a scheduler with a name that is already taken will raise a ``SystemSetupError``.
-    
+
     :param name: The name under which to register the scheduler.
     :param scheduler: Either a unary function ``float`` -> ``float`` or a class with the same interface as ``Scheduler``.
-    
+
     """
     logger = logging.getLogger(__name__)
     if name in __SCHEDULERS:
@@ -117,10 +117,10 @@ class DeterministicScheduler(Scheduler):
 
 class PoissonScheduler(Scheduler):
     """
-    Schedules the next execution according to a `Poisson distribution <https://en.wikipedia.org/wiki/Poisson_distribution>`_. A Poisson 
+    Schedules the next execution according to a `Poisson distribution <https://en.wikipedia.org/wiki/Poisson_distribution>`_. A Poisson
     distribution models random independent arrivals of clients which on average match the expected arrival rate which makes it suitable
     for modelling access in open systems.
-    
+
     See also http://preshing.com/20111007/how-to-generate-random-timings-for-a-poisson-process/
     """
 
