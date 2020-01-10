@@ -23,7 +23,7 @@ import urllib3
 from esrally import exceptions, doc_link
 from esrally.utils import console
 
-
+# THIS IS A LONG LINE TO TEST THE FAILURE OF THE JENKINS JOBS ONCE THE PIPEFAIL FIX IS MADE. THIS LINE WILL BE REMOVED, EVENTUALLY. IS THIS LONG ENUF YET?
 class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created. Intended for testing.
