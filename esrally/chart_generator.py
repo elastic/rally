@@ -1505,7 +1505,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
     }
 
 
-class RaceConfig: 
+class RaceConfig:
     def __init__(self, track, cfg=None, flavor=None, es_license=None, challenge=None, car=None, node_count=None, charts=None):
         self.track = track
         self.excluded_tasks = []
