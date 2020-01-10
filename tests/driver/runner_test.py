@@ -692,21 +692,21 @@ class ForceMergeRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     def test_force_merge_with_defaults(self, es):
         force_merge = runner.ForceMerge()
-        force_merge(es, params={})
+        force_merge(es, params={"index" : "_all"})
 
         es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=None)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_force_merge_override_request_timeout(self, es):
         force_merge = runner.ForceMerge()
-        force_merge(es, params={"request-timeout": 50000})
+        force_merge(es, params={"index" : "_all", "request-timeout": 50000})
 
         es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=50000)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_force_merge_with_params(self, es):
         force_merge = runner.ForceMerge()
-        force_merge(es, params={"max-num-segments": 1, "request-timeout": 50000})
+        force_merge(es, params={"index" : "_all", "max-num-segments": 1, "request-timeout": 50000})
 
         es.indices.forcemerge.assert_called_once_with(index="_all", max_num_segments=1, request_timeout=50000)
 

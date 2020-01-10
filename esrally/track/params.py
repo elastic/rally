@@ -580,6 +580,21 @@ class PartitionBulkIndexParamSource:
         return self.current_bulk / self.total_bulks
 
 
+class ForceMergeParamSouce:
+    def __init__(self, track, params, **kwargs):
+        if len(track.indices) > 0:
+            default_index = ','.join(map(str, track.indices))
+        else:
+            default_index = "_all"
+
+        self._index_name = params.get("index", default_index)
+
+    def params(self):
+        return {
+            "index": self._index_name
+        }
+
+
 def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
     """
     :return: The number of bulk operations that the given client will issue.
@@ -922,6 +937,7 @@ register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndex
 register_param_source_for_operation(track.OperationType.CreateIndexTemplate, CreateIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndexTemplate, DeleteIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
+register_param_source_for_operation(track.OperationType.ForceMerge, ForceMergeParamSouce)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)
