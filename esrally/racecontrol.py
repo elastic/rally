@@ -197,7 +197,7 @@ class BenchmarkActor(actor.RallyActor):
             distribution_version = mechanic.cluster_distribution_version(self.cfg)
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
-        
+
         t = track.load_track(self.cfg)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
         challenge_name = self.cfg.opts("track", "challenge.name")
