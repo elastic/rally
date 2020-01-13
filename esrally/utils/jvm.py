@@ -29,7 +29,7 @@ def _java(java_home):
 def supports_option(java_home, option):
     """
     Detects support for a specific option (or combination of options) for the JVM version available in java_home.
-    
+
     :param java_home: The JAVA_HOME to use for probing.
     :param option: The JVM option or combination of JVM options (separated by spaces) to check.
     :return: True iff the provided ``option`` is supported on this JVM.

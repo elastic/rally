@@ -1974,7 +1974,7 @@ class ExternalEnvironmentInfoTests(TestCase):
 
 
 class DiskIoTests(TestCase):
-    
+
     @mock.patch("esrally.utils.sysstats.process_io_counters")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
     def test_diskio_process_io_counters(self, metrics_store_node_count, process_io_counters):
@@ -1985,7 +1985,7 @@ class DiskIoTests(TestCase):
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        
+
         device = telemetry.DiskIo(node_count_on_host=1)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
@@ -2000,9 +2000,9 @@ class DiskIoTests(TestCase):
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),
             mock.call("rally0", "disk_io_read_bytes", 1, "byte")
-            
+
         ])
-        
+
     @mock.patch("esrally.utils.sysstats.disk_io_counters")
     @mock.patch("esrally.utils.sysstats.process_io_counters")
     @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
@@ -2012,10 +2012,10 @@ class DiskIoTests(TestCase):
         process_stop = Diskio(13, 13)
         disk_io_counters.side_effect = [process_start, process_stop]
         process_io_counters.side_effect = [None, None]
-        
+
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        
+
         device = telemetry.DiskIo(node_count_on_host=2)
         t = telemetry.Telemetry(enabled_devices=[], devices=[device])
         node = cluster.Node(pid=None, binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
@@ -2027,7 +2027,7 @@ class DiskIoTests(TestCase):
         t.detach_from_node(node, running=False)
         t.store_system_metrics(node, metrics_store)
 
-        # expected result is 1 byte because there are two nodes on the machine. Result is calculated 
+        # expected result is 1 byte because there are two nodes on the machine. Result is calculated
         # with total_bytes / node_count
         metrics_store_node_count.assert_has_calls([
             mock.call("rally0", "disk_io_write_bytes", 1, "byte"),

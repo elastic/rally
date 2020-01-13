@@ -474,7 +474,7 @@ def create_arg_parser():
             "--distribution-repository",
             help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
             default="release")
-        
+
         task_filter_group = p.add_mutually_exclusive_group()
         task_filter_group.add_argument(
             "--include-tasks",

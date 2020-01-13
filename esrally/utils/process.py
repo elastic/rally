@@ -84,21 +84,13 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, s
     with subprocess.Popen(command_line_args,
                           stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT,
+                          universal_newlines=True,
                           env=env,
                           stdin=stdin if stdin else None,
                           preexec_fn=pre_exec) as command_line_process:
-        if stdin:
-            output = command_line_process.communicate()
-            if output[0]:
-                logger.log(level=level, msg=output[0])
-        else:
-            has_output = True
-            while has_output:
-                line = command_line_process.stdout.readline()
-                if line:
-                    logger.log(level=level, msg=line)
-                else:
-                    has_output = False
+        stdout, _ = command_line_process.communicate()
+        if stdout:
+            logger.log(level=level, msg=stdout)
 
     logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
     return command_line_process.returncode
