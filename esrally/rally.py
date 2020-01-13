@@ -678,7 +678,8 @@ def with_actor_system(runnable, cfg):
                     logger.warning("User interrupted shutdown of internal actor system.")
                     console.info("Please wait a moment for Rally's internal components to shutdown.")
             if not shutdown_complete and times_interrupted > 0:
-                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
+                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.",
+                               times_interrupted)
                 console.println("")
                 console.warn("Terminating now at the risk of leaving child processes behind.")
                 console.println("")
@@ -687,7 +688,8 @@ def with_actor_system(runnable, cfg):
                 console.println(SKULL)
                 console.println("")
             elif not shutdown_complete:
-                console.warn("Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes.")
+                console.warn("Could not terminate all internal processes within timeout. Please check and force-terminate "
+                             "all Rally processes.")
 
 
 def generate(cfg):

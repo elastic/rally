@@ -49,7 +49,8 @@ class EsClientFactory:
 
             # ssl.Purpose.CLIENT_AUTH allows presenting client certs and can only be enabled during instantiation
             # but can be disabled via the verify_mode property later on.
-            self.ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=self.client_options.pop("ca_certs", certifi.where()))
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH,
+                                                          cafile=self.client_options.pop("ca_certs", certifi.where()))
 
             if not self.client_options.pop("verify_certs", True):
                 self.logger.info("SSL certificate verification: off")

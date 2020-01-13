@@ -568,7 +568,8 @@ class DistributionRepositoryTests(TestCase):
         renderer = supplier.TemplateRenderer(version="7.3.2")
         repo = supplier.DistributionRepository(name="release", distribution_config={
             "runtime.jdk.bundled": "true",
-            "jdk.bundled.release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
+            "jdk.bundled.release_url":
+                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
             "release.cache": "true"
         }, template_renderer=renderer)
         self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.download_url)

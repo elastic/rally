@@ -159,7 +159,9 @@ class TestTargetHosts(TestCase):
             opts.TargetHosts(target_hosts).default)
 
     def test_jsonstring_parses_as_dict_of_clusters(self):
-        target_hosts = '{"default": ["127.0.0.1:9200","10.17.0.5:19200"], "remote_1": ["88.33.22.15:19200"], "remote_2": ["10.18.0.6:19200","10.18.0.7:19201"]}'
+        target_hosts = ('{"default": ["127.0.0.1:9200","10.17.0.5:19200"],'
+                        ' "remote_1": ["88.33.22.15:19200"],'
+                        ' "remote_2": ["10.18.0.6:19200","10.18.0.7:19201"]}')
 
         self.assertEqual(
             {'default': ['127.0.0.1:9200','10.17.0.5:19200'],
