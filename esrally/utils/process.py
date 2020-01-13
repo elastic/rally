@@ -60,7 +60,7 @@ def exit_status_as_bool(runnable, quiet=False):
         return False
 
 
-def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, env=None):
+def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, env=None, detach=False):
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
 
@@ -68,14 +68,21 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, e
     :param header: An optional header line that should be logged (this will be logged on info level, regardless of the defined log level).
     :param level: The log level to use for output (default: logging.INFO).
     :param env: Use specific environment variables (default: None).
+    :param detach: Whether to detach this process from its parent process (default: False).
     :return: The process exit code as an int.
     """
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
     command_line_args = shlex.split(command_line)
+    pre_exec = os.setpgrp if detach else None
     if header is not None:
         logger.info(header)
-    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
+    # pylint: disable=subprocess-popen-preexec-fn
+    with subprocess.Popen(command_line_args,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT,
+                          env=env,
+                          preexec_fn=pre_exec) as command_line_process:
         has_output = True
         while has_output:
             line = command_line_process.stdout.readline()

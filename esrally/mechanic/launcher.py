@@ -194,7 +194,7 @@ class ProcessLauncher:
         os.chdir(binary_path)
         cmd = [io.escape_path(os.path.join(".", "bin", "elasticsearch"))]
         cmd.extend(["-d", "-p", "pid"])
-        ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env)
+        ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env, detach=True)
         if ret != 0:
             msg = "Daemon startup failed with exit code [{}]".format(ret)
             logging.error(msg)
