@@ -194,7 +194,6 @@ disable=print-statement,
         W0612,
         W0613,
         W0621,
-        W0631,
         W1201
 
 
