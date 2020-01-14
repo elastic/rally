@@ -206,6 +206,7 @@ class ProcessLauncher:
             self.logger.info("Keeping [%d] nodes on this host running.", len(nodes))
         else:
             self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
+        stopped_nodes = []
         for node in nodes:
             node_name = node.node_name
             telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
@@ -223,6 +224,7 @@ class ProcessLauncher:
                     try:
                         es.terminate()
                         es.wait(10.0)
+                        stopped_nodes.append(node)
                     except psutil.NoSuchProcess:
                         self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
                     except psutil.TimeoutExpired:
@@ -230,6 +232,7 @@ class ProcessLauncher:
                         try:
                             # kill -9
                             es.kill()
+                            stopped_nodes.append(node)
                         except psutil.NoSuchProcess:
                             self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
                     self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
@@ -237,3 +240,4 @@ class ProcessLauncher:
                 node.telemetry.detach_from_node(node, running=False)
             # store system metrics in any case (telemetry devices may derive system metrics while the node is running)
             node.telemetry.store_system_metrics(node, metrics_store)
+            return stopped_nodes
