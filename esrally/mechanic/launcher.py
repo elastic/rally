@@ -16,7 +16,6 @@
 # under the License.
 import logging
 import os
-import signal
 
 import psutil
 
