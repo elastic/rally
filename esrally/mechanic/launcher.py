@@ -222,16 +222,16 @@ class ProcessLauncher:
                     stop_watch = self._clock.stop_watch()
                     stop_watch.start()
                     try:
-                        os.kill(es.pid, signal.SIGTERM)
+                        es.terminate()
                         es.wait(10.0)
-                    except ProcessLookupError:
+                    except psutil.NoSuchProcess:
                         self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
                     except psutil.TimeoutExpired:
                         self.logger.info("kill -KILL node [%s]", node_name)
                         try:
                             # kill -9
                             es.kill()
-                        except ProcessLookupError:
+                        except psutil.NoSuchProcess:
                             self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
                     self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
 
