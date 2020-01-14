@@ -166,8 +166,8 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
                     if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
                         raise exceptions.SystemSetupError("No revision specified for plugin [%s]." % plugin.name)
                     else:
-                        logging.getLogger(__name__).info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s]."
-                                    % (plugin.name, plugin_revision))
+                        logging.getLogger(__name__).info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s].",
+                                                         plugin.name, plugin_revision)
                 supply_requirements[plugin.name] = ("source", plugin_revision, plugin_needs_build)
             else:
                 supply_requirements[plugin.name] = (distribution, _required_version(distribution_version), False)
