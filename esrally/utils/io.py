@@ -428,6 +428,7 @@ def guess_java_home(major_version=8, fallback=None, runner=_run, read_symlink=_r
                 m = debian_jdk_pattern.match(j)
                 if m:
                     return m.group(1)
+        # pylint: disable=line-too-long
         # Red Hat based distributions
         #
         # ls -l /etc/alternatives/jre_1.[789].0

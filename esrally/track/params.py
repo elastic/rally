@@ -646,7 +646,7 @@ def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id
                                                  docs.includes_action_and_meta_data)
             if num_docs > 0:
                 logger.info("Task-relative client at index [%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
-                            "from corpus [%s]." % (client_index, num_docs, offset, docs.target_index, docs.target_type, corpus.name))
+                            "from corpus [%s].", client_index, num_docs, offset, docs.target_index, docs.target_type, corpus.name)
                 readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
                                              on_conflict, recency))
             else:

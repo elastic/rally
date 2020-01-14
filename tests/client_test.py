@@ -64,8 +64,8 @@ class EsClientFactoryTests(TestCase):
             mock.call("SSL client authentication: off")
         ])
 
-        assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
-                                                  "certs"
+        assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied " \
+                                                  "client certs"
 
         self.assertEqual(hosts, f.hosts)
         self.assertTrue(f.ssl_context.check_hostname)
@@ -142,8 +142,8 @@ class EsClientFactoryTests(TestCase):
             mock.call("SSL client authentication: off")
         ])
 
-        assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
-            "certs"
+        assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied " \
+            "client certs"
         self.assertEqual(hosts, f.hosts)
         self.assertTrue(f.ssl_context.check_hostname)
         self.assertEqual(ssl.CERT_REQUIRED, f.ssl_context.verify_mode)
@@ -217,8 +217,8 @@ class EsClientFactoryTests(TestCase):
             mock.call("SSL client authentication: off")
         ])
 
-        assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied client " \
-                                                  "certs"
+        assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied " \
+                                                  "client certs"
 
         self.assertEqual(hosts, f.hosts)
         self.assertFalse(f.ssl_context.check_hostname)

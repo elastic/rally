@@ -315,11 +315,11 @@ class BulkIndex(Runner):
         If ``detailed-results`` is ``True`` the following meta data are returned in addition:
 
         * ``ops``: A hash with the operation name as key (e.g. index, update, delete) and various counts as values. ``item-count`` contains
-          the total number of items for this key. Additionally, we return a separate counter each result (indicating e.g. the number of created
-          items, the number of deleted items etc.).
-        * ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a shard
-          distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and ``failed``
-          shards (see examples below).
+          the total number of items for this key. Additionally, we return a separate counter each result (indicating e.g. the number of
+          created items, the number of deleted items etc.).
+        * ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a
+          shard distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and
+          ``failed`` shards (see examples below).
         * ``bulk-request-size-bytes``: Total size of the bulk request body in bytes.
         * ``total-document-size-bytes``: Total size of all documents within the bulk request body in bytes.
 
@@ -919,7 +919,8 @@ class CreateIndexTemplate(Runner):
 
 class DeleteIndexTemplate(Runner):
     """
-    Execute the `delete index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html#delete>`_.
+    Execute the `delete index template API
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html#delete>`_.
     """
 
     def __call__(self, es, params):
