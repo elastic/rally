@@ -445,8 +445,8 @@ class OperationType(Enum):
 
     @property
     def admin_op(self):
-        value = int(self.value)
-        return value > 1000
+        # pylint: disable=comparison-with-callable
+        return self.value > 1000
 
     # pylint: disable=too-many-return-statements
     @classmethod
