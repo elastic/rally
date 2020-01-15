@@ -631,7 +631,7 @@ check_prerequisites
 trap "tear_down" EXIT
 
 # allow invocation from release-docker.sh
-if [[ $1 == "test-docker-release" ]]; then
+if [[ $1 == "test_docker_release_image" ]]; then
     test_docker_release_image
     exit
 # if argument is the name of any other function, set up and call it
