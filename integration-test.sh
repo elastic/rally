@@ -630,12 +630,16 @@ check_prerequisites
 
 trap "tear_down" EXIT
 
-# if argument is the name of a function, set up and call it
-if declare -f "$1" > /dev/null
-then
+# allow invocation from release-docker.sh
+if [[ $1 == "test-docker-release" ]]; then
+    test_docker_release_image
+    exit
+# if argument is the name of any other function, set up and call it
+elif declare -f "$1" > /dev/null; then
     set_up
     $1
     exit
+# otherwise run all functions
+else
+  main
 fi
-
-main
