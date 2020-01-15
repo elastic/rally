@@ -314,7 +314,7 @@ def operation_parameters(t, op):
     if op.param_source:
         return params.param_source_for_name(op.param_source, t, op.params)
     else:
-        return params.param_source_for_operation(op.type, t, op.params)
+        return params.param_source_for_operation(op.type, t, op.params, op.name)
 
 
 def used_corpora(t, cfg):
