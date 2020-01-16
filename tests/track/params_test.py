@@ -1603,7 +1603,7 @@ class SearchParamSourceTests(TestCase):
                 "match_all": {}
             }
         }, p["body"])
-        
+
     def test_create_without_index(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             params.SearchParamSource(track=track.Track(name="unit-test"), params={
