@@ -36,6 +36,8 @@ __versionstr__ = raw_version
 
 long_description = str_from_file("README.rst")
 
+supported_python_versions = ["3.5", "3.6", "3.7", "3.8"]
+
 ################################################################################################
 #
 # Adapt `create-notice.sh` whenever changing dependencies here.
@@ -91,6 +93,8 @@ develop_require = [
     "pylint-quotes==0.2.1"
 ]
 
+python_version_classifiers = ["Programming Language :: Python :: {}".format(v) for v in supported_python_versions]
+
 # we call the tool rally, but it will be published as esrally on pypi
 setup(name="esrally",
       maintainer="Daniel Mitterdorfer",
@@ -105,6 +109,10 @@ setup(name="esrally",
           exclude=("tests*", "benchmarks*")
       ),
       include_package_data=True,
+      # supported Python versions. This will prohibit pip (> 9.0.0) from even installing Rally on an unsupported
+      # Python version.
+      # See also https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
+      python_requires=">={}, <={}.*".format(supported_python_versions[0], supported_python_versions[-1]),
       package_data={"": ["*.json", "*.yml"]},
       install_requires=install_requires,
       test_suite="tests",
@@ -130,9 +138,5 @@ setup(name="esrally",
           "Operating System :: POSIX",
           "Programming Language :: Python",
           "Programming Language :: Python :: 3",
-          "Programming Language :: Python :: 3.5",
-          "Programming Language :: Python :: 3.6",
-          "Programming Language :: Python :: 3.7",
-          "Programming Language :: Python :: 3.8",
-      ],
+      ] + python_version_classifiers,
       zip_safe=False)
