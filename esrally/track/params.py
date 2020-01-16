@@ -32,12 +32,12 @@ __PARAM_SOURCES_BY_OP = {}
 __PARAM_SOURCES_BY_NAME = {}
 
 
-def param_source_for_operation(op_type, track, params, op_name):
+def param_source_for_operation(op_type, track, params, task_name):
     try:
         # we know that this can only be a Rally core parameter source
-        return __PARAM_SOURCES_BY_OP[op_type](track, params, operation_name=op_name)
+        return __PARAM_SOURCES_BY_OP[op_type](track, params, operation_name=task_name)
     except KeyError:
-        return ParamSource(track, params, operation_name=op_name)
+        return ParamSource(track, params, operation_name=task_name)
 
 
 def param_source_for_name(name, track, params):
@@ -365,7 +365,7 @@ class SearchParamSource(ParamSource):
         }
 
         if not index_name:
-            raise exceptions.InvalidSyntax("'index' is mandatory and is missing for operation '%s'" % kwargs.get("operation_name"))
+            raise exceptions.InvalidSyntax("'index' is mandatory and is missing for operation '{}'".format(kwargs.get("operation_name")))
 
         if pages:
             self.query_params["pages"] = pages

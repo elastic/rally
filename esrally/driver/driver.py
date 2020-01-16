@@ -1370,7 +1370,7 @@ def schedule_for(current_track, task, client_index):
     sched = scheduler.scheduler_for(task.schedule, task.params)
     logger.info("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)
-    params_for_op = track.operation_parameters(current_track, op).partition(client_index, num_clients)
+    params_for_op = track.operation_parameters(current_track, task).partition(client_index, num_clients)
 
     if requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
