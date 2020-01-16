@@ -112,7 +112,15 @@ setup(name="esrally",
       # supported Python versions. This will prohibit pip (> 9.0.0) from even installing Rally on an unsupported
       # Python version.
       # See also https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
-      python_requires=">={}, <={}.*".format(supported_python_versions[0], supported_python_versions[-1]),
+      #
+      # According to https://www.python.org/dev/peps/pep-0440/#version-matching, a trailing ".*" should
+      # ignore patch versions:
+      #
+      # "additional trailing segments will be ignored when determining whether or not a version identifier matches
+      # the clause"
+      #
+      # However, with the pattern ">=3.5.*,<=3.8.*", the version "3.8.0" is not accepted.
+      python_requires=">={}.*,<={}.999".format(supported_python_versions[0], supported_python_versions[-1]),
       package_data={"": ["*.json", "*.yml"]},
       install_requires=install_requires,
       test_suite="tests",
