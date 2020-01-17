@@ -1,0 +1,31 @@
+{% raw %}{% import "rally.helpers" as rally with context %}{% endraw %}
+{
+  "version": 2,
+  "description": "Tracker-generated track for {{track_name}}",
+  "indices": [
+    {
+      "name": "{{index_name}}",
+      "body": "index.json"
+    }
+  ],
+  "corpora": [
+    {
+      "name": "{{track_name}}",
+      "base-url": "{{corpus_url}}",
+      "documents": [
+        {
+          "source-file": "{{corpus_filename}}",
+          "document-count": {{corpus_doc_count}},
+          "compressed-bytes": {{corpus_compressed_bytes}},
+          "uncompressed-bytes": {{corpus_uncompressed_bytes}}
+        }
+      ]
+    }
+  ],{% raw %}
+  "operations": [
+    {{ rally.collect(parts="operations/*.json") }}
+  ],
+  "challenges": [
+    {{ rally.collect(parts="challenges/*.json") }}
+  ]{% endraw %}
+}

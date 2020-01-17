@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "formatters": {
+    "normal": {
+      "format": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
+      "datefmt": "%Y-%m-%d %H:%M:%S",
+      "()": "tracker.log.configure_utc_formatter"
+    }
+  },
+  "handlers": {
+    "default_log_handler": {
+      "()": "tracker.log.configure_file_handler",
+      "filename": "~/.tracker/logs/tracker.log",
+      "encoding": "UTF-8",
+      "formatter": "normal"
+    },
+    "console_handler": {
+      "class": "logging.StreamHandler",
+      "level": "INFO"
+    }
+  },
+  "root": {
+    "handlers": [
+      "default_log_handler",
+      "console_handler"
+    ],
+    "level": "INFO"
+  },
+  "loggers": {
+    "elasticsearch": {
+      "handlers": [
+        "default_log_handler"
+      ],
+      "level": "WARNING",
+      "propagate": false
+    }
+  }
+}

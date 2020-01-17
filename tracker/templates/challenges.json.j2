@@ -1,0 +1,67 @@
+    {
+      "name": "append-no-conflicts",
+      "description": "Indexes the whole document corpus using Elasticsearch default settings. We only adjust the number of replicas as we benchmark a single node cluster and Rally will only start the benchmark if the cluster turns green. Document ids are unique so all index operations are append only. After that a couple of queries are run.",
+      "default": true,
+      "schedule": [
+        {
+          "operation": "delete-index"
+        },
+        {
+          "operation": {
+            "operation-type": "create-index",
+            "settings": {% raw %}{{index_settings | default({}) | tojson}}{% endraw %}
+          }
+        },
+        {
+          "name": "check-cluster-health",
+          "operation": {
+            "operation-type": "cluster-health",
+            "index": "{{ index_name }}",
+            "request-params": {
+              "wait_for_status": {% raw %}"{{cluster_health | default('green')}}",{% endraw %}
+              "wait_for_no_relocating_shards": "true"
+            }
+          }
+        },
+        {
+          "operation": "index-append",
+          "warmup-time-period": 120,
+          "clients": {% raw %}{{bulk_indexing_clients | default(8)}}{% endraw %}
+        },
+        {
+          "name": "refresh-after-index",
+          "operation": "refresh",
+          "clients": 1
+        },
+        {
+          "operation": "force-merge",
+          "clients": 1
+        },
+        {
+          "name": "refresh-after-force-merge",
+          "operation": "refresh",
+          "clients": 1
+        },
+        {
+          "operation": "index-stats",
+          "clients": 1,
+          "warmup-iterations": 500,
+          "iterations": 1000,
+          "target-throughput": 90
+        },
+        {
+          "operation": "node-stats",
+          "clients": 1,
+          "warmup-iterations": 100,
+          "iterations": 1000,
+          "target-throughput": 90
+        },
+        {
+          "operation": "default",
+          "clients": 1,
+          "warmup-iterations": 500,
+          "iterations": 1000,
+          "target-throughput": 50
+        }
+      ]
+    }
