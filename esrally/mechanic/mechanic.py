@@ -101,6 +101,13 @@ def start(cfg):
 def stop(cfg):
     root_path = paths.install_root(cfg)
     node_config = provisioner.load_node_configuration(root_path)
+    if node_config.build_type == "tar":
+        node_launcher = launcher.ProcessLauncher(cfg)
+    elif node_config.build_type == "docker":
+        node_launcher = launcher.DockerLauncher(cfg)
+    else:
+        raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
+
     nodes, race_id = _load_node_file(root_path)
 
     cls = metrics.metrics_store_class(cfg)
@@ -125,14 +132,9 @@ def stop(cfg):
         challenge_name=current_race.challenge_name
     )
 
-    if node_config.build_type == "tar":
-        node_launcher = launcher.ProcessLauncher(cfg)
-    elif node_config.build_type == "docker":
-        node_launcher = launcher.DockerLauncher(cfg)
-    else:
-        raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
-
     node_launcher.stop(nodes, metrics_store)
+    _delete_node_file(root_path)
+
     metrics_store.flush(refresh=True)
     for node in nodes:
         results = metrics.calculate_system_results(metrics_store, node.node_name)
@@ -140,7 +142,6 @@ def stop(cfg):
         metrics.results_store(cfg).store_results(current_race)
 
     metrics_store.close()
-    _delete_node_file(root_path)
 
     # TODO: Do we need to expose this as a separate command as well?
     provisioner.cleanup(preserve=cfg.opts("mechanic", "preserve.install"),

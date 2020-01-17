@@ -790,6 +790,7 @@ class ClusterHealth(Runner):
 
             def __lt__(self, other):
                 if self.__class__ is other.__class__:
+                    # pylint: disable=comparison-with-callable
                     return self.value < other.value
                 return NotImplemented
 
