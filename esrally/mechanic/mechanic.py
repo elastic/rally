@@ -116,32 +116,28 @@ def stop(cfg):
     race_store = metrics.race_store(cfg)
     try:
         current_race = race_store.find_by_race_id(race_id)
+        metrics_store.open(
+            race_id=current_race.race_id,
+            race_timestamp=current_race.race_timestamp,
+            track_name=current_race.track_name,
+            challenge_name=current_race.challenge_name
+        )
     except exceptions.NotFound:
-        logging.getLogger(__name__).info("Could not find race [%s] most likely because an in-memory metrics store is "
-                                         "used across multiple machines. Use an Elasticsearch metrics store to persist "
-                                         "results.", race_id)
-        # we are assuming here that we use an Elasticsearch metrics store... . If we use a file race store (across
-        # multiple machines) we will not be able to retrieve a race. In that case we open our in-memory metrics store
-        # with settings derived from startup parameters (because we can't store system metrics persistently anyway).
-        current_race = metrics.create_race(cfg, track=None, challenge=None)
-
-    metrics_store.open(
-        race_id=current_race.race_id,
-        race_timestamp=current_race.race_timestamp,
-        track_name=current_race.track_name,
-        challenge_name=current_race.challenge_name
-    )
+        logging.getLogger(__name__).info("Could not find race [%s] and will thus not persist system metrics.", race_id)
+        # Don't persist system metrics if we can't retrieve the race as we cannot derive the required meta-data.
+        current_race = None
 
     node_launcher.stop(nodes, metrics_store)
     _delete_node_file(root_path)
 
-    metrics_store.flush(refresh=True)
-    for node in nodes:
-        results = metrics.calculate_system_results(metrics_store, node.node_name)
-        current_race.add_results(results)
-        metrics.results_store(cfg).store_results(current_race)
+    if current_race:
+        metrics_store.flush(refresh=True)
+        for node in nodes:
+            results = metrics.calculate_system_results(metrics_store, node.node_name)
+            current_race.add_results(results)
+            metrics.results_store(cfg).store_results(current_race)
 
-    metrics_store.close()
+        metrics_store.close()
 
     # TODO: Do we need to expose this as a separate command as well?
     provisioner.cleanup(preserve=cfg.opts("mechanic", "preserve.install"),
