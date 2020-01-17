@@ -16,14 +16,15 @@
 # under the License.
 
 import argparse
+import json
 import logging
+from logging import config
 import os
 import pathlib
 
 from elasticsearch import Elasticsearch
 from jinja2 import Environment, PackageLoader
 
-from esrally import log
 from tracker import corpus, index
 
 TRACK_TEMPLATES = {
@@ -49,7 +50,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Dump mappings and document-sources from an Elasticsearch index to create a Rally track.")
 
     parser.add_argument("--hosts", nargs='+', required=True, help="Elasticsearch host(s) to connect to")
-    parser.add_argument("--index", required=True, help="Index to create track for")
+    parser.add_argument("--indices", nargs='+', required=True, help="Indices to include in track")
     parser.add_argument("--trackname", help="Name of track to use, if different from the name of index")
     parser.add_argument("--outdir", help="Output directory for track (default: tracks/)")
 
@@ -61,27 +62,47 @@ def get_args():
     return args
 
 
+def load_json(p):
+    with open(p) as f:
+        return json.load(f)
+
+
+def configure_logging():
+    log_config_path = os.path.join(os.path.dirname(__file__), "resources", "logging.json")
+    log_conf = load_json(log_config_path)
+    logging.config.dictConfig(log_conf)
+    logging.captureWarnings(True)
+
+
 def main():
-    log.configure_logging()
+    configure_logging()
     args = get_args()
 
     client = Elasticsearch(hosts=args.hosts)
     info = client.info()
-    logging.info("Connected to %s version %s", info['name'], info['version']['number'])
+    logging.info("Connected to Elasticsearch %s version %s", info['name'], info['version']['number'])
 
     outpath = os.path.join(args.outdir, args.trackname)
     if not os.path.exists(outpath):
         pathlib.Path(outpath).mkdir(parents=True)
 
-    index.extract(client, outpath, args.index)
-
     template_vars = {
-        "index_name": args.index,
         "track_name": args.trackname
     }
-    corpus_vars = corpus.extract(client, outpath, args.index)
-    template_vars.update(corpus_vars)
 
+    indices = []
+    corpora = []
+    for index_name in args.indices:
+        index_vars = index.extract(client, outpath, index_name)
+        indices.append(index_vars)
+
+        corpus_vars = corpus.extract(client, outpath, index_name)
+        corpora.append(corpus_vars)
+
+    template_vars.update({
+        "indices": indices,
+        "corpora": corpora
+    })
     for template, dest_filename in TRACK_TEMPLATES.items():
         dest_path = os.path.join(outpath, dest_filename)
         process_template(template, template_vars, dest_path)

@@ -35,7 +35,7 @@ def filter_ephemeral_index_settings(settings):
     return {k: v for k, v in settings.items() if k not in INDEX_SETTINGS_EPHEMERAL_KEYS}
 
 
-def extract_index_create(client, index):
+def extract_index_mapping_and_settings(client, index):
     """
     Calls index GET to retrieve mapping + settings, filtering settings
     so they can be used to re-create this index
@@ -59,8 +59,14 @@ def extract(client, outdir, index):
     :param index: name of index
     :return: None
     """
-    index_obj = extract_index_create(client, index)
-    outpath = os.path.join(outdir, "index.json")
+    filename = index + ".json"
+    index_obj = extract_index_mapping_and_settings(client, index)
+    outpath = os.path.join(outdir, filename)
     with open(outpath, "w") as outfile:
         json.dump(index_obj, outfile, indent=4, sort_keys=True)
         outfile.write('\n')
+    return {
+        "name": index,
+        "path": outpath,
+        "filename": filename,
+    }

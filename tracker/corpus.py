@@ -24,16 +24,17 @@ import pathlib
 from elasticsearch import helpers
 
 
-def template_vars(out_path, comp_outpath, doc_count):
+def template_vars(index_name, out_path, comp_outpath, doc_count):
     corpus_path = pathlib.Path(out_path)
     compressed_corpus_path = pathlib.Path(comp_outpath)
     return {
-        "corpus_filename": corpus_path.name,
-        "corpus_compressed_filename": compressed_corpus_path.name,
-        "corpus_url": compressed_corpus_path.as_uri(),
-        "corpus_doc_count": doc_count,
-        "corpus_uncompressed_bytes": os.stat(corpus_path.as_posix()).st_size,
-        "corpus_compressed_bytes": os.stat(compressed_corpus_path.as_posix()).st_size
+        "index_name": index_name,
+        "base_url": corpus_path.parent.as_uri(),
+        "filename": corpus_path.name,
+        "path": corpus_path,
+        "doc_count": doc_count,
+        "uncompressed_bytes": os.stat(corpus_path.as_posix()).st_size,
+        "compressed_bytes": os.stat(compressed_corpus_path.as_posix()).st_size
     }
 
 
@@ -46,13 +47,15 @@ def extract(client, outdir, index):
     :param index: Name of index to dump
     :return: dict of properties describing the corpus for templates
     """
-    outpath = os.path.join(outdir, "documents.json")
-    comp_outpath = outpath + ".bz2"
+    outpath = os.path.join(outdir, "{}-documents.json".format(index))
 
     total_docs = client.count(index=index)["count"]
-    logging.info("%d total docs", total_docs)
+    logging.info("%d total docs in index %s", total_docs, index)
+    freq = total_docs // 1000
 
     compressor = bz2.BZ2Compressor()
+    comp_outpath = outpath + ".bz2"
+
     with open(outpath, "wb") as outfile:
         with open(comp_outpath, "wb") as comp_outfile:
             logging.info("Now dumping corpus to %s...", outpath)
@@ -60,17 +63,19 @@ def extract(client, outdir, index):
             query = {"query": {"match_all": {}}}
             for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
                 docsrc = doc["_source"]
-                # Specify separators to not include the default " "
-                # for a more compact representation
                 data = (json.dumps(docsrc, separators=(',', ':')) + "\n").encode("utf-8")
+
                 outfile.write(data)
                 comp_outfile.write(compressor.compress(data))
 
-                if n % 1000 == 0 or total_docs - n < 1000:
-                    percent = (n * 100) / total_docs
-                    print("\r{n}/{total_docs} ({percent:.1f}%)".format(n=n, total_docs=total_docs, percent=percent), end="")
-            comp_outfile.write(compressor.flush())
-            # progress prints didn't have a newline. add one now!
-            print()
+                render_progress(n+1, total_docs, freq)
 
-    return template_vars(outpath, comp_outpath, total_docs)
+            print()  # progress prints didn't have a newline
+            comp_outfile.write(compressor.flush())
+    return template_vars(index, outpath, comp_outpath, total_docs)
+
+
+def render_progress(cur, total, freq):
+    if cur % freq == 0 or total - cur < freq:
+        percent = (cur * 100) / total
+        print("\r{n}/{total_docs} ({percent:.1f}%)".format(n=cur, total_docs=total, percent=percent), end="")

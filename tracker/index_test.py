@@ -16,7 +16,7 @@
 # under the License.
 
 from unittest import mock
-from tracker.index import filter_ephemeral_index_settings, extract_index_create
+from tracker.index import filter_ephemeral_index_settings, extract_index_mapping_and_settings
 
 
 def test_index_setting_filter():
@@ -97,5 +97,5 @@ def test_extract_index_create(client):
             }
         }
     }
-    res = extract_index_create(client, "osmgeopoints")
+    res = extract_index_mapping_and_settings(client, "osmgeopoints")
     assert res == expected

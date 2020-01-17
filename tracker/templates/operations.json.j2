@@ -13,13 +13,4 @@
     "on-conflict": "{{on_conflict | default('index')}}",
     "conflict-probability": {{conflict_probability | default(25)}},
     "recency": {{recency | default(0)}}
-},
-{
-    "name": "default",
-    "operation-type": "search",
-    "body": {
-        "query": {
-          "match_all": {}
-        }
-    }
 }
