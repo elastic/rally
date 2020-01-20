@@ -1604,6 +1604,19 @@ class SearchParamSourceTests(TestCase):
             }
         }, p["body"])
 
+    def test_create_without_index(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.SearchParamSource(track=track.Track(name="unit-test"), params={
+                "type": "type1",
+                "body": {
+                    "query": {
+                        "match_all": {}
+                        }
+                    }
+            }, operation_name="test_operation")
+
+        self.assertEqual("'index' is mandatory and is missing for operation 'test_operation'", ctx.exception.args[0])
+
     def test_passes_request_parameters(self):
         index1 = track.Index(name="index1", types=["type1"])
 
