@@ -102,7 +102,6 @@ class GenericHelperFunctionTests(TestCase):
             "rolledover_indices_suffix_separator",
             "rollover_max_age",
             "rollover_max_size",
-            "shard_count",
             "shard_sizing_iterations",
             "shard_sizing_queries",
             "source_enabled",
