@@ -22,9 +22,10 @@ from logging import config
 import os
 import pathlib
 
-from elasticsearch import Elasticsearch
 from jinja2 import Environment, PackageLoader
 
+from esrally.client import EsClientFactory
+from esrally.utils import opts
 from tracker import corpus, index
 
 TRACK_TEMPLATES = {
@@ -48,7 +49,8 @@ def process_template(template_filename, template_vars, dest_path):
 def get_args():
     parser = argparse.ArgumentParser(description="Dump mappings and document-sources from an Elasticsearch index to create a Rally track.")
 
-    parser.add_argument("--hosts", nargs='+', required=True, help="Elasticsearch host(s) to connect to")
+    parser.add_argument("--target-hosts", default="", required=True, help="Elasticsearch host(s) to connect to")
+    parser.add_argument("--client-options", default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS, help="Elasticsearch client options")
     parser.add_argument("--indices", nargs='+', required=True, help="Indices to include in track")
     parser.add_argument("--trackname", help="Name of track to use, if different from the name of index")
     parser.add_argument("--outdir", help="Output directory for track (default: tracks/)")
@@ -69,7 +71,7 @@ def load_json(p):
 def configure_logging():
     log_config_path = os.path.join(os.path.dirname(__file__), "resources", "logging.json")
     log_conf = load_json(log_config_path)
-    logging.config.dictConfig(log_conf)
+    config.dictConfig(log_conf)
     logging.captureWarnings(True)
 
 
@@ -77,7 +79,11 @@ def main():
     configure_logging()
     args = get_args()
 
-    client = Elasticsearch(hosts=args.hosts)
+    target_hosts = opts.TargetHosts(args.target_hosts)
+    client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
+    client = EsClientFactory(hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT],
+                             client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]).create()
+
     info = client.info()
     logging.info("Connected to Elasticsearch %s version %s", info['name'], info['version']['number'])
 
