@@ -21,7 +21,7 @@ import logging
 import os
 import pathlib
 
-from elasticsearch import helpers
+from esrally.utils import console
 
 
 def template_vars(index_name, out_path, comp_outpath, doc_count):
@@ -47,18 +47,21 @@ def extract(client, outdir, index):
     :param index: Name of index to dump
     :return: dict of properties describing the corpus for templates
     """
+    from elasticsearch import helpers
     outpath = os.path.join(outdir, "{}-documents.json".format(index))
 
     total_docs = client.count(index=index)["count"]
     logging.info("%d total docs in index %s", total_docs, index)
     freq = total_docs // 1000
 
+    progress = console.progress()
+
     compressor = bz2.BZ2Compressor()
     comp_outpath = outpath + ".bz2"
 
     with open(outpath, "wb") as outfile:
         with open(comp_outpath, "wb") as comp_outfile:
-            logging.info("Now dumping corpus to %s...", outpath)
+            logging.getLogger(__name__).info("Now dumping corpus to %s...", outpath)
 
             query = {"query": {"match_all": {}}}
             for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
@@ -68,14 +71,14 @@ def extract(client, outdir, index):
                 outfile.write(data)
                 comp_outfile.write(compressor.compress(data))
 
-                render_progress(n+1, total_docs, freq)
+                render_progress(progress, n+1, total_docs, freq)
 
-            print()  # progress prints didn't have a newline
             comp_outfile.write(compressor.flush())
+    progress.finish()
     return template_vars(index, outpath, comp_outpath, total_docs)
 
 
-def render_progress(cur, total, freq):
+def render_progress(progress, cur, total, freq):
     if cur % freq == 0 or total - cur < freq:
         percent = (cur * 100) / total
-        print("\r{n}/{total_docs} ({percent:.1f}%)".format(n=cur, total_docs=total, percent=percent), end="")
+        progress.print("Extracting documents...", "{n}/{total_docs} ({percent:.1f}%)".format(n=cur, total_docs=total, percent=percent))
