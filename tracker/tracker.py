@@ -55,7 +55,7 @@ def get_args():
 
     args = parser.parse_args()
     if not args.trackname:
-        args.trackname = args.index
+        args.trackname = args.indices[0]
     if not args.outdir:
         args.outdir = os.path.join(os.getcwd(), "tracks")
     return args
