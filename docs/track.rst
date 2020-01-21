@@ -341,7 +341,9 @@ Throughput will be reported as number of indexed documents per second.
 force-merge
 ~~~~~~~~~~~
 
-With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_. On older versions of Elasticsearch (prior to 2.1), Rally will use the ``optimize API`` instead. It supports the following parameter:
+With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_. On older versions of Elasticsearch (prior to 2.1), Rally will use the ``optimize API`` instead. It supports the following parameters:
+
+* ``index`` (optional, defaults to the indices defined in the ``indices`` section or ``_all`` if no indices are defined there): The name of the index that should be force-merged.
 
 * ``max-num-segments`` (optional)  The number of segments the index should be merged into. Defaults to simply checking if a merge needs to execute, and if so, executes it.
 

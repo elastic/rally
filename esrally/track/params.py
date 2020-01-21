@@ -580,7 +580,7 @@ class PartitionBulkIndexParamSource:
         return self.current_bulk / self.total_bulks
 
 
-class ForceMergeParamSouce:
+class ForceMergeParamSouce(ParamSource):
     def __init__(self, track, params, **kwargs):
         if len(track.indices) > 0:
             default_index = ','.join(map(str, track.indices))

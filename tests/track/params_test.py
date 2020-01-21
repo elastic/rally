@@ -1687,3 +1687,32 @@ class SearchParamSourceTests(TestCase):
         second = copy.deepcopy(search.params(choice=lambda d: d[1]))
 
         self.assertNotEqual(first, second)
+
+
+class ForceMergeParamSourceTests(TestCase):
+    def test_force_merge_index_from_track(self):
+        source = params.ForceMergeParamSouce(track.Track(name="unit-test", indices=[
+            track.Index(name="index1"),
+            track.Index(name="index2"),
+            track.Index(name="index3")
+        ]), params={})
+
+        p = source.params()
+
+        self.assertEqual("index1,index2,index3", p["index"])
+
+    def test_force_merge_index_by_name(self):
+        source = params.ForceMergeParamSouce(track.Track(name="unit-test"), params={"index": "index2"})
+
+        p = source.params()
+
+        self.assertEqual("index2", p["index"])
+
+    def test_default_force_merge_index(self):
+        source = params.ForceMergeParamSouce(track.Track(name="unit-test"), params={})
+
+        p = source.params()
+
+        self.assertEqual("_all", p["index"])
+
+
