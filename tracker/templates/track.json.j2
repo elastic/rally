@@ -23,9 +23,6 @@
       ]
     }
   ],{% raw %}
-  "operations": [
-    {{ rally.collect(parts="operations/*.json") }}
-  ],
   "challenges": [
     {{ rally.collect(parts="challenges/*.json") }}
   ]{% endraw %}

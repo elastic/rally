@@ -29,7 +29,6 @@ from tracker import corpus, index
 
 TRACK_TEMPLATES = {
     "track.json.j2": "track.json",
-    "operations.json.j2": "operations/default.json",
     "challenges.json.j2": "challenges/default.json",
 }
 
