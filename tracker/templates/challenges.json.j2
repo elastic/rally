@@ -21,34 +21,6 @@
           },
           "warmup-time-period": 120,
           "clients": {% raw %}{{bulk_indexing_clients | default(8)}}{% endraw %}
-        },
-        {
-          "name": "refresh-after-index",
-          "operation": "refresh",
-          "clients": 1
-        },
-        {
-          "operation": "force-merge",
-          "clients": 1
-        },
-        {
-          "name": "refresh-after-force-merge",
-          "operation": "refresh",
-          "clients": 1
-        },
-        {
-          "operation": "index-stats",
-          "clients": 1,
-          "warmup-iterations": 500,
-          "iterations": 1000,
-          "target-throughput": 90
-        },
-        {
-          "operation": "node-stats",
-          "clients": 1,
-          "warmup-iterations": 100,
-          "iterations": 1000,
-          "target-throughput": 90
         }
       ]
     }
