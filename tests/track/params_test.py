@@ -1691,7 +1691,7 @@ class SearchParamSourceTests(TestCase):
 
 class ForceMergeParamSourceTests(TestCase):
     def test_force_merge_index_from_track(self):
-        source = params.ForceMergeParamSouce(track.Track(name="unit-test", indices=[
+        source = params.ForceMergeParamSource(track.Track(name="unit-test", indices=[
             track.Index(name="index1"),
             track.Index(name="index2"),
             track.Index(name="index3")
@@ -1702,17 +1702,26 @@ class ForceMergeParamSourceTests(TestCase):
         self.assertEqual("index1,index2,index3", p["index"])
 
     def test_force_merge_index_by_name(self):
-        source = params.ForceMergeParamSouce(track.Track(name="unit-test"), params={"index": "index2"})
+        source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2"})
 
         p = source.params()
 
         self.assertEqual("index2", p["index"])
 
     def test_default_force_merge_index(self):
-        source = params.ForceMergeParamSouce(track.Track(name="unit-test"), params={})
+        source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={})
 
         p = source.params()
 
         self.assertEqual("_all", p["index"])
 
+    def test_force_merge_all_params(self):
+         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2",
+                                                                                      "request-timeout": 30,
+                                                                                      "max-num-segments": 1})
 
+         p = source.params()
+
+         self.assertEqual("index2", p["index"])
+         self.assertEqual(30, p["request-timeout"])
+         self.assertEqual(1, p["max-num-segments"])
