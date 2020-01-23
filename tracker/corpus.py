@@ -52,7 +52,7 @@ def extract(client, outdir, index):
 
     total_docs = client.count(index=index)["count"]
     logging.info("%d total docs in index %s", total_docs, index)
-    freq = total_docs // 1000
+    freq = max(1, total_docs // 1000)
 
     progress = console.progress()
 
