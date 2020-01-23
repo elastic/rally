@@ -126,6 +126,7 @@ def stop(cfg):
         logging.getLogger(__name__).info("Could not find race [%s] and will thus not persist system metrics.", race_id)
         # Don't persist system metrics if we can't retrieve the race as we cannot derive the required meta-data.
         current_race = None
+        metrics_store = None
 
     node_launcher.stop(nodes, metrics_store)
     _delete_node_file(root_path)
