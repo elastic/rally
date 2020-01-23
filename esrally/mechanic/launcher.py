@@ -209,7 +209,8 @@ class ProcessLauncher:
         stopped_nodes = []
         for node in nodes:
             node_name = node.node_name
-            telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
+            if metrics_store:
+                telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
             try:
                 es = psutil.Process(pid=node.pid)
                 node.telemetry.detach_from_node(node, running=True)
@@ -239,5 +240,6 @@ class ProcessLauncher:
 
                 node.telemetry.detach_from_node(node, running=False)
             # store system metrics in any case (telemetry devices may derive system metrics while the node is running)
-            node.telemetry.store_system_metrics(node, metrics_store)
+            if metrics_store:
+                node.telemetry.store_system_metrics(node, metrics_store)
             return stopped_nodes
