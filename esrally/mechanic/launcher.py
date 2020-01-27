@@ -199,7 +199,7 @@ class ProcessLauncher:
                               env=env,
                               preexec_fn=os.setpgrp) as command_line_process:
             # wait for it to finish
-            command_line_process.poll()
+            command_line_process.wait()
         return command_line_process.returncode
 
     @staticmethod
