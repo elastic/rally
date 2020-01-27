@@ -16,6 +16,8 @@
 # under the License.
 import logging
 import os
+import shlex
+import subprocess
 
 import psutil
 
@@ -187,13 +189,28 @@ class ProcessLauncher:
                     env[k] = env[k] + separator + v
 
     @staticmethod
+    def _run_subprocess(command_line, env):
+        command_line_args = shlex.split(command_line)
+
+        # pylint: disable=subprocess-popen-preexec-fn
+        with subprocess.Popen(command_line_args,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL,
+                              universal_newlines=True,
+                              env=env,
+                              preexec_fn=os.setpgrp) as command_line_process:
+            # wait for it to finish
+            command_line_process.poll()
+        return command_line_process.returncode
+
+    @staticmethod
     def _start_process(binary_path, env):
         if os.name == "posix" and os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         os.chdir(binary_path)
         cmd = [io.escape_path(os.path.join(".", "bin", "elasticsearch"))]
         cmd.extend(["-d", "-p", "pid"])
-        ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env, detach=True)
+        ret = ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
         if ret != 0:
             msg = "Daemon startup failed with exit code [{}]".format(ret)
             logging.error(msg)
