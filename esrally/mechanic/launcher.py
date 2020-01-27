@@ -196,7 +196,6 @@ class ProcessLauncher:
         with subprocess.Popen(command_line_args,
                               stdout=subprocess.DEVNULL,
                               stderr=subprocess.DEVNULL,
-                              universal_newlines=True,
                               env=env,
                               preexec_fn=os.setpgrp) as command_line_process:
             # wait for it to finish
