@@ -106,6 +106,9 @@ class MockPopen:
     def communicate(self, input=None, timeout=None):
         return [b"", b""]
 
+    def poll(self):
+        pass
+
     def __enter__(self):
         return self
 
