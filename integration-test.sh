@@ -38,6 +38,7 @@ readonly RALLY_LOG_BACKUP="${HOME}/.rally/logs/rally.log.it.bak"
 ES_PID=-1
 PROXY_CONTAINER_ID=-1
 PROXY_SERVER_AVAILABLE=0
+TEST_SUCCESS=0
 
 function check_prerequisites {
     exit_if_docker_not_running
@@ -595,12 +596,20 @@ function run_test {
     test_docker_dev_image
     echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
     test_node_management_commands
+    TEST_SUCCESS=1
 }
 
 function tear_down {
     info "tearing down"
     # just let tear down finish
     set +e
+    if [ "${TEST_SUCCESS}" != "1" ]; then
+      error "Tests have failed - Printing last 200 lines of logs"
+      error "===================== LOG FILE START =============================="
+      tail -n 200 "${RALLY_LOG}"
+      error "====================== LOG FILE END ==============================="
+    fi
+
     # terminate metrics store
     if [ "${ES_PID}" != "-1" ]; then
         info "Stopping Elasticsearch metrics store with PID [${ES_PID}]"
