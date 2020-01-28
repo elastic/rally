@@ -332,27 +332,6 @@ class TrackPreparationActor(actor.RallyActor):
         self.send(sender, TrackPrepared())
 
 
-def wait_for_rest_layer(es, max_attempts=20):
-    for attempt in range(max_attempts):
-        import elasticsearch
-        try:
-            es.info()
-            return True
-        except elasticsearch.ConnectionError as e:
-            if "SSL: UNKNOWN_PROTOCOL" in str(e):
-                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
-            else:
-                time.sleep(1)
-        except elasticsearch.TransportError as e:
-            if e.status_code == 503:
-                time.sleep(1)
-            elif e.status_code == 401:
-                time.sleep(1)
-            else:
-                raise e
-    return False
-
-
 class Driver:
     def __init__(self, target, config, es_client_factory_class=client.EsClientFactory):
         """
@@ -424,7 +403,7 @@ class Driver:
         else:
             es_default = es["default"]
             self.logger.info("Checking if REST API is available.")
-            if wait_for_rest_layer(es_default, max_attempts=40):
+            if client.wait_for_rest_layer(es_default, max_attempts=40):
                 self.logger.info("REST API is available.")
             else:
                 self.logger.error("REST API layer is not yet available. Stopping benchmark.")

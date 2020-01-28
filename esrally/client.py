@@ -16,6 +16,7 @@
 # under the License.
 
 import logging
+import time
 
 import certifi
 import urllib3
@@ -125,3 +126,31 @@ class EsClientFactory:
     def create(self):
         import elasticsearch
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
+
+
+def wait_for_rest_layer(es, max_attempts=20):
+    """
+    Waits for ``max_attempts`` until Elasticsearch's REST API is available.
+
+    :param es: Elasticsearch client to use for connecting.
+    :param max_attempts: The maximum number of attempts to check whether the REST API is available.
+    :return: True iff Elasticsearch is available.
+    """
+    for attempt in range(max_attempts):
+        import elasticsearch
+        try:
+            es.info()
+            return True
+        except elasticsearch.ConnectionError as e:
+            if "SSL: UNKNOWN_PROTOCOL" in str(e):
+                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
+            else:
+                time.sleep(1)
+        except elasticsearch.TransportError as e:
+            if e.status_code == 503:
+                time.sleep(1)
+            elif e.status_code == 401:
+                time.sleep(1)
+            else:
+                raise e
+    return False
