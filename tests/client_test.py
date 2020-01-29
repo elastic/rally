@@ -277,19 +277,30 @@ class EsClientFactoryTests(TestCase):
 
 
 class RestLayerTests(TestCase):
-    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
+    @mock.patch("elasticsearch.Elasticsearch")
     def test_successfully_waits_for_rest_layer(self, es):
+        es.transport.hosts = [
+            {"host": "node-a.example.org", "port": 9200},
+            {"host": "node-b.example.org", "port": 9200}
+        ]
+
         self.assertTrue(client.wait_for_rest_layer(es, max_attempts=3))
+
+        es.cluster.health.assert_has_calls([
+            mock.call(wait_for_nodes=">=2"),
+        ])
 
     # don't sleep in realtime
     @mock.patch("time.sleep")
-    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
+    @mock.patch("elasticsearch.Elasticsearch")
     def test_retries_on_transport_errors(self, es, sleep):
         import elasticsearch
 
-        es.info.side_effect = [
+        es.cluster.health.side_effect = [
             elasticsearch.TransportError(503, "Service Unavailable"),
             elasticsearch.TransportError(401, "Unauthorized"),
+            elasticsearch.TransportError(408, "Timed Out"),
+            elasticsearch.TransportError(408, "Timed Out"),
             {
                 "version": {
                     "number": "5.0.0",
@@ -297,23 +308,23 @@ class RestLayerTests(TestCase):
                 }
             }
         ]
-        self.assertTrue(client.wait_for_rest_layer(es, max_attempts=3))
+        self.assertTrue(client.wait_for_rest_layer(es, max_attempts=5))
 
     # don't sleep in realtime
     @mock.patch("time.sleep")
-    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
-    def test_dont_retries_eternally_on_transport_errors(self, es, sleep):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_dont_retry_eternally_on_transport_errors(self, es, sleep):
         import elasticsearch
 
-        es.info.side_effect = elasticsearch.TransportError(401, "Unauthorized")
+        es.cluster.health.side_effect = elasticsearch.TransportError(401, "Unauthorized")
         self.assertFalse(client.wait_for_rest_layer(es, max_attempts=3))
 
-    @mock.patch("elasticsearch.Elasticsearch", autospec=True)
+    @mock.patch("elasticsearch.Elasticsearch")
     def test_ssl_error(self, es):
         import elasticsearch
         import urllib3.exceptions
 
-        es.info.side_effect = elasticsearch.ConnectionError("N/A",
+        es.cluster.health.side_effect = elasticsearch.ConnectionError("N/A",
                                                             "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)",
                                                             urllib3.exceptions.SSLError(
                                                                 "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)"))
