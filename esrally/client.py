@@ -134,23 +134,34 @@ def wait_for_rest_layer(es, max_attempts=20):
 
     :param es: Elasticsearch client to use for connecting.
     :param max_attempts: The maximum number of attempts to check whether the REST API is available.
-    :return: True iff Elasticsearch is available.
+    :return: True iff Elasticsearch's REST API is available.
     """
+    # assume that at least the hosts that we expect to contact should be available. Note that this is not 100%
+    # bullet-proof as a cluster could have e.g. dedicated masters which are not contained in our list of target hosts
+    # but this is still better than just checking for any random node's REST API being reachable.
+    expected_node_count = len(es.transport.hosts)
+    logger = logging.getLogger(__name__)
     for attempt in range(max_attempts):
+        logger.debug("REST API is available after %s attempts", attempt)
         import elasticsearch
         try:
-            es.info()
+            # see also WaitForHttpResource in Elasticsearch tests. Contrary to the ES tests we consider the API also
+            # available when the cluster status is RED (as long as all required nodes are present)
+            es.cluster.health(wait_for_nodes=">={}".format(expected_node_count))
+            logger.info("REST API is available for >= [%s] nodes after [%s] attempts.", expected_node_count, attempt)
             return True
         except elasticsearch.ConnectionError as e:
             if "SSL: UNKNOWN_PROTOCOL" in str(e):
                 raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
             else:
-                time.sleep(1)
+                logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
+                time.sleep(3)
         except elasticsearch.TransportError as e:
-            if e.status_code == 503:
-                time.sleep(1)
-            elif e.status_code == 401:
-                time.sleep(1)
+            # cluster block, x-pack not initialized yet, our wait condition is not reached
+            if e.status_code in (503, 401, 408):
+                logger.debug("Got status code [%s] on attempt [%s]. Sleeping...", e.status_code, attempt)
+                time.sleep(3)
             else:
+                logger.warning("Got unexpected status code [%s] on attempt [%s].", e.status_code, attempt)
                 raise e
     return False
