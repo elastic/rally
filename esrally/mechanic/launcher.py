@@ -258,4 +258,4 @@ class ProcessLauncher:
             # store system metrics in any case (telemetry devices may derive system metrics while the node is running)
             if metrics_store:
                 node.telemetry.store_system_metrics(node, metrics_store)
-            return stopped_nodes
+        return stopped_nodes

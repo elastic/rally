@@ -174,12 +174,12 @@ class ProcessLauncherTests(TestCase):
         ms = get_metrics_store(cfg)
         proc_launcher = launcher.ProcessLauncher(cfg)
 
-        node_config = NodeConfiguration(build_type="tar", car_env={}, car_runtime_jdks="12,11", ip="127.0.0.1",
-                                        node_name="testnode", node_root_path="/tmp", binary_path="/tmp",
-                                        data_paths="/tmp")
+        node_configs = [NodeConfiguration(build_type="tar", car_env={}, car_runtime_jdks="12,11", ip="127.0.0.1",
+                                          node_name="testnode-{}".format(n), node_root_path="/tmp", binary_path="/tmp",
+                                          data_paths="/tmp") for n in range(2)]
 
-        nodes = proc_launcher.start([node_config])
-        self.assertEqual(len(nodes), 1)
+        nodes = proc_launcher.start(node_configs)
+        self.assertEqual(len(nodes), 2)
         self.assertEqual(nodes[0].pid, MOCK_PID_VALUE)
 
         stopped_nodes = proc_launcher.stop(nodes, ms)
