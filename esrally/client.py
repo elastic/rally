@@ -128,7 +128,7 @@ class EsClientFactory:
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
 
-def wait_for_rest_layer(es, max_attempts=20):
+def wait_for_rest_layer(es, max_attempts=40):
     """
     Waits for ``max_attempts`` until Elasticsearch's REST API is available.
 
