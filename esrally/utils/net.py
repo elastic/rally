@@ -58,9 +58,12 @@ class Progress:
 
     def __call__(self, bytes_read, bytes_total):
         from esrally.utils import convert
-        completed = bytes_read / bytes_total
-        total_as_mb = convert.bytes_to_human_string(bytes_total)
-        self.p.print("%s (%s total size)" % (self.msg, total_as_mb), self.percent_format % (completed * 100))
+        if bytes_total:
+            completed = bytes_read / bytes_total
+            total_as_mb = convert.bytes_to_human_string(bytes_total)
+            self.p.print("%s (%s total size)" % (self.msg, total_as_mb), self.percent_format % (completed * 100))
+        else:
+            self.p.print(self.msg, ".")
 
     def finish(self):
         self.p.finish()

@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 import random
 import unittest.mock as mock
 from unittest import TestCase
@@ -33,3 +32,15 @@ class NetTests(TestCase):
                         expected_size, progress_indicator)
         download.assert_called_once_with("mybucket.elasticsearch.org", "data/documents.json.bz2",
                                          "/tmp/documents.json.bz2", expected_size, progress_indicator)
+
+    def test_progress(self):
+        progress = net.Progress("test")
+        mock_progress = mock.Mock()
+        progress.p = mock_progress
+        progress(42, 100)
+        assert mock_progress.print.called
+        mock_progress.reset_mock()
+        progress(42, None)
+        assert mock_progress.print.called
+
+
