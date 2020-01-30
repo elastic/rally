@@ -192,12 +192,11 @@ class ProcessLauncher:
     def _run_subprocess(command_line, env):
         command_line_args = shlex.split(command_line)
 
-        # pylint: disable=subprocess-popen-preexec-fn
         with subprocess.Popen(command_line_args,
                               stdout=subprocess.DEVNULL,
                               stderr=subprocess.DEVNULL,
                               env=env,
-                              preexec_fn=os.setpgrp) as command_line_process:
+                              start_new_session=True) as command_line_process:
             # wait for it to finish
             command_line_process.wait()
         return command_line_process.returncode
