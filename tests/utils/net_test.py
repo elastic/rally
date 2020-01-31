@@ -42,5 +42,3 @@ class NetTests(TestCase):
         mock_progress.reset_mock()
         progress(42, None)
         assert mock_progress.print.called
-
-
