@@ -85,10 +85,13 @@ def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size
             self._progress(self._bytes_read, self._expected_size_in_bytes)
 
     s3 = boto3.resource("s3")
+    bucket = s3.Bucket(bucket_name)
+    if expected_size_in_bytes is None:
+        expected_size_in_bytes = bucket.Object(bucket_path).content_length
     progress_callback = S3ProgressAdapter(expected_size_in_bytes, progress_indicator) if progress_indicator else None
-    s3.Bucket(bucket_name).download_file(bucket_path, local_path,
-                                         Callback=progress_callback,
-                                         Config=boto3.s3.transfer.TransferConfig(use_threads=False))
+    bucket.download_file(bucket_path, local_path,
+                         Callback=progress_callback,
+                         Config=boto3.s3.transfer.TransferConfig(use_threads=False))
 
 
 def download_s3(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
