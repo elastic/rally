@@ -174,9 +174,11 @@ class ProcessLauncherTests(TestCase):
         ms = get_metrics_store(cfg)
         proc_launcher = launcher.ProcessLauncher(cfg)
 
-        node_configs = [NodeConfiguration(build_type="tar", car_env={}, car_runtime_jdks="12,11", ip="127.0.0.1",
-                                          node_name="testnode-{}".format(n), node_root_path="/tmp", binary_path="/tmp",
-                                          data_paths="/tmp") for n in range(2)]
+        node_configs = []
+        for node in range(2):
+            node_configs.append(NodeConfiguration(build_type="tar", car_env={}, car_runtime_jdks="12,11",
+                                                  ip="127.0.0.1", node_name="testnode-{}".format(node),
+                                                  node_root_path="/tmp", binary_path="/tmp", data_paths="/tmp"))
 
         nodes = proc_launcher.start(node_configs)
         self.assertEqual(len(nodes), 2)
