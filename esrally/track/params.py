@@ -563,6 +563,7 @@ class PartitionBulkIndexParamSource:
         all_bulks = number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
         self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
         self.infinite = False
+        self.logger = logging.getLogger(__name__)
 
     def partition(self, partition_index, total_partitions):
         raise exceptions.RallyError("Cannot partition a PartitionBulkIndexParamSource further")
@@ -573,7 +574,11 @@ class PartitionBulkIndexParamSource:
         if self.current_bulk == self.total_bulks:
             raise StopIteration
         self.current_bulk += 1
-        return next(self.internal_params)
+        start = time.perf_counter()
+        p = next(self.internal_params)
+        end = time.perf_counter()
+        self.logger.info("Reading bulk took [%s] seconds.", (end - start))
+        return p
 
     @property
     def percent_completed(self):
@@ -644,6 +649,7 @@ def chain(*iterables):
 
 def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
                           on_conflict, recency):
+    #source = Slice(io.StaticSource, offset, num_lines)
     source = Slice(io.FileSource, offset, num_lines)
 
     if docs.includes_action_and_meta_data:

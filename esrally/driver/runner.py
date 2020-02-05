@@ -30,7 +30,8 @@ __RUNNERS = {}
 
 
 def register_default_runners():
-    register_runner(track.OperationType.Bulk.name, BulkIndex())
+    register_runner(track.OperationType.Bulk.name, AsyncBulkIndex())
+    #register_runner(track.OperationType.Bulk.name, BulkIndex())
     register_runner(track.OperationType.ForceMerge.name, ForceMerge())
     register_runner(track.OperationType.IndicesStats.name, IndicesStats())
     register_runner(track.OperationType.NodesStats.name, NodeStats())
@@ -259,6 +260,307 @@ def mandatory(params, key, op):
     except KeyError:
         raise exceptions.DataError("Parameter source for operation '%s' did not provide the mandatory parameter '%s'. Please add it to your"
                                    " parameter source." % (str(op), key))
+
+
+class AsyncBulkIndex(Runner):
+    """
+    Bulk indexes the given documents.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    async def __call__(self, es, params):
+        """
+        Runs one bulk indexing operation.
+
+        :param es: The Elasticsearch client.
+        :param params: A hash with all parameters. See below for details.
+        :return: A hash with meta data for this bulk operation. See below for details.
+
+        It expects a parameter dict with the following mandatory keys:
+
+        * ``body``: containing all documents for the current bulk request.
+        * ``bulk-size``: the number of documents in this bulk.
+        * ``action_metadata_present``: if ``True``, assume that an action and metadata line is present (meaning only half of the lines
+        contain actual documents to index)
+        * ``index``: The name of the affected index in case ``action_metadata_present`` is ``False``.
+        * ``type``: The name of the affected type in case ``action_metadata_present`` is ``False``.
+
+        The following keys are optional:
+
+        * ``pipeline``: If present, runs the the specified ingest pipeline for this bulk.
+        * ``detailed-results``: If ``True``, the runner will analyze the response and add detailed meta-data. Defaults to ``False``. Note
+        that this has a very significant impact on performance and will very likely cause a bottleneck in the benchmark driver so please
+        be very cautious enabling this feature. Our own measurements have shown a median overhead of several thousand times (execution time
+         is in the single digit microsecond range when this feature is disabled and in the single digit millisecond range when this feature
+         is enabled; numbers based on a bulk size of 500 elements and no errors). For details please refer to the respective benchmarks
+         in ``benchmarks/driver``.
+
+
+        Returned meta data
+        `
+        The following meta data are always returned:
+
+        * ``index``: name of the affected index. May be `None` if it could not be derived.
+        * ``bulk-size``: bulk size, e.g. 5.000.
+        * ``bulk-request-size-bytes``: size of the full bulk requset in bytes
+        * ``total-document-size-bytes``: size of all documents contained in the bulk request in bytes
+        * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
+        * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
+        * ``success``: A boolean indicating whether the bulk request has succeeded.
+        * ``success-count``: Number of successfully processed items for this request (denoted in ``unit``).
+        * ``error-count``: Number of failed items for this request (denoted in ``unit``).
+        * ``took``` Value of the the ``took`` property in the bulk response.
+
+        If ``detailed-results`` is ``True`` the following meta data are returned in addition:
+
+        * ``ops``: A hash with the operation name as key (e.g. index, update, delete) and various counts as values. ``item-count`` contains
+          the total number of items for this key. Additionally, we return a separate counter each result (indicating e.g. the number of
+          created items, the number of deleted items etc.).
+        * ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a
+          shard distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and
+          ``failed`` shards (see examples below).
+        * ``bulk-request-size-bytes``: Total size of the bulk request body in bytes.
+        * ``total-document-size-bytes``: Total size of all documents within the bulk request body in bytes.
+
+        Here are a few examples:
+
+        If ``detailed-results`` is ``False`` a typical return value is::
+
+            {
+                "index": "my_index",
+                "weight": 5000,
+                "unit": "docs",
+                "bulk-size": 5000,
+                "success": True,
+                "success-count": 5000,
+                "error-count": 0,
+                "took": 20
+            }
+
+        Whereas the response will look as follow if there are bulk errors::
+
+            {
+                "index": "my_index",
+                "weight": 5000,
+                "unit": "docs",
+                "bulk-size": 5000,
+                "success": False,
+                "success-count": 4000,
+                "error-count": 1000,
+                "took": 20
+            }
+
+        If ``detailed-results`` is ``True`` a typical return value is::
+
+
+            {
+                "index": "my_index",
+                "weight": 5000,
+                "unit": "docs",
+                "bulk-size": 5000,
+                "bulk-request-size-bytes": 2250000,
+                "total-document-size-bytes": 2000000,
+                "success": True,
+                "success-count": 5000,
+                "error-count": 0,
+                "took": 20,
+                "ops": {
+                    "index": {
+                        "item-count": 5000,
+                        "created": 5000
+                    }
+                },
+                "shards_histogram": [
+                    {
+                        "item-count": 5000,
+                        "shards": {
+                            "total": 2,
+                            "successful": 2,
+                            "failed": 0
+                        }
+                    }
+                ]
+            }
+
+        An example error response may look like this::
+
+
+            {
+                "index": "my_index",
+                "weight": 5000,
+                "unit": "docs",
+                "bulk-size": 5000,
+                "bulk-request-size-bytes": 2250000,
+                "total-document-size-bytes": 2000000,
+                "success": False,
+                "success-count": 4000,
+                "error-count": 1000,
+                "took": 20,
+                "ops": {
+                    "index": {
+                        "item-count": 5000,
+                        "created": 4000,
+                        "noop": 1000
+                    }
+                },
+                "shards_histogram": [
+                    {
+                        "item-count": 4000,
+                        "shards": {
+                            "total": 2,
+                            "successful": 2,
+                            "failed": 0
+                        }
+                    },
+                    {
+                        "item-count": 500,
+                        "shards": {
+                            "total": 2,
+                            "successful": 1,
+                            "failed": 1
+                        }
+                    },
+                    {
+                        "item-count": 500,
+                        "shards": {
+                            "total": 2,
+                            "successful": 0,
+                            "failed": 2
+                        }
+                    }
+                ]
+            }
+        """
+        detailed_results = params.get("detailed-results", False)
+        index = params.get("index")
+
+        bulk_params = {}
+        if "pipeline" in params:
+            bulk_params["pipeline"] = params["pipeline"]
+
+        with_action_metadata = mandatory(params, "action-metadata-present", self)
+        bulk_size = mandatory(params, "bulk-size", self)
+
+        if with_action_metadata:
+            # only half of the lines are documents
+            response = await es.bulk(body=params["body"], params=bulk_params)
+        else:
+            response = await es.bulk(body=params["body"], index=index, doc_type=params.get("type"), params=bulk_params)
+
+        stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
+
+        meta_data = {
+            "index": str(index) if index else None,
+            "weight": bulk_size,
+            "unit": "docs",
+            "bulk-size": bulk_size
+        }
+        meta_data.update(stats)
+        if not stats["success"]:
+            meta_data["error-type"] = "bulk"
+        return meta_data
+
+    def detailed_stats(self, params, bulk_size, response):
+        ops = {}
+        shards_histogram = OrderedDict()
+        bulk_error_count = 0
+        error_details = set()
+        bulk_request_size_bytes = 0
+        total_document_size_bytes = 0
+        with_action_metadata = mandatory(params, "action-metadata-present", self)
+
+        for line_number, data in enumerate(params["body"]):
+            line_size = len(data.encode('utf-8'))
+            if with_action_metadata:
+                if line_number % 2 == 1:
+                    total_document_size_bytes += line_size
+            else:
+                total_document_size_bytes += line_size
+
+            bulk_request_size_bytes += line_size
+
+        for idx, item in enumerate(response["items"]):
+            # there is only one (top-level) item
+            op, data = next(iter(item.items()))
+            if op not in ops:
+                ops[op] = Counter()
+            ops[op]["item-count"] += 1
+            if "result" in data:
+                ops[op][data["result"]] += 1
+
+            if "_shards" in data:
+                s = data["_shards"]
+                sk = "%d-%d-%d" % (s["total"], s["successful"], s["failed"])
+                if sk not in shards_histogram:
+                    shards_histogram[sk] = {
+                        "item-count": 0,
+                        "shards": s
+                    }
+                shards_histogram[sk]["item-count"] += 1
+            if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
+                bulk_error_count += 1
+                self.extract_error_details(error_details, data)
+        stats = {
+            "took": response.get("took"),
+            "success": bulk_error_count == 0,
+            "success-count": bulk_size - bulk_error_count,
+            "error-count": bulk_error_count,
+            "ops": ops,
+            "shards_histogram": list(shards_histogram.values()),
+            "bulk-request-size-bytes": bulk_request_size_bytes,
+            "total-document-size-bytes": total_document_size_bytes
+        }
+        if bulk_error_count > 0:
+            stats["error-type"] = "bulk"
+            stats["error-description"] = self.error_description(error_details)
+        if "ingest_took" in response:
+            stats["ingest_took"] = response["ingest_took"]
+
+        return stats
+
+    def simple_stats(self, bulk_size, response):
+        bulk_error_count = 0
+        error_details = set()
+        if response["errors"]:
+            for idx, item in enumerate(response["items"]):
+                data = next(iter(item.values()))
+                if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
+                    bulk_error_count += 1
+                    self.extract_error_details(error_details, data)
+        stats = {
+            "took": response.get("took"),
+            "success": bulk_error_count == 0,
+            "success-count": bulk_size - bulk_error_count,
+            "error-count": bulk_error_count
+        }
+        if "ingest_took" in response:
+            stats["ingest_took"] = response["ingest_took"]
+        if bulk_error_count > 0:
+            stats["error-type"] = "bulk"
+            stats["error-description"] = self.error_description(error_details)
+        return stats
+
+    def extract_error_details(self, error_details, data):
+        error_data = data.get("error", {})
+        error_reason = error_data.get("reason") if isinstance(error_data, dict) else str(error_data)
+        if error_data:
+            error_details.add((data["status"], error_reason))
+        else:
+            error_details.add((data["status"], None))
+
+    def error_description(self, error_details):
+        error_description = ""
+        for status, reason in error_details:
+            if reason:
+                error_description += "HTTP status: %s, message: %s" % (str(status), reason)
+            else:
+                error_description += "HTTP status: %s" % str(status)
+        return error_description
+
+    def __repr__(self, *args, **kwargs):
+        return "bulk-index"
 
 
 class BulkIndex(Runner):

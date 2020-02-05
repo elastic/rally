@@ -127,6 +127,27 @@ class EsClientFactory:
         import elasticsearch
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
+    def create_async(self):
+        import elasticsearch
+        import elasticsearch_async
+        from aiohttp.client import ClientTimeout
+        import esrally.async_connection
+
+        # needs patching as https://github.com/elastic/elasticsearch-py-async/pull/68 is not merged yet
+        class RallyAsyncTransport(elasticsearch_async.transport.AsyncTransport):
+            def __init__(self, hosts, connection_class=esrally.async_connection.AIOHttpConnection, loop=None,
+                         connection_pool_class=elasticsearch_async.connection_pool.AsyncConnectionPool,
+                         sniff_on_start=False, raise_on_sniff_error=True, **kwargs):
+                super().__init__(hosts, connection_class, loop, connection_pool_class, sniff_on_start, raise_on_sniff_error, **kwargs)
+
+        if "timeout" in self.client_options and not isinstance(self.client_options["timeout"], ClientTimeout):
+            self.client_options["timeout"] = ClientTimeout(total=self.client_options["timeout"])
+
+        return elasticsearch_async.AsyncElasticsearch(hosts=self.hosts,
+                                                      transport_class=RallyAsyncTransport,
+                                                      ssl_context=self.ssl_context,
+                                                      **self.client_options)
+
 
 def wait_for_rest_layer(es, max_attempts=40):
     """

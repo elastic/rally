@@ -368,3 +368,8 @@ def run(cfg):
     except BaseException:
         tb = sys.exc_info()[2]
         raise exceptions.RallyError("This race ended with a fatal crash.").with_traceback(tb)
+
+
+def run_async(cfg):
+    # TODO: Provide everything that the BenchmarkActor provides
+    driver.race(cfg)

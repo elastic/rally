@@ -810,8 +810,8 @@ class LoadGenerator(actor.RallyActor):
                 # Now we need to ensure that we start partitioning parameters correctly in both cases. And that means we need to start
                 # from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
                 schedule = schedule_for(self.track, task_allocation.task, task_allocation.client_index_in_task)
-
-                executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete, self.abort_on_error)
+                executor = AsyncIoAdapter(self.config, self.client_id, task, schedule, self.sampler, self.cancel, self.complete, self.abort_on_error)
+                #executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete, self.abort_on_error)
                 final_executor = Profiler(executor, self.client_id, task) if profiling_enabled else executor
 
                 self.executor_future = self.pool.submit(final_executor)
@@ -848,9 +848,10 @@ class Sampler:
         self.q = queue.Queue(maxsize=16384)
         self.logger = logging.getLogger(__name__)
 
-    def add(self, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, percent_completed):
+    def add(self, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, percent_completed, client_id=None):
         try:
-            self.q.put_nowait(Sample(self.client_id, time.time(), time.perf_counter() - self.start_timestamp, self.task,
+            c = self.client_id if client_id is None else client_id
+            self.q.put_nowait(Sample(c, time.time(), time.perf_counter() - self.start_timestamp, self.task,
                                      sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period,
                                      percent_completed))
         except queue.Full:
@@ -1051,6 +1052,47 @@ class Profiler:
             profile += s.getvalue()
             profile += "=== Profile END for client [%s] and task [%s] ===" % (str(self.client_id), str(self.task))
             self.profile_logger.info(profile)
+
+
+class AsyncIoAdapter:
+    def __init__(self, cfg, client_id, sub_task, schedule, sampler, cancel, complete, abort_on_error):
+        self.cfg = cfg
+        self.client_id = client_id
+        self.sub_task = sub_task
+        self.schedule = schedule
+        self.sampler = sampler
+        self.cancel = cancel
+        self.complete = complete
+        self.abort_on_error = abort_on_error
+
+    def __call__(self, *args, **kwargs):
+        import asyncio
+        # only possible in Python 3.7+ (has introduced get_running_loop)
+        # try:
+        #     loop = asyncio.get_running_loop()
+        # except RuntimeError:
+        #     loop = asyncio.new_event_loop()
+        #     asyncio.set_event_loop(loop)
+        loop = asyncio.new_event_loop()
+        loop.set_debug(True)
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(self.run())
+        finally:
+            loop.close()
+
+    async def run(self):
+        def es_clients(all_hosts, all_client_options):
+            es = {}
+            for cluster_name, cluster_hosts in all_hosts.items():
+                es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async()
+            return es
+
+        from esrally.driver import async_driver
+
+        es = es_clients(self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options").all_client_options)
+        async_executor = async_driver.AsyncExecutor(self.client_id, self.sub_task, self.schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
+        return await async_executor()
 
 
 class Executor:
@@ -1404,10 +1446,16 @@ class ScheduleHandle:
         self.runner = runner
         self.params = params
         self.logger = logging.getLogger(__name__)
+        # TODO: Can we offload the parameter source execution to a different thread / process? Is this too heavy-weight?
+        #from concurrent.futures import ThreadPoolExecutor
+        #import asyncio
+        #self.io_pool_exc = ThreadPoolExecutor(max_workers=1)
+        #self.loop = asyncio.get_event_loop()
 
-    def __call__(self):
+    # TODO: This requires Python 3.6+ (see https://www.python.org/dev/peps/pep-0525/)
+    async def __call__(self):
+    # def __call__(self):
         next_scheduled = 0
-
         if self.task_progress_control.infinite:
             self.logger.info("Parameter source will determine when the schedule for [%s] terminates.", self.task_name)
             param_source_knows_progress = hasattr(self.params, "percent_completed")
@@ -1416,6 +1464,7 @@ class ScheduleHandle:
                 try:
                     # does not contribute at all to completion. Hence, we cannot define completion.
                     percent_completed = self.params.percent_completed if param_source_knows_progress else None
+                    #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
                     yield (next_scheduled, self.task_progress_control.sample_type, percent_completed, self.runner,
                            self.params.params())
                     next_scheduled = self.sched.next(next_scheduled)
@@ -1430,6 +1479,7 @@ class ScheduleHandle:
                              str(self.task_progress_control), self.task_name)
             while not self.task_progress_control.completed:
                 try:
+                    #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
                     yield (next_scheduled,
                            self.task_progress_control.sample_type,
                            self.task_progress_control.percent_completed,
