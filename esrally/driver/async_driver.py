@@ -148,6 +148,7 @@ class AsyncDriver:
         self._finished = False
         self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
         self.profiling_enabled = self.config.opts("driver", "profiling")
+        self.use_uvloop = self.config.opts("driver", "uvloop")
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         self.stop_timer_tasks = threading.Event()
         self.sampler = None
@@ -239,6 +240,13 @@ class AsyncDriver:
         self.pool.submit(Timer(fn=self.update_progress_message, interval=1, stop_event=self.stop_timer_tasks))
 
         # needed because a new thread does not have an event loop (see https://stackoverflow.com/questions/48725890/)
+        if self.use_uvloop:
+            self.logger.info("Using uvloop to perform asyncio.")
+            import uvloop
+            uvloop.install()
+        else:
+            self.logger.info("Using standard library implementation to perform asyncio.")
+
         loop = asyncio.new_event_loop()
         loop.set_debug(True)
         asyncio.set_event_loop(loop)

@@ -76,7 +76,8 @@ install_requires = [
     #   s3transfer: Apache 2.0
     "boto3==1.10.32",
     # TODO dm: Temporarily here - *might* be removed later
-    "yappi==1.2.3"
+    "yappi==1.2.3",
+    "uvloop==0.14.0"
 ]
 
 tests_require = [
