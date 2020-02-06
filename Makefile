@@ -19,10 +19,11 @@ SHELL = /bin/bash
 # We assume an active virtualenv for development
 include make-requirements.txt
 PYENV_REGEX = .pyenv/shims
+PY_BIN = python3
 VENV_NAME ?= .venv
 VENV_ACTIVATE_FILE = $(VENV_NAME)/bin/activate
 VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
-VEPYTHON = $(VENV_NAME)/bin/python3
+VEPYTHON = $(VENV_NAME)/bin/$(PY_BIN)
 VEPYLINT = $(VENV_NAME)/bin/pylint
 PYENV_ERROR = "\033[0;31mIMPORTANT\033[0m: Please install pyenv.\n"
 PYENV_PATH_ERROR = "\033[0;31mIMPORTANT\033[0m: Please add $(HOME)/$(PYENV_REGEX) to your PATH env.\n"
@@ -49,7 +50,7 @@ venv-create:
 		exit 1; \
 	fi;
 	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
-		eval "$$(pyenv init -)" && python3 -mvenv $(VENV_NAME); \
+		eval "$$(pyenv init -)" && $(PY_BIN) -mvenv $(VENV_NAME); \
 		printf "Created python3 venv under $(PWD)/$(VENV_NAME).\n"; \
 	fi;
 
