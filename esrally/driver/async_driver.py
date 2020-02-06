@@ -147,6 +147,7 @@ class AsyncDriver:
 
         self._finished = False
         self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
+        self.profiling_enabled = self.config.opts("driver", "profiling")
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         self.stop_timer_tasks = threading.Event()
         self.sampler = None
@@ -250,7 +251,8 @@ class AsyncDriver:
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         success = False
         try:
-            loop.run_until_complete(self.run_benchmark())
+            benchmark_runner = AsyncProfiler(self.run_benchmark) if self.profiling_enabled else self.run_benchmark
+            loop.run_until_complete(benchmark_runner())
 
             self._finished = True
             self.telemetry.on_benchmark_stop()
@@ -449,6 +451,37 @@ class BoundAsyncFoo:
 
     async def __call__(self):
         yield self.loop.run_in_executor(self.io_pool_exc, self.t)
+
+
+class AsyncProfiler:
+    def __init__(self, target):
+        """
+        :param target: The actual executor which should be profiled.
+        """
+        self.target = target
+        self.profile_logger = logging.getLogger("rally.profile")
+
+    async def __call__(self, *args, **kwargs):
+        import yappi
+        import io as python_io
+        yappi.start()
+        try:
+            return await self.target(*args, **kwargs)
+        finally:
+            yappi.stop()
+            s = python_io.StringIO()
+            yappi.get_func_stats().print_all(out=s, columns={
+                0: ("name", 200),
+                1: ("ncall", 5),
+                2: ("tsub", 8),
+                3: ("ttot", 8),
+                4: ("tavg", 8)
+            })
+
+            profile = "\n=== Profile START ===\n"
+            profile += s.getvalue()
+            profile += "=== Profile END ==="
+            self.profile_logger.info(profile)
 
 
 class AsyncExecutor:

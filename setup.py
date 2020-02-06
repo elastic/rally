@@ -74,7 +74,9 @@ install_requires = [
     #   botocore: Apache 2.0
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
-    "boto3==1.10.32"
+    "boto3==1.10.32",
+    # TODO dm: Temporarily here - *might* be removed later
+    "yappi==1.2.3"
 ]
 
 tests_require = [
