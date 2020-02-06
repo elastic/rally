@@ -479,8 +479,8 @@ class AsyncProfiler:
             yappi.stop()
             s = python_io.StringIO()
             yappi.get_func_stats().print_all(out=s, columns={
-                0: ("name", 200),
-                1: ("ncall", 5),
+                0: ("name", 140),
+                1: ("ncall", 8),
                 2: ("tsub", 8),
                 3: ("ttot", 8),
                 4: ("tavg", 8)
