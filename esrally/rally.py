@@ -868,7 +868,8 @@ def main():
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
-    cfg.add(config.Scope.applicationOverride, "driver", "uvloop", args.use_uvloop)
+    if sub_command == "race-async":
+        cfg.add(config.Scope.applicationOverride, "driver", "uvloop", args.use_uvloop)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
     if sub_command not in ("list", "install", "download"):
