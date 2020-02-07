@@ -116,7 +116,7 @@ def load_plugins(repo, plugin_names, plugin_params=None):
         elif len(plugin_spec) == 2:
             return plugin_spec[0], plugin_spec[1].split("+")
         else:
-            raise ValueError("Unrecognized plugin specification [%s]. Use either 'PLUGIN_NAME' or 'PLUGIN_NAME:PLUGIN_CONFIG'." % plugin)
+            raise ValueError("Unrecognized plugin specification [%s]. Use either 'PLUGIN_NAME' or 'PLUGIN_NAME:PLUGIN_CONFIG'." % p)
 
     plugins = []
     for plugin in plugin_names:

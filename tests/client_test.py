@@ -274,3 +274,60 @@ class EsClientFactoryTests(TestCase):
         self.assertNotIn("client_key", f.client_options)
 
         self.assertDictEqual(original_client_options, client_options)
+
+
+class RestLayerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_successfully_waits_for_rest_layer(self, es):
+        es.transport.hosts = [
+            {"host": "node-a.example.org", "port": 9200},
+            {"host": "node-b.example.org", "port": 9200}
+        ]
+
+        self.assertTrue(client.wait_for_rest_layer(es, max_attempts=3))
+
+        es.cluster.health.assert_has_calls([
+            mock.call(wait_for_nodes=">=2"),
+        ])
+
+    # don't sleep in realtime
+    @mock.patch("time.sleep")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_retries_on_transport_errors(self, es, sleep):
+        import elasticsearch
+
+        es.cluster.health.side_effect = [
+            elasticsearch.TransportError(503, "Service Unavailable"),
+            elasticsearch.TransportError(401, "Unauthorized"),
+            elasticsearch.TransportError(408, "Timed Out"),
+            elasticsearch.TransportError(408, "Timed Out"),
+            {
+                "version": {
+                    "number": "5.0.0",
+                    "build_hash": "abc123"
+                }
+            }
+        ]
+        self.assertTrue(client.wait_for_rest_layer(es, max_attempts=5))
+
+    # don't sleep in realtime
+    @mock.patch("time.sleep")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_dont_retry_eternally_on_transport_errors(self, es, sleep):
+        import elasticsearch
+
+        es.cluster.health.side_effect = elasticsearch.TransportError(401, "Unauthorized")
+        self.assertFalse(client.wait_for_rest_layer(es, max_attempts=3))
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_ssl_error(self, es):
+        import elasticsearch
+        import urllib3.exceptions
+
+        es.cluster.health.side_effect = elasticsearch.ConnectionError("N/A",
+                                                            "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)",
+                                                            urllib3.exceptions.SSLError(
+                                                                "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)"))
+        with self.assertRaisesRegex(expected_exception=exceptions.SystemSetupError,
+                                    expected_regex="Could not connect to cluster via https. Is this an https endpoint?"):
+            client.wait_for_rest_layer(es, max_attempts=3)

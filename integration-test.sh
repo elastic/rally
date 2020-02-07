@@ -38,6 +38,7 @@ readonly RALLY_LOG_BACKUP="${HOME}/.rally/logs/rally.log.it.bak"
 ES_PID=-1
 PROXY_CONTAINER_ID=-1
 PROXY_SERVER_AVAILABLE=0
+TEST_SUCCESS=0
 
 function check_prerequisites {
     exit_if_docker_not_running
@@ -87,6 +88,11 @@ function restore_rally_log {
 function stop_and_clean_docker_container {
     docker stop ${1} > /dev/null || true
     docker rm ${1} > /dev/null || true
+}
+
+function wait_for_free_es_port {
+  es_port=39200
+  while nc -z localhost ${es_port}; do sleep 1; echo "Port ${es_port} occupied waiting"; done
 }
 
 function kill_rally_processes {
@@ -286,9 +292,12 @@ function test_sources {
     # build Elasticsearch and a core plugin
     info "test sources [--configuration-name=${cfg}], [--revision=latest], [--track=geonames], [--challenge=append-no-conflicts], [--car=4gheap] [--elasticsearch-plugins=analysis-icu]"
     kill_rally_processes
+    wait_for_free_es_port
     esrally --configuration-name="${cfg}" --on-error=abort --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu
+
     info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=4gheap,ea] "
     kill_rally_processes
+    wait_for_free_es_port
     esrally --configuration-name="${cfg}" --on-error=abort --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car="4gheap,ea" 
 }
 
@@ -302,6 +311,7 @@ function test_distributions {
             random_configuration cfg
             info "test distributions [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--car=4gheap]"
             kill_rally_processes
+            wait_for_free_es_port
             esrally --configuration-name="${cfg}" --on-error=abort --distribution-version="${dist}" --track="${track}" --test-mode --car=4gheap
         done
     done
@@ -340,6 +350,7 @@ function test_distribution_fails_with_wrong_track_params {
 
     info "test distribution [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--track-params=${track_params}], [--car=4gheap]"
     kill_rally_processes
+    wait_for_free_es_port
 
     backup_rally_log
     set +e
@@ -514,6 +525,7 @@ function test_node_management_commands {
 
     info "test install [--configuration-name=${cfg}] [--build-type=${build_type}]"
     kill_rally_processes
+    wait_for_free_es_port
 
     raw_install_id=$(esrally install --quiet --configuration-name="${cfg}" --distribution-version="${dist}" --build-type="${build_type}" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
     install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)
@@ -595,12 +607,20 @@ function run_test {
     test_docker_dev_image
     echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
     test_node_management_commands
+    TEST_SUCCESS=1
 }
 
 function tear_down {
     info "tearing down"
     # just let tear down finish
     set +e
+    if [ "${TEST_SUCCESS}" != "1" ]; then
+      error "Tests have failed - Printing last 200 lines of logs"
+      error "===================== LOG FILE START =============================="
+      tail -n 200 "${RALLY_LOG}"
+      error "====================== LOG FILE END ==============================="
+    fi
+
     # terminate metrics store
     if [ "${ES_PID}" != "-1" ]; then
         info "Stopping Elasticsearch metrics store with PID [${ES_PID}]"
@@ -630,12 +650,16 @@ check_prerequisites
 
 trap "tear_down" EXIT
 
-# if argument is the name of a function, set up and call it
-if declare -f "$1" > /dev/null
-then
+# allow invocation from release-docker.sh
+if [[ $1 == "test_docker_release_image" ]]; then
+    test_docker_release_image
+    exit
+# if argument is the name of any other function, set up and call it
+elif declare -f "$1" > /dev/null; then
     set_up
     $1
     exit
+# otherwise run all functions
+else
+  main
 fi
-
-main

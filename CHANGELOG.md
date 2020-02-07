@@ -1,3 +1,70 @@
+### 1.4.0
+
+#### Highlights
+
+* [#853](https://github.com/elastic/rally/pull/853): Allow to use the bundled JDK in Elasticsearch
+* [#830](https://github.com/elastic/rally/pull/830): Manage Elasticsearch nodes with dedicated subcommands
+* [#815](https://github.com/elastic/rally/pull/815): Add Python 3.8 in Rally tests
+
+#### Enhancements
+
+* [#863](https://github.com/elastic/rally/pull/863): Allow piped stdin in run_subprocess_with_logging
+* [#862](https://github.com/elastic/rally/pull/862): Add support for excluded tasks in chart_generator
+* [#850](https://github.com/elastic/rally/pull/850): Allow to show track details
+* [#844](https://github.com/elastic/rally/pull/844): Add task exclude filter
+* [#840](https://github.com/elastic/rally/pull/840): Add make target to serve docs locally
+* [#836](https://github.com/elastic/rally/pull/836): Upgrade boto3
+* [#832](https://github.com/elastic/rally/pull/832): Only keep the most recent build log
+* [#829](https://github.com/elastic/rally/pull/829): Reduce usage of platform-specific code
+* [#818](https://github.com/elastic/rally/pull/818) (Breaking): Store build.log in log directory
+* [#816](https://github.com/elastic/rally/pull/816): Harmonize local pyenv versions with CI ones
+* [#805](https://github.com/elastic/rally/pull/805): Add lint + precommit make targets.
+* [#803](https://github.com/elastic/rally/pull/803): Calculate system metrics per node
+* [#802](https://github.com/elastic/rally/pull/802): Whitelist py.test in tox tests
+* [#798](https://github.com/elastic/rally/pull/798): Allow definition of body in restore-snapshot operation
+* [#793](https://github.com/elastic/rally/pull/793): Add ability to restore from a snapshot
+* [#789](https://github.com/elastic/rally/pull/789): Let the runner determine progress
+* [#788](https://github.com/elastic/rally/pull/788): Manage dev dependencies in setup.py
+* [#785](https://github.com/elastic/rally/pull/785): Don't attach telemetry devices for Docker
+* [#783](https://github.com/elastic/rally/pull/783): Upgrade pytest to 5.2.0
+* [#779](https://github.com/elastic/rally/pull/779) (Breaking): Gather cluster-level metrics in driver
+* [#778](https://github.com/elastic/rally/pull/778) (Breaking): Expose race-id as command line parameter
+* [#776](https://github.com/elastic/rally/pull/776): Add heapdump telemetry device
+* [#774](https://github.com/elastic/rally/pull/774): Raise an error if race is not found by id
+* [#773](https://github.com/elastic/rally/pull/773): Store race files always as race.json
+* [#771](https://github.com/elastic/rally/pull/771): Store track-related meta-data in results
+* [#767](https://github.com/elastic/rally/pull/767): Remove merge times from command line report
+* [#766](https://github.com/elastic/rally/pull/766): Ensure tox environment is clean
+* [#765](https://github.com/elastic/rally/pull/765): Start release process creating NOTICE
+* [#727](https://github.com/elastic/rally/pull/727): Allow function-level invocation of integration-test.sh.
+
+#### Bug Fixes
+
+* [#861](https://github.com/elastic/rally/pull/861): Pass plugin params for all plugins
+* [#859](https://github.com/elastic/rally/pull/859): Detach Elasticsearch on startup
+* [#858](https://github.com/elastic/rally/pull/858): Use the venv pylint in the makefile
+* [#841](https://github.com/elastic/rally/pull/841): Store Disk I/O metrics if available
+* [#825](https://github.com/elastic/rally/pull/825): Change remaining it tests to port 19200
+* [#820](https://github.com/elastic/rally/pull/820): Upgrade psutil to work with newer linux kernels
+* [#814](https://github.com/elastic/rally/pull/814): Fix error handling for automatically derived version
+* [#804](https://github.com/elastic/rally/pull/804): Allow multiple nodes per IP
+* [#801](https://github.com/elastic/rally/pull/801): Initialize schedule lazily
+* [#800](https://github.com/elastic/rally/pull/800): Properly wait for recovery to finish
+* [#799](https://github.com/elastic/rally/pull/799): Don't set retries for restore snapshot
+* [#784](https://github.com/elastic/rally/pull/784): Attach telemetry device on Docker launch
+* [#781](https://github.com/elastic/rally/pull/781): Add support for OSNAME and ARCH variables in dist repo URLs.
+* [#768](https://github.com/elastic/rally/pull/768): Honor ingest-percentage for bulks
+* [#763](https://github.com/elastic/rally/pull/763) (Breaking): Run a task completely even without time-periods
+
+#### Doc Changes
+
+* [#834](https://github.com/elastic/rally/pull/834): Clarify uses of distribution-version
+* [#826](https://github.com/elastic/rally/pull/826): Add note about mustache template
+* [#821](https://github.com/elastic/rally/pull/821): Move logrotate comments to separate lines
+* [#817](https://github.com/elastic/rally/pull/817): Fix mistake in wait-for-recovery docs
+* [#810](https://github.com/elastic/rally/pull/810): Fix duplicated IP in distributed_load diagram
+* [#782](https://github.com/elastic/rally/pull/782): Update Elasticsearch version of targets and metricstore in CCR recipe
+
 ### 1.3.0
 
 #### Enhancements

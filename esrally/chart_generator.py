@@ -1582,26 +1582,29 @@ class RaceConfig:
 
 
 def load_race_configs(cfg, chart_type, chart_spec_path=None):
-    def add_configs(race_configs_per_lic, flavor_name="oss", lic="oss"):
+    def add_configs(race_configs_per_lic, flavor_name="oss", lic="oss", track_name=None):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
             configs_per_lic.append(
-                RaceConfig(track=race_config_track.get_track(cfg, item["track"], race_config.get("track-params", {})),
+                RaceConfig(track=race_config_track.get_track(cfg, track_name, race_config.get("track-params", {})),
                            cfg=race_config,
                            flavor=flavor_name,
                            es_license=lic)
             )
         return configs_per_lic
 
-    def add_race_configs(license_configs, flavor_name):
+    def add_race_configs(license_configs, flavor_name, track_name):
         if chart_type == BarCharts:
             # Only one license config, "oss", is present in bar charts
             _lic_conf = [license_config["configurations"] for license_config in license_configs if license_config["name"] == "oss"]
             if _lic_conf:
-                race_configs_per_track.extend(add_configs(_lic_conf[0]))
+                race_configs_per_track.extend(add_configs(_lic_conf[0], track_name=track_name))
         else:
             for lic_config in license_configs:
-                race_configs_per_track.extend(add_configs(lic_config["configurations"], flavor_name, lic_config["name"]))
+                race_configs_per_track.extend(add_configs(lic_config["configurations"],
+                                                          flavor_name,
+                                                          lic_config["name"],
+                                                          track_name))
 
     if chart_spec_path:
         import json
@@ -1617,7 +1620,8 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
                     for flavor in item["flavors"]:
                         race_configs_per_track = []
                         _flavor_name = flavor["name"]
-                        add_race_configs(flavor["licenses"], _flavor_name)
+                        _track_name = item["track"]
+                        add_race_configs(flavor["licenses"], _flavor_name, _track_name)
 
                         if race_configs_per_track:
                             if chart_type == BarCharts:

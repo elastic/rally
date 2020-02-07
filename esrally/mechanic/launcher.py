@@ -16,7 +16,8 @@
 # under the License.
 import logging
 import os
-import signal
+import shlex
+import subprocess
 
 import psutil
 
@@ -188,13 +189,26 @@ class ProcessLauncher:
                     env[k] = env[k] + separator + v
 
     @staticmethod
+    def _run_subprocess(command_line, env):
+        command_line_args = shlex.split(command_line)
+
+        with subprocess.Popen(command_line_args,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL,
+                              env=env,
+                              start_new_session=True) as command_line_process:
+            # wait for it to finish
+            command_line_process.wait()
+        return command_line_process.returncode
+
+    @staticmethod
     def _start_process(binary_path, env):
         if os.name == "posix" and os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         os.chdir(binary_path)
         cmd = [io.escape_path(os.path.join(".", "bin", "elasticsearch"))]
         cmd.extend(["-d", "-p", "pid"])
-        ret = process.run_subprocess_with_logging(command_line=" ".join(cmd), env=env, detach=True)
+        ret = ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
         if ret != 0:
             msg = "Daemon startup failed with exit code [{}]".format(ret)
             logging.error(msg)
@@ -207,27 +221,40 @@ class ProcessLauncher:
             self.logger.info("Keeping [%d] nodes on this host running.", len(nodes))
         else:
             self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
+        stopped_nodes = []
         for node in nodes:
-            proc = psutil.Process(pid=node.pid)
             node_name = node.node_name
-            telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
+            if metrics_store:
+                telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
+            try:
+                es = psutil.Process(pid=node.pid)
+                node.telemetry.detach_from_node(node, running=True)
+            except psutil.NoSuchProcess:
+                self.logger.warning("No process found with PID [%s] for node [%s].", node.pid, node_name)
+                es = None
 
-            node.telemetry.detach_from_node(node, running=True)
             if not self.keep_running:
-                stop_watch = self._clock.stop_watch()
-                stop_watch.start()
-                try:
-                    os.kill(proc.pid, signal.SIGTERM)
-                    proc.wait(10.0)
-                except ProcessLookupError:
-                    self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
-                except psutil.TimeoutExpired:
-                    self.logger.info("kill -KILL node [%s]", node_name)
+                if es:
+                    stop_watch = self._clock.stop_watch()
+                    stop_watch.start()
                     try:
-                        # kill -9
-                        proc.kill()
-                    except ProcessLookupError:
-                        self.logger.warning("No process found with PID [%s] for node [%s]", proc.pid, node_name)
+                        es.terminate()
+                        es.wait(10.0)
+                        stopped_nodes.append(node)
+                    except psutil.NoSuchProcess:
+                        self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
+                    except psutil.TimeoutExpired:
+                        self.logger.info("kill -KILL node [%s]", node_name)
+                        try:
+                            # kill -9
+                            es.kill()
+                            stopped_nodes.append(node)
+                        except psutil.NoSuchProcess:
+                            self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
+                    self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
+
                 node.telemetry.detach_from_node(node, running=False)
+            # store system metrics in any case (telemetry devices may derive system metrics while the node is running)
+            if metrics_store:
                 node.telemetry.store_system_metrics(node, metrics_store)
-                self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
+        return stopped_nodes

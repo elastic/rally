@@ -106,6 +106,9 @@ class MockPopen:
     def communicate(self, input=None, timeout=None):
         return [b"", b""]
 
+    def poll(self):
+        pass
+
     def __enter__(self):
         return self
 
@@ -120,7 +123,6 @@ class MockPopen:
 class MockProcess:
     def __init__(self, pid):
         self.pid = pid
-        self.killed = False
 
     def name(self):
         return "p{pid}".format(pid=self.pid)
@@ -128,8 +130,16 @@ class MockProcess:
     def wait(self, timeout=None):
         raise psutil.TimeoutExpired(timeout)
 
+    def terminate(self):
+        pass
+
     def kill(self):
-        self.killed = True
+        pass
+
+
+class TerminatedProcess:
+    def __init__(self, pid):
+        raise psutil.NoSuchProcess(pid)
 
 
 def get_metrics_store(cfg):
@@ -146,7 +156,6 @@ MOCK_PID_VALUE = 1234
 
 
 class ProcessLauncherTests(TestCase):
-    @mock.patch('os.kill')
     @mock.patch('subprocess.Popen', new=MockPopen)
     @mock.patch('esrally.mechanic.java_resolver.java_home', return_value=(12, "/java_home/"))
     @mock.patch('esrally.utils.jvm.supports_option', return_value=True)
@@ -154,7 +163,7 @@ class ProcessLauncherTests(TestCase):
     @mock.patch('os.chdir')
     @mock.patch('esrally.mechanic.launcher.wait_for_pidfile', return_value=MOCK_PID_VALUE)
     @mock.patch('psutil.Process', new=MockProcess)
-    def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home, kill):
+    def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
@@ -165,18 +174,47 @@ class ProcessLauncherTests(TestCase):
         ms = get_metrics_store(cfg)
         proc_launcher = launcher.ProcessLauncher(cfg)
 
-        node_config = NodeConfiguration(build_type="tar", car_env={}, car_runtime_jdks="12,11", ip="127.0.0.1",
-                                        node_name="testnode", node_root_path="/tmp", binary_path="/tmp",
-                                        data_paths="/tmp")
+        node_configs = []
+        for node in range(2):
+            node_configs.append(NodeConfiguration(build_type="tar", car_env={}, car_runtime_jdks="12,11",
+                                                  ip="127.0.0.1", node_name="testnode-{}".format(node),
+                                                  node_root_path="/tmp", binary_path="/tmp", data_paths="/tmp"))
 
-        nodes = proc_launcher.start([node_config])
-        self.assertEqual(len(nodes), 1)
+        nodes = proc_launcher.start(node_configs)
+        self.assertEqual(len(nodes), 2)
         self.assertEqual(nodes[0].pid, MOCK_PID_VALUE)
 
-        proc_launcher.stop(nodes, ms)
-        self.assertTrue(kill.called)
+        stopped_nodes = proc_launcher.stop(nodes, ms)
+        # all nodes should be stopped
+        self.assertEqual(nodes, stopped_nodes)
 
-    def test_env_options_order(self):
+    @mock.patch('psutil.Process', new=TerminatedProcess)
+    def test_daemon_stop_with_already_terminated_process(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "node", "root.dir", "test")
+        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
+        cfg.add(config.Scope.application, "telemetry", "devices", [])
+        cfg.add(config.Scope.application, "telemetry", "params", None)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
+
+        ms = get_metrics_store(cfg)
+        proc_launcher = launcher.ProcessLauncher(cfg)
+
+        nodes = [
+            cluster.Node(pid=-1,
+                         binary_path="/bin",
+                         host_name="localhost",
+                         node_name="rally-0",
+                         telemetry=telemetry.Telemetry())
+        ]
+
+        stopped_nodes = proc_launcher.stop(nodes, ms)
+        # no nodes should have been stopped (they were already stopped)
+        self.assertEqual([], stopped_nodes)
+
+    # flight recorder shows a warning for several seconds before continuing
+    @mock.patch("esrally.time.sleep")
+    def test_env_options_order(self, sleep):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "system", "env.name", "test")
@@ -232,7 +270,6 @@ class DockerLauncherTests(TestCase):
 
         def stop_watch(self):
             return self._stop_watch
-
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("esrally.utils.process.run_subprocess_with_output")

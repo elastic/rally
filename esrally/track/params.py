@@ -32,12 +32,12 @@ __PARAM_SOURCES_BY_OP = {}
 __PARAM_SOURCES_BY_NAME = {}
 
 
-def param_source_for_operation(op_type, track, params):
+def param_source_for_operation(op_type, track, params, task_name):
     try:
         # we know that this can only be a Rally core parameter source
-        return __PARAM_SOURCES_BY_OP[op_type](track, params)
+        return __PARAM_SOURCES_BY_OP[op_type](track, params, operation_name=task_name)
     except KeyError:
-        return ParamSource(track, params)
+        return ParamSource(track, params, operation_name=task_name)
 
 
 def param_source_for_name(name, track, params):
@@ -365,7 +365,7 @@ class SearchParamSource(ParamSource):
         }
 
         if not index_name:
-            raise exceptions.InvalidSyntax("'index' is mandatory")
+            raise exceptions.InvalidSyntax("'index' is mandatory and is missing for operation '{}'".format(kwargs.get("operation_name")))
 
         if pages:
             self.query_params["pages"] = pages
@@ -578,6 +578,26 @@ class PartitionBulkIndexParamSource:
     @property
     def percent_completed(self):
         return self.current_bulk / self.total_bulks
+
+
+class ForceMergeParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        if len(track.indices) > 0:
+            default_index = ','.join(map(str, track.indices))
+        else:
+            default_index = "_all"
+
+        self._index_name = params.get("index", default_index)
+        self._max_num_segments = params.get("max-num-segments")
+        self._request_timeout = params.get("request-timeout")
+
+    def params(self):
+        return {
+            "index": self._index_name,
+            "max-num-segments": self._max_num_segments,
+            "request-timeout": self._request_timeout
+        }
 
 
 def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
@@ -922,6 +942,7 @@ register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndex
 register_param_source_for_operation(track.OperationType.CreateIndexTemplate, CreateIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndexTemplate, DeleteIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
+register_param_source_for_operation(track.OperationType.ForceMerge, ForceMergeParamSource)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)

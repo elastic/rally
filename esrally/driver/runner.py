@@ -576,9 +576,9 @@ class ForceMerge(Runner):
         request_timeout = params.get("request-timeout")
         try:
             if max_num_segments:
-                es.indices.forcemerge(index="_all", max_num_segments=max_num_segments, request_timeout=request_timeout)
+                es.indices.forcemerge(index=params.get("index"), max_num_segments=max_num_segments, request_timeout=request_timeout)
             else:
-                es.indices.forcemerge(index="_all", request_timeout=request_timeout)
+                es.indices.forcemerge(index=params.get("index"), request_timeout=request_timeout)
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
@@ -790,6 +790,7 @@ class ClusterHealth(Runner):
 
             def __lt__(self, other):
                 if self.__class__ is other.__class__:
+                    # pylint: disable=comparison-with-callable
                     return self.value < other.value
                 return NotImplemented
 

@@ -310,11 +310,12 @@ class SimpleTrackRepository:
         return self._track_file
 
 
-def operation_parameters(t, op):
+def operation_parameters(t, task):
+    op = task.operation
     if op.param_source:
         return params.param_source_for_name(op.param_source, t, op.params)
     else:
-        return params.param_source_for_operation(op.type, t, op.params)
+        return params.param_source_for_operation(op.type, t, op.params, task.name)
 
 
 def used_corpora(t, cfg):
@@ -323,7 +324,7 @@ def used_corpora(t, cfg):
         challenge = t.find_challenge_or_default(cfg.opts("track", "challenge.name"))
         for task in challenge.schedule:
             for sub_task in task:
-                param_source = operation_parameters(t, sub_task.operation)
+                param_source = operation_parameters(t, sub_task)
                 if hasattr(param_source, "corpora"):
                     for c in param_source.corpora:
                         # We might have the same corpus *but* they contain different doc sets. Therefore also need to union over doc sets.

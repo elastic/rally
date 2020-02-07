@@ -332,27 +332,6 @@ class TrackPreparationActor(actor.RallyActor):
         self.send(sender, TrackPrepared())
 
 
-def wait_for_rest_layer(es, max_attempts=20):
-    for attempt in range(max_attempts):
-        import elasticsearch
-        try:
-            es.info()
-            return True
-        except elasticsearch.ConnectionError as e:
-            if "SSL: UNKNOWN_PROTOCOL" in str(e):
-                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
-            else:
-                time.sleep(1)
-        except elasticsearch.TransportError as e:
-            if e.status_code == 503:
-                time.sleep(1)
-            elif e.status_code == 401:
-                time.sleep(1)
-            else:
-                raise e
-    return False
-
-
 class Driver:
     def __init__(self, target, config, es_client_factory_class=client.EsClientFactory):
         """
@@ -424,7 +403,7 @@ class Driver:
         else:
             es_default = es["default"]
             self.logger.info("Checking if REST API is available.")
-            if wait_for_rest_layer(es_default, max_attempts=40):
+            if client.wait_for_rest_layer(es_default, max_attempts=40):
                 self.logger.info("REST API is available.")
             else:
                 self.logger.error("REST API layer is not yet available. Stopping benchmark.")
@@ -1370,7 +1349,7 @@ def schedule_for(current_track, task, client_index):
     sched = scheduler.scheduler_for(task.schedule, task.params)
     logger.info("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)
-    params_for_op = track.operation_parameters(current_track, op).partition(client_index, num_clients)
+    params_for_op = track.operation_parameters(current_track, task).partition(client_index, num_clients)
 
     if requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
