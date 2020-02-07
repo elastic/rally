@@ -1031,3 +1031,10 @@ This implementation achieves the same rate independent of the number of clients.
         "lower-bound-millis": 50,
         "upper-bound-millis": 250
     }
+
+
+Track template generation from existing indices
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you wish to perform benchmarks in a repeatable fashion on an existing index, Rally provides a helper tool to get you
+started: :doc:`Tracker </tracker>`.
