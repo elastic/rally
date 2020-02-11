@@ -745,13 +745,14 @@ class DiskIo(InternalTelemetryDevice):
             self.write_bytes = process_start.write_bytes
             self.logger.info("Using more accurate process-based I/O counters.")
         else:
+            # noinspection PyBroadException
             try:
                 disk_start = sysstats.disk_io_counters()
                 self.read_bytes = disk_start.read_bytes
                 self.write_bytes = disk_start.write_bytes
                 self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less "
                                     "accurate disk I/O counters.")
-            except RuntimeError:
+            except BaseException:
                 self.logger.exception("Could not determine I/O stats at benchmark start.")
 
     def detach_from_node(self, node, running):
