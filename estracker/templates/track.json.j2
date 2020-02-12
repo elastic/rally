@@ -2,24 +2,26 @@
 {
   "version": 2,
   "description": "Tracker-generated track for {{track_name}}",
-  "indices": [{% for index in indices %}
+  "indices": [{% set comma = joiner() %}{% for index in indices %}
+{{comma()}}
     {
       "name": "{{index.name}}",
       "body": "{{index.filename}}"
-    }{% if not loop.last %},{% endif %}{% endfor %}
+    }{% endfor %}
   ],
   "corpora": [
     {
       "name": "{{track_name}}",
       "base-url": "{{corpora[0].base_url}}",
       "documents": [{% for corpus in corpora %}
+{{comma()}}
         {
           "target-index": "{{corpus.index_name}}",
           "source-file": "{{corpus.filename}}",
           "document-count": {{corpus.doc_count}},
           "compressed-bytes": {{corpus.compressed_bytes}},
           "uncompressed-bytes": {{corpus.uncompressed_bytes}}
-        }{% if not loop.last %},{% endif %}{% endfor %}
+        }{% endfor %}
       ]
     }
   ],{% raw %}

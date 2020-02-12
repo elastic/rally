@@ -24,6 +24,7 @@ import pathlib
 
 from jinja2 import Environment, PackageLoader
 
+from esrally import version
 from esrally.client import EsClientFactory
 from esrally.utils import opts, io
 from estracker import corpus, index
@@ -39,28 +40,23 @@ def process_template(template_filename, template_vars, dest_path):
     template = env.get_template(template_filename)
 
     parent_dir = pathlib.Path(dest_path).parent
-    if not parent_dir.exists():
-        parent_dir.mkdir()
+    io.ensure_dir(parent_dir)
 
     with open(dest_path, "w") as outfile:
         outfile.write(template.render(template_vars))
 
 
-def get_args():
+def get_arg_parser():
     parser = argparse.ArgumentParser(description="Dump mappings and document-sources from an Elasticsearch index to create a Rally track.")
 
     parser.add_argument("--target-hosts", default="", required=True, help="Elasticsearch host(s) to connect to")
     parser.add_argument("--client-options", default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS, help="Elasticsearch client options")
-    parser.add_argument("--indices", nargs='+', required=True, help="Indices to include in track")
-    parser.add_argument("--trackname", help="Name of track to use, if different from the name of index")
-    parser.add_argument("--outdir", help="Output directory for track (default: tracks/)")
+    parser.add_argument("--indices", nargs="+", required=True, help="Indices to include in track")
+    parser.add_argument("--track-name", help="Name of track to use, if different from the name of index")
+    parser.add_argument("--outdir", default=os.path.join(os.getcwd(), "tracks"), help="Output directory for track (default: tracks/)")
+    parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
 
-    args = parser.parse_args()
-    if not args.trackname:
-        args.trackname = args.indices[0]
-    if not args.outdir:
-        args.outdir = os.path.join(os.getcwd(), "tracks")
-    return args
+    return parser
 
 
 def load_json(p):
@@ -77,7 +73,11 @@ def configure_logging():
 
 def main():
     configure_logging()
-    args = get_args()
+    argparser = get_arg_parser()
+    args = argparser.parse_args()
+
+    if not args.track_name:
+        args.track_name = args.indices[0]
 
     target_hosts = opts.TargetHosts(args.target_hosts)
     client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
@@ -85,14 +85,14 @@ def main():
                              client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]).create()
 
     info = client.info()
-    logging.info("Connected to Elasticsearch %s version %s", info['name'], info['version']['number'])
+    logging.info("Connected to Elasticsearch %s version %s", info["name"], info["version"]["number"])
 
-    outpath = os.path.join(args.outdir, args.trackname)
-    if not os.path.exists(outpath):
-        pathlib.Path(outpath).mkdir(parents=True)
+    outpath = os.path.join(args.outdir, args.track_name)
+    abs_outpath = os.path.abspath(outpath)
+    io.ensure_dir(abs_outpath)
 
     template_vars = {
-        "track_name": args.trackname
+        "track_name": args.track_name
     }
 
     indices = []
@@ -112,7 +112,8 @@ def main():
         dest_path = os.path.join(outpath, dest_filename)
         process_template(template, template_vars, dest_path)
 
-    logging.info("%s has been tracked!", args.trackname)
+    logging.info("%s has been tracked!", args.track_name)
+    logging.info("To run with Rally: esrally race --track-path=%s", abs_outpath)
 
 
 if __name__ == '__main__':

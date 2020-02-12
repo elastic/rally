@@ -33,8 +33,8 @@ def template_vars(index_name, out_path, comp_outpath, doc_count):
         "filename": corpus_path.name,
         "path": corpus_path,
         "doc_count": doc_count,
-        "uncompressed_bytes": os.stat(corpus_path.as_posix()).st_size,
-        "compressed_bytes": os.stat(compressed_corpus_path.as_posix()).st_size
+        "uncompressed_bytes": os.path.getsize(corpus_path),
+        "compressed_bytes": os.path.getsize(compressed_corpus_path)
     }
 
 
@@ -48,10 +48,12 @@ def extract(client, outdir, index):
     :return: dict of properties describing the corpus for templates
     """
     from elasticsearch import helpers
+
+    logger = logging.getLogger(__name__)
     outpath = os.path.join(outdir, "{}-documents.json".format(index))
 
     total_docs = client.count(index=index)["count"]
-    logging.info("%d total docs in index %s", total_docs, index)
+    logger.info("%d total docs in index %s", total_docs, index)
     freq = max(1, total_docs // 1000)
 
     progress = console.progress()
@@ -61,7 +63,7 @@ def extract(client, outdir, index):
 
     with open(outpath, "wb") as outfile:
         with open(comp_outpath, "wb") as comp_outfile:
-            logging.getLogger(__name__).info("Now dumping corpus to %s...", outpath)
+            logger.info("Now dumping corpus to %s...", outpath)
 
             query = {"query": {"match_all": {}}}
             for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
