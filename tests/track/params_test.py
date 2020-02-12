@@ -61,8 +61,9 @@ class SliceTests(TestCase):
             '{"key": "value10"}'
         ]
 
-        source.open(data, "r")
-        self.assertEqual(data[2:7], list(source))
+        source.open(data, "r", 5)
+        # lines are returned as a list so we have to wrap our data once more
+        self.assertEqual([data[2:7]], list(source))
         source.close()
 
     def test_slice_with_slice_larger_than_source(self):
@@ -73,8 +74,9 @@ class SliceTests(TestCase):
             '{"key": "value3"}',
         ]
 
-        source.open(data, "r")
-        self.assertEqual(data, list(source))
+        source.open(data, "r", 5)
+        # lines are returned as a list so we have to wrap our data once more
+        self.assertEqual([data], list(source))
         source.close()
 
 
@@ -142,19 +144,19 @@ class ConflictingIdsBuilderTests(TestCase):
 
 class ActionMetaDataTests(TestCase):
     def test_generate_action_meta_data_without_id_conflicts(self):
-        self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type"}}'),
+        self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type"}}\n'),
                          next(params.GenerateActionMetaData("test_index", "test_type")))
 
     def test_generate_action_meta_data_typeless(self):
-        self.assertEqual(("index", '{"index": {"_index": "test_index"}}'),
+        self.assertEqual(("index", '{"index": {"_index": "test_index"}}\n'),
                          next(params.GenerateActionMetaData("test_index", type_name=None)))
 
     def test_generate_action_meta_data_with_id_conflicts(self):
         def idx(id):
-            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
+            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % id
 
         def conflict(action, id):
-            return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % (action, id)
+            return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % (action, id)
 
         pseudo_random_conflicts = iter([
             # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
@@ -197,15 +199,15 @@ class ActionMetaDataTests(TestCase):
     def test_generate_action_meta_data_with_id_conflicts_and_recency_bias(self):
         def idx(type_name, id):
             if type_name:
-                return "index", '{"index": {"_index": "test_index", "_type": "%s", "_id": "%s"}}' % (type_name, id)
+                return "index", '{"index": {"_index": "test_index", "_type": "%s", "_id": "%s"}}\n' % (type_name, id)
             else:
-                return "index", '{"index": {"_index": "test_index", "_id": "%s"}}' % id
+                return "index", '{"index": {"_index": "test_index", "_id": "%s"}}\n' % id
 
         def conflict(action, type_name, id):
             if type_name:
-                return action, '{"%s": {"_index": "test_index", "_type": "%s", "_id": "%s"}}' % (action, type_name, id)
+                return action, '{"%s": {"_index": "test_index", "_type": "%s", "_id": "%s"}}\n' % (action, type_name, id)
             else:
-                return action, '{"%s": {"_index": "test_index", "_id": "%s"}}' % (action, id)
+                return action, '{"%s": {"_index": "test_index", "_id": "%s"}}\n' % (action, id)
 
         pseudo_random_conflicts = iter([
             # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
@@ -270,7 +272,7 @@ class ActionMetaDataTests(TestCase):
 
     def test_generate_action_meta_data_with_id_and_zero_conflict_probability(self):
         def idx(id):
-            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}' % id
+            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % id
 
         test_ids = [100, 200, 300, 400]
 
@@ -280,39 +282,28 @@ class ActionMetaDataTests(TestCase):
 
         self.assertListEqual([idx(id) for id in test_ids], list(generator))
 
-    def test_source_file_action_meta_data(self):
-        source = params.Slice(io.StringAsFileSource, 0, 5)
-        generator = params.SourceActionMetaData(source)
-
-        data = [
-            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "1"}}',
-            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "2"}}',
-            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "3"}}',
-            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "4"}}',
-            '{"index": {"_index": "test_index", "_type": "test_type", "_id": "5"}}',
-        ]
-
-        source.open(data, "r")
-        self.assertEqual([("source", doc) for doc in data], list(generator))
-        source.close()
-
 
 class IndexDataReaderTests(TestCase):
     def test_read_bulk_larger_than_number_of_docs(self):
         data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}'
+            '{"key": "value1"}\n',
+            '{"key": "value2"}\n',
+            '{"key": "value3"}\n',
+            '{"key": "value4"}\n',
+            '{"key": "value5"}\n'
         ]
         bulk_size = 50
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
-        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
-                                        index_name="test_index", type_name="test_type")
+        reader = params.MetadataIndexDataReader(data,
+                                                batch_size=bulk_size,
+                                                bulk_size=bulk_size,
+                                                file_source=source,
+                                                action_metadata=am_handler,
+                                                index_name="test_index",
+                                                type_name="test_type")
 
         expected_bulk_sizes = [len(data)]
         # lines should include meta-data
@@ -321,19 +312,24 @@ class IndexDataReaderTests(TestCase):
 
     def test_read_bulk_with_offset(self):
         data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}'
+            '{"key": "value1"}\n',
+            '{"key": "value2"}\n',
+            '{"key": "value3"}\n',
+            '{"key": "value4"}\n',
+            '{"key": "value5"}\n'
         ]
         bulk_size = 50
 
         source = params.Slice(io.StringAsFileSource, 3, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
-        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
-                                        index_name="test_index", type_name="test_type")
+        reader = params.MetadataIndexDataReader(data,
+                                                batch_size=bulk_size,
+                                                bulk_size=bulk_size,
+                                                file_source=source,
+                                                action_metadata=am_handler,
+                                                index_name="test_index",
+                                                type_name="test_type")
 
         expected_bulk_sizes = [(len(data) - 3)]
         # lines should include meta-data
@@ -342,21 +338,26 @@ class IndexDataReaderTests(TestCase):
 
     def test_read_bulk_smaller_than_number_of_docs(self):
         data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}',
-            '{"key": "value6"}',
-            '{"key": "value7"}',
+            '{"key": "value1"}\n',
+            '{"key": "value2"}\n',
+            '{"key": "value3"}\n',
+            '{"key": "value4"}\n',
+            '{"key": "value5"}\n',
+            '{"key": "value6"}\n',
+            '{"key": "value7"}\n',
         ]
         bulk_size = 3
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
-        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
-                                        index_name="test_index", type_name="test_type")
+        reader = params.MetadataIndexDataReader(data,
+                                                batch_size=bulk_size,
+                                                bulk_size=bulk_size,
+                                                file_source=source,
+                                                action_metadata=am_handler,
+                                                index_name="test_index",
+                                                type_name="test_type")
 
         expected_bulk_sizes = [3, 3, 1]
         # lines should include meta-data
@@ -365,13 +366,13 @@ class IndexDataReaderTests(TestCase):
 
     def test_read_bulk_smaller_than_number_of_docs_and_multiple_clients(self):
         data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}',
-            '{"key": "value6"}',
-            '{"key": "value7"}',
+            '{"key": "value1"}\n',
+            '{"key": "value2"}\n',
+            '{"key": "value3"}\n',
+            '{"key": "value4"}\n',
+            '{"key": "value5"}\n',
+            '{"key": "value6"}\n',
+            '{"key": "value7"}\n',
         ]
         bulk_size = 3
 
@@ -379,8 +380,13 @@ class IndexDataReaderTests(TestCase):
         source = params.Slice(io.StringAsFileSource, 0, 5)
         am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
-        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
-                                        index_name="test_index", type_name="test_type")
+        reader = params.MetadataIndexDataReader(data,
+                                                batch_size=bulk_size,
+                                                bulk_size=bulk_size,
+                                                file_source=source,
+                                                action_metadata=am_handler,
+                                                index_name="test_index",
+                                                type_name="test_type")
 
         expected_bulk_sizes = [3, 2]
         # lines should include meta-data
@@ -389,28 +395,31 @@ class IndexDataReaderTests(TestCase):
 
     def test_read_bulks_and_assume_metadata_line_in_source_file(self):
         data = [
-            '{"index": {"_index": "test_index", "_type": "test_type"}',
-            '{"key": "value1"}',
-            '{"index": {"_index": "test_index", "_type": "test_type"}',
-            '{"key": "value2"}',
-            '{"index": {"_index": "test_index", "_type": "test_type"}',
-            '{"key": "value3"}',
-            '{"index": {"_index": "test_index", "_type": "test_type"}',
-            '{"key": "value4"}',
-            '{"index": {"_index": "test_index", "_type": "test_type"}',
-            '{"key": "value5"}',
-            '{"index": {"_index": "test_index", "_type": "test_type"}',
-            '{"key": "value6"}',
-            '{"index": {"_index": "test_index", "_type": "test_type"}',
-            '{"key": "value7"}'
+            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            '{"key": "value1"}\n',
+            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            '{"key": "value2"}\n',
+            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            '{"key": "value3"}\n',
+            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            '{"key": "value4"}\n',
+            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            '{"key": "value5"}\n',
+            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            '{"key": "value6"}\n',
+            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            '{"key": "value7"}\n'
         ]
         bulk_size = 3
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
-        am_handler = params.SourceActionMetaData(source)
 
-        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
-                                        index_name="test_index", type_name="test_type")
+        reader = params.SourceOnlyIndexDataReader(data,
+                                                  batch_size=bulk_size,
+                                                  bulk_size=bulk_size,
+                                                  file_source=source,
+                                                  index_name="test_index",
+                                                  type_name="test_type")
 
         expected_bulk_sizes = [3, 3, 1]
         # lines should include meta-data
@@ -434,11 +443,11 @@ class IndexDataReaderTests(TestCase):
             2])
 
         data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}',
-            '{"key": "value5"}'
+            '{"key": "value1"}\n',
+            '{"key": "value2"}\n',
+            '{"key": "value3"}\n',
+            '{"key": "value4"}\n',
+            '{"key": "value5"}\n'
         ]
         bulk_size = 2
 
@@ -450,8 +459,13 @@ class IndexDataReaderTests(TestCase):
                                                    rand=lambda: next(pseudo_random_conflicts),
                                                    randint=lambda x, y: next(chosen_index_of_conflicting_ids))
 
-        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
-                                        index_name="test_index", type_name="test_type")
+        reader = params.MetadataIndexDataReader(data,
+                                                batch_size=bulk_size,
+                                                bulk_size=bulk_size,
+                                                file_source=source,
+                                                action_metadata=am_handler,
+                                                index_name="test_index",
+                                                type_name="test_type")
 
         # consume all bulks
         bulks = []
@@ -461,31 +475,24 @@ class IndexDataReaderTests(TestCase):
                     bulks.append(bulk)
 
         self.assertEqual([
-            [
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}',
-                '{"key": "value1"}',
-                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}',
-                '{"doc":{"key": "value2"}}'
-            ],
-            [
-                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}',
-                '{"doc":{"key": "value3"}}',
-                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}',
-                '{"doc":{"key": "value4"}}'
-            ],
-            [
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}',
-                '{"key": "value5"}'
-            ]
-
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
+                '{"key": "value1"}\n' +
+                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+                '{"doc":{"key": "value2"}}\n',
+                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
+                '{"doc":{"key": "value3"}}\n' +
+                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
+                '{"doc":{"key": "value4"}}\n',
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+                '{"key": "value5"}\n'
         ], bulks)
 
     def test_read_bulk_with_external_id_and_zero_conflict_probability(self):
         data = [
-            '{"key": "value1"}',
-            '{"key": "value2"}',
-            '{"key": "value3"}',
-            '{"key": "value4"}'
+            '{"key": "value1"}\n',
+            '{"key": "value2"}\n',
+            '{"key": "value3"}\n',
+            '{"key": "value4"}\n'
         ]
         bulk_size = 2
 
@@ -494,8 +501,13 @@ class IndexDataReaderTests(TestCase):
                                                    conflicting_ids=[100, 200, 300, 400],
                                                    conflict_probability=0)
 
-        reader = params.IndexDataReader(data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, action_metadata=am_handler,
-                                        index_name="test_index", type_name="test_type")
+        reader = params.MetadataIndexDataReader(data,
+                                                batch_size=bulk_size,
+                                                bulk_size=bulk_size,
+                                                file_source=source,
+                                                action_metadata=am_handler,
+                                                index_name="test_index",
+                                                type_name="test_type")
 
         # consume all bulks
         bulks = []
@@ -505,28 +517,27 @@ class IndexDataReaderTests(TestCase):
                     bulks.append(bulk)
 
         self.assertEqual([
-            [
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}',
-                '{"key": "value1"}',
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}',
-                '{"key": "value2"}'
-            ],
-            [
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}',
-                '{"key": "value3"}',
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}',
-                '{"key": "value4"}'
-            ]
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
+                '{"key": "value1"}\n' +
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+                '{"key": "value2"}\n',
+
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
+                '{"key": "value3"}\n' +
+                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
+                '{"key": "value4"}\n'
         ], bulks)
 
     def assert_bulks_sized(self, reader, expected_bulk_sizes, expected_line_sizes):
+        self.assertEqual(len(expected_bulk_sizes), len(expected_line_sizes), "Bulk sizes and line sizes must be equal")
         with reader:
             bulk_index = 0
             for index, type, batch in reader:
                 for bulk_size, bulk in batch:
-                    self.assertEqual(expected_bulk_sizes[bulk_index], bulk_size)
-                    self.assertEqual(expected_line_sizes[bulk_index], len(bulk))
+                    self.assertEqual(expected_bulk_sizes[bulk_index], bulk_size, msg="bulk size")
+                    self.assertEqual(expected_line_sizes[bulk_index], bulk.count("\n"))
                     bulk_index += 1
+            self.assertEqual(len(expected_bulk_sizes), bulk_index, "Not all bulk sizes have been checked")
 
 
 class InvocationGeneratorTests(TestCase):

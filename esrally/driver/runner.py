@@ -470,7 +470,14 @@ class BulkIndex(Runner):
         total_document_size_bytes = 0
         with_action_metadata = mandatory(params, "action-metadata-present", self)
 
-        for line_number, data in enumerate(params["body"]):
+        if isinstance(params["body"], str):
+            bulk_lines = params["body"].split("\n")
+        elif isinstance(params["body"], list):
+            bulk_lines = params["body"]
+        else:
+            raise exceptions.DataError("bulk body is neither string nor list")
+
+        for line_number, data in enumerate(bulk_lines):
             line_size = len(data.encode('utf-8'))
             if with_action_metadata:
                 if line_number % 2 == 1:
