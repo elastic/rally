@@ -289,8 +289,8 @@ class DriverActor(actor.RallyActor):
         self.send(self.start_sender, PreparationComplete(
             # older versions (pre 6.3.0) don't expose build_flavor because the only (implicit) flavor was "oss"
             cluster_version.get("build_flavor", "oss"),
-            cluster_version.get("number", "Unknown"),
-            cluster_version.get("build_hash", "Unknown")
+            cluster_version.get("number"),
+            cluster_version.get("build_hash")
         ))
 
     def on_benchmark_complete(self, metrics):
