@@ -492,7 +492,7 @@ class Driver:
                 self.logger.debug("Closing metrics store...")
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
-                del self.metrics_store
+                self.metrics_store = None
                 self.logger.debug("Sending benchmark results...")
                 self.target.on_benchmark_complete(m)
             else:
