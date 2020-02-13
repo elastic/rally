@@ -89,7 +89,7 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: check-venv
-	@find esrally benchmarks scripts tests tracker -name "*.py" -exec $(VEPYLINT) -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
+	@find esrally benchmarks scripts tests estracker -name "*.py" -exec $(VEPYLINT) -j0 -rn --load-plugins pylint_quotes --rcfile=$(CURDIR)/.pylintrc \{\} +
 
 docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html

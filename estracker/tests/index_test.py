@@ -16,7 +16,7 @@
 # under the License.
 
 from unittest import mock
-from tracker.index import filter_ephemeral_index_settings, extract_index_mapping_and_settings
+from estracker.index import filter_ephemeral_index_settings, extract_index_mapping_and_settings
 
 
 def test_index_setting_filter():

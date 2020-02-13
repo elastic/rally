@@ -25,8 +25,8 @@ import pathlib
 from jinja2 import Environment, PackageLoader
 
 from esrally.client import EsClientFactory
-from esrally.utils import opts
-from tracker import corpus, index
+from esrally.utils import opts, io
+from estracker import corpus, index
 
 TRACK_TEMPLATES = {
     "track.json.j2": "track.json",

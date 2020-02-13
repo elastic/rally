@@ -142,7 +142,7 @@ setup(name="esrally",
           "console_scripts": [
               "esrally=esrally.rally:main",
               "esrallyd=esrally.rallyd:main",
-              "estracker=tracker.tracker:main"
+              "estracker=estracker.tracker:main"
           ],
       },
       classifiers=[
