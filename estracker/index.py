@@ -18,11 +18,14 @@
 import json
 import os
 
-
 INDEX_SETTINGS_EPHEMERAL_KEYS = ["uuid",
                                  "creation_date",
                                  "version",
-                                 "provided_name"]
+                                 "provided_name",
+                                 "store"]
+INDEX_SETTINGS_PARAMETERS = {"number_of_replicas": "{{{{number_of_replicas | default({orig})}}}}",
+                             "number_of_shards": "{{{{number_of_shards | default({orig})}}}}"
+                             }
 
 
 def filter_ephemeral_index_settings(settings):
@@ -38,6 +41,12 @@ def filter_ephemeral_index_settings(settings):
     return filtered
 
 
+def update_index_setting_parameters(settings):
+    for s, param in INDEX_SETTINGS_PARAMETERS.items():
+        orig_value = settings[s]
+        settings[s] = param.format(orig=orig_value)
+
+
 def extract_index_mapping_and_settings(client, index):
     """
     Calls index GET to retrieve mapping + settings, filtering settings
@@ -51,6 +60,7 @@ def extract_index_mapping_and_settings(client, index):
 
     mappings = details["mappings"]
     index_settings = filter_ephemeral_index_settings(details["settings"]["index"])
+    update_index_setting_parameters(index_settings)
     return {"mappings": mappings, "settings": {"index": index_settings}}
 
 

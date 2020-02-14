@@ -38,6 +38,9 @@ def test_index_setting_filter():
         "uuid": "jdzVt-dDS1aRlqdZWK4pdA",
         "version": {
             "created": "7050099"
+        },
+        "store": {
+            "type": "fs"
         }
     }
     settings = filter_ephemeral_index_settings(unfiltered_index_settings)
@@ -59,7 +62,7 @@ def test_extract_index_create(client):
             },
             "settings": {
                 "index": {
-                    "number_of_shards": "5",
+                    "number_of_shards": "3",
                     "provided_name": "osmgeopoints",
                     "creation_date": "1579210032233",
                     "requests": {
@@ -67,10 +70,13 @@ def test_extract_index_create(client):
                             "enable": "false"
                         }
                     },
-                    "number_of_replicas": "0",
+                    "number_of_replicas": "2",
                     "uuid": "vOOsPNfxTJyQekkIo9TjPA",
                     "version": {
                         "created": "7050099"
+                    },
+                    "store": {
+                        "type": "fs"
                     }
                 }
             }
@@ -87,8 +93,8 @@ def test_extract_index_create(client):
         },
         "settings": {
             "index": {
-                "number_of_replicas": "0",
-                "number_of_shards": "5",
+                "number_of_replicas": "{{number_of_replicas | default(2)}}",
+                "number_of_shards": "{{number_of_shards | default(3)}}",
                 "requests": {
                     "cache": {
                         "enable": "false"
