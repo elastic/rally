@@ -101,8 +101,11 @@ def wait_for_pidfile(pidfilename, timeout=60, clock=time.Clock):
     while stop_watch.split_time() < timeout:
         try:
             with open(pidfilename, "rb") as f:
-                return int(f.read())
-        except FileNotFoundError:
+                buf = f.read()
+                if not buf:
+                    raise EOFError
+                return int(buf)
+        except (FileNotFoundError, EOFError):
             time.sleep(0.5)
 
     msg = "pid file not available after {} seconds!".format(timeout)

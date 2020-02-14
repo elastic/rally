@@ -20,6 +20,7 @@ import sys
 import uuid
 from datetime import datetime
 from unittest import TestCase, mock
+from unittest.mock import mock_open
 
 import psutil
 
@@ -247,30 +248,71 @@ class ProcessLauncherTests(TestCase):
         # unmodified
         self.assertEqual(os.environ["PATH"], env["PATH"])
 
+    @mock.patch("esrally.time.sleep")
+    def test_pidfile_wait_race(self, sleep):
+        mo = mock_open()
+        with self.assertRaises(exceptions.LaunchError):
+            mo.side_effect = FileNotFoundError
+            testclock = TestClock(IterationBasedStopWatch(1))
+            with mock.patch("builtins.open", mo):
+                launcher.wait_for_pidfile("testpidfile", clock=testclock)
+        with self.assertRaises(exceptions.LaunchError):
+            mo = mock_open()
+            testclock = TestClock(IterationBasedStopWatch(1))
+            with mock.patch("builtins.open", mo):
+                launcher.wait_for_pidfile("testpidfile", clock=testclock)
+        mo = mock_open(read_data="1234")
+        testclock = TestClock(IterationBasedStopWatch(1))
+        with mock.patch("builtins.open", mo):
+            ret = launcher.wait_for_pidfile("testpidfile", clock=testclock)
+            self.assertEqual(ret, 1234)
+
+        def mock_open_with_delayed_write(read_data):
+            mo = mock_open(read_data=read_data)
+            handle = mo.return_value
+            old_read_se = handle.read.side_effect
+            handle.has_been_read = False
+
+            def _stub_first_read(*args, **kwargs):
+                if not handle.has_been_read:
+                    handle.has_been_read = True
+                    return ""
+                else:
+                    return old_read_se(*args, *kwargs)
+            handle.read.side_effect = _stub_first_read
+            return mo
+
+        testclock = TestClock(IterationBasedStopWatch(2))
+        with mock.patch("builtins.open", mock_open_with_delayed_write(read_data="4321")):
+            ret = launcher.wait_for_pidfile("testpidfile", clock=testclock)
+            self.assertEqual(ret, 4321)
+
+
+class IterationBasedStopWatch:
+    def __init__(self, max_iterations):
+        self.iterations = 0
+        self.max_iterations = max_iterations
+
+    def start(self):
+        self.iterations = 0
+
+    def split_time(self):
+        if self.iterations < self.max_iterations:
+            self.iterations += 1
+            return 0
+        else:
+            return sys.maxsize
+
+
+class TestClock:
+    def __init__(self, stop_watch):
+        self._stop_watch = stop_watch
+
+    def stop_watch(self):
+        return self._stop_watch
+
 
 class DockerLauncherTests(TestCase):
-    class IterationBasedStopWatch:
-        def __init__(self, max_iterations):
-            self.iterations = 0
-            self.max_iterations = max_iterations
-
-        def start(self):
-            self.iterations = 0
-
-        def split_time(self):
-            if self.iterations < self.max_iterations:
-                self.iterations += 1
-                return 0
-            else:
-                return sys.maxsize
-
-    class TestClock:
-        def __init__(self, stop_watch):
-            self._stop_watch = stop_watch
-
-        def stop_watch(self):
-            return self._stop_watch
-
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     def test_starts_container_successfully(self, run_subprocess_with_output, run_subprocess_with_logging):
@@ -309,8 +351,8 @@ class DockerLauncherTests(TestCase):
         run_subprocess_with_output.side_effect = [["de604d0d"], [], []]
         cfg = config.Config()
         # ensure we only check the status two times
-        stop_watch = DockerLauncherTests.IterationBasedStopWatch(max_iterations=2)
-        docker = launcher.DockerLauncher(cfg, clock=DockerLauncherTests.TestClock(stop_watch=stop_watch))
+        stop_watch = IterationBasedStopWatch(max_iterations=2)
+        docker = launcher.DockerLauncher(cfg, clock=TestClock(stop_watch=stop_watch))
 
         node_config = NodeConfiguration(build_type="docker", car_env={}, car_runtime_jdks="12,11", ip="127.0.0.1",
                                         node_name="testnode", node_root_path="/tmp", binary_path="/bin",
