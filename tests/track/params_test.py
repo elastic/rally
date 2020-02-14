@@ -88,34 +88,34 @@ class ConflictingIdsBuilderTests(TestCase):
     def test_sequential_conflicts(self):
         self.assertEqual(
             [
-                "         0",
-                "         1",
-                "         2",
-                "         3",
-                "         4",
-                "         5",
-                "         6",
-                "         7",
-                "         8",
-                "         9",
-                "        10",
+                '0000000000',
+                '0000000001',
+                '0000000002',
+                '0000000003',
+                '0000000004',
+                '0000000005',
+                '0000000006',
+                '0000000007',
+                '0000000008',
+                '0000000009',
+                '0000000010'
             ],
             params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 0)
         )
 
         self.assertEqual(
             [
-                "         5",
-                "         6",
-                "         7",
-                "         8",
-                "         9",
-                "        10",
-                "        11",
-                "        12",
-                "        13",
-                "        14",
-                "        15",
+                '0000000005',
+                '0000000006',
+                '0000000007',
+                '0000000008',
+                '0000000009',
+                '0000000010',
+                '0000000011',
+                '0000000012',
+                '0000000013',
+                '0000000014',
+                '0000000015'
             ],
             params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 5)
         )
@@ -125,18 +125,14 @@ class ConflictingIdsBuilderTests(TestCase):
 
         self.assertEqual(
             [
-                "         2",
-                "         1",
-                "         0"
+                '0000000002', '0000000001', '0000000000'
             ],
             params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0, shuffle=predictable_shuffle)
         )
 
         self.assertEqual(
             [
-                "         7",
-                "         6",
-                "         5"
+                '0000000007', '0000000006', '0000000005'
             ],
             params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 5, shuffle=predictable_shuffle)
         )
@@ -670,7 +666,7 @@ class InvocationGeneratorTests(TestCase):
 
     def test_build_conflicting_ids(self):
         self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 3, 0))
-        self.assertEqual(["         0", "         1", "         2"],
+        self.assertEqual(["0000000000", "0000000001", "0000000002"],
                          params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 3, 0))
         # we cannot tell anything specific about the contents...
         self.assertEqual(3, len(params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0)))
