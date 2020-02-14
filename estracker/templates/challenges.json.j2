@@ -1,4 +1,4 @@
-{
+{% raw %}{
   "name": "index-corpus",
   "description": "Indexes the whole document corpus using Elasticsearch default settings.",
   "default": true,
@@ -9,17 +9,17 @@
     {
       "operation": {
         "operation-type": "create-index",
-        "settings": {% raw %}{{index_settings | default({}) | tojson}}{% endraw %}
+        "settings": {{index_settings | default({}) | tojson}}
       }
     },
     {
       "operation": {
             "operation-type": "bulk",
-            "bulk-size": {% raw %}{{bulk_size | default(5000)}}{% endraw %},
-            "ingest-percentage": {% raw %}{{ingest_percentage | default(100)}}{% endraw %}
+            "bulk-size": {{bulk_size | default(5000)}},
+            "ingest-percentage": {{ingest_percentage | default(100)}}
       },
       "warmup-time-period": 120,
-      "clients": {% raw %}{{bulk_indexing_clients | default(8)}}{% endraw %}
+      "clients": {{bulk_indexing_clients | default(8)}}
     }
   ]
-}
+}{% endraw %}
