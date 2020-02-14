@@ -572,6 +572,15 @@ function test_tracker {
     info "Track the index."
     estracker  --target-hosts="localhost:39200" --indices geonames
 
+    info "Try to race the new track"
+    esrally race -target-host="localhost:39200" \
+        --race-id="rally-integration-test" \
+        --on-error=abort \
+        --pipeline=benchmark-only \
+        --track-path=tracks/geonames/ \
+        --test-mode \
+        --challenge=index-corpus \
+
     info "stop es"
     esrally stop --quiet --installation-id="${install_id}"
 }
