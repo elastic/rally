@@ -24,14 +24,21 @@ import pathlib
 from esrally.utils import console
 
 
-def template_vars(index_name, out_path, comp_outpath, doc_count):
-    corpus_path = pathlib.Path(out_path)
-    compressed_corpus_path = pathlib.Path(comp_outpath)
+DOCS_COMPRESSOR = bz2.BZ2Compressor
+COMP_EXT = ".bz2"
+
+
+def get_base_url(path):
+    return pathlib.Path(path).parent.as_uri()
+
+
+def template_vars(index_name, out_path, doc_count):
+    comp_outpath = out_path + COMP_EXT
     return {
         "index_name": index_name,
-        "base_url": pathlib.Path(out_path).parent.as_uri(),
-        "filename": corpus_path.name,
-        "path": corpus_path,
+        "base_url": get_base_url(out_path),
+        "filename": os.path.basename(out_path),
+        "path": out_path,
         "doc_count": doc_count,
         "uncompressed_bytes": os.path.getsize(out_path),
         "compressed_bytes": os.path.getsize(comp_outpath)
@@ -47,20 +54,31 @@ def extract(client, outdir, index):
     :param index: Name of index to dump
     :return: dict of properties describing the corpus for templates
     """
-    from elasticsearch import helpers
 
     logger = logging.getLogger(__name__)
     outpath = os.path.join(outdir, "{}-documents.json".format(index))
 
     total_docs = client.count(index=index)["count"]
     logger.info("%d total docs in index %s", total_docs, index)
+
+    if total_docs >= 1000:
+        tm_outpath = os.path.join(outdir, "{}-documents-1k.json".format(index))
+        dump_documents(client, index, tm_outpath, 1000)
+    else:
+        logger.warning("Insufficient document count for test-mode corpus!")
+    dump_documents(client, index, outpath, total_docs)
+    return template_vars(index, outpath, total_docs)
+
+
+def dump_documents(client, index, outpath, total_docs):
+    from elasticsearch import helpers
+
+    logger = logging.getLogger(__name__)
     freq = max(1, total_docs // 1000)
 
     progress = console.progress()
-
-    compressor = bz2.BZ2Compressor()
-    comp_outpath = outpath + ".bz2"
-
+    compressor = DOCS_COMPRESSOR()
+    comp_outpath = outpath + COMP_EXT
     with open(outpath, "wb") as outfile:
         with open(comp_outpath, "wb") as comp_outfile:
             logger.info("Now dumping corpus to %s...", outpath)
@@ -73,11 +91,10 @@ def extract(client, outdir, index):
                 outfile.write(data)
                 comp_outfile.write(compressor.compress(data))
 
-                render_progress(progress, n+1, total_docs, freq)
+                render_progress(progress, n + 1, total_docs, freq)
 
             comp_outfile.write(compressor.flush())
     progress.finish()
-    return template_vars(index, outpath, comp_outpath, total_docs)
 
 
 def render_progress(progress, cur, total, freq):
