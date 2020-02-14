@@ -14,7 +14,6 @@
     },
     {
       "operation": {
-            "name": "index-append",
             "operation-type": "bulk",
             "bulk-size": {% raw %}{{bulk_size | default(5000)}}{% endraw %},
             "ingest-percentage": {% raw %}{{ingest_percentage | default(100)}}{% endraw %}

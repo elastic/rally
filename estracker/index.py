@@ -32,7 +32,10 @@ def filter_ephemeral_index_settings(settings):
     :param settings: Index settings reported by index.get()
     :return: settings with ephemeral keys removed
     """
-    return {k: v for k, v in settings.items() if k not in INDEX_SETTINGS_EPHEMERAL_KEYS}
+    filtered = dict(settings)
+    for s in INDEX_SETTINGS_EPHEMERAL_KEYS:
+        filtered.pop(s, None)
+    return filtered
 
 
 def extract_index_mapping_and_settings(client, index):
@@ -57,9 +60,9 @@ def extract(client, outdir, index):
     :param client: Elasticsearch client
     :param outdir: destination directory
     :param index: name of index
-    :return: None
+    :return: Dict of template variables representing the index for use in track
     """
-    filename = index + ".json"
+    filename = index.lstrip(".") + ".json"
     index_obj = extract_index_mapping_and_settings(client, index)
     outpath = os.path.join(outdir, filename)
     with open(outpath, "w") as outfile:

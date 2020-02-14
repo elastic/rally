@@ -12,6 +12,7 @@
   "corpora": [
     {
       "name": "{{track_name}}",
+      "#COMMENT": "TODO: Upload data files and provide the http or S3 base URL here",
       "base-url": "{{corpora[0].base_url}}",
       "documents": [{% for corpus in corpora %}
 {{comma()}}

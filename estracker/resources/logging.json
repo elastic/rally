@@ -8,7 +8,7 @@
     }
   },
   "handlers": {
-    "default_log_handler": {
+    "file_log_handler": {
       "class": "logging.handlers.WatchedFileHandler",
       "filename": "tracker.log",
       "encoding": "UTF-8",
@@ -16,12 +16,12 @@
     },
     "console_handler": {
       "class": "logging.StreamHandler",
-      "level": "INFO"
+      "stream": "ext://sys.stdout"
     }
   },
   "root": {
     "handlers": [
-      "default_log_handler",
+      "file_log_handler",
       "console_handler"
     ],
     "level": "INFO"
@@ -29,7 +29,7 @@
   "loggers": {
     "elasticsearch": {
       "handlers": [
-        "default_log_handler"
+        "file_log_handler"
       ],
       "level": "WARNING",
       "propagate": false
