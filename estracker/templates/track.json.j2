@@ -9,22 +9,22 @@
       "body": "{{index.filename}}"
     }{% endfor %}
   ],
-  "corpora": [
+  "corpora": [{% for corpus in corpora %}
     {
-      "name": "{{track_name}}",
-      "#COMMENT": "TODO: Upload data files and provide the http or S3 base URL here",
-      "base-url": "{{corpora[0].base_url}}",
-      "documents": [{% for corpus in corpora %}
 {{comma()}}
+      "name": "{{corpus.index_name}}",
+      "#COMMENT": "TODO: Upload data files and provide the http or S3 base URL here",
+      "base-url": "{{corpus.base_url}}",
+      "documents": [
         {
           "target-index": "{{corpus.index_name}}",
           "source-file": "{{corpus.filename}}",
           "document-count": {{corpus.doc_count}},
           "compressed-bytes": {{corpus.compressed_bytes}},
           "uncompressed-bytes": {{corpus.uncompressed_bytes}}
-        }{% endfor %}
+        }
       ]
-    }
+    }{% endfor %}
   ],{% raw %}
   "challenges": [
     {{ rally.collect(parts="challenges/*.json") }}
