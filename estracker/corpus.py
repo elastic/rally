@@ -29,12 +29,12 @@ def template_vars(index_name, out_path, comp_outpath, doc_count):
     compressed_corpus_path = pathlib.Path(comp_outpath)
     return {
         "index_name": index_name,
-        "base_url": corpus_path.parent.as_uri(),
+        "base_url": pathlib.Path(out_path).parent.as_uri(),
         "filename": corpus_path.name,
         "path": corpus_path,
         "doc_count": doc_count,
-        "uncompressed_bytes": os.path.getsize(corpus_path),
-        "compressed_bytes": os.path.getsize(compressed_corpus_path)
+        "uncompressed_bytes": os.path.getsize(out_path),
+        "compressed_bytes": os.path.getsize(comp_outpath)
     }
 
 
