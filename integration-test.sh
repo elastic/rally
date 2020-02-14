@@ -546,6 +546,36 @@ function test_node_management_commands {
     esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}"
 }
 
+function test_tracker {
+    local dist
+    random_distribution dist
+
+    kill_rally_processes
+    wait_for_free_es_port
+
+    info "install & start es"
+    raw_install_id=$(esrally install --distribution-version="${dist}" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
+    install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)
+
+    esrally start --quiet --installation-id="${install_id}" --race-id="rally-integration-test"
+
+    info "benchmark to load data."
+    esrally --target-host="localhost:39200" \
+        --race-id="rally-integration-test" \
+        --on-error=abort \
+        --pipeline=benchmark-only \
+        --track=geonames \
+        --test-mode \
+        --challenge=append-no-conflicts-index-only \
+        --quiet
+
+    info "Track the index."
+    estracker  --target-hosts="localhost:39200" --indices geonames
+
+    info "stop es"
+    esrally stop --quiet --installation-id="${install_id}"
+}
+
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
     if [[ -z "${RALLY_VERSION}" ]]; then
@@ -607,6 +637,8 @@ function run_test {
     test_docker_dev_image
     echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
     test_node_management_commands
+    echo "**************************************** TESTING RALLY TRACKER TOOL ********************************************"
+    test_tracker
     TEST_SUCCESS=1
 }
 
@@ -658,6 +690,7 @@ if [[ $1 == "test_docker_release_image" ]]; then
 elif declare -f "$1" > /dev/null; then
     set_up
     $1
+    TEST_SUCCESS=1
     exit
 # otherwise run all functions
 else
