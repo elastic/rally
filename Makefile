@@ -31,11 +31,10 @@ PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please add \033[0;31meval \"\$$
 VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VENV_NAME); have you executed make venv-create?\033[0m\n"
 
 prereq: make-requirements.txt
-	pyenv install --skip-existing $(PY35)
 	pyenv install --skip-existing $(PY36)
 	pyenv install --skip-existing $(PY37)
 	pyenv install --skip-existing $(PY38)
-	pyenv global system $(PY35) $(PY36) $(PY37) $(PY38)
+	pyenv global system $(PY36) $(PY37) $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@awk -F'=' '{print $$2}' make-requirements.txt > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
@@ -105,9 +104,6 @@ precommit: lint
 it: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox
 
-it35: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py35
-
 it36: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py36
 
@@ -131,4 +127,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it35 it36 it37 it38 benchmark coverage release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it36 it37 it38 benchmark coverage release release-checks prereq venv-create check-env
