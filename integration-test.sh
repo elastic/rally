@@ -90,6 +90,11 @@ function stop_and_clean_docker_container {
     docker rm ${1} > /dev/null || true
 }
 
+function wait_for_free_es_port {
+  es_port=39200
+  while nc -z localhost ${es_port}; do sleep 1; echo "Port ${es_port} occupied waiting"; done
+}
+
 function kill_rally_processes {
     # kill all lingering Rally instances that might still be hanging
     set +e
@@ -287,9 +292,12 @@ function test_sources {
     # build Elasticsearch and a core plugin
     info "test sources [--configuration-name=${cfg}], [--revision=latest], [--track=geonames], [--challenge=append-no-conflicts], [--car=4gheap] [--elasticsearch-plugins=analysis-icu]"
     kill_rally_processes
+    wait_for_free_es_port
     esrally --configuration-name="${cfg}" --on-error=abort --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu
+
     info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=4gheap,ea] "
     kill_rally_processes
+    wait_for_free_es_port
     esrally --configuration-name="${cfg}" --on-error=abort --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car="4gheap,ea" 
 }
 
@@ -303,6 +311,7 @@ function test_distributions {
             random_configuration cfg
             info "test distributions [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--car=4gheap]"
             kill_rally_processes
+            wait_for_free_es_port
             esrally --configuration-name="${cfg}" --on-error=abort --distribution-version="${dist}" --track="${track}" --test-mode --car=4gheap
         done
     done
@@ -341,6 +350,7 @@ function test_distribution_fails_with_wrong_track_params {
 
     info "test distribution [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--track-params=${track_params}], [--car=4gheap]"
     kill_rally_processes
+    wait_for_free_es_port
 
     backup_rally_log
     set +e
@@ -515,6 +525,7 @@ function test_node_management_commands {
 
     info "test install [--configuration-name=${cfg}] [--build-type=${build_type}]"
     kill_rally_processes
+    wait_for_free_es_port
 
     raw_install_id=$(esrally install --quiet --configuration-name="${cfg}" --distribution-version="${dist}" --build-type="${build_type}" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
     install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)

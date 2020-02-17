@@ -901,6 +901,7 @@ def main():
     if sub_command in ["start", "stop"]:
         cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
 
+    logger.info("Race id [%s]", args.race_id)
     logger.info("OS [%s]", str(platform.uname()))
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
