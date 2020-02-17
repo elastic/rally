@@ -834,11 +834,11 @@ class TrackFileReader:
         """
 
         self.logger.info("Reading track specification file [%s].", track_spec_file)
+        # render the track to a temporary file instead of dumping it into the logs. It is easier to check for error messages
+        # involving lines numbers and it also does not bloat Rally's log file so much.
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
         try:
             rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
-            # render the track to a temporary file instead of dumping it into the logs. It is easier to check for error messages
-            # involving lines numbers and it also does not bloat Rally's log file so much.
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
             with open(tmp.name, "wt", encoding="utf-8") as f:
                 f.write(rendered)
             self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
@@ -846,10 +846,24 @@ class TrackFileReader:
         except jinja2.exceptions.TemplateNotFound:
             self.logger.exception("Could not load [%s]", track_spec_file)
             raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
+        except json.JSONDecodeError as e:
+            self.logger.exception("Could not load [%s].", track_spec_file)
+            msg = "Could not load '{}': {}.".format(track_spec_file, str(e))
+            if e.doc and e.lineno > 0 and e.colno > 0:
+                line_idx = e.lineno - 1
+                lines = e.doc.split("\n")
+                ctx_line_count = 3
+                ctx_start = max(0, line_idx - ctx_line_count)
+                ctx_end = min(line_idx + ctx_line_count, len(lines))
+                erroneous_lines = lines[ctx_start:ctx_end]
+                erroneous_lines.insert(line_idx - ctx_start + 1, "-" * (e.colno - 1) + "^ Error is here")
+                msg += " Lines containing the error:\n\n{}\n\n".format("\n".join(erroneous_lines))
+            msg += "The complete track has been written to '{}' for diagnosis.".format(tmp.name)
+            raise TrackSyntaxError(msg)
         except Exception as e:
             self.logger.exception("Could not load [%s].", track_spec_file)
             # Convert to string early on to avoid serialization errors with Jinja exceptions.
-            raise TrackSyntaxError("Could not load '{}'".format(track_spec_file), str(e))
+            raise TrackSyntaxError("Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name), str(e))
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
         try:
