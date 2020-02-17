@@ -40,7 +40,7 @@ prereq:
 	pyenv install --skip-existing $(PY38)
 	pyenv global system $(PY35) $(PY36) $(PY37) $(PY38)
 	@# Ensure all Python versions are registered for this project
-	jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
+	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
 
 venv-create:
