@@ -173,6 +173,9 @@ class StaticSource:
     def readline(self):
         return self.contents
 
+    def readlines(self, num_lines):
+        return [self.contents] * num_lines
+
     def close(self):
         self._assert_opened()
         self.contents = None
