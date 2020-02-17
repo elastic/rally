@@ -862,8 +862,9 @@ class TrackFileReader:
             raise TrackSyntaxError(msg)
         except Exception as e:
             self.logger.exception("Could not load [%s].", track_spec_file)
+            msg = "Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name)
             # Convert to string early on to avoid serialization errors with Jinja exceptions.
-            raise TrackSyntaxError("Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name), str(e))
+            raise TrackSyntaxError(msg, str(e))
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
         try:
