@@ -718,11 +718,17 @@ class ExecutorTests(TestCase):
                           warmup_time_period=0, clients=4)
         schedule = driver.schedule_for(test_track, task, 0)
 
-        sampler = driver.Sampler(client_id=2, task=task, start_timestamp=time.perf_counter())
+        sampler = driver.Sampler(start_timestamp=time.perf_counter())
         cancel = threading.Event()
         complete = threading.Event()
 
-        execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+        execute_schedule = driver.Executor(client_id=2,
+                                           task=task,
+                                           schedule=schedule,
+                                           es=es,
+                                           sampler=sampler,
+                                           cancel=cancel,
+                                           complete=complete)
         execute_schedule()
 
         samples = sampler.samples
@@ -764,11 +770,17 @@ class ExecutorTests(TestCase):
         }, param_source="driver-test-param-source"), warmup_time_period=0, clients=4)
         schedule = driver.schedule_for(test_track, task, 0)
 
-        sampler = driver.Sampler(client_id=2, task=task, start_timestamp=time.perf_counter())
+        sampler = driver.Sampler(start_timestamp=time.perf_counter())
         cancel = threading.Event()
         complete = threading.Event()
 
-        execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+        execute_schedule = driver.Executor(client_id=2,
+                                           task=task,
+                                           schedule=schedule,
+                                           es=es,
+                                           sampler=sampler,
+                                           cancel=cancel,
+                                           complete=complete)
         execute_schedule()
 
         samples = sampler.samples
@@ -815,13 +827,19 @@ class ExecutorTests(TestCase):
                               warmup_time_period=0.5, time_period=0.5, clients=4,
                               params={"target-throughput": target_throughput, "clients": 4},
                               completes_parent=True)
-            sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
+            sampler = driver.Sampler(start_timestamp=0)
 
             cancel = threading.Event()
             complete = threading.Event()
 
             schedule = driver.schedule_for(test_track, task, 0)
-            execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+            execute_schedule = driver.Executor(client_id=0,
+                                               task=task,
+                                               schedule=schedule,
+                                               es=es,
+                                               sampler=sampler,
+                                               cancel=cancel,
+                                               complete=complete)
             execute_schedule()
 
             samples = sampler.samples
@@ -855,11 +873,17 @@ class ExecutorTests(TestCase):
                               warmup_time_period=0.5, time_period=0.5, clients=4,
                               params={"target-throughput": target_throughput, "clients": 4})
             schedule = driver.schedule_for(test_track, task, 0)
-            sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
+            sampler = driver.Sampler(start_timestamp=0)
 
             cancel = threading.Event()
             complete = threading.Event()
-            execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+            execute_schedule = driver.Executor(client_id=0,
+                                               task=task,
+                                               schedule=schedule,
+                                               es=es,
+                                               sampler=sampler,
+                                               cancel=cancel,
+                                               complete=complete)
 
             cancel.set()
             execute_schedule()
@@ -885,10 +909,16 @@ class ExecutorTests(TestCase):
                           warmup_time_period=0.5, time_period=0.5, clients=4,
                           params={"clients": 4})
 
-        sampler = driver.Sampler(client_id=0, task=None, start_timestamp=0)
+        sampler = driver.Sampler(start_timestamp=0)
         cancel = threading.Event()
         complete = threading.Event()
-        execute_schedule = driver.Executor(task, schedule_handle, es, sampler, cancel, complete)
+        execute_schedule = driver.Executor(client_id=2,
+                                           task=task,
+                                           schedule=schedule_handle,
+                                           es=es,
+                                           sampler=sampler,
+                                           cancel=cancel,
+                                           complete=complete)
 
         with self.assertRaises(ExpectedUnitTestException):
             execute_schedule()

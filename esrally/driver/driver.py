@@ -799,7 +799,7 @@ class LoadGenerator(actor.RallyActor):
                                  self.client_id, task)
             else:
                 self.logger.info("LoadGenerator[%d] is executing [%s].", self.client_id, task)
-                self.sampler = Sampler(self.client_id, task, start_timestamp=time.perf_counter())
+                self.sampler = Sampler(start_timestamp=time.perf_counter())
                 # We cannot use the global client index here because we need to support parallel execution of tasks with multiple clients.
                 #
                 # Consider the following scenario:
@@ -811,7 +811,7 @@ class LoadGenerator(actor.RallyActor):
                 # from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
                 schedule = schedule_for(self.track, task_allocation.task, task_allocation.client_index_in_task)
                 executor = AsyncIoAdapter(self.config, self.client_id, task, schedule, self.sampler, self.cancel, self.complete, self.abort_on_error)
-                #executor = Executor(task, schedule, self.es, self.sampler, self.cancel, self.complete, self.abort_on_error)
+                #executor = Executor(self.client_id, task, schedule, self.es, self.sampler, self.cancel, self.complete, self.abort_on_error)
                 final_executor = Profiler(executor, self.client_id, task) if profiling_enabled else executor
 
                 self.executor_future = self.pool.submit(final_executor)
@@ -841,21 +841,18 @@ class Sampler:
     Encapsulates management of gathered samples.
     """
 
-    def __init__(self, client_id, task, start_timestamp):
-        self.client_id = client_id
-        self.task = task
+    def __init__(self, start_timestamp, buffer_size=16384):
         self.start_timestamp = start_timestamp
-        self.q = queue.Queue(maxsize=16384)
+        self.q = queue.Queue(maxsize=buffer_size)
         self.logger = logging.getLogger(__name__)
 
-    def add(self, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, percent_completed, client_id=None):
+    def add(self, task, client_id, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, percent_completed):
         try:
-            c = self.client_id if client_id is None else client_id
-            self.q.put_nowait(Sample(c, time.time(), time.perf_counter() - self.start_timestamp, self.task,
+            self.q.put_nowait(Sample(client_id, time.time(), time.perf_counter() - self.start_timestamp, task,
                                      sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period,
                                      percent_completed))
         except queue.Full:
-            self.logger.warning("Dropping sample for [%s] due to a full sampling queue.", self.task.operation.name)
+            self.logger.warning("Dropping sample for [%s] due to a full sampling queue.", task.operation.name)
 
     @property
     def samples(self):
@@ -1096,10 +1093,11 @@ class AsyncIoAdapter:
 
 
 class Executor:
-    def __init__(self, task, schedule, es, sampler, cancel, complete, abort_on_error=False):
+    def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, abort_on_error=False):
         """
         Executes tasks according to the schedule for a given operation.
 
+        :param client_id: Id of the client that executes requests.
         :param task: The task that is executed.
         :param schedule: The schedule for this task.
         :param es: Elasticsearch client that will be used to execute the operation.
@@ -1107,6 +1105,7 @@ class Executor:
         :param cancel: A shared boolean that indicates we need to cancel execution.
         :param complete: A shared boolean that indicates we need to prematurely complete execution.
         """
+        self.client_id = client_id
         self.task = task
         self.op = task.operation
         self.schedule_handle = schedule
@@ -1148,8 +1147,8 @@ class Executor:
                     progress = runner.percent_completed
                 else:
                     progress = percent_completed
-                self.sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
-                                 total_ops, total_ops_unit, (stop - total_start), progress)
+                self.sampler.add(self.task, self.client_id, sample_type, request_meta_data, convert.seconds_to_ms(latency),
+                                 convert.seconds_to_ms(service_time), total_ops, total_ops_unit, (stop - total_start), progress)
 
                 if completed:
                     self.logger.info("Task is considered completed due to external event.")

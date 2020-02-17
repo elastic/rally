@@ -199,6 +199,7 @@ class AsyncDriver:
                 raise exceptions.SystemSetupError("Elasticsearch REST API layer is not available.")
 
     def retrieve_cluster_info(self):
+        # noinspection PyBroadException
         try:
             return self.es_clients["default"].info()
         except BaseException:
@@ -238,15 +239,16 @@ class AsyncDriver:
         self.pool.submit(Timer(fn=self.post_process_samples, interval=30, stop_event=self.stop_timer_tasks))
         self.pool.submit(Timer(fn=self.update_progress_message, interval=1, stop_event=self.stop_timer_tasks))
 
-        # needed because a new thread does not have an event loop (see https://stackoverflow.com/questions/48725890/)
+        # needed because a new thread (that is not the main thread) does not have an event loop
         loop = asyncio.new_event_loop()
+        # TODO: Make this configurable?
         loop.set_debug(True)
         asyncio.set_event_loop(loop)
         loop.set_exception_handler(debug_exception_handler)
 
         track.set_absolute_data_path(self.config, self.track)
         runner.register_default_runners()
-        # TODO: I think we can skip this here - it has already been done earlier in prepare_benchmark()
+        # TODO: We can skip this here if we run in the same process; it has already been done in #prepare_benchmark()
         if self.track.has_plugins:
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         success = False
@@ -268,7 +270,7 @@ class AsyncDriver:
             self.logger.debug("Closing metrics store...")
             self.metrics_store.close()
             # immediately clear as we don't need it anymore and it can consume a significant amount of memory
-            del self.metrics_store
+            self.metrics_store = None
 
     async def run_benchmark(self):
         # avoid: aiohttp.internal WARNING The object should be created from async function
@@ -278,19 +280,15 @@ class AsyncDriver:
             # used to indicate that we want to prematurely consider this completed. This is *not* due to cancellation but a regular event in
             # a benchmark and used to model task dependency of parallel tasks.
             complete = threading.Event()
+            # allow to buffer more events than by default as we expect to have way more clients.
+            self.sampler = driver.Sampler(start_timestamp=time.perf_counter(), buffer_size=65536)
 
             for task in self.challenge.schedule:
+                self.current_tasks = []
+                aws = []
                 for sub_task in task:
+                    self.current_tasks.append(sub_task)
                     self.logger.info("Running task [%s] with [%d] clients...", sub_task.name, sub_task.clients)
-                    #console.println("Running task [{}] with [{}] clients...".format(sub_task.name, sub_task.clients), logger=self.logger.info)
-
-                    # TODO: We need to restructure this later on: We could have only one sampler for the whole benchmark but then we need to
-                    #       provide the current task to the sampler. This would also simplify #update_samples(). We also need to move the
-                    #       join point (done, pending = await asyncio.wait(aws)) below one level out so we can actually run all sub-tasks of
-                    #       a task in parallel. At the moment we'd run one after the other (which is plain wrong)
-                    self.current_tasks = [sub_task]
-                    self.sampler = driver.Sampler(None, task, start_timestamp=time.perf_counter())
-                    aws = []
                     # TODO: This is lacking support for one (sub)task being able to complete a complete parallel
                     #       structure. We can probably achieve that by waiting for the task in question and then
                     #       cancelling all other ongoing clients.
@@ -298,24 +296,14 @@ class AsyncDriver:
                         schedule = driver.schedule_for(self.track, sub_task, client_id)
                         e = AsyncExecutor(client_id, sub_task, schedule, es, self.sampler, cancel, complete, self.abort_on_error)
                         aws.append(e())
-                    # join point
-                    done, pending = await asyncio.wait(aws)
-                    self.logger.info("All clients have finished running task [%s]", sub_task.name)
-                    # drain the active samples before we move on to the next task
-                    self.update_samples()
-                    self.post_process_samples()
-                    self.reset_relative_time()
-                    self.update_progress_message(task_finished=True)
-
-
-                    #for client_index in range(start_client_index, start_client_index + sub_task.clients):
-                    # this is the actual client that will execute the task. It may differ from the logical one in case we over-commit (i.e.
-                    # more tasks than actually available clients)
-                    #     physical_client_index = client_index % max_clients
-                    #     if sub_task.completes_parent:
-                    #         clients_executing_completing_task.append(physical_client_index)
-                    #     allocations[physical_client_index].append(TaskAllocation(sub_task, client_index - start_client_index))
-                    # start_client_index += sub_task.clients
+                # join point
+                done, pending = await asyncio.wait(aws)
+                self.logger.info("All clients have finished running task [%s]", task.name)
+                # drain the active samples before we move on to the next task
+                self.update_samples()
+                self.post_process_samples()
+                self.reset_relative_time()
+                self.update_progress_message(task_finished=True)
         finally:
             await asyncio.get_event_loop().shutdown_asyncgens()
             await es["default"].transport.close()
@@ -496,7 +484,6 @@ class AsyncExecutor:
         # noinspection PyBroadException
         try:
             async for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
-                #self.logger.info("Next iteration in main loop for client id %s (%s %% completed)", self.client_id, percent_completed)
                 if self.cancel.is_set():
                     self.logger.info("User cancelled execution.")
                     break
@@ -520,8 +507,8 @@ class AsyncExecutor:
                     progress = runner.percent_completed
                 else:
                     progress = percent_completed
-                self.sampler.add(sample_type, request_meta_data, convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
-                                 total_ops, total_ops_unit, (stop - total_start), progress, client_id=self.client_id)
+                self.sampler.add(self.task, self.client_id, sample_type, request_meta_data, convert.seconds_to_ms(latency),
+                                 convert.seconds_to_ms(service_time), total_ops, total_ops_unit, (stop - total_start), progress)
 
                 if completed:
                     self.logger.info("Task is considered completed due to external event.")
