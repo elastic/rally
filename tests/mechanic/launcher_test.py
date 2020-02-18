@@ -289,6 +289,8 @@ class ProcessLauncherTests(TestCase):
 
 
 class IterationBasedStopWatch:
+    __test__ = False
+
     def __init__(self, max_iterations):
         self.iterations = 0
         self.max_iterations = max_iterations
@@ -305,6 +307,8 @@ class IterationBasedStopWatch:
 
 
 class TestClock:
+    __test__ = False
+
     def __init__(self, stop_watch):
         self._stop_watch = stop_watch
 
