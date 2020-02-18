@@ -1143,6 +1143,140 @@ class EsResultsStoreTests(TestCase):
         ]
         self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", doc_type="_doc", items=expected_docs)
 
+    def test_store_results_with_missing_version(self):
+        schedule = [
+            track.Task("index #1", track.Operation("index", track.OperationType.Bulk))
+        ]
+
+        t = track.Track(name="unittest-track",
+                        indices=[track.Index(name="tests", types=["_doc"])],
+                        challenges=[track.Challenge(
+                            name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
+                        meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"})
+
+        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", race_id=EsResultsStoreTests.RACE_ID,
+                            race_timestamp=EsResultsStoreTests.RACE_TIMESTAMP,
+                            pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
+                            challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params=None,
+                            track_revision="abc1", team_revision="123ab", distribution_version=None,
+                            distribution_flavor=None, results=metrics.GlobalStats(
+                {
+                    "young_gc_time": 100,
+                    "old_gc_time": 5,
+                    "op_metrics": [
+                        {
+                            "task": "index #1",
+                            "operation": "index",
+                            # custom op-metric which will override the defaults provided by the race
+                            "meta": {
+                                "track-type": "saturation-degree",
+                                "saturation": "70% saturated",
+                                "op-type": "bulk"
+                            },
+                            "throughput": {
+                                "min": 1000,
+                                "median": 1250,
+                                "max": 1500,
+                                "unit": "docs/s"
+                            }
+                        }
+                    ]
+                })
+                            )
+
+        self.results_store.store_results(race)
+
+        expected_docs = [
+            {
+                "rally-version": "0.4.4",
+                "environment": "unittest",
+                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-timestamp": "20160131T000000Z",
+                "trial-id": EsResultsStoreTests.RACE_ID,
+                "trial-timestamp": "20160131T000000Z",
+                "distribution-flavor": None,
+                "distribution-version": None,
+                "user-tags": {
+                    "os": "Linux"
+                },
+                "track": "unittest-track",
+                "team-revision": "123ab",
+                "track-revision": "abc1",
+                "challenge": "index",
+                "car": "4gheap",
+                "active": True,
+                "name": "old_gc_time",
+                "value": {
+                    "single": 5
+                },
+                "meta": {
+                    "track-type": "saturation-degree",
+                    "saturation": "70% saturated"
+                }
+            },
+            {
+                "rally-version": "0.4.4",
+                "environment": "unittest",
+                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-timestamp": "20160131T000000Z",
+                "trial-id": EsResultsStoreTests.RACE_ID,
+                "trial-timestamp": "20160131T000000Z",
+                "distribution-flavor": None,
+                "distribution-version": None,
+                "user-tags": {
+                    "os": "Linux"
+                },
+                "track": "unittest-track",
+                "team-revision": "123ab",
+                "track-revision": "abc1",
+                "challenge": "index",
+                "car": "4gheap",
+                "active": True,
+                "name": "throughput",
+                "task": "index #1",
+                "operation": "index",
+                "value": {
+                    "min": 1000,
+                    "median": 1250,
+                    "max": 1500,
+                    "unit": "docs/s"
+                },
+                "meta": {
+                    "track-type": "saturation-degree",
+                    "saturation": "70% saturated",
+                    "op-type": "bulk"
+                }
+            },
+            {
+                "rally-version": "0.4.4",
+                "environment": "unittest",
+                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-timestamp": "20160131T000000Z",
+                "trial-id": EsResultsStoreTests.RACE_ID,
+                "trial-timestamp": "20160131T000000Z",
+                "distribution-flavor": None,
+                "distribution-version": None,
+                "user-tags": {
+                    "os": "Linux"
+                },
+                "track": "unittest-track",
+                "team-revision": "123ab",
+                "track-revision": "abc1",
+                "challenge": "index",
+                "car": "4gheap",
+                "active": True,
+                "name": "young_gc_time",
+                "value": {
+                    "single": 100
+                },
+                "meta": {
+                    "track-type": "saturation-degree",
+                    "saturation": "70% saturated"
+                }
+            }
+        ]
+        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", doc_type="_doc", items=expected_docs)
+
 
 class InMemoryMetricsStoreTests(TestCase):
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)

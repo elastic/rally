@@ -17,9 +17,11 @@
 
 SHELL = /bin/bash
 # We assume an active virtualenv for development
-include make-requirements.txt
 PYENV_REGEX = .pyenv/shims
 PY_BIN = python3
+PY36 = $(shell jq '.python_versions.PY36' .ci/variables.json)
+PY37 = $(shell jq '.python_versions.PY37' .ci/variables.json)
+PY38 = $(shell jq '.python_versions.PY38' .ci/variables.json)
 VENV_NAME ?= .venv
 VENV_ACTIVATE_FILE = $(VENV_NAME)/bin/activate
 VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
@@ -30,13 +32,13 @@ PYENV_PATH_ERROR = "\033[0;31mIMPORTANT\033[0m: Please add $(HOME)/$(PYENV_REGEX
 PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please add \033[0;31meval \"\$$(pyenv init -)\"\033[0m to your bash profile and restart your terminal before proceeding any further.\n"
 VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VENV_NAME); have you executed make venv-create?\033[0m\n"
 
-prereq: make-requirements.txt
+prereq:
 	pyenv install --skip-existing $(PY36)
 	pyenv install --skip-existing $(PY37)
 	pyenv install --skip-existing $(PY38)
 	pyenv global system $(PY36) $(PY37) $(PY38)
 	@# Ensure all Python versions are registered for this project
-	@awk -F'=' '{print $$2}' make-requirements.txt > .python-version
+	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
 
 venv-create:

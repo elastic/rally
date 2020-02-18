@@ -1323,7 +1323,6 @@ class Race:
             "race-timestamp": time.to_iso8601(self.race_timestamp),
             "distribution-version": self.distribution_version,
             "distribution-flavor": self.distribution_flavor,
-            "distribution-major-version": versions.major_version(self.distribution_version),
             "user-tags": self.user_tags,
             "track": self.track_name,
             "challenge": self.challenge_name,
@@ -1331,6 +1330,8 @@ class Race:
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result
             "active": True
         }
+        if self.distribution_version:
+            result_template["distribution-major-version"] = versions.major_version(self.distribution_version)
         if self.team_revision:
             result_template["team-revision"] = self.team_revision
         if self.track_revision:
