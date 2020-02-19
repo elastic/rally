@@ -54,6 +54,11 @@ function check_prerequisites {
         echo "Minimum curl version required is ${MIN_CURL_VERSION[0]}.${MIN_CURL_VERSION[1]}.${MIN_CURL_VERSION[2]} ; please upgrade your curl."
         exit 1
     fi
+
+    if ! type docker-compose > /dev/null; then
+        echo "docker compose is necessary to run the integration tests"
+        exit 1
+    fi
 }
 
 function log {

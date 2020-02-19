@@ -1,6 +1,16 @@
 Migration Guide
 ===============
 
+Migrating to Rally 1.4.1
+------------------------
+
+Document IDs are now padded with 0 instead of spaces
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When Rally 1.4.1 generates document IDs, it will pad them with '0' instead of ' ' - 0000000000 instead of '         0', etc.
+Elasticsearch has optimizations for numeric IDs, so observed performance in Elasticsearch should improve slightly.
+
+
 Migrating to Rally 1.4.0
 ------------------------
 
