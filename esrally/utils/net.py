@@ -169,11 +169,10 @@ def retrieve_content_as_string(url):
         return response.read().decode("utf-8")
 
 
-def has_internet_connection():
+def has_internet_connection(probing_url):
     logger = logging.getLogger(__name__)
     try:
-        # We connect to Github anyway later on so we use that to avoid touching too much different remote endpoints.
-        probing_url = "https://github.com/"
+        # We try to connect to Github by default. We use that to avoid touching too much different remote endpoints.
         logger.debug("Checking for internet connection against [%s]", probing_url)
         # We do a HTTP request here to respect the HTTP proxy setting. If we'd open a plain socket connection we circumvent the
         # proxy and erroneously conclude we don't have an Internet connection.
