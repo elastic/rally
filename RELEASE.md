@@ -8,8 +8,10 @@ It is recommended to run `make release-checks release_version=1.2.0 next_version
 
 ### Manual Tasks
 
+Please execute the following tasks after `make release` has finished:
+
 * Close milestone on Github: https://github.com/elastic/rally/milestones.
-* Prepare offline installation package `source scripts/offline-install.sh "${RELEASE_VERSION}"`.
+* Prepare offline installation package `./scripts/offline-install.sh "${RELEASE_VERSION}"`.
 * Upload offline install package to Github: https://github.com/elastic/rally/releases/edit/$RELEASE_VERSION.
 * Build and publish Docker image using the CI job: Build and publish Docker image using: https://elasticsearch-ci.elastic.co/view/All/job/elastic+rally-release-docker+master specifying the $RELEASE_VERSION
 * Announce on Discuss: https://discuss.elastic.co/c/annoucements.
