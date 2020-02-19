@@ -548,13 +548,12 @@ function test_node_management_commands {
 
 function test_tracker {
     local dist
-    random_distribution dist
 
     kill_rally_processes
     wait_for_free_es_port
 
     info "install & start es"
-    raw_install_id=$(esrally install --distribution-version="${dist}" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
+    raw_install_id=$(esrally install --distribution-version="7.6.0" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
     install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)
 
     esrally start --quiet --installation-id="${install_id}" --race-id="rally-integration-test"
@@ -570,19 +569,24 @@ function test_tracker {
         --quiet
 
     info "Track the index."
-    estracker  --target-hosts="localhost:39200" --indices geonames
+    track_name=$(openssl rand -hex 12)
+    estracker  --target-hosts="localhost:39200" --indices geonames --trackname ${track_name}
 
     info "Try to race the new track"
-    esrally race -target-host="localhost:39200" \
-        --race-id="rally-integration-test" \
-        --on-error=abort \
-        --pipeline=benchmark-only \
-        --track-path=tracks/geonames/ \
-        --test-mode \
-        --challenge=index-corpus \
+    esrally --target-host="localhost:39200" \
+            --race-id="rally-integration-test" \
+            --on-error=abort \
+            --pipeline=benchmark-only \
+            --track-path=tracks/${track_name} \
+            --test-mode \
+            --challenge=index-corpus \
+            --quiet
 
     info "stop es"
     esrally stop --quiet --installation-id="${install_id}"
+
+    info "cleanup track"
+    rm -rf tracks/${track_name}
 }
 
 # This function gets called by release-docker.sh and assumes the image has been already built
