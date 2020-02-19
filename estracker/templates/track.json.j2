@@ -9,7 +9,7 @@
       "body": "{{index.filename}}"
     }{% endfor %}
   ],
-  "corpora": [{% for corpus in corpora %}
+  "corpora": [{% set comma = joiner() %}{% for corpus in corpora %}
     {
 {{comma()}}
       "name": "{{corpus.index_name}}",
