@@ -98,7 +98,7 @@ serve-docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
 
 test: check-venv
-	$(VEPYTHON) setup.py test
+	pytest tests/ estracker/tests/
 
 precommit: lint
 
