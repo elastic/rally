@@ -91,10 +91,6 @@ def main():
     abs_outpath = os.path.abspath(outpath)
     io.ensure_dir(abs_outpath)
 
-    template_vars = {
-        "track_name": args.track_name
-    }
-
     indices = []
     corpora = []
     for index_name in args.indices:
@@ -104,10 +100,12 @@ def main():
         corpus_vars = corpus.extract(client, outpath, index_name)
         corpora.append(corpus_vars)
 
-    template_vars.update({
+    template_vars ={
+        "track_name": args.track_name,
         "indices": indices,
         "corpora": corpora
-    })
+    }
+
     for template, dest_filename in TRACK_TEMPLATES.items():
         dest_path = os.path.join(outpath, dest_filename)
         process_template(template, template_vars, dest_path)
