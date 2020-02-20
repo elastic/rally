@@ -627,7 +627,7 @@ def build_conflicting_ids(conflicts, docs_to_index, offset, shuffle=random.shuff
     all_ids = [0] * docs_to_index
     for i in range(docs_to_index):
         # always consider the offset as each client will index its own range and we don't want uncontrolled conflicts across clients
-        all_ids[i] = "%10d" % (offset + i)
+        all_ids[i] = "%010d" % (offset + i)
     if conflicts == IndexIdConflict.RandomConflicts:
         shuffle(all_ids)
     return all_ids
