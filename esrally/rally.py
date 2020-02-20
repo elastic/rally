@@ -889,6 +889,7 @@ def main():
     if sub_command in ["start", "stop"]:
         cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
 
+    logger.info("Race id [%s]", args.race_id)
     logger.info("OS [%s]", str(platform.uname()))
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
@@ -896,7 +897,8 @@ def main():
     # Configure networking
     net.init()
     if not args.offline:
-        if not net.has_internet_connection():
+        probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
+        if not net.has_internet_connection(probing_url):
             console.warn("No Internet connection detected. Automatic download of track data sets etc. is disabled.",
                          logger=logger)
             cfg.add(config.Scope.applicationOverride, "system", "offline.mode", True)

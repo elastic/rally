@@ -571,7 +571,7 @@ class PartitionBulkIndexParamSource:
         # self.internal_params always reads all files. This is necessary to ensure we terminate early in case
         # the user has specified ingest percentage.
         if self.current_bulk == self.total_bulks:
-            raise StopIteration
+            raise StopIteration()
         self.current_bulk += 1
         return next(self.internal_params)
 
@@ -622,7 +622,7 @@ def build_conflicting_ids(conflicts, docs_to_index, offset, shuffle=random.shuff
     all_ids = [0] * docs_to_index
     for i in range(docs_to_index):
         # always consider the offset as each client will index its own range and we don't want uncontrolled conflicts across clients
-        all_ids[i] = "%10d" % (offset + i)
+        all_ids[i] = "%010d" % (offset + i)
     if conflicts == IndexIdConflict.RandomConflicts:
         shuffle(all_ids)
     return all_ids
@@ -647,13 +647,12 @@ def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_si
     source = Slice(io.FileSource, offset, num_lines)
 
     if docs.includes_action_and_meta_data:
-        am_handler = SourceActionMetaData(source)
+        return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, docs.target_index, docs.target_type)
     else:
         am_handler = GenerateActionMetaData(docs.target_index, docs.target_type,
                                             build_conflicting_ids(id_conflicts, num_docs, offset), conflict_probability,
                                             on_conflict, recency)
-
-    return IndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, docs.target_index, docs.target_type)
+        return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, docs.target_index, docs.target_type)
 
 
 def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
@@ -758,15 +757,15 @@ class GenerateActionMetaData:
     def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None,
                  recency=None, rand=random.random, randint=random.randint, randexp=random.expovariate):
         if type_name:
-            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % \
+            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % \
                                            (index_name, type_name, "%s")
-            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}' % \
+            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % \
                                             (index_name, type_name, "%s")
-            self.meta_data_index_no_id = '{"index": {"_index": "%s", "_type": "%s"}}' % (index_name, type_name)
+            self.meta_data_index_no_id = '{"index": {"_index": "%s", "_type": "%s"}}\n' % (index_name, type_name)
         else:
-            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_id": "%s"}}' % (index_name, "%s")
-            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_id": "%s"}}' % (index_name, "%s")
-            self.meta_data_index_no_id = '{"index": {"_index": "%s"}}' % index_name
+            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
+            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
+            self.meta_data_index_no_id = '{"index": {"_index": "%s"}}\n' % index_name
 
         self.conflicting_ids = conflicting_ids
         self.on_conflict = on_conflict
@@ -778,6 +777,13 @@ class GenerateActionMetaData:
         self.randint = randint
         self.randexp = randexp
         self.id_up_to = 0
+
+    @property
+    def is_constant(self):
+        """
+        :return: True iff the iterator will always return the same value.
+        """
+        return self.conflicting_ids is None
 
     def __iter__(self):
         return self
@@ -818,17 +824,6 @@ class GenerateActionMetaData:
             return "index", self.meta_data_index_no_id
 
 
-class SourceActionMetaData:
-    def __init__(self, source):
-        self.source = source
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return "source", next(self.source)
-
-
 class Slice:
     def __init__(self, source_class, offset, number_of_lines):
         self.source_class = source_class
@@ -836,16 +831,18 @@ class Slice:
         self.offset = offset
         self.number_of_lines = number_of_lines
         self.current_line = 0
+        self.bulk_size = None
+        self.logger = logging.getLogger(__name__)
 
-    def open(self, file_name, mode):
-        logger = logging.getLogger(__name__)
+    def open(self, file_name, mode, bulk_size):
+        self.bulk_size = bulk_size
         self.source = self.source_class(file_name, mode).open()
-        # skip offset number of lines
-        logger.info("Skipping %d lines in [%s].", self.offset, file_name)
+        self.logger.info("Will read [%d] lines from [%s] starting from line [%d] with bulk size [%d].",
+                         self.number_of_lines, file_name, self.offset, self.bulk_size)
         start = time.perf_counter()
         io.skip_lines(file_name, self.source, self.offset)
         end = time.perf_counter()
-        logger.info("Skipping %d lines took %f s.", self.offset, end - start)
+        self.logger.debug("Skipping [%d] lines took [%f] s.", self.offset, end - start)
         return self
 
     def close(self):
@@ -859,11 +856,12 @@ class Slice:
         if self.current_line >= self.number_of_lines:
             raise StopIteration()
         else:
-            self.current_line += 1
-            line = self.source.readline()
-            if len(line) == 0:
+            # ensure we don't read past the allowed number of lines.
+            lines = self.source.readlines(min(self.bulk_size, self.number_of_lines - self.current_line))
+            self.current_line += len(lines)
+            if len(lines) == 0:
                 raise StopIteration()
-            return line.strip()
+            return lines
 
     def __str__(self):
         return "%s[%d;%d]" % (self.source, self.offset, self.offset + self.number_of_lines)
@@ -873,21 +871,20 @@ class IndexDataReader:
     """
     Reads a file in bulks into an array and also adds a meta-data line before each document if necessary.
 
-    This implementation also supports batching. This means that you can specify batch_size = N * bulk_size, where N is any natural
-    number >= 1. This makes file reading more efficient for small bulk sizes.
+    This implementation also supports batching. This means that you can specify batch_size = N * bulk_size, where N
+    is any natural number >= 1. This makes file reading more efficient for small bulk sizes.
     """
 
-    def __init__(self, data_file, batch_size, bulk_size, file_source, action_metadata, index_name, type_name):
+    def __init__(self, data_file, batch_size, bulk_size, file_source, index_name, type_name):
         self.data_file = data_file
         self.batch_size = batch_size
         self.bulk_size = bulk_size
         self.file_source = file_source
-        self.action_metadata = action_metadata
         self.index_name = index_name
         self.type_name = type_name
 
     def __enter__(self):
-        self.file_source.open(self.data_file, 'rt')
+        self.file_source.open(self.data_file, "rt", self.bulk_size)
         return self
 
     def __iter__(self):
@@ -901,38 +898,86 @@ class IndexDataReader:
         try:
             docs_in_batch = 0
             while docs_in_batch < self.batch_size:
-                docs_in_bulk, bulk = self.read_bulk()
+                try:
+                    docs_in_bulk, bulk = self.read_bulk()
+                except StopIteration:
+                    break
                 if docs_in_bulk == 0:
                     break
                 docs_in_batch += docs_in_bulk
-                batch.append((docs_in_bulk, bulk))
+                batch.append((docs_in_bulk, "".join(bulk)))
             if docs_in_batch == 0:
                 raise StopIteration()
             return self.index_name, self.type_name, batch
         except IOError:
             logging.getLogger(__name__).exception("Could not read [%s]", self.data_file)
 
-    def read_bulk(self):
-        docs_in_bulk = 0
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.file_source.close()
+        return False
+
+
+class MetadataIndexDataReader(IndexDataReader):
+    def __init__(self, data_file, batch_size, bulk_size, file_source, action_metadata, index_name, type_name):
+        super().__init__(data_file, batch_size, bulk_size, file_source, index_name, type_name)
+        self.action_metadata = action_metadata
+        self.action_metadata_line = None
+
+    def __enter__(self):
+        super().__enter__()
+        if self.action_metadata.is_constant:
+            _, self.action_metadata_line = next(self.action_metadata)
+            self.read_bulk = self._read_bulk_fast
+        else:
+            self.read_bulk = self._read_bulk_regular
+        return self
+
+    def _read_bulk_fast(self):
+        """
+        Special-case implementation for bulk data files where the action and meta-data line is always identical.
+        """
         current_bulk = []
-        for action_metadata_item, document in zip(self.action_metadata, self.file_source):
+        # hoist
+        action_metadata_line = self.action_metadata_line
+        docs = next(self.file_source)
+
+        for doc in docs:
+            current_bulk.append(action_metadata_line)
+            current_bulk.append(doc)
+        return len(docs), current_bulk
+
+    def _read_bulk_regular(self):
+        """
+        General case implementation for bulk files. This implementation can cover all cases but is slower when the
+        action and meta-data line is always identical.
+        """
+        current_bulk = []
+        docs = next(self.file_source)
+        for doc in docs:
+            action_metadata_item = next(self.action_metadata)
             if action_metadata_item:
                 action_type, action_metadata_line = action_metadata_item
                 current_bulk.append(action_metadata_line)
                 if action_type == "update":
-                    current_bulk.append("{\"doc\":%s}" % document)
+                    # remove the trailing "\n" as the doc needs to fit on one line
+                    doc = doc.strip()
+                    current_bulk.append("{\"doc\":%s}\n" % doc)
                 else:
-                    current_bulk.append(document)
+                    current_bulk.append(doc)
             else:
-                current_bulk.append(document)
-            docs_in_bulk += 1
-            if docs_in_bulk == self.bulk_size:
-                break
-        return docs_in_bulk, current_bulk
+                current_bulk.append(doc)
+        return len(docs), current_bulk
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.file_source.close()
-        return False
+
+class SourceOnlyIndexDataReader(IndexDataReader):
+    def __init__(self, data_file, batch_size, bulk_size, file_source, index_name, type_name):
+        # keep batch size as it only considers documents read, not lines read but increase the bulk size as
+        # documents are only on every other line.
+        super().__init__(data_file, batch_size, bulk_size * 2, file_source, index_name, type_name)
+
+    def read_bulk(self):
+        bulk_items = next(self.file_source)
+        return len(bulk_items) // 2, bulk_items
 
 
 register_param_source_for_operation(track.OperationType.Bulk, BulkIndexParamSource)

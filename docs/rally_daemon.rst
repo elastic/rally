@@ -51,3 +51,58 @@ Status
 You can query the status of the local Rally daemon with::
 
     esrallyd status
+
+Troubleshooting
+---------------
+
+Rally uses the actor system `Thespian <https://github.com/kquick/Thespian>`_ under the hood. To inspect its status in more detail you can use the `Thespian shell <https://thespianpy.com/doc/in_depth.html#hH-058d8939-b973-4270-975b-3afd9c607176>`_. Below is an example invocation that demonstrates how to retrieve the actor system status::
+
+    python3 -m thespian.shell
+    Thespian Actor shell.  Type help or '?' to list commands.'
+
+    thespian> start multiprocTCPBase
+    Starting multiprocTCPBase ActorSystem
+    Capabilities: {}
+    Started multiprocTCPBase ActorSystem
+    thespian> address localhost 1900
+    Args is: {'port': '1900', 'ipaddr': 'localhost'}
+    Actor Address 0:  ActorAddr-(T|:1900)
+    thespian> status
+    Requesting status from Actor (or Admin) @ ActorAddr-(T|:1900) (#0)
+    Status of ActorSystem @ ActorAddr-(T|192.168.14.2:1900) [#1]:
+      |Capabilities[9]:
+                                   ip: 192.168.14.2
+              Convention Address.IPv4: 192.168.14.2:1900
+                  Thespian Generation: (3, 9)
+             Thespian Watch Supported: True
+                       Python Version: (3, 5, 2, 'final', 0)
+            Thespian ActorSystem Name: multiprocTCPBase
+         Thespian ActorSystem Version: 2
+                     Thespian Version: 1581669778176
+                          coordinator: True
+      |Convention Leader: ActorAddr-(T|192.168.14.2:1900) [#1]
+      |Convention Attendees [3]:
+        @ ActorAddr-(T|192.168.14.4:1900) [#2]: Expires_in_0:21:41.056599
+        @ ActorAddr-(T|192.168.14.3:1900) [#3]: Expires_in_0:21:41.030934
+        @ ActorAddr-(T|192.168.14.5:1900) [#4]: Expires_in_0:21:41.391251
+      |Primary Actors [0]:
+      |Rate Governer: Rate limit: 4480 messages/sec (currently low with 1077 ticks)
+      |Pending Messages [0]:
+      |Received Messages [0]:
+      |Pending Wakeups [0]:
+      |Pending Address Resolution [0]:
+      |>        1077 - Actor.Message Send.Transmit Started
+      |>          84 - Admin Handle Convention Registration
+      |>        1079 - Admin Message Received.Total
+      |>           6 - Admin Message Received.Type.QueryExists
+      |>         988 - Admin Message Received.Type.StatusReq
+      |> sock#0-fd10 - Idle-socket <socket.socket fd=10, family=AddressFamily.AF_INET, type=2049, proto=6, laddr=('192.168.14.2', 1900), raddr=('192.168.14.4', 44024)>->ActorAddr-(T|192.168.14.4:1900) (Expires_in_0:19:35.060480)
+      |> sock#2-fd11 - Idle-socket <socket.socket fd=11, family=AddressFamily.AF_INET, type=2049, proto=6, laddr=('192.168.14.2', 1900), raddr=('192.168.14.3', 40244)>->ActorAddr-(T|192.168.14.3:1900) (Expires_in_0:19:35.034779)
+      |> sock#3-fd12 - Idle-socket <socket.socket fd=12, family=AddressFamily.AF_INET, type=2049, proto=6, laddr=('192.168.14.2', 1900), raddr=('192.168.14.5', 58358)>->ActorAddr-(T|192.168.14.5:1900) (Expires_in_0:19:35.394918)
+      |> sock#1-fd13 - Idle-socket <socket.socket fd=13, family=AddressFamily.AF_INET, type=2049, proto=6, laddr=('127.0.0.1', 1900), raddr=('127.0.0.1', 34320)>->ActorAddr-(T|:46419) (Expires_in_0:19:59.999337)
+      |DeadLetter Addresses [0]:
+      |Source Authority: None
+      |Loaded Sources [0]:
+      |Global Actors [0]:
+
+

@@ -50,6 +50,16 @@ class FileSource:
     def readline(self):
         return self.f.readline()
 
+    def readlines(self, num_lines):
+        lines = []
+        f = self.f
+        for _ in range(num_lines):
+            line = f.readline()
+            if len(line) == 0:
+                break
+            lines.append(line)
+        return lines
+
     def close(self):
         self.f.close()
         self.f = None
@@ -114,6 +124,15 @@ class StringAsFileSource:
         line = self.contents[self.current_index]
         self.current_index += 1
         return line
+
+    def readlines(self, num_lines):
+        lines = []
+        for _ in range(num_lines):
+            line = self.readline()
+            if len(line) == 0:
+                break
+            lines.append(line)
+        return lines
 
     def close(self):
         self._assert_opened()

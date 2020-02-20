@@ -138,14 +138,12 @@ class BulkIndexRunnerTests(TestCase):
         bulk = runner.BulkIndex()
 
         bulk_params = {
-            "body": [
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line"
-            ]
+            "body": "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n"
         }
 
         with self.assertRaises(exceptions.DataError) as ctx:
@@ -161,14 +159,12 @@ class BulkIndexRunnerTests(TestCase):
         bulk = runner.BulkIndex()
 
         bulk_params = {
-            "body": [
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line"
-            ],
+            "body": "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n",
             "action-metadata-present": True,
             "bulk-size": 3
         }
@@ -194,11 +190,9 @@ class BulkIndexRunnerTests(TestCase):
         bulk = runner.BulkIndex()
 
         bulk_params = {
-            "body": [
-                "index_line",
-                "index_line",
-                "index_line"
-            ],
+            "body": "index_line\n" +
+                    "index_line\n" +
+                    "index_line\n",
             "action-metadata-present": False,
             "bulk-size": 3,
             "index": "test-index",
@@ -226,11 +220,9 @@ class BulkIndexRunnerTests(TestCase):
         bulk = runner.BulkIndex()
 
         bulk_params = {
-            "body": [
-                "index_line",
-                "index_line",
-                "index_line"
-            ],
+            "body": "index_line\n" +
+                    "index_line\n" +
+                    "index_line\n",
             "action-metadata-present": False,
             "bulk-size": 3,
             "index": "test-index"
@@ -290,14 +282,12 @@ class BulkIndexRunnerTests(TestCase):
         bulk = runner.BulkIndex()
 
         bulk_params = {
-            "body": [
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line"
-            ],
+            "body": "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n",
             "action-metadata-present": True,
             "bulk-size": 3,
             "index": "test"
@@ -354,14 +344,12 @@ class BulkIndexRunnerTests(TestCase):
         bulk = runner.BulkIndex()
 
         bulk_params = {
-            "body": [
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "index_line",
-            ],
+            "body": "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n",
             "action-metadata-present": True,
             "detailed-results": False,
             "bulk-size": 3,
@@ -459,16 +447,14 @@ class BulkIndexRunnerTests(TestCase):
         bulk = runner.BulkIndex()
 
         bulk_params = {
-            "body": [
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "update_line",
-                "action_meta_data",
-                "index_line",
-                "action_meta_data",
-                "update_line"
-            ],
+            "body": "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "update_line\n" +
+                    "action_meta_data\n" +
+                    "index_line\n" +
+                    "action_meta_data\n" +
+                    "update_line\n",
             "action-metadata-present": True,
             "detailed-results": False,
             "bulk-size": 4,
@@ -493,9 +479,8 @@ class BulkIndexRunnerTests(TestCase):
         result = bulk(es, bulk_params)
         self.assertNotIn("ingest_took", result)
 
-
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_mixed_bulk_with_detailed_stats(self, es):
+    def test_mixed_bulk_with_detailed_stats_body_as_string(self, es):
         es.bulk.return_value = {
             "took": 30,
             "ingest_took": 20,
@@ -606,20 +591,18 @@ class BulkIndexRunnerTests(TestCase):
         bulk = runner.BulkIndex()
 
         bulk_params = {
-            "body": [
-                '{ "index" : { "_index" : "test", "_type" : "type1" } }',
-                '{"location" : [-0.1485188, 51.5250666]}',
-                '{ "update" : { "_index" : "test", "_type" : "type1", "_id: "2" } }',
-                '{"location" : [-0.1479949, 51.5252071]}',
-                '{ "index" : { "_index" : "test", "_type" : "type1" } }',
-                '{"location" : [-0.1458559, 51.5289059]}',
-                '{ "index" : { "_index" : "test", "_type" : "type1" } }',
-                '{"location" : [-0.1498551, 51.5282564]}',
-                '{ "index" : { "_index" : "test", "_type" : "type1" } }',
-                '{"location" : [-0.1487043, 51.5254843]}',
-                '{ "update" : { "_index" : "test", "_type" : "type1", "_id: "3" } }',
-                '{"location" : [-0.1533367, 51.5261779]}'
-            ],
+            "body": '{ "index" : { "_index" : "test", "_type" : "type1" } }\n' +
+                    '{"location" : [-0.1485188, 51.5250666]}\n' +
+                    '{ "update" : { "_index" : "test", "_type" : "type1", "_id: "2" } }\n' +
+                    '{"location" : [-0.1479949, 51.5252071]}\n' +
+                    '{ "index" : { "_index" : "test", "_type" : "type1" } }\n' +
+                    '{"location" : [-0.1458559, 51.5289059]}\n' +
+                    '{ "index" : { "_index" : "test", "_type" : "type1" } }\n' +
+                    '{"location" : [-0.1498551, 51.5282564]}\n' +
+                    '{ "index" : { "_index" : "test", "_type" : "type1" } }\n' +
+                    '{"location" : [-0.1487043, 51.5254843]}\n' +
+                    '{ "update" : { "_index" : "test", "_type" : "type1", "_id: "3" } }\n' +
+                    '{"location" : [-0.1533367, 51.5261779]}\n',
             "action-metadata-present": True,
             "bulk-size": 6,
             "detailed-results": True,
@@ -686,6 +669,124 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.return_value.pop("ingest_took")
         result = bulk(es, bulk_params)
         self.assertNotIn("ingest_took", result)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_simple_bulk_with_detailed_stats_body_as_list(self, es):
+        es.bulk.return_value = {
+            "took": 30,
+            "ingest_took": 20,
+            "errors": False,
+            "items": [
+                {
+                    "index": {
+                        "_index": "test",
+                        "_type": "type1",
+                        "_id": "1",
+                        "_version": 1,
+                        "result": "created",
+                        "_shards": {
+                            "total": 2,
+                            "successful": 1,
+                            "failed": 0
+                        },
+                        "created": True,
+                        "status": 201,
+                        "_seq_no": 0
+                    }
+                }
+            ]
+        }
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": '{ "index" : { "_index" : "test", "_type" : "type1" } }\n' +
+                    '{"location" : [-0.1485188, 51.5250666]}\n',
+            "action-metadata-present": True,
+            "bulk-size": 1,
+            "detailed-results": True,
+            "index": "test"
+        }
+
+        result = bulk(es, bulk_params)
+
+        self.assertEqual("test", result["index"])
+        self.assertEqual(30, result["took"])
+        self.assertEqual(20, result["ingest_took"])
+        self.assertEqual(1, result["weight"])
+        self.assertEqual(1, result["bulk-size"])
+        self.assertEqual("docs", result["unit"])
+        self.assertEqual(True, result["success"])
+        self.assertEqual(0, result["error-count"])
+        self.assertEqual(
+            {
+                "index": {
+                    "item-count": 1,
+                    "created": 1
+                },
+            }, result["ops"])
+        self.assertEqual(
+            [
+                {
+                    "item-count": 1,
+                    "shards": {
+                        "total": 2,
+                        "successful": 1,
+                        "failed": 0
+                    }
+                }
+            ], result["shards_histogram"])
+        self.assertEqual(93, result["bulk-request-size-bytes"])
+        self.assertEqual(39, result["total-document-size-bytes"])
+
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
+
+        es.bulk.return_value.pop("ingest_took")
+        result = bulk(es, bulk_params)
+        self.assertNotIn("ingest_took", result)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_simple_bulk_with_detailed_stats_body_as_unrecognized_type(self, es):
+        es.bulk.return_value = {
+            "took": 30,
+            "ingest_took": 20,
+            "errors": False,
+            "items": [
+                {
+                    "index": {
+                        "_index": "test",
+                        "_type": "type1",
+                        "_id": "1",
+                        "_version": 1,
+                        "result": "created",
+                        "_shards": {
+                            "total": 2,
+                            "successful": 1,
+                            "failed": 0
+                        },
+                        "created": True,
+                        "status": 201,
+                        "_seq_no": 0
+                    }
+                }
+            ]
+        }
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": {
+                "items": '{ "index" : { "_index" : "test", "_type" : "type1" } }\n' +
+                         '{"location" : [-0.1485188, 51.5250666]}\n',
+            },
+            "action-metadata-present": True,
+            "bulk-size": 1,
+            "detailed-results": True,
+            "index": "test"
+        }
+
+        with self.assertRaisesRegex(exceptions.DataError, "bulk body is neither string nor list"):
+            bulk(es, bulk_params)
+
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
 
 class ForceMergeRunnerTests(TestCase):
