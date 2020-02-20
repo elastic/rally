@@ -36,7 +36,7 @@ prereq:
 	pyenv install --skip-existing $(PY36)
 	pyenv install --skip-existing $(PY37)
 	pyenv install --skip-existing $(PY38)
-	pyenv global system $(PY36) $(PY37) $(PY38)
+	pyenv local $(PY36) $(PY37) $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
