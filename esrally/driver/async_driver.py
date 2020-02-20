@@ -277,9 +277,6 @@ class AsyncDriver:
         es = self.create_es_clients(sync=False)
         try:
             cancel = threading.Event()
-            # used to indicate that we want to prematurely consider this completed. This is *not* due to cancellation but a regular event in
-            # a benchmark and used to model task dependency of parallel tasks.
-            complete = threading.Event()
             # allow to buffer more events than by default as we expect to have way more clients.
             self.sampler = driver.Sampler(start_timestamp=time.perf_counter(), buffer_size=65536)
 
@@ -289,11 +286,11 @@ class AsyncDriver:
                 for sub_task in task:
                     self.current_tasks.append(sub_task)
                     self.logger.info("Running task [%s] with [%d] clients...", sub_task.name, sub_task.clients)
-                    # TODO: This is lacking support for one (sub)task being able to complete a complete parallel
-                    #       structure. We can probably achieve that by waiting for the task in question and then
-                    #       cancelling all other ongoing clients.
                     for client_id in range(sub_task.clients):
                         schedule = driver.schedule_for(self.track, sub_task, client_id)
+                        # used to indicate that we want to prematurely consider this completed. This is *not* due to
+                        # cancellation but a regular event in a benchmark and used to model task dependency of parallel tasks.
+                        complete = threading.Event()
                         e = driver.AsyncExecutor(client_id, sub_task, schedule, es, self.sampler, cancel, complete, self.abort_on_error)
                         aws.append(e())
                 # join point
