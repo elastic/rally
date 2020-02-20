@@ -16,15 +16,15 @@
 # under the License.
 
 
-import logging
-from esrally.driver import driver, runner, scheduler
-import time
 import asyncio
+import concurrent.futures
+import logging
 import threading
+import time
 
 from esrally import exceptions, metrics, track, client, PROGRAM_NAME, telemetry
-from esrally.utils import console, convert
-import concurrent.futures
+from esrally.driver import driver, runner, scheduler
+from esrally.utils import console
 
 
 # TODO: Inline this code later
@@ -253,7 +253,7 @@ class AsyncDriver:
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         success = False
         try:
-            benchmark_runner = AsyncProfiler(self.run_benchmark) if self.profiling_enabled else self.run_benchmark
+            benchmark_runner = driver.AsyncProfiler(self.run_benchmark) if self.profiling_enabled else self.run_benchmark
             loop.run_until_complete(benchmark_runner())
 
             self._finished = True
@@ -294,7 +294,7 @@ class AsyncDriver:
                     #       cancelling all other ongoing clients.
                     for client_id in range(sub_task.clients):
                         schedule = driver.schedule_for(self.track, sub_task, client_id)
-                        e = AsyncExecutor(client_id, sub_task, schedule, es, self.sampler, cancel, complete, self.abort_on_error)
+                        e = driver.AsyncExecutor(client_id, sub_task, schedule, es, self.sampler, cancel, complete, self.abort_on_error)
                         aws.append(e())
                 # join point
                 done, pending = await asyncio.wait(aws)
@@ -419,156 +419,3 @@ class AsyncDriver:
 
 def debug_exception_handler(loop, context):
     logging.getLogger(__name__).error("Uncaught exception in event loop!! %s", context)
-
-
-class AsyncProfiler:
-    def __init__(self, target):
-        """
-        :param target: The actual executor which should be profiled.
-        """
-        self.target = target
-        self.profile_logger = logging.getLogger("rally.profile")
-
-    async def __call__(self, *args, **kwargs):
-        import yappi
-        import io as python_io
-        yappi.start()
-        try:
-            return await self.target(*args, **kwargs)
-        finally:
-            yappi.stop()
-            s = python_io.StringIO()
-            yappi.get_func_stats().print_all(out=s, columns={
-                0: ("name", 140),
-                1: ("ncall", 8),
-                2: ("tsub", 8),
-                3: ("ttot", 8),
-                4: ("tavg", 8)
-            })
-
-            profile = "\n=== Profile START ===\n"
-            profile += s.getvalue()
-            profile += "=== Profile END ==="
-            self.profile_logger.info(profile)
-
-
-class AsyncExecutor:
-    def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, abort_on_error=False):
-        """
-        Executes tasks according to the schedule for a given operation.
-
-        :param task: The task that is executed.
-        :param schedule: The schedule for this task.
-        :param es: Elasticsearch client that will be used to execute the operation.
-        :param sampler: A container to store raw samples.
-        :param cancel: A shared boolean that indicates we need to cancel execution.
-        :param complete: A shared boolean that indicates we need to prematurely complete execution.
-        """
-        self.client_id = client_id
-        self.task = task
-        self.op = task.operation
-        self.schedule_handle = schedule
-        self.es = es
-        self.sampler = sampler
-        self.cancel = cancel
-        self.complete = complete
-        self.abort_on_error = abort_on_error
-        self.logger = logging.getLogger(__name__)
-
-    async def __call__(self, *args, **kwargs):
-        total_start = time.perf_counter()
-        # lazily initialize the schedule
-        self.logger.debug("Initializing schedule for client id [%s].", self.client_id)
-        schedule = self.schedule_handle()
-        self.logger.debug("Entering main loop for client id [%s].", self.client_id)
-        # noinspection PyBroadException
-        try:
-            async for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
-                if self.cancel.is_set():
-                    self.logger.info("User cancelled execution.")
-                    break
-                absolute_expected_schedule_time = total_start + expected_scheduled_time
-                throughput_throttled = expected_scheduled_time > 0
-                if throughput_throttled:
-                    rest = absolute_expected_schedule_time - time.perf_counter()
-                    if rest > 0:
-                        await asyncio.sleep(rest)
-                start = time.perf_counter()
-                total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.abort_on_error)
-                stop = time.perf_counter()
-                service_time = stop - start
-                # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
-                latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
-                # last sample should bump progress to 100% if externally completed.
-                completed = self.complete.is_set() or runner.completed
-                if completed:
-                    progress = 1.0
-                elif runner.percent_completed:
-                    progress = runner.percent_completed
-                else:
-                    progress = percent_completed
-                self.sampler.add(self.task, self.client_id, sample_type, request_meta_data, convert.seconds_to_ms(latency),
-                                 convert.seconds_to_ms(service_time), total_ops, total_ops_unit, (stop - total_start), progress)
-
-                if completed:
-                    self.logger.info("Task is considered completed due to external event.")
-                    break
-        except BaseException:
-            self.logger.exception("Could not execute schedule")
-            raise
-        finally:
-            # Actively set it if this task completes its parent
-            if self.task.completes_parent:
-                self.complete.set()
-
-
-async def execute_single(runner, es, params, abort_on_error=False):
-    """
-    Invokes the given runner once and provides the runner's return value in a uniform structure.
-
-    :return: a triple of: total number of operations, unit of operations, a dict of request meta data (may be None).
-    """
-    import elasticsearch
-    try:
-        # TODO: Make all runners async-aware - Can we run async runners as a "regular" function (to avoid duplicate implementations)?
-        with runner:
-            return_value = await runner(es, params)
-        if isinstance(return_value, tuple) and len(return_value) == 2:
-            total_ops, total_ops_unit = return_value
-            request_meta_data = {"success": True}
-        elif isinstance(return_value, dict):
-            total_ops = return_value.pop("weight", 1)
-            total_ops_unit = return_value.pop("unit", "ops")
-            request_meta_data = return_value
-            if "success" not in request_meta_data:
-                request_meta_data["success"] = True
-        else:
-            total_ops = 1
-            total_ops_unit = "ops"
-            request_meta_data = {"success": True}
-    except elasticsearch.TransportError as e:
-        total_ops = 0
-        total_ops_unit = "ops"
-        request_meta_data = {
-            "success": False,
-            "error-type": "transport"
-        }
-        # The ES client will sometimes return string like "N/A" or "TIMEOUT" for connection errors.
-        if isinstance(e.status_code, int):
-            request_meta_data["http-status"] = e.status_code
-        if e.info:
-            request_meta_data["error-description"] = "%s (%s)" % (e.error, e.info)
-        else:
-            request_meta_data["error-description"] = e.error
-    except KeyError as e:
-        logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters.", str(runner))
-        msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
-        raise exceptions.SystemSetupError(msg)
-
-    if abort_on_error and not request_meta_data["success"]:
-        msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
-        description = request_meta_data.get("error-description")
-        if description:
-            msg += ", Description: %s" % description
-        raise exceptions.RallyAssertionError(msg)
-    return total_ops, total_ops_unit, request_meta_data

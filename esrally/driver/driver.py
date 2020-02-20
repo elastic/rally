@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import concurrent.futures
 import datetime
 import logging
@@ -772,7 +773,6 @@ class LoadGenerator(actor.RallyActor):
         self.logger.info("LoadGenerator[%d] received unknown message [%s] (ignoring).", self.client_id, str(msg))
 
     def drive(self):
-        profiling_enabled = self.config.opts("driver", "profiling")
         task_allocation = self.current_task_and_advance()
         # skip non-tasks in the task list
         while task_allocation is None:
@@ -810,11 +810,10 @@ class LoadGenerator(actor.RallyActor):
                 # Now we need to ensure that we start partitioning parameters correctly in both cases. And that means we need to start
                 # from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
                 schedule = schedule_for(self.track, task_allocation.task, task_allocation.client_index_in_task)
-                executor = AsyncIoAdapter(self.config, self.client_id, task, schedule, self.sampler, self.cancel, self.complete, self.abort_on_error)
-                #executor = Executor(self.client_id, task, schedule, self.es, self.sampler, self.cancel, self.complete, self.abort_on_error)
-                final_executor = Profiler(executor, self.client_id, task) if profiling_enabled else executor
+                executor = AsyncIoAdapter(
+                    self.config, self.client_id, task, schedule, self.sampler, self.cancel, self.complete, self.abort_on_error)
 
-                self.executor_future = self.pool.submit(final_executor)
+                self.executor_future = self.pool.submit(executor)
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
         else:
             raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task_allocation))
@@ -846,11 +845,10 @@ class Sampler:
         self.q = queue.Queue(maxsize=buffer_size)
         self.logger = logging.getLogger(__name__)
 
-    def add(self, task, client_id, sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period, percent_completed):
+    def add(self, task, client_id, sample_type, meta_data, latency, service_time, ops, ops_unit, time_period, percent_completed):
         try:
             self.q.put_nowait(Sample(client_id, time.time(), time.perf_counter() - self.start_timestamp, task,
-                                     sample_type, request_meta_data, latency_ms, service_time_ms, total_ops, total_ops_unit, time_period,
-                                     percent_completed))
+                                     sample_type, meta_data, latency, service_time, ops, ops_unit, time_period, percent_completed))
         except queue.Full:
             self.logger.warning("Dropping sample for [%s] due to a full sampling queue.", task.operation.name)
 
@@ -1018,39 +1016,6 @@ class ThroughputCalculator:
         return global_throughput
 
 
-class Profiler:
-    def __init__(self, target, client_id, task):
-        """
-        :param target: The actual executor which should be profiled.
-        :param client_id: The id of the client that executes the operation.
-        :param task: The task that is executed.
-        """
-        self.target = target
-        self.client_id = client_id
-        self.task = task
-        self.profile_logger = logging.getLogger("rally.profile")
-
-    def __call__(self, *args, **kwargs):
-        import cProfile
-        import pstats
-        import io as python_io
-        profiler = cProfile.Profile()
-        profiler.enable()
-        try:
-            return self.target(*args, **kwargs)
-        finally:
-            profiler.disable()
-            s = python_io.StringIO()
-            sortby = 'cumulative'
-            ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
-            ps.print_stats()
-
-            profile = "\n=== Profile START for client [%s] and task [%s] ===\n" % (str(self.client_id), str(self.task))
-            profile += s.getvalue()
-            profile += "=== Profile END for client [%s] and task [%s] ===" % (str(self.client_id), str(self.task))
-            self.profile_logger.info(profile)
-
-
 class AsyncIoAdapter:
     def __init__(self, cfg, client_id, sub_task, schedule, sampler, cancel, complete, abort_on_error):
         self.cfg = cfg
@@ -1061,9 +1026,9 @@ class AsyncIoAdapter:
         self.cancel = cancel
         self.complete = complete
         self.abort_on_error = abort_on_error
+        self.profiling_enabled = self.cfg.opts("driver", "profiling")
 
     def __call__(self, *args, **kwargs):
-        import asyncio
         # only possible in Python 3.7+ (has introduced get_running_loop)
         # try:
         #     loop = asyncio.get_running_loop()
@@ -1085,19 +1050,49 @@ class AsyncIoAdapter:
                 es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async()
             return es
 
-        from esrally.driver import async_driver
-
         es = es_clients(self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options").all_client_options)
-        async_executor = async_driver.AsyncExecutor(self.client_id, self.sub_task, self.schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
-        return await async_executor()
+        async_executor = AsyncExecutor(
+            self.client_id, self.sub_task, self.schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
+        final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
+        return await final_executor()
 
 
-class Executor:
+class AsyncProfiler:
+    def __init__(self, target):
+        """
+        :param target: The actual executor which should be profiled.
+        """
+        self.target = target
+        self.profile_logger = logging.getLogger("rally.profile")
+
+    async def __call__(self, *args, **kwargs):
+        import yappi
+        import io as python_io
+        yappi.start()
+        try:
+            return await self.target(*args, **kwargs)
+        finally:
+            yappi.stop()
+            s = python_io.StringIO()
+            yappi.get_func_stats().print_all(out=s, columns={
+                0: ("name", 140),
+                1: ("ncall", 8),
+                2: ("tsub", 8),
+                3: ("ttot", 8),
+                4: ("tavg", 8)
+            })
+
+            profile = "\n=== Profile START ===\n"
+            profile += s.getvalue()
+            profile += "=== Profile END ==="
+            self.profile_logger.info(profile)
+
+
+class AsyncExecutor:
     def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, abort_on_error=False):
         """
         Executes tasks according to the schedule for a given operation.
 
-        :param client_id: Id of the client that executes requests.
         :param task: The task that is executed.
         :param schedule: The schedule for this task.
         :param es: Elasticsearch client that will be used to execute the operation.
@@ -1116,13 +1111,15 @@ class Executor:
         self.abort_on_error = abort_on_error
         self.logger = logging.getLogger(__name__)
 
-    def __call__(self, *args, **kwargs):
+    async def __call__(self, *args, **kwargs):
         total_start = time.perf_counter()
         # lazily initialize the schedule
+        self.logger.debug("Initializing schedule for client id [%s].", self.client_id)
         schedule = self.schedule_handle()
+        self.logger.debug("Entering main loop for client id [%s].", self.client_id)
         # noinspection PyBroadException
         try:
-            for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
+            async for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
                 if self.cancel.is_set():
                     self.logger.info("User cancelled execution.")
                     break
@@ -1131,11 +1128,10 @@ class Executor:
                 if throughput_throttled:
                     rest = absolute_expected_schedule_time - time.perf_counter()
                     if rest > 0:
-                        time.sleep(rest)
+                        await asyncio.sleep(rest)
                 start = time.perf_counter()
-                total_ops, total_ops_unit, request_meta_data = execute_single(runner, self.es, params, self.abort_on_error)
+                total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.abort_on_error)
                 stop = time.perf_counter()
-
                 service_time = stop - start
                 # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
                 latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
@@ -1162,7 +1158,7 @@ class Executor:
                 self.complete.set()
 
 
-def execute_single(runner, es, params, abort_on_error=False):
+async def execute_single(runner, es, params, abort_on_error=False):
     """
     Invokes the given runner once and provides the runner's return value in a uniform structure.
 
@@ -1170,8 +1166,8 @@ def execute_single(runner, es, params, abort_on_error=False):
     """
     import elasticsearch
     try:
-        with runner:
-            return_value = runner(es, params)
+        async with runner:
+            return_value = await runner(es, params)
         if isinstance(return_value, tuple) and len(return_value) == 2:
             total_ops, total_ops_unit = return_value
             request_meta_data = {"success": True}
@@ -1210,7 +1206,6 @@ def execute_single(runner, es, params, abort_on_error=False):
         if description:
             msg += ", Description: %s" % description
         raise exceptions.RallyAssertionError(msg)
-
     return total_ops, total_ops_unit, request_meta_data
 
 
@@ -1451,9 +1446,7 @@ class ScheduleHandle:
         #self.io_pool_exc = ThreadPoolExecutor(max_workers=1)
         #self.loop = asyncio.get_event_loop()
 
-    # TODO: This requires Python 3.6+ (see https://www.python.org/dev/peps/pep-0525/)
     async def __call__(self):
-    # def __call__(self):
         next_scheduled = 0
         if self.task_progress_control.infinite:
             self.logger.info("Parameter source will determine when the schedule for [%s] terminates.", self.task_name)

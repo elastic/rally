@@ -128,7 +128,6 @@ class EsClientFactory:
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
     def create_async(self):
-        import elasticsearch
         import elasticsearch_async
         from aiohttp.client import ClientTimeout
         import esrally.async_connection

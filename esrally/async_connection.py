@@ -14,6 +14,9 @@ from elasticsearch.connection.http_urllib3 import create_ssl_context
 
 # This is only needed because https://github.com/elastic/elasticsearch-py-async/pull/68 is not merged yet
 # In addition we have raised the connection limit in TCPConnector from 100 to 10000.
+
+# We want to keep the diff as small as possible thus suppressing pylint warnings that we would not allow in Rally
+# pylint: disable=W0706
 class AIOHttpConnection(Connection):
     def __init__(self, host='localhost', port=9200, http_auth=None,
                  use_ssl=False, verify_certs=False, ca_certs=None, client_cert=None,

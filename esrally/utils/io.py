@@ -154,6 +154,8 @@ class StringAsFileSource:
         return "StringAsFileSource"
 
 
+# TODO: Remove before merging
+# pylint: disable=C0301
 class StaticSource:
     def __init__(self, contents, mode, encoding="utf-8"):
         self.contents = '{"geonameid": 2986043, "name": "Pic de Font Blanca", "asciiname": "Pic de Font Blanca", "alternatenames": "Pic de Font Blanca,Pic du Port", "feature_class": "T", "feature_code": "PK", "country_code": "AD", "admin1_code": "00", "population": 0, "dem": "2860", "timezone": "Europe/Andorra", "location": [1.53335, 42.64991]}'
