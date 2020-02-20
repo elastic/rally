@@ -85,6 +85,8 @@ def dump_documents(client, index, outpath, total_docs):
 
             query = {"query": {"match_all": {}}}
             for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
+                if n > total_docs:
+                    break
                 docsrc = doc["_source"]
                 data = (json.dumps(docsrc, separators=(',', ':')) + "\n").encode("utf-8")
 
