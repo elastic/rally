@@ -2,16 +2,14 @@
 {
   "version": 2,
   "description": "Tracker-generated track for {{track_name}}",
-  "indices": [{% set comma = joiner() %}{% for index in indices %}
-{{comma()}}
+  "indices": [{% set comma = joiner() %}{% for index in indices %}{{comma()}}
     {
       "name": "{{index.name}}",
       "body": "{{index.filename}}"
     }{% endfor %}
   ],
-  "corpora": [{% set comma = joiner() %}{% for corpus in corpora %}
+  "corpora": [{% set comma = joiner() %}{% for corpus in corpora %}{{comma()}}
     {
-{{comma()}}
       "name": "{{corpus.index_name}}",
       "#COMMENT": "TODO: Upload data files and provide the http or S3 base URL here",
       "base-url": "{{corpus.base_url}}",
