@@ -32,7 +32,7 @@ readonly ES_METRICS_STORE_TRANSPORT_PORT="63200"
 readonly ES_ARTIFACT_PATH="elasticsearch-${ES_METRICS_STORE_VERSION}"
 readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
 readonly MIN_CURL_VERSION=(7 12 3)
-readonly MIN_DOCKER_MEM_GB=6.0
+readonly MIN_DOCKER_MEM_GB=6
 readonly RALLY_LOG="${HOME}/.rally/logs/rally.log"
 readonly RALLY_LOG_BACKUP="${HOME}/.rally/logs/rally.log.it.bak"
 
@@ -44,9 +44,8 @@ TEST_SUCCESS=0
 function check_prerequisites {
     exit_if_docker_not_running
 
-    DOCKER_MEM=$(docker info | grep Memory | awk '{print ($3 + 0)}')
-    HAS_ENOUGH_MEM=$(echo "$DOCKER_MEM > $MIN_DOCKER_MEM_GB" | bc)
-    if [[ ${HAS_ENOUGH_MEM} -eq 0 ]]; then
+    DOCKER_MEM=$(docker info | grep Memory | awk '{print int($3 + 0)}')
+    if [[ ${DOCKER_MEM} -lt ${MIN_DOCKER_MEM_GB} ]]; then
         echo "Error: Docker is not configured with enough memory."
         echo "Please increase memory available to Docker to at least ${MIN_DOCKER_MEM_GB} GB"
         exit 1
