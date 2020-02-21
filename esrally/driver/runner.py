@@ -631,15 +631,6 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def search_type_fallback(es, doc_type, index, body, params):
-    if doc_type and not index:
-        index = "_all"
-    path = "/%s/%s/_search" % (index, doc_type)
-    return es.transport.perform_request(
-        "GET", path, params=params, body=body
-    )
-
-
 class Query(Runner):
     """
     Runs a request body search against Elasticsearch.
@@ -693,7 +684,7 @@ class Query(Runner):
         params = request_params
 
         if doc_type is not None:
-            r = await search_type_fallback(es, doc_type, index, body, params)
+            r = await self._search_type_fallback(es, doc_type, index, body, params)
         else:
             r = await es.search(index=index, body=body, params=params)
         hits = r["hits"]["total"]
@@ -735,7 +726,7 @@ class Query(Runner):
                     params["sort"] = sort
                     params["scroll"] = scroll
                     params["size"] = size
-                    r = search_type_fallback(es, doc_type, index, body, params)
+                    r = await self._search_type_fallback(es, doc_type, index, body, params)
                 else:
                     r = await es.search(index=index, body=body, params=params, sort=sort, scroll=scroll, size=size)
                 # This should only happen if we concurrently create an index and start searching
@@ -761,6 +752,12 @@ class Query(Runner):
             "timed_out": timed_out,
             "took": took
         }
+
+    async def _search_type_fallback(self, es, doc_type, index, body, params):
+        if doc_type and not index:
+            index = "_all"
+        path = "/%s/%s/_search" % (index, doc_type)
+        return await es.transport.perform_request("GET", path, params=params, body=body)
 
     def _default_request_params(self, params):
         request_params = params.get("request-params", {})
