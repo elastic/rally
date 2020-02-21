@@ -37,12 +37,16 @@ def template_vars(index_name, out_path, doc_count):
     return {
         "index_name": index_name,
         "base_url": get_base_url(out_path),
-        "filename": os.path.basename(out_path),
+        "filename": os.path.basename(comp_outpath),
         "path": out_path,
         "doc_count": doc_count,
         "uncompressed_bytes": os.path.getsize(out_path),
         "compressed_bytes": os.path.getsize(comp_outpath)
     }
+
+
+def get_doc_outpath(outdir, name, suffix=""):
+    return os.path.join(outdir, "{}-documents{}.json".format(name, suffix))
 
 
 def extract(client, outdir, index):
@@ -56,13 +60,16 @@ def extract(client, outdir, index):
     """
 
     logger = logging.getLogger(__name__)
-    outpath = os.path.join(outdir, "{}-documents.json".format(index))
+    outpath = get_doc_outpath(outdir, index)
 
     total_docs = client.count(index=index)["count"]
     logger.info("%d total docs in index %s", total_docs, index)
 
+    if total_docs == 0:
+        raise ValueError("Cannot dump an index with 0 documents!")
+
     if total_docs >= 1000:
-        tm_outpath = os.path.join(outdir, "{}-documents-1k.json".format(index))
+        tm_outpath = get_doc_outpath(outdir, index, "-1k")
         dump_documents(client, index, tm_outpath, 1000)
     else:
         logger.warning("Insufficient document count for test-mode corpus!")
@@ -103,3 +110,9 @@ def render_progress(progress, cur, total, freq):
     if cur % freq == 0 or total - cur < freq:
         percent = (cur * 100) / total
         progress.print("Extracting documents...", "{n}/{total_docs} ({percent:.1f}%)".format(n=cur, total_docs=total, percent=percent))
+
+
+def purge(outpath, index_name):
+    for suffix in ("", "-1k"):
+        path = os.path.join(outpath, index_name, suffix)
+        os.unlink(path)

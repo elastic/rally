@@ -20,30 +20,11 @@ import json
 import logging
 from logging import config
 import os
-import pathlib
-
-from jinja2 import Environment, PackageLoader
 
 from esrally import version
 from esrally.client import EsClientFactory
 from esrally.utils import opts, io
-from estracker import corpus, index
-
-TRACK_TEMPLATES = {
-    "track.json.j2": "track.json",
-    "challenges.json.j2": "challenges/default.json",
-}
-
-
-def process_template(template_filename, template_vars, dest_path):
-    env = Environment(loader=PackageLoader("estracker", "templates"))
-    template = env.get_template(template_filename)
-
-    parent_dir = pathlib.Path(dest_path).parent
-    io.ensure_dir(str(parent_dir))
-
-    with open(dest_path, "w") as outfile:
-        outfile.write(template.render(template_vars))
+from estracker import track
 
 
 def get_arg_parser():
@@ -73,6 +54,7 @@ def configure_logging():
 
 def main():
     configure_logging()
+    logger = logging.getLogger(__name__)
     argparser = get_arg_parser()
     args = argparser.parse_args()
 
@@ -91,27 +73,10 @@ def main():
     abs_outpath = os.path.abspath(outpath)
     io.ensure_dir(abs_outpath)
 
-    indices = []
-    corpora = []
-    for index_name in args.indices:
-        index_vars = index.extract(client, outpath, index_name)
-        indices.append(index_vars)
+    track.extract(client, abs_outpath, args.track_name, args.indices)
 
-        corpus_vars = corpus.extract(client, outpath, index_name)
-        corpora.append(corpus_vars)
-
-    template_vars ={
-        "track_name": args.track_name,
-        "indices": indices,
-        "corpora": corpora
-    }
-
-    for template, dest_filename in TRACK_TEMPLATES.items():
-        dest_path = os.path.join(outpath, dest_filename)
-        process_template(template, template_vars, dest_path)
-
-    logging.info("%s has been tracked!", args.track_name)
-    logging.info("To run with Rally: esrally race --track-path=%s", abs_outpath)
+    logger.info("%s has been tracked!", args.track_name)
+    logger.info("To run with Rally: esrally race --track-path=%s", abs_outpath)
 
 
 if __name__ == '__main__':
