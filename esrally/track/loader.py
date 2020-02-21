@@ -950,7 +950,8 @@ class TrackPluginReader:
         from esrally import version
 
         return {
-            "rally_version": version.release_version()
+            "rally_version": version.release_version(),
+            "async_runner": True
         }
 
 
