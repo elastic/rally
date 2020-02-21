@@ -50,7 +50,14 @@ install_requires = [
     # License: Apache 2.0
     # transitive dependency urllib3: MIT
     "elasticsearch==7.0.5",
-    "elasticsearch-async==6.2.0",
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   aiohttp: Apache 2.0
+    #   async_timeout: Apache 2.0
+    # 6.2.0 does not include https://github.com/elastic/elasticsearch-py-async/pull/49 which (also) causes
+    # the behavior reported in https://github.com/elastic/elasticsearch-py-async/issues/43
+    # "elasticsearch-async==6.2.0",
+    "elasticsearch-async@git+https://github.com/elastic/elasticsearch-py-async.git",
     # License: BSD
     "psutil==5.6.5",
     # License: MIT
@@ -75,6 +82,7 @@ install_requires = [
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
     "boto3==1.10.32",
+    # License: Apache 2.0
     "yappi==1.2.3"
 ]
 
