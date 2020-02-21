@@ -551,6 +551,28 @@ function test_node_management_commands {
     esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}"
 }
 
+
+function assert_eq {
+  local expected="$1"
+  local actual="$2"
+
+  if [[ "$expected" == "$actual" ]]; then
+    return 0
+  else
+    error "$expected = $actual"
+    exit 1
+  fi
+}
+
+function assert_exists {
+  if [[ -f "$1" ]]; then
+    return 0
+  else
+    error "$1 does not exist!"
+    exit 1
+  fi
+}
+
 function test_tracker {
     local dist
 
@@ -575,7 +597,20 @@ function test_tracker {
 
     info "Track the index."
     track_name=$(openssl rand -hex 12)
-    estracker  --target-hosts="localhost:39200" --indices geonames --trackname ${track_name}
+    estracker  --target-hosts="localhost:39200" --indices geonames --track-name ${track_name}
+
+    info "Perform some sanity checks..."
+    for file in "geonames.json" \
+        "track.json" \
+        "geonames-documents-1k.json" \
+        "geonames-documents.json" \
+        "geonames-documents-1k.json.bz2" \
+        "geonames-documents.json.bz2"; do
+        assert_exists tracks/${track_name}/${file}
+    done
+
+    assert_eq $(wc -l tracks/${track_name}/geonames-documents-1k.json | awk '{print $1}') 1000
+    assert_eq $(wc -l tracks/${track_name}/geonames-documents.json | awk '{print $1}') 1000
 
     info "Try to race the new track"
     esrally --target-host="localhost:39200" \
