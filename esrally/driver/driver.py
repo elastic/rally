@@ -1037,11 +1037,15 @@ class AsyncIoAdapter:
         #     asyncio.set_event_loop(loop)
         loop = asyncio.new_event_loop()
         loop.set_debug(True)
+        loop.set_exception_handler(self._logging_exception_handler)
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(self.run())
         finally:
             loop.close()
+
+    def _logging_exception_handler(self, loop, context):
+        logging.getLogger(__name__).error("Uncaught exception in event loop: %s", context)
 
     async def run(self):
         def es_clients(all_hosts, all_client_options):

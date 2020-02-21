@@ -19,4 +19,4 @@
 from .driver import DriverActor, PrepareBenchmark, PreparationComplete, StartBenchmark, BenchmarkComplete, TaskFinished
 
 # async API
-from .async_driver import race
+from .async_driver import AsyncDriver

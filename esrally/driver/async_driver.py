@@ -22,70 +22,9 @@ import logging
 import threading
 import time
 
-from esrally import exceptions, metrics, track, client, PROGRAM_NAME, telemetry
+from esrally import exceptions, metrics, track, client, telemetry
 from esrally.driver import driver, runner, scheduler
 from esrally.utils import console
-
-
-# TODO: Inline this code later
-class PseudoActor:
-    def __init__(self, cfg, current_race):
-        self.cfg = cfg
-        self.race = current_race
-
-    def on_cluster_details_retrieved(self, cluster_details):
-        #self.cluster_details = cluster_details
-        pass
-
-    def on_benchmark_complete(self, metrics_store):
-        # TODO: Should we do this in race control instead?
-        from esrally import reporter
-        final_results = metrics.calculate_results(metrics_store, self.race)
-        metrics.results_store(self.cfg).store_results(self.race)
-        reporter.summarize(final_results, self.cfg)
-
-
-def race(cfg):
-    logger = logging.getLogger(__name__)
-    # TODO: Taken from BenchmarkActor#setup()
-    t = track.load_track(cfg)
-    track_revision = cfg.opts("track", "repository.revision", mandatory=False)
-    challenge_name = cfg.opts("track", "challenge.name")
-    challenge = t.find_challenge_or_default(challenge_name)
-    if challenge is None:
-        raise exceptions.SystemSetupError("Track [%s] does not provide challenge [%s]. List the available tracks with %s list tracks."
-                                          % (t.name, challenge_name, PROGRAM_NAME))
-    if challenge.user_info:
-        console.info(challenge.user_info)
-    current_race = metrics.create_race(cfg, t, challenge, track_revision)
-
-    metrics_store = metrics.metrics_store(
-        cfg,
-        track=current_race.track_name,
-        challenge=current_race.challenge_name,
-        read_only=False
-    )
-    race_store = metrics.race_store(cfg)
-
-    a = PseudoActor(cfg, current_race)
-
-    d = AsyncDriver(a, cfg)
-    logger.info("Preparing benchmark...")
-    cluster_info = d.prepare_benchmark(t)
-    # TODO: ensure we execute the code in after_track_prepared (from the original actor)
-    # def after_track_prepared(self):
-    #     cluster_version = self.cluster_details["version"] if self.cluster_details else {}
-    #     for child in self.children:
-    #         self.send(child, thespian.actors.ActorExitRequest())
-    #     self.children = []
-    #     self.send(self.start_sender, driver.PreparationComplete(
-    #         # older versions (pre 6.3.0) don't expose build_flavor because the only (implicit) flavor was "oss"
-    #         cluster_version.get("build_flavor", "oss"),
-    #         cluster_version.get("number", "Unknown"),
-    #         cluster_version.get("build_hash", "Unknown")
-    #     ))
-    logger.info("Running benchmark...")
-    d.start_benchmark()
 
 
 # TODO: Move to time.py
@@ -108,17 +47,15 @@ class Timer:
 
 
 class AsyncDriver:
-    def __init__(self, target, config, es_client_factory_class=client.EsClientFactory):
+    def __init__(self, config, es_client_factory_class=client.EsClientFactory):
         """
         Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
         we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
         appropriate messages.
 
-        :param target: A target that will be notified of important events.
         :param config: The current config object.
         """
         self.logger = logging.getLogger(__name__)
-        self.target = target
         self.config = config
         self.es_client_factory = es_client_factory_class
         self.track = None
@@ -206,11 +143,12 @@ class AsyncDriver:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
-    def prepare_benchmark(self, t):
+    def setup(self, t):
         self.track = t
         self.challenge = driver.select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         self.throughput_calculator = driver.ThroughputCalculator()
+
         self.metrics_store = metrics.metrics_store(cfg=self.config,
                                                    track=self.track.name,
                                                    challenge=self.challenge.name,
@@ -225,9 +163,11 @@ class AsyncDriver:
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         track.prepare_track(self.track, self.config)
 
-        return self.retrieve_cluster_info()
+        cluster_info = self.retrieve_cluster_info()
+        cluster_version = cluster_info["version"] if cluster_info else {}
+        return cluster_version.get("build_flavor", "oss"), cluster_version.get("number"), cluster_version.get("build_hash")
 
-    def start_benchmark(self):
+    def run(self):
         self.logger.info("Benchmark is about to start.")
         # ensure relative time starts when the benchmark starts.
         self.reset_relative_time()
@@ -244,35 +184,35 @@ class AsyncDriver:
         # TODO: Make this configurable?
         loop.set_debug(True)
         asyncio.set_event_loop(loop)
-        loop.set_exception_handler(debug_exception_handler)
+        loop.set_exception_handler(self._logging_exception_handler)
 
         track.set_absolute_data_path(self.config, self.track)
         runner.register_default_runners()
-        # TODO: We can skip this here if we run in the same process; it has already been done in #prepare_benchmark()
+        # TODO: We can skip this here if we run in the same process; it has already been done in #setup()
         if self.track.has_plugins:
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
-        success = False
         try:
-            benchmark_runner = driver.AsyncProfiler(self.run_benchmark) if self.profiling_enabled else self.run_benchmark
+            benchmark_runner = driver.AsyncProfiler(self._run_benchmark) if self.profiling_enabled else self._run_benchmark
             loop.run_until_complete(benchmark_runner())
 
             self._finished = True
             self.telemetry.on_benchmark_stop()
             self.logger.info("All steps completed.")
-            success = True
+            return self.metrics_store.to_externalizable()
         finally:
             self.stop_timer_tasks.set()
             self.pool.shutdown()
             loop.close()
             self.progress_reporter.finish()
-            if success:
-                self.target.on_benchmark_complete(self.metrics_store)
             self.logger.debug("Closing metrics store...")
             self.metrics_store.close()
             # immediately clear as we don't need it anymore and it can consume a significant amount of memory
             self.metrics_store = None
 
-    async def run_benchmark(self):
+    def _logging_exception_handler(self, loop, context):
+        self.logger.error("Uncaught exception in event loop: %s", context)
+
+    async def _run_benchmark(self):
         # avoid: aiohttp.internal WARNING The object should be created from async function
         es = self.create_es_clients(sync=False)
         try:
@@ -303,16 +243,12 @@ class AsyncDriver:
                 self.update_progress_message(task_finished=True)
         finally:
             await asyncio.get_event_loop().shutdown_asyncgens()
-            await es["default"].transport.close()
+            for e in es.values():
+                await e.transport.close()
 
     def reset_relative_time(self):
         self.logger.debug("Resetting relative time of request metrics store.")
         self.metrics_store.reset_relative_time()
-
-    def close(self):
-        self.progress_reporter.finish()
-        if self.metrics_store and self.metrics_store.opened:
-            self.metrics_store.close()
 
     def update_samples(self):
         if self.sampler:
@@ -412,7 +348,3 @@ class AsyncDriver:
             if arg is not None:
                 result.update(arg)
         return result
-
-
-def debug_exception_handler(loop, context):
-    logging.getLogger(__name__).error("Uncaught exception in event loop!! %s", context)
