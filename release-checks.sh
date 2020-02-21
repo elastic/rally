@@ -21,6 +21,9 @@
 set -eu
 RELEASE_VERSION=$1
 
+# Minimum Docker memory required to run Docker integration tests for release
+MIN_DOCKER_MEM=6.0
+
 # test number of parameters
 if [[ $# != 2 ]]
 then
@@ -55,6 +58,16 @@ if [[ ${ORIGIN_URL} != *"elastic/rally"* ]]
 then
     echo "Error: the git remote [origin] does not point to Rally's main repo at elastic/rally but to [${ORIGIN_URL}]."
     exit 1
+fi
+
+if [[ $(uname) == "Darwin" ]]; then
+    DOCKER_MEM=$(docker info | grep Memory | awk '{print ($3 + 0)}')
+    HAS_ENOUGH_MEM=$(echo "$DOCKER_MEM > $MIN_DOCKER_MEM" | bc)
+    if [[ ${HAS_ENOUGH_MEM} -eq 0 ]]; then
+        echo "Error: Docker is not configured with enough memory."
+        echo "Please increase memory available to Docker to at least ${MIN_DOCKER_MEM} gb"
+        exit 1
+    fi
 fi
 
 # Check if there will be any errors during CHANGELOG.md generation
