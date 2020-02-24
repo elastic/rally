@@ -939,8 +939,8 @@ class TrackPluginReader:
     def register_param_source(self, name, param_source):
         params.register_param_source_for_name(name, param_source)
 
-    def register_runner(self, name, runner):
-        self.runner_registry(name, runner)
+    def register_runner(self, name, runner, **kwargs):
+        self.runner_registry(name, runner, **kwargs)
 
     def register_scheduler(self, name, scheduler):
         self.scheduler_registry(name, scheduler)
