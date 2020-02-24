@@ -1058,7 +1058,12 @@ class AsyncIoAdapter:
         async_executor = AsyncExecutor(
             self.client_id, self.sub_task, self.schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
         final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
-        return await final_executor()
+        try:
+            return await final_executor()
+        finally:
+            await asyncio.get_event_loop().shutdown_asyncgens()
+            for e in es.values():
+                await e.transport.close()
 
 
 class AsyncProfiler:
