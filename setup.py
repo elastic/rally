@@ -54,10 +54,7 @@ install_requires = [
     # transitive dependencies:
     #   aiohttp: Apache 2.0
     #   async_timeout: Apache 2.0
-    # 6.2.0 does not include https://github.com/elastic/elasticsearch-py-async/pull/49 which (also) causes
-    # the behavior reported in https://github.com/elastic/elasticsearch-py-async/issues/43
-    # "elasticsearch-async==6.2.0",
-    "elasticsearch-async@git+https://github.com/elastic/elasticsearch-py-async.git",
+    "elasticsearch-async==6.2.0",
     # License: BSD
     "psutil==5.6.5",
     # License: MIT
