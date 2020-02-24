@@ -881,17 +881,15 @@ In ``track.json`` set the ``operation-type`` to "percolate" (you can choose this
 
 Then create a file ``track.py`` next to ``track.json`` and implement the following two functions::
 
-    def percolate(es, params):
-        es.percolate(
-            index="queries",
-            doc_type="content",
-            body=params["body"]
-        )
-
+    async def percolate(es, params):
+        await es.percolate(
+                index="queries",
+                doc_type="content",
+                body=params["body"]
+              )
 
     def register(registry):
-        registry.register_runner("percolate", percolate)
-
+        registry.register_runner("percolate", percolate, async_runner=True)
 
 The function ``percolate`` is the actual runner and takes the following parameters:
 
@@ -906,11 +904,25 @@ This function can return:
 
 Similar to a parameter source you also need to bind the name of your operation type to the function within ``register``.
 
+To illustrate how to use custom return values, suppose we want to implement a custom runner that calls the `pending tasks API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-pending.html>`_ and returns the number of pending tasks as additional meta-data::
+
+    async def pending_tasks(es, params):
+        response = await es.cluster.pending_tasks()
+        return {
+            "weight": 1,
+            "unit": "ops",
+            "pending-tasks-count": len(response["tasks"])
+        }
+
+    def register(registry):
+        registry.register_runner("pending-tasks", pending_tasks, async_runner=True)
+
+
 If you need more control, you can also implement a runner class. The example above, implemented as a class looks as follows::
 
     class PercolateRunner:
-        def __call__(self, es, params):
-            es.percolate(
+        async def __call__(self, es, params):
+            await es.percolate(
                 index="queries",
                 doc_type="content",
                 body=params["body"]
@@ -920,10 +932,12 @@ If you need more control, you can also implement a runner class. The example abo
             return "percolate"
 
     def register(registry):
-        registry.register_runner("percolate", PercolateRunner())
+        registry.register_runner("percolate", PercolateRunner(), async_runner=True)
 
 
-The actual runner is implemented in the method ``__call__`` and the same return value conventions apply as for functions. For debugging purposes you should also implement ``__repr__`` and provide a human-readable name for your runner. Finally, you need to register your runner in the ``register`` function. Runners also support Python's `context manager <https://docs.python.org/3/library/stdtypes.html#typecontextmanager>`_ interface. Rally uses a new context for each request. Implementing the context manager interface can be handy for cleanup of resources after executing an operation. Rally uses it, for example, to clear open scrolls.
+The actual runner is implemented in the method ``__call__`` and the same return value conventions apply as for functions. For debugging purposes you should also implement ``__repr__`` and provide a human-readable name for your runner. Finally, you need to register your runner in the ``register`` function.
+
+Runners also support Python's `asynchronous context manager <https://docs.python.org/3/reference/datamodel.html#async-context-managers>`_ interface. Rally uses a new context for each request. Implementing the asynchronous context manager interface can be handy for cleanup of resources after executing an operation. Rally uses it, for example, to clear open scrolls.
 
 If you have specified multiple Elasticsearch clusters using :ref:`target-hosts <command_line_reference_advanced_topics>` you can make Rally pass a dictionary of client connections instead of one for the ``default`` cluster in the ``es`` parameter.
 
@@ -938,14 +952,14 @@ Example (assuming Rally has been invoked specifying ``default`` and ``remote`` i
     class CreateIndexInRemoteCluster:
         multi_cluster = True
 
-        def __call__(self, es, params):
-            es['remote'].indices.create(index='remote-index')
+        async def __call__(self, es, params):
+            await es["remote"].indices.create(index="remote-index")
 
         def __repr__(self, *args, **kwargs):
             return "create-index-in-remote-cluster"
 
     def register(registry):
-        registry.register_runner("create-index-in-remote-cluster", CreateIndexInRemoteCluster())
+        registry.register_runner("create-index-in-remote-cluster", CreateIndexInRemoteCluster(), async_runner=True)
 
 
 .. note::
