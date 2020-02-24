@@ -27,66 +27,80 @@ from esrally.driver import driver, runner, scheduler
 from esrally.utils import console
 
 
-# TODO: Move to time.py
 class Timer:
-    def __init__(self, fn, interval, stop_event):
-        self.stop_event = stop_event
-        self.fn = fn
-        self.interval = interval
-        # check at least once a second whether we need to exit
-        self.wakeup_interval = min(self.interval, 1)
+    """
+    A general purpose timer that periodically runs tasks that have been added via ``add_task``. Stop the timer via
+    the ``stop`` method. Note that tasks can be called only once per second at most.
+
+    """
+    class Task:
+        def __init__(self, fn, interval, wakeup_interval):
+            self.fn = fn
+            self.interval = interval
+            self.wakeup_interval = wakeup_interval
+            self.current = 0
+
+        def may_run(self):
+            self.current += self.wakeup_interval
+            if self.current >= self.interval:
+                self.current = 0
+                self.fn()
+
+        def __repr__(self):
+            return "timer task for {} firing every {}s.".format(str(self.fn), self.interval)
+
+    def __init__(self, wakeup_interval=1):
+        """
+        :param wakeup_interval: The interval in seconds in which the timer will check whether it has been stopped or
+                                schedule tasks. Default: 1 second.
+        """
+        self.stop_event = threading.Event()
+        self.tasks = []
+        self.wakeup_interval = wakeup_interval
+        self.logger = logging.getLogger(__name__)
+
+    def add_task(self, fn, interval):
+        self.tasks.append(Timer.Task(fn, interval, self.wakeup_interval))
+
+    def stop(self):
+        self.stop_event.set()
 
     def __call__(self, *args, **kwargs):
         while not self.stop_event.is_set():
-            self.fn(*args, **kwargs)
+            for t in self.tasks:
+                self.logger.debug("Invoking [%s]", t)
+                t.may_run()
             # allow early exit even if a longer sleeping period is requested
-            for _ in range(self.interval):
-                if self.stop_event.is_set():
-                    break
-                time.sleep(self.wakeup_interval)
+            if self.stop_event.is_set():
+                self.logger.debug("Stopping timer due to external event.")
+                break
+            time.sleep(self.wakeup_interval)
 
 
 class AsyncDriver:
-    def __init__(self, config, es_client_factory_class=client.EsClientFactory):
-        """
-        Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
-        we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
-        appropriate messages.
-
-        :param config: The current config object.
-        """
+    def __init__(self, config, track, challenge, es_client_factory_class=client.EsClientFactory):
         self.logger = logging.getLogger(__name__)
         self.config = config
+        self.track = track
+        self.challenge = challenge
         self.es_client_factory = es_client_factory_class
-        self.track = None
-        self.challenge = None
         self.metrics_store = None
-        self.drivers = []
 
         self.progress_reporter = console.progress()
-        self.progress_counter = 0
-        self.quiet = False
-        self.allocations = None
+        self.throughput_calculator = driver.ThroughputCalculator()
         self.raw_samples = []
-        self.throughput_calculator = None
         self.most_recent_sample_per_client = {}
 
-        self.number_of_steps = 0
-        self.currently_completed = 0
-        self.clients_completed_current_step = {}
-        self.current_step = -1
-        self.tasks_per_join_point = None
-        self.complete_current_task_sent = False
         self.current_tasks = []
 
         self.telemetry = None
         self.es_clients = None
 
-        self._finished = False
+        self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
+        # TODO: Change the default value to `False` once this implementation becomes the default
+        self.debug_event_loop = self.config.opts("system", "async.debug", mandatory=False, default_value=True)
         self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
         self.profiling_enabled = self.config.opts("driver", "profiling")
-        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
-        self.stop_timer_tasks = threading.Event()
         self.sampler = None
 
     def create_es_clients(self, sync=True):
@@ -143,11 +157,13 @@ class AsyncDriver:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
-    def setup(self, t):
-        self.track = t
-        self.challenge = driver.select_challenge(self.config, self.track)
-        self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
-        self.throughput_calculator = driver.ThroughputCalculator()
+    def setup(self):
+        if self.track.has_plugins:
+            # no need to fetch the track once more; it has already been updated
+            track.track_repo(self.config, fetch=False, update=False)
+            # load track plugins eagerly to initialize the respective parameter sources
+            track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
+        track.prepare_track(self.track, self.config)
 
         self.metrics_store = metrics.metrics_store(cfg=self.config,
                                                    track=self.track.name,
@@ -156,12 +172,6 @@ class AsyncDriver:
         self.es_clients = self.create_es_clients()
         self.wait_for_rest_api()
         self.prepare_telemetry()
-
-        if self.track.has_plugins:
-            track.track_repo(self.config, fetch=True, update=True)
-            # we also need to load track plugins eagerly as the respective parameter sources could require
-            track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
-        track.prepare_track(self.track, self.config)
 
         cluster_info = self.retrieve_cluster_info()
         cluster_version = cluster_info["version"] if cluster_info else {}
@@ -174,34 +184,38 @@ class AsyncDriver:
         self.logger.info("Attaching cluster-level telemetry devices.")
         self.telemetry.on_benchmark_start()
         self.logger.info("Cluster-level telemetry devices are now attached.")
-        # TODO: Turn the intervals into constants
-        self.pool.submit(Timer(fn=self.update_samples, interval=1, stop_event=self.stop_timer_tasks))
-        self.pool.submit(Timer(fn=self.post_process_samples, interval=30, stop_event=self.stop_timer_tasks))
-        self.pool.submit(Timer(fn=self.update_progress_message, interval=1, stop_event=self.stop_timer_tasks))
+
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+        timer = Timer()
+        timer.add_task(fn=self.update_samples, interval=1)
+        timer.add_task(fn=self.post_process_samples, interval=30)
+        timer.add_task(fn=self.update_progress_message, interval=1)
+
+        pool.submit(timer)
 
         # needed because a new thread (that is not the main thread) does not have an event loop
         loop = asyncio.new_event_loop()
-        # TODO: Make this configurable?
-        loop.set_debug(True)
+        loop.set_debug(self.debug_event_loop)
         asyncio.set_event_loop(loop)
         loop.set_exception_handler(self._logging_exception_handler)
 
         track.set_absolute_data_path(self.config, self.track)
         runner.register_default_runners()
-        # TODO: We can skip this here if we run in the same process; it has already been done in #setup()
-        if self.track.has_plugins:
-            track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
+        # We can skip this here as long as we run in the same process; it has already been done in #setup()
+        # if self.track.has_plugins:
+        #     track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         try:
             benchmark_runner = driver.AsyncProfiler(self._run_benchmark) if self.profiling_enabled else self._run_benchmark
             loop.run_until_complete(benchmark_runner())
-
-            self._finished = True
             self.telemetry.on_benchmark_stop()
             self.logger.info("All steps completed.")
             return self.metrics_store.to_externalizable()
         finally:
-            self.stop_timer_tasks.set()
-            self.pool.shutdown()
+            self.logger.debug("Stopping timer...")
+            timer.stop()
+            pool.shutdown()
+            self.logger.debug("Closing event loop...")
             loop.close()
             self.progress_reporter.finish()
             self.logger.debug("Closing metrics store...")
@@ -287,7 +301,7 @@ class AsyncDriver:
             return
         total_start = time.perf_counter()
         start = total_start
-        # we do *not* do this here to avoid concurrent updates (actors are single-threaded) but rather to make it clear that we use
+        # we do *not* do this here to avoid concurrent updates (we are single-threaded) but rather to make it clear that we use
         # only a snapshot and that new data will go to a new sample set.
         raw_samples = self.raw_samples
         self.raw_samples = []

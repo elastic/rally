@@ -396,11 +396,11 @@ def run_async(cfg):
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
     coordinator = BenchmarkCoordinator(cfg)
-    race_driver = driver.AsyncDriver(cfg)
 
     try:
         coordinator.setup()
-        distribution_flavor, distribution_version, revision = race_driver.setup(coordinator.current_track)
+        race_driver = driver.AsyncDriver(cfg, coordinator.current_track, coordinator.current_challenge)
+        distribution_flavor, distribution_version, revision = race_driver.setup()
         coordinator.on_preparation_complete(distribution_flavor, distribution_version, revision)
 
         new_metrics = race_driver.run()

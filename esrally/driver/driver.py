@@ -1027,6 +1027,7 @@ class AsyncIoAdapter:
         self.complete = complete
         self.abort_on_error = abort_on_error
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
+        self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
 
     def __call__(self, *args, **kwargs):
         # only possible in Python 3.7+ (has introduced get_running_loop)
@@ -1036,7 +1037,7 @@ class AsyncIoAdapter:
         #     loop = asyncio.new_event_loop()
         #     asyncio.set_event_loop(loop)
         loop = asyncio.new_event_loop()
-        loop.set_debug(True)
+        loop.set_debug(self.debug_event_loop)
         loop.set_exception_handler(self._logging_exception_handler)
         asyncio.set_event_loop(loop)
         try:
