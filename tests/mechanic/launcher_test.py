@@ -367,7 +367,24 @@ class DockerLauncherTests(TestCase):
 
     @mock.patch("esrally.telemetry.add_metadata_for_node")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_stops_container_successfully(self, run_subprocess_with_logging, add_metadata_for_node):
+    def test_stops_container_successfully_with_metrics_store(self, run_subprocess_with_logging, add_metadata_for_node):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "env.name", "test")
+
+        metrics_store = get_metrics_store(cfg)
+        docker = launcher.DockerLauncher(cfg)
+
+        nodes = [cluster.Node(0, "/bin", "127.0.0.1", "testnode", telemetry.Telemetry())]
+
+        docker.stop(nodes, metrics_store=metrics_store)
+
+        add_metadata_for_node.assert_called_once_with(metrics_store, "testnode", "127.0.0.1")
+
+        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml down")
+
+    @mock.patch("esrally.telemetry.add_metadata_for_node")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_stops_container_when_no_metrics_store_is_provided(self, run_subprocess_with_logging, add_metadata_for_node):
         cfg = config.Config()
         metrics_store = None
         docker = launcher.DockerLauncher(cfg)
@@ -376,6 +393,6 @@ class DockerLauncherTests(TestCase):
 
         docker.stop(nodes, metrics_store=metrics_store)
 
-        add_metadata_for_node.assert_called_once_with(metrics_store, "testnode", "127.0.0.1")
+        self.assertEqual(0, add_metadata_for_node.call_count)
 
         run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml down")
