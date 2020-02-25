@@ -154,51 +154,6 @@ class StringAsFileSource:
         return "StringAsFileSource"
 
 
-# TODO: Remove before merging
-# pylint: disable=C0301
-class StaticSource:
-    def __init__(self, contents, mode, encoding="utf-8"):
-        self.contents = '{"geonameid": 2986043, "name": "Pic de Font Blanca", "asciiname": "Pic de Font Blanca", "alternatenames": "Pic de Font Blanca,Pic du Port", "feature_class": "T", "feature_code": "PK", "country_code": "AD", "admin1_code": "00", "population": 0, "dem": "2860", "timezone": "Europe/Andorra", "location": [1.53335, 42.64991]}'
-        self.current_index = 0
-        self.opened = False
-
-    def open(self):
-        self.opened = True
-        return self
-
-    def seek(self, offset):
-        pass
-
-    def read(self):
-        return "\n".join(self.contents)
-
-    def readline(self):
-        return self.contents
-
-    def readlines(self, num_lines):
-        return [self.contents] * num_lines
-
-    def close(self):
-        self._assert_opened()
-        self.contents = None
-        self.opened = False
-
-    def _assert_opened(self):
-        assert self.opened
-
-    def __enter__(self):
-        self.open()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-        return False
-
-    def __str__(self, *args, **kwargs):
-        return "StaticSource"
-
-
-
 def ensure_dir(directory, mode=0o777):
     """
     Ensure that the provided directory and all of its parent directories exist.
