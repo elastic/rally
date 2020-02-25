@@ -88,11 +88,13 @@ class DockerLauncher:
         self.logger.info("Shutting down [%d] nodes running in Docker on this host.", len(nodes))
         for node in nodes:
             self.logger.info("Stopping node [%s].", node.node_name)
-            telemetry.add_metadata_for_node(metrics_store, node.node_name, node.host_name)
+            if metrics_store:
+                telemetry.add_metadata_for_node(metrics_store, node.node_name, node.host_name)
             node.telemetry.detach_from_node(node, running=True)
             process.run_subprocess_with_logging(self._docker_compose(node.binary_path, "down"))
             node.telemetry.detach_from_node(node, running=False)
-            node.telemetry.store_system_metrics(node, metrics_store)
+            if metrics_store:
+                node.telemetry.store_system_metrics(node, metrics_store)
 
 
 def wait_for_pidfile(pidfilename, timeout=60, clock=time.Clock):
