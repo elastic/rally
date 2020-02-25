@@ -505,7 +505,8 @@ def create_arg_parser():
         p.add_argument(
             "--preserve-install",
             help="Keep the benchmark candidate and its index. (default: %s)." % str(preserve_install).lower(),
-            default=preserve_install)
+            default=preserve_install,
+            action="store_true")
         p.add_argument(
             "--test-mode",
             help="Runs the given track in 'test mode'. Meant to check a track for errors but not for real benchmarks (default: false).",
