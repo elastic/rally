@@ -143,6 +143,9 @@ class EsClientFactory:
 
         if "timeout" in self.client_options and not isinstance(self.client_options["timeout"], ClientTimeout):
             self.client_options["timeout"] = ClientTimeout(total=self.client_options["timeout"])
+        else:
+            # 10 seconds is the Elasticsearch default, ensure we always set a ClientTimeout object here
+            self.client_options["timeout"] = ClientTimeout(total=10)
 
         # copy of AsyncElasticsearch as https://github.com/elastic/elasticsearch-py-async/pull/49 is not yet released.
         # That PR (also) fixes the behavior reported in https://github.com/elastic/elasticsearch-py-async/issues/43.

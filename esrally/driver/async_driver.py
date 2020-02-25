@@ -248,7 +248,7 @@ class AsyncDriver:
                         e = driver.AsyncExecutor(client_id, sub_task, schedule, es, self.sampler, cancel, complete, self.abort_on_error)
                         aws.append(e())
                 # join point
-                done, pending = await asyncio.wait(aws)
+                _ = await asyncio.gather(*aws)
                 self.logger.info("All clients have finished running task [%s]", task.name)
                 # drain the active samples before we move on to the next task
                 self.update_samples()
