@@ -112,7 +112,7 @@ setup(name="esrally",
       license="Apache License, Version 2.0",
       packages=find_packages(
           where=".",
-          exclude=("tests*", "benchmarks*")
+          exclude=("tests*", "benchmarks*", "it*")
       ),
       include_package_data=True,
       # supported Python versions. This will prohibit pip (> 9.0.0) from even installing Rally on an unsupported
