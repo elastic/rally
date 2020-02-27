@@ -21,6 +21,7 @@ import random
 
 import pytest
 
+from esrally import client
 from esrally.utils import process, io
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
@@ -92,8 +93,10 @@ class TestCluster:
     def __init__(self, cfg):
         self.cfg = cfg
         self.installation_id = None
+        self.http_port = None
 
     def install(self, distribution_version, node_name, http_port):
+        self.http_port = http_port
         transport_port = http_port + 100
         try:
             output = process.run_subprocess_with_output(
@@ -109,6 +112,8 @@ class TestCluster:
         cmd = "start --runtime-jdk=\"bundled\" --installation-id={} --race-id={}".format(self.installation_id, race_id)
         if esrally(self.cfg, cmd) != 0:
             raise AssertionError("Failed to start Elasticsearch test cluster.")
+        es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
+        client.wait_for_rest_layer(es)
 
     def stop(self):
         if self.installation_id:
