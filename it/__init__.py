@@ -55,7 +55,7 @@ def rally_es(t):
 
 
 def esrally(cfg, command_line):
-    return os.system("esrally --configuration-name=\"{}\" {}".format(cfg, command_line))
+    return os.system("esrally {} --configuration-name=\"{}\"".format(command_line, cfg))
 
 
 def wait_until_port_is_free(port_number=39200):
@@ -106,10 +106,14 @@ class TestCluster:
             raise AssertionError("Failed to install Elasticsearch {}.".format(distribution_version), e)
 
     def start(self, race_id):
-        esrally(self.cfg, "start --installation-id={} --race-id={}".format(self.installation_id, race_id))
+        cmd = "start --runtime-jdk=\"bundled\" --installation-id={} --race-id={}".format(self.installation_id, race_id)
+        if esrally(self.cfg, cmd) != 0:
+            raise AssertionError("Failed to start Elasticsearch test cluster.")
 
     def stop(self):
-        esrally(self.cfg, "stop --installation-id={}".format(self.installation_id))
+        if self.installation_id:
+            if esrally(self.cfg, "stop --installation-id={}".format(self.installation_id)) != 0:
+                raise AssertionError("Failed to stop Elasticsearch test cluster.")
 
 
 class EsMetricsStore:
