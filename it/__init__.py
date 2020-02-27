@@ -55,7 +55,7 @@ def rally_es(t):
 
 
 def esrally(cfg, command_line):
-    return process.run_subprocess_with_logging("esrally --configuration-name=\"{}\" {}".format(cfg, command_line))
+    return os.system("esrally --configuration-name=\"{}\" {}".format(cfg, command_line))
 
 
 def wait_until_port_is_free(port_number=39200):
