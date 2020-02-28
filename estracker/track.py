@@ -26,6 +26,13 @@ def process_template(template_filename, template_vars, dest_path):
         outfile.write(template.render(template_vars))
 
 
+def check_index_name(index_name):
+    if len(index_name) == 0:
+        raise ValueError("Index name cannot be empty.")
+    if index_name.startswith("."):
+        raise ValueError("Cannot extract hidden indices.")
+
+
 def extract_mappings_and_corpora(client, outpath, indices_to_extract):
     logger = logging.getLogger(__name__)
 
@@ -33,6 +40,7 @@ def extract_mappings_and_corpora(client, outpath, indices_to_extract):
     corpora = []
     for index_name in indices_to_extract:
         try:
+            check_index_name(index_name)
             corpus_vars = corpus.extract(client, outpath, index_name)
             corpora.append(corpus_vars)
 

@@ -73,7 +73,7 @@ def extract(client, outdir, index):
     :param index: name of index
     :return: Dict of template variables representing the index for use in track
     """
-    filename = index.lstrip(".") + ".json"
+    filename = index + ".json"
     index_obj = extract_index_mapping_and_settings(client, index)
     outpath = os.path.join(outdir, filename)
     with open(outpath, "w") as outfile:
