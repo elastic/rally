@@ -24,7 +24,15 @@ import os
 from esrally import version
 from esrally.client import EsClientFactory
 from esrally.utils import opts, io
+from esrally.utils.opts import csv_to_list
 from estracker import track
+
+
+def list_type(arg):
+    lst = csv_to_list(arg)
+    if len(lst) < 1:
+        raise argparse.ArgumentError("At least one argument required!")
+    return lst
 
 
 def get_arg_parser():
@@ -32,7 +40,7 @@ def get_arg_parser():
 
     parser.add_argument("--target-hosts", default="", required=True, help="Elasticsearch host(s) to connect to")
     parser.add_argument("--client-options", default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS, help="Elasticsearch client options")
-    parser.add_argument("--indices", nargs="+", required=True, help="Indices to include in track")
+    parser.add_argument("--indices", type=list_type, required=True, help="Indices to include in track")
     parser.add_argument("--track-name", help="Name of track to use, if different from the name of index")
     parser.add_argument("--outdir", default=os.path.join(os.getcwd(), "tracks"), help="Output directory for track (default: tracks/)")
     parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
@@ -59,7 +67,10 @@ def main():
     args = argparser.parse_args()
 
     if not args.track_name:
-        args.track_name = args.indices[0]
+        if len(args.indices) == 1:
+            args.track_name = args.indices[0]
+        else:
+            raise ValueError("Track name must be specified when including multiple indices")
 
     target_hosts = opts.TargetHosts(args.target_hosts)
     client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
