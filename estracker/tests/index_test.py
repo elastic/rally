@@ -16,7 +16,7 @@
 # under the License.
 
 from unittest import mock
-from estracker.index import filter_ephemeral_index_settings, extract_index_mapping_and_settings
+from estracker.index import filter_ephemeral_index_settings, extract_index_mapping_and_settings, update_index_setting_parameters
 
 
 def test_index_setting_filter():
@@ -45,6 +45,36 @@ def test_index_setting_filter():
     }
     settings = filter_ephemeral_index_settings(unfiltered_index_settings)
     assert settings.keys() == {"number_of_shards", "number_of_replicas", "requests", "queries"}
+
+
+def test_index_setting_parameters():
+    settings = {
+        "number_of_shards": "5",
+        "provided_name": "queries",
+        "creation_date": "1579230289084",
+        "requests": {
+            "cache": {
+                "enable": "false"
+            }
+        },
+        "number_of_replicas": "0",
+    }
+    update_index_setting_parameters(settings)
+    assert settings == {
+        "number_of_shards": "{{number_of_shards | default(5)}}",
+        "provided_name": "queries",
+        "creation_date": "1579230289084",
+        "requests": {
+            "cache": {
+                "enable": "false"
+            }
+        },
+        "number_of_replicas": "{{number_of_replicas | default(0)}}",
+    }
+    # make sure we don't explode if the parameterized settings aren't present for some reason
+    settings.pop("number_of_shards")
+    settings.pop("number_of_replicas")
+    update_index_setting_parameters(settings)
 
 
 @mock.patch("elasticsearch.Elasticsearch")

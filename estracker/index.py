@@ -43,8 +43,9 @@ def filter_ephemeral_index_settings(settings):
 
 def update_index_setting_parameters(settings):
     for s, param in INDEX_SETTINGS_PARAMETERS.items():
-        orig_value = settings[s]
-        settings[s] = param.format(orig=orig_value)
+        if s in settings:
+            orig_value = settings[s]
+            settings[s] = param.format(orig=orig_value)
 
 
 def extract_index_mapping_and_settings(client, index):
