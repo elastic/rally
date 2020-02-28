@@ -36,9 +36,9 @@ def template_vars(index_name, out_path, doc_count):
     comp_outpath = out_path + COMP_EXT
     return {
         "index_name": index_name,
-        "base_url": get_base_url(out_path),
+        "base_url": get_base_url(comp_outpath),
         "filename": os.path.basename(comp_outpath),
-        "path": out_path,
+        "path": comp_outpath,
         "doc_count": doc_count,
         "uncompressed_bytes": os.path.getsize(out_path),
         "compressed_bytes": os.path.getsize(comp_outpath)

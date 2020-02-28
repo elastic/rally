@@ -78,8 +78,8 @@ def test_extract(client, mo):
                          call("/abs/outpath/to/tracks/test-documents-1k.json.bz2", "wb")
                          ], any_order=True)
 
-    assert res == {'filename': 'test-documents.json',
-                   'path': '/abs/outpath/to/tracks/test-documents.json',
+    assert res == {'filename': 'test-documents.json.bz2',
+                   'path': '/abs/outpath/to/tracks/test-documents.json.bz2',
                    'compressed_bytes': 500,
                    'index_name': 'test',
                    'doc_count': 1001,
