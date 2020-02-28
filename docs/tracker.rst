@@ -10,7 +10,9 @@ Usage
 -----
 To generate a new track, invoke Tracker as follows (replacing the example parameters below)::
 
-    estracker --target-hosts=host:9200,host2:9200 --indices=index_1 index_2 --trackname=xtrack --outdir=mytracks
+    estracker --target-hosts=host:9200,host2:9200 --client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'" --indices index_1,index_2 --track-name=xtrack --outdir=mytracks
+
+Note above that target-hosts and client-options parameters are the same as used in Rally.
 
 For each index on the specified Elasticsearch cluster, Tracker will retrieve the mapping and then proceed to fetch all
 documents in the index, saving the attached `_source` field for each document.
