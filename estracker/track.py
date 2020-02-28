@@ -50,6 +50,8 @@ def extract_mappings_and_corpora(client, outpath, indices_to_extract):
 
 def extract(client, outpath, track_name, indices_to_extract):
     indices, corpora = extract_mappings_and_corpora(client, outpath, indices_to_extract)
+    if len(indices) == 0:
+        raise RuntimeError("Failed to extract any indices for track!")
 
     template_vars = {
         "track_name": track_name,
