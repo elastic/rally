@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import functools
 import json
 import os
 import random
@@ -28,6 +29,7 @@ CONFIG_NAMES = ["in-memory-it", "es-it"]
 
 
 def all_rally_configs(t):
+    @functools.wraps(t)
     @pytest.mark.parametrize("cfg", CONFIG_NAMES)
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
@@ -35,6 +37,7 @@ def all_rally_configs(t):
 
 
 def random_rally_config(t):
+    @functools.wraps(t)
     @pytest.mark.parametrize("cfg", [random.choice(CONFIG_NAMES)])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
@@ -42,6 +45,7 @@ def random_rally_config(t):
 
 
 def rally_in_mem(t):
+    @functools.wraps(t)
     @pytest.mark.parametrize("cfg", ["in-memory-it"])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
@@ -49,6 +53,7 @@ def rally_in_mem(t):
 
 
 def rally_es(t):
+    @functools.wraps(t)
     @pytest.mark.parametrize("cfg", ["es-it"])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
