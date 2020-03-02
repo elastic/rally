@@ -27,4 +27,3 @@ def test_sources(cfg):
     it.wait_until_port_is_free()
     assert it.esrally(cfg, "--on-error=abort --pipeline=from-sources-skip-build --track=geonames --test-mode "
                            "--challenge=append-no-conflicts-index-only --car=\"4gheap,ea\"") == 0
-

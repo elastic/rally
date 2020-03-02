@@ -33,6 +33,7 @@ def all_rally_configs(t):
     @pytest.mark.parametrize("cfg", CONFIG_NAMES)
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
+
     return wrapper
 
 
@@ -41,6 +42,7 @@ def random_rally_config(t):
     @pytest.mark.parametrize("cfg", [random.choice(CONFIG_NAMES)])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
+
     return wrapper
 
 
@@ -49,6 +51,7 @@ def rally_in_mem(t):
     @pytest.mark.parametrize("cfg", ["in-memory-it"])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
+
     return wrapper
 
 
@@ -57,6 +60,7 @@ def rally_es(t):
     @pytest.mark.parametrize("cfg", ["es-it"])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
+
     return wrapper
 
 
@@ -105,9 +109,13 @@ class TestCluster:
         transport_port = http_port + 100
         try:
             output = process.run_subprocess_with_output(
-                "esrally install --configuration-name={} --quiet --distribution-version={} --build-type=tar "
-                "--http-port={} --node={} --master-nodes={} --seed-hosts=\"127.0.0.1:{}\"".format(
-                    self.cfg, distribution_version, http_port, node_name, node_name, transport_port))
+                "esrally install --configuration-name={cfg} --quiet --distribution-version={dist} --build-type=tar "
+                "--http-port={http_port} --node={node_name} --master-nodes={node_name} "
+                "--seed-hosts=\"127.0.0.1:{transport_port}\"".format(cfg=self.cfg,
+                                                                     dist=distribution_version,
+                                                                     http_port=http_port,
+                                                                     node_name=node_name,
+                                                                     transport_port=transport_port))
 
             self.installation_id = json.loads("".join(output))["installation-id"]
         except BaseException as e:
@@ -170,4 +178,3 @@ def setup_module():
 def teardown_module():
     ES_METRICS_STORE.stop()
     remove_integration_test_config()
-
