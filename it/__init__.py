@@ -69,13 +69,20 @@ def esrally(cfg, command_line):
 
 
 def wait_until_port_is_free(port_number=39200):
+    import errno
+    import time
     import socket
-    s = socket.socket()
     while True:
+        c = socket.socket()
+        connect_result = c.connect_ex(("127.0.0.1", port_number))
+        # noinspection PyBroadException
         try:
-            s.connect(("127.0.0.1", port_number))
-            s.close()
-            break
+            if connect_result == errno.ECONNREFUSED:
+                c.close()
+                return
+            else:
+                c.close()
+                time.sleep(0.5)
         except Exception:
             pass
 
