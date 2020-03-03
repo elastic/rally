@@ -15,27 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import os
-import uuid
-
 import it
 
 
 @it.random_rally_config
 def test_sources(cfg):
     it.wait_until_port_is_free()
-    race_id = str(uuid.uuid4())
-
-    return_code = it.esrally(cfg, "--on-error=abort --revision=latest --track=geonames --test-mode "
-                                  "--challenge=append-no-conflicts --car=4gheap "
-                                  "--elasticsearch-plugins=analysis-icu --race-id={}".format(race_id))
-    if return_code != 0:
-        print("Printing ES log - Rally exit code %s" % return_code, flush=True)
-        with open(os.path.join(os.path.expanduser("~"), ".rally", "benchmarks", "races", race_id, "rally-node-0",
-                               "logs", "server", "rally-benchmark.log")) as f:
-            print("".join(f.readlines()))
-
-    assert return_code == 0
+    assert it.esrally(cfg, "--on-error=abort --revision=latest --track=geonames --test-mode "
+                           "--challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu") == 0
 
     it.wait_until_port_is_free()
     assert it.esrally(cfg, "--on-error=abort --pipeline=from-sources-skip-build --track=geonames --test-mode "
