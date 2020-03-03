@@ -71,7 +71,7 @@ def main():
     check_python_version()
     log.install_default_log_config()
     log.configure_logging()
-    console.init()
+    console.init(assume_tty=False)
 
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
                                      description=BANNER + "\n\n Rally daemon to support remote benchmarks",
