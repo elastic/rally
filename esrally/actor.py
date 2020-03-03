@@ -21,7 +21,7 @@ import thespian.actors
 import thespian.system.messages.status
 
 from esrally import exceptions, log
-from esrally.utils import net
+from esrally.utils import console, net
 
 
 class BenchmarkFailure:
@@ -101,6 +101,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         self.status = None
         log.post_configure_actor_logging()
         self.logger = logging.getLogger(__name__)
+        console.set_assume_tty(assume_tty=False)
 
     # The method name is required by the actor framework
     # noinspection PyPep8Naming

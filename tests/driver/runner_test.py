@@ -860,6 +860,88 @@ class ForceMergeRunnerTests(TestCase):
                                                              params={"request_timeout": 17000})
 
 
+class IndicesStatsRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_indices_stats_without_parameters(self, es):
+        es.indices.stats.return_value = as_future({})
+        indices_stats = runner.IndicesStats()
+        result = await indices_stats(es, params={})
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+
+        es.indices.stats.assert_called_once_with(index="_all", metric="_all")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_indices_stats_with_failed_condition(self, es):
+        es.indices.stats.return_value = as_future({
+            "_all": {
+                "total": {
+                    "merges": {
+                        "current": 2,
+                        "current_docs": 292698,
+                    }
+                }
+            }
+        })
+
+        indices_stats = runner.IndicesStats()
+
+        result = await indices_stats(es, params={
+            "index": "logs-*",
+            "condition": {
+                "path": "_all.total.merges.current",
+                "expected-value": 0
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertFalse(result["success"])
+        self.assertDictEqual({
+            "path": "_all.total.merges.current",
+            "actual-value": "2",
+            "expected-value": "0"
+        }, result["condition"])
+
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_indices_stats_with_successful_condition(self, es):
+        es.indices.stats.return_value = as_future({
+            "_all": {
+                "total": {
+                    "merges": {
+                        "current": 0,
+                        "current_docs": 292698,
+                    }
+                }
+            }
+        })
+
+        indices_stats = runner.IndicesStats()
+
+        result = await indices_stats(es, params={
+            "index": "logs-*",
+            "condition": {
+                "path": "_all.total.merges.current",
+                "expected-value": 0
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+        self.assertDictEqual({
+            "path": "_all.total.merges.current",
+            "actual-value": "0",
+            "expected-value": "0"
+        }, result["condition"])
+
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
+
+
 class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
