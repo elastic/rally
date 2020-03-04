@@ -907,6 +907,39 @@ class IndicesStatsRunnerTests(TestCase):
 
         es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_indices_stats_with_non_existing_path(self, es):
+        es.indices.stats.return_value = {
+            "indices": {
+                "total": {
+                    "docs": {
+                        "current": 0
+                    }
+                }
+            }
+        }
+
+        indices_stats = runner.IndicesStats()
+
+        result = indices_stats(es, params={
+            "index": "logs-*",
+            "condition": {
+                # non-existing path
+                "path": "indices.my_index.total.docs.count",
+                "expected-value": 0
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertFalse(result["success"])
+        self.assertDictEqual({
+            "path": "indices.my_index.total.docs.count",
+            "actual-value": None,
+            "expected-value": "0"
+        }, result["condition"])
+
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
+
 
 class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
