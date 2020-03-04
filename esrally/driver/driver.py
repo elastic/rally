@@ -1201,7 +1201,10 @@ async def execute_single(runner, es, params, abort_on_error=False):
         # The ES client will sometimes return string like "N/A" or "TIMEOUT" for connection errors.
         if isinstance(e.status_code, int):
             request_meta_data["http-status"] = e.status_code
-        if e.info:
+        # connection timeout errors don't provide a helpful description
+        if isinstance(e, elasticsearch.ConnectionTimeout):
+            request_meta_data["error-description"] = "network connection timed out"
+        elif e.info:
             request_meta_data["error-description"] = "%s (%s)" % (e.error, e.info)
         else:
             request_meta_data["error-description"] = e.error
