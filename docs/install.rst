@@ -16,7 +16,7 @@ Rally does not support Windows and is only actively tested on MacOS and Linux. I
 Python
 ~~~~~~
 
-* Python 3.5 or better available as `python3` on the path. Verify with: ``python3 --version``.
+* Python 3.6 or better available as `python3` on the path. Verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
@@ -24,18 +24,18 @@ Python
 
 ::
 
-    sudo apt-get install gcc python3-pip python3-dev
+    sudo apt-get install gcc python3-pip python3.6-dev
 
 
 **RHEL / CentOS 6 and 7**
 
-Please refer to the `installation instructions for Python 3.5 in the Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/rh-python35/>`_.
+Please refer to the `installation instructions for Python 3.6 in the Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/rh-python36/>`_.
 
 **Amazon Linux**
 
 ::
 
-    sudo yum install -y gcc python35-pip.noarch python35-devel.x86_64
+    sudo yum install -y gcc python3-pip.noarch python3-devel.x86_64
 
 **MacOS**
 
