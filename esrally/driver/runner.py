@@ -32,7 +32,7 @@ __RUNNERS = {}
 def register_default_runners():
     register_runner(track.OperationType.Bulk.name, BulkIndex())
     register_runner(track.OperationType.ForceMerge.name, ForceMerge())
-    register_runner(track.OperationType.IndicesStats.name, IndicesStats())
+    register_runner(track.OperationType.IndicesStats.name, Retry(IndicesStats()))
     register_runner(track.OperationType.NodesStats.name, NodeStats())
     register_runner(track.OperationType.Search.name, Query())
     register_runner(track.OperationType.RawRequest.name, RawRequest())
@@ -607,8 +607,44 @@ class IndicesStats(Runner):
     Gather index stats for all indices.
     """
 
+    def _get(self, v, path):
+        if v is None:
+            return None
+        elif len(path) == 1:
+            return v.get(path[0])
+        else:
+            return self._get(v.get(path[0]), path[1:])
+
+    def _safe_string(self, v):
+        return str(v) if v is not None else None
+
     def __call__(self, es, params):
-        es.indices.stats(metric="_all")
+        index = params.get("index", "_all")
+        condition = params.get("condition")
+
+        response = es.indices.stats(index=index, metric="_all")
+        if condition:
+            path = mandatory(condition, "path", repr(self))
+            expected_value = mandatory(condition, "expected-value", repr(self))
+            actual_value = self._get(response, path.split("."))
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "condition": {
+                    "path": path,
+                    # avoid mapping issues in the ES metrics store by always rendering values as strings
+                    "actual-value": self._safe_string(actual_value),
+                    "expected-value": self._safe_string(expected_value)
+                },
+                # currently we only support "==" as a predicate but that might change in the future
+                "success": actual_value == expected_value
+            }
+        else:
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "success": True
+            }
 
     def __repr__(self, *args, **kwargs):
         return "indices-stats"
@@ -1433,8 +1469,10 @@ class Retry(Runner, Delegator):
                 # we can determine success if and only if the runner returns a dict. Otherwise, we have to assume it was fine.
                 elif isinstance(return_value, dict):
                     if return_value.get("success", True):
+                        self.logger.debug("%s has returned successfully", repr(self.delegate))
                         return return_value
                     else:
+                        self.logger.debug("%s has returned with an error: %s.", repr(self.delegate), return_value)
                         time.sleep(sleep_time)
                 else:
                     return return_value

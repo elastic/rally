@@ -19,6 +19,7 @@ Please execute the following tasks after `make release` has finished:
 ### Preconditions
 
 * Ensure that the master branch is checked out and your working copy is clean (run `git status`).
+* Ensure that integration tests can run to completion successfully on your machine (run `make it`).
 * Ensure that the associated milestone on Github contains no open tickets (otherwise the release will fail).
 
 ### Initial Setup

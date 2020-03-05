@@ -301,6 +301,14 @@ Each operation consists of the following properties:
 * ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
 * ``include-in-reporting`` (optional, defaults to ``true`` for normal operations and to ``false`` for administrative operations): Whether or not this operation should be included in the command line report. For example you might want Rally to create an index for you but you are not interested in detailed metrics about it. Note that Rally will still record all metrics in the metrics store.
 
+Some of the operations below are also retryable (marked accordingly below). Retryable operations expose the following properties:
+
+* ``retries`` (optional, defaults to 0): The number of times the operation is retried.
+* ``retry-until-success`` (optional, defaults to ``false``): Retries until the operation returns a success. This will also forcibly set ``retry-on-error`` to ``true``.
+* ``retry-wait-period`` (optional, defaults to 0.5): The time in seconds to wait between retry attempts.
+* ``retry-on-timeout`` (optional, defaults to ``true``): Whether to retry on connection timeout.
+* ``retry-on-error`` (optional, defaults to ``false``): Whether to retry on errors (e.g. when an index could not be deleted).
+
 Depending on the operation type a couple of further parameters can be specified.
 
 bulk
@@ -351,9 +359,26 @@ This is an administrative operation. Metrics are not reported by default. If rep
 index-stats
 ~~~~~~~~~~~
 
-With the operation type ``index-stats`` you can call the `indices stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_. It does not support any parameters.
+With the operation type ``index-stats`` you can call the `indices stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_. It supports the following properties:
+
+* ``index`` (optional, defaults to `_all`): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this operation.
+* ``condition`` (optional, defaults to no condition): A structured object with the properties ``path`` and ``expected-value``. If the actual value returned by indices stats API is equal to the expected value at the provided path, this operation will return successfully. See below for an example how this can be used.
+
+In the following example the ``index-stats`` operation will wait until all segments have been merged::
+
+    {
+        "operation-type": "index-stats",
+        "index": "_all",
+        "condition": {
+            "path": "_all.total.merges.current",
+            "expected-value": 0
+        },
+        "retry-until-success": true
+    }
 
 Throughput will be reported as number of completed `index-stats` operations per second.
+
+This operation is :ref:`retryable <track_operations>`.
 
 node-stats
 ~~~~~~~~~~
@@ -452,6 +477,8 @@ This example requires that the ``ingest-geoip`` Elasticsearch plugin is installe
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 put-settings
 ~~~~~~~~~~~~
 
@@ -474,6 +501,8 @@ Example::
     }
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
 
 cluster-health
 ~~~~~~~~~~~~~~
@@ -499,6 +528,8 @@ Example::
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 refresh
 ~~~~~~~
 
@@ -507,6 +538,8 @@ With the operation ``refresh`` you can execute the `refresh API <https://www.ela
 * ``index`` (optional, defaults to ``_all``): The name of the index that should be refreshed.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
 
 create-index
 ~~~~~~~~~~~~
@@ -566,6 +599,8 @@ With the following snippet we will create a new index that is not defined in the
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 delete-index
 ~~~~~~~~~~~~
 
@@ -606,6 +641,8 @@ With the following snippet we will delete all ``logs-*`` indices::
     }
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
 
 create-index-template
 ~~~~~~~~~~~~~~~~~~~~~
@@ -662,6 +699,8 @@ With the following snippet we will create a new index template that is not defin
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 delete-index-template
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -705,6 +744,8 @@ With the following snippet we will delete the `default`` index template::
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 shrink-index
 ~~~~~~~~~~~~
 
@@ -733,6 +774,8 @@ Example::
 
 This will shrink the index ``src`` to ``target``. The target index will consist of one shard and have one replica. With ``shrink-node`` we also explicitly specify the name of the node where we want the source index to be relocated to.
 
+This operation is :ref:`retryable <track_operations>`.
+
 delete-ml-datafeed
 ~~~~~~~~~~~~~~~~~~
 
@@ -755,6 +798,8 @@ With the operation ``create-ml-datafeed`` you can execute the `create datafeeds 
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 start-ml-datafeed
 ~~~~~~~~~~~~~~~~~
 
@@ -768,6 +813,8 @@ With the operation ``start-ml-datafeed`` you can execute the `start datafeeds AP
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 stop-ml-datafeed
 ~~~~~~~~~~~~~~~~
 
@@ -778,6 +825,8 @@ With the operation ``stop-ml-datafeed`` you can execute the `stop datafeed API <
 * ``timeout`` (optional, defaults to empty): Amount of time to wait until a datafeed stops.
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
 
 delete-ml-job
 ~~~~~~~~~~~~~
@@ -791,6 +840,8 @@ This runner will intentionally ignore 404s from Elasticsearch so it is safe to e
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 create-ml-job
 ~~~~~~~~~~~~~
 
@@ -801,6 +852,8 @@ With the operation ``create-ml-job`` you can execute the `create jobs API <https
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 open-ml-job
 ~~~~~~~~~~~
 
@@ -809,6 +862,8 @@ With the operation ``open-ml-job`` you can execute the `open jobs API <https://w
 * ``job-id`` (mandatory): The name of the machine learning job to open.
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
 
 close-ml-job
 ~~~~~~~~~~~~
@@ -820,6 +875,8 @@ With the operation ``close-ml-job`` you can execute the `close jobs API. The ``c
 * ``timeout`` (optional, defaults to empty): Amount of time to wait until a job stops.
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
 
 raw-request
 ~~~~~~~~~~~
@@ -854,6 +911,8 @@ With the operation ``delete-snapshot-repository`` you can delete an existing sna
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+This operation is :ref:`retryable <track_operations>`.
+
 create-snapshot-repository
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -864,6 +923,8 @@ With the operation ``create-snapshot-repository`` you can create a new snapshot 
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
 
 restore-snapshot
 ~~~~~~~~~~~~~~~~
@@ -911,6 +972,8 @@ With the operation ``wait-for-recovery`` you can wait until an ongoing shard rec
     In this example, Rally will check the progress of shard recovery every ten seconds (as specified by ``target-throughput``). When the index recovery API reports that there are no active recoveries, it will still check this twice (``completion-recheck-attempts``), waiting for five seconds in between those calls (``completion-recheck-wait-period``).
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
 
 schedule
 ~~~~~~~~

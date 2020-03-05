@@ -1,3 +1,49 @@
+### 1.4.1
+
+#### Highlights
+
+* [#890](https://github.com/elastic/rally/pull/890): Speed up client-side bulk-handling
+
+#### Enhancements
+
+* [#912](https://github.com/elastic/rally/pull/912): Honor only specified Python versions in prereq
+* [#909](https://github.com/elastic/rally/pull/909): Add custom probing URL
+* [#908](https://github.com/elastic/rally/pull/908): Validate docker-compose exists in it tests
+* [#907](https://github.com/elastic/rally/pull/907): Specify useful variables for Rally CI
+* [#906](https://github.com/elastic/rally/pull/906): Specify useful variables for Rally CI
+* [#904](https://github.com/elastic/rally/pull/904): Eliminate deprecation warnings in Python 3.7+
+* [#903](https://github.com/elastic/rally/pull/903): Show more user-friendly track loader errors
+* [#899](https://github.com/elastic/rally/pull/899) (Breaking): Use zeroes instead of whitespaces as padding bytes
+* [#895](https://github.com/elastic/rally/pull/895): Log race id on startup
+* [#887](https://github.com/elastic/rally/pull/887): Allow to override Python binary for make
+* [#886](https://github.com/elastic/rally/pull/886): Fix race condition with old ES processes in IT tests
+* [#884](https://github.com/elastic/rally/pull/884): Detach ES using Python standard mechanism
+* [#880](https://github.com/elastic/rally/pull/880): Show recent log output on integration test failure
+* [#879](https://github.com/elastic/rally/pull/879): Don't read from stdout/stderr on ES startup
+* [#873](https://github.com/elastic/rally/pull/873): Prevent installation with unsupported Python
+* [#872](https://github.com/elastic/rally/pull/872): Extend error msg to specify operation name for missing index
+* [#865](https://github.com/elastic/rally/pull/865): Updating force merge operation to force merge only track indices by default
+
+#### Bug Fixes
+
+* [#901](https://github.com/elastic/rally/pull/901): Fix race in wait_for_pidfile.
+* [#894](https://github.com/elastic/rally/pull/894): Only set distribution-version if known
+* [#893](https://github.com/elastic/rally/pull/893): Only clear  metrics store on benchmark end
+* [#891](https://github.com/elastic/rally/pull/891): Align exception handling in disk IO telemetry
+* [#885](https://github.com/elastic/rally/pull/885): Fix issue with fetching test-mode -1k document corpora.
+* [#883](https://github.com/elastic/rally/pull/883): Stop all locally running nodes
+* [#882](https://github.com/elastic/rally/pull/882): Make REST API check stricter
+* [#881](https://github.com/elastic/rally/pull/881): Wait for REST layer before version check
+* [#877](https://github.com/elastic/rally/pull/877): Don't write metrics to a closed metrics store
+* [#874](https://github.com/elastic/rally/pull/874): Store system metrics if race metadata are present
+* [#871](https://github.com/elastic/rally/pull/871): Skip setup phase in IT tests during docker release
+* [#868](https://github.com/elastic/rally/pull/868): Fix W0631
+* [#860](https://github.com/elastic/rally/pull/860): More resilient node shutdown
+
+#### Doc Changes
+
+* [#902](https://github.com/elastic/rally/pull/902): Add example how to determine actor system status
+
 ### 1.4.0
 
 #### Highlights
