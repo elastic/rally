@@ -51,7 +51,7 @@ install_requires = [
     # transitive dependency urllib3: MIT
     "elasticsearch==7.0.5",
     # License: BSD
-    "psutil==5.6.5",
+    "psutil==5.7.0",
     # License: MIT
     "py-cpuinfo==3.2.0",
     # License: MIT
