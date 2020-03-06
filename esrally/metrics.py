@@ -1219,14 +1219,15 @@ def create_race(cfg, track, challenge, track_revision=None):
     car_params = cfg.opts("mechanic", "car.params")
     plugin_params = cfg.opts("mechanic", "plugin.params")
     rally_version = version.version()
+    rally_revision = version.revision()
 
-    return Race(rally_version, environment, race_id, race_timestamp, pipeline, user_tags, track, track_params,
-                challenge, car, car_params, plugin_params, track_revision)
+    return Race(rally_version, rally_revision, environment, race_id, race_timestamp, pipeline, user_tags, track,
+                track_params, challenge, car, car_params, plugin_params, track_revision)
 
 
 class Race:
-    def __init__(self, rally_version, environment_name, race_id, race_timestamp, pipeline, user_tags, track,
-                 track_params, challenge, car, car_params, plugin_params, track_revision=None, team_revision=None,
+    def __init__(self, rally_version, rally_revision, environment_name, race_id, race_timestamp, pipeline, user_tags,
+                 track, track_params, challenge, car, car_params, plugin_params, track_revision=None, team_revision=None,
                  distribution_version=None, distribution_flavor=None, revision=None, results=None, meta_data=None):
         if results is None:
             results = {}
@@ -1238,6 +1239,7 @@ class Race:
             if challenge:
                 meta_data.update(challenge.meta_data)
         self.rally_version = rally_version
+        self.rally_revision = rally_revision
         self.environment_name = environment_name
         self.race_id = race_id
         self.race_timestamp = race_timestamp
@@ -1278,6 +1280,7 @@ class Race:
         """
         d = {
             "rally-version": self.rally_version,
+            "rally-revision": self.rally_revision,
             "environment": self.environment_name,
             # TODO #777: Remove trial-* with a later release. They are only here for BWC
             "trial-id": self.race_id,
@@ -1315,6 +1318,7 @@ class Race:
         """
         result_template = {
             "rally-version": self.rally_version,
+            "rally-revision": self.rally_revision,
             "environment": self.environment_name,
             # TODO #777: Remove trial-* with a later release. They are only here for BWC
             "trial-id": self.race_id,
@@ -1366,7 +1370,7 @@ class Race:
         # TODO: cluster is optional for BWC. This can be removed after some grace period.
         # TODO #777: Remove the backwards-compatibility layer with trial*
         cluster = d.get("cluster", {})
-        return Race(d["rally-version"], d["environment"], d.get("race-id", d.get("trial-id")),
+        return Race(d["rally-version"], d.get("rally-revision"), d["environment"], d.get("race-id", d.get("trial-id")),
                     time.from_is8601(d.get("race-timestamp", d.get("trial-timestamp"))),
                     d["pipeline"], user_tags, d["track"], d.get("track-params"), d.get("challenge"), d["car"],
                     d.get("car-params"), d.get("plugin-params"), track_revision=d.get("track-revision"),
