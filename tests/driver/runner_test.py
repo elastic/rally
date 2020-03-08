@@ -942,8 +942,9 @@ class IndicesStatsRunnerTests(TestCase):
         es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_indices_stats_with_non_existing_path(self, es):
-        es.indices.stats.return_value = {
+    @run_async
+    async def test_indices_stats_with_non_existing_path(self, es):
+        es.indices.stats.return_value = as_future({
             "indices": {
                 "total": {
                     "docs": {
@@ -951,11 +952,11 @@ class IndicesStatsRunnerTests(TestCase):
                     }
                 }
             }
-        }
+        })
 
         indices_stats = runner.IndicesStats()
 
-        result = indices_stats(es, params={
+        result = await indices_stats(es, params={
             "index": "logs-*",
             "condition": {
                 # non-existing path
