@@ -67,6 +67,7 @@ def create_arg_parser():
         help="")
 
     race_parser = subparsers.add_parser("race", help="Run the benchmarking pipeline. This sub-command should typically be used.")
+    async_race_parser = subparsers.add_parser("race-async")
     # change in favor of "list telemetry", "list tracks", "list pipelines"
     list_parser = subparsers.add_parser("list", help="List configuration options")
     list_parser.add_argument(
@@ -350,7 +351,7 @@ def create_arg_parser():
         default=preserve_install,
         action="store_true")
 
-    for p in [parser, list_parser, race_parser, generate_parser]:
+    for p in [parser, list_parser, race_parser, async_race_parser, generate_parser]:
         p.add_argument(
             "--distribution-version",
             help="Define the version of the Elasticsearch distribution to download. "
@@ -390,7 +391,7 @@ def create_arg_parser():
             default=False,
             action="store_true")
 
-    for p in [parser, race_parser]:
+    for p in [parser, race_parser, async_race_parser]:
         p.add_argument(
             "--race-id",
             help="Define a unique id for this race.",
@@ -522,7 +523,7 @@ def create_arg_parser():
     # The options below are undocumented and can be removed or changed at any time.
     #
     ###############################################################################
-    for p in [parser, race_parser]:
+    for p in [parser, race_parser, async_race_parser]:
         # This option is intended to tell Rally to assume a different start date than 'now'. This is effectively just useful for things like
         # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
         p.add_argument(
@@ -544,7 +545,7 @@ def create_arg_parser():
             default=False)
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
-              start_parser, stop_parser, info_parser]:
+              start_parser, stop_parser, info_parser, async_race_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
@@ -713,6 +714,8 @@ def dispatch_sub_command(cfg, sub_command):
             mechanic.stop(cfg)
         elif sub_command == "race":
             race(cfg)
+        elif sub_command == "race-async":
+            racecontrol.run_async(cfg)
         elif sub_command == "generate":
             generate(cfg)
         elif sub_command == "info":

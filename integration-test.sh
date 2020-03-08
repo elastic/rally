@@ -546,11 +546,11 @@ function test_node_management_commands {
     info "test start [--configuration-name=${cfg}]"
     esrally start --quiet --configuration-name="${cfg}" --installation-id="${install_id}" --race-id="rally-integration-test"
 
-    esrally --target-host="localhost:39200" \
+    esrally race-async \
+            --target-host="localhost:39200" \
             --configuration-name="${cfg}" \
             --race-id="rally-integration-test" \
             --on-error=abort \
-            --pipeline=benchmark-only \
             --track=geonames \
             --test-mode \
             --challenge=append-no-conflicts-index-only
