@@ -1151,7 +1151,8 @@ class TimeSeriesCharts:
                         "fill": "0.6",
                         "stacked": "none",
                         "split_color_mode": "gradient",
-                        "series_drop_last_bucket": 0
+                        "series_drop_last_bucket": 0,
+                        "value_template": "{{value}} ms",
                     },
                     {
                         "id": str(uuid.uuid4()),
@@ -1174,7 +1175,8 @@ class TimeSeriesCharts:
                         "fill": "0.4",
                         "stacked": "none",
                         "split_color_mode": "gradient",
-                        "series_drop_last_bucket": 0
+                        "series_drop_last_bucket": 0,
+                        "value_template": "{{value}} ms",
                     },
                     {
                         "id": str(uuid.uuid4()),
@@ -1197,7 +1199,8 @@ class TimeSeriesCharts:
                         "fill": "0.2",
                         "stacked": "none",
                         "split_color_mode": "gradient",
-                        "series_drop_last_bucket": 0
+                        "series_drop_last_bucket": 0,
+                        "value_template": "{{value}} ms",
                     },
                     {
                         "id": str(uuid.uuid4()),
@@ -1220,7 +1223,8 @@ class TimeSeriesCharts:
                         "fill": "0.1",
                         "stacked": "none",
                         "split_color_mode": "gradient",
-                        "series_drop_last_bucket": 0
+                        "series_drop_last_bucket": 0,
+                        "value_template": "{{value}} ms",
                     }
                 ],
                 "time_field": "race-timestamp",

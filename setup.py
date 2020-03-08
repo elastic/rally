@@ -56,7 +56,7 @@ install_requires = [
     #   async_timeout: Apache 2.0
     "elasticsearch-async==6.2.0",
     # License: BSD
-    "psutil==5.6.5",
+    "psutil==5.7.0",
     # License: MIT
     "py-cpuinfo==3.2.0",
     # License: MIT

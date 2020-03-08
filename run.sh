@@ -35,9 +35,11 @@ install_esrally_with_setuptools () {
     fi
 
     if [[ ${IN_VIRTUALENV} == 0 ]]; then
-        python3 setup.py -q develop --user --upgrade
+        # https://setuptools.readthedocs.io/en/latest/setuptools.html suggests not invoking setup.py directly
+        # Also workaround system pip conflicts, https://github.com/pypa/pip/issues/5599
+        python3 -m pip install --quiet --user --upgrade --editable .[develop]
     else
-        python3 setup.py -q develop --upgrade
+        python3 -m pip install --quiet --upgrade --editable .[develop]
     fi
 }
 

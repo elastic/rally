@@ -19,6 +19,8 @@ SHELL = /bin/bash
 # We assume an active virtualenv for development
 PYENV_REGEX = .pyenv/shims
 PY_BIN = python3
+# https://github.com/pypa/pip/issues/5599
+PIP_WRAPPER = $(PY_BIN) -m pip
 PY36 = $(shell jq '.python_versions.PY36' .ci/variables.json)
 PY37 = $(shell jq '.python_versions.PY37' .ci/variables.json)
 PY38 = $(shell jq '.python_versions.PY38' .ci/variables.json)
@@ -36,7 +38,7 @@ prereq:
 	pyenv install --skip-existing $(PY36)
 	pyenv install --skip-existing $(PY37)
 	pyenv install --skip-existing $(PY38)
-	pyenv local $(PY35) $(PY36) $(PY37) $(PY38)
+	pyenv local $(PY36) $(PY37) $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
@@ -61,10 +63,10 @@ check-venv:
 	fi
 
 install: venv-create
-	. $(VENV_ACTIVATE_FILE); pip install --upgrade pip setuptools
-	. $(VENV_ACTIVATE_FILE); pip3 install -e .
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip setuptools wheel
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 	# Also install development dependencies
-	. $(VENV_ACTIVATE_FILE); pip3 install -e .[develop]
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop]
 
 clean: nondocs-clean docs-clean
 

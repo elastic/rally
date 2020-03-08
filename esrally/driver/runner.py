@@ -613,10 +613,15 @@ class IndicesStats(Runner):
     """
 
     def _get(self, v, path):
-        if len(path) == 1:
-            return v[path[0]]
+        if v is None:
+            return None
+        elif len(path) == 1:
+            return v.get(path[0])
         else:
-            return self._get(v[path[0]], path[1:])
+            return self._get(v.get(path[0]), path[1:])
+
+    def _safe_string(self, v):
+        return str(v) if v is not None else None
 
     async def __call__(self, es, params):
         index = params.get("index", "_all")
@@ -633,8 +638,8 @@ class IndicesStats(Runner):
                 "condition": {
                     "path": path,
                     # avoid mapping issues in the ES metrics store by always rendering values as strings
-                    "actual-value": str(actual_value),
-                    "expected-value": str(expected_value)
+                    "actual-value": self._safe_string(actual_value),
+                    "expected-value": self._safe_string(expected_value)
                 },
                 # currently we only support "==" as a predicate but that might change in the future
                 "success": actual_value == expected_value
