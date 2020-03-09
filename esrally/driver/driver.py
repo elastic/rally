@@ -1028,6 +1028,7 @@ class AsyncIoAdapter:
         self.abort_on_error = abort_on_error
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
+        self.use_uvloop = self.cfg.opts("driver", "uvloop")
 
     def __call__(self, *args, **kwargs):
         # only possible in Python 3.7+ (has introduced get_running_loop)
@@ -1036,6 +1037,13 @@ class AsyncIoAdapter:
         # except RuntimeError:
         #     loop = asyncio.new_event_loop()
         #     asyncio.set_event_loop(loop)
+        if self.use_uvloop:
+            print("Using uvloop to perform asyncio.")
+            import uvloop
+            uvloop.install()
+        #else:
+            #self.logger.info("Using standard library implementation to perform asyncio.")
+
         loop = asyncio.new_event_loop()
         loop.set_debug(self.debug_event_loop)
         loop.set_exception_handler(self._logging_exception_handler)

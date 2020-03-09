@@ -82,7 +82,9 @@ install_requires = [
     # License: Apache 2.0
     "yappi==1.2.3",
     # TODO: Add proper license
-    "orjson==2.5.2"
+    "orjson==2.5.2",
+    #"ijson==2.6.1",
+    "uvloop==0.14.0"
 ]
 
 tests_require = [
