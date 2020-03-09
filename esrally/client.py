@@ -134,29 +134,17 @@ class EsClientFactory:
         import elasticsearch_async
         from aiohttp.client import ClientTimeout
         import esrally.async_connection
-        import ujson
-        from datetime import date, datetime
-        from decimal import Decimal
-        import uuid
+        import orjson
 
         from elasticsearch.compat import string_types
 
-        # override the builtin JSON serializer
         class UJSONSerializer:
             mimetype = "application/json"
 
-            def default(self, data):
-                if isinstance(data, (date, datetime)):
-                    return data.isoformat()
-                elif isinstance(data, Decimal):
-                    return float(data)
-                elif isinstance(data, uuid.UUID):
-                    return str(data)
-                raise TypeError("Unable to serialize %r (type: %s)" % (data, type(data)))
-
             def loads(self, s):
+                print("loads")
                 try:
-                    return ujson.loads(s)
+                    return orjson.loads(s)
                 except (ValueError, TypeError) as e:
                     raise elasticsearch.SerializationError(s, e)
 
@@ -166,13 +154,9 @@ class EsClientFactory:
                     return data
 
                 try:
-                    return ujson.dumps(
-                        data, default=self.default, ensure_ascii=False, separators=(",", ":")
-                    )
+                    return orjson.dumps(data)
                 except (ValueError, TypeError) as e:
                     raise elasticsearch.SerializationError(data, e)
-
-        elasticsearch.transport.DEFAULT_SERIALIZERS[UJSONSerializer.mimetype] = UJSONSerializer()
 
         # needs patching as https://github.com/elastic/elasticsearch-py-async/pull/68 is not merged yet
         class RallyAsyncTransport(elasticsearch_async.transport.AsyncTransport):
@@ -186,6 +170,9 @@ class EsClientFactory:
         else:
             # 10 seconds is the Elasticsearch default, ensure we always set a ClientTimeout object here
             self.client_options["timeout"] = ClientTimeout(total=10)
+
+        # override the builtin JSON serializer
+        self.client_options["serializer"] = UJSONSerializer()
 
         # copy of AsyncElasticsearch as https://github.com/elastic/elasticsearch-py-async/pull/49 is not yet released.
         # That PR (also) fixes the behavior reported in https://github.com/elastic/elasticsearch-py-async/issues/43.
