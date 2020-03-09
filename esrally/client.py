@@ -130,9 +130,49 @@ class EsClientFactory:
     def create_async(self):
         # keep imports confined as we do some temporary patching to work around unsolved issues in the async ES connector
         import elasticsearch
+        import elasticsearch.transport
         import elasticsearch_async
         from aiohttp.client import ClientTimeout
         import esrally.async_connection
+        import ujson
+        from datetime import date, datetime
+        from decimal import Decimal
+        import uuid
+
+        from elasticsearch.compat import string_types
+
+        # override the builtin JSON serializer
+        class UJSONSerializer:
+            mimetype = "application/json"
+
+            def default(self, data):
+                if isinstance(data, (date, datetime)):
+                    return data.isoformat()
+                elif isinstance(data, Decimal):
+                    return float(data)
+                elif isinstance(data, uuid.UUID):
+                    return str(data)
+                raise TypeError("Unable to serialize %r (type: %s)" % (data, type(data)))
+
+            def loads(self, s):
+                try:
+                    return ujson.loads(s)
+                except (ValueError, TypeError) as e:
+                    raise elasticsearch.SerializationError(s, e)
+
+            def dumps(self, data):
+                # don't serialize strings
+                if isinstance(data, string_types):
+                    return data
+
+                try:
+                    return ujson.dumps(
+                        data, default=self.default, ensure_ascii=False, separators=(",", ":")
+                    )
+                except (ValueError, TypeError) as e:
+                    raise elasticsearch.SerializationError(data, e)
+
+        elasticsearch.transport.DEFAULT_SERIALIZERS[UJSONSerializer.mimetype] = UJSONSerializer()
 
         # needs patching as https://github.com/elastic/elasticsearch-py-async/pull/68 is not merged yet
         class RallyAsyncTransport(elasticsearch_async.transport.AsyncTransport):

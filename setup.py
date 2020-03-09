@@ -80,7 +80,9 @@ install_requires = [
     #   s3transfer: Apache 2.0
     "boto3==1.10.32",
     # License: Apache 2.0
-    "yappi==1.2.3"
+    "yappi==1.2.3",
+    # TODO: Add proper license
+    "ujson==2.0.1"
 ]
 
 tests_require = [
