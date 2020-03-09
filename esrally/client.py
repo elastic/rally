@@ -142,7 +142,6 @@ class EsClientFactory:
             mimetype = "application/json"
 
             def loads(self, s):
-                print("loads")
                 try:
                     return orjson.loads(s)
                 except (ValueError, TypeError) as e:
