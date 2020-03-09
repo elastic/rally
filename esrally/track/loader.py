@@ -939,8 +939,8 @@ class TrackPluginReader:
     def register_param_source(self, name, param_source):
         params.register_param_source_for_name(name, param_source)
 
-    def register_runner(self, name, runner, **kwargs):
-        self.runner_registry(name, runner, **kwargs)
+    def register_runner(self, name, runner):
+        self.runner_registry(name, runner)
 
     def register_scheduler(self, name, scheduler):
         self.scheduler_registry(name, scheduler)
@@ -950,8 +950,7 @@ class TrackPluginReader:
         from esrally import version
 
         return {
-            "rally_version": version.release_version(),
-            "async_runner": True
+            "rally_version": version.release_version()
         }
 
 
