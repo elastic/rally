@@ -260,7 +260,7 @@ class BarCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
-                "description": "",
+                "description": "gc",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": json.dumps(search_source)
@@ -439,7 +439,7 @@ class BarCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
-                "description": "",
+                "description": "io",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": json.dumps(search_source)
@@ -597,7 +597,7 @@ class BarCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
-                "description": "",
+                "description": "query",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": json.dumps(search_source)
@@ -773,7 +773,7 @@ class BarCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
-                "description": "",
+                "description": "index",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": json.dumps(search_source)
@@ -902,7 +902,7 @@ class TimeSeriesCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
-                "description": "",
+                "description": "gc",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
@@ -994,7 +994,7 @@ class TimeSeriesCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
-                "description": "",
+                "description": "io",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
@@ -1109,7 +1109,7 @@ class TimeSeriesCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
-                "description": "",
+                "description": "segment_memory",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": "{\"query\":{\"query\":{\"query_string\":{\"query\":\"*\"}},\"language\":\"lucene\"},\"filter\":[]}"
@@ -1268,7 +1268,7 @@ class TimeSeriesCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
-                "description": "",
+                "description": "query",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
@@ -1361,7 +1361,7 @@ class TimeSeriesCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
-                "description": "",
+                "description": "index",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
@@ -1453,25 +1453,39 @@ def generate_segment_memory(chart_type, race_configs, environment):
 def generate_dashboard(chart_type, environment, track, charts, flavor=None):
     panels = []
 
-    width = 6
-    height = 6
+    width = 24
+    height = 32
 
     row = 0
     col = 0
 
     for idx, chart in enumerate(charts):
+        panelIndex = idx + 1
+        # make index charts wider
+        if chart["_source"]["description"] == "index":
+            chart_width = 2 * width
+            # force one panel per row
+            next_col = 0
+        else:
+            chart_width = width
+            # two rows per panel
+            next_col = (col + 1) % 2
+
         panel = {
             "id": chart["_id"],
-            "panelIndex": idx,
-            "row": (row * height) + 1,
-            "col": (col * width) + 1,
-            "size_x": width,
-            "size_y": height,
-            "type": "visualization"
+            "panelIndex": panelIndex,
+            "gridData": {
+                "x": (col * chart_width),
+                "y": (row * height),
+                "w": chart_width,
+                "h": height,
+                "i": "{}".format(panelIndex)
+            },
+            "type": "visualization",
+            "version": "6.3.2"
         }
         panels.append(panel)
-        # two rows per panel
-        col = (col + 1) % 2
+        col = next_col
         if col == 0:
             row += 1
 
