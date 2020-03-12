@@ -131,6 +131,7 @@ class EsClientFactory:
     def create_async(self):
         # keep imports confined as we do some temporary patching to work around unsolved issues in the async ES connector
         import elasticsearch.transport
+        import elasticsearch.compat
         import elasticsearch_async
         from aiohttp.client import ClientTimeout
         import esrally.async_connection
@@ -194,6 +195,20 @@ class EsClientFactory:
             def return_raw_response(self):
                 ctx = RallyAsyncElasticsearch.request_context.get()
                 ctx["raw_response"] = True
+
+            def _bulk_body(self, body):
+                # if not passed in a string, serialize items and join by newline
+                if not isinstance(body, elasticsearch.compat.string_types):
+                    body = "\n".join(map(self.transport.serializer.dumps, body))
+
+                # bulk body must end with a newline
+                if isinstance(body, bytes) and not body.endswith(b"\n"):
+                    body += b"\n"
+                elif isinstance(body, str) and not body.endswith("\n"):
+                    body += "\n"
+
+                return body
+
 
             async def __aenter__(self):
                 return self

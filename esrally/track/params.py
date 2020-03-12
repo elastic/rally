@@ -644,7 +644,7 @@ def chain(*iterables):
 
 def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
                           on_conflict, recency):
-    source = Slice(io.FileSource, offset, num_lines)
+    source = Slice(io.MmapSource, offset, num_lines)
 
     if docs.includes_action_and_meta_data:
         return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, docs.target_index, docs.target_type)
@@ -905,7 +905,8 @@ class IndexDataReader:
                 if docs_in_bulk == 0:
                     break
                 docs_in_batch += docs_in_bulk
-                batch.append((docs_in_bulk, "".join(bulk)))
+                # TODO: Implement support for string and bytes?
+                batch.append((docs_in_bulk, b"".join(bulk)))
             if docs_in_batch == 0:
                 raise StopIteration()
             return self.index_name, self.type_name, batch
@@ -938,7 +939,7 @@ class MetadataIndexDataReader(IndexDataReader):
         """
         current_bulk = []
         # hoist
-        action_metadata_line = self.action_metadata_line
+        action_metadata_line = self.action_metadata_line.encode("utf-8")
         docs = next(self.file_source)
 
         for doc in docs:
