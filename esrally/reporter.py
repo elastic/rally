@@ -122,6 +122,7 @@ class SummaryReporter:
             metrics_table.extend(self.report_throughput(record, task))
             metrics_table.extend(self.report_latency(record, task))
             metrics_table.extend(self.report_service_time(record, task))
+            metrics_table.extend(self.report_processing_time(record, task))
             metrics_table.extend(self.report_error_rate(record, task))
             self.add_warnings(warnings, record, task)
 
@@ -161,6 +162,9 @@ class SummaryReporter:
 
     def report_service_time(self, values, task):
         return self.report_percentiles("service time", task, values["service_time"])
+
+    def report_processing_time(self, values, task):
+        return self.report_percentiles("processing time", task, values["processing_time"])
 
     def report_percentiles(self, name, task, value):
         lines = []

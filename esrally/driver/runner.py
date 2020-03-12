@@ -16,9 +16,12 @@
 # under the License.
 
 import asyncio
+import ijson
+import json
 import logging
 import random
 import sys
+import time
 import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
@@ -447,6 +450,11 @@ class BulkIndex(Runner):
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)
 
+        # parse responses lazily in the standard case - responses might be large thus parsing skews results and if no
+        # errors have occurred we only need a small amount of information from the potentially large response.
+        if not detailed_results:
+            es.return_raw_response()
+
         if with_action_metadata:
             # only half of the lines are documents
             response = await es.bulk(body=params["body"], params=bulk_params)
@@ -534,20 +542,23 @@ class BulkIndex(Runner):
     def simple_stats(self, bulk_size, response):
         bulk_error_count = 0
         error_details = set()
-        if response["errors"]:
-            for idx, item in enumerate(response["items"]):
+        # parse lazily on the fast path
+        props = parse(response, ["errors", "took"])
+
+        if props.get("errors", False):
+            # Reparse fully in case of errors - this will be slower
+            parsed_response = json.loads(response)
+            for idx, item in enumerate(parsed_response["items"]):
                 data = next(iter(item.values()))
                 if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1
                     self.extract_error_details(error_details, data)
         stats = {
-            "took": response.get("took"),
+            "took": props.get("took"),
             "success": bulk_error_count == 0,
             "success-count": bulk_size - bulk_error_count,
             "error-count": bulk_error_count
         }
-        if "ingest_took" in response:
-            stats["ingest_took"] = response["ingest_took"]
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
@@ -667,6 +678,18 @@ class NodeStats(Runner):
         return "node-stats"
 
 
+def parse(text, props):
+    parser = ijson.parse(text)
+    parsed = {}
+    for prefix, event, value in parser:
+        if prefix in props:
+            parsed[prefix] = value
+            # found all necessary properties
+            if len(parsed) == len(props):
+                break
+    return parsed
+
+
 class Query(Runner):
     """
     Runs a request body search against Elasticsearch.
@@ -703,8 +726,6 @@ class Query(Runner):
 
     def __init__(self):
         super().__init__()
-        self.scroll_id = None
-        self.es = None
 
     async def __call__(self, es, params):
         if "pages" in params and "results-per-page" in params:
@@ -719,71 +740,93 @@ class Query(Runner):
         doc_type = params.get("type")
         params = request_params
 
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
+
         if doc_type is not None:
             r = await self._search_type_fallback(es, doc_type, index, body, params)
         else:
             r = await es.search(index=index, body=body, params=params)
-        hits = r["hits"]["total"]
-        if isinstance(hits, dict):
-            hits_total = hits["value"]
-            hits_relation = hits["relation"]
-        else:
-            hits_total = hits
-            hits_relation = "eq"
+
+        props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+        hits_total = props.get("hits.total.value", props.get("hits.total", 0))
+        hits_relation = props.get("hits.total.relation", "eq")
+        timed_out = props.get("timed_out", False)
+        took = props.get("took", 0)
+
         return {
             "weight": 1,
             "unit": "ops",
             "hits": hits_total,
             "hits_relation": hits_relation,
-            "timed_out": r["timed_out"],
-            "took": r["took"]
+            "timed_out": timed_out,
+            "took": took
         }
 
     async def scroll_query(self, es, params):
         request_params = self._default_request_params(params)
         hits = 0
+        hits_relation = None
         retrieved_pages = 0
         timed_out = False
         took = 0
-        self.es = es
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
         size = params.get("results-per-page")
+        scroll_id = None
 
-        for page in range(total_pages):
-            if page == 0:
-                index = params.get("index", "_all")
-                body = mandatory(params, "body", self)
-                sort = "_doc"
-                scroll = "10s"
-                doc_type = params.get("type")
-                params = request_params
-                if doc_type is not None:
-                    params["sort"] = sort
-                    params["scroll"] = scroll
-                    params["size"] = size
-                    r = await self._search_type_fallback(es, doc_type, index, body, params)
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
+
+        try:
+            for page in range(total_pages):
+                if page == 0:
+                    index = params.get("index", "_all")
+                    body = mandatory(params, "body", self)
+                    sort = "_doc"
+                    scroll = "10s"
+                    doc_type = params.get("type")
+                    params = request_params
+                    if doc_type is not None:
+                        params["sort"] = sort
+                        params["scroll"] = scroll
+                        params["size"] = size
+                        r = await self._search_type_fallback(es, doc_type, index, body, params)
+                    else:
+                        r = await es.search(index=index, body=body, params=params, sort=sort, scroll=scroll, size=size)
+
+                    props = parse(r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+                    scroll_id = props.get("_scroll_id")
+                    hits = props.get("hits.total.value", props.get("hits.total", 0))
+                    hits_relation = props.get("hits.total.relation", "eq")
+                    timed_out = props.get("timed_out", False)
+                    took = props.get("took", 0)
                 else:
-                    r = await es.search(index=index, body=body, params=params, sort=sort, scroll=scroll, size=size)
-                # This should only happen if we concurrently create an index and start searching
-                self.scroll_id = r.get("_scroll_id", None)
-            else:
-                r = await es.scroll(body={"scroll_id": self.scroll_id, "scroll": "10s"})
-            hit_count = len(r["hits"]["hits"])
-            timed_out = timed_out or r["timed_out"]
-            took += r["took"]
-            hits += hit_count
-            retrieved_pages += 1
-            if hit_count == 0:
-                # We're done prematurely. Even if we are on page index zero, we still made one call.
-                break
+                    r = await es.scroll(body={"scroll_id": scroll_id, "scroll": "10s"})
+                    props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+                timed_out = timed_out or props.get("timed_out", False)
+                took += props.get("took", 0)
+                retrieved_pages += 1
+                # Only terminate early if we have the exact number of hits
+                if hits_relation == "eq":
+                    hit_count = hits - (retrieved_pages * size)
+                    if hit_count <= 0:
+                        # We're done prematurely. Even if we are on page index zero, we still made one call.
+                        break
+        finally:
+            if scroll_id:
+                # noinspection PyBroadException
+                try:
+                    await es.clear_scroll(body={"scroll_id": [scroll_id]})
+                except BaseException:
+                    self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in "
+                                          "Elasticsearch and will skew your benchmark results.", scroll_id)
 
         return {
             "weight": retrieved_pages,
             "pages": retrieved_pages,
             "hits": hits,
-            # as Rally determines the number of hits in a scroll, the result is always accurate.
-            "hits_relation": "eq",
+            "hits_relation": hits_relation,
             "unit": "pages",
             "timed_out": timed_out,
             "took": took
@@ -801,17 +844,6 @@ class Query(Runner):
         if cache is not None:
             request_params["request_cache"] = str(cache).lower()
         return request_params
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.scroll_id and self.es:
-            try:
-                await self.es.clear_scroll(body={"scroll_id": [self.scroll_id]})
-            except BaseException:
-                self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in "
-                                      "Elasticsearch and will skew your benchmark results.", self.scroll_id)
-        self.scroll_id = None
-        self.es = None
-        return False
 
     def __repr__(self, *args, **kwargs):
         return "query"

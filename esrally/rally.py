@@ -543,11 +543,6 @@ def create_arg_parser():
             help=argparse.SUPPRESS,
             action="store_true",
             default=False)
-        p.add_argument(
-            "--use-uvloop",
-            help=argparse.SUPPRESS,
-            default=False,
-            action="store_true")
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
               start_parser, stop_parser, info_parser, async_race_parser]:
@@ -867,7 +862,6 @@ def main():
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
-    cfg.add(config.Scope.applicationOverride, "driver", "uvloop", args.use_uvloop)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
     if sub_command not in ("list", "install", "download"):

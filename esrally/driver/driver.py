@@ -602,6 +602,12 @@ class Driver:
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                        relative_time=sample.relative_time, meta_data=meta_data)
 
+            self.metrics_store.put_value_cluster_level(name="processing_time", value=sample.processing_time_ms,
+                                                       unit="ms", task=sample.task.name,
+                                                       operation=sample.task.name, operation_type=sample.operation.type,
+                                                       sample_type=sample.sample_type, absolute_time=sample.absolute_time,
+                                                       relative_time=sample.relative_time, meta_data=meta_data)
+
         end = time.perf_counter()
         self.logger.debug("Storing latency and service time took [%f] seconds.", (end - start))
         start = end
@@ -845,10 +851,12 @@ class Sampler:
         self.q = queue.Queue(maxsize=buffer_size)
         self.logger = logging.getLogger(__name__)
 
-    def add(self, task, client_id, sample_type, meta_data, latency, service_time, ops, ops_unit, time_period, percent_completed):
+    def add(self, task, client_id, sample_type, meta_data, latency, service_time, processing_time, ops, ops_unit,
+            time_period, percent_completed):
         try:
             self.q.put_nowait(Sample(client_id, time.time(), time.perf_counter() - self.start_timestamp, task,
-                                     sample_type, meta_data, latency, service_time, ops, ops_unit, time_period, percent_completed))
+                                     sample_type, meta_data, latency, service_time, processing_time, ops,
+                                     ops_unit, time_period, percent_completed))
         except queue.Full:
             self.logger.warning("Dropping sample for [%s] due to a full sampling queue.", task.operation.name)
 
@@ -864,8 +872,8 @@ class Sampler:
 
 
 class Sample:
-    def __init__(self, client_id, absolute_time, relative_time, task, sample_type, request_meta_data, latency_ms, service_time_ms,
-                 total_ops, total_ops_unit, time_period, percent_completed):
+    def __init__(self, client_id, absolute_time, relative_time, task, sample_type, request_meta_data, latency_ms,
+                 service_time_ms, processing_time_ms, total_ops, total_ops_unit, time_period, percent_completed):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
@@ -874,6 +882,7 @@ class Sample:
         self.request_meta_data = request_meta_data
         self.latency_ms = latency_ms
         self.service_time_ms = service_time_ms
+        self.processing_time_ms = processing_time_ms
         self.total_ops = total_ops
         self.total_ops_unit = total_ops_unit
         self.time_period = time_period
@@ -1028,7 +1037,6 @@ class AsyncIoAdapter:
         self.abort_on_error = abort_on_error
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
-        self.use_uvloop = self.cfg.opts("driver", "uvloop")
 
     def __call__(self, *args, **kwargs):
         # only possible in Python 3.7+ (has introduced get_running_loop)
@@ -1037,13 +1045,6 @@ class AsyncIoAdapter:
         # except RuntimeError:
         #     loop = asyncio.new_event_loop()
         #     asyncio.set_event_loop(loop)
-        if self.use_uvloop:
-            print("Using uvloop to perform asyncio.")
-            import uvloop
-            uvloop.install()
-        #else:
-            #self.logger.info("Using standard library implementation to perform asyncio.")
-
         loop = asyncio.new_event_loop()
         loop.set_debug(self.debug_event_loop)
         loop.set_exception_handler(self._logging_exception_handler)
@@ -1147,10 +1148,13 @@ class AsyncExecutor:
                     rest = absolute_expected_schedule_time - time.perf_counter()
                     if rest > 0:
                         await asyncio.sleep(rest)
-                start = time.perf_counter()
+                request_context = self.es["default"].init_request_context()
+                processing_start = time.perf_counter()
                 total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.abort_on_error)
-                stop = time.perf_counter()
-                service_time = stop - start
+                processing_end = time.perf_counter()
+                stop = request_context["request_end"]
+                service_time = request_context["request_end"] - request_context["request_start"]
+                processing_time = processing_end - processing_start
                 # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
                 latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
                 # last sample should bump progress to 100% if externally completed.
@@ -1161,8 +1165,10 @@ class AsyncExecutor:
                     progress = runner.percent_completed
                 else:
                     progress = percent_completed
-                self.sampler.add(self.task, self.client_id, sample_type, request_meta_data, convert.seconds_to_ms(latency),
-                                 convert.seconds_to_ms(service_time), total_ops, total_ops_unit, (stop - total_start), progress)
+                self.sampler.add(self.task, self.client_id, sample_type, request_meta_data,
+                                 convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
+                                 convert.seconds_to_ms(processing_time), total_ops, total_ops_unit,
+                                 (stop - total_start), progress)
 
                 if completed:
                     self.logger.info("Task is considered completed due to external event.")

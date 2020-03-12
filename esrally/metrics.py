@@ -1637,6 +1637,7 @@ class GlobalStatsCalculator:
                         self.summary_stats("throughput", t),
                         self.single_latency(t),
                         self.single_latency(t, metric_name="service_time"),
+                        self.single_latency(t, metric_name="processing_time"),
                         self.error_rate(t),
                         self.merge(
                             self.track.meta_data,
@@ -1839,6 +1840,8 @@ class GlobalStats:
                         all_results.append(op_metrics(item, "latency"))
                     if "service_time" in item:
                         all_results.append(op_metrics(item, "service_time"))
+                    if "processing_time" in item:
+                        all_results.append(op_metrics(item, "processing_time"))
                     if "error_rate" in item:
                         all_results.append(op_metrics(item, "error_rate", single_value=True))
             elif metric == "ml_processing_time":
@@ -1870,13 +1873,14 @@ class GlobalStats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate, meta):
+    def add_op_metrics(self, task, operation, throughput, latency, service_time, processing_time, error_rate, meta):
         doc = {
             "task": task,
             "operation": operation,
             "throughput": throughput,
             "latency": latency,
             "service_time": service_time,
+            "processing_time": processing_time,
             "error_rate": error_rate,
         }
         if meta:

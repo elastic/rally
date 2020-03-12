@@ -52,6 +52,7 @@ function main {
     add_license "thespian" "https://raw.githubusercontent.com/kquick/Thespian/master/LICENSE.txt"
     add_license "boto3" "https://raw.githubusercontent.com/boto/boto3/develop/LICENSE"
     add_license "yappi" "https://raw.githubusercontent.com/sumerc/yappi/master/LICENSE"
+    add_license "ijson" "https://raw.githubusercontent.com/ICRAR/ijson/master/LICENSE.txt"
 
     # transitive dependencies
     # Jinja2 -> Markupsafe

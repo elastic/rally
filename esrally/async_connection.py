@@ -21,7 +21,7 @@ class AIOHttpConnection(Connection):
     def __init__(self, host='localhost', port=9200, http_auth=None,
                  use_ssl=False, verify_certs=False, ca_certs=None, client_cert=None,
                  client_key=None, loop=None, use_dns_cache=True, headers=None,
-                 ssl_context=None, **kwargs):
+                 ssl_context=None, trace_config=None, **kwargs):
         super().__init__(host=host, port=port, **kwargs)
 
         self.loop = asyncio.get_event_loop() if loop is None else loop
@@ -68,6 +68,8 @@ class AIOHttpConnection(Connection):
                 verify_certs = True
                 use_ssl = True
 
+        trace_configs = [trace_config] if trace_config else None
+
         self.session = aiohttp.ClientSession(
             auth=http_auth,
             timeout=self.timeout,
@@ -79,7 +81,8 @@ class AIOHttpConnection(Connection):
                 # this has been changed from the default (100)
                 limit=100000
             ),
-            headers=headers
+            headers=headers,
+            trace_configs=trace_configs
         )
 
         self.base_url = 'http%s://%s:%d%s' % (

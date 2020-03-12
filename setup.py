@@ -81,10 +81,8 @@ install_requires = [
     "boto3==1.10.32",
     # License: Apache 2.0
     "yappi==1.2.3",
-    # TODO: Add proper license
-    "orjson==2.5.2",
-    #"ijson==2.6.1",
-    "uvloop==0.14.0"
+    # License: BSD
+    "ijson==2.6.1"
 ]
 
 tests_require = [
