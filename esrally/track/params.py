@@ -905,7 +905,6 @@ class IndexDataReader:
                 if docs_in_bulk == 0:
                     break
                 docs_in_batch += docs_in_bulk
-                # TODO: Implement support for string and bytes?
                 batch.append((docs_in_bulk, b"".join(bulk)))
             if docs_in_batch == 0:
                 raise StopIteration()
@@ -958,11 +957,11 @@ class MetadataIndexDataReader(IndexDataReader):
             action_metadata_item = next(self.action_metadata)
             if action_metadata_item:
                 action_type, action_metadata_line = action_metadata_item
-                current_bulk.append(action_metadata_line)
+                current_bulk.append(action_metadata_line.encode("utf-8"))
                 if action_type == "update":
                     # remove the trailing "\n" as the doc needs to fit on one line
                     doc = doc.strip()
-                    current_bulk.append("{\"doc\":%s}\n" % doc)
+                    current_bulk.append(b"{\"doc\":%s}\n" % doc)
                 else:
                     current_bulk.append(doc)
             else:

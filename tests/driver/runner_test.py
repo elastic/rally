@@ -16,6 +16,7 @@
 # under the License.
 
 import io
+import json
 import random
 import unittest.mock as mock
 from unittest import TestCase
@@ -137,13 +138,90 @@ class RegisterRunnerTests(TestCase):
         self.assertEqual((all_clients, "some_param"), await returned_runner(all_clients, "some_param"))
 
 
+class SelectiveJsonParserTests(TestCase):
+    def doc_as_text(self, doc):
+        return io.StringIO(json.dumps(doc))
+
+    def test_parse_all_expected(self):
+        doc = self.doc_as_text({
+            "title": "Hello",
+            "meta": {
+                "length": 100,
+                "date": {
+                    "year": 2000
+                }
+            }
+        })
+
+        parsed = runner.parse(doc, [
+            # simple property
+            "title",
+            # a nested property
+            "meta.date.year",
+            # ignores unknown properties
+            "meta.date.month"
+        ])
+
+        self.assertEqual("Hello", parsed.get("title"))
+        self.assertEqual(2000, parsed.get("meta.date.year"))
+        self.assertNotIn("meta.date.month", parsed)
+
+    def test_list_length(self):
+        doc = self.doc_as_text({
+            "title": "Hello",
+            "meta": {
+                "length": 100,
+                "date": {
+                    "year": 2000
+                }
+            },
+            "authors": ["George", "Harry"],
+            "readers": [
+                {
+                    "name": "Tom",
+                    "age": 14
+                },
+                {
+                    "name": "Bob",
+                    "age": 17
+                },
+                {
+                    "name": "Alice",
+                    "age": 22
+                }
+            ],
+            "supporters": []
+        })
+
+        parsed = runner.parse(doc, [
+            # simple property
+            "title",
+            # a nested property
+            "meta.date.year",
+            # ignores unknown properties
+            "meta.date.month"
+        ], ["authors", "readers", "supporters"])
+
+        self.assertEqual("Hello", parsed.get("title"))
+        self.assertEqual(2000, parsed.get("meta.date.year"))
+        self.assertNotIn("meta.date.month", parsed)
+
+        # lists
+        self.assertFalse(parsed.get("authors"))
+        self.assertFalse(parsed.get("readers"))
+        self.assertTrue(parsed.get("supporters"))
+
+
 class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_bulk_index_missing_params(self, es):
-        es.bulk.return_value = {
-            "errors": False
+        bulk_response = {
+            "errors": False,
+            "took": 8
         }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -163,9 +241,12 @@ class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_bulk_index_success_with_metadata(self, es):
-        es.bulk.return_value = as_future({
-            "errors": False
-        })
+        bulk_response = {
+            "errors": False,
+            "took": 8
+        }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -181,7 +262,7 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertIsNone(result["took"])
+        self.assertEqual(8, result["took"])
         self.assertIsNone(result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
@@ -195,9 +276,11 @@ class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_bulk_index_success_without_metadata_with_doc_type(self, es):
-        es.bulk.return_value = as_future({
-            "errors": False
-        })
+        bulk_response = {
+            "errors": False,
+            "took": 8
+        }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -212,7 +295,7 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertIsNone(result["took"])
+        self.assertEqual(8, result["took"])
         self.assertEqual("test-index", result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
@@ -226,9 +309,11 @@ class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_bulk_index_success_without_metadata_and_without_doc_type(self, es):
-        es.bulk.return_value = as_future({
-            "errors": False
-        })
+        bulk_response = {
+            "errors": False,
+            "took": 8
+        }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -242,7 +327,7 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertIsNone(result["took"])
+        self.assertEqual(8, result["took"])
         self.assertEqual("test-index", result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
@@ -256,7 +341,7 @@ class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_bulk_index_error(self, es):
-        es.bulk.return_value = as_future({
+        bulk_response = {
             "took": 5,
             "errors": True,
             "items": [
@@ -291,7 +376,10 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 },
             ]
-        })
+        }
+
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -322,7 +410,7 @@ class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_bulk_index_error_no_shards(self, es):
-        es.bulk.return_value = as_future({
+        bulk_response = {
             "took": 20,
             "errors": True,
             "items": [
@@ -354,7 +442,10 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 }
             ]
-        })
+        }
+
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -386,7 +477,7 @@ class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_mixed_bulk_with_simple_stats(self, es):
-        es.bulk.return_value = as_future({
+        bulk_response = {
             "took": 30,
             "ingest_took": 20,
             "errors": True,
@@ -458,7 +549,8 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 }
             ]
-        })
+        }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -480,7 +572,7 @@ class BulkIndexRunnerTests(TestCase):
 
         self.assertEqual("test", result["index"])
         self.assertEqual(30, result["took"])
-        self.assertEqual(20, result["ingest_took"])
+        self.assertNotIn("ingest_took", result, "ingest_took is not extracted with simple stats")
         self.assertEqual(4, result["weight"])
         self.assertEqual(4, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -489,10 +581,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual("bulk", result["error-type"])
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
-
-        es.bulk.return_value.result().pop("ingest_took")
-        result = await bulk(es, bulk_params)
-        self.assertNotIn("ingest_took", result)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -980,7 +1068,7 @@ class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_query_match_only_request_body_defined(self, es):
-        es.search.return_value = as_future({
+        search_response = {
             "timed_out": False,
             "took": 5,
             "hits": {
@@ -990,14 +1078,15 @@ class QueryRunnerTests(TestCase):
                 },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
-        })
+        }
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1031,7 +1120,7 @@ class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_query_match_using_request_params(self, es):
-        es.search.return_value = as_future({
+        response = {
             "timed_out": False,
             "took": 62,
             "hits": {
@@ -1041,15 +1130,16 @@ class QueryRunnerTests(TestCase):
                 },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
 
                 ]
             }
-        })
+        }
+        es.search.return_value = as_future(io.StringIO(json.dumps(response)))
 
         query_runner = runner.Query()
         params = {
@@ -1084,21 +1174,22 @@ class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_query_hits_total_as_number(self, es):
-        es.search.return_value = as_future({
+        search_response = {
             "timed_out": False,
             "took": 5,
             "hits": {
                 "total": 2,
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
-        })
+        }
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1134,7 +1225,7 @@ class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_query_match_all(self, es):
-        es.search.return_value = as_future({
+        search_response = {
             "timed_out": False,
             "took": 5,
             "hits": {
@@ -1144,14 +1235,15 @@ class QueryRunnerTests(TestCase):
                 },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
-        })
+        }
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1186,7 +1278,7 @@ class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_query_match_all_doc_type_fallback(self, es):
-        es.transport.perform_request.return_value = as_future({
+        search_response = {
             "timed_out": False,
             "took": 5,
             "hits": {
@@ -1196,14 +1288,16 @@ class QueryRunnerTests(TestCase):
                 },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
-        })
+        }
+
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1240,24 +1334,28 @@ class QueryRunnerTests(TestCase):
     @run_async
     async def test_scroll_query_only_one_page(self, es):
         # page 1
-        es.search.return_value = as_future({
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "took": 4,
             "timed_out": False,
             "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
-        })
-        es.clear_scroll.return_value = as_future({
-            "acknowledged": True
-        })
+        }
+
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1301,24 +1399,28 @@ class QueryRunnerTests(TestCase):
     @run_async
     async def test_scroll_query_no_request_cache(self, es):
         # page 1
-        es.search.return_value = as_future({
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "took": 4,
             "timed_out": False,
             "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
-        })
-        es.clear_scroll.return_value = as_future({
-            "acknowledged": True
-        })
+        }
+
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1359,25 +1461,28 @@ class QueryRunnerTests(TestCase):
     @run_async
     async def test_scroll_query_only_one_page_only_request_body_defined(self, es):
         # page 1
-        es.search.return_value = as_future({
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "took": 4,
             "timed_out": False,
             "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
-        })
+        }
 
-        es.clear_scroll.return_value = as_future({
-            "acknowledged": True
-        })
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1403,49 +1508,64 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
+        es.search.assert_called_once_with(
+            index="_all",
+            body=params["body"],
+            scroll="10s",
+            size=100,
+            sort='_doc',
+            params={}
+        )
+
         es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_scroll_query_with_explicit_number_of_pages(self, es):
         # page 1
-        es.search.return_value = as_future({
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
             "took": 54,
             "hits": {
+                "total": {
+                    # includes all hits across all pages
+                    "value": 3,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
-        })
+        }
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+
         # page 2
-        es.scroll.return_value = as_future({
+        scroll_response = {
             "_scroll_id": "some-scroll-id",
             "timed_out": True,
             "took": 25,
             "hits": {
                 "hits": [
                     {
-                        "some-doc-3"
+                        "title": "some-doc-3"
                     }
                 ]
             }
-        })
-        es.clear_scroll.return_value = as_future({
-            "acknowledged": True
-        })
+        }
+        es.scroll.return_value = as_future(io.StringIO(json.dumps(scroll_response)))
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
         params = {
             "pages": 2,
-            "results-per-page": 100,
+            "results-per-page": 2,
             "index": "unittest",
             "cache": False,
             "body": {
@@ -1474,27 +1594,24 @@ class QueryRunnerTests(TestCase):
     async def test_scroll_query_cannot_clear_scroll(self, es):
         import elasticsearch
         # page 1
-        es.search.return_value = as_future({
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
             "took": 53,
             "hits": {
+                "total": {
+                    "value": 1,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     }
                 ]
             }
-        })
-        # page 2 has no results
-        es.scroll.return_value = as_future({
-            "_scroll_id": "some-scroll-id",
-            "timed_out": False,
-            "took": 2,
-            "hits": {
-                "hits": []
-            }
-        })
+        }
+
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
         es.clear_scroll.return_value = as_future(exception=elasticsearch.ConnectionTimeout())
 
         query_runner = runner.Query()
@@ -1514,12 +1631,12 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             results = await query_runner(es, params)
 
-        self.assertEqual(2, results["weight"])
-        self.assertEqual(2, results["pages"])
+        self.assertEqual(1, results["weight"])
+        self.assertEqual(1, results["pages"])
         self.assertEqual(1, results["hits"])
         self.assertEqual("eq", results["hits_relation"])
         self.assertEqual("pages", results["unit"])
-        self.assertEqual(55, results["took"])
+        self.assertEqual(53, results["took"])
         self.assertFalse("error-type" in results)
 
         es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
@@ -1528,45 +1645,49 @@ class QueryRunnerTests(TestCase):
     @run_async
     async def test_scroll_query_request_all_pages(self, es):
         # page 1
-        es.search.return_value = as_future({
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
             "took": 876,
             "hits": {
+                "total": {
+                    "value": 4,
+                    "relation": "gte"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     },
                     {
-                        "some-doc-3"
+                        "title": "some-doc-3"
                     },
                     {
-                        "some-doc-4"
+                        "title": "some-doc-4"
                     }
                 ]
             }
-        })
+        }
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
         # page 2 has no results
-        es.scroll.return_value = as_future({
+        scroll_response = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
             "took": 2,
             "hits": {
                 "hits": []
             }
-        })
-        es.clear_scroll.return_value = as_future({
-            "acknowledged": True
-        })
+        }
+        es.scroll.return_value = as_future(io.StringIO(json.dumps(scroll_response)))
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
         params = {
             "pages": "all",
-            "results-per-page": 100,
+            "results-per-page": 4,
             "index": "unittest",
             "cache": False,
             "body": {
@@ -1582,7 +1703,7 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(4, results["hits"])
-        self.assertEqual("eq", results["hits_relation"])
+        self.assertEqual("gte", results["hits_relation"])
         self.assertEqual(878, results["took"])
         self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])

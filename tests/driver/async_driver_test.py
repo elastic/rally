@@ -16,6 +16,8 @@
 # under the License.
 
 import concurrent.futures
+import io
+import json
 import time
 from datetime import datetime
 from unittest import TestCase, mock
@@ -23,7 +25,6 @@ from unittest import TestCase, mock
 from esrally import config, metrics
 from esrally.driver import async_driver
 from esrally.track import track, params
-
 from tests import as_future
 
 
@@ -76,10 +77,16 @@ class StaticClientFactory:
 
         StaticClientFactory.ASYNC_PATCHER = mock.patch("elasticsearch.Elasticsearch")
         self.es_async = StaticClientFactory.ASYNC_PATCHER.start()
-        self.es_async.bulk.return_value = as_future({
+        self.es_async.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
+        }
+        bulk_response = {
             "errors": False,
             "took": 5
-        })
+        }
+        # bulk responses are raw strings
+        self.es_async.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
         self.es_async.transport.close.return_value = as_future()
 
     def create(self):
@@ -183,9 +190,10 @@ class AsyncDriverTests(TestCase):
         metric_store = metrics.metrics_store(cfg, read_only=True, track=current_track, challenge=current_challenge)
         metric_store.bulk_add(metrics_store_representation)
 
-        self.assertEqual(5, len(metric_store.docs))
+        self.assertEqual(6, len(metric_store.docs))
         self.assertIsNotNone(metric_store.get(name="latency", task="bulk-index", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="service_time", task="bulk-index", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get(name="processing_time", task="bulk-index", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="throughput", task="bulk-index", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="node_total_young_gen_gc_time", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="node_total_old_gen_gc_time", sample_type=metrics.SampleType.Normal))

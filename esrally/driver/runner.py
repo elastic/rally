@@ -16,15 +16,15 @@
 # under the License.
 
 import asyncio
-import ijson
 import json
 import logging
 import random
 import sys
-import time
 import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
+
+import ijson
 
 from esrally import exceptions, track
 
@@ -547,7 +547,7 @@ class BulkIndex(Runner):
 
         if props.get("errors", False):
             # Reparse fully in case of errors - this will be slower
-            parsed_response = json.loads(response)
+            parsed_response = json.loads(response.getvalue())
             for idx, item in enumerate(parsed_response["items"]):
                 data = next(iter(item.values()))
                 if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
@@ -678,15 +678,41 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text, props):
+def parse(text, props, lists=None):
+    """
+    Selectively parsed the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
+    specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
+    contain elements (respective key will be ``False``).
+
+    :param text: A text to parse.
+    :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
+    :param lists: An optional list of property paths to JSON lists in the provided text.
+    :return: A dict containing all properties and lists that have been found in the provided text.
+    """
     parser = ijson.parse(text)
     parsed = {}
-    for prefix, event, value in parser:
-        if prefix in props:
-            parsed[prefix] = value
+    parsed_lists = {}
+    current_list = None
+    expect_end_array = False
+    try:
+        for prefix, event, value in parser:
+            if expect_end_array:
+                # True if the list is empty, False otherwise
+                parsed_lists[current_list] = event == "end_array"
+                expect_end_array = False
+            if prefix in props:
+                parsed[prefix] = value
+            elif lists is not None and prefix in lists and event == "start_array":
+                current_list = prefix
+                expect_end_array = True
             # found all necessary properties
-            if len(parsed) == len(props):
+            if len(parsed) == len(props) and lists is not None and len(parsed_lists) == len(lists):
                 break
+    except ijson.IncompleteJSONError:
+        # did not find all properties
+        pass
+
+    parsed.update(parsed_lists)
     return parsed
 
 
@@ -795,24 +821,25 @@ class Query(Runner):
                     else:
                         r = await es.search(index=index, body=body, params=params, sort=sort, scroll=scroll, size=size)
 
-                    props = parse(r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+                    props = parse(r,
+                                  ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"],
+                                  ["hits.hits"])
                     scroll_id = props.get("_scroll_id")
                     hits = props.get("hits.total.value", props.get("hits.total", 0))
                     hits_relation = props.get("hits.total.relation", "eq")
                     timed_out = props.get("timed_out", False)
                     took = props.get("took", 0)
+                    all_results_collected = (size is not None and hits < size) or hits == 0
                 else:
                     r = await es.scroll(body={"scroll_id": scroll_id, "scroll": "10s"})
-                    props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
-                timed_out = timed_out or props.get("timed_out", False)
-                took += props.get("took", 0)
+                    props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"])
+                    timed_out = timed_out or props.get("timed_out", False)
+                    took += props.get("took", 0)
+                    # is the list of hits empty?
+                    all_results_collected = props.get("hits.hits", False)
                 retrieved_pages += 1
-                # Only terminate early if we have the exact number of hits
-                if hits_relation == "eq":
-                    hit_count = hits - (retrieved_pages * size)
-                    if hit_count <= 0:
-                        # We're done prematurely. Even if we are on page index zero, we still made one call.
-                        break
+                if all_results_collected:
+                    break
         finally:
             if scroll_id:
                 # noinspection PyBroadException

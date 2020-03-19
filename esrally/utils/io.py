@@ -17,12 +17,14 @@
 
 import bz2
 import gzip
-import mmap
 import os
 import re
 import subprocess
 import tarfile
 import zipfile
+from contextlib import suppress
+
+import mmap
 
 from esrally.utils import console
 
@@ -91,8 +93,10 @@ class MmapSource:
     def open(self):
         self.f = open(self.file_name, mode="r+b")
         self.mm = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
-        # TODO: requires Python 3.8! -> Add capability check
-        self.mm.madvise(mmap.MADV_SEQUENTIAL)
+        # madvise is available in Python 3.8+
+        with suppress(AttributeError):
+            self.mm.madvise(mmap.MADV_SEQUENTIAL)
+
         # allow for chaining
         return self
 

@@ -323,6 +323,12 @@ class AsyncDriver:
                                                        sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                        relative_time=sample.relative_time, meta_data=meta_data)
 
+            self.metrics_store.put_value_cluster_level(name="processing_time", value=sample.processing_time_ms,
+                                                       unit="ms", task=sample.task.name,
+                                                       operation=sample.task.name, operation_type=sample.operation.type,
+                                                       sample_type=sample.sample_type, absolute_time=sample.absolute_time,
+                                                       relative_time=sample.relative_time, meta_data=meta_data)
+
         end = time.perf_counter()
         self.logger.debug("Storing latency and service time took [%f] seconds.", (end - start))
         start = end

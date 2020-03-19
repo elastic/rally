@@ -17,6 +17,7 @@
 
 import asyncio
 import collections
+import io
 import threading
 import time
 import unittest.mock as mock
@@ -26,7 +27,6 @@ from unittest import TestCase
 from esrally import metrics, track, exceptions, config
 from esrally.driver import driver, runner
 from esrally.track import params
-
 from tests import run_async, as_future
 
 
@@ -384,8 +384,8 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Warmup, None, -1, -1, 3000, "docs", 1, 1),
-            driver.Sample(0, 1470838595.5, 21.5, op, metrics.SampleType.Normal, None, -1, -1, 2500, "docs", 1, 1),
+            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Warmup, None, -1, -1, -1, 3000, "docs", 1, 1),
+            driver.Sample(0, 1470838595.5, 21.5, op, metrics.SampleType.Normal, None, -1, -1, -1, 2500, "docs", 1, 1),
         ]
 
         aggregated = self.calculate_global_throughput(samples)
@@ -402,15 +402,15 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 1, 1 / 9),
-            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 2, 2 / 9),
-            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 3, 3 / 9),
-            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4, 4 / 9),
-            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5, 5 / 9),
-            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6, 6 / 9),
-            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4.5, 7 / 9),
-            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5.5, 8 / 9),
-            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6.5, 9 / 9)
+            driver.Sample(0, 38595, 21, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 1, 1 / 9),
+            driver.Sample(0, 38596, 22, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 2, 2 / 9),
+            driver.Sample(0, 38597, 23, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 3, 3 / 9),
+            driver.Sample(0, 38598, 24, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 4, 4 / 9),
+            driver.Sample(0, 38599, 25, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 5, 5 / 9),
+            driver.Sample(0, 38600, 26, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 6, 6 / 9),
+            driver.Sample(1, 38598.5, 24.5, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 4.5, 7 / 9),
+            driver.Sample(1, 38599.5, 25.5, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 5.5, 8 / 9),
+            driver.Sample(1, 38600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 6.5, 9 / 9)
         ]
 
         aggregated = self.calculate_global_throughput(samples)
@@ -420,12 +420,12 @@ class MetricsAggregationTests(TestCase):
 
         throughput = aggregated[op]
         self.assertEqual(6, len(throughput))
-        self.assertEqual((1470838595, 21, metrics.SampleType.Normal, 5000, "docs/s"), throughput[0])
-        self.assertEqual((1470838596, 22, metrics.SampleType.Normal, 5000, "docs/s"), throughput[1])
-        self.assertEqual((1470838597, 23, metrics.SampleType.Normal, 5000, "docs/s"), throughput[2])
-        self.assertEqual((1470838598, 24, metrics.SampleType.Normal, 5000, "docs/s"), throughput[3])
-        self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 6000, "docs/s"), throughput[4])
-        self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 6666.666666666667, "docs/s"), throughput[5])
+        self.assertEqual((38595, 21, metrics.SampleType.Normal, 5000, "docs/s"), throughput[0])
+        self.assertEqual((38596, 22, metrics.SampleType.Normal, 5000, "docs/s"), throughput[1])
+        self.assertEqual((38597, 23, metrics.SampleType.Normal, 5000, "docs/s"), throughput[2])
+        self.assertEqual((38598, 24, metrics.SampleType.Normal, 5000, "docs/s"), throughput[3])
+        self.assertEqual((38599, 25, metrics.SampleType.Normal, 6000, "docs/s"), throughput[4])
+        self.assertEqual((38600, 26, metrics.SampleType.Normal, 6666.666666666667, "docs/s"), throughput[5])
         # self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
 
     def calculate_global_throughput(self, samples):
@@ -698,9 +698,11 @@ class AsyncExecutorTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_in_throughput_mode(self, es):
-        es.bulk.return_value = as_future({
-            "errors": False
-        })
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
+        }
+        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -757,9 +759,11 @@ class AsyncExecutorTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_with_progress_determined_by_runner(self, es):
-        es.bulk.return_value = as_future({
-            "errors": False
-        })
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
+        }
+        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -813,9 +817,16 @@ class AsyncExecutorTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_throughput_throttled(self, es):
-        es.bulk.return_value = as_future({
-            "errors": False
-        })
+        def bulk(*args, **kwargs):
+            return as_future(io.StringIO('{"errors": false, "took": 8}'))
+
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
+        }
+        # as this method is called several times we need to return a fresh StringIO instance every time as the previous
+        # one has been "consumed".
+        es.bulk.side_effect = bulk
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -862,9 +873,11 @@ class AsyncExecutorTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_cancel_execute_schedule(self, es):
-        es.bulk.return_value = as_future({
-            "errors": False
-        })
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
+        }
+        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",

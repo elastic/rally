@@ -209,7 +209,6 @@ class EsClientFactory:
 
                 return body
 
-
             async def __aenter__(self):
                 return self
 
