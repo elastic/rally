@@ -706,7 +706,7 @@ def parse(text, props, lists=None):
                 current_list = prefix
                 expect_end_array = True
             # found all necessary properties
-            if len(parsed) == len(props) and lists is not None and len(parsed_lists) == len(lists):
+            if len(parsed) == len(props) and (lists is None or len(parsed_lists) == len(lists)):
                 break
     except ijson.IncompleteJSONError:
         # did not find all properties
