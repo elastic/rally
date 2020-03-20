@@ -27,20 +27,31 @@ __version__ = pkg_resources.require("esrally")[0].version
 __RALLY_VERSION_PATTERN = re.compile(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:.(.+))?$")
 
 
+def revision():
+    """
+    :return: The current git revision if Rally is installed in development mode or ``None``.
+    """
+    # noinspection PyBroadException
+    try:
+        if git.is_working_copy(io.normalize_path("%s/.." % paths.rally_root())):
+            raw_revision = git.head_revision(paths.rally_root())
+            return raw_revision.strip()
+    except BaseException:
+        pass
+    return None
+
+
 def version():
     """
     :return: The release version string and an optional suffix for the current git revision if Rally is installed in development mode.
     """
     release = __version__
-    # noinspection PyBroadException
-    try:
-        if git.is_working_copy(io.normalize_path("%s/.." % paths.rally_root())):
-            revision = git.head_revision(paths.rally_root())
-            return "%s (git revision: %s)" % (release, revision.strip())
-    except BaseException:
-        pass
-    # cannot determine head revision so user has probably installed Rally via pip instead of git clone
-    return release
+    rally_revision = revision()
+    if rally_revision:
+        return "%s (git revision: %s)" % (release, rally_revision.strip())
+    else:
+        # cannot determine head revision so user has probably installed Rally via pip instead of git clone
+        return release
 
 
 def release_version():

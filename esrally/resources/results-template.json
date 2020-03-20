@@ -53,6 +53,9 @@
         "rally-version": {
           "type": "keyword"
         },
+        "rally-revision": {
+          "type": "keyword"
+        },
         "environment": {
           "type": "keyword"
         },
