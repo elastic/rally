@@ -190,13 +190,14 @@ class AsyncDriverTests(TestCase):
         metric_store = metrics.metrics_store(cfg, read_only=True, track=current_track, challenge=current_challenge)
         metric_store.bulk_add(metrics_store_representation)
 
-        self.assertEqual(6, len(metric_store.docs))
         self.assertIsNotNone(metric_store.get(name="latency", task="bulk-index", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="service_time", task="bulk-index", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="processing_time", task="bulk-index", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="throughput", task="bulk-index", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="node_total_young_gen_gc_time", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get(name="node_total_old_gen_gc_time", sample_type=metrics.SampleType.Normal))
+        # ensure that there are not more documents than we expect
+        self.assertEqual(6, len(metric_store.docs))
 
     def tearDown(self):
         StaticClientFactory.close()
