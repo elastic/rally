@@ -72,8 +72,8 @@ $$$$$$$$$$""""           ""$$$$$$$$$$$"
 
 
 def check_python_version():
-    if sys.version_info.major != 3 or sys.version_info.minor < 6:
-        raise RuntimeError("Rally requires at least Python 3.6 but you are using:\n\nPython %s" % str(sys.version))
+    if sys.version_info.major != 3 or sys.version_info.minor < 7:
+        raise RuntimeError("Rally requires at least Python 3.7 but you are using:\n\nPython %s" % str(sys.version))
 
 
 def doc_link(path=None):
