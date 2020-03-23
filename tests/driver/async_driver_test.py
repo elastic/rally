@@ -77,9 +77,19 @@ class StaticClientFactory:
 
         StaticClientFactory.ASYNC_PATCHER = mock.patch("elasticsearch.Elasticsearch")
         self.es_async = StaticClientFactory.ASYNC_PATCHER.start()
+        # we want to simulate that the request took 10 seconds. Internally this is measured using `time#perf_counter`
+        # and the code relies that measurements are taken consistently with `time#perf_counter` because in some places
+        # we take a value and will subtract other measurements (e.g. in the main loop in AsyncExecutor we subtract
+        # `total_start` from `stop`.
+        #
+        # On some systems (MacOS), `time#perf_counter` starts at zero when the process is started but on others (Linux),
+        # `time#perf_counter` starts when the OS is started. Thus we need to ensure that this value here is roughly
+        # consistent across all systems by using the current value of `time#perf_counter` as basis.
+
+        start = time.perf_counter()
         self.es_async.init_request_context.return_value = {
-            "request_start": 0,
-            "request_end": 10
+            "request_start": start,
+            "request_end": start + 10
         }
         bulk_response = {
             "errors": False,
@@ -190,12 +200,12 @@ class AsyncDriverTests(TestCase):
         metric_store = metrics.metrics_store(cfg, read_only=True, track=current_track, challenge=current_challenge)
         metric_store.bulk_add(metrics_store_representation)
 
-        self.assertIsNotNone(metric_store.get(name="latency", task="bulk-index", sample_type=metrics.SampleType.Normal))
-        self.assertIsNotNone(metric_store.get(name="service_time", task="bulk-index", sample_type=metrics.SampleType.Normal))
-        self.assertIsNotNone(metric_store.get(name="processing_time", task="bulk-index", sample_type=metrics.SampleType.Normal))
-        self.assertIsNotNone(metric_store.get(name="throughput", task="bulk-index", sample_type=metrics.SampleType.Normal))
-        self.assertIsNotNone(metric_store.get(name="node_total_young_gen_gc_time", sample_type=metrics.SampleType.Normal))
-        self.assertIsNotNone(metric_store.get(name="node_total_old_gen_gc_time", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get_one(name="latency", task="bulk-index", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get_one(name="service_time", task="bulk-index", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get_one(name="processing_time", task="bulk-index", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get_one(name="throughput", task="bulk-index", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get_one(name="node_total_young_gen_gc_time", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get_one(name="node_total_old_gen_gc_time", sample_type=metrics.SampleType.Normal))
         # ensure that there are not more documents than we expect
         self.assertEqual(6, len(metric_store.docs), msg=json.dumps(metric_store.docs, indent=2))
 

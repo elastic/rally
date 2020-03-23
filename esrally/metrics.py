@@ -690,16 +690,17 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None, node_name=None):
+    def get_one(self, name, sample_type=None, node_name=None, task=None):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
         :param name: The metric name to query.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
+        :param task The task name to query. Optional.
         :return: The corresponding value for the given metric name or None if there is no value.
         """
-        return self._first_or_none(self.get(name=name, sample_type=sample_type, node_name=node_name))
+        return self._first_or_none(self.get(name=name, task=task, sample_type=sample_type, node_name=node_name))
 
     @staticmethod
     def _first_or_none(values):
