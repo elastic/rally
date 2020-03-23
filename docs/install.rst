@@ -13,35 +13,29 @@ Prerequisites
 
 Rally does not support Windows and is only actively tested on MacOS and Linux. Install the following packages first.
 
+.. _install_python:
+
 Python
 ~~~~~~
 
-* Python 3.6 or better available as `python3` on the path. Verify with: ``python3 --version``.
+* Python 3.8 or better available as ``python3`` on the path. Verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
-**Debian / Ubuntu**
+We recommend to use `pyenv <https://github.com/pyenv/pyenv>`_ to manage installation of Python. For details refer to their `installation instructions <https://github.com/pyenv/pyenv#installation>`_ and **ensure that all of** `pyenv's prerequisites <https://github.com/pyenv/pyenv/wiki/common-build-problems#prerequisites>`_ are installed.
 
-::
+Once ``pyenv`` is installed, install a compatible Python version::
 
-    sudo apt-get install gcc python3-pip python3.6-dev
+    # Install Python
+    pyenv install 3.8.0
 
+    # select that version for the current user
+    # see https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-global for details
+    pyenv global 3.8.0
 
-**RHEL / CentOS 6 and 7**
-
-Please refer to the `installation instructions for Python 3.6 in the Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/rh-python36/>`_.
-
-**Amazon Linux**
-
-::
-
-    sudo yum install -y gcc python3-pip.noarch python3-devel.x86_64
-
-**MacOS**
-
-We recommend that you use `Homebrew <https://brew.sh/>`_::
-
-    brew install python3
+    # Install pip3
+    curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+    python3 get-pip.py --user
 
 git
 ~~~
@@ -104,7 +98,7 @@ Non-sudo Install
 If you don't want to use ``sudo`` when installing Rally, installation is still possible but a little more involved:
 
 1. Specify the ``--user`` option when installing Rally (step 2 above), so the command to be issued is: ``python3 setup.py develop --user``.
-2. Check the output of the install script or lookup the `Python documentation on the variable site.USER_BASE <https://docs.python.org/3.5/library/site.html#site.USER_BASE>`_ to find out where the script is located. On Linux, this is typically ``~/.local/bin``.
+2. Check the output of the install script or lookup the `Python documentation on the variable site.USER_BASE <https://docs.python.org/3/library/site.html#site.USER_BASE>`_ to find out where the script is located. On Linux, this is typically ``~/.local/bin``.
 
 You can now either add ``~/.local/bin`` to your path or invoke Rally via ``~/.local/bin/esrally`` instead of just ``esrally``.
 
@@ -118,13 +112,6 @@ You can also use Virtualenv to install Rally into an isolated Python environment
 3. Install Rally with ``pip install esrally``
 
 Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
-
-PyEnv Install
-------------------
-
-Rally can be tested with different Python versions and it uses pyenv to manage them. 
-
-Please refer to PyEnv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
 
 Docker
 ------
