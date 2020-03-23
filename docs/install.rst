@@ -22,7 +22,7 @@ Python
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
-We recommend to use `pyenv <https://github.com/pyenv/pyenv>`_ to manage installation of Python. For details refer to their `installation instructions <https://github.com/pyenv/pyenv#installation>`_ and `ensure that all of pyenv's prerequisites are installed <https://github.com/pyenv/pyenv/wiki/common-build-problems#prerequisites>`_.
+We recommend to use `pyenv <https://github.com/pyenv/pyenv>`_ to manage installation of Python. For details refer to their `installation instructions <https://github.com/pyenv/pyenv#installation>`_ and **ensure that all of** `pyenv's prerequisites <https://github.com/pyenv/pyenv/wiki/common-build-problems#prerequisites>`_ are installed.
 
 Once ``pyenv`` is installed, install a compatible Python version::
 
