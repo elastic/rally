@@ -133,7 +133,7 @@ For example, after executing our earlier quickstart example ``docker run elastic
 
 To further examine the contents we can bind mount it from another image e.g.::
 
-    $ docker run --rm -i -v=96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199:/rallyvolume -ti python:3.7.3-slim /bin/bash
+    $ docker run --rm -i -v=96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199:/rallyvolume -ti python:3.8.2-slim /bin/bash
     root@9a7dd7b3d8df:/# cd /rallyvolume/
     root@9a7dd7b3d8df:/rallyvolume# ls
     root@9a7dd7b3d8df:/rallyvolume/.rally# ls

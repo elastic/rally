@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 1.5.0
 ------------------------
 
+Minimum Python version is 3.8.0
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 1.5.0 requires Python 3.8.0. Check the :ref:`updated installation instructions <install_python>` for more details.
+
 Runner API uses asyncio
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -40,7 +45,6 @@ Apply to the following changes for each custom runner:
 * Add ``async_runner=True`` as the last argument to the ``register_runner`` function.
 
 For more details please refer to the updated documentation on :ref:`custom runners <adding_tracks_custom_runners>`.
-
 
 Migrating to Rally 1.4.1
 ------------------------
