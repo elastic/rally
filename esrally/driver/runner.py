@@ -689,6 +689,7 @@ def parse(text, props, lists=None):
     :param lists: An optional list of property paths to JSON lists in the provided text.
     :return: A dict containing all properties and lists that have been found in the provided text.
     """
+    text.seek(0)
     parser = ijson.parse(text)
     parsed = {}
     parsed_lists = {}
@@ -764,6 +765,7 @@ class Query(Runner):
         index = params.get("index", "_all")
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
+        detailed_results = params.get("detailed-results", True)
         params = request_params
 
         # disable eager response parsing - responses might be huge thus skewing results
@@ -774,20 +776,28 @@ class Query(Runner):
         else:
             r = await es.search(index=index, body=body, params=params)
 
-        props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
-        hits_total = props.get("hits.total.value", props.get("hits.total", 0))
-        hits_relation = props.get("hits.total.relation", "eq")
-        timed_out = props.get("timed_out", False)
-        took = props.get("took", 0)
+        if detailed_results:
+            props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+            hits_total = props.get("hits.total.value", props.get("hits.total", 0))
+            hits_relation = props.get("hits.total.relation", "eq")
+            timed_out = props.get("timed_out", False)
+            took = props.get("took", 0)
 
-        return {
-            "weight": 1,
-            "unit": "ops",
-            "hits": hits_total,
-            "hits_relation": hits_relation,
-            "timed_out": timed_out,
-            "took": took
-        }
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "success": True,
+                "hits": hits_total,
+                "hits_relation": hits_relation,
+                "timed_out": timed_out,
+                "took": took
+            }
+        else:
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "success": True
+            }
 
     async def scroll_query(self, es, params):
         request_params = self._default_request_params(params)

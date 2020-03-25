@@ -1173,6 +1173,57 @@ class QueryRunnerTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
+    async def test_query_no_detailed_results(self, es):
+        response = {
+            "timed_out": False,
+            "took": 62,
+            "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
+                "hits": [
+                    {
+                        "title": "some-doc-1"
+                    },
+                    {
+                        "title": "some-doc-2"
+                    }
+
+                ]
+            }
+        }
+        es.search.return_value = as_future(io.StringIO(json.dumps(response)))
+
+        query_runner = runner.Query()
+        params = {
+            "body": None,
+            "request-params": {
+                "q": "user:kimchy"
+            },
+            "detailed-results": False
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertNotIn("hits", result)
+        self.assertNotIn("hits_relation", result)
+        self.assertNotIn("timed_out", result)
+        self.assertNotIn("took", result)
+        self.assertNotIn("error-type", result)
+
+        es.search.assert_called_once_with(
+            index="_all",
+            body=params["body"],
+            params={"q": "user:kimchy"}
+        )
+        es.clear_scroll.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
     async def test_query_hits_total_as_number(self, es):
         search_response = {
             "timed_out": False,
