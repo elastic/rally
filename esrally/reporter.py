@@ -101,7 +101,6 @@ class SummaryReporter:
         self.report_all_percentile_values = reporting_values == "all-percentiles"
         self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime",
                                                                 mandatory=False, default_value=False))
-        print("SHOW_PROCESSING_TIME: %s" % str(self.show_processing_time))
         self.cwd = config.opts("node", "rally.cwd")
 
     def report(self):
