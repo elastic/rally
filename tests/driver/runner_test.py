@@ -1091,6 +1091,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "detailed-results": True,
             "cache": True,
             "body": {
                 "query": {
@@ -1144,6 +1145,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
         params = {
             "cache": False,
+            "detailed-results": True,
             "body": None,
             "request-params": {
                 "q": "user:kimchy"
@@ -1246,6 +1248,7 @@ class QueryRunnerTests(TestCase):
 
         params = {
             "cache": True,
+            "detailed-results": True,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1300,6 +1303,7 @@ class QueryRunnerTests(TestCase):
 
         params = {
             "index": "unittest",
+            "detailed-results": True,
             "cache": None,
             "body": {
                 "query": {
@@ -1355,6 +1359,7 @@ class QueryRunnerTests(TestCase):
         params = {
             "index": "unittest",
             "type": "type",
+            "detailed-results": True,
             "cache": None,
             "body": {
                 "query": {

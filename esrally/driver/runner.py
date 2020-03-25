@@ -728,6 +728,13 @@ class Query(Runner):
     * `cache`: True iff the request cache should be used.
     * `body`: Query body
 
+    The following parameters are optional:
+
+    * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
+                                               corresponding response in more detail, this might incur additional
+                                               overhead which can skew measurement results. This flag is ineffective
+                                               for scroll queries (detailed meta-data are always returned).
+
     If the following parameters are present in addition, a scroll query will be issued:
 
     * `pages`: Number of pages to retrieve at most for this scroll. If a scroll query does yield less results than the specified number of
@@ -765,7 +772,7 @@ class Query(Runner):
         index = params.get("index", "_all")
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
-        detailed_results = params.get("detailed-results", True)
+        detailed_results = params.get("detailed-results", False)
         params = request_params
 
         # disable eager response parsing - responses might be huge thus skewing results

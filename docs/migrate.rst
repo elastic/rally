@@ -9,6 +9,18 @@ Minimum Python version is 3.8.0
 
 Rally 1.5.0 requires Python 3.8.0. Check the :ref:`updated installation instructions <install_python>` for more details.
 
+Meta-Data for queries are omitted
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 1.5.0 does not determine query meta-data anymore by default to reduce the risk of client-side bottlenecks. The following meta-data fields are affected:
+
+* ``hits``
+* ``hits_relation``
+* ``timed_out``
+* ``took``
+
+If you still want to retrieve them (risking skewed results due to additional overhead), set the new property ``detailed-results`` to ``true`` for any operation of type ``search``.
+
 Runner API uses asyncio
 ^^^^^^^^^^^^^^^^^^^^^^^
 
