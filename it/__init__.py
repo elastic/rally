@@ -88,10 +88,8 @@ def wait_until_port_is_free(port_number=39200):
 
 
 def check_prerequisites():
-    if process.run_subprocess_with_logging("docker") != 0:
-        raise AssertionError("Docker is required to run integration tests.")
     if process.run_subprocess_with_logging("docker ps") != 0:
-        raise AssertionError("Docker daemon must be up and running to run integration tests.")
+        raise AssertionError("Docker must be installed and the daemon must be up and running to run integration tests.")
     if process.run_subprocess_with_logging("docker-compose --help") != 0:
         raise AssertionError("Docker Compose is required to run integration tests.")
 
