@@ -19,6 +19,7 @@ import functools
 import json
 import os
 import random
+from string import Template
 
 import pytest
 
@@ -159,8 +160,8 @@ def install_integration_test_config():
         io.ensure_dir(f.rally_home)
         with open(f.target_path, "w", encoding="UTF-8") as target:
             with open(f.source_path, "r", encoding="UTF-8") as src:
-                contents = src.read().replace("${USER_HOME}", f.user_home)
-                target.write(contents)
+                contents = src.read()
+                target.write(Template(contents).substitute(USER_HOME=f.user_home))
 
     for n in CONFIG_NAMES:
         copy_config(n)
