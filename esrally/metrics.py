@@ -732,16 +732,17 @@ class MetricsStore:
         """
         return self._get(name, task, operation_type, sample_type, node_name, mapper)
 
-    def get_unit(self, name, task=None):
+    def get_unit(self, name, task=None, node_name=None):
         """
         Gets the unit for the given metric name.
 
         :param name: The metric name to query.
         :param task The task name to query. Optional.
+        :param node_name The name of the node where this metric was gathered. Optional.
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, task, None, None, None, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, None, None, node_name, lambda doc: doc["unit"]))
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         raise NotImplementedError("abstract method")
@@ -1772,11 +1773,13 @@ class GlobalStatsCalculator:
             mean = self.store.get_mean(metric_name,
                                        task=task,
                                        sample_type=sample_type)
+            unit = self.store.get_unit(metric_name, task=task)
             stats = collections.OrderedDict()
             for k, v in percentiles.items():
                 # safely encode so we don't have any dots in field names
                 stats[encode_float_key(k)] = v
             stats["mean"] = mean
+            stats["unit"] = unit
             return stats
         else:
             return {}
@@ -1917,9 +1920,10 @@ class SystemStatsCalculator:
 
     def add(self, result, raw_metric_key, summary_metric_key):
         metric_value = self.store.get_one(raw_metric_key, node_name=self.node_name)
+        metric_unit = self.store.get_unit(raw_metric_key)
         if metric_value:
             self.logger.debug("Adding record for [%s] with value [%s].", raw_metric_key, str(metric_value))
-            result.add_node_metrics(self.node_name, summary_metric_key, metric_value)
+            result.add_node_metrics(self.node_name, summary_metric_key, metric_value, metric_unit)
         else:
             self.logger.debug("Skipping incomplete [%s] record.", raw_metric_key)
 
@@ -1931,12 +1935,14 @@ class SystemStats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_node_metrics(self, node, name, value):
+    def add_node_metrics(self, node, name, value, unit):
         metric = {
             "node": node,
             "name": name,
             "value": value
         }
+        if unit:
+            metric["unit"] = unit
         self.node_metrics.append(metric)
 
     def as_flat_list(self):
