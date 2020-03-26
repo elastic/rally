@@ -1,6 +1,14 @@
 Migration Guide
 ===============
 
+Migrating to Rally 1.5.0
+------------------------
+
+Minimum Python version is 3.8.0
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 1.5.0 requires Python 3.8.0. Check the :ref:`updated installation instructions <install_python>` for more details.
+
 Migrating to Rally 1.4.1
 ------------------------
 

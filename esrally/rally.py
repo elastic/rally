@@ -150,11 +150,6 @@ def create_arg_parser():
         choices=["time-series", "bar"],
         default="time-series")
     generate_parser.add_argument(
-        "--quiet",
-        help="Suppress as much as output as possible (default: false).",
-        default=False,
-        action="store_true")
-    generate_parser.add_argument(
         "--output-path",
         help="Output file name (default: stdout).",
         default=None)
@@ -544,7 +539,7 @@ def create_arg_parser():
             default=False)
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
-              start_parser, stop_parser, info_parser]:
+              start_parser, stop_parser, info_parser, generate_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",

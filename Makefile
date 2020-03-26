@@ -19,9 +19,8 @@ SHELL = /bin/bash
 # We assume an active virtualenv for development
 PYENV_REGEX = .pyenv/shims
 PY_BIN = python3
-PY35 = $(shell jq '.python_versions.PY35' .ci/variables.json)
-PY36 = $(shell jq '.python_versions.PY36' .ci/variables.json)
-PY37 = $(shell jq '.python_versions.PY37' .ci/variables.json)
+# https://github.com/pypa/pip/issues/5599
+PIP_WRAPPER = $(PY_BIN) -m pip
 PY38 = $(shell jq '.python_versions.PY38' .ci/variables.json)
 VENV_NAME ?= .venv
 VENV_ACTIVATE_FILE = $(VENV_NAME)/bin/activate
@@ -34,11 +33,8 @@ PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please add \033[0;31meval \"\$$
 VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VENV_NAME); have you executed make venv-create?\033[0m\n"
 
 prereq:
-	pyenv install --skip-existing $(PY35)
-	pyenv install --skip-existing $(PY36)
-	pyenv install --skip-existing $(PY37)
 	pyenv install --skip-existing $(PY38)
-	pyenv local $(PY35) $(PY36) $(PY37) $(PY38)
+	pyenv local $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
@@ -63,10 +59,10 @@ check-venv:
 	fi
 
 install: venv-create
-	. $(VENV_ACTIVATE_FILE); pip install --upgrade pip setuptools
-	. $(VENV_ACTIVATE_FILE); pip3 install -e .
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip setuptools wheel
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 	# Also install development dependencies
-	. $(VENV_ACTIVATE_FILE); pip3 install -e .[develop]
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop]
 
 clean: nondocs-clean docs-clean
 
@@ -108,15 +104,6 @@ precommit: lint
 it: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox
 
-it35: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py35
-
-it36: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py36
-
-it37: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py37
-
 it38: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38
 
@@ -134,4 +121,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it35 it36 it37 it38 benchmark coverage release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 benchmark coverage release release-checks prereq venv-create check-env
