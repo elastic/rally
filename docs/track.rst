@@ -406,6 +406,13 @@ With the operation type ``search`` you can execute `request body searches <http:
 * ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
 * ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
 
+If ``detailed-results`` is set to ``true``, the following meta-data properties will be determined and stored:
+
+* ``hits``
+* ``hits_relation``
+* ``timed_out``
+* ``took``
+
 Example::
 
     {
