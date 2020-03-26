@@ -69,11 +69,14 @@ def esrally(cfg, command_line):
     return os.system("esrally {} --configuration-name=\"{}\"".format(command_line, cfg))
 
 
-def wait_until_port_is_free(port_number=39200):
+def wait_until_port_is_free(port_number=39200, timeout=120):
     import errno
     import time
     import socket
-    while True:
+
+    start = time.perf_counter()
+    end = start + timeout
+    while time.perf_counter() < end:
         c = socket.socket()
         connect_result = c.connect_ex(("127.0.0.1", port_number))
         # noinspection PyBroadException
@@ -86,6 +89,8 @@ def wait_until_port_is_free(port_number=39200):
                 time.sleep(0.5)
         except Exception:
             pass
+
+    raise TimeoutError(f"Port [{port_number}] is occupied after [{timeout}] seconds")
 
 
 def check_prerequisites():
