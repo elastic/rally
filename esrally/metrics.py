@@ -1920,7 +1920,7 @@ class SystemStatsCalculator:
 
     def add(self, result, raw_metric_key, summary_metric_key):
         metric_value = self.store.get_one(raw_metric_key, node_name=self.node_name)
-        metric_unit = self.store.get_unit(raw_metric_key)
+        metric_unit = self.store.get_unit(raw_metric_key, node_name=self.node_name)
         if metric_value:
             self.logger.debug("Adding record for [%s] with value [%s].", raw_metric_key, str(metric_value))
             result.add_node_metrics(self.node_name, summary_metric_key, metric_value, metric_unit)
