@@ -282,11 +282,11 @@ class ActionMetaDataTests(TestCase):
 class IndexDataReaderTests(TestCase):
     def test_read_bulk_larger_than_number_of_docs(self):
         data = [
-            '{"key": "value1"}\n',
-            '{"key": "value2"}\n',
-            '{"key": "value3"}\n',
-            '{"key": "value4"}\n',
-            '{"key": "value5"}\n'
+            b'{"key": "value1"}\n',
+            b'{"key": "value2"}\n',
+            b'{"key": "value3"}\n',
+            b'{"key": "value4"}\n',
+            b'{"key": "value5"}\n'
         ]
         bulk_size = 50
 
@@ -308,11 +308,11 @@ class IndexDataReaderTests(TestCase):
 
     def test_read_bulk_with_offset(self):
         data = [
-            '{"key": "value1"}\n',
-            '{"key": "value2"}\n',
-            '{"key": "value3"}\n',
-            '{"key": "value4"}\n',
-            '{"key": "value5"}\n'
+            b'{"key": "value1"}\n',
+            b'{"key": "value2"}\n',
+            b'{"key": "value3"}\n',
+            b'{"key": "value4"}\n',
+            b'{"key": "value5"}\n'
         ]
         bulk_size = 50
 
@@ -334,13 +334,13 @@ class IndexDataReaderTests(TestCase):
 
     def test_read_bulk_smaller_than_number_of_docs(self):
         data = [
-            '{"key": "value1"}\n',
-            '{"key": "value2"}\n',
-            '{"key": "value3"}\n',
-            '{"key": "value4"}\n',
-            '{"key": "value5"}\n',
-            '{"key": "value6"}\n',
-            '{"key": "value7"}\n',
+            b'{"key": "value1"}\n',
+            b'{"key": "value2"}\n',
+            b'{"key": "value3"}\n',
+            b'{"key": "value4"}\n',
+            b'{"key": "value5"}\n',
+            b'{"key": "value6"}\n',
+            b'{"key": "value7"}\n',
         ]
         bulk_size = 3
 
@@ -362,13 +362,13 @@ class IndexDataReaderTests(TestCase):
 
     def test_read_bulk_smaller_than_number_of_docs_and_multiple_clients(self):
         data = [
-            '{"key": "value1"}\n',
-            '{"key": "value2"}\n',
-            '{"key": "value3"}\n',
-            '{"key": "value4"}\n',
-            '{"key": "value5"}\n',
-            '{"key": "value6"}\n',
-            '{"key": "value7"}\n',
+            b'{"key": "value1"}\n',
+            b'{"key": "value2"}\n',
+            b'{"key": "value3"}\n',
+            b'{"key": "value4"}\n',
+            b'{"key": "value5"}\n',
+            b'{"key": "value6"}\n',
+            b'{"key": "value7"}\n',
         ]
         bulk_size = 3
 
@@ -391,20 +391,20 @@ class IndexDataReaderTests(TestCase):
 
     def test_read_bulks_and_assume_metadata_line_in_source_file(self):
         data = [
-            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
-            '{"key": "value1"}\n',
-            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
-            '{"key": "value2"}\n',
-            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
-            '{"key": "value3"}\n',
-            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
-            '{"key": "value4"}\n',
-            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
-            '{"key": "value5"}\n',
-            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
-            '{"key": "value6"}\n',
-            '{"index": {"_index": "test_index", "_type": "test_type"}\n',
-            '{"key": "value7"}\n'
+            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"key": "value1"}\n',
+            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"key": "value2"}\n',
+            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"key": "value3"}\n',
+            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"key": "value4"}\n',
+            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"key": "value5"}\n',
+            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"key": "value6"}\n',
+            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"key": "value7"}\n'
         ]
         bulk_size = 3
 
@@ -439,11 +439,11 @@ class IndexDataReaderTests(TestCase):
             2])
 
         data = [
-            '{"key": "value1"}\n',
-            '{"key": "value2"}\n',
-            '{"key": "value3"}\n',
-            '{"key": "value4"}\n',
-            '{"key": "value5"}\n'
+            b'{"key": "value1"}\n',
+            b'{"key": "value2"}\n',
+            b'{"key": "value3"}\n',
+            b'{"key": "value4"}\n',
+            b'{"key": "value5"}\n'
         ]
         bulk_size = 2
 
@@ -471,24 +471,24 @@ class IndexDataReaderTests(TestCase):
                     bulks.append(bulk)
 
         self.assertEqual([
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
-                '{"key": "value1"}\n' +
-                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-                '{"doc":{"key": "value2"}}\n',
-                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
-                '{"doc":{"key": "value3"}}\n' +
-                '{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
-                '{"doc":{"key": "value4"}}\n',
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-                '{"key": "value5"}\n'
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
+                b'{"key": "value1"}\n' +
+                b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+                b'{"doc":{"key": "value2"}}\n',
+                b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
+                b'{"doc":{"key": "value3"}}\n' +
+                b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
+                b'{"doc":{"key": "value4"}}\n',
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+                b'{"key": "value5"}\n'
         ], bulks)
 
     def test_read_bulk_with_external_id_and_zero_conflict_probability(self):
         data = [
-            '{"key": "value1"}\n',
-            '{"key": "value2"}\n',
-            '{"key": "value3"}\n',
-            '{"key": "value4"}\n'
+            b'{"key": "value1"}\n',
+            b'{"key": "value2"}\n',
+            b'{"key": "value3"}\n',
+            b'{"key": "value4"}\n'
         ]
         bulk_size = 2
 
@@ -513,15 +513,15 @@ class IndexDataReaderTests(TestCase):
                     bulks.append(bulk)
 
         self.assertEqual([
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
-                '{"key": "value1"}\n' +
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-                '{"key": "value2"}\n',
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
+                b'{"key": "value1"}\n' +
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+                b'{"key": "value2"}\n',
 
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
-                '{"key": "value3"}\n' +
-                '{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
-                '{"key": "value4"}\n'
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
+                b'{"key": "value3"}\n' +
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
+                b'{"key": "value4"}\n'
         ], bulks)
 
     def assert_bulks_sized(self, reader, expected_bulk_sizes, expected_line_sizes):
@@ -531,7 +531,7 @@ class IndexDataReaderTests(TestCase):
             for index, type, batch in reader:
                 for bulk_size, bulk in batch:
                     self.assertEqual(expected_bulk_sizes[bulk_index], bulk_size, msg="bulk size")
-                    self.assertEqual(expected_line_sizes[bulk_index], bulk.count("\n"))
+                    self.assertEqual(expected_line_sizes[bulk_index], bulk.count(b"\n"))
                     bulk_index += 1
             self.assertEqual(len(expected_bulk_sizes), bulk_index, "Not all bulk sizes have been checked")
 

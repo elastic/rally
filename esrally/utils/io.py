@@ -22,6 +22,9 @@ import re
 import subprocess
 import tarfile
 import zipfile
+from contextlib import suppress
+
+import mmap
 
 from esrally.utils import console
 
@@ -61,6 +64,64 @@ class FileSource:
         return lines
 
     def close(self):
+        self.f.close()
+        self.f = None
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+    def __str__(self, *args, **kwargs):
+        return self.file_name
+
+
+class MmapSource:
+    """
+    MmapSource is a wrapper around a memory-mapped file which simplifies testing of file I/O calls.
+    """
+    def __init__(self, file_name, mode, encoding="utf-8"):
+        self.file_name = file_name
+        self.mode = mode
+        self.encoding = encoding
+        self.f = None
+        self.mm = None
+
+    def open(self):
+        self.f = open(self.file_name, mode="r+b")
+        self.mm = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
+        # madvise is available in Python 3.8+
+        with suppress(AttributeError):
+            self.mm.madvise(mmap.MADV_SEQUENTIAL)
+
+        # allow for chaining
+        return self
+
+    def seek(self, offset):
+        self.mm.seek(offset)
+
+    def read(self):
+        return self.mm.read()
+
+    def readline(self):
+        return self.mm.readline()
+
+    def readlines(self, num_lines):
+        lines = []
+        mm = self.mm
+        for _ in range(num_lines):
+            line = mm.readline()
+            if line == b"":
+                break
+            lines.append(line)
+        return lines
+
+    def close(self):
+        self.mm.close()
+        self.mm = None
         self.f.close()
         self.f = None
 

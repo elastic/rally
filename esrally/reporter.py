@@ -99,6 +99,8 @@ class SummaryReporter:
         reporting_values = config.opts("reporting", "values")
         self.report_all_values = reporting_values == "all"
         self.report_all_percentile_values = reporting_values == "all-percentiles"
+        self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime",
+                                                                mandatory=False, default_value=False))
         self.cwd = config.opts("node", "rally.cwd")
 
     def report(self):
@@ -122,6 +124,9 @@ class SummaryReporter:
             metrics_table.extend(self.report_throughput(record, task))
             metrics_table.extend(self.report_latency(record, task))
             metrics_table.extend(self.report_service_time(record, task))
+            # this is mostly needed for debugging purposes but not so relevant to end users
+            if self.show_processing_time:
+                metrics_table.extend(self.report_processing_time(record, task))
             metrics_table.extend(self.report_error_rate(record, task))
             self.add_warnings(warnings, record, task)
 
@@ -161,6 +166,9 @@ class SummaryReporter:
 
     def report_service_time(self, values, task):
         return self.report_percentiles("service time", task, values["service_time"])
+
+    def report_processing_time(self, values, task):
+        return self.report_percentiles("processing time", task, values["processing_time"])
 
     def report_percentiles(self, name, task, value):
         lines = []

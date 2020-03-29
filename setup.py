@@ -50,6 +50,11 @@ install_requires = [
     # License: Apache 2.0
     # transitive dependency urllib3: MIT
     "elasticsearch==7.0.5",
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   aiohttp: Apache 2.0
+    #   async_timeout: Apache 2.0
+    "elasticsearch-async==6.2.0",
     # License: BSD
     "psutil==5.7.0",
     # License: MIT
@@ -73,7 +78,11 @@ install_requires = [
     #   botocore: Apache 2.0
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
-    "boto3==1.10.32"
+    "boto3==1.10.32",
+    # License: Apache 2.0
+    "yappi==1.2.3",
+    # License: BSD
+    "ijson==2.6.1"
 ]
 
 tests_require = [

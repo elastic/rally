@@ -9,6 +9,55 @@ Minimum Python version is 3.8.0
 
 Rally 1.5.0 requires Python 3.8.0. Check the :ref:`updated installation instructions <install_python>` for more details.
 
+Meta-Data for queries are omitted
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 1.5.0 does not determine query meta-data anymore by default to reduce the risk of client-side bottlenecks. The following meta-data fields are affected:
+
+* ``hits``
+* ``hits_relation``
+* ``timed_out``
+* ``took``
+
+If you still want to retrieve them (risking skewed results due to additional overhead), set the new property ``detailed-results`` to ``true`` for any operation of type ``search``.
+
+Runner API uses asyncio
+^^^^^^^^^^^^^^^^^^^^^^^
+
+In order to support more concurrent clients in the future, Rally is moving from a synchronous model to an asynchronous model internally. With Rally 1.5.0 all custom runners need to be implemented using async APIs and a new bool argument ``async_runner=True`` needs to be provided upon registration. Below is an example how to migrate a custom runner function.
+
+A custom runner prior to Rally 1.5.0::
+
+    def percolate(es, params):
+        es.percolate(
+           index="queries",
+           doc_type="content",
+           body=params["body"]
+        )
+
+    def register(registry):
+        registry.register_runner("percolate", percolate)
+
+With Rally 1.5.0, the implementation changes as follows::
+
+    async def percolate(es, params):
+        await es.percolate(
+                index="queries",
+                doc_type="content",
+                body=params["body"]
+              )
+
+    def register(registry):
+        registry.register_runner("percolate", percolate, async_runner=True)
+
+Apply to the following changes for each custom runner:
+
+* Prefix the function signature with ``async``.
+* Add an ``await`` keyword before each Elasticsearch API call.
+* Add ``async_runner=True`` as the last argument to the ``register_runner`` function.
+
+For more details please refer to the updated documentation on :ref:`custom runners <adding_tracks_custom_runners>`.
+
 Migrating to Rally 1.4.1
 ------------------------
 
