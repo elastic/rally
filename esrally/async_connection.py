@@ -12,6 +12,18 @@ from elasticsearch.compat import urlencode
 from elasticsearch.connection.http_urllib3 import create_ssl_context
 
 
+class RawClientResponse(aiohttp.ClientResponse):
+    """
+    Returns the body as bytes object (instead of a str) to avoid decoding overhead.
+    """
+    async def text(self, encoding=None, errors="strict"):
+        """Read response payload and decode."""
+        if self._body is None:
+            await self.read()
+
+        return self._body
+
+
 # This is only needed because https://github.com/elastic/elasticsearch-py-async/pull/68 is not merged yet
 # In addition we have raised the connection limit in TCPConnector from 100 to 10000.
 
@@ -82,7 +94,8 @@ class AIOHttpConnection(Connection):
                 limit=100000
             ),
             headers=headers,
-            trace_configs=trace_configs
+            trace_configs=trace_configs,
+            response_class=RawClientResponse
         )
 
         self.base_url = 'http%s://%s:%d%s' % (
