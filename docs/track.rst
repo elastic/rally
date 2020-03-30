@@ -405,6 +405,7 @@ With the operation type ``search`` you can execute `request body searches <http:
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results. This flag is ineffective for scroll queries.
 * ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
 * ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
+* ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of scroll responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression. This option is ineffective for regular queries.
 
 If ``detailed-results`` is set to ``true``, the following meta-data properties will be determined and stored:
 

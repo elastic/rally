@@ -779,7 +779,7 @@ class Query(Runner):
         es.return_raw_response()
 
         if doc_type is not None:
-            r = await self._search_type_fallback(es, doc_type, index, body, params)
+            r = await self._raw_search(es, doc_type, index, body, params)
         else:
             r = await es.search(index=index, body=body, params=params)
 
@@ -816,6 +816,11 @@ class Query(Runner):
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
         size = params.get("results-per-page")
+        # reduces overhead due to decompression of very large responses
+        if params.get("response-compression-enabled", True):
+            headers = None
+        else:
+            headers = {"Accept-Encoding": "identity"}
         scroll_id = None
 
         # disable eager response parsing - responses might be huge thus skewing results
@@ -830,13 +835,10 @@ class Query(Runner):
                     scroll = "10s"
                     doc_type = params.get("type")
                     params = request_params
-                    if doc_type is not None:
-                        params["sort"] = sort
-                        params["scroll"] = scroll
-                        params["size"] = size
-                        r = await self._search_type_fallback(es, doc_type, index, body, params)
-                    else:
-                        r = await es.search(index=index, body=body, params=params, sort=sort, scroll=scroll, size=size)
+                    params["sort"] = sort
+                    params["scroll"] = scroll
+                    params["size"] = size
+                    r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
 
                     props = parse(r,
                                   ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"],
@@ -848,7 +850,9 @@ class Query(Runner):
                     took = props.get("took", 0)
                     all_results_collected = (size is not None and hits < size) or hits == 0
                 else:
-                    r = await es.scroll(body={"scroll_id": scroll_id, "scroll": "10s"})
+                    r = await es.transport.perform_request("GET", "/_search/scroll",
+                                                           body={"scroll_id": scroll_id, "scroll": "10s"},
+                                                           headers=headers)
                     props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"])
                     timed_out = timed_out or props.get("timed_out", False)
                     took += props.get("took", 0)
@@ -876,11 +880,15 @@ class Query(Runner):
             "took": took
         }
 
-    async def _search_type_fallback(self, es, doc_type, index, body, params):
-        if doc_type and not index:
-            index = "_all"
-        path = "/%s/%s/_search" % (index, doc_type)
-        return await es.transport.perform_request("GET", path, params=params, body=body)
+    async def _raw_search(self, es, doc_type, index, body, params, headers=None):
+        components = []
+        if index:
+            components.append(index)
+        if doc_type:
+            components.append(doc_type)
+        components.append("_search")
+        path = "/".join(components)
+        return await es.transport.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
 
     def _default_request_params(self, params):
         request_params = params.get("request-params", {})

@@ -1380,9 +1380,10 @@ class QueryRunnerTests(TestCase):
         self.assertFalse("error-type" in result)
 
         es.transport.perform_request.assert_called_once_with(
-            'GET', '/unittest/type/_search',
+            "GET", "/unittest/type/_search",
             body=params["body"],
-            params={}
+            params={},
+            headers=None
         )
         es.clear_scroll.assert_not_called()
 
@@ -1410,7 +1411,7 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
         es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
@@ -1439,15 +1440,12 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
-        es.search.assert_called_once_with(
-            index="unittest",
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/unittest/_search",
+            params={"request_cache": "true", "sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
-            scroll="10s",
-            size=100,
-            sort='_doc',
-            params={
-                "request_cache": "true"
-            }
+            headers=None
         )
         es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
@@ -1475,7 +1473,7 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
         es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
@@ -1484,6 +1482,7 @@ class QueryRunnerTests(TestCase):
             "pages": 1,
             "results-per-page": 100,
             "index": "unittest",
+            "response-compression-enabled": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1503,13 +1502,12 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
-        es.search.assert_called_once_with(
-            index="unittest",
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/unittest/_search",
+            params={"sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
-            scroll="10s",
-            size=100,
-            sort='_doc',
-            params={}
+            headers={"Accept-Encoding": "identity"}
         )
         es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
@@ -1537,7 +1535,7 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
         es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
@@ -1564,13 +1562,12 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
-        es.search.assert_called_once_with(
-            index="_all",
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/_all/_search",
+            params={"sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
-            scroll="10s",
-            size=100,
-            sort='_doc',
-            params={}
+            headers=None
         )
 
         es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
@@ -1599,7 +1596,6 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         # page 2
         scroll_response = {
@@ -1614,7 +1610,12 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.scroll.return_value = as_future(io.StringIO(json.dumps(scroll_response)))
+
+        es.transport.perform_request.side_effect = [
+            as_future(io.StringIO(json.dumps(search_response))),
+            as_future(io.StringIO(json.dumps(scroll_response)))
+        ]
+
         es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
@@ -1667,7 +1668,7 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
         es.clear_scroll.return_value = as_future(exception=elasticsearch.ConnectionTimeout())
 
         query_runner = runner.Query()
@@ -1726,7 +1727,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+
         # page 2 has no results
         scroll_response = {
             "_scroll_id": "some-scroll-id",
@@ -1736,7 +1737,11 @@ class QueryRunnerTests(TestCase):
                 "hits": []
             }
         }
-        es.scroll.return_value = as_future(io.StringIO(json.dumps(scroll_response)))
+
+        es.transport.perform_request.side_effect = [
+            as_future(io.StringIO(json.dumps(search_response))),
+            as_future(io.StringIO(json.dumps(scroll_response)))
+        ]
         es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
