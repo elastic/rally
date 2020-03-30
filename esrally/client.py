@@ -144,7 +144,7 @@ class EsClientFactory:
             def loads(self, s):
                 meta = RallyAsyncElasticsearch.request_context.get()
                 if "raw_response" in meta:
-                    return io.StringIO(s)
+                    return io.BytesIO(s)
                 else:
                     return super().loads(s)
 
