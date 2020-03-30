@@ -1581,8 +1581,10 @@ class StatsCalculatorTests(TestCase):
         opm = stats.metrics("index #1")
         self.assertEqual(collections.OrderedDict(
             [("min", 500), ("mean", 1125), ("median", 1000), ("max", 2000), ("unit", "docs/s")]), opm["throughput"])
-        self.assertEqual(collections.OrderedDict([("50_0", 220), ("100_0", 225), ("mean", 215)]), opm["latency"])
-        self.assertEqual(collections.OrderedDict([("50_0", 200), ("100_0", 210), ("mean", 200)]), opm["service_time"])
+        self.assertEqual(collections.OrderedDict(
+            [("50_0", 220), ("100_0", 225), ("mean", 215), ("unit", "ms")]), opm["latency"])
+        self.assertEqual(collections.OrderedDict(
+            [("50_0", 200), ("100_0", 210), ("mean", 200), ("unit", "ms")]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
 
         self.assertEqual(1, len(stats.ml_processing_time))
@@ -1625,7 +1627,8 @@ class StatsCalculatorTests(TestCase):
             {
                 "node": "rally-node-0",
                 "name": "index_size",
-                "value": 2048
+                "value": 2048,
+                "unit": "bytes"
             }
         ], stats.node_metrics)
 
