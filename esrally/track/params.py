@@ -355,12 +355,14 @@ class SearchParamSource(ParamSource):
         pages = params.get("pages", None)
         results_per_page = params.get("results-per-page", None)
         request_params = params.get("request-params", {})
+        response_compression_enabled = params.get("response-compression-enabled", True)
 
         self.query_params = {
             "index": index_name,
             "type": type_name,
             "cache": request_cache,
             "request-params": request_params,
+            "response-compression-enabled": response_compression_enabled,
             "body": query_body
         }
 
