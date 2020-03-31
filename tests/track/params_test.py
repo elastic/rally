@@ -1600,11 +1600,12 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(5, len(p))
+        self.assertEqual(6, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual({}, p["request-params"])
         self.assertEqual(True, p["cache"])
+        self.assertEqual(True, p["response-compression-enabled"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -1639,13 +1640,14 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(5, len(p))
+        self.assertEqual(6, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual({
             "_source_include": "some_field"
         }, p["request-params"])
         self.assertIsNone(p["cache"])
+        self.assertEqual(True, p["response-compression-enabled"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -1659,6 +1661,7 @@ class SearchParamSourceTests(TestCase):
             "index": "_all",
             "type": "type1",
             "cache": False,
+            "response-compression-enabled": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1667,12 +1670,13 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(5, len(p))
+        self.assertEqual(6, len(p))
         self.assertEqual("_all", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
         self.assertEqual(False, p["cache"])
+        self.assertEqual(False, p["response-compression-enabled"])
         self.assertEqual({
             "query": {
                 "match_all": {}
