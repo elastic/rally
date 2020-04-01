@@ -87,6 +87,7 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
         self.cfg.add(config.Scope.application, "system", "time.start", datetime(year=2017, month=8, day=20, hour=1, minute=0, second=0))
         self.cfg.add(config.Scope.application, "system", "race.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
+        self.cfg.add(config.Scope.application, "system", "available.cores", 8)
         self.cfg.add(config.Scope.application, "track", "challenge.name", "default")
         self.cfg.add(config.Scope.application, "track", "params", {})
         self.cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
@@ -137,10 +138,10 @@ class DriverTests(TestCase):
         d.start_benchmark()
 
         target.create_client.assert_has_calls(calls=[
-            mock.call(0, "10.5.5.1"),
-            mock.call(1, "10.5.5.2"),
-            mock.call(2, "10.5.5.1"),
-            mock.call(3, "10.5.5.2"),
+            mock.call("10.5.5.1"),
+            mock.call("10.5.5.1"),
+            mock.call("10.5.5.2"),
+            mock.call("10.5.5.2"),
         ])
 
         # Did we start all load generators? There is no specific mock assert for this...
@@ -158,10 +159,10 @@ class DriverTests(TestCase):
         d.start_benchmark()
 
         target.create_client.assert_has_calls(calls=[
-            mock.call(0, "localhost"),
-            mock.call(1, "localhost"),
-            mock.call(2, "localhost"),
-            mock.call(3, "localhost"),
+            mock.call("localhost"),
+            mock.call("localhost"),
+            mock.call("localhost"),
+            mock.call("localhost"),
         ])
 
         # Did we start all load generators? There is no specific mock assert for this...
@@ -176,7 +177,9 @@ class DriverTests(TestCase):
 
         self.assertEqual(0, len(d.workers_completed_current_step))
 
-        d.joinpoint_reached(worker_id=0, worker_local_timestamp=10, task=driver.JoinPoint(id=0))
+        d.joinpoint_reached(worker_id=0,
+                            worker_local_timestamp=10,
+                            task_allocations=[driver.ClientAllocation(client_id=0, task=driver.JoinPoint(id=0))])
 
         self.assertEqual(1, len(d.workers_completed_current_step))
 
@@ -192,8 +195,12 @@ class DriverTests(TestCase):
 
         self.assertEqual(0, len(d.workers_completed_current_step))
 
-        # it does not matter what we put into `clients_executing_completing_task` We choose to put the client id into it.
-        d.joinpoint_reached(worker_id=0, worker_local_timestamp=10, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=0,
+                            worker_local_timestamp=10,
+                            task_allocations=[
+                                driver.ClientAllocation(client_id=0,
+                                                        task=driver.JoinPoint(id=0,
+                                                                              clients_executing_completing_task=[0]))])
 
         self.assertEqual(-1, d.current_step)
         self.assertEqual(1, len(d.workers_completed_current_step))
@@ -201,15 +208,31 @@ class DriverTests(TestCase):
         self.assertEqual(4, target.complete_current_task.call_count)
 
         # awaiting responses of other clients
-        d.joinpoint_reached(worker_id=1, worker_local_timestamp=11, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=1,
+                            worker_local_timestamp=11,
+                            task_allocations=[
+                                driver.ClientAllocation(client_id=1,
+                                                        task=driver.JoinPoint(id=0,
+                                                                              clients_executing_completing_task=[0]))])
+
         self.assertEqual(-1, d.current_step)
         self.assertEqual(2, len(d.workers_completed_current_step))
 
-        d.joinpoint_reached(worker_id=2, worker_local_timestamp=12, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=2,
+                            worker_local_timestamp=12,
+                            task_allocations=[
+                                driver.ClientAllocation(client_id=2,
+                                                        task=driver.JoinPoint(id=0,
+                                                                              clients_executing_completing_task=[0]))])
         self.assertEqual(-1, d.current_step)
         self.assertEqual(3, len(d.workers_completed_current_step))
 
-        d.joinpoint_reached(worker_id=3, worker_local_timestamp=13, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=3,
+                            worker_local_timestamp=13,
+                            task_allocations=[
+                                driver.ClientAllocation(client_id=3,
+                                                        task=driver.JoinPoint(id=0,
+                                                                              clients_executing_completing_task=[0]))])
 
         # by now the previous step should be considered completed and we are at the next one
         self.assertEqual(0, d.current_step)
