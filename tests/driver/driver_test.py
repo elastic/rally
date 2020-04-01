@@ -248,6 +248,145 @@ def op(name, operation_type):
     return track.Operation(name, operation_type, param_source="driver-test-param-source")
 
 
+class WorkerAssignmentTests(TestCase):
+    def test_single_host_assignment_clients_matches_cores(self):
+        host_configs = [{
+            "host": "localhost",
+            "cores": 4
+        }]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=4)
+
+        self.assertEqual([
+            {
+                "host": "localhost",
+                "workers": [
+                    [0],
+                    [1],
+                    [2],
+                    [3]
+                ],
+                "worker": 4
+            }
+        ], assignments)
+
+    def test_single_host_assignment_more_clients_than_cores(self):
+        host_configs = [{
+            "host": "localhost",
+            "cores": 4
+        }]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=6)
+
+        self.assertEqual([
+            {
+                "host": "localhost",
+                "workers": [
+                    [0, 4],
+                    [1, 5],
+                    [2],
+                    [3]
+                ],
+                "worker": 6
+            }
+        ], assignments)
+
+    def test_single_host_assignment_less_clients_than_cores(self):
+        host_configs = [{
+            "host": "localhost",
+            "cores": 4
+        }]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=2)
+
+        self.assertEqual([
+            {
+                "host": "localhost",
+                "workers": [
+                    [0],
+                    [1],
+                    [],
+                    []
+                ],
+                "worker": 2
+            }
+        ], assignments)
+
+    def test_multiple_host_assignment_more_clients_than_cores(self):
+        host_configs = [
+            {
+                "host": "host-a",
+                "cores": 4
+            },
+            {
+                "host": "host-b",
+                "cores": 4
+            }
+        ]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=16)
+
+        self.assertEqual([
+            {
+                "host": "host-a",
+                "workers": [
+                    [0, 8],
+                    [2, 10],
+                    [4, 12],
+                    [6, 14]
+                ],
+                "worker": 8
+            },
+            {
+                "host": "host-b",
+                "workers": [
+                    [1, 9],
+                    [3, 11],
+                    [5, 13],
+                    [7, 15]
+                ],
+                "worker": 8
+            }
+        ], assignments)
+
+    def test_multiple_host_assignment_less_clients_than_cores(self):
+        host_configs = [
+            {
+                "host": "host-a",
+                "cores": 4
+            },
+            {
+                "host": "host-b",
+                "cores": 4
+            }
+        ]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=4)
+
+        self.assertEqual([
+            {
+                "host": "host-a",
+                "workers": [
+                    [0],
+                    [2],
+                    [],
+                    []
+                ],
+                "worker": 2
+            },
+            {
+                "host": "host-b",
+                "workers": [
+                    [1],
+                    [3],
+                    [],
+                    []
+                ],
+                "worker": 2
+            }
+        ], assignments)
+
+
 class AllocatorTests(TestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
