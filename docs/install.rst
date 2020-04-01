@@ -69,6 +69,35 @@ In all other cases, Rally requires ``git 1.9`` or better. Verify with ``git --ve
 
 ``git`` is already installed on MacOS.
 
+pbzip2
+~~~~~~
+
+It is strongly recommended to install ``pbzip2`` to speed up decompressing the corpora of Rally `standard tracks <https://github.com/elastic/rally-tracks>`_.
+If you have created :doc:`custom tracks </adding_tracks>` using corpora compressed with ``gzip`` instead of ``bzip2``, it's also advisable to install ``pigz`` to speed up the process.
+
+**Debian / Ubuntu**
+
+::
+
+    sudo apt-get install pbzip2
+
+**Red Hat / CentOS / Amazon Linux**
+
+``pbzip`` is available via the `EPEL repository <https://fedoraproject.org/wiki/EPEL#Quickstart>`_.
+
+::
+
+    sudo yum install pbzip2
+
+**MacOS**
+
+Install via `Homebrew <https://brew.sh/>`_:
+
+::
+
+    brew install pbzip2
+
+
 JDK
 ~~~
 

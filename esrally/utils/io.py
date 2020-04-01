@@ -17,8 +17,10 @@
 
 import bz2
 import gzip
+import logging
 import os
 import re
+import shutil
 import subprocess
 import tarfile
 import zipfile
@@ -244,6 +246,15 @@ def is_archive(name):
     return ext in [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2"]
 
 
+def is_executable(name):
+    """
+    :param name: File name to check.
+    :return: True iff given file name is executable and in PATH, all other cases False.
+    """
+
+    return shutil.which(name) is not None
+
+
 def compress(source_directory, archive_name):
     """
     Compress a directory tree.
@@ -274,24 +285,55 @@ def decompress(zip_name, target_directory):
     this function.
     """
     path_without_extension, extension = splitext(zip_name)
-    filename = basename(path_without_extension)
     if extension == ".zip":
         _do_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
-        _do_decompress_manually(target_directory, filename, bz2.open(zip_name))
+        decompressor_args = ["pbzip2", "-d", "-k", "-m10000", "-c"]
+        decompressor_lib = bz2.open(zip_name)
+        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
     elif extension == ".gz":
-        _do_decompress_manually(target_directory, filename, gzip.open(zip_name))
+        decompressor_args = ["pigz", "-d", "-k", "-c"]
+        decompressor_lib = gzip.open(zip_name)
+        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
     elif extension in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
         _do_decompress(target_directory, tarfile.open(zip_name))
     else:
         raise RuntimeError("Unsupported file extension [%s]. Cannot decompress [%s]" % (extension, zip_name))
 
 
-def _do_decompress_manually(target_directory, filename, compressed_file):
+def _do_decompress_manually(target_directory, filename, decompressor_args, decompressor_lib):
+    decompressor_bin = decompressor_args[0]
+    base_path_without_extension = basename(splitext(filename)[0])
+
+    if is_executable(decompressor_bin):
+        if _do_decompress_manually_external(target_directory, filename, base_path_without_extension, decompressor_args):
+            return
+    else:
+        console.warn(f"{decompressor_bin} not found in PATH. Using default library, decompression will take longer.")
+
+    _do_decompress_manually_with_lib(target_directory, filename, decompressor_lib)
+
+
+def _do_decompress_manually_external(target_directory, filename, base_path_without_extension, decompressor_args):
+    logger = logging.getLogger(__name__)
+
+    with open(os.path.join(target_directory, base_path_without_extension), "wb") as new_file:
+        try:
+            subprocess.run(decompressor_args + [filename], stdout=new_file, stderr=subprocess.PIPE, check=True)
+        except subprocess.CalledProcessError as err:
+            console.warn(f"Failed to decompress [{filename}] with [{err.cmd}]. Falling back to default library.")
+            logger.warning("Error [%s]", err.stderr)
+            return False
+    return True
+
+
+def _do_decompress_manually_with_lib(target_directory, filename, compressed_file):
+    path_without_extension = basename(splitext(filename)[0])
+
     ensure_dir(target_directory)
     try:
-        with open("%s/%s" % (target_directory, filename), 'wb') as new_file:
-            for data in iter(lambda: compressed_file.read(100 * 1024), b''):
+        with open("%s/%s" % (target_directory, path_without_extension), "wb") as new_file:
+            for data in iter(lambda: compressed_file.read(100 * 1024), b""):
                 new_file.write(data)
     finally:
         compressed_file.close()

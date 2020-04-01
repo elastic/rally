@@ -16,6 +16,7 @@
 # under the License.
 
 import os
+import subprocess
 import tempfile
 import unittest.mock as mock
 from unittest import TestCase
@@ -93,19 +94,53 @@ class IoTests(TestCase):
         self.assertFalse(io.has_extension("/tmp/README", "README"))
 
 
-class DecompressionTests(TestCase):
+class TestDecompression:
     def test_decompresses_supported_file_formats(self):
         for ext in ["zip", "gz", "bz2", "tgz", "tar.bz2", "tar.gz"]:
             tmp_dir = tempfile.mkdtemp()
-            archive_path = "%s/resources/test.txt.%s" % (os.path.dirname(os.path.abspath(__file__)), ext)
-            decompressed_path = "%s/test.txt" % tmp_dir
+            archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"test.txt.{ext}")
+            decompressed_path = os.path.join(tmp_dir, "test.txt")
 
             io.decompress(archive_path, target_directory=tmp_dir)
 
-            self.assertTrue(os.path.exists(decompressed_path), msg="Could not decompress [%s] to [%s] (target file does not exist)" %
-                                                                   (archive_path, decompressed_path))
-            self.assertEqual("Sample text for DecompressionTests\n", self.read(decompressed_path),
-                             msg="Could not decompress [%s] to [%s] (target file is corrupt)" % (archive_path, decompressed_path))
+            assert os.path.exists(decompressed_path) is True,\
+                f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file does not exist)"
+            assert self.read(decompressed_path) == "Sample text for DecompressionTests\n",\
+                f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
+
+    @mock.patch.object(io, "is_executable", return_value=False)
+    def test_decompresses_supported_file_formats_with_lib_as_failover(self, mocked_is_executable):
+        for ext in ["zip", "gz", "bz2", "tgz", "tar.bz2", "tar.gz"]:
+            tmp_dir = tempfile.mkdtemp()
+            archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"test.txt.{ext}")
+            decompressed_path = os.path.join(tmp_dir, "test.txt")
+
+            with mock.patch("esrally.utils.console.warn") as mocked_console_warn:
+                io.decompress(archive_path, target_directory=tmp_dir)
+
+                assert os.path.exists(decompressed_path) is True,\
+                    f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file does not exist)"
+                assert self.read(decompressed_path) == "Sample text for DecompressionTests\n",\
+                    f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
+
+            if ext in ["bz2", "gz"]:
+                assert f"not found in PATH. Using default library, decompression will take longer." in mocked_console_warn.call_args[0][0]
+
+    @mock.patch("subprocess.run")
+    @mock.patch("esrally.utils.console.warn")
+    def test_decompress_manually_external_fails_if_tool_missing(self, mocked_console_warn, mocked_run):
+        base_path_without_extension = "corpus"
+        archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "test.txt.bz2")
+        tmp_dir = tempfile.mkdtemp()
+        decompressor_bin = "pbzip2"
+        decompress_cmd = f"{decompressor_bin} -d -k -m10000 -c ${archive_path}"
+        expected_err = f"Failed to decompress [{archive_path}] with [{decompress_cmd}]. Falling back to default library."
+        mocked_run.side_effect = subprocess.CalledProcessError(cmd=decompress_cmd, returncode=1)
+
+        result = io._do_decompress_manually_external(tmp_dir, archive_path, base_path_without_extension, [decompressor_bin])
+
+        mocked_console_warn.assert_called_once_with(expected_err)
+        assert result is False
 
     def read(self, f):
         with open(f, 'r') as content_file:
