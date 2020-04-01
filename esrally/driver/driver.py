@@ -883,7 +883,8 @@ class Worker(actor.RallyActor):
                 self.logger.info("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
                 # allow to buffer more events than by default as we expect to have way more clients.
                 self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=65536)
-                executor = AsyncIoAdapter(self.config, self.track, task_allocations, self.sampler, self.cancel, self.complete, self.abort_on_error)
+                executor = AsyncIoAdapter(self.config, self.track, task_allocations, self.sampler,
+                                          self.cancel, self.complete, self.abort_on_error)
 
                 self.executor_future = self.pool.submit(executor)
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
