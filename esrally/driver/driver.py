@@ -16,9 +16,11 @@
 # under the License.
 
 import asyncio
+import collections
 import concurrent.futures
 import datetime
 import logging
+import multiprocessing
 import queue
 import threading
 import time
@@ -78,22 +80,22 @@ class PreparationComplete:
         self.revision = revision
 
 
-class StartLoadGenerator:
+class StartWorker:
     """
-    Starts a load generator.
+    Starts a worker.
     """
 
-    def __init__(self, client_id, config, track, tasks):
+    def __init__(self, worker_id, config, track, client_allocations):
         """
-        :param client_id: Client id of the load generator.
+        :param worker_id: Unique (numeric) id of the worker.
         :param config: Rally internal configuration object.
         :param track: The track to use.
-        :param tasks: Tasks to run.
+        :param client_allocations: A structure describing which clients need to run which tasks.
         """
-        self.client_id = client_id
+        self.worker_id = worker_id
         self.config = config
         self.track = track
-        self.tasks = tasks
+        self.client_allocations = client_allocations
 
 
 class Drive:
@@ -129,11 +131,12 @@ class JoinPointReached:
     Tells the master that a load generator has reached a join point. Used for coordination across multiple load generators.
     """
 
-    def __init__(self, client_id, task):
-        self.client_id = client_id
-        # Using perf_counter here is fine even in the distributed case. Although we "leak" this value to other machines, we will only
-        # ever interpret this value on the same machine (see `Drive` and the implementation in `Driver#joinpoint_reached()`).
-        self.client_local_timestamp = time.perf_counter()
+    def __init__(self, worker_id, task):
+        self.worker_id = worker_id
+        # Using perf_counter here is fine even in the distributed case. Although we "leak" this value to other
+        # machines, we will only ever interpret this value on the same machine (see `Drive` and the implementation
+        # in `Driver#joinpoint_reached()`).
+        self.worker_timestamp = time.perf_counter()
         self.task = task
 
 
@@ -161,7 +164,7 @@ class DriverActor(actor.RallyActor):
     POST_PROCESS_INTERVAL_SECONDS = 30
 
     """
-    Coordinates all worker drivers. This is actually only a thin actor wrapper layer around ``Driver`` which does the actual work.
+    Coordinates all workers. This is actually only a thin actor wrapper layer around ``Driver`` which does the actual work.
     """
 
     def __init__(self):
@@ -192,14 +195,14 @@ class DriverActor(actor.RallyActor):
         self.status = "exiting"
 
     def receiveMsg_ChildActorExited(self, msg, sender):
-        # is it a driver?
-        if msg.childAddress in self.coordinator.drivers:
-            driver_index = self.coordinator.drivers.index(msg.childAddress)
+        # is it a worker?
+        if msg.childAddress in self.coordinator.workers:
+            worker_index = self.coordinator.workers.index(msg.childAddress)
             if self.status == "exiting":
-                self.logger.info("Load generator [%d] has exited.", driver_index)
+                self.logger.info("Worker [%d] has exited.", worker_index)
             else:
-                self.logger.error("Load generator [%d] has exited prematurely. Aborting benchmark.", driver_index)
-                self.send(self.start_sender, actor.BenchmarkFailure("Load generator [{}] has exited prematurely.".format(driver_index)))
+                self.logger.error("Worker [%d] has exited prematurely. Aborting benchmark.", worker_index)
+                self.send(self.start_sender, actor.BenchmarkFailure("Worker [{}] has exited prematurely.".format(worker_index)))
         else:
             self.logger.info("A track preparator has exited.")
 
@@ -225,7 +228,7 @@ class DriverActor(actor.RallyActor):
 
     @actor.no_retry("driver")
     def receiveMsg_JoinPointReached(self, msg, sender):
-        self.coordinator.joinpoint_reached(msg.client_id, msg.client_local_timestamp, msg.task)
+        self.coordinator.joinpoint_reached(msg.worker_id, msg.worker_timestamp, msg.task)
 
     @actor.no_retry("driver")
     def receiveMsg_UpdateSamples(self, msg, sender):
@@ -243,13 +246,11 @@ class DriverActor(actor.RallyActor):
             self.coordinator.update_progress_message()
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    def create_client(self, client_id, host):
-        return self.createActor(LoadGenerator,
-                                #globalName="/rally/driver/worker/%s" % str(client_id),
-                                targetActorRequirements=self._requirements(host))
+    def create_client(self, host):
+        return self.createActor(Worker, targetActorRequirements=self._requirements(host))
 
-    def start_load_generator(self, driver, client_id, cfg, track, allocations):
-        self.send(driver, StartLoadGenerator(client_id, cfg, track, allocations))
+    def start_worker(self, driver, worker_id, cfg, track, allocations):
+        self.send(driver, StartWorker(worker_id, cfg, track, allocations))
 
     def drive_at(self, driver, client_start_timestamp):
         self.send(driver, Drive(client_start_timestamp))
@@ -351,7 +352,9 @@ class Driver:
         self.challenge = None
         self.metrics_store = None
         self.load_driver_hosts = []
-        self.drivers = []
+        self.workers = []
+        # which client ids are assigned to which workers?
+        self.clients_per_worker = {}
 
         self.progress_reporter = console.progress()
         self.progress_counter = 0
@@ -363,7 +366,7 @@ class Driver:
 
         self.number_of_steps = 0
         self.currently_completed = 0
-        self.clients_completed_current_step = {}
+        self.workers_completed_current_step = {}
         self.current_step = -1
         self.tasks_per_join_point = None
         self.complete_current_task_sent = False
@@ -431,12 +434,18 @@ class Driver:
         self.prepare_telemetry(es_clients)
         self.target.on_cluster_details_retrieved(self.retrieve_cluster_info(es_clients))
         for host in self.config.opts("driver", "load_driver_hosts"):
+            host_config = {
+                # for simplicity we assume that all benchmark machines have the same specs
+                "cores": multiprocessing.cpu_count()
+            }
             if host != "localhost":
-                self.load_driver_hosts.append(net.resolve(host))
+                host_config["host"] = net.resolve(host)
             else:
-                self.load_driver_hosts.append(host)
+                host_config["host"] = host
 
-        preps = [self.target.create_track_preparator(h) for h in self.load_driver_hosts]
+            self.load_driver_hosts.append(host_config)
+
+        preps = [self.target.create_track_preparator(h["host"]) for h in self.load_driver_hosts]
         self.target.on_prepare_track(preps, self.config, self.track)
 
     def start_benchmark(self):
@@ -452,33 +461,43 @@ class Driver:
         self.number_of_steps = len(allocator.join_points) - 1
         self.tasks_per_join_point = allocator.tasks_per_joinpoint
 
-        self.logger.info("Benchmark consists of [%d] steps executed by (at most) [%d] clients as specified by the allocation matrix:\n%s",
-                         self.number_of_steps, len(self.allocations), self.allocations)
+        self.logger.info("Benchmark consists of [%d] steps executed by [%d] clients.",
+                         self.number_of_steps, len(self.allocations))
+        # avoid flooding the log if there are too many clients
+        if allocator.clients < 128:
+            self.logger.info("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
-        for client_id in range(allocator.clients):
-            # allocate clients round-robin to all defined hosts
-            host = self.load_driver_hosts[client_id % len(self.load_driver_hosts)]
-            self.logger.info("Allocating load generator [%d] on [%s]", client_id, host)
-            self.drivers.append(self.target.create_client(client_id, host))
-        for client_id, driver in enumerate(self.drivers):
-            self.logger.info("Starting load generator [%d].", client_id)
-            self.target.start_load_generator(driver, client_id, self.config, self.track, self.allocations[client_id])
+        worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
+        for assignment in worker_assignments:
+            host = assignment["host"]
+            for worker_id, clients in enumerate(assignment["workers"]):
+                # don't assign workers without any clients
+                if len(clients) > 0:
+                    self.logger.info("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
+                    worker = self.target.create_client(host)
+
+                    client_allocations = ClientAllocations()
+                    for client_id in clients:
+                        client_allocations.add(client_id, self.allocations[client_id])
+                        self.clients_per_worker[client_id] = worker_id
+                    self.target.start_worker(worker, worker_id, self.config, self.track, client_allocations)
+                    self.workers.append(worker)
 
         self.update_progress_message()
 
-    def joinpoint_reached(self, client_id, client_local_timestamp, task):
+    def joinpoint_reached(self, worker_id, worker_local_timestamp, task_allocations):
         self.currently_completed += 1
-        self.clients_completed_current_step[client_id] = (client_local_timestamp, time.perf_counter())
-        self.logger.info("[%d/%d] drivers reached join point [%d/%d].",
-                         self.currently_completed, len(self.drivers), self.current_step + 1, self.number_of_steps)
-        if self.currently_completed == len(self.drivers):
-            self.logger.info("All drivers completed their tasks until join point [%d/%d].", self.current_step + 1, self.number_of_steps)
+        self.workers_completed_current_step[worker_id] = (worker_local_timestamp, time.perf_counter())
+        self.logger.info("[%d/%d] workers reached join point [%d/%d].",
+                         self.currently_completed, len(self.workers), self.current_step + 1, self.number_of_steps)
+        if self.currently_completed == len(self.workers):
+            self.logger.info("All workers completed their tasks until join point [%d/%d].", self.current_step + 1, self.number_of_steps)
             # we can go on to the next step
             self.currently_completed = 0
             self.complete_current_task_sent = False
             # make a copy and reset early to avoid any race conditions from clients that reach a join point already while we are sending...
-            clients_curr_step = self.clients_completed_current_step
-            self.clients_completed_current_step = {}
+            workers_curr_step = self.workers_completed_current_step
+            self.workers_completed_current_step = {}
             self.update_progress_message(task_finished=True)
             # clear per step
             self.most_recent_sample_per_client = {}
@@ -511,32 +530,43 @@ class Driver:
                 # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
                 # a relative instead of an absolute value.
                 start_next_task = time.perf_counter() + waiting_period
-                for client_id, driver in enumerate(self.drivers):
-                    client_ended_task_at, master_received_msg_at = clients_curr_step[client_id]
-                    client_start_timestamp = client_ended_task_at + (start_next_task - master_received_msg_at)
-                    self.logger.info("Scheduling next task for client id [%d] at their timestamp [%f] (master timestamp [%f])",
-                                     client_id, client_start_timestamp, start_next_task)
-                    self.target.drive_at(driver, client_start_timestamp)
+                for worker_id, driver in enumerate(self.workers):
+                    worker_ended_task_at, master_received_msg_at = workers_curr_step[worker_id]
+                    worker_start_timestamp = worker_ended_task_at + (start_next_task - master_received_msg_at)
+                    self.logger.info("Scheduling next task for worker id [%d] at their timestamp [%f] (master timestamp [%f])",
+                                     worker_id, worker_start_timestamp, start_next_task)
+                    self.target.drive_at(driver, worker_start_timestamp)
         else:
-            current_join_point = task
-            # we need to actively send CompleteCurrentTask messages to all remaining clients.
-            if current_join_point.preceding_task_completes_parent and not self.complete_current_task_sent:
-                self.logger.info("Tasks before [%s] are able to complete the parent structure. Checking if clients [%s] have finished yet.",
-                                 current_join_point, current_join_point.clients_executing_completing_task)
-                # are all clients executing said task already done? if so we need to notify the remaining clients
-                all_clients_finished = True
+            joinpoints_completing_parent = [a for a in task_allocations if a.task.preceding_task_completes_parent]
+            # we need to actively send CompleteCurrentTask messages to all remaining workers.
+            if len(joinpoints_completing_parent) > 0 and not self.complete_current_task_sent:
+                # while this list could contain multiple items, it should always be the same task (but multiple
+                # different clients) so any item is sufficient.
+                current_join_point = joinpoints_completing_parent[0].task
+                self.logger.info("Tasks before join point [%s] are able to complete the parent structure. Checking "
+                                 "if all [%d] clients have finished yet.",
+                                 current_join_point, len(current_join_point.clients_executing_completing_task))
+
+                pending_client_ids = []
                 for client_id in current_join_point.clients_executing_completing_task:
-                    if client_id not in self.clients_completed_current_step:
-                        self.logger.info("Client id [%s] did not yet finish.", client_id)
-                        # do not break here so we can see all remaining clients in the log output.
-                        all_clients_finished = False
-                if all_clients_finished:
-                    # As we are waiting for other clients to finish, we would send this message over and over again. Hence we need to
-                    # memorize whether we have already sent it for the current step.
+                    # We assume that all clients have finished if their corresponding worker has finished
+                    worker_id = self.clients_per_worker[client_id]
+                    if worker_id not in self.workers_completed_current_step:
+                        pending_client_ids.append(client_id)
+
+                # are all clients executing said task already done? if so we need to notify the remaining clients
+                if len(pending_client_ids) == 0:
+                    # As we are waiting for other clients to finish, we would send this message over and over again.
+                    # Hence we need to memorize whether we have already sent it for the current step.
                     self.complete_current_task_sent = True
                     self.logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
-                    for client_id, driver in enumerate(self.drivers):
-                        self.target.complete_current_task(driver)
+                    for worker_id, worker in enumerate(self.workers):
+                        self.target.complete_current_task(worker)
+                else:
+                    if len(pending_client_ids) > 32:
+                        self.logger.info("[%d] clients did not yet finish.", len(pending_client_ids))
+                    else:
+                        self.logger.info("Client id(s) [%s] did not yet finish.", ",".join(map(str, pending_client_ids)))
 
     def reset_relative_time(self):
         self.logger.debug("Resetting relative time of request metrics store.")
@@ -554,6 +584,7 @@ class Driver:
         self.raw_samples += samples
         if len(samples) > 0:
             most_recent = samples[-1]
+            # TODO: We need to change this similarly to async_driver as there are more clients now per worker
             self.most_recent_sample_per_client[most_recent.client_id] = most_recent
 
     def update_progress_message(self, task_finished=False):
@@ -649,9 +680,64 @@ class Driver:
         return result
 
 
-class LoadGenerator(actor.RallyActor):
+def calculate_worker_assignments(host_configs, client_count):
     """
-    The actual driver that applies load against the cluster(s).
+    Assigns clients to workers on the provided hosts.
+
+    :param host_configs: A list of dicts where each dict contains the host name (key: ``host``) and the number of
+                         available CPU cores (key: ``cores``).
+    :param client_count: The number of clients that should be used at most.
+    :return: A list of dicts containing the host (key: ``host``) and a list of workers (key ``workers``). Each entry
+             in that list contains another list with the clients that should be assigned to these workers.
+    """
+    assignments = []
+
+    for host_config in host_configs:
+        assignments.append({
+            "host": host_config["host"],
+            "workers": [[] for _ in range(host_config["cores"])],
+            "worker": 0
+        })
+
+    for client_idx in range(client_count):
+        host = assignments[client_idx % len(assignments)]
+        workers = host["workers"]
+        worker_idx = host["worker"]
+        worker = host["workers"][worker_idx % len(workers)]
+        worker.append(client_idx)
+        host["worker"] = worker_idx + 1
+
+    return assignments
+
+
+ClientAllocation = collections.namedtuple("ClientAllocation", ["client_id", "task"])
+
+
+class ClientAllocations:
+    def __init__(self):
+        self.allocations = []
+
+    def add(self, client_id, tasks):
+        self.allocations.append({
+            "client_id": client_id,
+            "tasks": tasks
+        })
+
+    def is_joinpoint(self, task_index):
+        return all(isinstance(t.task, JoinPoint) for t in self.tasks(task_index))
+
+    def tasks(self, task_index, remove_empty=True):
+        current_tasks = []
+        for allocation in self.allocations:
+            tasks_at_index = allocation["tasks"][task_index]
+            if remove_empty and tasks_at_index is not None:
+                current_tasks.append(ClientAllocation(allocation["client_id"], tasks_at_index))
+        return current_tasks
+
+
+class Worker(actor.RallyActor):
+    """
+    The actual worker that applies load against the cluster(s).
 
     It will also regularly send measurements to the master node so it can consolidate them.
     """
@@ -661,45 +747,36 @@ class LoadGenerator(actor.RallyActor):
     def __init__(self):
         super().__init__()
         self.master = None
-        self.client_id = None
-        self.es = None
+        self.worker_id = None
         self.config = None
         self.track = None
-        self.tasks = None
+        self.client_allocations = None
         self.current_task_index = 0
-        self.current_task = None
+        self.next_task_index = 0
         self.abort_on_error = False
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
         self.cancel = threading.Event()
-        # used to indicate that we want to prematurely consider this completed. This is *not* due to cancellation but a regular event in
-        # a benchmark and used to model task dependency of parallel tasks.
+        # used to indicate that we want to prematurely consider this completed. This is *not* due to cancellation
+        # but a regular event in a benchmark and used to model task dependency of parallel tasks.
         self.complete = threading.Event()
         self.executor_future = None
         self.sampler = None
         self.start_driving = False
-        self.wakeup_interval = LoadGenerator.WAKEUP_INTERVAL_SECONDS
+        self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
 
-    @actor.no_retry("load generator")
-    def receiveMsg_StartLoadGenerator(self, msg, sender):
-        def es_clients(all_hosts, all_client_options):
-            es = {}
-            for cluster_name, cluster_hosts in all_hosts.items():
-                es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create()
-            return es
-
-        self.logger.info("LoadGenerator[%d] is about to start.", msg.client_id)
+    @actor.no_retry("worker")
+    def receiveMsg_StartWorker(self, msg, sender):
+        self.logger.info("Worker[%d] is about to start.", msg.worker_id)
         self.master = sender
-        self.client_id = msg.client_id
+        self.worker_id = msg.worker_id
         self.config = load_local_config(msg.config)
         self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
-        self.es = es_clients(self.config.opts("client", "hosts").all_hosts, self.config.opts("client", "options").all_client_options)
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
-        self.tasks = msg.tasks
+        self.client_allocations = msg.client_allocations
         self.current_task_index = 0
         self.cancel.clear()
-        self.current_task = None
         # we need to wake up more often in test mode
         if self.config.opts("track", "test.mode.enabled"):
             self.wakeup_interval = 0.5
@@ -708,65 +785,65 @@ class LoadGenerator(actor.RallyActor):
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         self.drive()
 
-    @actor.no_retry("load generator")
+    @actor.no_retry("worker")
     def receiveMsg_Drive(self, msg, sender):
         sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
-        self.logger.info("LoadGenerator[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
-                         self.client_id, self.current_task_index, msg.client_start_timestamp, sleep_time)
+        self.logger.info("Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
+                         self.worker_id, self.current_task_index, msg.client_start_timestamp, sleep_time)
         self.start_driving = True
         self.wakeupAfter(sleep_time)
 
-    @actor.no_retry("load generator")
+    @actor.no_retry("worker")
     def receiveMsg_CompleteCurrentTask(self, msg, sender):
         # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
         # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
         if self.at_joinpoint():
-            self.logger.info("LoadGenerator[%s] has received CompleteCurrentTask but is currently at [%s]. Ignoring.",
-                             str(self.client_id), self.current_task)
+            self.logger.info("Worker[%s] has received CompleteCurrentTask but is currently at join point at index [%d]. Ignoring.",
+                             str(self.worker_id), self.current_task_index)
         else:
-            self.logger.info("LoadGenerator[%s] has received CompleteCurrentTask. Completing current task [%s].",
-                             str(self.client_id), self.current_task)
+            self.logger.info("Worker[%s] has received CompleteCurrentTask. Completing tasks at index [%d].",
+                             str(self.worker_id), self.current_task_index)
             self.complete.set()
 
-    @actor.no_retry("load generator")
+    @actor.no_retry("worker")
     def receiveMsg_WakeupMessage(self, msg, sender):
         # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
         if self.start_driving:
-            self.logger.info("LoadGenerator[%s] starts driving now.", str(self.client_id))
             self.start_driving = False
             self.drive()
         else:
             current_samples = self.send_samples()
             if self.cancel.is_set():
-                self.logger.info("LoadGenerator[%s] has detected that benchmark has been cancelled. Notifying master...",
-                                 str(self.client_id))
+                self.logger.info("Worker[%s] has detected that benchmark has been cancelled. Notifying master...",
+                                 str(self.worker_id))
                 self.send(self.master, actor.BenchmarkCancelled())
             elif self.executor_future is not None and self.executor_future.done():
                 e = self.executor_future.exception(timeout=0)
                 if e:
-                    self.logger.info("LoadGenerator[%s] has detected a benchmark failure. Notifying master...", str(self.client_id))
+                    self.logger.info("Worker[%s] has detected a benchmark failure. Notifying master...", str(self.worker_id))
                     # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
                     # deserialized on the receiver so we convert it here to a plain string.
-                    self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.client_id), str(e)))
+                    self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.worker_id), str(e)))
                 else:
-                    self.logger.info("LoadGenerator[%s] is ready for the next task.", str(self.client_id))
+                    self.logger.info("Worker[%s] is ready for the next task.", str(self.worker_id))
                     self.executor_future = None
                     self.drive()
             else:
                 if current_samples and len(current_samples) > 0:
                     most_recent_sample = current_samples[-1]
                     if most_recent_sample.percent_completed is not None:
-                        self.logger.debug("LoadGenerator[%s] is executing [%s] (%.2f%% complete).",
-                                          str(self.client_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0)
+                        self.logger.debug("Worker[%s] is executing [%s] (%.2f%% complete).",
+                                          str(self.worker_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0)
                     else:
-                        self.logger.debug("LoadGenerator[%s] is executing [%s] (dependent eternal task).",
-                                          str(self.client_id), most_recent_sample.task)
+                        # TODO: This could be misleading given that one worker could execute more than one task...
+                        self.logger.debug("Worker[%s] is executing [%s] (dependent eternal task).",
+                                          str(self.worker_id), most_recent_sample.task)
                 else:
-                    self.logger.debug("LoadGenerator[%s] is executing (no samples).", str(self.client_id))
+                    self.logger.debug("Worker[%s] is executing (no samples).", str(self.worker_id))
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.info("LoadGenerator[%s] is exiting due to ActorExitRequest.", str(self.client_id))
+        self.logger.info("Worker[%s] is exiting due to ActorExitRequest.", str(self.worker_id))
         if self.executor_future is not None and self.executor_future.running():
             self.cancel.set()
             self.pool.shutdown()
@@ -776,17 +853,16 @@ class LoadGenerator(actor.RallyActor):
         self.send(self.master, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("LoadGenerator[%d] received unknown message [%s] (ignoring).", self.client_id, str(msg))
+        self.logger.info("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
 
     def drive(self):
-        task_allocation = self.current_task_and_advance()
+        task_allocations = self.current_tasks_and_advance()
         # skip non-tasks in the task list
-        while task_allocation is None:
-            task_allocation = self.current_task_and_advance()
-        self.current_task = task_allocation
+        while len(task_allocations) == 0:
+            task_allocations = self.current_tasks_and_advance()
 
-        if isinstance(task_allocation, JoinPoint):
-            self.logger.info("LoadGenerator[%d] reached join point [%s].", self.client_id, task_allocation)
+        if self.at_joinpoint():
+            self.logger.info("Worker[%d] reached join point at index [%d].", self.worker_id, self.current_task_index)
             # clients that don't execute tasks don't need to care about waiting
             if self.executor_future is not None:
                 self.executor_future.result()
@@ -795,48 +871,37 @@ class LoadGenerator(actor.RallyActor):
             self.complete.clear()
             self.executor_future = None
             self.sampler = None
-            self.send(self.master, JoinPointReached(self.client_id, task_allocation))
-        elif isinstance(task_allocation, TaskAllocation):
-            task = task_allocation.task
-            # There may be a situation where there are more (parallel) tasks than clients. If we were asked to complete all tasks, we not
+            self.send(self.master, JoinPointReached(self.worker_id, task_allocations))
+        else:
+            # There may be a situation where there are more (parallel) tasks than workers. If we were asked to complete all tasks, we not
             # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
             if self.complete.is_set():
-                self.logger.info("LoadGenerator[%d] skips [%s] because it has been asked to complete all tasks until next join point.",
-                                 self.client_id, task)
+                self.logger.info("Worker[%d] skips tasks at index [%d] because it has been asked to complete all "
+                                 "tasks until next join point.", self.worker_id, self.current_task_index)
             else:
-                self.logger.info("LoadGenerator[%d] is executing [%s].", self.client_id, task)
-                self.sampler = Sampler(start_timestamp=time.perf_counter())
-                # We cannot use the global client index here because we need to support parallel execution of tasks with multiple clients.
-                #
-                # Consider the following scenario:
-                #
-                # * Clients 0-3 bulk index into indexA
-                # * Clients 4-7 bulk index into indexB
-                #
-                # Now we need to ensure that we start partitioning parameters correctly in both cases. And that means we need to start
-                # from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
-                schedule = schedule_for(self.track, task_allocation.task, task_allocation.client_index_in_task)
-                executor = AsyncIoAdapter(
-                    self.config, self.client_id, task, schedule, self.sampler, self.cancel, self.complete, self.abort_on_error)
+                self.logger.info("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
+                # allow to buffer more events than by default as we expect to have way more clients.
+                self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=65536)
+                executor = AsyncIoAdapter(self.config, self.track, task_allocations, self.sampler, self.cancel, self.complete, self.abort_on_error)
 
                 self.executor_future = self.pool.submit(executor)
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
-        else:
-            raise exceptions.RallyAssertionError("Unknown task type [%s]" % type(task_allocation))
 
     def at_joinpoint(self):
-        return isinstance(self.current_task, JoinPoint)
+        return self.client_allocations.is_joinpoint(self.current_task_index)
 
-    def current_task_and_advance(self):
-        current = self.tasks[self.current_task_index]
-        self.current_task_index += 1
+    def current_tasks_and_advance(self):
+        self.current_task_index = self.next_task_index
+        current = self.client_allocations.tasks(self.current_task_index)
+        self.next_task_index += 1
+        self.logger.debug("Worker[%d] is at task index [%d].", self.worker_id, self.current_task_index)
         return current
 
     def send_samples(self):
         if self.sampler:
             samples = self.sampler.samples
             if len(samples) > 0:
-                self.send(self.master, UpdateSamples(self.client_id, samples))
+                self.send(self.master, UpdateSamples(self.worker_id, samples))
             return samples
         return None
 
@@ -1026,17 +1091,17 @@ class ThroughputCalculator:
 
 
 class AsyncIoAdapter:
-    def __init__(self, cfg, client_id, sub_task, schedule, sampler, cancel, complete, abort_on_error):
+    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error):
         self.cfg = cfg
-        self.client_id = client_id
-        self.sub_task = sub_task
-        self.schedule = schedule
+        self.track = track
+        self.task_allocations = task_allocations
         self.sampler = sampler
         self.cancel = cancel
         self.complete = complete
         self.abort_on_error = abort_on_error
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
+        self.logger = logging.getLogger(__name__)
 
     def __call__(self, *args, **kwargs):
         # only possible in Python 3.7+ (has introduced get_running_loop)
@@ -1055,7 +1120,7 @@ class AsyncIoAdapter:
             loop.close()
 
     def _logging_exception_handler(self, loop, context):
-        logging.getLogger(__name__).error("Uncaught exception in event loop: %s", context)
+        self.logger.error("Uncaught exception in event loop: %s", context)
 
     async def run(self):
         def es_clients(all_hosts, all_client_options):
@@ -1065,11 +1130,24 @@ class AsyncIoAdapter:
             return es
 
         es = es_clients(self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options").all_client_options)
-        async_executor = AsyncExecutor(
-            self.client_id, self.sub_task, self.schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
-        final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
+
+        aws = []
+        for client_id, task in self.task_allocations:
+            # We cannot use the global client index here because we need to support parallel execution of tasks
+            # with multiple clients. Consider the following scenario:
+            #
+            # * Clients 0-3 bulk index into indexA
+            # * Clients 4-7 bulk index into indexB
+            #
+            # Now we need to ensure that we start partitioning parameters correctly in both cases. And that means we
+            # need to start from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
+            schedule = schedule_for(self.track, task.task, task.client_index_in_task)
+            async_executor = AsyncExecutor(
+                client_id, task.task, schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
+            final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
+            aws.append(final_executor())
         try:
-            return await final_executor()
+            _ = await asyncio.gather(*aws)
         finally:
             await asyncio.get_event_loop().shutdown_asyncgens()
             for e in es.values():
@@ -1131,6 +1209,7 @@ class AsyncExecutor:
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self, *args, **kwargs):
+        task_completes_parent = self.task.completes_parent
         total_start = time.perf_counter()
         # lazily initialize the schedule
         self.logger.debug("Initializing schedule for client id [%s].", self.client_id)
@@ -1157,8 +1236,16 @@ class AsyncExecutor:
                 processing_time = processing_end - processing_start
                 # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
                 latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
+                # If this task completes the parent task we should *not* check for completion by another client but
+                # instead continue until our own runner has completed. We need to do this because the current
+                # worker (process) could run multiple clients that execute the same task. We do not want all clients to
+                # finish this task as soon as the first of these clients has finished but rather continue until the last
+                # client has finished that task.
+                if task_completes_parent:
+                    completed = runner.completed
+                else:
+                    completed = self.complete.is_set() or runner.completed
                 # last sample should bump progress to 100% if externally completed.
-                completed = self.complete.is_set() or runner.completed
                 if completed:
                     progress = 1.0
                 elif runner.percent_completed:
@@ -1178,7 +1265,9 @@ class AsyncExecutor:
             raise
         finally:
             # Actively set it if this task completes its parent
-            if self.task.completes_parent:
+            if task_completes_parent:
+                self.logger.info("Task [%s] completes parent. Client id [%s] is finished executing it and signals completion.",
+                                 self.task, self.client_id)
                 self.complete.set()
 
 

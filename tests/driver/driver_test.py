@@ -144,7 +144,7 @@ class DriverTests(TestCase):
         ])
 
         # Did we start all load generators? There is no specific mock assert for this...
-        self.assertEqual(4, target.start_load_generator.call_count)
+        self.assertEqual(4, target.start_worker.call_count)
 
     def test_assign_drivers_round_robin(self):
         target = self.create_test_driver_target()
@@ -165,7 +165,7 @@ class DriverTests(TestCase):
         ])
 
         # Did we start all load generators? There is no specific mock assert for this...
-        self.assertEqual(4, target.start_load_generator.call_count)
+        self.assertEqual(4, target.start_worker.call_count)
 
     def test_client_reaches_join_point_others_still_executing(self):
         target = self.create_test_driver_target()
@@ -174,11 +174,11 @@ class DriverTests(TestCase):
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
 
-        self.assertEqual(0, len(d.clients_completed_current_step))
+        self.assertEqual(0, len(d.workers_completed_current_step))
 
-        d.joinpoint_reached(client_id=0, client_local_timestamp=10, task=driver.JoinPoint(id=0))
+        d.joinpoint_reached(worker_id=0, worker_local_timestamp=10, task=driver.JoinPoint(id=0))
 
-        self.assertEqual(1, len(d.clients_completed_current_step))
+        self.assertEqual(1, len(d.workers_completed_current_step))
 
         self.assertEqual(0, target.on_task_finished.call_count)
         self.assertEqual(0, target.drive_at.call_count)
@@ -190,30 +190,30 @@ class DriverTests(TestCase):
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
 
-        self.assertEqual(0, len(d.clients_completed_current_step))
+        self.assertEqual(0, len(d.workers_completed_current_step))
 
         # it does not matter what we put into `clients_executing_completing_task` We choose to put the client id into it.
-        d.joinpoint_reached(client_id=0, client_local_timestamp=10, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=0, worker_local_timestamp=10, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
 
         self.assertEqual(-1, d.current_step)
-        self.assertEqual(1, len(d.clients_completed_current_step))
+        self.assertEqual(1, len(d.workers_completed_current_step))
         # notified all drivers that they should complete the current task ASAP
         self.assertEqual(4, target.complete_current_task.call_count)
 
         # awaiting responses of other clients
-        d.joinpoint_reached(client_id=1, client_local_timestamp=11, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=1, worker_local_timestamp=11, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
         self.assertEqual(-1, d.current_step)
-        self.assertEqual(2, len(d.clients_completed_current_step))
+        self.assertEqual(2, len(d.workers_completed_current_step))
 
-        d.joinpoint_reached(client_id=2, client_local_timestamp=12, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=2, worker_local_timestamp=12, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
         self.assertEqual(-1, d.current_step)
-        self.assertEqual(3, len(d.clients_completed_current_step))
+        self.assertEqual(3, len(d.workers_completed_current_step))
 
-        d.joinpoint_reached(client_id=3, client_local_timestamp=13, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=3, worker_local_timestamp=13, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
 
         # by now the previous step should be considered completed and we are at the next one
         self.assertEqual(0, d.current_step)
-        self.assertEqual(0, len(d.clients_completed_current_step))
+        self.assertEqual(0, len(d.workers_completed_current_step))
 
         # this requires at least Python 3.6
         # target.on_task_finished.assert_called_once()
