@@ -436,8 +436,8 @@ class Driver:
         for host in self.config.opts("driver", "load_driver_hosts"):
             host_config = {
                 # for simplicity we assume that all benchmark machines have the same specs
-                "cores": self.config.opts("system", "available.cores", mandatory=False,
-                                          default_value=multiprocessing.cpu_count())
+                "cores": int(self.config.opts("system", "available.cores", mandatory=False,
+                                              default_value=multiprocessing.cpu_count()))
             }
             if host != "localhost":
                 host_config["host"] = net.resolve(host)
