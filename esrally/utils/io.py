@@ -309,7 +309,7 @@ def _do_decompress_manually(target_directory, filename, decompressor_args, decom
         if _do_decompress_manually_external(target_directory, filename, base_path_without_extension, decompressor_args):
             return
     else:
-        console.warn(f"{decompressor_bin} not found in PATH. Using default library, decompression will take longer.")
+        console.warn(f"{decompressor_bin} not found in PATH. Using standard library, decompression will take longer.")
 
     _do_decompress_manually_with_lib(target_directory, filename, decompressor_lib(filename))
 
