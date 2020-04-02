@@ -1153,14 +1153,14 @@ class AsyncIoAdapter:
             _ = await asyncio.gather(*aws)
         finally:
             run_end = time.perf_counter()
-            self.logger.info(f"Total run duration: {run_end - run_start} seconds.")
+            self.logger.info("Total run duration: %f seconds.", (run_end - run_start))
             await asyncio.get_event_loop().shutdown_asyncgens()
             shutdown_asyncgens_end = time.perf_counter()
-            self.logger.info(f"Total time to shutdown asyncgens: {run_end - shutdown_asyncgens_end} seconds.")
+            self.logger.info("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
             for e in es.values():
                 await e.transport.close()
             transport_close_end = time.perf_counter()
-            self.logger.info(f"Total time to close transports: {shutdown_asyncgens_end - transport_close_end} seconds.")
+            self.logger.info("Total time to close transports: %f seconds.", (shutdown_asyncgens_end - transport_close_end))
 
 
 class AsyncProfiler:
