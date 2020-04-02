@@ -1671,6 +1671,19 @@ class GlobalStatsCalculator:
         # convert to int, fraction counts are senseless
         median_segment_count = self.median("segments_count")
         result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
+
+        result.transform_pages_processed = self.max("transform_pages_processed")
+        result.transform_documents_processed = self.max("transform_documents_processed")
+        result.transform_documents_indexed = self.max("transform_documents_indexed")
+        result.transform_search_time_in_ms = self.max("transform_search_time_in_ms")
+        result.transform_index_time_in_ms = self.max("transform_index_time_in_ms")
+        result.transform_processing_time_in_ms = self.max("transform_processing_time_in_ms")
+        result.transform_index_total = self.max("transform_index_total")
+        result.transform_index_failures = self.max("transform_index_failures")
+        result.transform_search_total = self.max("transform_search_total")
+        result.transform_search_failures = self.max("transform_search_failures")
+        result.transform_processing_total = self.max("transform_processing_total")
+
         return result
 
     def merge(self, *args):
@@ -1747,6 +1760,12 @@ class GlobalStatsCalculator:
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
         return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
 
+    def max(self, metric_name, task_name=None, operation_type=None, sample_type=None):
+        stats = self.store.get_stats(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
+        if stats is not None:
+            return stats["max"]
+        return 0
+
     def single_latency(self, task, metric_name="latency"):
         sample_type = SampleType.Normal
         sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type)
@@ -1804,6 +1823,18 @@ class GlobalStats:
         self.store_size = self.v(d, "store_size")
         self.translog_size = self.v(d, "translog_size")
         self.segment_count = self.v(d, "segment_count")
+
+        self.transform_pages_processed = self.v(d, "transform_pages_processed")
+        self.transform_documents_processed = self.v(d, "transform_documents_processed")
+        self.transform_documents_indexed = self.v(d, "transform_documents_indexed")
+        self.transform_search_time_in_ms = self.v(d, "transform_search_time_in_ms")
+        self.transform_index_time_in_ms = self.v(d, "transform_index_time_in_ms")
+        self.transform_processing_time_in_ms = self.v(d, "transform_processing_time_in_ms")
+        self.transform_index_total = self.v(d, "transform_index_total")
+        self.transform_index_failures = self.v(d, "transform_index_failures")
+        self.transform_search_total = self.v(d, "transform_search_total")
+        self.transform_search_failures = self.v(d, "transform_search_failures")
+        self.transform_processing_total = self.v(d, "transform_processing_total")
 
     def as_dict(self):
         return self.__dict__

@@ -100,10 +100,11 @@ class StartupTimeTests(TestCase):
 
 
 class Client:
-    def __init__(self, nodes=None, info=None, indices=None, transport_client=None):
+    def __init__(self, nodes=None, info=None, indices=None, transform=None, transport_client=None):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
+        self.transform = transform
         if transport_client:
             self.transport = transport_client
 
@@ -112,10 +113,11 @@ class Client:
 
 
 class SubClient:
-    def __init__(self, stats=None, info=None, recovery=None):
+    def __init__(self, stats=None, info=None, recovery=None, transform_stats=None):
         self._stats = wrap(stats)
         self._info = wrap(info)
         self._recovery = wrap(recovery)
+        self._transform_stats = wrap(transform_stats)
 
     def stats(self, *args, **kwargs):
         return self._stats()
@@ -125,6 +127,9 @@ class SubClient:
 
     def recovery(self, *args, **kwargs):
         return self._recovery()
+
+    def get_transform_stats(self, *args, **kwargs):
+        return self._transform_stats()
 
 
 def wrap(it):
@@ -1753,6 +1758,111 @@ class NodeStatsRecorderTests(TestCase):
                                     "The telemetry parameter 'node-stats-include-indices-metrics' must be "
                                     "a comma-separated string but was <class 'dict'>"):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+
+
+class TransformStatsTests(TestCase):
+    def test_negative_sample_interval_forbidden(self):
+        clients = {"default": Client(), "cluster_b": Client()}
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "transform-stats-sample-interval": -1 * random.random()
+        }
+        with self.assertRaisesRegex(exceptions.SystemSetupError,
+                                    r"The telemetry parameter 'transform-stats-sample-interval' must be greater than zero but was .*\."):
+            telemetry.TransformStats(telemetry_params, clients, metrics_store)
+
+    def test_wrong_cluster_name_in_transform_stats_indices_forbidden(self):
+        clients = {"default": Client(), "cluster_b": Client()}
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "transform-stats-transforms": {
+                "default": ["leader"],
+                "wrong_cluster_name": ["follower"]
+            }
+        }
+        with self.assertRaisesRegex(exceptions.SystemSetupError,
+                                    r"The telemetry parameter 'transform-stats-transforms' must be a JSON Object with keys matching "
+                                    r"the cluster names \[{}] specified in --target-hosts "
+                                    r"but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))
+                                    ):
+            telemetry.TransformStats(telemetry_params, clients, metrics_store)
+
+
+class TransformStatsRecorderTests(TestCase):
+    transform_stats_response = {}
+
+    @classmethod
+    def setUpClass(cls):
+        java_signed_maxlong = (2 ** 63) - 1
+        transform_id_prefix = "transform_job_"
+        count = random.randrange(1, 10)
+        transforms = []
+
+        for i in range(0, count):
+            transform = {
+                "id": transform_id_prefix + str(i),
+                "state": random.choice(["stopped", "indexing", "started", "failed"]),
+                "stats": {
+                    "pages_processed": 1,
+                    "documents_processed": 2,
+                    "documents_indexed": 3,
+                    "trigger_count": 4,
+                    "index_time_in_ms": 5,
+                    "index_total": 6,
+                    "index_failures": 7,
+                    "search_time_in_ms": 8,
+                    "search_total": 9,
+                    "search_failures": 10,
+                    "processing_time_in_ms": 11,
+                    "processing_total": 12,
+                    "exponential_avg_checkpoint_duration_ms": random.uniform(1.0, 100.0),
+                    "exponential_avg_documents_indexed": random.uniform(1.0, 1000.0),
+                    "exponential_avg_documents_processed": random.uniform(1.0, 10000.0)
+                },
+                "checkpointing": {
+                    "last": {
+                        "checkpoint": random.randint(0, java_signed_maxlong),
+                        "timestamp_millis": random.randint(0, java_signed_maxlong)
+                    },
+                    "changes_last_detected_at": random.randint(0, java_signed_maxlong)
+                }
+            }
+            transforms.append(transform)
+
+        TransformStatsRecorderTests.transform_stats_response = {
+            "count": count,
+            "transforms": transforms
+        }
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_stores_default_stats(self, metrics_store_put_value, metrics_store_put_count):
+        client = Client(transform=SubClient(transform_stats=TransformStatsRecorderTests.transform_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.TransformStatsRecorder(cluster_name="transform_cluster", client=client,
+                                                    metrics_store=metrics_store,
+                                                    sample_interval=1)
+        recorder.record()
+
+        metrics_store_put_count.assert_has_calls([
+            mock.call("transform_pages_processed", 1),
+            mock.call("transform_documents_processed", 2),
+            mock.call("transform_documents_indexed", 3),
+            mock.call("transform_index_total", 6),
+            mock.call("transform_index_failures", 7),
+            mock.call("transform_search_total", 9),
+            mock.call("transform_search_failures", 10),
+            mock.call("transform_processing_total", 12)
+        ])
+
+        metrics_store_put_value.assert_has_calls([
+            mock.call("transform_search_time_in_ms", 8, 'ms'),
+            mock.call("transform_index_time_in_ms", 5, 'ms'),
+            mock.call("transform_processing_time_in_ms", 11, 'ms')
+        ])
 
 
 class ClusterEnvironmentInfoTests(TestCase):

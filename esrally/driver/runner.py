@@ -65,6 +65,10 @@ def register_default_runners():
     register_runner(track.OperationType.CreateSnapshotRepository.name, Retry(CreateSnapshotRepository()), async_runner=True)
     register_runner(track.OperationType.WaitForRecovery.name, Retry(IndicesRecovery()), async_runner=True)
     register_runner(track.OperationType.PutSettings.name, Retry(PutSettings()), async_runner=True)
+    register_runner(track.OperationType.CreateTransform.name, Retry(CreateTransform()), async_runner=True)
+    register_runner(track.OperationType.StartTransform.name, Retry(StartTransform()), async_runner=True)
+    register_runner(track.OperationType.StopTransform.name, Retry(StopTransform()), async_runner=True)
+    register_runner(track.OperationType.DeleteTransform.name, Retry(DeleteTransform()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -1561,6 +1565,76 @@ class PutSettings(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "put-settings"
+
+
+class CreateTransform(Runner):
+    """
+    Execute the `create transform API https://www.elastic.co/guide/en/elasticsearch/reference/current/put-transform.html`_.
+    """
+
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+        body = mandatory(params, "body", self)
+        defer_validation = params.get("defer_validation", False)
+        await es.transform.put_transform(transform_id=transform_id, body=body, defer_validation=defer_validation)
+
+    def __repr__(self, *args, **kwargs):
+        return "create-transform"
+
+
+class StartTransform(Runner):
+    """
+    Execute the `start transform API
+    https://www.elastic.co/guide/en/elasticsearch/reference/current/start-transform.html`_.
+    """
+
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+        timeout = params.get("timeout")
+
+        await es.transform.start_transform(transform_id=transform_id, timeout=timeout)
+
+    def __repr__(self, *args, **kwargs):
+        return "start-transform"
+
+
+class StopTransform(Runner):
+    """
+    Execute the `stop transform API
+    https://www.elastic.co/guide/en/elasticsearch/reference/current/stop-transform.html`_.
+    """
+
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+        force = params.get("force", False)
+        timeout = params.get("timeout")
+        wait_for_completion = params.get("wait_for_completion", False)
+        wait_for_checkpoint = params.get("wait_for_checkpoint", False)
+
+        await es.transform.stop_transform(transform_id=transform_id,
+                                          force=force,
+                                          timeout=timeout,
+                                          wait_for_completion=wait_for_completion,
+                                          wait_for_checkpoint=wait_for_checkpoint)
+
+    def __repr__(self, *args, **kwargs):
+        return "stop-transform"
+
+
+class DeleteTransform(Runner):
+    """
+    Execute the `delete transform API
+    https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-transform.html`_.
+    """
+
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+        force = params.get("force", False)
+        # we don't want to fail if a job does not exist, thus we ignore 404s.
+        await es.transform.delete_transform(transform_id=transform_id, force=force, ignore=[404])
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-transform"
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.

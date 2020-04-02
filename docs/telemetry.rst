@@ -134,3 +134,13 @@ Supported telemetry parameters:
 
 * ``ccr-stats-indices`` (default: all indices): An index pattern for which ccr stats should be checked.
 * ``ccr-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+
+transform-stats
+---------------
+
+The transform-stats telemetry device regularly calls the `transform stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/get-transform-stats.html>` and records one metrics document per transform.
+
+Supported telemetry parameters:
+
+* ``transform-stats-transforms`` (default: all transforms): A list of transforms per cluster for which transform stats should be checked.
+* ``transform-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
