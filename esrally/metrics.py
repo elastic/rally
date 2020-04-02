@@ -889,9 +889,11 @@ class EsMetricsStore(MetricsStore):
 
     def flush(self, refresh=True):
         if self._docs:
+            start = time.perf_counter()
             self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-            self.logger.info("Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s].",
-                             len(self._docs), self._race_timestamp, self._track, self._challenge, self._car)
+            end = time.perf_counter()
+            self.logger.info("Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
+                             len(self._docs), self._race_timestamp, self._track, self._challenge, self._car, (end - start))
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
