@@ -289,11 +289,11 @@ def decompress(zip_name, target_directory):
         _do_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
         decompressor_args = ["pbzip2", "-d", "-k", "-m10000", "-c"]
-        decompressor_lib = bz2.open(zip_name)
+        decompressor_lib = bz2.open
         _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
     elif extension == ".gz":
         decompressor_args = ["pigz", "-d", "-k", "-c"]
-        decompressor_lib = gzip.open(zip_name)
+        decompressor_lib = gzip.open
         _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
     elif extension in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
         _do_decompress(target_directory, tarfile.open(zip_name))
@@ -311,7 +311,7 @@ def _do_decompress_manually(target_directory, filename, decompressor_args, decom
     else:
         console.warn(f"{decompressor_bin} not found in PATH. Using default library, decompression will take longer.")
 
-    _do_decompress_manually_with_lib(target_directory, filename, decompressor_lib)
+    _do_decompress_manually_with_lib(target_directory, filename, decompressor_lib(filename))
 
 
 def _do_decompress_manually_external(target_directory, filename, base_path_without_extension, decompressor_args):
