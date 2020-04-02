@@ -323,7 +323,7 @@ The ``schedule`` element contains a list of tasks that are executed by Rally, i.
 * ``target-interval`` (optional): This is just ``1 / target-throughput`` (in seconds) and may be more convenient for cases where the throughput is less than one operation per second. Define either ``target-throughput`` or ``target-interval`` but not both (otherwise Rally will raise an error).
 
 Defining operations
-^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~
 
 In the following snippet we define two operations ``force-merge`` and a ``match-all`` query separately in an operations block::
 
@@ -414,7 +414,7 @@ Contrary to the ``query``, the ``force-merge`` operation does not take any param
     }
 
 Choosing a schedule
-^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~
 
 Rally allows you to choose between the following schedules to simulate traffic:
 
@@ -431,7 +431,7 @@ If you want as much reproducibility as possible you can choose the `deterministi
 If you have more complex needs on how to model traffic, you can also implement a :doc:`custom schedule </adding_tracks>`.
 
 Time-based vs. iteration-based
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You should usually use time periods for batch style operations and iterations for the rest. However, you can also choose to run a query for a certain time period.
 
