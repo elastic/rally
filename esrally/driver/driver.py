@@ -1148,12 +1148,19 @@ class AsyncIoAdapter:
                 client_id, task.task, schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
             aws.append(final_executor())
+        run_start = time.perf_counter()
         try:
             _ = await asyncio.gather(*aws)
         finally:
+            run_end = time.perf_counter()
+            self.logger.info(f"Total run duration: {run_end - run_start} seconds.")
             await asyncio.get_event_loop().shutdown_asyncgens()
+            shutdown_asyncgens_end = time.perf_counter()
+            self.logger.info(f"Total time to shutdown asyncgens: {run_end - shutdown_asyncgens_end} seconds.")
             for e in es.values():
                 await e.transport.close()
+            transport_close_end = time.perf_counter()
+            self.logger.info(f"Total time to close transports: {shutdown_asyncgens_end - transport_close_end} seconds.")
 
 
 class AsyncProfiler:
