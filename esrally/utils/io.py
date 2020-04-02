@@ -309,7 +309,8 @@ def _do_decompress_manually(target_directory, filename, decompressor_args, decom
         if _do_decompress_manually_external(target_directory, filename, base_path_without_extension, decompressor_args):
             return
     else:
-        console.warn(f"{decompressor_bin} not found in PATH. Using standard library, decompression will take longer.")
+        logging.getLogger(__name__).warning("%s not found in PATH. Using standard library, decompression will take longer.",
+                                            decompressor_bin)
 
     _do_decompress_manually_with_lib(target_directory, filename, decompressor_lib(filename))
 
@@ -319,9 +320,8 @@ def _do_decompress_manually_external(target_directory, filename, base_path_witho
         try:
             subprocess.run(decompressor_args + [filename], stdout=new_file, stderr=subprocess.PIPE, check=True)
         except subprocess.CalledProcessError as err:
-            logger = logging.getLogger(__name__)
-            console.warn(f"Failed to decompress [{filename}] with [{err.cmd}]. Error [{err.stderr}]. Falling back to standard library.",
-                         logger=logger.warning)
+            logging.getLogger(__name__).warning("Failed to decompress [%s] with [%s]. Error [%s]. Falling back to standard library.",
+                                                filename, err.cmd, err.stderr)
             return False
     return True
 

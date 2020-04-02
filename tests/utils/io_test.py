@@ -115,7 +115,8 @@ class TestDecompression:
             archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"test.txt.{ext}")
             decompressed_path = os.path.join(tmp_dir, "test.txt")
 
-            with mock.patch("esrally.utils.console.warn") as mocked_console_warn:
+            logger = logging.getLogger("esrally.utils.io")
+            with mock.patch.object(logger, "warning") as mocked_console_warn:
                 io.decompress(archive_path, target_directory=tmp_dir)
 
                 assert os.path.exists(decompressed_path) is True,\
@@ -127,23 +128,21 @@ class TestDecompression:
                 assert f"not found in PATH. Using standard library, decompression will take longer." in mocked_console_warn.call_args[0][0]
 
     @mock.patch("subprocess.run")
-    @mock.patch("esrally.utils.console.warn")
-    def test_decompress_manually_external_fails_if_tool_missing(self, mocked_console_warn, mocked_run):
+    def test_decompress_manually_external_fails_if_tool_missing(self, mocked_run):
         base_path_without_extension = "corpus"
         archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "test.txt.bz2")
         tmp_dir = tempfile.mkdtemp()
         decompressor_bin = "pbzip2"
         decompress_cmd = f"{decompressor_bin} -d -k -m10000 -c ${archive_path}"
         stderr_msg = "Error details here"
-        expected_err = f"Failed to decompress [{archive_path}] with [{decompress_cmd}]. " + \
-                       f"Error [{stderr_msg}]. Falling back to standard library."
+        expected_err = "Failed to decompress [%s] with [%s]. Error [%s]. Falling back to standard library."
         mocked_run.side_effect = subprocess.CalledProcessError(cmd=decompress_cmd, returncode=1, stderr=stderr_msg)
 
         logger = logging.getLogger("esrally.utils.io")
         with mock.patch.object(logger, "warning") as mocked_warn_logger:
             result = io._do_decompress_manually_external(tmp_dir, archive_path, base_path_without_extension, [decompressor_bin])
 
-        mocked_console_warn.assert_called_once_with(expected_err, logger=mocked_warn_logger)
+        mocked_warn_logger.assert_called_once_with(expected_err, archive_path, decompress_cmd, stderr_msg)
         assert result is False
 
     def read(self, f):
