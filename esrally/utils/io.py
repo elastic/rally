@@ -315,14 +315,13 @@ def _do_decompress_manually(target_directory, filename, decompressor_args, decom
 
 
 def _do_decompress_manually_external(target_directory, filename, base_path_without_extension, decompressor_args):
-    logger = logging.getLogger(__name__)
-
     with open(os.path.join(target_directory, base_path_without_extension), "wb") as new_file:
         try:
             subprocess.run(decompressor_args + [filename], stdout=new_file, stderr=subprocess.PIPE, check=True)
         except subprocess.CalledProcessError as err:
-            console.warn(f"Failed to decompress [{filename}] with [{err.cmd}]. Falling back to default library.")
-            logger.warning("Error [%s]", err.stderr)
+            logger = logging.getLogger(__name__)
+            console.warn(f"Failed to decompress [{filename}] with [{err.cmd}]. Error [{err.stderr}]. Falling back to standard library.",
+                         logger=logger.warning)
             return False
     return True
 

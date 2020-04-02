@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import logging
 import os
 import subprocess
 import tempfile
@@ -124,7 +124,7 @@ class TestDecompression:
                     f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
 
             if ext in ["bz2", "gz"]:
-                assert f"not found in PATH. Using default library, decompression will take longer." in mocked_console_warn.call_args[0][0]
+                assert f"not found in PATH. Using standard library, decompression will take longer." in mocked_console_warn.call_args[0][0]
 
     @mock.patch("subprocess.run")
     @mock.patch("esrally.utils.console.warn")
@@ -134,12 +134,16 @@ class TestDecompression:
         tmp_dir = tempfile.mkdtemp()
         decompressor_bin = "pbzip2"
         decompress_cmd = f"{decompressor_bin} -d -k -m10000 -c ${archive_path}"
-        expected_err = f"Failed to decompress [{archive_path}] with [{decompress_cmd}]. Falling back to default library."
-        mocked_run.side_effect = subprocess.CalledProcessError(cmd=decompress_cmd, returncode=1)
+        stderr_msg = "Error details here"
+        expected_err = f"Failed to decompress [{archive_path}] with [{decompress_cmd}]. " + \
+                       f"Error [{stderr_msg}]. Falling back to standard library."
+        mocked_run.side_effect = subprocess.CalledProcessError(cmd=decompress_cmd, returncode=1, stderr=stderr_msg)
 
-        result = io._do_decompress_manually_external(tmp_dir, archive_path, base_path_without_extension, [decompressor_bin])
+        logger = logging.getLogger("esrally.utils.io")
+        with mock.patch.object(logger, "warning") as mocked_warn_logger:
+            result = io._do_decompress_manually_external(tmp_dir, archive_path, base_path_without_extension, [decompressor_bin])
 
-        mocked_console_warn.assert_called_once_with(expected_err)
+        mocked_console_warn.assert_called_once_with(expected_err, logger=mocked_warn_logger)
         assert result is False
 
     def read(self, f):
