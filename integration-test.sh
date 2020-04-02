@@ -33,8 +33,9 @@ readonly ES_ARTIFACT_PATH="elasticsearch-${ES_METRICS_STORE_VERSION}"
 readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
 readonly MIN_CURL_VERSION=(7 12 3)
 readonly MIN_DOCKER_MEM_BYTES=$(expr 6 \* 1024 \* 1024 \* 1024)
-readonly RALLY_LOG="${HOME}/.rally/logs/rally.log"
-readonly RALLY_LOG_BACKUP="${HOME}/.rally/logs/rally.log.it.bak"
+readonly RALLY_HOME="${RALLY_HOME:-$HOME}"
+readonly RALLY_LOG="${RALLY_HOME}/.rally/logs/rally.log"
+readonly RALLY_LOG_BACKUP="${RALLY_HOME}/.rally/logs/rally.log.it.bak"
 
 ES_PID=-1
 PROXY_CONTAINER_ID=-1
@@ -145,8 +146,8 @@ function kill_related_es_processes {
 }
 
 function set_up_metrics_store {
-    local in_memory_config_file_path="${HOME}/.rally/rally-integration-test.ini"
-    local es_config_file_path="${HOME}/.rally/rally-es-integration-test.ini"
+    local in_memory_config_file_path="${RALLY_HOME}/.rally/rally-integration-test.ini"
+    local es_config_file_path="${RALLY_HOME}/.rally/rally-es-integration-test.ini"
 
     # configure Elasticsearch instead of in-memory after the fact
     # this is more portable than using sed's in-place editing which requires "-i" on GNU and "-i ''" elsewhere.
@@ -607,7 +608,7 @@ function tear_down {
         stop_and_clean_docker_container ${PROXY_CONTAINER_ID}
     fi
 
-    rm -f ~/.rally/rally*integration-test.ini
+    rm -f ${RALLY_HOME}/.rally/rally*integration-test.ini
     rm -rf .rally_it/cache/"${ES_ARTIFACT_PATH}"
     rm -rf .rally_it/proxy_tmp
     set -e
