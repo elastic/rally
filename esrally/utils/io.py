@@ -331,7 +331,7 @@ def _do_decompress_manually_with_lib(target_directory, filename, compressed_file
 
     ensure_dir(target_directory)
     try:
-        with open("%s/%s" % (target_directory, path_without_extension), "wb") as new_file:
+        with open(os.path.join(target_directory, path_without_extension), "wb") as new_file:
             for data in iter(lambda: compressed_file.read(100 * 1024), b""):
                 new_file.write(data)
     finally:
