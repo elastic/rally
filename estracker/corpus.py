@@ -100,16 +100,16 @@ def dump_documents(client, index, outpath, total_docs):
                 outfile.write(data)
                 comp_outfile.write(compressor.compress(data))
 
-                render_progress(progress, n + 1, total_docs, freq)
+                render_progress(progress, index, n + 1, total_docs, freq)
 
             comp_outfile.write(compressor.flush())
     progress.finish()
 
 
-def render_progress(progress, cur, total, freq):
+def render_progress(progress, index, cur, total, freq):
     if cur % freq == 0 or total - cur < freq:
         percent = (cur * 100) / total
-        progress.print("Extracting documents...", "{n}/{total_docs} ({percent:.1f}%)".format(n=cur, total_docs=total, percent=percent))
+        progress.print(f"Extracting documents for index {index}...", f"{cur}/{total} ({percent:.1f}%)")
 
 
 def purge(outpath, index_name):
