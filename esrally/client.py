@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import contextvars
 import logging
 import time
 
@@ -126,6 +127,100 @@ class EsClientFactory:
     def create(self):
         import elasticsearch
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
+
+    def create_async(self):
+        # keep imports confined as we do some temporary patching to work around unsolved issues in the async ES connector
+        import elasticsearch.transport
+        import elasticsearch.compat
+        import elasticsearch_async
+        from aiohttp.client import ClientTimeout
+        import esrally.async_connection
+        import io
+        import aiohttp
+
+        from elasticsearch.serializer import JSONSerializer
+
+        class LazyJSONSerializer(JSONSerializer):
+            def loads(self, s):
+                meta = RallyAsyncElasticsearch.request_context.get()
+                if "raw_response" in meta:
+                    return io.BytesIO(s)
+                else:
+                    return super().loads(s)
+
+        async def on_request_start(session, trace_config_ctx, params):
+            meta = RallyAsyncElasticsearch.request_context.get()
+            # this can happen if multiple requests are sent on the wire for one logical request (e.g. scrolls)
+            if "request_start" not in meta:
+                meta["request_start"] = time.perf_counter()
+
+        async def on_request_end(session, trace_config_ctx, params):
+            meta = RallyAsyncElasticsearch.request_context.get()
+            meta["request_end"] = time.perf_counter()
+
+        trace_config = aiohttp.TraceConfig()
+        trace_config.on_request_start.append(on_request_start)
+        trace_config.on_request_end.append(on_request_end)
+        # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
+        trace_config.on_request_exception.append(on_request_end)
+
+        # needs patching as https://github.com/elastic/elasticsearch-py-async/pull/68 is not merged yet
+        class RallyAsyncTransport(elasticsearch_async.transport.AsyncTransport):
+            def __init__(self, hosts, connection_class=esrally.async_connection.AIOHttpConnection, loop=None,
+                         connection_pool_class=elasticsearch_async.connection_pool.AsyncConnectionPool,
+                         sniff_on_start=False, raise_on_sniff_error=True, **kwargs):
+                super().__init__(hosts, connection_class, loop, connection_pool_class, sniff_on_start, raise_on_sniff_error, **kwargs)
+
+        if "timeout" in self.client_options and not isinstance(self.client_options["timeout"], ClientTimeout):
+            self.client_options["timeout"] = ClientTimeout(total=self.client_options["timeout"])
+        else:
+            # 10 seconds is the Elasticsearch default, ensure we always set a ClientTimeout object here
+            self.client_options["timeout"] = ClientTimeout(total=10)
+
+        # override the builtin JSON serializer
+        self.client_options["serializer"] = LazyJSONSerializer()
+        self.client_options["trace_config"] = trace_config
+
+        # copy of AsyncElasticsearch as https://github.com/elastic/elasticsearch-py-async/pull/49 is not yet released.
+        # That PR (also) fixes the behavior reported in https://github.com/elastic/elasticsearch-py-async/issues/43.
+        class RallyAsyncElasticsearch(elasticsearch.Elasticsearch):
+            request_context = contextvars.ContextVar("rally_request_context")
+
+            def __init__(self, hosts=None, transport_class=RallyAsyncTransport, **kwargs):
+                super().__init__(hosts, transport_class=transport_class, **kwargs)
+
+            def init_request_context(self):
+                ctx = {}
+                RallyAsyncElasticsearch.request_context.set(ctx)
+                return ctx
+
+            def return_raw_response(self):
+                ctx = RallyAsyncElasticsearch.request_context.get()
+                ctx["raw_response"] = True
+
+            def _bulk_body(self, body):
+                # if not passed in a string, serialize items and join by newline
+                if not isinstance(body, elasticsearch.compat.string_types):
+                    body = "\n".join(map(self.transport.serializer.dumps, body))
+
+                # bulk body must end with a newline
+                if isinstance(body, bytes) and not body.endswith(b"\n"):
+                    body += b"\n"
+                elif isinstance(body, str) and not body.endswith("\n"):
+                    body += "\n"
+
+                return body
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
+                yield self.transport.close()
+
+        return RallyAsyncElasticsearch(hosts=self.hosts,
+                                       transport_class=RallyAsyncTransport,
+                                       ssl_context=self.ssl_context,
+                                       **self.client_options)
 
 
 def wait_for_rest_layer(es, max_attempts=40):

@@ -22,6 +22,7 @@ import sys
 PLAIN = False
 QUIET = False
 RALLY_RUNNING_IN_DOCKER = False
+ASSUME_TTY = True
 
 
 class PlainFormat:
@@ -87,10 +88,17 @@ class RichFormat:
 format = PlainFormat
 
 
-def init(quiet=False):
-    global QUIET, RALLY_RUNNING_IN_DOCKER, PLAIN, format
+def init(quiet=False, assume_tty=True):
+    """
+    Initialize console out.
+
+    :param quiet: Flag indicating whether Rally should not print anything except when forced explicitly. Default: False.
+    :param assume_tty: Flag indicating whether to assume a tty is attached without checking. Default: True.
+    """
+    global QUIET, ASSUME_TTY, RALLY_RUNNING_IN_DOCKER, PLAIN, format
 
     QUIET = quiet
+    ASSUME_TTY = assume_tty
     RALLY_RUNNING_IN_DOCKER = os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE"
     if os.environ.get("TERM") == "dumb" or sys.platform == "win32":
         PLAIN = True
@@ -112,6 +120,17 @@ def init(quiet=False):
             pass
 
 
+def set_assume_tty(assume_tty):
+    """
+    Change whether Rally should assume a tty. If ``True`` is provided, output will be printed. If ``False`` is provided,
+    Rally will explicitly check whether it is attached to a tty before attempting to print anything.
+
+    :param assume_tty: Flag indicating whether to assume a tty is attached without checking.
+    """
+    global ASSUME_TTY
+    ASSUME_TTY = assume_tty
+
+
 def info(msg, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
     println(msg, console_prefix="[INFO]", end=end, flush=flush, force=force, overline=overline, underline=underline,
             logger=logger.info if logger else None)
@@ -128,8 +147,7 @@ def error(msg, end="\n", flush=False, force=False, logger=None, overline=None, u
 
 
 def println(msg, console_prefix=None, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
-    # TODO: Checking for sys.stdout.isatty() prevents shell redirections and pipes (useful for list commands). Can we remove this check?
-    allow_print = force or (not QUIET and (RALLY_RUNNING_IN_DOCKER or sys.stdout.isatty()))
+    allow_print = force or (not QUIET and (RALLY_RUNNING_IN_DOCKER or ASSUME_TTY or sys.stdout.isatty()))
     if allow_print:
         complete_msg = "%s %s" % (console_prefix, msg) if console_prefix else msg
         if overline:
@@ -169,7 +187,7 @@ class CmdLineProgressReporter:
         :param message: A message to display (will be left-aligned)
         :param progress: A progress indication (will be right-aligned)
         """
-        if QUIET or (not RALLY_RUNNING_IN_DOCKER and not sys.stdout.isatty()):
+        if QUIET or (not RALLY_RUNNING_IN_DOCKER and not ASSUME_TTY and not sys.stdout.isatty()):
             return
         w = self._width
         if self._first_print:
@@ -192,7 +210,7 @@ class CmdLineProgressReporter:
             return "%s%s" % (text[0:max_length - len(omission) - 5], omission)
 
     def finish(self):
-        if QUIET or (not RALLY_RUNNING_IN_DOCKER and not sys.stdout.isatty()):
+        if QUIET or (not RALLY_RUNNING_IN_DOCKER and not ASSUME_TTY and not sys.stdout.isatty()):
             return
         # print a final statement in order to end the progress line
         self._printer("")

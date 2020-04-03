@@ -15,7 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import collections
+import io
 import threading
 import time
 import unittest.mock as mock
@@ -25,6 +27,7 @@ from unittest import TestCase
 from esrally import metrics, track, exceptions, config
 from esrally.driver import driver, runner
 from esrally.track import params
+from tests import run_async, as_future
 
 
 class DriverTestParamSource:
@@ -218,25 +221,6 @@ class DriverTests(TestCase):
         self.assertEqual(4, target.drive_at.call_count)
 
 
-class ScheduleTestCase(TestCase):
-    def assert_schedule(self, expected_schedule, schedule, infinite_schedule=False):
-        if not infinite_schedule:
-            self.assertEqual(len(expected_schedule), len(schedule),
-                             msg="Number of elements in the schedules do not match")
-        idx = 0
-        for invocation_time, sample_type, progress_percent, runner, params in schedule:
-            exp_invocation_time, exp_sample_type, exp_progress_percent, exp_params = expected_schedule[idx]
-            self.assertAlmostEqual(exp_invocation_time, invocation_time, msg="Invocation time for sample at index %d does not match" % idx)
-            self.assertEqual(exp_sample_type, sample_type, "Sample type for sample at index %d does not match" % idx)
-            self.assertEqual(exp_progress_percent, progress_percent, "Current progress for sample at index %d does not match" % idx)
-            self.assertIsNotNone(runner, "runner must be defined")
-            self.assertEqual(exp_params, params, "Parameters do not match")
-            idx += 1
-            # for infinite schedules we only check the first few elements
-            if infinite_schedule and idx == len(expected_schedule):
-                break
-
-
 def op(name, operation_type):
     return track.Operation(name, operation_type, param_source="driver-test-param-source")
 
@@ -400,8 +384,8 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Warmup, None, -1, -1, 3000, "docs", 1, 1),
-            driver.Sample(0, 1470838595.5, 21.5, op, metrics.SampleType.Normal, None, -1, -1, 2500, "docs", 1, 1),
+            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Warmup, None, -1, -1, -1, 3000, "docs", 1, 1),
+            driver.Sample(0, 1470838595.5, 21.5, op, metrics.SampleType.Normal, None, -1, -1, -1, 2500, "docs", 1, 1),
         ]
 
         aggregated = self.calculate_global_throughput(samples)
@@ -418,15 +402,15 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 1, 1 / 9),
-            driver.Sample(0, 1470838596, 22, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 2, 2 / 9),
-            driver.Sample(0, 1470838597, 23, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 3, 3 / 9),
-            driver.Sample(0, 1470838598, 24, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4, 4 / 9),
-            driver.Sample(0, 1470838599, 25, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5, 5 / 9),
-            driver.Sample(0, 1470838600, 26, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6, 6 / 9),
-            driver.Sample(1, 1470838598.5, 24.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 4.5, 7 / 9),
-            driver.Sample(1, 1470838599.5, 25.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 5.5, 8 / 9),
-            driver.Sample(1, 1470838600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, 5000, "docs", 6.5, 9 / 9)
+            driver.Sample(0, 38595, 21, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 1, 1 / 9),
+            driver.Sample(0, 38596, 22, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 2, 2 / 9),
+            driver.Sample(0, 38597, 23, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 3, 3 / 9),
+            driver.Sample(0, 38598, 24, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 4, 4 / 9),
+            driver.Sample(0, 38599, 25, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 5, 5 / 9),
+            driver.Sample(0, 38600, 26, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 6, 6 / 9),
+            driver.Sample(1, 38598.5, 24.5, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 4.5, 7 / 9),
+            driver.Sample(1, 38599.5, 25.5, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 5.5, 8 / 9),
+            driver.Sample(1, 38600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, -1, 5000, "docs", 6.5, 9 / 9)
         ]
 
         aggregated = self.calculate_global_throughput(samples)
@@ -436,19 +420,19 @@ class MetricsAggregationTests(TestCase):
 
         throughput = aggregated[op]
         self.assertEqual(6, len(throughput))
-        self.assertEqual((1470838595, 21, metrics.SampleType.Normal, 5000, "docs/s"), throughput[0])
-        self.assertEqual((1470838596, 22, metrics.SampleType.Normal, 5000, "docs/s"), throughput[1])
-        self.assertEqual((1470838597, 23, metrics.SampleType.Normal, 5000, "docs/s"), throughput[2])
-        self.assertEqual((1470838598, 24, metrics.SampleType.Normal, 5000, "docs/s"), throughput[3])
-        self.assertEqual((1470838599, 25, metrics.SampleType.Normal, 6000, "docs/s"), throughput[4])
-        self.assertEqual((1470838600, 26, metrics.SampleType.Normal, 6666.666666666667, "docs/s"), throughput[5])
+        self.assertEqual((38595, 21, metrics.SampleType.Normal, 5000, "docs/s"), throughput[0])
+        self.assertEqual((38596, 22, metrics.SampleType.Normal, 5000, "docs/s"), throughput[1])
+        self.assertEqual((38597, 23, metrics.SampleType.Normal, 5000, "docs/s"), throughput[2])
+        self.assertEqual((38598, 24, metrics.SampleType.Normal, 5000, "docs/s"), throughput[3])
+        self.assertEqual((38599, 25, metrics.SampleType.Normal, 6000, "docs/s"), throughput[4])
+        self.assertEqual((38600, 26, metrics.SampleType.Normal, 6666.666666666667, "docs/s"), throughput[5])
         # self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
 
     def calculate_global_throughput(self, samples):
         return driver.ThroughputCalculator().calculate(samples)
 
 
-class SchedulerTests(ScheduleTestCase):
+class SchedulerTests(TestCase):
     class RunnerWithProgress:
         def __init__(self, complete_after=3):
             self.completed = False
@@ -456,7 +440,7 @@ class SchedulerTests(ScheduleTestCase):
             self.calls = 0
             self.complete_after = complete_after
 
-        def __call__(self, *args, **kwargs):
+        async def __call__(self, *args, **kwargs):
             self.calls += 1
             if not self.completed:
                 self.percent_completed = self.calls / self.complete_after
@@ -464,21 +448,37 @@ class SchedulerTests(ScheduleTestCase):
             else:
                 self.percent_completed = 1.0
 
+    async def assert_schedule(self, expected_schedule, schedule, infinite_schedule=False):
+        idx = 0
+        async for invocation_time, sample_type, progress_percent, runner, params in schedule:
+            exp_invocation_time, exp_sample_type, exp_progress_percent, exp_params = expected_schedule[idx]
+            self.assertAlmostEqual(exp_invocation_time, invocation_time, msg="Invocation time for sample at index %d does not match" % idx)
+            self.assertEqual(exp_sample_type, sample_type, "Sample type for sample at index %d does not match" % idx)
+            self.assertEqual(exp_progress_percent, progress_percent, "Current progress for sample at index %d does not match" % idx)
+            self.assertIsNotNone(runner, "runner must be defined")
+            self.assertEqual(exp_params, params, "Parameters do not match")
+            idx += 1
+            # for infinite schedules we only check the first few elements
+            if infinite_schedule and idx == len(expected_schedule):
+                break
+        if not infinite_schedule:
+            self.assertEqual(len(expected_schedule), idx, msg="Number of elements in the schedules do not match")
+
     def setUp(self):
         self.test_track = track.Track(name="unittest")
         self.runner_with_progress = SchedulerTests.RunnerWithProgress()
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         runner.register_default_runners()
-        runner.register_runner("driver-test-runner-with-completion", self.runner_with_progress)
+        runner.register_runner("driver-test-runner-with-completion", self.runner_with_progress, async_runner=True)
 
     def tearDown(self):
         runner.remove_runner("driver-test-runner-with-completion")
 
-    def test_search_task_one_client(self):
+    @run_async
+    async def test_search_task_one_client(self):
         task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
                           warmup_iterations=3, iterations=5, clients=1, params={"target-throughput": 10, "clients": 1})
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 1 / 8, {}),
@@ -490,13 +490,13 @@ class SchedulerTests(ScheduleTestCase):
             (0.6, metrics.SampleType.Normal, 7 / 8, {}),
             (0.7, metrics.SampleType.Normal, 8 / 8, {}),
         ]
-        self.assert_schedule(expected_schedule, list(schedule))
+        await self.assert_schedule(expected_schedule, schedule())
 
-    def test_search_task_two_clients(self):
+    @run_async
+    async def test_search_task_two_clients(self):
         task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
                           warmup_iterations=1, iterations=5, clients=2, params={"target-throughput": 10, "clients": 2})
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 1 / 6, {}),
@@ -506,61 +506,61 @@ class SchedulerTests(ScheduleTestCase):
             (0.8, metrics.SampleType.Normal, 5 / 6, {}),
             (1.0, metrics.SampleType.Normal, 6 / 6, {}),
         ]
-        self.assert_schedule(expected_schedule, list(schedule))
+        await self.assert_schedule(expected_schedule, schedule())
 
-    def test_schedule_param_source_determines_iterations_no_warmup(self):
+    @run_async
+    async def test_schedule_param_source_determines_iterations_no_warmup(self):
         # we neither define any time-period nor any iteration count on the task.
         task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"], "size": 3},
                                                         param_source="driver-test-param-source"),
                           clients=1, params={"target-throughput": 4, "clients": 4})
 
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
-        self.assert_schedule([
+        await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 3, {"body": ["a"], "size": 3}),
             (1.0, metrics.SampleType.Normal, 2 / 3, {"body": ["a"], "size": 3}),
             (2.0, metrics.SampleType.Normal, 3 / 3, {"body": ["a"], "size": 3}),
-        ], list(schedule))
+        ], schedule())
 
-    def test_schedule_param_source_determines_iterations_including_warmup(self):
+    @run_async
+    async def test_schedule_param_source_determines_iterations_including_warmup(self):
         task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"], "size": 5},
                                                         param_source="driver-test-param-source"),
                           warmup_iterations=2, clients=1, params={"target-throughput": 4, "clients": 4})
 
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
-        self.assert_schedule([
+        await self.assert_schedule([
             (0.0, metrics.SampleType.Warmup, 1 / 5, {"body": ["a"], "size": 5}),
             (1.0, metrics.SampleType.Warmup, 2 / 5, {"body": ["a"], "size": 5}),
             (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "size": 5}),
             (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "size": 5}),
             (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "size": 5}),
-        ], list(schedule))
+        ], schedule())
 
-    def test_schedule_defaults_to_iteration_based(self):
+    @run_async
+    async def test_schedule_defaults_to_iteration_based(self):
         # no time-period and no iterations specified on the task. Also, the parameter source does not define a size.
         task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"]},
                                                         param_source="driver-test-param-source"),
                           clients=1, params={"target-throughput": 4, "clients": 4})
 
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
-        self.assert_schedule([
+        await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 1, {"body": ["a"]}),
-        ], list(schedule))
+        ], schedule())
 
-    def test_schedule_for_warmup_time_based(self):
+    @run_async
+    async def test_schedule_for_warmup_time_based(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
-        self.assert_schedule([
+        await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 11, {"body": ["a"], "size": 11}),
             (1.0, metrics.SampleType.Normal, 2 / 11, {"body": ["a"], "size": 11}),
             (2.0, metrics.SampleType.Normal, 3 / 11, {"body": ["a"], "size": 11}),
@@ -572,71 +572,70 @@ class SchedulerTests(ScheduleTestCase):
             (8.0, metrics.SampleType.Normal, 9 / 11, {"body": ["a"], "size": 11}),
             (9.0, metrics.SampleType.Normal, 10 / 11, {"body": ["a"], "size": 11}),
             (10.0, metrics.SampleType.Normal, 11 / 11, {"body": ["a"], "size": 11}),
-        ], list(schedule))
+        ], schedule())
 
-    def test_infinite_schedule_without_progress_indication(self):
+    @run_async
+    async def test_infinite_schedule_without_progress_indication(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"]},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
-        self.assert_schedule([
+        await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (1.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-        ], schedule, infinite_schedule=True)
+        ], schedule(), infinite_schedule=True)
 
-    def test_finite_schedule_with_progress_indication(self):
+    @run_async
+    async def test_finite_schedule_with_progress_indication(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 5},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
-        self.assert_schedule([
+        await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 5, {"body": ["a"], "size": 5}),
             (1.0, metrics.SampleType.Normal, 2 / 5, {"body": ["a"], "size": 5}),
             (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "size": 5}),
             (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "size": 5}),
             (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "size": 5}),
-        ], list(schedule), infinite_schedule=False)
+        ], schedule(), infinite_schedule=False)
 
-    def test_schedule_with_progress_determined_by_runner(self):
+    @run_async
+    async def test_schedule_with_progress_determined_by_runner(self):
         task = track.Task("time-based", track.Operation("time-based", "driver-test-runner-with-completion",
                                                         params={"body": ["a"]},
                                                         param_source="driver-test-param-source"),
                           clients=1,
                           params={"target-throughput": 1, "clients": 1})
 
-        schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = schedule_handle()
+        schedule = driver.schedule_for(self.test_track, task, 0)
 
-        self.assert_schedule([
+        await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (1.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
             (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-        ], schedule, infinite_schedule=True)
+        ], schedule(), infinite_schedule=True)
 
-    def test_schedule_for_time_based(self):
+    @run_async
+    async def test_schedule_for_time_based(self):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
                                                         param_source="driver-test-param-source"), warmup_time_period=0.1, time_period=0.1,
                           clients=1)
 
         schedule_handle = driver.schedule_for(self.test_track, task, 0)
-        schedule = list(schedule_handle())
-
-        self.assertTrue(len(schedule) > 0)
+        schedule = schedule_handle()
 
         last_progress = -1
 
-        for invocation_time, sample_type, progress_percent, runner, params in schedule:
+        async for invocation_time, sample_type, progress_percent, runner, params in schedule:
             # we're not throughput throttled
             self.assertEqual(0, invocation_time)
             if progress_percent <= 0.5:
@@ -651,18 +650,18 @@ class SchedulerTests(ScheduleTestCase):
             self.assertEqual({"body": ["a"], "size": 11}, params)
 
 
-class ExecutorTests(TestCase):
+class AsyncExecutorTests(TestCase):
     class NoopContextManager:
         def __init__(self, mock):
             self.mock = mock
 
-        def __enter__(self):
+        async def __aenter__(self):
             return self
 
-        def __call__(self, *args):
-            return self.mock(*args)
+        async def __call__(self, *args):
+            return await self.mock(*args)
 
-        def __exit__(self, exc_type, exc_val, exc_tb):
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
             return False
 
         def __str__(self):
@@ -681,7 +680,7 @@ class ExecutorTests(TestCase):
         def percent_completed(self):
             return (self.iterations - self.iterations_left) / self.iterations
 
-        def __call__(self, es, params):
+        async def __call__(self, es, params):
             self.iterations_left -= 1
 
     def __init__(self, methodName):
@@ -689,18 +688,21 @@ class ExecutorTests(TestCase):
         self.runner_with_progress = None
 
     def context_managed(self, mock):
-        return ExecutorTests.NoopContextManager(mock)
+        return AsyncExecutorTests.NoopContextManager(mock)
 
     def setUp(self):
         runner.register_default_runners()
-        self.runner_with_progress = ExecutorTests.RunnerWithProgress()
-        runner.register_runner("unit-test-recovery", self.runner_with_progress)
+        self.runner_with_progress = AsyncExecutorTests.RunnerWithProgress()
+        runner.register_runner("unit-test-recovery", self.runner_with_progress, async_runner=True)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_execute_schedule_in_throughput_mode(self, es):
-        es.bulk.return_value = {
-            "errors": False
+    @run_async
+    async def test_execute_schedule_in_throughput_mode(self, es):
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
         }
+        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -718,12 +720,20 @@ class ExecutorTests(TestCase):
                           warmup_time_period=0, clients=4)
         schedule = driver.schedule_for(test_track, task, 0)
 
-        sampler = driver.Sampler(client_id=2, task=task, start_timestamp=time.perf_counter())
+        sampler = driver.Sampler(start_timestamp=time.perf_counter())
         cancel = threading.Event()
         complete = threading.Event()
 
-        execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
-        execute_schedule()
+        execute_schedule = driver.AsyncExecutor(client_id=2,
+                                                task=task,
+                                                schedule=schedule,
+                                                es={
+                                                    "default": es
+                                                },
+                                                sampler=sampler,
+                                                cancel=cancel,
+                                                complete=complete)
+        await execute_schedule()
 
         samples = sampler.samples
 
@@ -747,10 +757,13 @@ class ExecutorTests(TestCase):
             self.assertEqual(1, sample.request_meta_data["bulk-size"])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_execute_schedule_with_progress_determined_by_runner(self, es):
-        es.bulk.return_value = {
-            "errors": False
+    @run_async
+    async def test_execute_schedule_with_progress_determined_by_runner(self, es):
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
         }
+        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -764,12 +777,20 @@ class ExecutorTests(TestCase):
         }, param_source="driver-test-param-source"), warmup_time_period=0, clients=4)
         schedule = driver.schedule_for(test_track, task, 0)
 
-        sampler = driver.Sampler(client_id=2, task=task, start_timestamp=time.perf_counter())
+        sampler = driver.Sampler(start_timestamp=time.perf_counter())
         cancel = threading.Event()
         complete = threading.Event()
 
-        execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
-        execute_schedule()
+        execute_schedule = driver.AsyncExecutor(client_id=2,
+                                                task=task,
+                                                schedule=schedule,
+                                                es={
+                                                    "default": es
+                                                },
+                                                sampler=sampler,
+                                                cancel=cancel,
+                                                complete=complete)
+        await execute_schedule()
 
         samples = sampler.samples
 
@@ -794,10 +815,18 @@ class ExecutorTests(TestCase):
             self.assertEqual("ops", sample.total_ops_unit)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_execute_schedule_throughput_throttled(self, es):
-        es.bulk.return_value = {
-            "errors": False
+    @run_async
+    async def test_execute_schedule_throughput_throttled(self, es):
+        def bulk(*args, **kwargs):
+            return as_future(io.StringIO('{"errors": false, "took": 8}'))
+
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
         }
+        # as this method is called several times we need to return a fresh StringIO instance every time as the previous
+        # one has been "consumed".
+        es.bulk.side_effect = bulk
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -815,14 +844,22 @@ class ExecutorTests(TestCase):
                               warmup_time_period=0.5, time_period=0.5, clients=4,
                               params={"target-throughput": target_throughput, "clients": 4},
                               completes_parent=True)
-            sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
+            sampler = driver.Sampler(start_timestamp=0)
 
             cancel = threading.Event()
             complete = threading.Event()
 
             schedule = driver.schedule_for(test_track, task, 0)
-            execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
-            execute_schedule()
+            execute_schedule = driver.AsyncExecutor(client_id=0,
+                                                    task=task,
+                                                    schedule=schedule,
+                                                    es={
+                                                        "default": es
+                                                    },
+                                                    sampler=sampler,
+                                                    cancel=cancel,
+                                                    complete=complete)
+            await execute_schedule()
 
             samples = sampler.samples
 
@@ -834,10 +871,13 @@ class ExecutorTests(TestCase):
             self.assertTrue(complete.is_set(), "Executor should auto-complete a task that terminates its parent")
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_cancel_execute_schedule(self, es):
-        es.bulk.return_value = {
-            "errors": False
+    @run_async
+    async def test_cancel_execute_schedule(self, es):
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
         }
+        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -855,14 +895,22 @@ class ExecutorTests(TestCase):
                               warmup_time_period=0.5, time_period=0.5, clients=4,
                               params={"target-throughput": target_throughput, "clients": 4})
             schedule = driver.schedule_for(test_track, task, 0)
-            sampler = driver.Sampler(client_id=0, task=task, start_timestamp=0)
+            sampler = driver.Sampler(start_timestamp=0)
 
             cancel = threading.Event()
             complete = threading.Event()
-            execute_schedule = driver.Executor(task, schedule, es, sampler, cancel, complete)
+            execute_schedule = driver.AsyncExecutor(client_id=0,
+                                                    task=task,
+                                                    schedule=schedule,
+                                                    es={
+                                                        "default": es
+                                                    },
+                                                    sampler=sampler,
+                                                    cancel=cancel,
+                                                    complete=complete)
 
             cancel.set()
-            execute_schedule()
+            await execute_schedule()
 
             samples = sampler.samples
 
@@ -870,86 +918,102 @@ class ExecutorTests(TestCase):
             self.assertEqual(0, sample_size)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_execute_schedule_aborts_on_error(self, es):
+    @run_async
+    async def test_execute_schedule_aborts_on_error(self, es):
         class ExpectedUnitTestException(Exception):
             pass
 
         def run(*args, **kwargs):
             raise ExpectedUnitTestException()
 
-        def schedule_handle():
-            return [(0, metrics.SampleType.Warmup, 0, self.context_managed(run), None)]
+        async def schedule_handle():
+            invocations = [(0, metrics.SampleType.Warmup, 0, self.context_managed(run), None)]
+            for invocation in invocations:
+                yield invocation
 
         task = track.Task("no-op", track.Operation("no-op", track.OperationType.Bulk.name, params={},
                                                    param_source="driver-test-param-source"),
                           warmup_time_period=0.5, time_period=0.5, clients=4,
                           params={"clients": 4})
 
-        sampler = driver.Sampler(client_id=0, task=None, start_timestamp=0)
+        sampler = driver.Sampler(start_timestamp=0)
         cancel = threading.Event()
         complete = threading.Event()
-        execute_schedule = driver.Executor(task, schedule_handle, es, sampler, cancel, complete)
+        execute_schedule = driver.AsyncExecutor(client_id=2,
+                                                task=task,
+                                                schedule=schedule_handle,
+                                                es={
+                                                    "default": es
+                                                },
+                                                sampler=sampler,
+                                                cancel=cancel,
+                                                complete=complete)
 
         with self.assertRaises(ExpectedUnitTestException):
-            execute_schedule()
+            await execute_schedule()
 
         self.assertEqual(0, es.call_count)
 
-    def test_execute_single_no_return_value(self):
+    @run_async
+    async def test_execute_single_no_return_value(self):
         es = None
         params = None
         runner = mock.Mock()
+        runner.return_value = as_future()
 
-        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
 
-        self.assertEqual(1, total_ops)
-        self.assertEqual("ops", total_ops_unit)
+        self.assertEqual(1, ops)
+        self.assertEqual("ops", unit)
         self.assertEqual({"success": True}, request_meta_data)
 
-    def test_execute_single_tuple(self):
+    @run_async
+    async def test_execute_single_tuple(self):
         es = None
         params = None
         runner = mock.Mock()
-        runner.return_value = (500, "MB")
+        runner.return_value = as_future(result=(500, "MB"))
 
-        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
 
-        self.assertEqual(500, total_ops)
-        self.assertEqual("MB", total_ops_unit)
+        self.assertEqual(500, ops)
+        self.assertEqual("MB", unit)
         self.assertEqual({"success": True}, request_meta_data)
 
-    def test_execute_single_dict(self):
+    @run_async
+    async def test_execute_single_dict(self):
         es = None
         params = None
         runner = mock.Mock()
-        runner.return_value = {
+        runner.return_value = as_future({
             "weight": 50,
             "unit": "docs",
             "some-custom-meta-data": "valid",
             "http-status": 200
-        }
+        })
 
-        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
 
-        self.assertEqual(50, total_ops)
-        self.assertEqual("docs", total_ops_unit)
+        self.assertEqual(50, ops)
+        self.assertEqual("docs", unit)
         self.assertEqual({
             "some-custom-meta-data": "valid",
             "http-status": 200,
             "success": True
         }, request_meta_data)
 
-    def test_execute_single_with_connection_error(self):
+    @run_async
+    async def test_execute_single_with_connection_error(self):
         import elasticsearch
         es = None
         params = None
         # ES client uses pseudo-status "N/A" in this case...
-        runner = mock.Mock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host", None))
+        runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
 
-        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
 
-        self.assertEqual(0, total_ops)
-        self.assertEqual("ops", total_ops_unit)
+        self.assertEqual(0, ops)
+        self.assertEqual("ops", unit)
         self.assertEqual({
             # Look ma: No http-status!
             "error-description": "no route to host",
@@ -957,16 +1021,18 @@ class ExecutorTests(TestCase):
             "success": False
         }, request_meta_data)
 
-    def test_execute_single_with_http_400(self):
+    @run_async
+    async def test_execute_single_with_http_400(self):
         import elasticsearch
         es = None
         params = None
-        runner = mock.Mock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
+        runner = mock.Mock(side_effect=
+                           as_future(exception=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found")))
 
-        total_ops, total_ops_unit, request_meta_data = driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
 
-        self.assertEqual(0, total_ops)
-        self.assertEqual("ops", total_ops_unit)
+        self.assertEqual(0, ops)
+        self.assertEqual("ops", unit)
         self.assertEqual({
             "http-status": 404,
             "error-type": "transport",
@@ -974,9 +1040,10 @@ class ExecutorTests(TestCase):
             "success": False
         }, request_meta_data)
 
-    def test_execute_single_with_key_error(self):
+    @run_async
+    async def test_execute_single_with_key_error(self):
         class FailingRunner:
-            def __call__(self, *args):
+            async def __call__(self, *args):
                 raise KeyError("bulk-size missing")
 
             def __str__(self):
@@ -990,24 +1057,25 @@ class ExecutorTests(TestCase):
         runner = FailingRunner()
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            driver.execute_single(self.context_managed(runner), es, params)
+            await driver.execute_single(self.context_managed(runner), es, params)
         self.assertEqual(
             "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing'].",
             ctx.exception.args[0])
 
 
-class ProfilerTests(TestCase):
-    def test_profiler_is_a_transparent_wrapper(self):
+class AsyncProfilerTests(TestCase):
+    @run_async
+    async def test_profiler_is_a_transparent_wrapper(self):
         import time
 
-        def f(x):
-            time.sleep(x)
+        async def f(x):
+            await asyncio.sleep(x)
             return x * 2
 
-        profiler = driver.Profiler(f, 0, "sleep-operation")
+        profiler = driver.AsyncProfiler(f)
         start = time.perf_counter()
         # this should take roughly 1 second and should return something
-        return_value = profiler(1)
+        return_value = await profiler(1)
         end = time.perf_counter()
         self.assertEqual(2, return_value)
         duration = end - start

@@ -15,8 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# expose only the minimum API
-from .driver import DriverActor, PrepareBenchmark, PreparationComplete, StartBenchmark, BenchmarkComplete, TaskFinished
+import it
 
-# async API
-from .async_driver import AsyncDriver, Timer
+
+@it.random_rally_config
+def test_sources(cfg):
+    it.wait_until_port_is_free()
+    assert it.esrally(cfg, "--on-error=abort --revision=latest --track=geonames --test-mode "
+                           "--challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu") == 0
+
+    it.wait_until_port_is_free()
+    assert it.esrally(cfg, "--on-error=abort --pipeline=from-sources-skip-build --track=geonames --test-mode "
+                           "--challenge=append-no-conflicts-index-only --car=\"4gheap,ea\"") == 0

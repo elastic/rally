@@ -3,7 +3,7 @@
 # Install Rally from source inside a virtualenv
 ################################################################################
 
-FROM python:3.7.3-slim as builder
+FROM python:3.8.2-slim as builder
 
 RUN apt-get -y update && \
     apt-get install -y curl git gcc && \
@@ -34,7 +34,7 @@ RUN pip3 install /rally
 # Add entrypoint
 ################################################################################
 
-FROM python:3.7.3-slim
+FROM python:3.8.2-slim
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
 ENV RALLY_RUNNING_IN_DOCKER True

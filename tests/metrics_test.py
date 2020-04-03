@@ -905,8 +905,8 @@ class EsRaceStoreTests(TestCase):
                         indices=[track.Index(name="tests", types=["_doc"])],
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
-        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", race_id=EsRaceStoreTests.RACE_ID,
-                            race_timestamp=EsRaceStoreTests.RACE_TIMESTAMP,
+        race = metrics.Race(rally_version="0.4.4", rally_revision="123abc", environment_name="unittest",
+                            race_id=EsRaceStoreTests.RACE_ID, race_timestamp=EsRaceStoreTests.RACE_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"shard-count": 3},
                             challenge=t.default_challenge, car="defaults", car_params={"heap_size": "512mb"}, plugin_params=None,
                             track_revision="abc1", team_revision="abc12333", distribution_version="5.0.0",
@@ -934,6 +934,7 @@ class EsRaceStoreTests(TestCase):
 
         expected_doc = {
             "rally-version": "0.4.4",
+            "rally-revision": "123abc",
             "environment": "unittest",
             "race-id": EsRaceStoreTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
@@ -1008,8 +1009,8 @@ class EsResultsStoreTests(TestCase):
                             name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
                         meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"})
 
-        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", race_id=EsResultsStoreTests.RACE_ID,
-                            race_timestamp=EsResultsStoreTests.RACE_TIMESTAMP,
+        race = metrics.Race(rally_version="0.4.4", rally_revision="123abc", environment_name="unittest",
+                            race_id=EsResultsStoreTests.RACE_ID, race_timestamp=EsResultsStoreTests.RACE_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params={"some-param": True},
                             track_revision="abc1", team_revision="123ab", distribution_version="5.0.0",
@@ -1043,6 +1044,7 @@ class EsResultsStoreTests(TestCase):
         expected_docs = [
             {
                 "rally-version": "0.4.4",
+                "rally-revision": "123abc",
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
@@ -1074,6 +1076,7 @@ class EsResultsStoreTests(TestCase):
             },
             {
                 "rally-version": "0.4.4",
+                "rally-revision": "123abc",
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
@@ -1111,6 +1114,7 @@ class EsResultsStoreTests(TestCase):
             },
             {
                 "rally-version": "0.4.4",
+                "rally-revision": "123abc",
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
@@ -1154,8 +1158,8 @@ class EsResultsStoreTests(TestCase):
                             name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
                         meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"})
 
-        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", race_id=EsResultsStoreTests.RACE_ID,
-                            race_timestamp=EsResultsStoreTests.RACE_TIMESTAMP,
+        race = metrics.Race(rally_version="0.4.4", rally_revision=None, environment_name="unittest",
+                            race_id=EsResultsStoreTests.RACE_ID, race_timestamp=EsResultsStoreTests.RACE_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params=None,
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params=None,
                             track_revision="abc1", team_revision="123ab", distribution_version=None,
@@ -1189,6 +1193,7 @@ class EsResultsStoreTests(TestCase):
         expected_docs = [
             {
                 "rally-version": "0.4.4",
+                "rally-revision": None,
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
@@ -1216,6 +1221,7 @@ class EsResultsStoreTests(TestCase):
             },
             {
                 "rally-version": "0.4.4",
+                "rally-revision": None,
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
@@ -1249,6 +1255,7 @@ class EsResultsStoreTests(TestCase):
             },
             {
                 "rally-version": "0.4.4",
+                "rally-revision": None,
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
@@ -1485,8 +1492,8 @@ class FileRaceStoreTests(TestCase):
                         indices=[track.Index(name="tests", types=["_doc"])],
                         challenges=[track.Challenge(name="index", default=True, schedule=schedule)])
 
-        race = metrics.Race(rally_version="0.4.4", environment_name="unittest", race_id=FileRaceStoreTests.RACE_ID,
-                            race_timestamp=FileRaceStoreTests.RACE_TIMESTAMP,
+        race = metrics.Race(rally_version="0.4.4", rally_revision="123abc", environment_name="unittest",
+                            race_id=FileRaceStoreTests.RACE_ID, race_timestamp=FileRaceStoreTests.RACE_TIMESTAMP,
                             pipeline="from-sources", user_tags={"os": "Linux"}, track=t, track_params={"clients": 12},
                             challenge=t.default_challenge, car="4gheap", car_params=None, plugin_params=None,
                             track_revision="abc1", team_revision="abc12333", distribution_version="5.0.0",
@@ -1574,8 +1581,10 @@ class StatsCalculatorTests(TestCase):
         opm = stats.metrics("index #1")
         self.assertEqual(collections.OrderedDict(
             [("min", 500), ("mean", 1125), ("median", 1000), ("max", 2000), ("unit", "docs/s")]), opm["throughput"])
-        self.assertEqual(collections.OrderedDict([("50_0", 220), ("100_0", 225), ("mean", 215)]), opm["latency"])
-        self.assertEqual(collections.OrderedDict([("50_0", 200), ("100_0", 210), ("mean", 200)]), opm["service_time"])
+        self.assertEqual(collections.OrderedDict(
+            [("50_0", 220), ("100_0", 225), ("mean", 215), ("unit", "ms")]), opm["latency"])
+        self.assertEqual(collections.OrderedDict(
+            [("50_0", 200), ("100_0", 210), ("mean", 200), ("unit", "ms")]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
 
         self.assertEqual(1, len(stats.ml_processing_time))
@@ -1618,7 +1627,8 @@ class StatsCalculatorTests(TestCase):
             {
                 "node": "rally-node-0",
                 "name": "index_size",
-                "value": 2048
+                "value": 2048,
+                "unit": "bytes"
             }
         ], stats.node_metrics)
 

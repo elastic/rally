@@ -15,8 +15,31 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# expose only the minimum API
-from .driver import DriverActor, PrepareBenchmark, PreparationComplete, StartBenchmark, BenchmarkComplete, TaskFinished
+import it
 
-# async API
-from .async_driver import AsyncDriver, Timer
+
+@it.all_rally_configs
+def test_list_races(cfg):
+    assert it.esrally(cfg, "list races") == 0
+
+
+@it.rally_in_mem
+def test_list_cars(cfg):
+    assert it.esrally(cfg, "list cars") == 0
+
+
+@it.rally_in_mem
+def test_list_elasticsearch_plugins(cfg):
+    assert it.esrally(cfg, "list elasticsearch-plugins") == 0
+
+
+@it.rally_in_mem
+def test_list_tracks(cfg):
+    assert it.esrally(cfg, "list tracks") == 0
+    assert it.esrally(cfg, "list tracks --track-repository=default "
+                           "--track-revision=4080dc9850d07e23b6fc7cfcdc7cf57b14e5168d") == 0
+
+
+@it.rally_in_mem
+def test_list_telemetry(cfg):
+    assert it.esrally(cfg, "list telemetry") == 0

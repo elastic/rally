@@ -37,7 +37,7 @@ __versionstr__ = raw_version
 long_description = str_from_file("README.rst")
 
 # tuples of (major, minor) of supported Python versions ordered from lowest to highest
-supported_python_versions = [(3, 5), (3, 6), (3, 7), (3, 8)]
+supported_python_versions = [(3, 8)]
 
 ################################################################################################
 #
@@ -50,8 +50,13 @@ install_requires = [
     # License: Apache 2.0
     # transitive dependency urllib3: MIT
     "elasticsearch==7.0.5",
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   aiohttp: Apache 2.0
+    #   async_timeout: Apache 2.0
+    "elasticsearch-async==6.2.0",
     # License: BSD
-    "psutil==5.6.5",
+    "psutil==5.7.0",
     # License: MIT
     "py-cpuinfo==3.2.0",
     # License: MIT
@@ -73,7 +78,11 @@ install_requires = [
     #   botocore: Apache 2.0
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
-    "boto3==1.10.32"
+    "boto3==1.10.32",
+    # License: Apache 2.0
+    "yappi==1.2.3",
+    # License: BSD
+    "ijson==2.6.1"
 ]
 
 tests_require = [
@@ -112,7 +121,7 @@ setup(name="esrally",
       license="Apache License, Version 2.0",
       packages=find_packages(
           where=".",
-          exclude=("tests*", "benchmarks*")
+          exclude=("tests*", "benchmarks*", "it*")
       ),
       include_package_data=True,
       # supported Python versions. This will prohibit pip (> 9.0.0) from even installing Rally on an unsupported

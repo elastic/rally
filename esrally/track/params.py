@@ -355,12 +355,14 @@ class SearchParamSource(ParamSource):
         pages = params.get("pages", None)
         results_per_page = params.get("results-per-page", None)
         request_params = params.get("request-params", {})
+        response_compression_enabled = params.get("response-compression-enabled", True)
 
         self.query_params = {
             "index": index_name,
             "type": type_name,
             "cache": request_cache,
             "request-params": request_params,
+            "response-compression-enabled": response_compression_enabled,
             "body": query_body
         }
 
@@ -644,7 +646,7 @@ def chain(*iterables):
 
 def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
                           on_conflict, recency):
-    source = Slice(io.FileSource, offset, num_lines)
+    source = Slice(io.MmapSource, offset, num_lines)
 
     if docs.includes_action_and_meta_data:
         return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, docs.target_index, docs.target_type)
@@ -905,7 +907,7 @@ class IndexDataReader:
                 if docs_in_bulk == 0:
                     break
                 docs_in_batch += docs_in_bulk
-                batch.append((docs_in_bulk, "".join(bulk)))
+                batch.append((docs_in_bulk, b"".join(bulk)))
             if docs_in_batch == 0:
                 raise StopIteration()
             return self.index_name, self.type_name, batch
@@ -938,7 +940,7 @@ class MetadataIndexDataReader(IndexDataReader):
         """
         current_bulk = []
         # hoist
-        action_metadata_line = self.action_metadata_line
+        action_metadata_line = self.action_metadata_line.encode("utf-8")
         docs = next(self.file_source)
 
         for doc in docs:
@@ -957,11 +959,11 @@ class MetadataIndexDataReader(IndexDataReader):
             action_metadata_item = next(self.action_metadata)
             if action_metadata_item:
                 action_type, action_metadata_line = action_metadata_item
-                current_bulk.append(action_metadata_line)
+                current_bulk.append(action_metadata_line.encode("utf-8"))
                 if action_type == "update":
                     # remove the trailing "\n" as the doc needs to fit on one line
                     doc = doc.strip()
-                    current_bulk.append("{\"doc\":%s}\n" % doc)
+                    current_bulk.append(b"{\"doc\":%s}\n" % doc)
                 else:
                     current_bulk.append(doc)
             else:

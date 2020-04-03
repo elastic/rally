@@ -690,16 +690,17 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None, node_name=None):
+    def get_one(self, name, sample_type=None, node_name=None, task=None):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
         :param name: The metric name to query.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
+        :param task The task name to query. Optional.
         :return: The corresponding value for the given metric name or None if there is no value.
         """
-        return self._first_or_none(self.get(name=name, sample_type=sample_type, node_name=node_name))
+        return self._first_or_none(self.get(name=name, task=task, sample_type=sample_type, node_name=node_name))
 
     @staticmethod
     def _first_or_none(values):
@@ -732,16 +733,17 @@ class MetricsStore:
         """
         return self._get(name, task, operation_type, sample_type, node_name, mapper)
 
-    def get_unit(self, name, task=None):
+    def get_unit(self, name, task=None, node_name=None):
         """
         Gets the unit for the given metric name.
 
         :param name: The metric name to query.
         :param task The task name to query. Optional.
+        :param node_name The name of the node where this metric was gathered. Optional.
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, task, None, None, None, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, None, None, node_name, lambda doc: doc["unit"]))
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         raise NotImplementedError("abstract method")
@@ -1219,14 +1221,15 @@ def create_race(cfg, track, challenge, track_revision=None):
     car_params = cfg.opts("mechanic", "car.params")
     plugin_params = cfg.opts("mechanic", "plugin.params")
     rally_version = version.version()
+    rally_revision = version.revision()
 
-    return Race(rally_version, environment, race_id, race_timestamp, pipeline, user_tags, track, track_params,
-                challenge, car, car_params, plugin_params, track_revision)
+    return Race(rally_version, rally_revision, environment, race_id, race_timestamp, pipeline, user_tags, track,
+                track_params, challenge, car, car_params, plugin_params, track_revision)
 
 
 class Race:
-    def __init__(self, rally_version, environment_name, race_id, race_timestamp, pipeline, user_tags, track,
-                 track_params, challenge, car, car_params, plugin_params, track_revision=None, team_revision=None,
+    def __init__(self, rally_version, rally_revision, environment_name, race_id, race_timestamp, pipeline, user_tags,
+                 track, track_params, challenge, car, car_params, plugin_params, track_revision=None, team_revision=None,
                  distribution_version=None, distribution_flavor=None, revision=None, results=None, meta_data=None):
         if results is None:
             results = {}
@@ -1238,6 +1241,7 @@ class Race:
             if challenge:
                 meta_data.update(challenge.meta_data)
         self.rally_version = rally_version
+        self.rally_revision = rally_revision
         self.environment_name = environment_name
         self.race_id = race_id
         self.race_timestamp = race_timestamp
@@ -1278,6 +1282,7 @@ class Race:
         """
         d = {
             "rally-version": self.rally_version,
+            "rally-revision": self.rally_revision,
             "environment": self.environment_name,
             # TODO #777: Remove trial-* with a later release. They are only here for BWC
             "trial-id": self.race_id,
@@ -1315,6 +1320,7 @@ class Race:
         """
         result_template = {
             "rally-version": self.rally_version,
+            "rally-revision": self.rally_revision,
             "environment": self.environment_name,
             # TODO #777: Remove trial-* with a later release. They are only here for BWC
             "trial-id": self.race_id,
@@ -1366,7 +1372,7 @@ class Race:
         # TODO: cluster is optional for BWC. This can be removed after some grace period.
         # TODO #777: Remove the backwards-compatibility layer with trial*
         cluster = d.get("cluster", {})
-        return Race(d["rally-version"], d["environment"], d.get("race-id", d.get("trial-id")),
+        return Race(d["rally-version"], d.get("rally-revision"), d["environment"], d.get("race-id", d.get("trial-id")),
                     time.from_is8601(d.get("race-timestamp", d.get("trial-timestamp"))),
                     d["pipeline"], user_tags, d["track"], d.get("track-params"), d.get("challenge"), d["car"],
                     d.get("car-params"), d.get("plugin-params"), track_revision=d.get("track-revision"),
@@ -1637,6 +1643,7 @@ class GlobalStatsCalculator:
                         self.summary_stats("throughput", t),
                         self.single_latency(t),
                         self.single_latency(t, metric_name="service_time"),
+                        self.single_latency(t, metric_name="processing_time"),
                         self.error_rate(t),
                         self.merge(
                             self.track.meta_data,
@@ -1768,11 +1775,13 @@ class GlobalStatsCalculator:
             mean = self.store.get_mean(metric_name,
                                        task=task,
                                        sample_type=sample_type)
+            unit = self.store.get_unit(metric_name, task=task)
             stats = collections.OrderedDict()
             for k, v in percentiles.items():
                 # safely encode so we don't have any dots in field names
                 stats[encode_float_key(k)] = v
             stats["mean"] = mean
+            stats["unit"] = unit
             return stats
         else:
             return {}
@@ -1839,6 +1848,8 @@ class GlobalStats:
                         all_results.append(op_metrics(item, "latency"))
                     if "service_time" in item:
                         all_results.append(op_metrics(item, "service_time"))
+                    if "processing_time" in item:
+                        all_results.append(op_metrics(item, "processing_time"))
                     if "error_rate" in item:
                         all_results.append(op_metrics(item, "error_rate", single_value=True))
             elif metric == "ml_processing_time":
@@ -1870,13 +1881,14 @@ class GlobalStats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_op_metrics(self, task, operation, throughput, latency, service_time, error_rate, meta):
+    def add_op_metrics(self, task, operation, throughput, latency, service_time, processing_time, error_rate, meta):
         doc = {
             "task": task,
             "operation": operation,
             "throughput": throughput,
             "latency": latency,
             "service_time": service_time,
+            "processing_time": processing_time,
             "error_rate": error_rate,
         }
         if meta:
@@ -1913,9 +1925,10 @@ class SystemStatsCalculator:
 
     def add(self, result, raw_metric_key, summary_metric_key):
         metric_value = self.store.get_one(raw_metric_key, node_name=self.node_name)
+        metric_unit = self.store.get_unit(raw_metric_key, node_name=self.node_name)
         if metric_value:
             self.logger.debug("Adding record for [%s] with value [%s].", raw_metric_key, str(metric_value))
-            result.add_node_metrics(self.node_name, summary_metric_key, metric_value)
+            result.add_node_metrics(self.node_name, summary_metric_key, metric_value, metric_unit)
         else:
             self.logger.debug("Skipping incomplete [%s] record.", raw_metric_key)
 
@@ -1927,12 +1940,14 @@ class SystemStats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_node_metrics(self, node, name, value):
+    def add_node_metrics(self, node, name, value, unit):
         metric = {
             "node": node,
             "name": name,
             "value": value
         }
+        if unit:
+            metric["unit"] = unit
         self.node_metrics.append(metric)
 
     def as_flat_list(self):

@@ -43,6 +43,7 @@ function main {
     printf "The source code can be obtained at https://github.com/certifi/python-certifi\n" >> "${OUTPUT_FILE}"
     add_license "certifi" "https://raw.githubusercontent.com/certifi/python-certifi/master/LICENSE"
     add_license "elasticsearch" "https://raw.githubusercontent.com/elastic/elasticsearch-py/master/LICENSE"
+    add_license "elasticsearch-async" "https://raw.githubusercontent.com/elastic/elasticsearch-py-async/master/LICENSE"
     add_license "jinja2" "https://raw.githubusercontent.com/pallets/jinja/master/LICENSE.rst"
     add_license "jsonschema" "https://raw.githubusercontent.com/Julian/jsonschema/master/COPYING"
     add_license "psutil" "https://raw.githubusercontent.com/giampaolo/psutil/master/LICENSE"
@@ -50,12 +51,18 @@ function main {
     add_license "tabulate" "https://bitbucket.org/astanin/python-tabulate/raw/03182bf9b8a2becbc54d17aa7e3e7dfed072c5f5/LICENSE"
     add_license "thespian" "https://raw.githubusercontent.com/kquick/Thespian/master/LICENSE.txt"
     add_license "boto3" "https://raw.githubusercontent.com/boto/boto3/develop/LICENSE"
+    add_license "yappi" "https://raw.githubusercontent.com/sumerc/yappi/master/LICENSE"
+    add_license "ijson" "https://raw.githubusercontent.com/ICRAR/ijson/master/LICENSE.txt"
 
     # transitive dependencies
     # Jinja2 -> Markupsafe
     add_license "Markupsafe" "https://raw.githubusercontent.com/pallets/markupsafe/master/LICENSE.rst"
     # elasticsearch -> urllib3
     add_license "urllib3" "https://raw.githubusercontent.com/shazow/urllib3/master/LICENSE.txt"
+    #elasticsearch_async -> aiohttp
+    add_license "aiohttp" "https://raw.githubusercontent.com/aio-libs/aiohttp/master/LICENSE.txt"
+    #elasticsearch_async -> async_timeout
+    add_license "async_timeout" "https://raw.githubusercontent.com/aio-libs/async-timeout/master/LICENSE"
     # boto3 -> s3transfer
     add_license "s3transfer" "https://raw.githubusercontent.com/boto/s3transfer/develop/LICENSE.txt"
     # boto3 -> jmespath

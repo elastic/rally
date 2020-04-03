@@ -32,6 +32,7 @@ readonly ES_METRICS_STORE_TRANSPORT_PORT="63200"
 readonly ES_ARTIFACT_PATH="elasticsearch-${ES_METRICS_STORE_VERSION}"
 readonly ES_ARTIFACT="${ES_ARTIFACT_PATH}.tar.gz"
 readonly MIN_CURL_VERSION=(7 12 3)
+readonly MIN_DOCKER_MEM_BYTES=$(expr 6 \* 1024 \* 1024 \* 1024)
 readonly RALLY_LOG="${HOME}/.rally/logs/rally.log"
 readonly RALLY_LOG_BACKUP="${HOME}/.rally/logs/rally.log.it.bak"
 
@@ -42,6 +43,13 @@ TEST_SUCCESS=0
 
 function check_prerequisites {
     exit_if_docker_not_running
+
+    DOCKER_MEM_BYTES=$(docker info --format="{{.MemTotal}}")
+    if [[ ${DOCKER_MEM_BYTES} -lt ${MIN_DOCKER_MEM_BYTES} ]]; then
+        echo "Error: Docker is not configured with enough memory. ($DOCKER_MEM_BYTES bytes)"
+        echo "Please increase memory available to Docker to at least ${MIN_DOCKER_MEM_BYTES} bytes"
+        exit 1
+    fi
 
     local curl_major_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 1,1)
     local curl_minor_version=$(curl --version | head -1 | cut -d ' ' -f 2,2 | cut -d '.' -f 2,2)
@@ -247,24 +255,6 @@ function test_configure {
     esrally configure --assume-defaults --configuration-name="config-integration-test"
 }
 
-function test_list {
-    local cfg
-    random_configuration cfg
-
-    info "test list races [${cfg}]"
-    esrally list races --configuration-name="${cfg}"
-    info "test list cars [${cfg}]"
-    esrally list cars --configuration-name="${cfg}"
-    info "test list Elasticsearch plugins [${cfg}]"
-    esrally list elasticsearch-plugins --configuration-name="${cfg}"
-    info "test list tracks [${cfg}]"
-    esrally list tracks --configuration-name="${cfg}"
-    info "test list can use track revision together with track repository"
-    esrally list tracks --configuration-name="${cfg}" --track-repository=default --track-revision=4080dc9850d07e23b6fc7cfcdc7cf57b14e5168d
-    info "test list telemetry [${cfg}]"
-    esrally list telemetry --configuration-name="${cfg}"
-}
-
 function test_info {
     local cfg
     random_configuration cfg
@@ -288,22 +278,6 @@ function test_download {
         kill_rally_processes
         esrally download --configuration-name="${cfg}" --distribution-version="${dist}" --quiet
     done
-}
-
-function test_sources {
-    local cfg
-    random_configuration cfg
-
-    # build Elasticsearch and a core plugin
-    info "test sources [--configuration-name=${cfg}], [--revision=latest], [--track=geonames], [--challenge=append-no-conflicts], [--car=4gheap] [--elasticsearch-plugins=analysis-icu]"
-    kill_rally_processes
-    wait_for_free_es_port
-    esrally --configuration-name="${cfg}" --on-error=abort --revision=latest --track=geonames --test-mode --challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu
-
-    info "test sources [--configuration-name=${cfg}], [--pipeline=from-sources-skip-build], [--track=geonames], [--challenge=append-no-conflicts-index-only], [--car=4gheap,ea] "
-    kill_rally_processes
-    wait_for_free_es_port
-    esrally --configuration-name="${cfg}" --on-error=abort --pipeline=from-sources-skip-build --track=geonames --test-mode --challenge=append-no-conflicts-index-only --car="4gheap,ea" 
 }
 
 function test_distributions {
@@ -538,11 +512,11 @@ function test_node_management_commands {
     info "test start [--configuration-name=${cfg}]"
     esrally start --quiet --configuration-name="${cfg}" --installation-id="${install_id}" --race-id="rally-integration-test"
 
-    esrally --target-host="localhost:39200" \
+    esrally race-async \
+            --target-host="localhost:39200" \
             --configuration-name="${cfg}" \
             --race-id="rally-integration-test" \
             --on-error=abort \
-            --pipeline=benchmark-only \
             --track=geonames \
             --test-mode \
             --challenge=append-no-conflicts-index-only
@@ -670,16 +644,12 @@ function run_test {
     fi
     echo "**************************************** TESTING CONFIGURATION OF RALLY ****************************************"
     test_configure
-    echo "**************************************** TESTING RALLY LIST COMMANDS *******************************************"
-    test_list
     echo "**************************************** TESTING RALLY INFO COMMAND ********************************************"
     test_info
     echo "**************************************** TESTING RALLY FAILS WITH UNUSED TRACK-PARAMS **************************"
     test_distribution_fails_with_wrong_track_params
     echo "**************************************** TESTING RALLY DOWNLOAD COMMAND ***********************************"
     test_download
-    echo "**************************************** TESTING RALLY WITH ES FROM SOURCES ************************************"
-    test_sources
     echo "**************************************** TESTING RALLY WITH ES DISTRIBUTIONS ***********************************"
     test_distributions
     echo "**************************************** TESTING RALLY WITH ES DOCKER IMAGE ***********************************"

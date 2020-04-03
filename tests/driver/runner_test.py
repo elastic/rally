@@ -16,23 +16,24 @@
 # under the License.
 
 import io
+import json
 import random
 import unittest.mock as mock
 from unittest import TestCase
 
 import elasticsearch
-import pytest
 
 from esrally import exceptions
 from esrally.driver import runner
+from tests import run_async, as_future
 
 
 class BaseUnitTestContextManagerRunner:
-    def __enter__(self):
+    async def __aenter__(self):
         self.fp = io.StringIO("many\nlines\nin\na\nfile")
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         self.fp.close()
         return False
 
@@ -41,48 +42,53 @@ class RegisterRunnerTests(TestCase):
     def tearDown(self):
         runner.remove_runner("unit_test")
 
-    def test_runner_function_should_be_wrapped(self):
-        def runner_function(*args):
+    @run_async
+    async def test_runner_function_should_be_wrapped(self):
+        async def runner_function(*args):
             return args
 
-        runner.register_runner(operation_type="unit_test", runner=runner_function)
+        runner.register_runner(operation_type="unit_test", runner=runner_function, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
         self.assertIsInstance(returned_runner, runner.NoCompletion)
         self.assertEqual("user-defined runner for [runner_function]", repr(returned_runner))
-        self.assertEqual(("default_client", "param"), returned_runner({"default": "default_client", "other": "other_client"}, "param"))
+        self.assertEqual(("default_client", "param"),
+                         await returned_runner({"default": "default_client", "other": "other_client"}, "param"))
 
-    def test_single_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
+    @run_async
+    async def test_single_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
         class UnitTestSingleClusterContextManagerRunner(BaseUnitTestContextManagerRunner):
-            def __call__(self, *args):
+            async def __call__(self, *args):
                 return args
 
             def __str__(self):
                 return "UnitTestSingleClusterContextManagerRunner"
 
         test_runner = UnitTestSingleClusterContextManagerRunner()
-        runner.register_runner(operation_type="unit_test", runner=test_runner)
+        runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
         self.assertIsInstance(returned_runner, runner.NoCompletion)
         self.assertEqual("user-defined context-manager enabled runner for [UnitTestSingleClusterContextManagerRunner]",
                          repr(returned_runner))
         # test that context_manager functionality gets preserved after wrapping
-        with returned_runner:
-            self.assertEqual(("default_client", "param"), returned_runner({"default": "default_client", "other": "other_client"}, "param"))
+        async with returned_runner:
+            self.assertEqual(("default_client", "param"),
+                             await returned_runner({"default": "default_client", "other": "other_client"}, "param"))
         # check that the context manager interface of our inner runner has been respected.
         self.assertTrue(test_runner.fp.closed)
 
-    def test_multi_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
+    @run_async
+    async def test_multi_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
         class UnitTestMultiClusterContextManagerRunner(BaseUnitTestContextManagerRunner):
             multi_cluster = True
 
-            def __call__(self, *args):
+            async def __call__(self, *args):
                 return args
 
             def __str__(self):
                 return "UnitTestMultiClusterContextManagerRunner"
 
         test_runner = UnitTestMultiClusterContextManagerRunner()
-        runner.register_runner(operation_type="unit_test", runner=test_runner)
+        runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
         self.assertIsInstance(returned_runner, runner.NoCompletion)
         self.assertEqual("user-defined context-manager enabled runner for [UnitTestMultiClusterContextManagerRunner]",
@@ -90,51 +96,132 @@ class RegisterRunnerTests(TestCase):
 
         # test that context_manager functionality gets preserved after wrapping
         all_clients = {"default": "default_client", "other": "other_client"}
-        with returned_runner:
-            self.assertEqual((all_clients, "param1", "param2"), returned_runner(all_clients, "param1", "param2"))
+        async with returned_runner:
+            self.assertEqual((all_clients, "param1", "param2"), await returned_runner(all_clients, "param1", "param2"))
         # check that the context manager interface of our inner runner has been respected.
         self.assertTrue(test_runner.fp.closed)
 
-    def test_single_cluster_runner_class_should_be_wrapped(self):
+    @run_async
+    async def test_single_cluster_runner_class_should_be_wrapped(self):
         class UnitTestSingleClusterRunner:
-            def __call__(self, *args):
+            async def __call__(self, *args):
                 return args
 
             def __str__(self):
                 return "UnitTestSingleClusterRunner"
 
         test_runner = UnitTestSingleClusterRunner()
-        runner.register_runner(operation_type="unit_test", runner=test_runner)
+        runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
         self.assertIsInstance(returned_runner, runner.NoCompletion)
         self.assertEqual("user-defined runner for [UnitTestSingleClusterRunner]", repr(returned_runner))
-        self.assertEqual(("default_client", "param"), returned_runner({"default": "default_client", "other": "other_client"}, "param"))
+        self.assertEqual(("default_client", "param"),
+                         await returned_runner({"default": "default_client", "other": "other_client"}, "param"))
 
-    def test_multi_cluster_runner_class_should_be_wrapped(self):
+    @run_async
+    async def test_multi_cluster_runner_class_should_be_wrapped(self):
         class UnitTestMultiClusterRunner:
             multi_cluster = True
 
-            def __call__(self, *args):
+            async def __call__(self, *args):
                 return args
 
             def __str__(self):
                 return "UnitTestMultiClusterRunner"
 
         test_runner = UnitTestMultiClusterRunner()
-        runner.register_runner(operation_type="unit_test", runner=test_runner)
+        runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
         self.assertIsInstance(returned_runner, runner.NoCompletion)
         self.assertEqual("user-defined runner for [UnitTestMultiClusterRunner]", repr(returned_runner))
         all_clients = {"default": "default_client", "other": "other_client"}
-        self.assertEqual((all_clients, "some_param"), returned_runner(all_clients, "some_param"))
+        self.assertEqual((all_clients, "some_param"), await returned_runner(all_clients, "some_param"))
+
+
+class SelectiveJsonParserTests(TestCase):
+    def doc_as_text(self, doc):
+        return io.StringIO(json.dumps(doc))
+
+    def test_parse_all_expected(self):
+        doc = self.doc_as_text({
+            "title": "Hello",
+            "meta": {
+                "length": 100,
+                "date": {
+                    "year": 2000
+                }
+            }
+        })
+
+        parsed = runner.parse(doc, [
+            # simple property
+            "title",
+            # a nested property
+            "meta.date.year",
+            # ignores unknown properties
+            "meta.date.month"
+        ])
+
+        self.assertEqual("Hello", parsed.get("title"))
+        self.assertEqual(2000, parsed.get("meta.date.year"))
+        self.assertNotIn("meta.date.month", parsed)
+
+    def test_list_length(self):
+        doc = self.doc_as_text({
+            "title": "Hello",
+            "meta": {
+                "length": 100,
+                "date": {
+                    "year": 2000
+                }
+            },
+            "authors": ["George", "Harry"],
+            "readers": [
+                {
+                    "name": "Tom",
+                    "age": 14
+                },
+                {
+                    "name": "Bob",
+                    "age": 17
+                },
+                {
+                    "name": "Alice",
+                    "age": 22
+                }
+            ],
+            "supporters": []
+        })
+
+        parsed = runner.parse(doc, [
+            # simple property
+            "title",
+            # a nested property
+            "meta.date.year",
+            # ignores unknown properties
+            "meta.date.month"
+        ], ["authors", "readers", "supporters"])
+
+        self.assertEqual("Hello", parsed.get("title"))
+        self.assertEqual(2000, parsed.get("meta.date.year"))
+        self.assertNotIn("meta.date.month", parsed)
+
+        # lists
+        self.assertFalse(parsed.get("authors"))
+        self.assertFalse(parsed.get("readers"))
+        self.assertTrue(parsed.get("supporters"))
 
 
 class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_bulk_index_missing_params(self, es):
-        es.bulk.return_value = {
-            "errors": False
+    @run_async
+    async def test_bulk_index_missing_params(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8
         }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -147,15 +234,19 @@ class BulkIndexRunnerTests(TestCase):
         }
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            bulk(es, bulk_params)
+            await bulk(es, bulk_params)
         self.assertEqual("Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'action-metadata-present'. "
                          "Please add it to your parameter source.", ctx.exception.args[0])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_bulk_index_success_with_metadata(self, es):
-        es.bulk.return_value = {
-            "errors": False
+    @run_async
+    async def test_bulk_index_success_with_metadata(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8
         }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -169,9 +260,9 @@ class BulkIndexRunnerTests(TestCase):
             "bulk-size": 3
         }
 
-        result = bulk(es, bulk_params)
+        result = await bulk(es, bulk_params)
 
-        self.assertIsNone(result["took"])
+        self.assertEqual(8, result["took"])
         self.assertIsNone(result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
@@ -183,10 +274,13 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_bulk_index_success_without_metadata_with_doc_type(self, es):
-        es.bulk.return_value = {
-            "errors": False
+    @run_async
+    async def test_bulk_index_success_without_metadata_with_doc_type(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8
         }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -199,9 +293,9 @@ class BulkIndexRunnerTests(TestCase):
             "type": "_doc"
         }
 
-        result = bulk(es, bulk_params)
+        result = await bulk(es, bulk_params)
 
-        self.assertIsNone(result["took"])
+        self.assertEqual(8, result["took"])
         self.assertEqual("test-index", result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
@@ -213,10 +307,13 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="_doc", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_bulk_index_success_without_metadata_and_without_doc_type(self, es):
-        es.bulk.return_value = {
-            "errors": False
+    @run_async
+    async def test_bulk_index_success_without_metadata_and_without_doc_type(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8
         }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -228,9 +325,9 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test-index"
         }
 
-        result = bulk(es, bulk_params)
+        result = await bulk(es, bulk_params)
 
-        self.assertIsNone(result["took"])
+        self.assertEqual(8, result["took"])
         self.assertEqual("test-index", result["index"])
         self.assertEqual(3, result["weight"])
         self.assertEqual(3, result["bulk-size"])
@@ -242,8 +339,9 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type=None, params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_bulk_index_error(self, es):
-        es.bulk.return_value = {
+    @run_async
+    async def test_bulk_index_error(self, es):
+        bulk_response = {
             "took": 5,
             "errors": True,
             "items": [
@@ -279,6 +377,9 @@ class BulkIndexRunnerTests(TestCase):
                 },
             ]
         }
+
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -293,7 +394,7 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test"
         }
 
-        result = bulk(es, bulk_params)
+        result = await bulk(es, bulk_params)
 
         self.assertEqual("test", result["index"])
         self.assertEqual(5, result["took"])
@@ -307,8 +408,9 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_bulk_index_error_no_shards(self, es):
-        es.bulk.return_value = {
+    @run_async
+    async def test_bulk_index_error_no_shards(self, es):
+        bulk_response = {
             "took": 20,
             "errors": True,
             "items": [
@@ -341,6 +443,9 @@ class BulkIndexRunnerTests(TestCase):
                 }
             ]
         }
+
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -356,7 +461,7 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test"
         }
 
-        result = bulk(es, bulk_params)
+        result = await bulk(es, bulk_params)
 
         self.assertEqual("test", result["index"])
         self.assertEqual(20, result["took"])
@@ -370,8 +475,9 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_mixed_bulk_with_simple_stats(self, es):
-        es.bulk.return_value = {
+    @run_async
+    async def test_mixed_bulk_with_simple_stats(self, es):
+        bulk_response = {
             "took": 30,
             "ingest_took": 20,
             "errors": True,
@@ -444,6 +550,7 @@ class BulkIndexRunnerTests(TestCase):
                 }
             ]
         }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -461,11 +568,11 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test"
         }
 
-        result = bulk(es, bulk_params)
+        result = await bulk(es, bulk_params)
 
         self.assertEqual("test", result["index"])
         self.assertEqual(30, result["took"])
-        self.assertEqual(20, result["ingest_took"])
+        self.assertNotIn("ingest_took", result, "ingest_took is not extracted with simple stats")
         self.assertEqual(4, result["weight"])
         self.assertEqual(4, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
@@ -475,13 +582,10 @@ class BulkIndexRunnerTests(TestCase):
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
-        es.bulk.return_value.pop("ingest_took")
-        result = bulk(es, bulk_params)
-        self.assertNotIn("ingest_took", result)
-
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_mixed_bulk_with_detailed_stats_body_as_string(self, es):
-        es.bulk.return_value = {
+    @run_async
+    async def test_mixed_bulk_with_detailed_stats_body_as_string(self, es):
+        es.bulk.return_value = as_future({
             "took": 30,
             "ingest_took": 20,
             "errors": True,
@@ -587,7 +691,7 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 }
             ]
-        }
+        })
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -609,7 +713,7 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test"
         }
 
-        result = bulk(es, bulk_params)
+        result = await bulk(es, bulk_params)
 
         self.assertEqual("test", result["index"])
         self.assertEqual(30, result["took"])
@@ -666,13 +770,14 @@ class BulkIndexRunnerTests(TestCase):
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
-        es.bulk.return_value.pop("ingest_took")
-        result = bulk(es, bulk_params)
+        es.bulk.return_value.result().pop("ingest_took")
+        result = await bulk(es, bulk_params)
         self.assertNotIn("ingest_took", result)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_simple_bulk_with_detailed_stats_body_as_list(self, es):
-        es.bulk.return_value = {
+    @run_async
+    async def test_simple_bulk_with_detailed_stats_body_as_list(self, es):
+        es.bulk.return_value = as_future({
             "took": 30,
             "ingest_took": 20,
             "errors": False,
@@ -695,7 +800,7 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 }
             ]
-        }
+        })
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -707,7 +812,7 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test"
         }
 
-        result = bulk(es, bulk_params)
+        result = await bulk(es, bulk_params)
 
         self.assertEqual("test", result["index"])
         self.assertEqual(30, result["took"])
@@ -740,13 +845,14 @@ class BulkIndexRunnerTests(TestCase):
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
-        es.bulk.return_value.pop("ingest_took")
-        result = bulk(es, bulk_params)
+        es.bulk.return_value.result().pop("ingest_took")
+        result = await bulk(es, bulk_params)
         self.assertNotIn("ingest_took", result)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_simple_bulk_with_detailed_stats_body_as_unrecognized_type(self, es):
-        es.bulk.return_value = {
+    @run_async
+    async def test_simple_bulk_with_detailed_stats_body_as_unrecognized_type(self, es):
+        es.bulk.return_value = as_future({
             "took": 30,
             "ingest_took": 20,
             "errors": False,
@@ -769,7 +875,7 @@ class BulkIndexRunnerTests(TestCase):
                     }
                 }
             ]
-        }
+        })
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -784,56 +890,184 @@ class BulkIndexRunnerTests(TestCase):
         }
 
         with self.assertRaisesRegex(exceptions.DataError, "bulk body is neither string nor list"):
-            bulk(es, bulk_params)
+            await bulk(es, bulk_params)
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
 
 class ForceMergeRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_force_merge_with_defaults(self, es):
+    @run_async
+    async def test_force_merge_with_defaults(self, es):
+        es.indices.forcemerge.return_value = as_future()
         force_merge = runner.ForceMerge()
-        force_merge(es, params={"index" : "_all"})
+        await force_merge(es, params={"index" : "_all"})
 
         es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=None)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_force_merge_override_request_timeout(self, es):
+    @run_async
+    async def test_force_merge_override_request_timeout(self, es):
+        es.indices.forcemerge.return_value = as_future()
+
         force_merge = runner.ForceMerge()
-        force_merge(es, params={"index" : "_all", "request-timeout": 50000})
+        await force_merge(es, params={"index": "_all", "request-timeout": 50000})
 
         es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=50000)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_force_merge_with_params(self, es):
+    @run_async
+    async def test_force_merge_with_params(self, es):
+        es.indices.forcemerge.return_value = as_future()
+
         force_merge = runner.ForceMerge()
-        force_merge(es, params={"index" : "_all", "max-num-segments": 1, "request-timeout": 50000})
+        await force_merge(es, params={"index" : "_all", "max-num-segments": 1, "request-timeout": 50000})
 
         es.indices.forcemerge.assert_called_once_with(index="_all", max_num_segments=1, request_timeout=50000)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_optimize_with_defaults(self, es):
-        es.indices.forcemerge.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_optimize_with_defaults(self, es):
+        es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
 
         force_merge = runner.ForceMerge()
-        force_merge(es, params={})
+        await force_merge(es, params={})
 
-        es.transport.perform_request.assert_called_once_with("POST", "/_optimize", params={"request_timeout": None})
+        es.transport.perform_request.assert_called_once_with("POST", "/_optimize", timeout=None)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_optimize_with_params(self, es):
-        es.indices.forcemerge.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_optimize_with_params(self, es):
+        es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
         force_merge = runner.ForceMerge()
-        force_merge(es, params={"max-num-segments": 3, "request-timeout": 17000})
+        await force_merge(es, params={"max-num-segments": 3, "request-timeout": 17000})
 
-        es.transport.perform_request.assert_called_once_with("POST", "/_optimize?max_num_segments=3",
-                                                             params={"request_timeout": 17000})
+        es.transport.perform_request.assert_called_once_with("POST", "/_optimize?max_num_segments=3", timeout=17000)
+
+
+class IndicesStatsRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_indices_stats_without_parameters(self, es):
+        es.indices.stats.return_value = as_future({})
+        indices_stats = runner.IndicesStats()
+        result = await indices_stats(es, params={})
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+
+        es.indices.stats.assert_called_once_with(index="_all", metric="_all")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_indices_stats_with_failed_condition(self, es):
+        es.indices.stats.return_value = as_future({
+            "_all": {
+                "total": {
+                    "merges": {
+                        "current": 2,
+                        "current_docs": 292698,
+                    }
+                }
+            }
+        })
+
+        indices_stats = runner.IndicesStats()
+
+        result = await indices_stats(es, params={
+            "index": "logs-*",
+            "condition": {
+                "path": "_all.total.merges.current",
+                "expected-value": 0
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertFalse(result["success"])
+        self.assertDictEqual({
+            "path": "_all.total.merges.current",
+            "actual-value": "2",
+            "expected-value": "0"
+        }, result["condition"])
+
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_indices_stats_with_successful_condition(self, es):
+        es.indices.stats.return_value = as_future({
+            "_all": {
+                "total": {
+                    "merges": {
+                        "current": 0,
+                        "current_docs": 292698,
+                    }
+                }
+            }
+        })
+
+        indices_stats = runner.IndicesStats()
+
+        result = await indices_stats(es, params={
+            "index": "logs-*",
+            "condition": {
+                "path": "_all.total.merges.current",
+                "expected-value": 0
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+        self.assertDictEqual({
+            "path": "_all.total.merges.current",
+            "actual-value": "0",
+            "expected-value": "0"
+        }, result["condition"])
+
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_indices_stats_with_non_existing_path(self, es):
+        es.indices.stats.return_value = as_future({
+            "indices": {
+                "total": {
+                    "docs": {
+                        "current": 0
+                    }
+                }
+            }
+        })
+
+        indices_stats = runner.IndicesStats()
+
+        result = await indices_stats(es, params={
+            "index": "logs-*",
+            "condition": {
+                # non-existing path
+                "path": "indices.my_index.total.docs.count",
+                "expected-value": 0
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertFalse(result["success"])
+        self.assertDictEqual({
+            "path": "indices.my_index.total.docs.count",
+            "actual-value": None,
+            "expected-value": "0"
+        }, result["condition"])
+
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
 
 class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_query_match_only_request_body_defined(self, es):
-        es.search.return_value = {
+    @run_async
+    async def test_query_match_only_request_body_defined(self, es):
+        search_response = {
             "timed_out": False,
             "took": 5,
             "hits": {
@@ -843,18 +1077,20 @@ class QueryRunnerTests(TestCase):
                 },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
         }
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
         params = {
+            "detailed-results": True,
             "cache": True,
             "body": {
                 "query": {
@@ -863,8 +1099,8 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            result = query_runner(es, params)
+        async with query_runner:
+            result = await query_runner(es, params)
 
         self.assertEqual(1, result["weight"])
         self.assertEqual("ops", result["unit"])
@@ -879,10 +1115,12 @@ class QueryRunnerTests(TestCase):
             body=params["body"],
             params={"request_cache": "true"}
         )
+        es.clear_scroll.assert_not_called()
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_query_match_using_request_params(self, es):
-        es.search.return_value = {
+    @run_async
+    async def test_query_match_using_request_params(self, es):
+        response = {
             "timed_out": False,
             "took": 62,
             "hits": {
@@ -892,27 +1130,29 @@ class QueryRunnerTests(TestCase):
                 },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
 
                 ]
             }
         }
+        es.search.return_value = as_future(io.StringIO(json.dumps(response)))
 
         query_runner = runner.Query()
         params = {
             "cache": False,
+            "detailed-results": True,
             "body": None,
             "request-params": {
                 "q": "user:kimchy"
             }
         }
 
-        with query_runner:
-            result = query_runner(es, params)
+        async with query_runner:
+            result = await query_runner(es, params)
 
         self.assertEqual(1, result["weight"])
         self.assertEqual("ops", result["unit"])
@@ -930,29 +1170,84 @@ class QueryRunnerTests(TestCase):
                 "q": "user:kimchy"
             }
         )
+        es.clear_scroll.assert_not_called()
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_query_hits_total_as_number(self, es):
-        es.search.return_value = {
+    @run_async
+    async def test_query_no_detailed_results(self, es):
+        response = {
+            "timed_out": False,
+            "took": 62,
+            "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
+                "hits": [
+                    {
+                        "title": "some-doc-1"
+                    },
+                    {
+                        "title": "some-doc-2"
+                    }
+
+                ]
+            }
+        }
+        es.search.return_value = as_future(io.StringIO(json.dumps(response)))
+
+        query_runner = runner.Query()
+        params = {
+            "body": None,
+            "request-params": {
+                "q": "user:kimchy"
+            },
+            "detailed-results": False
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertNotIn("hits", result)
+        self.assertNotIn("hits_relation", result)
+        self.assertNotIn("timed_out", result)
+        self.assertNotIn("took", result)
+        self.assertNotIn("error-type", result)
+
+        es.search.assert_called_once_with(
+            index="_all",
+            body=params["body"],
+            params={"q": "user:kimchy"}
+        )
+        es.clear_scroll.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_query_hits_total_as_number(self, es):
+        search_response = {
             "timed_out": False,
             "took": 5,
             "hits": {
                 "total": 2,
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
         }
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
         params = {
             "cache": True,
+            "detailed-results": True,
             "body": {
                 "query": {
                     "match_all": {}
@@ -960,8 +1255,8 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            result = query_runner(es, params)
+        async with query_runner:
+            result = await query_runner(es, params)
 
         self.assertEqual(1, result["weight"])
         self.assertEqual("ops", result["unit"])
@@ -978,10 +1273,12 @@ class QueryRunnerTests(TestCase):
                 "request_cache": "true"
             }
         )
+        es.clear_scroll.assert_not_called()
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_query_match_all(self, es):
-        es.search.return_value = {
+    @run_async
+    async def test_query_match_all(self, es):
+        search_response = {
             "timed_out": False,
             "took": 5,
             "hits": {
@@ -991,19 +1288,21 @@ class QueryRunnerTests(TestCase):
                 },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
         }
+        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
         params = {
             "index": "unittest",
+            "detailed-results": True,
             "cache": None,
             "body": {
                 "query": {
@@ -1012,8 +1311,8 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            result = query_runner(es, params)
+        async with query_runner:
+            result = await query_runner(es, params)
 
         self.assertEqual(1, result["weight"])
         self.assertEqual("ops", result["unit"])
@@ -1028,10 +1327,12 @@ class QueryRunnerTests(TestCase):
             body=params["body"],
             params={}
         )
+        es.clear_scroll.assert_not_called()
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_query_match_all_doc_type_fallback(self, es):
-        es.transport.perform_request.return_value = {
+    @run_async
+    async def test_query_match_all_doc_type_fallback(self, es):
+        search_response = {
             "timed_out": False,
             "took": 5,
             "hits": {
@@ -1041,20 +1342,23 @@ class QueryRunnerTests(TestCase):
                 },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
         }
+
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
         params = {
             "index": "unittest",
             "type": "type",
+            "detailed-results": True,
             "cache": None,
             "body": {
                 "query": {
@@ -1063,8 +1367,8 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            result = query_runner(es, params)
+        async with query_runner:
+            result = await query_runner(es, params)
 
         self.assertEqual(1, result["weight"])
         self.assertEqual("ops", result["unit"])
@@ -1075,35 +1379,39 @@ class QueryRunnerTests(TestCase):
         self.assertFalse("error-type" in result)
 
         es.transport.perform_request.assert_called_once_with(
-            'GET', '/unittest/type/_search',
+            "GET", "/unittest/type/_search",
             body=params["body"],
-            params={}
+            params={},
+            headers=None
         )
+        es.clear_scroll.assert_not_called()
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_scroll_query_only_one_page(self, es):
+    @run_async
+    async def test_scroll_query_only_one_page(self, es):
         # page 1
-        es.search.return_value = {
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "took": 4,
             "timed_out": False,
             "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
         }
-        es.transport.perform_request.side_effect = [
-            # delete scroll id response
-            {
-                "acknowledged": True
-            }
-        ]
+
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1119,8 +1427,8 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            results = query_runner(es, params)
+        async with query_runner:
+            results = await query_runner(es, params)
 
         self.assertEqual(1, results["weight"])
         self.assertEqual(1, results["pages"])
@@ -1131,41 +1439,41 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
-        es.search.assert_called_once_with(
-            index="unittest",
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/unittest/_search",
+            params={"request_cache": "true", "sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
-            scroll="10s",
-            size=100,
-            sort='_doc',
-            params={
-                "request_cache": "true"
-            }
+            headers=None
         )
+        es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_scroll_query_no_request_cache(self, es):
+    @run_async
+    async def test_scroll_query_no_request_cache(self, es):
         # page 1
-        es.search.return_value = {
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "took": 4,
             "timed_out": False,
             "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
         }
-        es.transport.perform_request.side_effect = [
-            # delete scroll id response
-            {
-                "acknowledged": True
-            }
-        ]
+
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1173,6 +1481,7 @@ class QueryRunnerTests(TestCase):
             "pages": 1,
             "results-per-page": 100,
             "index": "unittest",
+            "response-compression-enabled": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1180,8 +1489,8 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            results = query_runner(es, params)
+        async with query_runner:
+            results = await query_runner(es, params)
 
         self.assertEqual(1, results["weight"])
         self.assertEqual(1, results["pages"])
@@ -1192,39 +1501,41 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
-        es.search.assert_called_once_with(
-            index="unittest",
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/unittest/_search",
+            params={"sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
-            scroll="10s",
-            size=100,
-            sort='_doc',
-            params={}
+            headers={"Accept-Encoding": "identity"}
         )
+        es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_scroll_query_only_one_page_only_request_body_defined(self, es):
+    @run_async
+    async def test_scroll_query_only_one_page_only_request_body_defined(self, es):
         # page 1
-        es.search.return_value = {
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "took": 4,
             "timed_out": False,
             "hits": {
+                "total": {
+                    "value": 2,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
         }
-        es.transport.perform_request.side_effect = [
-            # delete scroll id response
-            {
-                "acknowledged": True
-            }
-        ]
+
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1238,8 +1549,8 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            results = query_runner(es, params)
+        async with query_runner:
+            results = await query_runner(es, params)
 
         self.assertEqual(1, results["weight"])
         self.assertEqual(1, results["pages"])
@@ -1250,49 +1561,67 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/_all/_search",
+            params={"sort": "_doc", "scroll": "10s", "size": 100},
+            body=params["body"],
+            headers=None
+        )
+
+        es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
+
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_scroll_query_with_explicit_number_of_pages(self, es):
+    @run_async
+    async def test_scroll_query_with_explicit_number_of_pages(self, es):
         # page 1
-        es.search.return_value = {
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
             "took": 54,
             "hits": {
+                "total": {
+                    # includes all hits across all pages
+                    "value": 3,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     }
                 ]
             }
         }
-        es.scroll.side_effect = [
-            # page 2
-            {
-                "_scroll_id": "some-scroll-id",
-                "timed_out": True,
-                "took": 25,
-                "hits": {
-                    "hits": [
-                        {
-                            "some-doc-3"
-                        }
-                    ]
-                }
-            },
-            # delete scroll id response
-            {
-                "acknowledged": True
+
+        # page 2
+        scroll_response = {
+            "_scroll_id": "some-scroll-id",
+            "timed_out": True,
+            "took": 25,
+            "hits": {
+                "hits": [
+                    {
+                        "title": "some-doc-3"
+                    }
+                ]
             }
+        }
+
+        es.transport.perform_request.side_effect = [
+            as_future(io.StringIO(json.dumps(search_response))),
+            as_future(io.StringIO(json.dumps(scroll_response)))
         ]
+
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
         params = {
             "pages": 2,
-            "results-per-page": 100,
+            "results-per-page": 2,
             "index": "unittest",
             "cache": False,
             "body": {
@@ -1302,8 +1631,8 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            results = query_runner(es, params)
+        async with query_runner:
+            results = await query_runner(es, params)
 
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
@@ -1314,91 +1643,32 @@ class QueryRunnerTests(TestCase):
         self.assertTrue(results["timed_out"])
         self.assertFalse("error-type" in results)
 
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_scroll_query_early_termination(self, es):
-        # page 1
-        es.search.return_value = {
-            "_scroll_id": "some-scroll-id",
-            "timed_out": False,
-            "took": 53,
-            "hits": {
-                "hits": [
-                    {
-                        "some-doc-1"
-                    }
-                ]
-            }
-        }
-        es.scroll.side_effect = [
-            # page 2 has no results
-            {
-                "_scroll_id": "some-scroll-id",
-                "timed_out": False,
-                "took": 2,
-                "hits": {
-                    "hits": []
-                }
-            },
-            # delete scroll id response
-            {
-                "acknowledged": True
-            }
-        ]
-
-        query_runner = runner.Query()
-
-        params = {
-            "pages": 5,
-            "results-per-page": 100,
-            "index": "unittest",
-            "cache": False,
-            "body": {
-                "query": {
-                    "match_all": {}
-                }
-            }
-        }
-
-        with query_runner:
-            results = query_runner(es, params)
-
-        self.assertEqual(2, results["weight"])
-        self.assertEqual(2, results["pages"])
-        self.assertEqual(1, results["hits"])
-        self.assertEqual("eq", results["hits_relation"])
-        self.assertEqual("pages", results["unit"])
-        self.assertEqual(55, results["took"])
-        self.assertFalse("error-type" in results)
+        es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_scroll_query_cannot_clear_scroll(self, es):
+    @run_async
+    async def test_scroll_query_cannot_clear_scroll(self, es):
         import elasticsearch
         # page 1
-        es.search.return_value = {
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
             "took": 53,
             "hits": {
+                "total": {
+                    "value": 1,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     }
                 ]
             }
         }
-        es.scroll.side_effect = [
-            # page 2 has no results
-            {
-                "_scroll_id": "some-scroll-id",
-                "timed_out": False,
-                "took": 2,
-                "hits": {
-                    "hits": []
-                }
-            },
-            # delete scroll id raises an exception
-            elasticsearch.ConnectionTimeout()
-        ]
+
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.clear_scroll.return_value = as_future(exception=elasticsearch.ConnectionTimeout())
 
         query_runner = runner.Query()
 
@@ -1414,62 +1684,70 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            results = query_runner(es, params)
+        async with query_runner:
+            results = await query_runner(es, params)
 
-        self.assertEqual(2, results["weight"])
-        self.assertEqual(2, results["pages"])
+        self.assertEqual(1, results["weight"])
+        self.assertEqual(1, results["pages"])
         self.assertEqual(1, results["hits"])
         self.assertEqual("eq", results["hits_relation"])
         self.assertEqual("pages", results["unit"])
-        self.assertEqual(55, results["took"])
+        self.assertEqual(53, results["took"])
         self.assertFalse("error-type" in results)
 
+        es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
+
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_scroll_query_request_all_pages(self, es):
+    @run_async
+    async def test_scroll_query_request_all_pages(self, es):
         # page 1
-        es.search.return_value = {
+        search_response = {
             "_scroll_id": "some-scroll-id",
             "timed_out": False,
             "took": 876,
             "hits": {
+                "total": {
+                    "value": 4,
+                    "relation": "gte"
+                },
                 "hits": [
                     {
-                        "some-doc-1"
+                        "title": "some-doc-1"
                     },
                     {
-                        "some-doc-2"
+                        "title": "some-doc-2"
                     },
                     {
-                        "some-doc-3"
+                        "title": "some-doc-3"
                     },
                     {
-                        "some-doc-4"
+                        "title": "some-doc-4"
                     }
                 ]
             }
         }
-        es.scroll.side_effect = [
-            # page 2 has no results
-            {
-                "_scroll_id": "some-scroll-id",
-                "took": 24,
-                "timed_out": False,
-                "hits": {
-                    "hits": []
-                }
-            },
-            # delete scroll id response
-            {
-                "acknowledged": True
+
+        # page 2 has no results
+        scroll_response = {
+            "_scroll_id": "some-scroll-id",
+            "timed_out": False,
+            "took": 2,
+            "hits": {
+                "hits": []
             }
+        }
+
+        es.transport.perform_request.side_effect = [
+            as_future(io.StringIO(json.dumps(search_response))),
+            as_future(io.StringIO(json.dumps(scroll_response)))
         ]
+        es.clear_scroll.return_value = as_future(io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
         params = {
             "pages": "all",
-            "results-per-page": 100,
+            "results-per-page": 4,
             "index": "unittest",
             "cache": False,
             "body": {
@@ -1479,22 +1757,27 @@ class QueryRunnerTests(TestCase):
             }
         }
 
-        with query_runner:
-            results = query_runner(es, params)
+        async with query_runner:
+            results = await query_runner(es, params)
 
         self.assertEqual(2, results["weight"])
         self.assertEqual(2, results["pages"])
         self.assertEqual(4, results["hits"])
-        self.assertEqual("eq", results["hits_relation"])
-        self.assertEqual(900, results["took"])
+        self.assertEqual("gte", results["hits_relation"])
+        self.assertEqual(878, results["took"])
         self.assertEqual("pages", results["unit"])
         self.assertFalse(results["timed_out"])
         self.assertFalse("error-type" in results)
 
+        es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
+
 
 class PutPipelineRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_create_pipeline(self, es):
+    @run_async
+    async def test_create_pipeline(self, es):
+        es.ingest.put_pipeline.return_value = as_future()
+
         r = runner.PutPipeline()
 
         params = {
@@ -1512,12 +1795,15 @@ class PutPipelineRunnerTests(TestCase):
             }
         }
 
-        r(es, params)
+        await r(es, params)
 
         es.ingest.put_pipeline.assert_called_once_with(id="rename", body=params["body"], master_timeout=None, timeout=None)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_param_body_mandatory(self, es):
+    @run_async
+    async def test_param_body_mandatory(self, es):
+        es.ingest.put_pipeline.return_value = as_future()
+
         r = runner.PutPipeline()
 
         params = {
@@ -1526,12 +1812,15 @@ class PutPipelineRunnerTests(TestCase):
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'body'. "
                                     "Please add it to your parameter source."):
-            r(es, params)
+            await r(es, params)
 
         self.assertEqual(0, es.ingest.put_pipeline.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_param_id_mandatory(self, es):
+    @run_async
+    async def test_param_id_mandatory(self, es):
+        es.ingest.put_pipeline.return_value = as_future()
+
         r = runner.PutPipeline()
 
         params = {
@@ -1540,18 +1829,19 @@ class PutPipelineRunnerTests(TestCase):
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
                                     "Please add it to your parameter source."):
-            r(es, params)
+            await r(es, params)
 
         self.assertEqual(0, es.ingest.put_pipeline.call_count)
 
 
 class ClusterHealthRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_waits_for_expected_cluster_status(self, es):
-        es.cluster.health.return_value = {
+    @run_async
+    async def test_waits_for_expected_cluster_status(self, es):
+        es.cluster.health.return_value = as_future({
             "status": "green",
             "relocating_shards": 0
-        }
+        })
         r = runner.ClusterHealth()
 
         params = {
@@ -1560,7 +1850,7 @@ class ClusterHealthRunnerTests(TestCase):
             }
         }
 
-        result = r(es, params)
+        result = await r(es, params)
 
         self.assertDictEqual({
             "weight": 1,
@@ -1573,11 +1863,12 @@ class ClusterHealthRunnerTests(TestCase):
         es.cluster.health.assert_called_once_with(index=None, params={"wait_for_status": "green"})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_accepts_better_cluster_status(self, es):
-        es.cluster.health.return_value = {
+    @run_async
+    async def test_accepts_better_cluster_status(self, es):
+        es.cluster.health.return_value = as_future({
             "status": "green",
             "relocating_shards": 0
-        }
+        })
         r = runner.ClusterHealth()
 
         params = {
@@ -1586,7 +1877,7 @@ class ClusterHealthRunnerTests(TestCase):
             }
         }
 
-        result = r(es, params)
+        result = await r(es, params)
 
         self.assertDictEqual({
             "weight": 1,
@@ -1599,11 +1890,12 @@ class ClusterHealthRunnerTests(TestCase):
         es.cluster.health.assert_called_once_with(index=None, params={"wait_for_status": "yellow"})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_rejects_relocating_shards(self, es):
-        es.cluster.health.return_value = {
+    @run_async
+    async def test_rejects_relocating_shards(self, es):
+        es.cluster.health.return_value = as_future({
             "status": "yellow",
             "relocating_shards": 3
-        }
+        })
         r = runner.ClusterHealth()
 
         params = {
@@ -1614,7 +1906,7 @@ class ClusterHealthRunnerTests(TestCase):
             }
         }
 
-        result = r(es, params)
+        result = await r(es, params)
 
         self.assertDictEqual({
             "weight": 1,
@@ -1628,11 +1920,12 @@ class ClusterHealthRunnerTests(TestCase):
                                                   params={"wait_for_status": "red", "wait_for_no_relocating_shards": True})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_rejects_unknown_cluster_status(self, es):
-        es.cluster.health.return_value = {
+    @run_async
+    async def test_rejects_unknown_cluster_status(self, es):
+        es.cluster.health.return_value = as_future({
             "status": None,
             "relocating_shards": 0
-        }
+        })
         r = runner.ClusterHealth()
 
         params = {
@@ -1641,7 +1934,7 @@ class ClusterHealthRunnerTests(TestCase):
             }
         }
 
-        result = r(es, params)
+        result = await r(es, params)
 
         self.assertDictEqual({
             "weight": 1,
@@ -1656,7 +1949,10 @@ class ClusterHealthRunnerTests(TestCase):
 
 class CreateIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_creates_multiple_indices(self, es):
+    @run_async
+    async def test_creates_multiple_indices(self, es):
+        es.indices.create.return_value = as_future()
+
         r = runner.CreateIndex()
 
         request_params = {
@@ -1671,7 +1967,7 @@ class CreateIndexRunnerTests(TestCase):
             "request-params": request_params
         }
 
-        result = r(es, params)
+        result = await r(es, params)
 
         self.assertEqual((2, "ops"), result)
 
@@ -1681,22 +1977,27 @@ class CreateIndexRunnerTests(TestCase):
         ])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_param_indices_mandatory(self, es):
+    @run_async
+    async def test_param_indices_mandatory(self, es):
+        es.indices.create.return_value = as_future()
+
         r = runner.CreateIndex()
 
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'create-index' did not provide the mandatory parameter 'indices'. "
                                     "Please add it to your parameter source."):
-            r(es, params)
+            await r(es, params)
 
         self.assertEqual(0, es.indices.create.call_count)
 
 
 class DeleteIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_deletes_existing_indices(self, es):
-        es.indices.exists.side_effect = [False, True]
+    @run_async
+    async def test_deletes_existing_indices(self, es):
+        es.indices.exists.side_effect = [as_future(False), as_future(True)]
+        es.indices.delete.return_value = as_future()
 
         r = runner.DeleteIndex()
 
@@ -1705,14 +2006,17 @@ class DeleteIndexRunnerTests(TestCase):
             "only-if-exists": True
         }
 
-        result = r(es, params)
+        result = await r(es, params)
 
         self.assertEqual((1, "ops"), result)
 
         es.indices.delete.assert_called_once_with(index="indexB", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_deletes_all_indices(self, es):
+    @run_async
+    async def test_deletes_all_indices(self, es):
+        es.indices.delete.return_value = as_future()
+
         r = runner.DeleteIndex()
 
         params = {
@@ -1724,7 +2028,7 @@ class DeleteIndexRunnerTests(TestCase):
             }
         }
 
-        result = r(es, params)
+        result = await r(es, params)
 
         self.assertEqual((2, "ops"), result)
 
@@ -1737,7 +2041,10 @@ class DeleteIndexRunnerTests(TestCase):
 
 class CreateIndexTemplateRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_create_index_templates(self, es):
+    @run_async
+    async def test_create_index_templates(self, es):
+        es.indices.put_template.return_value = as_future()
+
         r = runner.CreateIndexTemplate()
 
         params = {
@@ -1751,7 +2058,7 @@ class CreateIndexTemplateRunnerTests(TestCase):
             }
         }
 
-        result = r(es, params)
+        result = await r(es, params)
 
         self.assertEqual((2, "ops"), result)
 
@@ -1761,21 +2068,28 @@ class CreateIndexTemplateRunnerTests(TestCase):
         ])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_param_templates_mandatory(self, es):
+    @run_async
+    async def test_param_templates_mandatory(self, es):
+        es.indices.put_template.return_value = as_future()
+
         r = runner.CreateIndexTemplate()
 
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'create-index-template' did not provide the mandatory parameter "
                                     "'templates'. Please add it to your parameter source."):
-            r(es, params)
+            await r(es, params)
 
         self.assertEqual(0, es.indices.put_template.call_count)
 
 
 class DeleteIndexTemplateRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_deletes_all_index_templates(self, es):
+    @run_async
+    async def test_deletes_all_index_templates(self, es):
+        es.indices.delete_template.return_value = as_future()
+        es.indices.delete.return_value = as_future()
+
         r = runner.DeleteIndexTemplate()
 
         params = {
@@ -1787,7 +2101,7 @@ class DeleteIndexTemplateRunnerTests(TestCase):
                 "timeout": 60
             }
         }
-        result = r(es, params)
+        result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
         self.assertEqual((3, "ops"), result)
@@ -1799,8 +2113,10 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         es.indices.delete.assert_called_once_with(index="logs-*")
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_deletes_only_existing_index_templates(self, es):
-        es.indices.exists_template.side_effect = [False, True]
+    @run_async
+    async def test_deletes_only_existing_index_templates(self, es):
+        es.indices.exists_template.side_effect = [as_future(False), as_future(True)]
+        es.indices.delete_template.return_value = as_future()
 
         r = runner.DeleteIndexTemplate()
 
@@ -1815,7 +2131,7 @@ class DeleteIndexTemplateRunnerTests(TestCase):
             },
             "only-if-exists": True
         }
-        result = r(es, params)
+        result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
         self.assertEqual((1, "ops"), result)
@@ -1825,21 +2141,25 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         self.assertEqual(0, es.indices.delete.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_param_templates_mandatory(self, es):
+    @run_async
+    async def test_param_templates_mandatory(self, es):
         r = runner.DeleteIndexTemplate()
 
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'delete-index-template' did not provide the mandatory parameter "
                                     "'templates'. Please add it to your parameter source."):
-            r(es, params)
+            await r(es, params)
 
         self.assertEqual(0, es.indices.delete_template.call_count)
 
 
 class CreateMlDatafeedTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_create_ml_datafeed(self, es):
+    @run_async
+    async def test_create_ml_datafeed(self, es):
+        es.xpack.ml.put_datafeed.return_value = as_future()
+
         params = {
             "datafeed-id": "some-data-feed",
             "body": {
@@ -1849,13 +2169,15 @@ class CreateMlDatafeedTests(TestCase):
         }
 
         r = runner.CreateMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.put_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"], body=params["body"])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_create_ml_datafeed_fallback(self, es):
-        es.xpack.ml.put_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_create_ml_datafeed_fallback(self, es):
+        es.xpack.ml.put_datafeed.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
         datafeed_id = "some-data-feed"
         body = {
                 "job_id": "total-requests",
@@ -1867,7 +2189,7 @@ class CreateMlDatafeedTests(TestCase):
         }
 
         r = runner.CreateMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("PUT",
                                                              "/_xpack/ml/datafeeds/%s" % datafeed_id,
@@ -1877,27 +2199,32 @@ class CreateMlDatafeedTests(TestCase):
 
 class DeleteMlDatafeedTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_delete_ml_datafeed(self, es):
+    @run_async
+    async def test_delete_ml_datafeed(self, es):
+        es.xpack.ml.delete_datafeed.return_value = as_future()
+
         datafeed_id = "some-data-feed"
         params = {
             "datafeed-id": datafeed_id
         }
 
         r = runner.DeleteMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.delete_datafeed.assert_called_once_with(datafeed_id=datafeed_id, force=False, ignore=[404])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_delete_ml_datafeed_fallback(self, es):
-        es.xpack.ml.delete_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_delete_ml_datafeed_fallback(self, es):
+        es.xpack.ml.delete_datafeed.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
         datafeed_id = "some-data-feed"
         params = {
             "datafeed-id": datafeed_id,
         }
 
         r = runner.DeleteMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("DELETE",
                                                              "/_xpack/ml/datafeeds/%s" % datafeed_id,
@@ -1906,7 +2233,9 @@ class DeleteMlDatafeedTests(TestCase):
 
 class StartMlDatafeedTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_start_ml_datafeed_with_body(self, es):
+    @run_async
+    async def test_start_ml_datafeed_with_body(self, es):
+        es.xpack.ml.start_datafeed.return_value = as_future()
         params = {
             "datafeed-id": "some-data-feed",
             "body": {
@@ -1915,7 +2244,7 @@ class StartMlDatafeedTests(TestCase):
         }
 
         r = runner.StartMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.start_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"],
                                                            body=params["body"],
@@ -1924,8 +2253,10 @@ class StartMlDatafeedTests(TestCase):
                                                            timeout=None)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_start_ml_datafeed_with_body_fallback(self, es):
-        es.xpack.ml.start_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_start_ml_datafeed_with_body_fallback(self, es):
+        es.xpack.ml.start_datafeed.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
         body = {
                 "end": "now"
             }
@@ -1935,7 +2266,7 @@ class StartMlDatafeedTests(TestCase):
         }
 
         r = runner.StartMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
                                                              "/_xpack/ml/datafeeds/%s/_start" % params["datafeed-id"],
@@ -1943,7 +2274,9 @@ class StartMlDatafeedTests(TestCase):
                                                              params=params)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_start_ml_datafeed_with_params(self, es):
+    @run_async
+    async def test_start_ml_datafeed_with_params(self, es):
+        es.xpack.ml.start_datafeed.return_value = as_future()
         params = {
             "datafeed-id": "some-data-feed",
             "start": "2017-01-01T01:00:00Z",
@@ -1952,7 +2285,7 @@ class StartMlDatafeedTests(TestCase):
         }
 
         r = runner.StartMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.start_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"],
                                                            body=None,
@@ -1961,11 +2294,11 @@ class StartMlDatafeedTests(TestCase):
                                                            timeout=params["timeout"])
 
 
-class StopMlDatafeedTests:
+class StopMlDatafeedTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.parametrize("seed", range(20))
-    def test_stop_ml_datafeed(self, es, seed):
-        random.seed(seed)
+    @run_async
+    async def test_stop_ml_datafeed(self, es):
+        es.xpack.ml.stop_datafeed.return_value = as_future()
         params = {
             "datafeed-id": "some-data-feed",
             "force": random.choice([False, True]),
@@ -1973,17 +2306,18 @@ class StopMlDatafeedTests:
         }
 
         r = runner.StopMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.stop_datafeed.assert_called_once_with(datafeed_id=params["datafeed-id"],
                                                           force=params["force"],
                                                           timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.parametrize("seed", range(20))
-    def test_stop_ml_datafeed_fallback(self, es, seed):
-        random.seed(seed)
-        es.xpack.ml.stop_datafeed.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_stop_ml_datafeed_fallback(self, es):
+        es.xpack.ml.stop_datafeed.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
+
         params = {
             "datafeed-id": "some-data-feed",
             "force": random.choice([False, True]),
@@ -1991,7 +2325,7 @@ class StopMlDatafeedTests:
         }
 
         r = runner.StopMlDatafeed()
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
                                                              "/_xpack/ml/datafeeds/%s/_stop" % params["datafeed-id"],
@@ -2000,7 +2334,10 @@ class StopMlDatafeedTests:
 
 class CreateMlJobTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_create_ml_job(self, es):
+    @run_async
+    async def test_create_ml_job(self, es):
+        es.xpack.ml.put_job.return_value = as_future()
+
         params = {
             "job-id": "an-ml-job",
             "body": {
@@ -2023,13 +2360,16 @@ class CreateMlJobTests(TestCase):
         }
 
         r = runner.CreateMlJob()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.put_job.assert_called_once_with(job_id=params["job-id"], body=params["body"])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_create_ml_job_fallback(self, es):
-        es.xpack.ml.put_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_create_ml_job_fallback(self, es):
+        es.xpack.ml.put_job.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
+
         body = {
                 "description": "Total sum of requests",
                 "analysis_config": {
@@ -2053,7 +2393,7 @@ class CreateMlJobTests(TestCase):
         }
 
         r = runner.CreateMlJob()
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("PUT",
                                                              "/_xpack/ml/anomaly_detectors/%s" % params["job-id"],
@@ -2063,20 +2403,25 @@ class CreateMlJobTests(TestCase):
 
 class DeleteMlJobTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_delete_ml_job(self, es):
+    @run_async
+    async def test_delete_ml_job(self, es):
+        es.xpack.ml.delete_job.return_value = as_future()
+
         job_id = "an-ml-job"
         params = {
             "job-id": job_id
         }
 
         r = runner.DeleteMlJob()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.delete_job.assert_called_once_with(job_id=job_id, force=False, ignore=[404])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_delete_ml_job_fallback(self, es):
-        es.xpack.ml.delete_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_delete_ml_job_fallback(self, es):
+        es.xpack.ml.delete_job.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
 
         job_id = "an-ml-job"
         params = {
@@ -2084,7 +2429,7 @@ class DeleteMlJobTests(TestCase):
         }
 
         r = runner.DeleteMlJob()
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("DELETE",
                                                              "/_xpack/ml/anomaly_detectors/%s" % params["job-id"],
@@ -2093,20 +2438,25 @@ class DeleteMlJobTests(TestCase):
 
 class OpenMlJobTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_open_ml_job(self, es):
+    @run_async
+    async def test_open_ml_job(self, es):
+        es.xpack.ml.open_job.return_value = as_future()
+
         job_id = "an-ml-job"
         params = {
             "job-id": job_id
         }
 
         r = runner.OpenMlJob()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.open_job.assert_called_once_with(job_id=job_id)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_open_ml_job_fallback(self, es):
-        es.xpack.ml.open_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_open_ml_job_fallback(self, es):
+        es.xpack.ml.open_job.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
 
         job_id = "an-ml-job"
         params = {
@@ -2114,18 +2464,18 @@ class OpenMlJobTests(TestCase):
         }
 
         r = runner.OpenMlJob()
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
                                                              "/_xpack/ml/anomaly_detectors/%s/_open" % params["job-id"],
                                                              params=params)
 
 
-class CloseMlJobTests:
+class CloseMlJobTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.parametrize("seed", range(20))
-    def test_close_ml_job(self, es, seed):
-        random.seed(seed)
+    @run_async
+    async def test_close_ml_job(self, es):
+        es.xpack.ml.close_job.return_value = as_future()
         params = {
             "job-id": "an-ml-job",
             "force": random.choice([False, True]),
@@ -2133,15 +2483,15 @@ class CloseMlJobTests:
         }
 
         r = runner.CloseMlJob()
-        r(es, params)
+        await r(es, params)
 
         es.xpack.ml.close_job.assert_called_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.parametrize("seed", range(20))
-    def test_close_ml_job_fallback(self, es, seed):
-        random.seed(seed)
-        es.xpack.ml.close_job.side_effect = elasticsearch.TransportError(400, "Bad Request")
+    @run_async
+    async def test_close_ml_job_fallback(self, es):
+        es.xpack.ml.close_job.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
+        es.transport.perform_request.return_value = as_future()
 
         params = {
             "job-id": "an-ml-job",
@@ -2150,7 +2500,7 @@ class CloseMlJobTests:
         }
 
         r = runner.CloseMlJob()
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
                                                              "/_xpack/ml/anomaly_detectors/%s/_close" % params["job-id"],
@@ -2159,13 +2509,15 @@ class CloseMlJobTests:
 
 class RawRequestRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_issue_request_with_defaults(self, es):
+    @run_async
+    async def test_issue_request_with_defaults(self, es):
+        es.transport.perform_request.return_value = as_future()
         r = runner.RawRequest()
 
         params = {
             "path": "/_cat/count"
         }
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with(method="GET",
                                                              url="/_cat/count",
@@ -2174,7 +2526,9 @@ class RawRequestRunnerTests(TestCase):
                                                              params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_issue_delete_index(self, es):
+    @run_async
+    async def test_issue_delete_index(self, es):
+        es.transport.perform_request.return_value = as_future()
         r = runner.RawRequest()
 
         params = {
@@ -2185,7 +2539,7 @@ class RawRequestRunnerTests(TestCase):
                 "pretty": "true"
             }
         }
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with(method="DELETE",
                                                              url="/twitter",
@@ -2194,7 +2548,9 @@ class RawRequestRunnerTests(TestCase):
                                                              params={"ignore": [400, 404], "pretty": "true"})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_issue_create_index(self, es):
+    @run_async
+    async def test_issue_create_index(self, es):
+        es.transport.perform_request.return_value = as_future()
         r = runner.RawRequest()
 
         params = {
@@ -2208,7 +2564,7 @@ class RawRequestRunnerTests(TestCase):
                 }
             }
         }
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with(method="POST",
                                                              url="/twitter",
@@ -2223,7 +2579,9 @@ class RawRequestRunnerTests(TestCase):
                                                              params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_issue_msearch(self, es):
+    @run_async
+    async def test_issue_msearch(self, es):
+        es.transport.perform_request.return_value = as_future()
         r = runner.RawRequest()
 
         params = {
@@ -2238,7 +2596,7 @@ class RawRequestRunnerTests(TestCase):
                 {"query": {"match_all": {}}}
             ]
         }
-        r(es, params)
+        await r(es, params)
 
         es.transport.perform_request.assert_called_once_with(method="GET",
                                                              url="/_msearch",
@@ -2255,23 +2613,25 @@ class RawRequestRunnerTests(TestCase):
 class SleepTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("time.sleep")
-    def test_missing_parameter(self, sleep, es):
+    @mock.patch("asyncio.sleep", return_value=as_future())
+    @run_async
+    async def test_missing_parameter(self, sleep, es):
         r = runner.Sleep()
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'sleep' did not provide the mandatory parameter "
                                     "'duration'. Please add it to your parameter source."):
-            r(es, params={})
+            await r(es, params={})
 
         self.assertEqual(0, es.call_count)
         self.assertEqual(0, sleep.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("time.sleep")
-    def test_sleep(self, sleep, es):
+    @mock.patch("asyncio.sleep", return_value=as_future())
+    @run_async
+    async def test_sleep(self, sleep, es):
         r = runner.Sleep()
-        r(es, params={"duration": 4.3})
+        await r(es, params={"duration": 4.3})
 
         self.assertEqual(0, es.call_count)
         sleep.assert_called_once_with(4.3)
@@ -2279,20 +2639,24 @@ class SleepTests(TestCase):
 
 class DeleteSnapshotRepositoryTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_delete_snapshot_repository(self, es):
+    @run_async
+    async def test_delete_snapshot_repository(self, es):
+        es.snapshot.delete_repository.return_value = as_future()
         params = {
             "repository": "backups"
         }
 
         r = runner.DeleteSnapshotRepository()
-        r(es, params)
+        await r(es, params)
 
         es.snapshot.delete_repository.assert_called_once_with(repository="backups")
 
 
 class CreateSnapshotRepositoryTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_create_snapshot_repository(self, es):
+    @run_async
+    async def test_create_snapshot_repository(self, es):
+        es.snapshot.create_repository.return_value = as_future()
         params = {
             "repository": "backups",
             "body": {
@@ -2304,7 +2668,7 @@ class CreateSnapshotRepositoryTests(TestCase):
         }
 
         r = runner.CreateSnapshotRepository()
-        r(es, params)
+        await r(es, params)
 
         es.snapshot.create_repository.assert_called_once_with(repository="backups",
                                                               body={
@@ -2318,7 +2682,10 @@ class CreateSnapshotRepositoryTests(TestCase):
 
 class RestoreSnapshotTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_restore_snapshot(self, es):
+    @run_async
+    async def test_restore_snapshot(self, es):
+        es.snapshot.restore.return_value = as_future()
+
         params = {
             "repository": "backups",
             "snapshot": "snapshot-001",
@@ -2329,7 +2696,7 @@ class RestoreSnapshotTests(TestCase):
         }
 
         r = runner.RestoreSnapshot()
-        r(es, params)
+        await r(es, params)
 
         es.snapshot.restore.assert_called_once_with(repository="backups",
                                                     snapshot="snapshot-001",
@@ -2338,7 +2705,9 @@ class RestoreSnapshotTests(TestCase):
                                                     params={"request_timeout": 7200})
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_restore_snapshot_with_body(self, es):
+    @run_async
+    async def test_restore_snapshot_with_body(self, es):
+        es.snapshot.restore.return_value = as_future()
         params = {
             "repository": "backups",
             "snapshot": "snapshot-001",
@@ -2356,7 +2725,7 @@ class RestoreSnapshotTests(TestCase):
         }
 
         r = runner.RestoreSnapshot()
-        r(es, params)
+        await r(es, params)
 
         es.snapshot.restore.assert_called_once_with(repository="backups",
                                                     snapshot="snapshot-001",
@@ -2373,15 +2742,16 @@ class RestoreSnapshotTests(TestCase):
 
 class IndicesRecoveryTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_indices_recovery_already_finished(self, es):
+    @run_async
+    async def test_indices_recovery_already_finished(self, es):
         # empty response
-        es.indices.recovery.return_value = {}
+        es.indices.recovery.return_value = as_future({})
 
         r = runner.IndicesRecovery()
         self.assertFalse(r.completed)
         self.assertEqual(r.percent_completed, 0.0)
 
-        r(es, {
+        await r(es, {
             "completion-recheck-wait-period": 0
         })
 
@@ -2393,11 +2763,12 @@ class IndicesRecoveryTests(TestCase):
         self.assertEqual(3, es.indices.recovery.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_waits_for_ongoing_indices_recovery(self, es):
+    @run_async
+    async def test_waits_for_ongoing_indices_recovery(self, es):
         # empty response
         es.indices.recovery.side_effect = [
             # active recovery
-            {
+            as_future({
                 "index1": {
                     "shards": [
                         {
@@ -2424,11 +2795,11 @@ class IndicesRecoveryTests(TestCase):
                         }
                     ]
                 }
-            },
+            }),
             # completed - will be called three times
-            {},
-            {},
-            {},
+            as_future({}),
+            as_future({}),
+            as_future({}),
         ]
 
         r = runner.IndicesRecovery()
@@ -2436,7 +2807,7 @@ class IndicesRecoveryTests(TestCase):
         self.assertEqual(r.percent_completed, 0.0)
 
         while not r.completed:
-            recovered_bytes, unit = r(es, {
+            recovered_bytes, unit = await r(es, {
                 "completion-recheck-wait-period": 0
             })
             if r.completed:
@@ -2453,13 +2824,16 @@ class IndicesRecoveryTests(TestCase):
 class ShrinkIndexTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("time.sleep")
-    def test_shrink_index_with_shrink_node(self, sleep, es):
+    @mock.patch("asyncio.sleep", return_value=as_future())
+    @run_async
+    async def test_shrink_index_with_shrink_node(self, sleep, es):
         # cluster health API
-        es.cluster.health.return_value = {
+        es.cluster.health.return_value = as_future({
             "status": "green",
             "relocating_shards": 0
-        }
+        })
+        es.indices.put_settings.return_value = as_future()
+        es.indices.shrink.return_value = as_future()
 
         r = runner.ShrinkIndex()
         params = {
@@ -2474,7 +2848,7 @@ class ShrinkIndexTests(TestCase):
             "shrink-node": "rally-node-0"
         }
 
-        r(es, params)
+        await r(es, params)
 
         es.indices.put_settings.assert_called_once_with(index="src",
                                                         body={
@@ -2501,14 +2875,15 @@ class ShrinkIndexTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("time.sleep")
-    def test_shrink_index_derives_shrink_node(self, sleep, es):
+    @mock.patch("asyncio.sleep", return_value=as_future())
+    @run_async
+    async def test_shrink_index_derives_shrink_node(self, sleep, es):
         # cluster health API
-        es.cluster.health.return_value = {
+        es.cluster.health.return_value = as_future({
             "status": "green",
             "relocating_shards": 0
-        }
-        es.nodes.info.return_value = {
+        })
+        es.nodes.info.return_value = as_future({
             "_nodes": {
                 "total": 3,
                 "successful": 3,
@@ -2537,7 +2912,9 @@ class ShrinkIndexTests(TestCase):
                     ]
                 }
             }
-        }
+        })
+        es.indices.put_settings.return_value = as_future()
+        es.indices.shrink.return_value = as_future()
 
         r = runner.ShrinkIndex()
         params = {
@@ -2551,7 +2928,7 @@ class ShrinkIndexTests(TestCase):
             }
         }
 
-        r(es, params)
+        await r(es, params)
 
         es.indices.put_settings.assert_called_once_with(index="src",
                                                         body={
@@ -2580,7 +2957,9 @@ class ShrinkIndexTests(TestCase):
 
 class PutSettingsTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_put_settings(self, es):
+    @run_async
+    async def test_put_settings(self, es):
+        es.cluster.put_settings.return_value = as_future()
         params = {
             "body": {
                 "transient": {
@@ -2590,7 +2969,7 @@ class PutSettingsTests(TestCase):
         }
 
         r = runner.PutSettings()
-        r(es, params)
+        await r(es, params)
 
         es.cluster.put_settings.assert_called_once_with(body={
             "transient": {
@@ -2600,22 +2979,24 @@ class PutSettingsTests(TestCase):
 
 
 class RetryTests(TestCase):
-    def test_is_transparent_on_success_when_no_retries(self):
-        delegate = mock.Mock()
+    @run_async
+    async def test_is_transparent_on_success_when_no_retries(self):
+        delegate = mock.Mock(return_value=as_future())
         es = None
         params = {
             # no retries
         }
         retrier = runner.Retry(delegate)
 
-        retrier(es, params)
+        await retrier(es, params)
 
         delegate.assert_called_once_with(es, params)
 
-    def test_is_transparent_on_exception_when_no_retries(self):
+    @run_async
+    async def test_is_transparent_on_exception_when_no_retries(self):
         import elasticsearch
 
-        delegate = mock.Mock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+        delegate = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")))
         es = None
         params = {
             # no retries
@@ -2623,27 +3004,29 @@ class RetryTests(TestCase):
         retrier = runner.Retry(delegate)
 
         with self.assertRaises(elasticsearch.ConnectionError):
-            retrier(es, params)
+            await retrier(es, params)
 
         delegate.assert_called_once_with(es, params)
 
-    def test_is_transparent_on_application_error_when_no_retries(self):
+    @run_async
+    async def test_is_transparent_on_application_error_when_no_retries(self):
         original_return_value = {"weight": 1, "unit": "ops", "success": False}
 
-        delegate = mock.Mock(return_value=original_return_value)
+        delegate = mock.Mock(return_value=as_future(original_return_value))
         es = None
         params = {
             # no retries
         }
         retrier = runner.Retry(delegate)
 
-        result = retrier(es, params)
+        result = await retrier(es, params)
 
         self.assertEqual(original_return_value, result)
         delegate.assert_called_once_with(es, params)
 
-    def test_is_does_not_retry_on_success(self):
-        delegate = mock.Mock()
+    @run_async
+    async def test_is_does_not_retry_on_success(self):
+        delegate = mock.Mock(return_value=as_future())
         es = None
         params = {
             "retries": 3,
@@ -2653,14 +3036,20 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        retrier(es, params)
+        await retrier(es, params)
 
         delegate.assert_called_once_with(es, params)
 
-    def test_retries_on_timeout_if_wanted_and_raises_if_no_recovery(self):
+    @run_async
+    async def test_retries_on_timeout_if_wanted_and_raises_if_no_recovery(self):
         import elasticsearch
 
-        delegate = mock.Mock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+        delegate = mock.Mock(side_effect=[
+            as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
+            as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
+            as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
+            as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host"))
+        ])
         es = None
         params = {
             "retries": 3,
@@ -2671,7 +3060,7 @@ class RetryTests(TestCase):
         retrier = runner.Retry(delegate)
 
         with self.assertRaises(elasticsearch.ConnectionError):
-            retrier(es, params)
+            await retrier(es, params)
 
         delegate.assert_has_calls([
             mock.call(es, params),
@@ -2679,11 +3068,15 @@ class RetryTests(TestCase):
             mock.call(es, params)
         ])
 
-    def test_retries_on_timeout_if_wanted_and_returns_first_call(self):
+    @run_async
+    async def test_retries_on_timeout_if_wanted_and_returns_first_call(self):
         import elasticsearch
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
 
-        delegate = mock.Mock(side_effect=[elasticsearch.ConnectionError("N/A", "no route to host"), failed_return_value])
+        delegate = mock.Mock(side_effect=[
+            as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
+            as_future(failed_return_value)
+        ])
         es = None
         params = {
             "retries": 3,
@@ -2693,7 +3086,7 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        result = retrier(es, params)
+        result = await retrier(es, params)
         self.assertEqual(failed_return_value, result)
 
         delegate.assert_has_calls([
@@ -2703,20 +3096,21 @@ class RetryTests(TestCase):
             mock.call(es, params)
         ])
 
-    def test_retries_mixed_timeout_and_application_errors(self):
+    @run_async
+    async def test_retries_mixed_timeout_and_application_errors(self):
         import elasticsearch
         connection_error = elasticsearch.ConnectionError("N/A", "no route to host")
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": False}
 
         delegate = mock.Mock(side_effect=[
-            connection_error,
-            failed_return_value,
-            connection_error,
-            connection_error,
-            failed_return_value,
-            success_return_value]
-        )
+            as_future(exception=connection_error),
+            as_future(failed_return_value),
+            as_future(exception=connection_error),
+            as_future(exception=connection_error),
+            as_future(failed_return_value),
+            as_future(success_return_value)
+        ])
         es = None
         params = {
             # we try exactly as often as there are errors to also test the semantics of "retry".
@@ -2727,7 +3121,7 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        result = retrier(es, params)
+        result = await retrier(es, params)
         self.assertEqual(success_return_value, result)
 
         delegate.assert_has_calls([
@@ -2745,10 +3139,11 @@ class RetryTests(TestCase):
             mock.call(es, params)
         ])
 
-    def test_does_not_retry_on_timeout_if_not_wanted(self):
+    @run_async
+    async def test_does_not_retry_on_timeout_if_not_wanted(self):
         import elasticsearch
 
-        delegate = mock.Mock(side_effect=elasticsearch.ConnectionTimeout(408, "timed out"))
+        delegate = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionTimeout(408, "timed out")))
         es = None
         params = {
             "retries": 3,
@@ -2759,15 +3154,19 @@ class RetryTests(TestCase):
         retrier = runner.Retry(delegate)
 
         with self.assertRaises(elasticsearch.ConnectionTimeout):
-            retrier(es, params)
+            await retrier(es, params)
 
         delegate.assert_called_once_with(es, params)
 
-    def test_retries_on_application_error_if_wanted(self):
+    @run_async
+    async def test_retries_on_application_error_if_wanted(self):
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": True}
 
-        delegate = mock.Mock(side_effect=[failed_return_value, success_return_value])
+        delegate = mock.Mock(side_effect=[
+            as_future(failed_return_value),
+            as_future(success_return_value)
+        ])
         es = None
         params = {
             "retries": 3,
@@ -2777,7 +3176,7 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        result = retrier(es, params)
+        result = await retrier(es, params)
 
         self.assertEqual(success_return_value, result)
 
@@ -2787,10 +3186,11 @@ class RetryTests(TestCase):
             mock.call(es, params)
         ])
 
-    def test_does_not_retry_on_application_error_if_not_wanted(self):
+    @run_async
+    async def test_does_not_retry_on_application_error_if_not_wanted(self):
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
 
-        delegate = mock.Mock(return_value=failed_return_value)
+        delegate = mock.Mock(return_value=as_future(failed_return_value))
         es = None
         params = {
             "retries": 3,
@@ -2800,14 +3200,15 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        result = retrier(es, params)
+        result = await retrier(es, params)
 
         self.assertEqual(failed_return_value, result)
 
         delegate.assert_called_once_with(es, params)
 
-    def test_assumes_success_if_runner_returns_non_dict(self):
-        delegate = mock.Mock(return_value=(1, "ops"))
+    @run_async
+    async def test_assumes_success_if_runner_returns_non_dict(self):
+        delegate = mock.Mock(return_value=as_future(result=(1, "ops")))
         es = None
         params = {
             "retries": 3,
@@ -2817,21 +3218,22 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        result = retrier(es, params)
+        result = await retrier(es, params)
 
         self.assertEqual((1, "ops"), result)
 
         delegate.assert_called_once_with(es, params)
 
-    def test_retries_until_success(self):
+    @run_async
+    async def test_retries_until_success(self):
         failure_count = 5
 
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": True}
 
         responses = []
-        responses += failure_count * [failed_return_value]
-        responses += [success_return_value]
+        responses += failure_count * [as_future(failed_return_value)]
+        responses += [as_future(success_return_value)]
 
         delegate = mock.Mock(side_effect=responses)
         es = None
@@ -2841,7 +3243,7 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        result = retrier(es, params)
+        result = await retrier(es, params)
 
         self.assertEqual(success_return_value, result)
 
