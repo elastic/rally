@@ -67,7 +67,7 @@ install_requires = [
     # transitive dependency Markupsafe: BSD
     "Jinja2==2.10.3",
     # License: MIT
-    "thespian==3.9.3",
+    "thespian==3.10.0",
     # recommended library for thespian to identify actors more easily with `ps`
     # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
