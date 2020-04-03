@@ -290,7 +290,7 @@ class ConfigFactory:
     def create_config(self, config_file, advanced_config=False, assume_defaults=False):
         """
         Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
-        and writes them to the configuration file in ${RALLY_HOME}/.rally/rally.init, where ${RALLY_HOME} is defaulted to ~.
+        and writes them to the configuration file in ${RALLY_HOME}/.rally/rally.ini, where ${RALLY_HOME} is defaulted to ~.
 
         :param config_file:
         :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
