@@ -911,7 +911,7 @@ class ForceMergeRunnerTests(TestCase):
         es.indices.forcemerge.return_value = as_future()
 
         force_merge = runner.ForceMerge()
-        await force_merge(es, params={"index" : "_all", "request-timeout": 50000})
+        await force_merge(es, params={"index": "_all", "request-timeout": 50000})
 
         es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=50000)
 
@@ -934,7 +934,7 @@ class ForceMergeRunnerTests(TestCase):
         force_merge = runner.ForceMerge()
         await force_merge(es, params={})
 
-        es.transport.perform_request.assert_called_once_with("POST", "/_optimize", params={"request_timeout": None})
+        es.transport.perform_request.assert_called_once_with("POST", "/_optimize", timeout=None)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -944,8 +944,7 @@ class ForceMergeRunnerTests(TestCase):
         force_merge = runner.ForceMerge()
         await force_merge(es, params={"max-num-segments": 3, "request-timeout": 17000})
 
-        es.transport.perform_request.assert_called_once_with("POST", "/_optimize?max_num_segments=3",
-                                                             params={"request_timeout": 17000})
+        es.transport.perform_request.assert_called_once_with("POST", "/_optimize?max_num_segments=3", timeout=17000)
 
 
 class IndicesStatsRunnerTests(TestCase):

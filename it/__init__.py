@@ -166,7 +166,9 @@ def install_integration_test_config():
         with open(f.target_path, "w", encoding="UTF-8") as target:
             with open(f.source_path, "r", encoding="UTF-8") as src:
                 contents = src.read()
-                target.write(Template(contents).substitute(USER_HOME=f.user_home))
+                # optionally allow for a homedir override in integration tests
+                user_home = os.getenv("OVERRIDE_RALLY_HOME", f.user_home)
+                target.write(Template(contents).substitute(USER_HOME=user_home))
 
     for n in CONFIG_NAMES:
         copy_config(n)

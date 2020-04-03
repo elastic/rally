@@ -117,8 +117,10 @@ class AIOHttpConnection(Connection):
         start = self.loop.time()
         response = None
         try:
-            with async_timeout.timeout(timeout or self.timeout.total, loop=self.loop):
-                response = yield from self.session.request(method, url, data=body, headers=headers)
+            request_timeout = timeout or self.timeout.total
+            with async_timeout.timeout(request_timeout, loop=self.loop):
+                # override the default session timeout explicitly
+                response = yield from self.session.request(method, url, data=body, headers=headers, timeout=request_timeout)
                 raw_data = yield from response.text()
             duration = self.loop.time() - start
 

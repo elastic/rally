@@ -161,6 +161,8 @@ class EsClientFactory:
         trace_config = aiohttp.TraceConfig()
         trace_config.on_request_start.append(on_request_start)
         trace_config.on_request_end.append(on_request_end)
+        # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
+        trace_config.on_request_exception.append(on_request_end)
 
         # needs patching as https://github.com/elastic/elasticsearch-py-async/pull/68 is not merged yet
         class RallyAsyncTransport(elasticsearch_async.transport.AsyncTransport):
