@@ -772,15 +772,12 @@ class Query(Runner):
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
         detailed_results = params.get("detailed-results", False)
-        params = request_params
+        headers = self._headers(params)
 
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
-        if doc_type is not None:
-            r = await self._raw_search(es, doc_type, index, body, params)
-        else:
-            r = await es.search(index=index, body=body, params=params)
+        r = await self._raw_search(es, doc_type, index, body, request_params, headers)
 
         if detailed_results:
             props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
@@ -815,11 +812,7 @@ class Query(Runner):
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
         size = params.get("results-per-page")
-        # reduces overhead due to decompression of very large responses
-        if params.get("response-compression-enabled", True):
-            headers = None
-        else:
-            headers = {"Accept-Encoding": "identity"}
+        headers = self._headers(params)
         scroll_id = None
 
         # disable eager response parsing - responses might be huge thus skewing results
@@ -895,6 +888,13 @@ class Query(Runner):
         if cache is not None:
             request_params["request_cache"] = str(cache).lower()
         return request_params
+
+    def _headers(self, params):
+        # reduces overhead due to decompression of very large responses
+        if params.get("response-compression-enabled", True):
+            return None
+        else:
+            return {"Accept-Encoding": "identity"}
 
     def __repr__(self, *args, **kwargs):
         return "query"
