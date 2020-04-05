@@ -198,6 +198,30 @@ class EsClientFactory:
                 ctx = RallyAsyncElasticsearch.request_context.get()
                 ctx["raw_response"] = True
 
+            # workaround for https://github.com/elastic/elasticsearch-py/issues/919
+            @elasticsearch.client.utils.query_params(
+                "_source",
+                "_source_excludes",
+                "_source_includes",
+                "pipeline",
+                "refresh",
+                "routing",
+                "timeout",
+                "wait_for_active_shards",
+            )
+            def bulk(self, body, index=None, doc_type=None, params=None, headers=None):
+                if body in elasticsearch.client.utils.SKIP_IN_PATH:
+                    raise ValueError("Empty value passed for a required argument 'body'.")
+
+                body = self._bulk_body(body)
+                return self.transport.perform_request(
+                    "POST",
+                    elasticsearch.client.utils._make_path(index, doc_type, "_bulk"),
+                    params=params,
+                    headers=headers,
+                    body=body,
+                )
+
             def _bulk_body(self, body):
                 # if not passed in a string, serialize items and join by newline
                 if not isinstance(body, elasticsearch.compat.string_types):
