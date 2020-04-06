@@ -23,6 +23,7 @@ import platform
 import sys
 import time
 import uuid
+import signal
 
 from esrally import PROGRAM_NAME, BANNER, SKULL, check_python_version, doc_link, telemetry
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, \
@@ -551,6 +552,12 @@ def create_arg_parser():
             help="Suppress as much as output as possible (default: false).",
             default=False,
             action="store_true")
+        p.add_argument(
+            "--kill-running-processes",
+            action="store_true",
+            default=False,
+            help="If any processes is running, it is going to kill them and allow Rally to continue to run."
+        )
 
     return parser
 
@@ -614,20 +621,33 @@ def race(cfg):
     other_rally_processes = process.find_all_other_rally_processes()
     if other_rally_processes:
         pids = [p.pid for p in other_rally_processes]
-        msg = "There are other Rally processes running on this machine (PIDs: %s) but only one Rally benchmark is allowed to run at " \
-              "the same time. Please check and terminate these processes and retry again." % pids
-        raise exceptions.RallyError(msg)
 
-    with_actor_system(racecontrol.run, cfg)
+        kill_running_processes = cfg.opts("system", "kill.running.processes", default_value=False, mandatory=False)
+
+        if kill_running_processes:
+            console.info("Killing running processes ...", flush=True)
+            for pid in pids:
+                os.kill(pid, signal.SIGTERM)
+        else:
+            msg = "There are other Rally processes running on this machine (PIDs: %s) but only one Rally benchmark " \
+                  "is allowed to run at the same time. \n\nRally can terminate automatically any running " \
+                  "processes with --kill-running-processes flag, so you don't need to do it manually." % pids
+            raise exceptions.RallyError(msg)
+
+    with_actor_system(racecontrol.run, cfg, kill_running_processes)
 
 
-def with_actor_system(runnable, cfg):
+def with_actor_system(runnable, cfg, kill_running_processes):
     import thespian.actors
     logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
     logger.info("Actor system already running locally? [%s]", str(already_running))
     try:
-        actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
+        if already_running and kill_running_processes:
+            actors = actor.bootstrap_actor_system(try_join=False, prefer_local_only=already_running)
+        else:
+            actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
+
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
         cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
     # This happens when the admin process could not be started, e.g. because it could not open a socket.
@@ -774,6 +794,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
+    cfg.add(config.Scope.applicationOverride, "system", "kill.running.processes", args.kill_running_processes)
 
     # Local config per node
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())

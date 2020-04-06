@@ -710,6 +710,13 @@ The following invocation will list the 50 most recent races::
 
 Suppresses some output on the command line.
 
+``kill-running-processes``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Only one Rally benchmark is allowed to run at the same time. If any processes is running, it is going to kill them and allow Rally to continue to run a new benchmark.
+
+The default value is ``false``.
+
 ``offline``
 ~~~~~~~~~~~
 
