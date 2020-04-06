@@ -23,9 +23,10 @@ INDEX_SETTINGS_EPHEMERAL_KEYS = ["uuid",
                                  "version",
                                  "provided_name",
                                  "store"]
-INDEX_SETTINGS_PARAMETERS = {"number_of_replicas": "{{{{number_of_replicas | default({orig})}}}}",
-                             "number_of_shards": "{{{{number_of_shards | default({orig})}}}}"
-                             }
+INDEX_SETTINGS_PARAMETERS = {
+    "number_of_replicas": "{{{{number_of_replicas | default({orig})}}}}",
+    "number_of_shards": "{{{{number_of_shards | default({orig})}}}}"
+}
 
 
 def filter_ephemeral_index_settings(settings):

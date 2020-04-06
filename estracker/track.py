@@ -10,8 +10,7 @@ from estracker import corpus, index
 
 
 TRACK_TEMPLATES = {
-    "track.json.j2": "track.json",
-    "challenges.json.j2": "challenges/default.json",
+    "track.json.j2": "track.json"
 }
 
 
@@ -67,6 +66,5 @@ def extract(client, outpath, track_name, indices_to_extract):
         "corpora": corpora
     }
 
-    for template, dest_filename in TRACK_TEMPLATES.items():
-        dest_path = os.path.join(outpath, dest_filename)
-        process_template(template, template_vars, dest_path)
+    dest_path = os.path.join(outpath, "track.json")
+    process_template("track.json.j2", template_vars, dest_path)

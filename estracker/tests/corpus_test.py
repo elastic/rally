@@ -83,7 +83,6 @@ def test_extract(client, mo):
                    'compressed_bytes': 500,
                    'index_name': 'test',
                    'doc_count': 1001,
-                   'base_url': 'file:///abs/outpath/to/tracks',
                    'uncompressed_bytes': 1000
                    }
 

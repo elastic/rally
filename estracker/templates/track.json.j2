@@ -11,8 +11,6 @@
   "corpora": [{% set comma = joiner() %}{% for corpus in corpora %}{{comma()}}
     {
       "name": "{{corpus.index_name}}",
-      "#COMMENT": "TODO: Upload data files and provide the http or S3 base URL here",
-      "base-url": "{{corpus.base_url}}",
       "documents": [
         {
           "target-index": "{{corpus.index_name}}",
@@ -24,7 +22,23 @@
       ]
     }{% endfor %}
   ],{% raw %}
-  "challenges": [
-    {{ rally.collect(parts="challenges/*.json") }}
+  "schedule": [
+    {
+      "operation": "delete-index"
+    },
+    {
+      "operation": {
+        "operation-type": "create-index",
+        "settings": {{index_settings | default({}) | tojson}}
+      }
+    },
+    {
+      "operation": {
+            "operation-type": "bulk",
+            "bulk-size": {{bulk_size | default(5000)}},
+            "ingest-percentage": {{ingest_percentage | default(100)}}
+      },
+      "clients": {{bulk_indexing_clients | default(8)}}
+    }
   ]{% endraw %}
 }

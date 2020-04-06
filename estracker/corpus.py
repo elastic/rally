@@ -19,7 +19,6 @@ import bz2
 import json
 import logging
 import os
-import pathlib
 
 from esrally.utils import console
 
@@ -28,15 +27,10 @@ DOCS_COMPRESSOR = bz2.BZ2Compressor
 COMP_EXT = ".bz2"
 
 
-def get_base_url(path):
-    return pathlib.Path(path).parent.as_uri()
-
-
 def template_vars(index_name, out_path, doc_count):
     comp_outpath = out_path + COMP_EXT
     return {
         "index_name": index_name,
-        "base_url": get_base_url(comp_outpath),
         "filename": os.path.basename(comp_outpath),
         "path": comp_outpath,
         "doc_count": doc_count,
