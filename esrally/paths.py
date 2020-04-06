@@ -42,7 +42,4 @@ def install_root(cfg=None):
 
 
 def logs():
-    """
-    :return: The absolute path to the directory that contains Rally's log file.
-    """
     return os.path.join(rally_confdir(), "logs")
