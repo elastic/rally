@@ -102,7 +102,7 @@ def check_prerequisites():
 
 class ConfigFile:
     def __init__(self, config_name):
-        self.user_home = os.path.expanduser("~")
+        self.user_home = os.getenv("RALLY_HOME", os.path.expanduser("~"))
         self.rally_home = os.path.join(self.user_home, ".rally")
         self.config_file_name = "rally-{}.ini".format(config_name)
         self.source_path = os.path.join(os.path.dirname(__file__), "resources", self.config_file_name)
@@ -127,7 +127,6 @@ class TestCluster:
                                                                      http_port=http_port,
                                                                      node_name=node_name,
                                                                      transport_port=transport_port))
-
             self.installation_id = json.loads("".join(output))["installation-id"]
         except BaseException as e:
             raise AssertionError("Failed to install Elasticsearch {}.".format(distribution_version), e)
@@ -166,8 +165,8 @@ def install_integration_test_config():
         with open(f.target_path, "w", encoding="UTF-8") as target:
             with open(f.source_path, "r", encoding="UTF-8") as src:
                 contents = src.read()
-                # optionally allow for a homedir override in integration tests
-                user_home = os.getenv("OVERRIDE_RALLY_HOME", f.user_home)
+                # Rally allows for a RALLY_HOME homedir override. This honors the change for it tests
+                user_home = os.getenv("RALLY_HOME", f.user_home)
                 target.write(Template(contents).substitute(USER_HOME=user_home))
 
     for n in CONFIG_NAMES:

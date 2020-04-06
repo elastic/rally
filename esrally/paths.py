@@ -17,6 +17,11 @@
 import os
 
 
+def rally_confdir():
+    default_home = os.path.expanduser("~")
+    return os.path.join(os.getenv("RALLY_HOME", default_home), ".rally")
+
+
 def rally_root():
     return os.path.dirname(os.path.realpath(__file__))
 
@@ -36,8 +41,11 @@ def install_root(cfg=None):
     return os.path.join(races_root(cfg), install_id)
 
 
+# There is a weird bug manifesting in jenkins that is somehow saying the following line has an invalid docstring
+# So to work around it, we are adding this disable, even though the docstring is perfectly fine.
+# pylint: disable=invalid-docstring-quote
 def logs():
     """
     :return: The absolute path to the directory that contains Rally's log file.
     """
-    return os.path.join(os.path.expanduser("~"), ".rally", "logs")
+    return os.path.join(rally_confdir(), "logs")
