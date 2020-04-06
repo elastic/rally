@@ -5,7 +5,7 @@ ARG RALLY_LICENSE
 ENV RALLY_RUNNING_IN_DOCKER True
 
 RUN apt-get -y update && \
-    apt-get install -y curl git gcc && \
+    apt-get install -y curl git gcc pbzip2 pigz && \
     apt-get -y upgrade && \
     rm -rf /var/lib/apt/lists/*
 
