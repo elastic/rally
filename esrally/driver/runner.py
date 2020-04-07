@@ -269,6 +269,21 @@ def mandatory(params, key, op):
                                    " parameter source." % (str(op), key))
 
 
+def escape(v):
+    """
+    Escapes values so they can be used as query parameters
+
+    :param v: The raw value. May be None.
+    :return: The escaped value.
+    """
+    if v is None:
+        return None
+    elif isinstance(v, bool):
+        return str(v).lower()
+    else:
+        return str(v)
+
+
 class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
@@ -1166,8 +1181,7 @@ class CreateMlDatafeed(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "PUT",
-                    "/_xpack/ml/datafeeds/%s" % datafeed_id,
-                    params=params,
+                    f"/_xpack/ml/datafeeds/{datafeed_id}",
                     body=body,
                 )
             else:
@@ -1194,8 +1208,11 @@ class DeleteMlDatafeed(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "DELETE",
-                    "/_xpack/ml/datafeeds/%s" % datafeed_id,
-                    params=params,
+                    f"/_xpack/ml/datafeeds/{datafeed_id}",
+                    params={
+                        "force": escape(force),
+                        "ignore": 404
+                    },
                 )
             else:
                 raise e
@@ -1223,8 +1240,7 @@ class StartMlDatafeed(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "POST",
-                    "/_xpack/ml/datafeeds/%s/_start" % datafeed_id,
-                    params=params,
+                    f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
                     body=body,
                 )
             else:
@@ -1249,10 +1265,15 @@ class StopMlDatafeed(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
+                request_params = {
+                    "force": escape(force),
+                }
+                if timeout:
+                    request_params["timeout"] = escape(timeout)
                 await es.transport.perform_request(
                     "POST",
-                    "/_xpack/ml/datafeeds/%s/_stop" % datafeed_id,
-                    params=params
+                    f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
+                    params=request_params
                 )
             else:
                 raise e
@@ -1277,8 +1298,7 @@ class CreateMlJob(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "PUT",
-                    "/_xpack/ml/anomaly_detectors/%s" % job_id,
-                    params=params,
+                    f"/_xpack/ml/anomaly_detectors/{job_id}",
                     body=body,
                 )
             else:
@@ -1303,10 +1323,13 @@ class DeleteMlJob(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                es.transport.perform_request(
+                await es.transport.perform_request(
                     "DELETE",
-                    "/_xpack/ml/anomaly_detectors/%s" % job_id,
-                    params=params,
+                    f"/_xpack/ml/anomaly_detectors/{job_id}",
+                    params={
+                        "force": escape(force),
+                        "ignore": 404
+                    },
                 )
             else:
                 raise e
@@ -1330,8 +1353,7 @@ class OpenMlJob(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "POST",
-                    "/_xpack/ml/anomaly_detectors/%s/_open" % job_id,
-                    params=params,
+                    f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
                 )
             else:
                 raise e
@@ -1355,10 +1377,16 @@ class CloseMlJob(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
+                request_params = {
+                    "force": escape(force),
+                }
+                if timeout:
+                    request_params["timeout"] = escape(timeout)
+
                 await es.transport.perform_request(
                     "POST",
-                    "/_xpack/ml/anomaly_detectors/%s/_close" % job_id,
-                    params=params,
+                    f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
+                    params=request_params,
                 )
             else:
                 raise e

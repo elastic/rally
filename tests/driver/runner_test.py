@@ -2201,10 +2201,7 @@ class CreateMlDatafeedTests(TestCase):
         r = runner.CreateMlDatafeed()
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with("PUT",
-                                                             "/_xpack/ml/datafeeds/%s" % datafeed_id,
-                                                             body=body,
-                                                             params=params)
+        es.transport.perform_request.assert_called_once_with("PUT", f"/_xpack/ml/datafeeds/{datafeed_id}", body=body)
 
 
 class DeleteMlDatafeedTests(TestCase):
@@ -2237,8 +2234,11 @@ class DeleteMlDatafeedTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("DELETE",
-                                                             "/_xpack/ml/datafeeds/%s" % datafeed_id,
-                                                             params=params)
+                                                             f"/_xpack/ml/datafeeds/{datafeed_id}",
+                                                             params={
+                                                                 "force": "false",
+                                                                 "ignore": 404
+                                                             })
 
 
 class StartMlDatafeedTests(TestCase):
@@ -2279,9 +2279,8 @@ class StartMlDatafeedTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
-                                                             "/_xpack/ml/datafeeds/%s/_start" % params["datafeed-id"],
-                                                             body=body,
-                                                             params=params)
+                                                             f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_start",
+                                                             body=body)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2338,8 +2337,11 @@ class StopMlDatafeedTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
-                                                             "/_xpack/ml/datafeeds/%s/_stop" % params["datafeed-id"],
-                                                             params=params)
+                                                             f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_stop",
+                                                             params={
+                                                                 "force": str(params["force"]).lower(),
+                                                                 "timeout": params["timeout"]
+                                                             })
 
 
 class CreateMlJobTests(TestCase):
@@ -2406,8 +2408,7 @@ class CreateMlJobTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("PUT",
-                                                             "/_xpack/ml/anomaly_detectors/%s" % params["job-id"],
-                                                             params=params,
+                                                             f"/_xpack/ml/anomaly_detectors/{params['job-id']}",
                                                              body=body)
 
 
@@ -2442,8 +2443,11 @@ class DeleteMlJobTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("DELETE",
-                                                             "/_xpack/ml/anomaly_detectors/%s" % params["job-id"],
-                                                             params=params)
+                                                             f"/_xpack/ml/anomaly_detectors/{params['job-id']}",
+                                                             params={
+                                                                 "force": "false",
+                                                                 "ignore": 404
+                                                             })
 
 
 class OpenMlJobTests(TestCase):
@@ -2477,8 +2481,7 @@ class OpenMlJobTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
-                                                             "/_xpack/ml/anomaly_detectors/%s/_open" % params["job-id"],
-                                                             params=params)
+                                                             f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_open")
 
 
 class CloseMlJobTests(TestCase):
@@ -2513,8 +2516,11 @@ class CloseMlJobTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
-                                                             "/_xpack/ml/anomaly_detectors/%s/_close" % params["job-id"],
-                                                             params=params)
+                                                             f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_close",
+                                                             params={
+                                                                 "force": str(params["force"]).lower(),
+                                                                 "timeout": params["timeout"]
+                                                             })
 
 
 class RawRequestRunnerTests(TestCase):
