@@ -79,7 +79,7 @@ def extract(client, outdir, index):
     outpath = os.path.join(outdir, filename)
     with open(outpath, "w") as outfile:
         json.dump(index_obj, outfile, indent=4, sort_keys=True)
-        outfile.write('\n')
+        outfile.write("\n")
     return {
         "name": index,
         "path": outpath,

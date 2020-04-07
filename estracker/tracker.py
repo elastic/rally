@@ -43,7 +43,7 @@ def get_arg_parser():
     parser.add_argument("--indices", type=list_type, required=True, help="Indices to include in track")
     parser.add_argument("--track-name", help="Name of track to use, if different from the name of index")
     parser.add_argument("--outdir", default=os.path.join(os.getcwd(), "tracks"), help="Output directory for track (default: tracks/)")
-    parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
+    parser.add_argument("--version", action="version", version="%(prog)s " + version.version())
 
     return parser
 
@@ -90,5 +90,5 @@ def main():
     logger.info("To run with Rally: esrally race --track-path=%s", abs_outpath)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

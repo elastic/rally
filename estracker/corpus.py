@@ -83,13 +83,12 @@ def dump_documents(client, index, outpath, total_docs):
     with open(outpath, "wb") as outfile:
         with open(comp_outpath, "wb") as comp_outfile:
             logger.info("Now dumping corpus to %s...", outpath)
-
             query = {"query": {"match_all": {}}}
             for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
                 if n > total_docs:
                     break
                 docsrc = doc["_source"]
-                data = (json.dumps(docsrc, separators=(',', ':')) + "\n").encode("utf-8")
+                data = (json.dumps(docsrc, separators=(",", ":")) + "\n").encode("utf-8")
 
                 outfile.write(data)
                 comp_outfile.write(compressor.compress(data))

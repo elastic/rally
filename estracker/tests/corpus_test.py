@@ -22,7 +22,7 @@ from estracker import corpus
 
 
 def serialize_doc(doc):
-    return (json.dumps(doc, separators=(',', ':')) + "\n").encode("utf-8")
+    return (json.dumps(doc, separators=(",", ":")) + "\n").encode("utf-8")
 
 
 @mock.patch("builtins.open", new_callable=mock.mock_open)
@@ -78,12 +78,12 @@ def test_extract(client, mo):
                          call("/abs/outpath/to/tracks/test-documents-1k.json.bz2", "wb")
                          ], any_order=True)
 
-    assert res == {'filename': 'test-documents.json.bz2',
-                   'path': '/abs/outpath/to/tracks/test-documents.json.bz2',
-                   'compressed_bytes': 500,
-                   'index_name': 'test',
-                   'doc_count': 1001,
-                   'uncompressed_bytes': 1000
+    assert res == {"filename": "test-documents.json.bz2",
+                   "path": "/abs/outpath/to/tracks/test-documents.json.bz2",
+                   "compressed_bytes": 500,
+                   "index_name": "test",
+                   "doc_count": 1001,
+                   "uncompressed_bytes": 1000
                    }
 
     file_mock = mo.return_value
