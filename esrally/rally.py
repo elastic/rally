@@ -618,17 +618,25 @@ def print_help_on_errors():
 
 
 def race(cfg):
-    other_rally_processes = process.find_all_other_rally_processes()
-    if other_rally_processes:
-        pids = [p.pid for p in other_rally_processes]
+    logger = logging.getLogger(__name__)
 
-        kill_running_processes = cfg.opts("system", "kill.running.processes", default_value=False, mandatory=False)
+    kill_running_processes = cfg.opts("system", "kill.running.processes", default_value=False, mandatory=False)
 
-        if kill_running_processes:
-            console.info("Killing running processes ...", flush=True)
-            for pid in pids:
-                os.kill(pid, signal.SIGTERM)
-        else:
+    if kill_running_processes:
+        logger.info("Killing running Rally processes")
+
+        # Kill any lingering Rally processes before attempting to continue - the actor system needs to be a singleton on this machine
+        # noinspection PyBroadException
+        try:
+            process.kill_running_rally_instances()
+        except BaseException:
+            logger.exception(
+                "Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
+    else:
+        other_rally_processes = process.find_all_other_rally_processes()
+        if other_rally_processes:
+            pids = [p.pid for p in other_rally_processes]
+
             msg = "There are other Rally processes running on this machine (PIDs: %s) but only one Rally benchmark " \
                   "is allowed to run at the same time. \n\nRally can terminate automatically any running " \
                   "processes with --kill-running-processes flag, so you don't need to do it manually." % pids
@@ -643,11 +651,7 @@ def with_actor_system(runnable, cfg, kill_running_processes):
     already_running = actor.actor_system_already_running()
     logger.info("Actor system already running locally? [%s]", str(already_running))
     try:
-        if already_running and kill_running_processes:
-            actors = actor.bootstrap_actor_system(try_join=False, prefer_local_only=already_running)
-        else:
-            actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
-
+        actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
         cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
     # This happens when the admin process could not be started, e.g. because it could not open a socket.

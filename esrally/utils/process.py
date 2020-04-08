@@ -135,3 +135,14 @@ def for_all_other_processes(predicate, action):
                 action(p)
         except (psutil.ZombieProcess, psutil.AccessDenied, psutil.NoSuchProcess):
             pass
+
+
+def kill_running_rally_instances():
+    def rally_process(p):
+        return p.name() == "esrally" or \
+               p.name() == "rally" or \
+               (p.name().lower().startswith("python")
+                and any("esrally" in e for e in p.cmdline())
+                and not any("esrallyd" in e for e in p.cmdline()))
+
+    kill_all(rally_process)
