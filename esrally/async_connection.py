@@ -5,6 +5,7 @@ import warnings
 import aiohttp
 from aiohttp.client_exceptions import ServerFingerprintMismatch
 import async_timeout
+import yarl
 
 from elasticsearch.exceptions import ConnectionError, ConnectionTimeout, ImproperlyConfigured, SSLError
 from elasticsearch.connection import Connection
@@ -97,11 +98,7 @@ class AIOHttpConnection(Connection):
             trace_configs=trace_configs,
             response_class=RawClientResponse
         )
-
-        self.base_url = 'http%s://%s:%d%s' % (
-            's' if use_ssl else '',
-            host, port, self.url_prefix
-        )
+        self.scheme = "https" if use_ssl else "http"
 
     @asyncio.coroutine
     def close(self):
@@ -111,8 +108,16 @@ class AIOHttpConnection(Connection):
     def perform_request(self, method, url, params=None, body=None, timeout=None, ignore=(), headers=None):
         url_path = url
         if params:
-            url_path = '%s?%s' % (url, urlencode(params or {}))
-        url = self.base_url + url_path
+            query_string = urlencode(params)
+        else:
+            query_string = ""
+        # Provide correct URL object to avoid string parsing in low-level code
+        url = yarl.URL.build(scheme=self.scheme,
+                             host=self.hostname,
+                             port=self.port,
+                             path=url,
+                             query_string=query_string,
+                             encoded=True)
 
         start = self.loop.time()
         response = None
