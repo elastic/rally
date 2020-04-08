@@ -619,7 +619,7 @@ def print_help_on_errors():
 def race(cfg):
     logger = logging.getLogger(__name__)
 
-    kill_running_processes = cfg.opts("system", "kill.running.processes", default_value=False, mandatory=False)
+    kill_running_processes = cfg.opts("system", "kill.running.processes")
 
     if kill_running_processes:
         logger.info("Killing running Rally processes")
@@ -636,15 +636,16 @@ def race(cfg):
         if other_rally_processes:
             pids = [p.pid for p in other_rally_processes]
 
-            msg = "There are other Rally processes running on this machine (PIDs: %s) but only one Rally benchmark " \
-                  "is allowed to run at the same time. \n\nRally can terminate automatically any running " \
-                  "processes with --kill-running-processes flag, so you don't need to do it manually." % pids
+            msg = f"There are other Rally processes running on this machine (PIDs: {pids}) but only one Rally " \
+                  f"benchmark is allowed to run at the same time.\n\nYou can use --kill-running-processes flag " \
+                  f"to kill running processes automatically and allow Rally to continue to run a new benchmark. " \
+                  f"Otherwise, you need to manually kill them."
             raise exceptions.RallyError(msg)
 
-    with_actor_system(racecontrol.run, cfg, kill_running_processes)
+    with_actor_system(racecontrol.run, cfg)
 
 
-def with_actor_system(runnable, cfg, kill_running_processes):
+def with_actor_system(runnable, cfg):
     import thespian.actors
     logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()

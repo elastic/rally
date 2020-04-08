@@ -713,7 +713,7 @@ Suppresses some output on the command line.
 ``kill-running-processes``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Rally attempts to generate benchmark results that are not skewed unintentionally. Consequently, if some benchmark is running, Rally will not allow you to start another one. Instead, you should stop the current benchmark and start another one manually. This flag can be added to handle automatically for you this stop-start processes.
+Rally attempts to generate benchmark results that are not skewed unintentionally. Consequently, if some benchmark is running, Rally will not allow you to start another one. Instead, you should stop the current benchmark and start another one manually. This flag can be added to handle automatically this process for you.
 
 Only one Rally benchmark is allowed to run at the same time. If any processes is running, it is going to kill them and allow Rally to continue to run a new benchmark.
 
