@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Licensed to Elasticsearch B.V. under one or more contributor
 # license agreements. See the NOTICE file distributed with
 # this work for additional information regarding copyright
@@ -15,7 +17,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-set -eo pipefail
+# fail this script immediately if any command fails with a non-zero exit code
+set -e
+# fail on pipeline errors, e.g. when grepping
+set -o pipefail
+
 export PATH="$HOME/.pyenv/bin:$PATH"
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
@@ -26,7 +32,11 @@ make install
 make precommit
 make it
 
+# Treat unset env variables as an error, but only after the make targets have completed
+set -u
+
 # this will only be done if the build number variable is present
-if [ ! -z "$BUILD_NUMBER" ] && [ -d ".rally" ]; then
-  tar -cvjf .rally/$BUILD_NUMBER.tar.bzip $( find .rally/ -name "*.log" )
+RALLY_DIR=${RALLY_HOME}/.rally
+if [ ! -z "${BUILD_NUMBER}" ] && [ -d ${RALLY_DIR} ]; then
+  tar -cvjf ${RALLY_DIR}/${BUILD_NUMBER}.tar.bzip $( find ${RALLY_DIR} -name "*.log" )
 fi
