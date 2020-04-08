@@ -23,7 +23,6 @@ import platform
 import sys
 import time
 import uuid
-import signal
 
 from esrally import PROGRAM_NAME, BANNER, SKULL, check_python_version, doc_link, telemetry
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, \
