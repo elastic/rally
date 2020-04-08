@@ -22,21 +22,36 @@ set -e
 # fail on pipeline errors, e.g. when grepping
 set -o pipefail
 
-export PATH="$HOME/.pyenv/bin:$PATH"
-export TERM=dumb
-export LC_ALL=en_US.UTF-8
-eval "$(pyenv init -)"
-eval "$(pyenv virtualenv-init -)"
-make prereq
-make install
-make precommit
-make it
+function build {
+  export PATH="$HOME/.pyenv/bin:$PATH"
+  export TERM=dumb
+  export LC_ALL=en_US.UTF-8
+  eval "$(pyenv init -)"
+  eval "$(pyenv virtualenv-init -)"
+  make prereq
+  make install
+  make precommit
+  make it
+}
 
-# Treat unset env variables as an error, but only after the make targets have completed
-set -u
+function archive {
+  # Treat unset env variables as an error, but only in this function as there are other functions that allow unset variables
+  set -u
 
-# this will only be done if the build number variable is present
-RALLY_DIR=${RALLY_HOME}/.rally
-if [ ! -z "${BUILD_NUMBER}" ] && [ -d ${RALLY_DIR} ]; then
-  tar -cvjf ${RALLY_DIR}/${BUILD_NUMBER}.tar.bzip $( find ${RALLY_DIR} -name "*.log" )
+  # this will only be done if the build number variable is present
+  RALLY_DIR=${RALLY_HOME}/.rally
+  if [[ -d ${RALLY_DIR} ]]; then
+    find ${RALLY_DIR} -name "*.log" -printf "%P\\0" | tar -cvjf ${RALLY_DIR}/${BUILD_NUMBER}.tar.bz2 -C ${RALLY_DIR} --transform "s,^,ci-${BUILD_NUMBER}/," --null -T -
+  else
+    echo "Rally directory not present, this should not happen"
+    exit 1
+  fi
+}
+
+if declare -f "$1" > /dev/null; then
+    $1
+    exit
+else
+    echo "Please specify a function to run"
+    exit 1
 fi
