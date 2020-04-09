@@ -43,12 +43,12 @@ function archive {
   if [[ -d ${RALLY_DIR} ]]; then
     find ${RALLY_DIR} -name "*.log" -printf "%P\\0" | tar -cvjf ${RALLY_DIR}/${BUILD_NUMBER}.tar.bz2 -C ${RALLY_DIR} --transform "s,^,ci-${BUILD_NUMBER}/," --null -T -
   else
-    echo "Rally directory not present, this should not happen"
+    echo "Rally directory [${RALLY_DIR}] not present. Ensure the RALLY_DIR environment variable is correct"
     exit 1
   fi
 }
 
-if declare -f "$1" > /dev/null; then
+if declare -F "$1" > /dev/null; then
     $1
     exit
 else
