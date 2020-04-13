@@ -25,6 +25,7 @@ import tabulate
 from esrally import metrics, time, exceptions
 from esrally.metrics import MetaInfoScope
 from esrally.utils import io, sysstats, console, opts, process
+from esrally.utils.versions import components
 
 
 def list_telemetry():
@@ -547,8 +548,8 @@ class NodeStats(TelemetryDevice):
     command = "node-stats"
     human_name = "Node Stats"
     help = "Regularly samples node stats"
-    warning = """You have enabled the node-stats telemetry device, but requests to the _nodes/stats Elasticsearch endpoint
-          trigger additional refreshes and WILL SKEW results.
+    warning = """You have enabled the node-stats telemetry device with Elasticsearch < 7.2.0. Requests to the
+          _nodes/stats Elasticsearch endpoint trigger additional refreshes and WILL SKEW results.
     """
 
     def __init__(self, telemetry_params, clients, metrics_store):
@@ -560,7 +561,12 @@ class NodeStats(TelemetryDevice):
         self.samplers = []
 
     def on_benchmark_start(self):
-        console.warn(NodeStats.warning, logger=self.logger)
+        default_client = self.clients["default"]
+        distribution_version = default_client.info()["version"]["number"]
+        major, minor = components(distribution_version)[:2]
+
+        if major < 7 or (major == 7 and minor < 2):
+            console.warn(NodeStats.warning, logger=self.logger)
 
         for cluster_name in self.specified_cluster_names:
             recorder = NodeStatsRecorder(self.telemetry_params, cluster_name, self.clients[cluster_name], self.metrics_store)
