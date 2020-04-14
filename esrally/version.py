@@ -42,6 +42,8 @@ def revision():
 
 
 def version():
+    # Disabled not because this is an actual issue here but it is occasionally reported by pylint in CI.
+    # pylint:disable=invalid-docstring-quote
     """
     :return: The release version string and an optional suffix for the current git revision if Rally is installed in development mode.
     """
