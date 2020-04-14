@@ -191,7 +191,8 @@ disable=print-statement,
         W0404,
         W0612,
         W0613,
-        W0621
+        W0621,
+        invalid-docstring-quote
 
 
 # Enable the message, report, category or checker with the given id(s). You can
