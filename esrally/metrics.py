@@ -87,9 +87,9 @@ class EsClient:
         # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
         import elasticsearch.helpers
         if self._cluster_version[0] > 6:
-            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index)
+            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
         else:
-            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
+            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type, chunk_size=5000)
 
     def index(self, index, doc_type, item, id=None):
         doc = {
