@@ -77,7 +77,7 @@ node-stats
 
 .. warning::
 
-    With ``Elasticsearch < 7.2.0``, this telemetry device will skew your results because the node-stats API triggers additional refreshes.
+    With ``Elasticsearch < 7.2.0``, using this telemetry device will skew your results because the node-stats API triggers additional refreshes.
     Additionally a lot of metrics get recorded impacting the measurement results even further.
 
 The node-stats telemetry device regularly calls the `cluster node-stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records metrics from the following sections:
