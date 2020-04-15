@@ -240,8 +240,10 @@ class AsyncDriver:
                 for sub_task in task:
                     self.current_tasks.append(sub_task)
                     self.logger.info("Running task [%s] with [%d] clients...", sub_task.name, sub_task.clients)
+                    # A parameter source should only be created once per task - it is partitioned later on per client.
+                    param_source = track.operation_parameters(self.track, task)
                     for client_id in range(sub_task.clients):
-                        schedule = driver.schedule_for(self.track, sub_task, client_id)
+                        schedule = driver.schedule_for(param_source, sub_task, client_id)
                         # used to indicate that we want to prematurely consider this completed. This is *not* due to
                         # cancellation but a regular event in a benchmark and used to model task dependency of parallel tasks.
                         complete = threading.Event()

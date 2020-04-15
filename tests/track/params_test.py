@@ -581,76 +581,76 @@ class InvocationGeneratorTests(TestCase):
         self.assertEqual(1, i1.exit_count)
 
     def test_calculate_bounds(self):
-        self.assertEqual((0, 1000, 1000), params.bounds(1000, 0, 1, includes_action_and_meta_data=False))
-        self.assertEqual((0, 1000, 2000), params.bounds(1000, 0, 1, includes_action_and_meta_data=True))
+        self.assertEqual((0, 1000, 1000), params.bounds(1000, 0, 0, 1, includes_action_and_meta_data=False))
+        self.assertEqual((0, 1000, 2000), params.bounds(1000, 0, 0, 1, includes_action_and_meta_data=True))
 
-        self.assertEqual((  0, 500, 500), params.bounds(1000, 0, 2, includes_action_and_meta_data=False))
-        self.assertEqual((500, 500, 500), params.bounds(1000, 1, 2, includes_action_and_meta_data=False))
+        self.assertEqual((  0, 500, 500), params.bounds(1000, 0, 0, 2, includes_action_and_meta_data=False))
+        self.assertEqual((500, 500, 500), params.bounds(1000, 1, 1, 2, includes_action_and_meta_data=False))
 
-        self.assertEqual((   0, 200, 400), params.bounds(800, 0, 4, includes_action_and_meta_data=True))
-        self.assertEqual(( 400, 200, 400), params.bounds(800, 1, 4, includes_action_and_meta_data=True))
-        self.assertEqual(( 800, 200, 400), params.bounds(800, 2, 4, includes_action_and_meta_data=True))
-        self.assertEqual((1200, 200, 400), params.bounds(800, 3, 4, includes_action_and_meta_data=True))
+        self.assertEqual((   0, 200, 400), params.bounds(800, 0, 0, 4, includes_action_and_meta_data=True))
+        self.assertEqual(( 400, 200, 400), params.bounds(800, 1, 1, 4, includes_action_and_meta_data=True))
+        self.assertEqual(( 800, 200, 400), params.bounds(800, 2, 2, 4, includes_action_and_meta_data=True))
+        self.assertEqual((1200, 200, 400), params.bounds(800, 3, 3, 4, includes_action_and_meta_data=True))
 
-        self.assertEqual((   0, 250, 250), params.bounds(2000, 0, 8, includes_action_and_meta_data=False))
-        self.assertEqual(( 250, 250, 250), params.bounds(2000, 1, 8, includes_action_and_meta_data=False))
-        self.assertEqual(( 500, 250, 250), params.bounds(2000, 2, 8, includes_action_and_meta_data=False))
-        self.assertEqual(( 750, 250, 250), params.bounds(2000, 3, 8, includes_action_and_meta_data=False))
-        self.assertEqual((1000, 250, 250), params.bounds(2000, 4, 8, includes_action_and_meta_data=False))
-        self.assertEqual((1250, 250, 250), params.bounds(2000, 5, 8, includes_action_and_meta_data=False))
-        self.assertEqual((1500, 250, 250), params.bounds(2000, 6, 8, includes_action_and_meta_data=False))
-        self.assertEqual((1750, 250, 250), params.bounds(2000, 7, 8, includes_action_and_meta_data=False))
+        self.assertEqual((   0, 250, 250), params.bounds(2000, 0, 0, 8, includes_action_and_meta_data=False))
+        self.assertEqual(( 250, 250, 250), params.bounds(2000, 1, 1, 8, includes_action_and_meta_data=False))
+        self.assertEqual(( 500, 250, 250), params.bounds(2000, 2, 2, 8, includes_action_and_meta_data=False))
+        self.assertEqual(( 750, 250, 250), params.bounds(2000, 3, 3, 8, includes_action_and_meta_data=False))
+        self.assertEqual((1000, 250, 250), params.bounds(2000, 4, 4, 8, includes_action_and_meta_data=False))
+        self.assertEqual((1250, 250, 250), params.bounds(2000, 5, 5, 8, includes_action_and_meta_data=False))
+        self.assertEqual((1500, 250, 250), params.bounds(2000, 6, 6, 8, includes_action_and_meta_data=False))
+        self.assertEqual((1750, 250, 250), params.bounds(2000, 7, 7, 8, includes_action_and_meta_data=False))
 
     def test_calculate_non_multiple_bounds(self):
         # in this test case, each client would need to read 1333.3333 lines. Instead we let most clients read 1333
         # lines and every third client, one line more (1334).
-        self.assertEqual((    0, 1333, 1333), params.bounds(16000,  0, 12, includes_action_and_meta_data=False))
-        self.assertEqual(( 1333, 1334, 1334), params.bounds(16000,  1, 12, includes_action_and_meta_data=False))
-        self.assertEqual(( 2667, 1333, 1333), params.bounds(16000,  2, 12, includes_action_and_meta_data=False))
-        self.assertEqual(( 4000, 1333, 1333), params.bounds(16000,  3, 12, includes_action_and_meta_data=False))
-        self.assertEqual(( 5333, 1334, 1334), params.bounds(16000,  4, 12, includes_action_and_meta_data=False))
-        self.assertEqual(( 6667, 1333, 1333), params.bounds(16000,  5, 12, includes_action_and_meta_data=False))
-        self.assertEqual(( 8000, 1333, 1333), params.bounds(16000,  6, 12, includes_action_and_meta_data=False))
-        self.assertEqual(( 9333, 1334, 1334), params.bounds(16000,  7, 12, includes_action_and_meta_data=False))
-        self.assertEqual((10667, 1333, 1333), params.bounds(16000,  8, 12, includes_action_and_meta_data=False))
-        self.assertEqual((12000, 1333, 1333), params.bounds(16000,  9, 12, includes_action_and_meta_data=False))
-        self.assertEqual((13333, 1334, 1334), params.bounds(16000, 10, 12, includes_action_and_meta_data=False))
-        self.assertEqual((14667, 1333, 1333), params.bounds(16000, 11, 12, includes_action_and_meta_data=False))
+        self.assertEqual((    0, 1333, 1333), params.bounds(16000,  0,  0, 12, includes_action_and_meta_data=False))
+        self.assertEqual(( 1333, 1334, 1334), params.bounds(16000,  1,  1, 12, includes_action_and_meta_data=False))
+        self.assertEqual(( 2667, 1333, 1333), params.bounds(16000,  2,  2, 12, includes_action_and_meta_data=False))
+        self.assertEqual(( 4000, 1333, 1333), params.bounds(16000,  3,  3, 12, includes_action_and_meta_data=False))
+        self.assertEqual(( 5333, 1334, 1334), params.bounds(16000,  4,  4, 12, includes_action_and_meta_data=False))
+        self.assertEqual(( 6667, 1333, 1333), params.bounds(16000,  5,  5, 12, includes_action_and_meta_data=False))
+        self.assertEqual(( 8000, 1333, 1333), params.bounds(16000,  6,  6, 12, includes_action_and_meta_data=False))
+        self.assertEqual(( 9333, 1334, 1334), params.bounds(16000,  7,  7, 12, includes_action_and_meta_data=False))
+        self.assertEqual((10667, 1333, 1333), params.bounds(16000,  8,  8, 12, includes_action_and_meta_data=False))
+        self.assertEqual((12000, 1333, 1333), params.bounds(16000,  9,  9, 12, includes_action_and_meta_data=False))
+        self.assertEqual((13333, 1334, 1334), params.bounds(16000, 10, 10, 12, includes_action_and_meta_data=False))
+        self.assertEqual((14667, 1333, 1333), params.bounds(16000, 11, 11, 12, includes_action_and_meta_data=False))
 
         # With 3500 docs and 6 clients, every client needs to read 583.33 docs. We have two lines per doc, which makes it
         # 2 * 583.333 docs = 1166.6666 lines per client. We let them read 1166 and 1168 lines respectively (583 and 584 docs).
-        self.assertEqual((   0, 583, 1166), params.bounds(3500, 0, 6, includes_action_and_meta_data=True))
-        self.assertEqual((1166, 584, 1168), params.bounds(3500, 1, 6, includes_action_and_meta_data=True))
-        self.assertEqual((2334, 583, 1166), params.bounds(3500, 2, 6, includes_action_and_meta_data=True))
-        self.assertEqual((3500, 583, 1166), params.bounds(3500, 3, 6, includes_action_and_meta_data=True))
-        self.assertEqual((4666, 584, 1168), params.bounds(3500, 4, 6, includes_action_and_meta_data=True))
-        self.assertEqual((5834, 583, 1166), params.bounds(3500, 5, 6, includes_action_and_meta_data=True))
+        self.assertEqual((   0, 583, 1166), params.bounds(3500, 0, 0, 6, includes_action_and_meta_data=True))
+        self.assertEqual((1166, 584, 1168), params.bounds(3500, 1, 1, 6, includes_action_and_meta_data=True))
+        self.assertEqual((2334, 583, 1166), params.bounds(3500, 2, 2, 6, includes_action_and_meta_data=True))
+        self.assertEqual((3500, 583, 1166), params.bounds(3500, 3, 3, 6, includes_action_and_meta_data=True))
+        self.assertEqual((4666, 584, 1168), params.bounds(3500, 4, 4, 6, includes_action_and_meta_data=True))
+        self.assertEqual((5834, 583, 1166), params.bounds(3500, 5, 5, 6, includes_action_and_meta_data=True))
 
     def test_calculate_number_of_bulks(self):
         docs1 = self.docs(1)
         docs2 = self.docs(2)
 
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 1, 1))
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 1, 2))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 0, 1, 1))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 0, 1, 2))
         self.assertEqual(20, self.number_of_bulks(
             [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 1, 1))
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 1))
         self.assertEqual(11, self.number_of_bulks(
             [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 1, 2))
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 2))
         self.assertEqual(11, self.number_of_bulks(
             [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 1, 3))
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 3))
         self.assertEqual(11, self.number_of_bulks(
             [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 1, 100))
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 100))
 
-        self.assertEqual(2, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 3, 250))
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 3, 267))
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 0, 3, 267))
+        self.assertEqual(2, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 0, 3, 250))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 0, 3, 267))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 0, 0, 3, 267))
         # this looks odd at first but we are prioritizing number of clients above bulk size
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 1, 3, 267))
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 2, 3, 267))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 1, 1, 3, 267))
+        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 2, 2, 3, 267))
 
     @staticmethod
     def corpus(name, docs):
@@ -661,8 +661,8 @@ class InvocationGeneratorTests(TestCase):
         return track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=num_docs)
 
     @staticmethod
-    def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
-        return params.number_of_bulks(corpora, partition_index, total_partitions, bulk_size)
+    def number_of_bulks(corpora, first_partition_index, last_partition_index, total_partitions, bulk_size):
+        return params.number_of_bulks(corpora, first_partition_index, last_partition_index, total_partitions, bulk_size)
 
     def test_build_conflicting_ids(self):
         self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 3, 0))
@@ -890,6 +890,7 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         partition = source.partition(0, 1)
+        partition._init_internal_params()
         # # no ingest-percentage specified, should issue all one hundred bulk requests
         self.assertEqual(100, partition.total_bulks)
 
@@ -941,6 +942,7 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         partition = source.partition(0, 1)
+        partition._init_internal_params()
         # should issue three bulks of size 10.000
         self.assertEqual(3, partition.total_bulks)
         self.assertEqual(3, len(list(schedule(partition))))
@@ -1001,7 +1003,7 @@ class BulkDataGeneratorTests(TestCase):
                             )
         ])
 
-        bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus],
+        bulks = params.bulk_data_based(num_clients=1, start_client_index=0, end_client_index=0, corpora=[corpus],
                                        batch_size=5, bulk_size=5,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
                                        recency=None, pipeline=None,
@@ -1015,7 +1017,6 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual({
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
-            "bulk-id": "0-1",
             "bulk-size": 5,
             "index": "test-idx",
             "type": "test-type",
@@ -1026,7 +1027,6 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual({
             "action-metadata-present": True,
             "body": ["6", "7", "8"],
-            "bulk-id": "0-2",
             "bulk-size": 3,
             "index": "test-idx",
             "type": "test-type",
@@ -1059,7 +1059,7 @@ class BulkDataGeneratorTests(TestCase):
 
             ]
 
-        bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=corpora,
+        bulks = params.bulk_data_based(num_clients=1, start_client_index=0, end_client_index=0, corpora=corpora,
                                        batch_size=5, bulk_size=5,
                                        id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
                                        recency=None, pipeline=None,
@@ -1073,7 +1073,6 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual({
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
-            "bulk-id": "0-1",
             "bulk-size": 5,
             "index": "logs-2018-01",
             "type": "docs",
@@ -1084,7 +1083,6 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual({
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
-            "bulk-id": "0-2",
             "bulk-size": 5,
             "index": "logs-2018-02",
             "type": "docs",
@@ -1095,7 +1093,6 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual({
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
-            "bulk-id": "0-3",
             "bulk-size": 5,
             "index": "logs-2017-01",
             "type": "docs",
@@ -1112,8 +1109,9 @@ class BulkDataGeneratorTests(TestCase):
                             )
         ])
 
-        bulks = params.bulk_data_based(num_clients=1, client_index=0, corpora=[corpus], batch_size=3, bulk_size=3,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
+        bulks = params.bulk_data_based(num_clients=1, start_client_index=0, end_client_index=0, corpora=[corpus],
+                                       batch_size=3, bulk_size=3, id_conflicts=params.IndexIdConflict.NoConflicts,
+                                       conflict_probability=None, on_conflict=None,
                                        recency=None, pipeline=None,
                                        original_params={
                                            "body": "foo",
@@ -1126,7 +1124,6 @@ class BulkDataGeneratorTests(TestCase):
         self.assertEqual({
             "action-metadata-present": True,
             "body": ["1", "2", "3"],
-            "bulk-id": "0-1",
             "bulk-size": 3,
             "index": "test-idx",
             "type": "test-type",
