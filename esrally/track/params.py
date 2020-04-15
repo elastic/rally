@@ -774,8 +774,8 @@ def bulk_data_based(num_clients, start_client_index, end_client_index, corpora, 
                       intended for testing only.
     :return: A generator for the bulk operations of the given client.
     """
-    readers = create_readers(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict,
-                             recency, create_reader)
+    readers = create_readers(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size,
+                             id_conflicts, conflict_probability, on_conflict, recency, create_reader)
     return bulk_generator(chain(*readers), pipeline, original_params)
 
 
