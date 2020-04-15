@@ -99,7 +99,7 @@ class StartupTimeTests(TestCase):
 
 
 class Client:
-    def __init__(self, nodes=None, info=None, indices=None, transport_client=None):
+    def __init__(self, nodes=None, info=None, indices=None, transport_client=None, version="7.2.0"):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
@@ -840,14 +840,14 @@ class RecoveryStatsTests(TestCase):
 
 
 class NodeStatsTests(TestCase):
-    warning = """You have enabled the node-stats telemetry device, but requests to the _nodes/stats Elasticsearch endpoint
-          trigger additional refreshes and WILL SKEW results.
+    warning = """You have enabled the node-stats telemetry device with Elasticsearch < 7.2.0. Requests to the
+          _nodes/stats Elasticsearch endpoint trigger additional refreshes and WILL SKEW results.
     """
 
     @mock.patch("esrally.telemetry.NodeStatsRecorder", mock.Mock())
     @mock.patch("esrally.telemetry.SamplerThread", mock.Mock())
     def test_prints_warning_using_node_stats(self):
-        clients = {"default": Client()}
+        clients = {"default": Client(info={"version": {"number": "7.1.0"}})}
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         telemetry_params = {
@@ -861,6 +861,21 @@ class NodeStatsTests(TestCase):
             NodeStatsTests.warning,
             logger=t.logger
         )
+
+    @mock.patch("esrally.telemetry.NodeStatsRecorder", mock.Mock())
+    @mock.patch("esrally.telemetry.SamplerThread", mock.Mock())
+    def test_no_warning_using_node_stats_after_version(self):
+        clients = {"default": Client(info={"version": {"number": "7.2.0"}})}
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "node-stats-sample-interval": random.randint(1, 100)
+        }
+        t = telemetry.NodeStats(telemetry_params, clients, metrics_store)
+
+        with mock.patch.object(console, "warn") as mocked_console_warn:
+            t.on_benchmark_start()
+        mocked_console_warn.assert_not_called()
 
 
 class NodeStatsRecorderTests(TestCase):
