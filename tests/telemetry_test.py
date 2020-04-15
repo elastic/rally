@@ -99,7 +99,7 @@ class StartupTimeTests(TestCase):
 
 
 class Client:
-    def __init__(self, nodes=None, info=None, indices=None, transport_client=None, version="7.2.0"):
+    def __init__(self, nodes=None, info=None, indices=None, transport_client=None):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
