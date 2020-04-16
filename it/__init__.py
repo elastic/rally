@@ -28,6 +28,7 @@ from esrally.utils import process, io
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.1.1"]
+TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 
 
 def all_rally_configs(t):
@@ -67,7 +68,7 @@ def rally_es(t):
 
 
 def esrally(cfg, command_line):
-    return os.system("esrally {}  --kill-running-processes --configuration-name=\"{}\"".format(command_line, cfg))
+    return os.system("esrally {} --kill-running-processes --configuration-name=\"{}\"".format(command_line, cfg))
 
 
 def wait_until_port_is_free(port_number=39200, timeout=120):
