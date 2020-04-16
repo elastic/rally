@@ -844,10 +844,11 @@ class Worker(actor.RallyActor):
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.info("Worker[%s] is exiting due to ActorExitRequest.", str(self.worker_id))
+        self.logger.info("Worker[%s] has received ActorExitRequest.", str(self.worker_id))
         if self.executor_future is not None and self.executor_future.running():
             self.cancel.set()
-            self.pool.shutdown()
+        self.pool.shutdown()
+        self.logger.info("Worker[%s] is exiting due to ActorExitRequest.", str(self.worker_id))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our no_retry infrastructure; forward to master
