@@ -1167,7 +1167,7 @@ class AsyncIoAdapter:
             #
             # Now we need to ensure that we start partitioning parameters correctly in both cases. And that means we
             # need to start from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
-            schedule = schedule_for(params_per_task[task], task, task_allocation.client_index_in_task)
+            schedule = schedule_for(task, task_allocation.client_index_in_task, params_per_task[task])
             async_executor = AsyncExecutor(
                 client_id, task, schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
@@ -1519,13 +1519,13 @@ class Allocator:
 
 # Runs a concrete schedule on one worker client
 # Needs to determine the runners and concrete iterations per client.
-def schedule_for(parameter_source, task, client_index):
+def schedule_for(task, client_index, parameter_source):
     """
     Calculates a client's schedule for a given task.
 
-    :param parameter_source: The current track.
     :param task: The task that should be executed.
     :param client_index: The current client index.  Must be in the range [0, `task.clients').
+    :param parameter_source: The parameter source that should be used for this task.
     :return: A generator for the operations the given client needs to perform for this task.
     """
     logger = logging.getLogger(__name__)

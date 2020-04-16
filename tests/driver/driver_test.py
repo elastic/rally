@@ -683,7 +683,7 @@ class SchedulerTests(TestCase):
         task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
                           warmup_iterations=3, iterations=5, clients=1, params={"target-throughput": 10, "clients": 1})
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 1 / 8, {}),
@@ -702,7 +702,7 @@ class SchedulerTests(TestCase):
         task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
                           warmup_iterations=1, iterations=5, clients=2, params={"target-throughput": 10, "clients": 2})
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 1 / 6, {}),
@@ -722,7 +722,7 @@ class SchedulerTests(TestCase):
                           clients=1, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 3, {"body": ["a"], "size": 3}),
@@ -737,7 +737,7 @@ class SchedulerTests(TestCase):
                           warmup_iterations=2, clients=1, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Warmup, 1 / 5, {"body": ["a"], "size": 5}),
@@ -755,7 +755,7 @@ class SchedulerTests(TestCase):
                           clients=1, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 1, {"body": ["a"]}),
@@ -768,7 +768,7 @@ class SchedulerTests(TestCase):
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 11, {"body": ["a"], "size": 11}),
@@ -791,7 +791,7 @@ class SchedulerTests(TestCase):
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
@@ -808,7 +808,7 @@ class SchedulerTests(TestCase):
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 5, {"body": ["a"], "size": 5}),
@@ -827,7 +827,7 @@ class SchedulerTests(TestCase):
                           params={"target-throughput": 1, "clients": 1})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
@@ -844,7 +844,7 @@ class SchedulerTests(TestCase):
                           clients=1)
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule_handle = driver.schedule_for(param_source, task, 0)
+        schedule_handle = driver.schedule_for(task, 0, param_source)
         schedule = schedule_handle()
 
         last_progress = -1
@@ -933,7 +933,7 @@ class AsyncExecutorTests(TestCase):
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4)
         param_source = track.operation_parameters(test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         sampler = driver.Sampler(start_timestamp=time.perf_counter())
         cancel = threading.Event()
@@ -991,7 +991,7 @@ class AsyncExecutorTests(TestCase):
             "size": None
         }, param_source="driver-test-param-source"), warmup_time_period=0, clients=4)
         param_source = track.operation_parameters(test_track, task)
-        schedule = driver.schedule_for(param_source, task, 0)
+        schedule = driver.schedule_for(task, 0, param_source)
 
         sampler = driver.Sampler(start_timestamp=time.perf_counter())
         cancel = threading.Event()
@@ -1066,7 +1066,7 @@ class AsyncExecutorTests(TestCase):
             complete = threading.Event()
 
             param_source = track.operation_parameters(test_track, task)
-            schedule = driver.schedule_for(param_source, task, 0)
+            schedule = driver.schedule_for(task, 0, param_source)
             execute_schedule = driver.AsyncExecutor(client_id=0,
                                                     task=task,
                                                     schedule=schedule,
@@ -1113,7 +1113,7 @@ class AsyncExecutorTests(TestCase):
                               params={"target-throughput": target_throughput, "clients": 4})
 
             param_source = track.operation_parameters(test_track, task)
-            schedule = driver.schedule_for(param_source, task, 0)
+            schedule = driver.schedule_for(task, 0, param_source)
             sampler = driver.Sampler(start_timestamp=0)
 
             cancel = threading.Event()
