@@ -582,11 +582,11 @@ class Driver:
             self.metrics_store.close()
 
     def update_samples(self, samples):
-        self.raw_samples += samples
         if len(samples) > 0:
-            most_recent = samples[-1]
-            # TODO: We need to change this similarly to async_driver as there are more clients now per worker
-            self.most_recent_sample_per_client[most_recent.client_id] = most_recent
+            self.raw_samples += samples
+            # We need to check all samples, they will be from different clients
+            for s in samples:
+                self.most_recent_sample_per_client[s.client_id] = s
 
     def update_progress_message(self, task_finished=False):
         if not self.quiet and self.current_step >= 0:
