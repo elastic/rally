@@ -256,18 +256,6 @@ function test_configure {
     esrally configure --assume-defaults --configuration-name="config-integration-test"
 }
 
-function test_info {
-    local cfg
-    random_configuration cfg
-
-    info "test info [${cfg}]"
-    esrally info --configuration-name="${cfg}" --track=geonames --challenge=append-no-conflicts
-    info "test info can also use a track repository [${cfg}]"
-    esrally info --configuration-name="${cfg}" --track-repository=default --track=geonames
-    info "test info with task filter [${cfg}]"
-    esrally info --configuration-name="${cfg}" --track=geonames --challenge=append-no-conflicts --include-tasks="type:search"
-}
-
 function test_download {
     local cfg
     random_configuration cfg

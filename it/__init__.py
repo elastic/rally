@@ -66,7 +66,7 @@ def rally_es(t):
 
 
 def esrally(cfg, command_line):
-    return os.system("esrally {} --configuration-name=\"{}\"".format(command_line, cfg))
+    return os.system("esrally {}  --kill-running-processes --configuration-name=\"{}\"".format(command_line, cfg))
 
 
 def wait_until_port_is_free(port_number=39200, timeout=120):
