@@ -27,6 +27,7 @@ from esrally import client
 from esrally.utils import process, io
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
+DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.1.1"]
 
 
 def all_rally_configs(t):

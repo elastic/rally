@@ -256,19 +256,6 @@ function test_configure {
     esrally configure --assume-defaults --configuration-name="config-integration-test"
 }
 
-function test_download {
-    local cfg
-    random_configuration cfg
-
-    for dist in "${DISTRIBUTIONS[@]}"
-    do
-        random_configuration cfg
-        info "test download [--configuration-name=${cfg}], [--distribution-version=${dist}]"
-        kill_rally_processes
-        esrally download --configuration-name="${cfg}" --distribution-version="${dist}" --quiet
-    done
-}
-
 function test_distributions {
     local cfg
 
