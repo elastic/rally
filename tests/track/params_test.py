@@ -674,30 +674,66 @@ class InvocationGeneratorTests(TestCase):
 
 class BulkIndexParamSourceTests(TestCase):
     def test_create_without_params(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={})
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={})
 
         self.assertEqual("Mandatory parameter 'bulk-size' is missing", ctx.exception.args[0])
 
-    def test_create_with_non_numeric_bulk_size(self):
+    def test_create_without_corpora_definition(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={})
+
+        self.assertEqual("There is no document corpora definition for track unit-test. "
+                         "You must add at least one before making bulk requests to Elasticsearch.", ctx.exception.args[0])
+
+
+    def test_create_with_non_numeric_bulk_size(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": "Three"
             })
 
         self.assertEqual("'bulk-size' must be numeric", ctx.exception.args[0])
 
     def test_create_with_negative_bulk_size(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": -5
             })
 
         self.assertEqual("'bulk-size' must be positive but was -5", ctx.exception.args[0])
 
     def test_create_with_fraction_smaller_batch_size(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5,
                 "batch-size": 3
             })
@@ -705,8 +741,15 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual("'batch-size' must be greater than or equal to 'bulk-size'", ctx.exception.args[0])
 
     def test_create_with_fraction_larger_batch_size(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5,
                 "batch-size": 8
             })
@@ -748,8 +791,15 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual("Unknown 'on-conflict' setting [delete]", ctx.exception.args[0])
 
     def test_create_with_ingest_percentage_too_low(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5000,
                 "ingest-percentage": 0.0
             })
@@ -757,8 +807,15 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual("'ingest-percentage' must be in the range (0.0, 100.0] but was 0.0", ctx.exception.args[0])
 
     def test_create_with_ingest_percentage_too_high(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5000,
                 "ingest-percentage": 100.1
             })
@@ -766,8 +823,15 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual("'ingest-percentage' must be in the range (0.0, 100.0] but was 100.1", ctx.exception.args[0])
 
     def test_create_with_ingest_percentage_not_numeric(self):
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5000,
                 "ingest-percentage": "100 percent"
             })
@@ -775,7 +839,14 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual("'ingest-percentage' must be numeric", ctx.exception.args[0])
 
     def test_create_valid_param_source(self):
-        self.assertIsNotNone(params.BulkIndexParamSource(track.Track(name="unit-test"), params={
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
+        self.assertIsNotNone(params.BulkIndexParamSource(track.Track(name="unit-test", corpora=[corpus]), params={
             "conflicts": "random",
             "bulk-size": 5000,
             "batch-size": 20000,
@@ -946,7 +1017,14 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual(3, len(list(schedule(partition))))
 
     def test_create_with_conflict_probability_zero(self):
-        params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+        corpus = track.DocumentCorpus(name="default", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            number_of_documents=10,
+                            target_index="test-idx",
+                            target_type="test-type"
+                            )])
+
+        params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
             "bulk-size": 5000,
             "conflicts": "sequential",
             "conflict-probability": 0
