@@ -459,7 +459,7 @@ class BulkIndexParamSource(ParamSource):
         self.corpora = self.used_corpora(track, params)
 
         if len(self.corpora) == 0:
-            raise exceptions.InvalidSyntax(f"There is no document corpora definition for track {track}. You must add at "
+            raise exceptions.InvalidSyntax(f"There is no document corpus definition for track {track}. You must add at "
                                            f"least one before making bulk requests to Elasticsearch.")
 
         for corpus in self.corpora:

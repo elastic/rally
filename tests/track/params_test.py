@@ -690,7 +690,7 @@ class BulkIndexParamSourceTests(TestCase):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={})
 
-        self.assertEqual("There is no document corpora definition for track unit-test. "
+        self.assertEqual("There is no document corpus definition for track unit-test. "
                          "You must add at least one before making bulk requests to Elasticsearch.", ctx.exception.args[0])
 
 
