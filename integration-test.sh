@@ -256,57 +256,6 @@ function test_configure {
     esrally configure --assume-defaults --configuration-name="config-integration-test"
 }
 
-function test_info {
-    local cfg
-    random_configuration cfg
-
-    info "test info [${cfg}]"
-    esrally info --configuration-name="${cfg}" --track=geonames --challenge=append-no-conflicts
-    info "test info can also use a track repository [${cfg}]"
-    esrally info --configuration-name="${cfg}" --track-repository=default --track=geonames
-    info "test info with task filter [${cfg}]"
-    esrally info --configuration-name="${cfg}" --track=geonames --challenge=append-no-conflicts --include-tasks="type:search"
-}
-
-function test_download {
-    local cfg
-    random_configuration cfg
-
-    for dist in "${DISTRIBUTIONS[@]}"
-    do
-        random_configuration cfg
-        info "test download [--configuration-name=${cfg}], [--distribution-version=${dist}]"
-        kill_rally_processes
-        esrally download --configuration-name="${cfg}" --distribution-version="${dist}" --quiet
-    done
-}
-
-function test_distributions {
-    local cfg
-
-    for dist in "${DISTRIBUTIONS[@]}"
-    do
-        for track in "${TRACKS[@]}"
-        do
-            random_configuration cfg
-            info "test distributions [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--car=4gheap]"
-            kill_rally_processes
-            wait_for_free_es_port
-            esrally --configuration-name="${cfg}" --on-error=abort --distribution-version="${dist}" --track="${track}" --test-mode --car=4gheap
-        done
-    done
-}
-
-function test_docker {
-    local cfg
-    # only test the most recent Docker distribution
-    local dist="${DISTRIBUTIONS[${#DISTRIBUTIONS[@]}-1]}"
-    random_configuration cfg
-    info "test docker [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=geonames], [--car=4gheap]"
-    kill_rally_processes
-    esrally --configuration-name="${cfg}" --on-error=abort --pipeline="docker" --distribution-version="${dist}" --track="geonames" --challenge="append-no-conflicts-index-only" --test-mode --car=4gheap --target-hosts=127.0.0.1:19200
-}
-
 function test_distribution_fails_with_wrong_track_params {
     local cfg
     local distribution
@@ -567,16 +516,8 @@ function run_test {
     fi
     echo "**************************************** TESTING CONFIGURATION OF RALLY ****************************************"
     test_configure
-    echo "**************************************** TESTING RALLY INFO COMMAND ********************************************"
-    test_info
     echo "**************************************** TESTING RALLY FAILS WITH UNUSED TRACK-PARAMS **************************"
     test_distribution_fails_with_wrong_track_params
-    echo "**************************************** TESTING RALLY DOWNLOAD COMMAND ***********************************"
-    test_download
-    echo "**************************************** TESTING RALLY WITH ES DISTRIBUTIONS ***********************************"
-    test_distributions
-    echo "**************************************** TESTING RALLY WITH ES DOCKER IMAGE ***********************************"
-    test_docker
     echo "**************************************** TESTING RALLY BENCHMARK-ONLY PIPELINE *********************************"
     test_benchmark_only
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
