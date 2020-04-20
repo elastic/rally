@@ -27,7 +27,7 @@ from esrally import client
 from esrally.utils import process, io
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
-DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.1.1"]
+DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.6.0"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 
 
@@ -112,22 +112,23 @@ class ConfigFile:
 
 
 class TestCluster:
-    def __init__(self, cfg):
+    def __init__(self,cfg):
         self.cfg = cfg
         self.installation_id = None
         self.http_port = None
 
-    def install(self, distribution_version, node_name, http_port):
+    def install(self, distribution_version, node_name, car, http_port):
         self.http_port = http_port
         transport_port = http_port + 100
         try:
             output = process.run_subprocess_with_output(
                 "esrally install --configuration-name={cfg} --quiet --distribution-version={dist} --build-type=tar "
-                "--http-port={http_port} --node={node_name} --master-nodes={node_name} "
+                "--http-port={http_port} --node={node_name} --master-nodes={node_name} --car={car} "
                 "--seed-hosts=\"127.0.0.1:{transport_port}\"".format(cfg=self.cfg,
                                                                      dist=distribution_version,
                                                                      http_port=http_port,
                                                                      node_name=node_name,
+                                                                     car=car,
                                                                      transport_port=transport_port))
             self.installation_id = json.loads("".join(output))["installation-id"]
         except BaseException as e:
@@ -145,6 +146,9 @@ class TestCluster:
             if esrally(self.cfg, "stop --installation-id={}".format(self.installation_id)) != 0:
                 raise AssertionError("Failed to stop Elasticsearch test cluster.")
 
+    def __str__(self):
+        return f"TestCluster[installation-id={self.installation_id}]"
+
 
 class EsMetricsStore:
     VERSION = "7.6.0"
@@ -153,7 +157,10 @@ class EsMetricsStore:
         self.cluster = TestCluster("in-memory-it")
 
     def start(self):
-        self.cluster.install(distribution_version=EsMetricsStore.VERSION, node_name="metrics-store", http_port=10200)
+        self.cluster.install(distribution_version=EsMetricsStore.VERSION,
+                             node_name="metrics-store",
+                             car="defaults",
+                             http_port=10200)
         self.cluster.start(race_id="metrics-store")
 
     def stop(self):

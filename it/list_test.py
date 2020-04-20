@@ -36,6 +36,7 @@ def test_list_elasticsearch_plugins(cfg):
 @it.rally_in_mem
 def test_list_tracks(cfg):
     assert it.esrally(cfg, "list tracks") == 0
+    assert it.esrally(cfg, "list tracks --track-repository=eventdata") == 0
     assert it.esrally(cfg, "list tracks --track-repository=default "
                            "--track-revision=4080dc9850d07e23b6fc7cfcdc7cf57b14e5168d") == 0
 
