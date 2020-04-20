@@ -326,7 +326,7 @@ class BulkIndex(Runner):
 
         * ``index``: name of the affected index. May be `None` if it could not be derived.
         * ``bulk-size``: bulk size, e.g. 5.000.
-        * ``bulk-request-size-bytes``: size of the full bulk requset in bytes
+        * ``bulk-request-size-bytes``: size of the full bulk request in bytes
         * ``total-document-size-bytes``: size of all documents contained in the bulk request in bytes
         * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
         * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
