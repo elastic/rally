@@ -42,7 +42,7 @@ def test_generate_track(cfg, tmp_path, test_cluster):
     # prepare some data
     cmd = f"--test-mode --pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} " \
           f" --track=geonames --challenge=append-no-conflicts-index-only --quiet"
-    assert it.esrally(cfg, cmd) == 0
+    assert it.race(cfg, cmd) == 0
 
     # generate the track
     track_name = f"test-track-{uuid.uuid4()}"
@@ -64,4 +64,4 @@ def test_generate_track(cfg, tmp_path, test_cluster):
 
     # run a benchmark with the generated track
     cmd = f"--test-mode --pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track-path={track_path}"
-    assert it.esrally(cfg, cmd) == 0
+    assert it.race(cfg, cmd) == 0
