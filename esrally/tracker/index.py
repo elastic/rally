@@ -16,6 +16,7 @@
 # under the License.
 
 import json
+import logging
 import os
 
 INDEX_SETTINGS_EPHEMERAL_KEYS = ["uuid",
@@ -49,39 +50,64 @@ def update_index_setting_parameters(settings):
             settings[s] = param.format(orig=orig_value)
 
 
-def extract_index_mapping_and_settings(client, index):
+def is_valid(index_name):
+    if len(index_name) == 0:
+        return False, "Index name is empty"
+    if index_name.startswith("."):
+        return False, f"Index [{index_name}] is hidden"
+    return True, None
+
+
+def extract_index_mapping_and_settings(client, index_pattern):
     """
     Calls index GET to retrieve mapping + settings, filtering settings
     so they can be used to re-create this index
     :param client: Elasticsearch client
-    :param index: name of index
+    :param index_pattern: name of index
     :return: index creation dictionary
     """
-    response = client.indices.get(index)
-    details = response[index]
+    results = {}
+    logger = logging.getLogger(__name__)
+    # the response might contain multiple indices if a wildcard was provided
+    response = client.indices.get(index_pattern)
+    for index, details in response.items():
+        valid, reason = is_valid(index)
+        if valid:
+            mappings = details["mappings"]
+            index_settings = filter_ephemeral_index_settings(details["settings"]["index"])
+            update_index_setting_parameters(index_settings)
+            results[index] = {
+                "mappings": mappings,
+                "settings": {
+                    "index": index_settings
+                }
+            }
+        else:
+            logger.info("Skipping index [%s] (reason: %s).", index, reason)
 
-    mappings = details["mappings"]
-    index_settings = filter_ephemeral_index_settings(details["settings"]["index"])
-    update_index_setting_parameters(index_settings)
-    return {"mappings": mappings, "settings": {"index": index_settings}}
+    return results
 
 
-def extract(client, outdir, index):
+def extract(client, outdir, index_pattern):
     """
     Request index information to format in "index.json" for Rally
     :param client: Elasticsearch client
     :param outdir: destination directory
-    :param index: name of index
+    :param index_pattern: name of index
     :return: Dict of template variables representing the index for use in track
     """
-    filename = index + ".json"
-    index_obj = extract_index_mapping_and_settings(client, index)
-    outpath = os.path.join(outdir, filename)
-    with open(outpath, "w") as outfile:
-        json.dump(index_obj, outfile, indent=4, sort_keys=True)
-        outfile.write("\n")
-    return {
-        "name": index,
-        "path": outpath,
-        "filename": filename,
-    }
+    results = []
+
+    index_obj = extract_index_mapping_and_settings(client, index_pattern)
+    for index, details in index_obj.items():
+        filename = f"{index}.json"
+        outpath = os.path.join(outdir, filename)
+        with open(outpath, "w") as outfile:
+            json.dump(index_obj, outfile, indent=4, sort_keys=True)
+            outfile.write("\n")
+        results.append({
+            "name": index,
+            "path": outpath,
+            "filename": filename,
+        })
+    return results

@@ -497,62 +497,6 @@ function assert_exists {
   fi
 }
 
-function test_tracker {
-    local dist
-
-    kill_rally_processes
-    wait_for_free_es_port
-
-    info "install & start es"
-    raw_install_id=$(esrally install --distribution-version="7.6.0" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
-    install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)
-
-    esrally start --quiet --installation-id="${install_id}" --race-id="rally-integration-test"
-
-    info "benchmark to load data."
-    esrally --target-host="localhost:39200" \
-        --race-id="rally-integration-test" \
-        --on-error=abort \
-        --pipeline=benchmark-only \
-        --track=geonames \
-        --test-mode \
-        --challenge=append-no-conflicts-index-only \
-        --quiet
-
-    info "Track the index."
-    track_name=$(openssl rand -hex 12)
-    estracker  --target-hosts="localhost:39200" --indices geonames --track-name ${track_name}
-
-    info "Perform some sanity checks..."
-    for file in "geonames.json" \
-        "track.json" \
-        "geonames-documents-1k.json" \
-        "geonames-documents.json" \
-        "geonames-documents-1k.json.bz2" \
-        "geonames-documents.json.bz2"; do
-        assert_exists tracks/${track_name}/${file}
-    done
-
-    assert_eq $(wc -l tracks/${track_name}/geonames-documents-1k.json | awk '{print $1}') 1000
-    assert_eq $(wc -l tracks/${track_name}/geonames-documents.json | awk '{print $1}') 1000
-
-    info "Try to race the new track"
-    esrally --target-host="localhost:39200" \
-            --race-id="rally-integration-test" \
-            --on-error=abort \
-            --pipeline=benchmark-only \
-            --track-path=tracks/${track_name} \
-            --test-mode \
-            --challenge=index-corpus \
-            --quiet
-
-    info "stop es"
-    esrally stop --quiet --installation-id="${install_id}"
-
-    info "cleanup track"
-    rm -rf tracks/${track_name}
-}
-
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
     if [[ -z "${RALLY_VERSION}" ]]; then
@@ -602,8 +546,6 @@ function run_test {
     test_docker_dev_image
     echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
     test_node_management_commands
-    echo "**************************************** TESTING RALLY TRACKER TOOL ********************************************"
-    test_tracker
     TEST_SUCCESS=1
 }
 

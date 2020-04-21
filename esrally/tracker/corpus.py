@@ -40,38 +40,34 @@ def template_vars(index_name, out_path, doc_count):
 
 
 def get_doc_outpath(outdir, name, suffix=""):
-    return os.path.join(outdir, "{}-documents{}.json".format(name, suffix))
+    return os.path.join(outdir, f"{name}-documents{suffix}.json")
 
 
-def extract(client, outdir, index):
+def extract(client, output_path, index):
     """
-    Scroll an index with a match-all query, dumping document source to
-    outdir/documents.json
-    :param client: Elasitcsearch client to scroll
-    :param outdir: Destination directory for corpus dump
+    Scroll an index with a match-all query, dumping document source to ``outdir/documents.json``.
+
+    :param client: Elasticsearch client used to extract data
+    :param output_path: Destination directory for corpus dump
     :param index: Name of index to dump
     :return: dict of properties describing the corpus for templates
     """
 
     logger = logging.getLogger(__name__)
-    outpath = get_doc_outpath(outdir, index)
 
     total_docs = client.count(index=index)["count"]
-    logger.info("%d total docs in index %s", total_docs, index)
-
-    if total_docs == 0:
-        raise ValueError("Cannot dump an index with 0 documents!")
-
-    if total_docs >= 1000:
-        tm_outpath = get_doc_outpath(outdir, index, "-1k")
-        dump_documents(client, index, tm_outpath, 1000)
+    if total_docs > 0:
+        logger.info("[%d] total docs in index [%s].", total_docs, index)
+        docs_path = get_doc_outpath(output_path, index)
+        dump_documents(client, index, get_doc_outpath(output_path, index, "-1k"), min(total_docs, 1000), " for test mode")
+        dump_documents(client, index, docs_path, total_docs)
+        return template_vars(index, docs_path, total_docs)
     else:
-        logger.warning("Insufficient document count for test-mode corpus!")
-    dump_documents(client, index, outpath, total_docs)
-    return template_vars(index, outpath, total_docs)
+        logger.info("Skipping corpus extraction fo index [%s] as it contains no documents.", index)
+        return None
 
 
-def dump_documents(client, index, outpath, total_docs):
+def dump_documents(client, index, out_path, total_docs, progress_message_suffix=""):
     from elasticsearch import helpers
 
     logger = logging.getLogger(__name__)
@@ -79,33 +75,27 @@ def dump_documents(client, index, outpath, total_docs):
 
     progress = console.progress()
     compressor = DOCS_COMPRESSOR()
-    comp_outpath = outpath + COMP_EXT
-    with open(outpath, "wb") as outfile:
+    comp_outpath = out_path + COMP_EXT
+    with open(out_path, "wb") as outfile:
         with open(comp_outpath, "wb") as comp_outfile:
-            logger.info("Now dumping corpus to %s...", outpath)
+            logger.info("Dumping corpus for index [%s] to [%s].", index, out_path)
             query = {"query": {"match_all": {}}}
             for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
                 if n > total_docs:
                     break
-                docsrc = doc["_source"]
-                data = (json.dumps(docsrc, separators=(",", ":")) + "\n").encode("utf-8")
+                data = (json.dumps(doc["_source"], separators=(",", ":")) + "\n").encode("utf-8")
 
                 outfile.write(data)
                 comp_outfile.write(compressor.compress(data))
 
-                render_progress(progress, index, n + 1, total_docs, freq)
+                render_progress(progress, progress_message_suffix, index, n + 1, total_docs, freq)
 
             comp_outfile.write(compressor.flush())
     progress.finish()
 
 
-def render_progress(progress, index, cur, total, freq):
+def render_progress(progress, progress_message_suffix, index, cur, total, freq):
     if cur % freq == 0 or total - cur < freq:
+        msg = f"Extracting documents for index [{index}]{progress_message_suffix}..."
         percent = (cur * 100) / total
-        progress.print(f"Extracting documents for index {index}...", f"{cur}/{total} ({percent:.1f}%)")
-
-
-def purge(outpath, index_name):
-    for suffix in ("", "-1k"):
-        path = os.path.join(outpath, index_name, suffix)
-        os.unlink(path)
+        progress.print(msg, f"{cur}/{total} docs [{percent:.1f}% done]")

@@ -28,6 +28,7 @@ from esrally import PROGRAM_NAME, BANNER, SKULL, check_python_version, doc_link,
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, \
     log
 from esrally.mechanic import team, mechanic
+from esrally.tracker import tracker
 from esrally.utils import io, convert, process, console, net, opts
 
 
@@ -37,6 +38,12 @@ def create_arg_parser():
         if value <= 0:
             raise argparse.ArgumentTypeError("must be positive but was {}".format(value))
         return value
+
+    def non_empty_list(arg):
+        lst = opts.csv_to_list(arg)
+        if len(lst) < 1:
+            raise argparse.ArgumentError("At least one argument required!")
+        return lst
 
     def runtime_jdk(v):
         if v == "bundled":
@@ -117,11 +124,35 @@ def create_arg_parser():
         "--exclude-tasks",
         help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.")
 
+    generate_track_parser = subparsers.add_parser("generate-track", help="Generate a Rally track from existing data")
+    generate_track_parser.add_argument(
+        "--track",
+        required=True,
+        help="Name of the generated track")
+    generate_track_parser.add_argument(
+        "--indices",
+        type=non_empty_list,
+        required=True,
+        help="Comma-separated list of indices to include in the track")
+    generate_track_parser.add_argument(
+        "--target-hosts",
+        default="",
+        required=True,
+        help="Comma-separated list of host:port pairs which should be targeted")
+    generate_track_parser.add_argument(
+        "--client-options",
+        default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS,
+        help=f"Comma-separated list of client options to use. (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS})")
+    generate_track_parser.add_argument(
+        "--output-path",
+        default=os.path.join(os.getcwd(), "tracks"),
+        help="Track output directory (default: tracks/)")
+
     generate_parser = subparsers.add_parser("generate", help="Generate artifacts")
     generate_parser.add_argument(
         "artifact",
         metavar="artifact",
-        help="The artifact to create. Possible values are: charts",
+        help="The artifact to create. Possible values are: charts, track",
         choices=["charts"])
     # We allow to either have a chart-spec-path *or* define a chart-spec on the fly with track, challenge and car. Convincing
     # argparse to validate that everything is correct *might* be doable but it is simpler to just do this manually.
@@ -540,7 +571,7 @@ def create_arg_parser():
             default=False)
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
-              start_parser, stop_parser, info_parser, generate_parser, async_race_parser]:
+              start_parser, stop_parser, info_parser, generate_parser, generate_track_parser, async_race_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
@@ -737,6 +768,8 @@ def dispatch_sub_command(cfg, sub_command):
             racecontrol.run_async(cfg)
         elif sub_command == "generate":
             generate(cfg)
+        elif sub_command == "generate-track":
+            tracker.generate_track(cfg)
         elif sub_command == "info":
             track.track_info(cfg)
         else:
@@ -880,6 +913,10 @@ def main():
         else:
             # other options are stored elsewhere already
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
+    if sub_command == "generate-track":
+        # cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
+        cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
+        cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)

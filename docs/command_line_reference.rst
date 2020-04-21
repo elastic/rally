@@ -83,6 +83,11 @@ This subcommand is needed for :doc:`tournament mode </tournament>` and its usage
 
 This subcommand is needed to :doc:`configure </configuration>` Rally. It is implicitly chosen if you start Rally for the first time but you can rerun this command at any time.
 
+``generate-track``
+~~~~~~~~~~~~~~~~~~
+
+This subcommand generates a basic track from data in an existing cluster. See the :ref:`track tutorial <add_track_generate_track>` for a complete walkthrough.
+
 ``download``
 ~~~~~~~~~~~~~
 
@@ -616,6 +621,8 @@ By default, the command line reporter will print the results only on standard ou
 
    esrally --report-format=csv --report-file=~/benchmarks/result.csv
 
+.. _clr_client_options:
+
 ``client-options``
 ~~~~~~~~~~~~~~~~~~
 
@@ -786,6 +793,26 @@ When you run ``esrally list races``, this will show up again::
     20160518T112341Z  pmc                         append-no-conflicts  defaults  disk:SSD,data_node_count:4
 
 This will help you recognize a specific race when running ``esrally compare``.
+
+``indices``
+~~~~~~~~~~~
+
+A comma-separated list of index patterns to target when generating a track with the ``generate-track`` subcommand.
+
+**Examples**
+
+Target a single index::
+
+    esrally generate-track --track=acme --indices="products" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+Target multiple indices::
+
+    esrally generate-track --track=acme --indices="products,companies" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+Use index patterns::
+
+    esrally generate-track --track=my-logs --indices="logs-*" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
 
 .. _command_line_reference_advanced_topics:
 

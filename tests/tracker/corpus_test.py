@@ -18,7 +18,7 @@ import json
 from unittest import mock
 from unittest.mock import call
 
-from estracker import corpus
+from esrally.tracker import corpus
 
 
 def serialize_doc(doc):
@@ -40,7 +40,8 @@ def test_extract(client, mo):
         "_scroll_id": "uohialjrknf",
         "_shards": {
             "successful": 1,
-            "total": 1
+            "total": 1,
+            "skipped": 0
         },
         "hits": {
             "hits": [
@@ -78,13 +79,14 @@ def test_extract(client, mo):
                          call("/abs/outpath/to/tracks/test-documents-1k.json.bz2", "wb")
                          ], any_order=True)
 
-    assert res == {"filename": "test-documents.json.bz2",
-                   "path": "/abs/outpath/to/tracks/test-documents.json.bz2",
-                   "compressed_bytes": 500,
-                   "index_name": "test",
-                   "doc_count": 1001,
-                   "uncompressed_bytes": 1000
-                   }
+    assert res == {
+        "filename": "test-documents.json.bz2",
+        "path": "/abs/outpath/to/tracks/test-documents.json.bz2",
+        "compressed_bytes": 500,
+        "index_name": "test",
+        "doc_count": 1001,
+        "uncompressed_bytes": 1000
+    }
 
     file_mock = mo.return_value
     file_mock.assert_has_calls([call.write(doc_data)])

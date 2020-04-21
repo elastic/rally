@@ -6,8 +6,42 @@ Definition
 
 A track describes one or more benchmarking scenarios. Its structure is described in detail in the :doc:`track reference </track>`.
 
-Example track
--------------
+.. _add_track_generate_track:
+
+Generating a track from data in an existing cluster
+---------------------------------------------------
+
+If you already have a cluster with data in it you can use the ``generate-track`` subcommand of Rally to create a basic Rally track. To create a Rally track with data from the indices ``products`` and ``companies`` that are hosted by a locally running Elasticsearch cluster, issue the following command::
+
+    esrally --track=acme --target-hosts=127.0.0.1:9200 --indices="products,companies" --output-path=~/tracks
+
+.. note::
+   If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
+
+The track generator will create a folder with the track's name in the specified output directory::
+
+    > find tracks/acme
+    tracks/acme
+    tracks/acme/companies-documents.json
+    tracks/acme/companies-documents.json.bz2
+    tracks/acme/companies-documents-1k.json
+    tracks/acme/companies-documents-1k.json.bz2
+    tracks/acme/companies.json
+    tracks/acme/products-documents.json
+    tracks/acme/products-documents.json.bz2
+    tracks/acme/products-documents-1k.json
+    tracks/acme/products-documents-1k.json.bz2
+    tracks/acme/products.json
+    tracks/acme/track.json
+
+The files are organized as follows:
+
+* ``track.json`` contains the actual Rally track. For details see the :doc:`track reference<track>`.
+* ``companies.json`` and ``products.json`` contain the mapping and settings for the extracted indices.
+* ``*-documents.json(.bz2)`` contains the sources of all the documents from the extracted indices. The files suffixed with ``-1k`` contain a smaller version of the document corpus to support :ref:`test mode <add_track_test_mode>`.
+
+Creating a track from scratch
+-----------------------------
 
 We will create the track "tutorial" step by step. We store everything in the directory ``~/rally-tracks/tutorial`` but you can choose any other location.
 
@@ -1046,9 +1080,3 @@ This implementation achieves the same rate independent of the number of clients.
         "upper-bound-millis": 250
     }
 
-
-Track template generation from existing indices
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you wish to perform benchmarks in a repeatable fashion on an existing index, Rally provides a helper tool to get you
-started: :doc:`Tracker </tracker>`.

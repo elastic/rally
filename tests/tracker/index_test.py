@@ -16,7 +16,7 @@
 # under the License.
 
 from unittest import mock
-from estracker.index import filter_ephemeral_index_settings, extract_index_mapping_and_settings, update_index_setting_parameters
+from esrally.tracker.index import filter_ephemeral_index_settings, extract_index_mapping_and_settings, update_index_setting_parameters
 
 
 def test_index_setting_filter():
@@ -110,28 +110,55 @@ def test_extract_index_create(client):
                     }
                 }
             }
-        }
-    }
-    expected = {
-        "mappings": {
-            "dynamic": "strict",
-            "properties": {
-                "location": {
-                    "type": "geo_point"
+        },
+        # should be filtered
+        ".security": {
+            "mappings": {},
+            "settings": {
+                "index": {
+                    "number_of_shards": "1"
                 }
             }
         },
-        "settings": {
-            "index": {
-                "number_of_replicas": "{{number_of_replicas | default(2)}}",
-                "number_of_shards": "{{number_of_shards | default(3)}}",
-                "requests": {
-                    "cache": {
-                        "enable": "false"
-                    }
+        "geodata": {
+            "mappings": {},
+            "settings": {
+                "index": {
+                    "number_of_shards": "1"
                 }
             }
         }
     }
-    res = extract_index_mapping_and_settings(client, "osmgeopoints")
+    expected = {
+        "osmgeopoints": {
+            "mappings": {
+                "dynamic": "strict",
+                "properties": {
+                    "location": {
+                        "type": "geo_point"
+                    }
+                }
+            },
+            "settings": {
+                "index": {
+                    "number_of_replicas": "{{number_of_replicas | default(2)}}",
+                    "number_of_shards": "{{number_of_shards | default(3)}}",
+                    "requests": {
+                        "cache": {
+                            "enable": "false"
+                        }
+                    }
+                }
+            }
+        },
+        "geodata": {
+            "mappings": {},
+            "settings": {
+                "index": {
+                    "number_of_shards": "{{number_of_shards | default(1)}}"
+                }
+            }
+        }
+    }
+    res = extract_index_mapping_and_settings(client, "_all")
     assert res == expected
