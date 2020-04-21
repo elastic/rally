@@ -611,15 +611,15 @@ Sharing your track with others
 
 So far the track is only available on your local machine. To share your track you could check it into version control. To avoid committing the potentially huge data file you can expose it via http (e.g. via an S3 bucket) and reference it in your track with the property ``base-url``. Rally expects that the URL points to the parent path and appends the document file name automatically.
 
-You should also compress your document corpus to save network bandwidth; bzip2 works well. You can create a compressed archive with the following command::
+You should also compress your document corpus to save network bandwidth; `pbzip2 <https://linux.die.net/man/1/pbzip2>`_ works well, is backwards compatible with ``bzip2`` and makes use of all available cpu cores for compression and decompression. You can create a compressed archive with the following command::
 
-    bzip2 -9 -c documents.json > documents.json.bz2
+    pbzip2 -9 -k -m2000 -v documents.json
 
 If you want to support Rally's test mode, also compress your test mode corpus with::
 
-    bzip2 -9 -c documents-1k.json > documents-1k.json.bz2
+    pbzip2 -9 -k -m2000 -v documents-1k.json
 
-Then upload ``documents.json.bz2`` and ``documents-1k.json.bz2`` to the remote location.
+Then upload the generated archives ``documents.json.bz2`` and ``documents-1k.json.bz2`` to the remote location.
 
 Finally, specify the compressed file name in the ``source-file`` property and also add the ``base-url`` property::
 

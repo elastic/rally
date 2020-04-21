@@ -1085,7 +1085,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1110,10 +1110,12 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
 
-        es.search.assert_called_once_with(
-            index="_all",
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/_all/_search",
+            params={"request_cache": "true"},
             body=params["body"],
-            params={"request_cache": "true"}
+            headers=None
         )
         es.clear_scroll.assert_not_called()
 
@@ -1139,7 +1141,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.search.return_value = as_future(io.StringIO(json.dumps(response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(response)))
 
         query_runner = runner.Query()
         params = {
@@ -1162,13 +1164,15 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(62, result["took"])
         self.assertFalse("error-type" in result)
 
-        es.search.assert_called_once_with(
-            index="_all",
-            body=params["body"],
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/_all/_search",
             params={
                 "request_cache": "false",
                 "q": "user:kimchy"
-            }
+            },
+            body=params["body"],
+            headers=None
         )
         es.clear_scroll.assert_not_called()
 
@@ -1194,7 +1198,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.search.return_value = as_future(io.StringIO(json.dumps(response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(response)))
 
         query_runner = runner.Query()
         params = {
@@ -1216,10 +1220,12 @@ class QueryRunnerTests(TestCase):
         self.assertNotIn("took", result)
         self.assertNotIn("error-type", result)
 
-        es.search.assert_called_once_with(
-            index="_all",
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/_all/_search",
+            params={"q": "user:kimchy"},
             body=params["body"],
-            params={"q": "user:kimchy"}
+            headers=None
         )
         es.clear_scroll.assert_not_called()
 
@@ -1241,7 +1247,7 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1266,12 +1272,14 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
 
-        es.search.assert_called_once_with(
-            index="_all",
-            body=params["body"],
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/_all/_search",
             params={
                 "request_cache": "true"
-            }
+            },
+            body=params["body"],
+            headers=None
         )
         es.clear_scroll.assert_not_called()
 
@@ -1296,14 +1304,14 @@ class QueryRunnerTests(TestCase):
                 ]
             }
         }
-        es.search.return_value = as_future(io.StringIO(json.dumps(search_response)))
+        es.transport.perform_request.return_value = as_future(io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
         params = {
             "index": "unittest",
             "detailed-results": True,
-            "cache": None,
+            "response-compression-enabled": False,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1322,10 +1330,12 @@ class QueryRunnerTests(TestCase):
         self.assertEqual(5, result["took"])
         self.assertFalse("error-type" in result)
 
-        es.search.assert_called_once_with(
-            index="unittest",
+        es.transport.perform_request.assert_called_once_with(
+            "GET",
+            "/unittest/_search",
+            params={},
             body=params["body"],
-            params={}
+            headers={"Accept-Encoding": "identity"}
         )
         es.clear_scroll.assert_not_called()
 
@@ -2191,10 +2201,7 @@ class CreateMlDatafeedTests(TestCase):
         r = runner.CreateMlDatafeed()
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with("PUT",
-                                                             "/_xpack/ml/datafeeds/%s" % datafeed_id,
-                                                             body=body,
-                                                             params=params)
+        es.transport.perform_request.assert_called_once_with("PUT", f"/_xpack/ml/datafeeds/{datafeed_id}", body=body)
 
 
 class DeleteMlDatafeedTests(TestCase):
@@ -2227,8 +2234,11 @@ class DeleteMlDatafeedTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("DELETE",
-                                                             "/_xpack/ml/datafeeds/%s" % datafeed_id,
-                                                             params=params)
+                                                             f"/_xpack/ml/datafeeds/{datafeed_id}",
+                                                             params={
+                                                                 "force": "false",
+                                                                 "ignore": 404
+                                                             })
 
 
 class StartMlDatafeedTests(TestCase):
@@ -2269,9 +2279,8 @@ class StartMlDatafeedTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
-                                                             "/_xpack/ml/datafeeds/%s/_start" % params["datafeed-id"],
-                                                             body=body,
-                                                             params=params)
+                                                             f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_start",
+                                                             body=body)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2328,8 +2337,11 @@ class StopMlDatafeedTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
-                                                             "/_xpack/ml/datafeeds/%s/_stop" % params["datafeed-id"],
-                                                             params=params)
+                                                             f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_stop",
+                                                             params={
+                                                                 "force": str(params["force"]).lower(),
+                                                                 "timeout": params["timeout"]
+                                                             })
 
 
 class CreateMlJobTests(TestCase):
@@ -2396,8 +2408,7 @@ class CreateMlJobTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("PUT",
-                                                             "/_xpack/ml/anomaly_detectors/%s" % params["job-id"],
-                                                             params=params,
+                                                             f"/_xpack/ml/anomaly_detectors/{params['job-id']}",
                                                              body=body)
 
 
@@ -2432,8 +2443,11 @@ class DeleteMlJobTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("DELETE",
-                                                             "/_xpack/ml/anomaly_detectors/%s" % params["job-id"],
-                                                             params=params)
+                                                             f"/_xpack/ml/anomaly_detectors/{params['job-id']}",
+                                                             params={
+                                                                 "force": "false",
+                                                                 "ignore": 404
+                                                             })
 
 
 class OpenMlJobTests(TestCase):
@@ -2467,8 +2481,7 @@ class OpenMlJobTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
-                                                             "/_xpack/ml/anomaly_detectors/%s/_open" % params["job-id"],
-                                                             params=params)
+                                                             f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_open")
 
 
 class CloseMlJobTests(TestCase):
@@ -2503,8 +2516,11 @@ class CloseMlJobTests(TestCase):
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with("POST",
-                                                             "/_xpack/ml/anomaly_detectors/%s/_close" % params["job-id"],
-                                                             params=params)
+                                                             f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_close",
+                                                             params={
+                                                                 "force": str(params["force"]).lower(),
+                                                                 "timeout": params["timeout"]
+                                                             })
 
 
 class RawRequestRunnerTests(TestCase):

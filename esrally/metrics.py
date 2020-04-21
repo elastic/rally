@@ -87,9 +87,9 @@ class EsClient:
         # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
         import elasticsearch.helpers
         if self._cluster_version[0] > 6:
-            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index)
+            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
         else:
-            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type)
+            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type, chunk_size=5000)
 
     def index(self, index, doc_type, item, id=None):
         doc = {
@@ -889,9 +889,13 @@ class EsMetricsStore(MetricsStore):
 
     def flush(self, refresh=True):
         if self._docs:
+            sw = time.StopWatch()
+            sw.start()
             self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
-            self.logger.info("Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s].",
-                             len(self._docs), self._race_timestamp, self._track, self._challenge, self._car)
+            sw.stop()
+            self.logger.info("Successfully added %d metrics documents for race timestamp=[%s], track=[%s], "
+                             "challenge=[%s], car=[%s] in [%f] seconds.", len(self._docs), self._race_timestamp,
+                             self._track, self._challenge, self._car, sw.total_time())
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:

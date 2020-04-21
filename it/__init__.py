@@ -27,6 +27,8 @@ from esrally import client
 from esrally.utils import process, io
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
+DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.6.0"]
+TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 
 
 def all_rally_configs(t):
@@ -66,7 +68,7 @@ def rally_es(t):
 
 
 def esrally(cfg, command_line):
-    return os.system("esrally {} --configuration-name=\"{}\"".format(command_line, cfg))
+    return os.system("esrally {} --kill-running-processes --configuration-name=\"{}\"".format(command_line, cfg))
 
 
 def wait_until_port_is_free(port_number=39200, timeout=120):
@@ -102,7 +104,7 @@ def check_prerequisites():
 
 class ConfigFile:
     def __init__(self, config_name):
-        self.user_home = os.path.expanduser("~")
+        self.user_home = os.getenv("RALLY_HOME", os.path.expanduser("~"))
         self.rally_home = os.path.join(self.user_home, ".rally")
         self.config_file_name = "rally-{}.ini".format(config_name)
         self.source_path = os.path.join(os.path.dirname(__file__), "resources", self.config_file_name)
@@ -110,24 +112,24 @@ class ConfigFile:
 
 
 class TestCluster:
-    def __init__(self, cfg):
+    def __init__(self,cfg):
         self.cfg = cfg
         self.installation_id = None
         self.http_port = None
 
-    def install(self, distribution_version, node_name, http_port):
+    def install(self, distribution_version, node_name, car, http_port):
         self.http_port = http_port
         transport_port = http_port + 100
         try:
             output = process.run_subprocess_with_output(
                 "esrally install --configuration-name={cfg} --quiet --distribution-version={dist} --build-type=tar "
-                "--http-port={http_port} --node={node_name} --master-nodes={node_name} "
+                "--http-port={http_port} --node={node_name} --master-nodes={node_name} --car={car} "
                 "--seed-hosts=\"127.0.0.1:{transport_port}\"".format(cfg=self.cfg,
                                                                      dist=distribution_version,
                                                                      http_port=http_port,
                                                                      node_name=node_name,
+                                                                     car=car,
                                                                      transport_port=transport_port))
-
             self.installation_id = json.loads("".join(output))["installation-id"]
         except BaseException as e:
             raise AssertionError("Failed to install Elasticsearch {}.".format(distribution_version), e)
@@ -144,6 +146,9 @@ class TestCluster:
             if esrally(self.cfg, "stop --installation-id={}".format(self.installation_id)) != 0:
                 raise AssertionError("Failed to stop Elasticsearch test cluster.")
 
+    def __str__(self):
+        return f"TestCluster[installation-id={self.installation_id}]"
+
 
 class EsMetricsStore:
     VERSION = "7.6.0"
@@ -152,7 +157,10 @@ class EsMetricsStore:
         self.cluster = TestCluster("in-memory-it")
 
     def start(self):
-        self.cluster.install(distribution_version=EsMetricsStore.VERSION, node_name="metrics-store", http_port=10200)
+        self.cluster.install(distribution_version=EsMetricsStore.VERSION,
+                             node_name="metrics-store",
+                             car="defaults",
+                             http_port=10200)
         self.cluster.start(race_id="metrics-store")
 
     def stop(self):
@@ -166,8 +174,8 @@ def install_integration_test_config():
         with open(f.target_path, "w", encoding="UTF-8") as target:
             with open(f.source_path, "r", encoding="UTF-8") as src:
                 contents = src.read()
-                # optionally allow for a homedir override in integration tests
-                user_home = os.getenv("OVERRIDE_RALLY_HOME", f.user_home)
+                # Rally allows for a RALLY_HOME homedir override. This honors the change for it tests
+                user_home = os.getenv("RALLY_HOME", f.user_home)
                 target.write(Template(contents).substitute(USER_HOME=user_home))
 
     for n in CONFIG_NAMES:

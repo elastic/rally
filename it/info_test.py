@@ -18,29 +18,16 @@
 import it
 
 
-@it.all_rally_configs
-def test_list_races(cfg):
-    assert it.esrally(cfg, "list races") == 0
+@it.random_rally_config
+def test_track_info_with_challenge(cfg):
+    assert it.esrally(cfg, "info --track=geonames --challenge=append-no-conflicts") == 0
 
 
-@it.rally_in_mem
-def test_list_cars(cfg):
-    assert it.esrally(cfg, "list cars") == 0
+@it.random_rally_config
+def test_track_info_with_track_repo(cfg):
+    assert it.esrally(cfg, "info --track-repository=default --track=geonames") == 0
 
 
-@it.rally_in_mem
-def test_list_elasticsearch_plugins(cfg):
-    assert it.esrally(cfg, "list elasticsearch-plugins") == 0
-
-
-@it.rally_in_mem
-def test_list_tracks(cfg):
-    assert it.esrally(cfg, "list tracks") == 0
-    assert it.esrally(cfg, "list tracks --track-repository=eventdata") == 0
-    assert it.esrally(cfg, "list tracks --track-repository=default "
-                           "--track-revision=4080dc9850d07e23b6fc7cfcdc7cf57b14e5168d") == 0
-
-
-@it.rally_in_mem
-def test_list_telemetry(cfg):
-    assert it.esrally(cfg, "list telemetry") == 0
+@it.random_rally_config
+def test_track_info_with_task_filter(cfg):
+    assert it.esrally(cfg, "info --track=geonames --challenge=append-no-conflicts --include-tasks=\"type:search\"") == 0

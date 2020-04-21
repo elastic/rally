@@ -551,6 +551,12 @@ def create_arg_parser():
             help="Suppress as much as output as possible (default: false).",
             default=False,
             action="store_true")
+        p.add_argument(
+            "--kill-running-processes",
+            action="store_true",
+            default=False,
+            help="If any processes is running, it is going to kill them and allow Rally to continue to run."
+        )
 
     return parser
 
@@ -611,12 +617,30 @@ def print_help_on_errors():
 
 
 def race(cfg):
-    other_rally_processes = process.find_all_other_rally_processes()
-    if other_rally_processes:
-        pids = [p.pid for p in other_rally_processes]
-        msg = "There are other Rally processes running on this machine (PIDs: %s) but only one Rally benchmark is allowed to run at " \
-              "the same time. Please check and terminate these processes and retry again." % pids
-        raise exceptions.RallyError(msg)
+    logger = logging.getLogger(__name__)
+
+    kill_running_processes = cfg.opts("system", "kill.running.processes")
+
+    if kill_running_processes:
+        logger.info("Killing running Rally processes")
+
+        # Kill any lingering Rally processes before attempting to continue - the actor system needs to be a singleton on this machine
+        # noinspection PyBroadException
+        try:
+            process.kill_running_rally_instances()
+        except BaseException:
+            logger.exception(
+                "Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
+    else:
+        other_rally_processes = process.find_all_other_rally_processes()
+        if other_rally_processes:
+            pids = [p.pid for p in other_rally_processes]
+
+            msg = f"There are other Rally processes running on this machine (PIDs: {pids}) but only one Rally " \
+                  f"benchmark is allowed to run at the same time.\n\nYou can use --kill-running-processes flag " \
+                  f"to kill running processes automatically and allow Rally to continue to run a new benchmark. " \
+                  f"Otherwise, you need to manually kill them."
+            raise exceptions.RallyError(msg)
 
     with_actor_system(racecontrol.run, cfg)
 
@@ -774,6 +798,7 @@ def main():
     cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
     cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
+    cfg.add(config.Scope.applicationOverride, "system", "kill.running.processes", args.kill_running_processes)
 
     # Local config per node
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())

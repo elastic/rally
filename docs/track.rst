@@ -288,12 +288,177 @@ We can also define default values on document corpus level but override some of 
       ]
 
 
+challenge
+.........
+
+If your track defines only one benchmarking scenario specify the ``schedule`` on top-level. Use the ``challenge`` element if you want to specify additional properties like a name or a description. You can think of a challenge as a benchmarking scenario. If you have multiple challenges, you can define an array of ``challenges``.
+
+This section contains one or more challenges which describe the benchmark scenarios for this data set. A challenge can reference all operations that are defined in the ``operations`` section.
+
+Each challenge consists of the following properties:
+
+* ``name`` (mandatory): A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users.
+* ``description`` (optional): A human readable description of the challenge.
+* ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need to define ``"default": true`` on exactly one challenge.
+* ``schedule`` (mandatory): Defines the workload. It is described in more detail below.
+
+.. note::
+
+    You should strive to minimize the number of challenges. If you just want to run a subset of the tasks in a challenge, use :ref:`task filtering <clr_include_tasks>`.
+
+schedule
+........
+
+The ``schedule`` element contains a list of tasks that are executed by Rally, i.e. it describes the workload. Each task consists of the following properties:
+
+* ``name`` (optional): This property defines an explicit name for the given task. By default the operation's name is implicitly used as the task name but if the same operation is run multiple times, a unique task name must be specified using this property.
+* ``operation`` (mandatory): This property refers either to the name of an operation that has been defined in the ``operations`` section or directly defines an operation inline.
+* ``clients`` (optional, defaults to 1): The number of clients that should execute a task concurrently.
+* ``warmup-iterations`` (optional, defaults to 0): Number of iterations that each client should execute to warmup the benchmark candidate. Warmup iterations will not show up in the measurement results.
+* ``iterations`` (optional, defaults to 1): Number of measurement iterations that each client executes. The command line report will automatically adjust the percentile numbers based on this number (i.e. if you just run 5 iterations you will not get a 99.9th percentile because we need at least 1000 iterations to determine this value precisely).
+* ``warmup-time-period`` (optional, defaults to 0): A time period in seconds that Rally considers for warmup of the benchmark candidate. All response data captured during warmup will not show up in the measurement results.
+* ``time-period`` (optional): A time period in seconds that Rally considers for measurement. Note that for bulk indexing you should usually not define this time period. Rally will just bulk index all documents and consider every sample after the warmup time period as measurement sample.
+* ``schedule`` (optional, defaults to ``deterministic``): Defines the schedule for this task, i.e. it defines at which point in time during the benchmark an operation should be executed. For example, if you specify a ``deterministic`` schedule and a target-interval of 5 (seconds), Rally will attempt to execute the corresponding operation at second 0, 5, 10, 15 ... . Out of the box, Rally supports ``deterministic`` and ``poisson`` but you can define your own :doc:`custom schedules </adding_tracks>`.
+* ``target-throughput`` (optional): Defines the benchmark mode. If it is not defined, Rally assumes this is a throughput benchmark and will run the task as fast as it can. This is mostly needed for batch-style operations where it is more important to achieve the best throughput instead of an acceptable latency. If it is defined, it specifies the number of requests per second over all clients. E.g. if you specify ``target-throughput: 1000`` with 8 clients, it means that each client will issue 125 (= 1000 / 8) requests per second. In total, all clients will issue 1000 requests each second. If Rally reports less than the specified throughput then Elasticsearch simply cannot reach it.
+* ``target-interval`` (optional): This is just ``1 / target-throughput`` (in seconds) and may be more convenient for cases where the throughput is less than one operation per second. Define either ``target-throughput`` or ``target-interval`` but not both (otherwise Rally will raise an error).
+
+Defining operations
+~~~~~~~~~~~~~~~~~~~
+
+In the following snippet we define two operations ``force-merge`` and a ``match-all`` query separately in an operations block::
+
+    {
+      "operations": [
+        {
+          "name": "force-merge",
+          "operation-type": "force-merge"
+        },
+        {
+          "name": "match-all-query",
+          "operation-type": "search",
+          "body": {
+            "query": {
+              "match_all": {}
+            }
+          }
+        }
+      ],
+      "schedule": [
+        {
+          "operation": "force-merge",
+          "clients": 1
+        },
+        {
+          "operation": "match-all-query",
+          "clients": 4,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
+        }
+      ]
+    }
+
+If we do not want to reuse these operations, we can also define them inline. Note that the ``operations`` section is gone::
+
+    {
+      "schedule": [
+        {
+          "operation": {
+            "name": "force-merge",
+            "operation-type": "force-merge"
+          },
+          "clients": 1
+        },
+        {
+          "operation": {
+            "name": "match-all-query",
+            "operation-type": "search",
+            "body": {
+              "query": {
+                "match_all": {}
+              }
+            }
+          },
+          "clients": 4,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
+        }
+      ]
+    }
+
+Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. It's name will be the same as the operation's type::
+
+    {
+      "schedule": [
+        {
+          "operation": "force-merge",
+          "clients": 1
+        },
+        {
+          "operation": {
+            "name": "match-all-query",
+            "operation-type": "search",
+            "body": {
+              "query": {
+                "match_all": {}
+              }
+            }
+          },
+          "clients": 4,
+          "warmup-iterations": 1000,
+          "iterations": 1000,
+          "target-throughput": 100
+        }
+      ]
+    }
+
+Choosing a schedule
+~~~~~~~~~~~~~~~~~~~
+
+Rally allows you to choose between the following schedules to simulate traffic:
+
+* `deterministically distributed <https://en.wikipedia.org/wiki/Degenerate_distribution>`_
+* `Poisson distributed <https://en.wikipedia.org/wiki/Poisson_distribution>`_
+
+The diagram below shows how different schedules in Rally behave during the first ten seconds of a benchmark. Each schedule is configured for a (mean) target throughput of one operation per second.
+
+.. image:: schedulers_10s.png
+   :alt: Comparison of Scheduling Strategies in Rally
+
+If you want as much reproducibility as possible you can choose the `deterministic` schedule. A Poisson distribution models random independent arrivals of clients which on average match the expected arrival rate which makes it suitable for modelling the behaviour of multiple clients that decide independently when to issue a request. For this reason, Poisson processes play an important role in `queueing theory <https://en.wikipedia.org/wiki/Queueing_theory>`_.
+
+If you have more complex needs on how to model traffic, you can also implement a :doc:`custom schedule </adding_tracks>`.
+
+Time-based vs. iteration-based
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You should usually use time periods for batch style operations and iterations for the rest. However, you can also choose to run a query for a certain time period.
+
+All tasks in the ``schedule`` list are executed sequentially in the order in which they have been defined. However, it is also possible to execute multiple tasks concurrently, by wrapping them in a ``parallel`` element. The ``parallel`` element defines of the following properties:
+
+* ``clients`` (optional): The number of clients that should execute the provided tasks. If you specify this property, Rally will only use as many clients as you have defined on the ``parallel`` element (see examples)!
+* ``warmup-time-period`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
+* ``time-period`` (optional, no default value if not specified): Allows to define a default value for all tasks of the ``parallel`` element.
+* ``warmup-iterations`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
+* ``iterations`` (optional, defaults to 1): Allows to define a default value for all tasks of the ``parallel`` element.
+* ``completed-by`` (optional): Allows to define the name of one task in the ``tasks`` list. As soon as this task has completed, the whole ``parallel`` task structure is considered completed. If this property is not explicitly defined, the ``parallel`` task structure is considered completed as soon as all its subtasks have completed. A task is completed if and only if all associated clients have completed execution.
+* ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the following properties that have been defined above: ``clients``, ``warmup-time-period``, ``time-period``, ``warmup-iterations`` and ``iterations``.
+
+.. note::
+
+    ``parallel`` elements cannot be nested.
+
+.. warning::
+
+    Specify the number of clients on each task separately. If you specify this number on the ``parallel`` element instead, Rally will only use that many clients in total and you will only want to use this behavior in very rare cases (see examples)!
+
 .. _track_operations:
 
 operations
 ..........
 
-The ``operations`` section contains a list of all operations that are available later when specifying a schedule. Operations define the static properties of a request against Elasticsearch whereas the ``schedule`` element defines the dynamic properties (such as the target throughput).
+The ``operations`` section contains a list of all operations that are available when specifying a schedule. Operations define the static properties of a request against Elasticsearch whereas the ``schedule`` element defines the dynamic properties (such as the target throughput).
 
 Each operation consists of the following properties:
 
@@ -402,10 +567,10 @@ With the operation type ``search`` you can execute `request body searches <http:
         2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 * ``body`` (mandatory): The query body.
+* ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results. This flag is ineffective for scroll queries.
 * ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
 * ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
-* ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of scroll responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression. This option is ineffective for regular queries.
 
 If ``detailed-results`` is set to ``true``, the following meta-data properties will be determined and stored:
 
@@ -983,171 +1148,6 @@ With the operation ``wait-for-recovery`` you can wait until an ongoing shard rec
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
 This operation is :ref:`retryable <track_operations>`.
-
-schedule
-~~~~~~~~
-
-The ``schedule`` element contains a list of tasks that are executed by Rally, i.e. it describes the workload. Each task consists of the following properties:
-
-* ``name`` (optional): This property defines an explicit name for the given task. By default the operation's name is implicitly used as the task name but if the same operation is run multiple times, a unique task name must be specified using this property.
-* ``operation`` (mandatory): This property refers either to the name of an operation that has been defined in the ``operations`` section or directly defines an operation inline.
-* ``clients`` (optional, defaults to 1): The number of clients that should execute a task concurrently.
-* ``warmup-iterations`` (optional, defaults to 0): Number of iterations that each client should execute to warmup the benchmark candidate. Warmup iterations will not show up in the measurement results.
-* ``iterations`` (optional, defaults to 1): Number of measurement iterations that each client executes. The command line report will automatically adjust the percentile numbers based on this number (i.e. if you just run 5 iterations you will not get a 99.9th percentile because we need at least 1000 iterations to determine this value precisely).
-* ``warmup-time-period`` (optional, defaults to 0): A time period in seconds that Rally considers for warmup of the benchmark candidate. All response data captured during warmup will not show up in the measurement results.
-* ``time-period`` (optional): A time period in seconds that Rally considers for measurement. Note that for bulk indexing you should usually not define this time period. Rally will just bulk index all documents and consider every sample after the warmup time period as measurement sample.
-* ``schedule`` (optional, defaults to ``deterministic``): Defines the schedule for this task, i.e. it defines at which point in time during the benchmark an operation should be executed. For example, if you specify a ``deterministic`` schedule and a target-interval of 5 (seconds), Rally will attempt to execute the corresponding operation at second 0, 5, 10, 15 ... . Out of the box, Rally supports ``deterministic`` and ``poisson`` but you can define your own :doc:`custom schedules </adding_tracks>`.
-* ``target-throughput`` (optional): Defines the benchmark mode. If it is not defined, Rally assumes this is a throughput benchmark and will run the task as fast as it can. This is mostly needed for batch-style operations where it is more important to achieve the best throughput instead of an acceptable latency. If it is defined, it specifies the number of requests per second over all clients. E.g. if you specify ``target-throughput: 1000`` with 8 clients, it means that each client will issue 125 (= 1000 / 8) requests per second. In total, all clients will issue 1000 requests each second. If Rally reports less than the specified throughput then Elasticsearch simply cannot reach it.
-* ``target-interval`` (optional): This is just ``1 / target-throughput`` (in seconds) and may be more convenient for cases where the throughput is less than one operation per second. Define either ``target-throughput`` or ``target-interval`` but not both (otherwise Rally will raise an error).
-
-Defining operations
-...................
-
-In the following snippet we define two operations ``force-merge`` and a ``match-all`` query separately in an operations block::
-
-    {
-      "operations": [
-        {
-          "name": "force-merge",
-          "operation-type": "force-merge"
-        },
-        {
-          "name": "match-all-query",
-          "operation-type": "search",
-          "body": {
-            "query": {
-              "match_all": {}
-            }
-          }
-        }
-      ],
-      "schedule": [
-        {
-          "operation": "force-merge",
-          "clients": 1
-        },
-        {
-          "operation": "match-all-query",
-          "clients": 4,
-          "warmup-iterations": 1000,
-          "iterations": 1000,
-          "target-throughput": 100
-        }
-      ]
-    }
-
-If we do not want to reuse these operations, we can also define them inline. Note that the ``operations`` section is gone::
-
-    {
-      "schedule": [
-        {
-          "operation": {
-            "name": "force-merge",
-            "operation-type": "force-merge"
-          },
-          "clients": 1
-        },
-        {
-          "operation": {
-            "name": "match-all-query",
-            "operation-type": "search",
-            "body": {
-              "query": {
-                "match_all": {}
-              }
-            }
-          },
-          "clients": 4,
-          "warmup-iterations": 1000,
-          "iterations": 1000,
-          "target-throughput": 100
-        }
-      ]
-    }
-
-Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. It's name will be the same as the operation's type::
-
-    {
-      "schedule": [
-        {
-          "operation": "force-merge",
-          "clients": 1
-        },
-        {
-          "operation": {
-            "name": "match-all-query",
-            "operation-type": "search",
-            "body": {
-              "query": {
-                "match_all": {}
-              }
-            }
-          },
-          "clients": 4,
-          "warmup-iterations": 1000,
-          "iterations": 1000,
-          "target-throughput": 100
-        }
-      ]
-    }
-
-Choosing a schedule
-...................
-
-Rally allows you to choose between the following schedules to simulate traffic:
-
-* `deterministically distributed <https://en.wikipedia.org/wiki/Degenerate_distribution>`_
-* `Poisson distributed <https://en.wikipedia.org/wiki/Poisson_distribution>`_
-
-The diagram below shows how different schedules in Rally behave during the first ten seconds of a benchmark. Each schedule is configured for a (mean) target throughput of one operation per second.
-
-.. image:: schedulers_10s.png
-   :alt: Comparison of Scheduling Strategies in Rally
-
-If you want as much reproducibility as possible you can choose the `deterministic` schedule. A Poisson distribution models random independent arrivals of clients which on average match the expected arrival rate which makes it suitable for modelling the behaviour of multiple clients that decide independently when to issue a request. For this reason, Poisson processes play an important role in `queueing theory <https://en.wikipedia.org/wiki/Queueing_theory>`_.
-
-If you have more complex needs on how to model traffic, you can also implement a :doc:`custom schedule </adding_tracks>`.
-
-Time-based vs. iteration-based
-..............................
-
-You should usually use time periods for batch style operations and iterations for the rest. However, you can also choose to run a query for a certain time period.
-
-All tasks in the ``schedule`` list are executed sequentially in the order in which they have been defined. However, it is also possible to execute multiple tasks concurrently, by wrapping them in a ``parallel`` element. The ``parallel`` element defines of the following properties:
-
-* ``clients`` (optional): The number of clients that should execute the provided tasks. If you specify this property, Rally will only use as many clients as you have defined on the ``parallel`` element (see examples)!
-* ``warmup-time-period`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
-* ``time-period`` (optional, no default value if not specified): Allows to define a default value for all tasks of the ``parallel`` element.
-* ``warmup-iterations`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
-* ``iterations`` (optional, defaults to 1): Allows to define a default value for all tasks of the ``parallel`` element.
-* ``completed-by`` (optional): Allows to define the name of one task in the ``tasks`` list. As soon as this task has completed, the whole ``parallel`` task structure is considered completed. If this property is not explicitly defined, the ``parallel`` task structure is considered completed as soon as all its subtasks have completed. A task is completed if and only if all associated clients have completed execution.
-* ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the following properties that have been defined above: ``clients``, ``warmup-time-period``, ``time-period``, ``warmup-iterations`` and ``iterations``.
-
-.. note::
-
-    ``parallel`` elements cannot be nested.
-
-.. warning::
-
-    Specify the number of clients on each task separately. If you specify this number on the ``parallel`` element instead, Rally will only use that many clients in total and you will only want to use this behavior in very rare cases (see examples)!
-
-challenge
-.........
-
-If your track defines only one benchmarking scenario specify the ``schedule`` on top-level. Use the ``challenge`` element if you want to specify additional properties like a name or a description. You can think of a challenge as a benchmarking scenario. If you have multiple challenges, you can define an array of ``challenges``.
-
-This section contains one or more challenges which describe the benchmark scenarios for this data set. A challenge can reference all operations that are defined in the ``operations`` section.
-
-Each challenge consists of the following properties:
-
-* ``name`` (mandatory): A descriptive name of the challenge. Should not contain spaces in order to simplify handling on the command line for users.
-* ``description`` (optional): A human readable description of the challenge.
-* ``default`` (optional): If true, Rally selects this challenge by default if the user did not specify a challenge on the command line. If your track only defines one challenge, it is implicitly selected as default, otherwise you need to define ``"default": true`` on exactly one challenge.
-* ``schedule`` (mandatory): Defines the workload. It is described in more detail above.
-
-.. note::
-
-    You should strive to minimize the number of challenges. If you just want to run a subset of the tasks in a challenge, use :ref:`task filtering <clr_include_tasks>`.
 
 Examples
 ========

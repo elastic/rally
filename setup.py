@@ -49,7 +49,7 @@ supported_python_versions = [(3, 8)]
 install_requires = [
     # License: Apache 2.0
     # transitive dependency urllib3: MIT
-    "elasticsearch==7.0.5",
+    "elasticsearch==7.6.0",
     # License: Apache 2.0
     # transitive dependencies:
     #   aiohttp: Apache 2.0
@@ -67,7 +67,7 @@ install_requires = [
     # transitive dependency Markupsafe: BSD
     "Jinja2==2.10.3",
     # License: MIT
-    "thespian==3.9.3",
+    "thespian==3.10.0",
     # recommended library for thespian to identify actors more easily with `ps`
     # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...

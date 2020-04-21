@@ -87,6 +87,7 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
         self.cfg.add(config.Scope.application, "system", "time.start", datetime(year=2017, month=8, day=20, hour=1, minute=0, second=0))
         self.cfg.add(config.Scope.application, "system", "race.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
+        self.cfg.add(config.Scope.application, "system", "available.cores", 8)
         self.cfg.add(config.Scope.application, "track", "challenge.name", "default")
         self.cfg.add(config.Scope.application, "track", "params", {})
         self.cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
@@ -137,14 +138,14 @@ class DriverTests(TestCase):
         d.start_benchmark()
 
         target.create_client.assert_has_calls(calls=[
-            mock.call(0, "10.5.5.1"),
-            mock.call(1, "10.5.5.2"),
-            mock.call(2, "10.5.5.1"),
-            mock.call(3, "10.5.5.2"),
+            mock.call("10.5.5.1"),
+            mock.call("10.5.5.1"),
+            mock.call("10.5.5.2"),
+            mock.call("10.5.5.2"),
         ])
 
         # Did we start all load generators? There is no specific mock assert for this...
-        self.assertEqual(4, target.start_load_generator.call_count)
+        self.assertEqual(4, target.start_worker.call_count)
 
     def test_assign_drivers_round_robin(self):
         target = self.create_test_driver_target()
@@ -158,14 +159,14 @@ class DriverTests(TestCase):
         d.start_benchmark()
 
         target.create_client.assert_has_calls(calls=[
-            mock.call(0, "localhost"),
-            mock.call(1, "localhost"),
-            mock.call(2, "localhost"),
-            mock.call(3, "localhost"),
+            mock.call("localhost"),
+            mock.call("localhost"),
+            mock.call("localhost"),
+            mock.call("localhost"),
         ])
 
         # Did we start all load generators? There is no specific mock assert for this...
-        self.assertEqual(4, target.start_load_generator.call_count)
+        self.assertEqual(4, target.start_worker.call_count)
 
     def test_client_reaches_join_point_others_still_executing(self):
         target = self.create_test_driver_target()
@@ -174,11 +175,13 @@ class DriverTests(TestCase):
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
 
-        self.assertEqual(0, len(d.clients_completed_current_step))
+        self.assertEqual(0, len(d.workers_completed_current_step))
 
-        d.joinpoint_reached(client_id=0, client_local_timestamp=10, task=driver.JoinPoint(id=0))
+        d.joinpoint_reached(worker_id=0,
+                            worker_local_timestamp=10,
+                            task_allocations=[driver.ClientAllocation(client_id=0, task=driver.JoinPoint(id=0))])
 
-        self.assertEqual(1, len(d.clients_completed_current_step))
+        self.assertEqual(1, len(d.workers_completed_current_step))
 
         self.assertEqual(0, target.on_task_finished.call_count)
         self.assertEqual(0, target.drive_at.call_count)
@@ -190,30 +193,50 @@ class DriverTests(TestCase):
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
 
-        self.assertEqual(0, len(d.clients_completed_current_step))
+        self.assertEqual(0, len(d.workers_completed_current_step))
 
-        # it does not matter what we put into `clients_executing_completing_task` We choose to put the client id into it.
-        d.joinpoint_reached(client_id=0, client_local_timestamp=10, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=0,
+                            worker_local_timestamp=10,
+                            task_allocations=[
+                                driver.ClientAllocation(client_id=0,
+                                                        task=driver.JoinPoint(id=0,
+                                                                              clients_executing_completing_task=[0]))])
 
         self.assertEqual(-1, d.current_step)
-        self.assertEqual(1, len(d.clients_completed_current_step))
+        self.assertEqual(1, len(d.workers_completed_current_step))
         # notified all drivers that they should complete the current task ASAP
         self.assertEqual(4, target.complete_current_task.call_count)
 
         # awaiting responses of other clients
-        d.joinpoint_reached(client_id=1, client_local_timestamp=11, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
-        self.assertEqual(-1, d.current_step)
-        self.assertEqual(2, len(d.clients_completed_current_step))
+        d.joinpoint_reached(worker_id=1,
+                            worker_local_timestamp=11,
+                            task_allocations=[
+                                driver.ClientAllocation(client_id=1,
+                                                        task=driver.JoinPoint(id=0,
+                                                                              clients_executing_completing_task=[0]))])
 
-        d.joinpoint_reached(client_id=2, client_local_timestamp=12, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
         self.assertEqual(-1, d.current_step)
-        self.assertEqual(3, len(d.clients_completed_current_step))
+        self.assertEqual(2, len(d.workers_completed_current_step))
 
-        d.joinpoint_reached(client_id=3, client_local_timestamp=13, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))
+        d.joinpoint_reached(worker_id=2,
+                            worker_local_timestamp=12,
+                            task_allocations=[
+                                driver.ClientAllocation(client_id=2,
+                                                        task=driver.JoinPoint(id=0,
+                                                                              clients_executing_completing_task=[0]))])
+        self.assertEqual(-1, d.current_step)
+        self.assertEqual(3, len(d.workers_completed_current_step))
+
+        d.joinpoint_reached(worker_id=3,
+                            worker_local_timestamp=13,
+                            task_allocations=[
+                                driver.ClientAllocation(client_id=3,
+                                                        task=driver.JoinPoint(id=0,
+                                                                              clients_executing_completing_task=[0]))])
 
         # by now the previous step should be considered completed and we are at the next one
         self.assertEqual(0, d.current_step)
-        self.assertEqual(0, len(d.clients_completed_current_step))
+        self.assertEqual(0, len(d.workers_completed_current_step))
 
         # this requires at least Python 3.6
         # target.on_task_finished.assert_called_once()
@@ -223,6 +246,145 @@ class DriverTests(TestCase):
 
 def op(name, operation_type):
     return track.Operation(name, operation_type, param_source="driver-test-param-source")
+
+
+class WorkerAssignmentTests(TestCase):
+    def test_single_host_assignment_clients_matches_cores(self):
+        host_configs = [{
+            "host": "localhost",
+            "cores": 4
+        }]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=4)
+
+        self.assertEqual([
+            {
+                "host": "localhost",
+                "workers": [
+                    [0],
+                    [1],
+                    [2],
+                    [3]
+                ],
+                "worker": 4
+            }
+        ], assignments)
+
+    def test_single_host_assignment_more_clients_than_cores(self):
+        host_configs = [{
+            "host": "localhost",
+            "cores": 4
+        }]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=6)
+
+        self.assertEqual([
+            {
+                "host": "localhost",
+                "workers": [
+                    [0, 4],
+                    [1, 5],
+                    [2],
+                    [3]
+                ],
+                "worker": 6
+            }
+        ], assignments)
+
+    def test_single_host_assignment_less_clients_than_cores(self):
+        host_configs = [{
+            "host": "localhost",
+            "cores": 4
+        }]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=2)
+
+        self.assertEqual([
+            {
+                "host": "localhost",
+                "workers": [
+                    [0],
+                    [1],
+                    [],
+                    []
+                ],
+                "worker": 2
+            }
+        ], assignments)
+
+    def test_multiple_host_assignment_more_clients_than_cores(self):
+        host_configs = [
+            {
+                "host": "host-a",
+                "cores": 4
+            },
+            {
+                "host": "host-b",
+                "cores": 4
+            }
+        ]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=16)
+
+        self.assertEqual([
+            {
+                "host": "host-a",
+                "workers": [
+                    [0, 8],
+                    [2, 10],
+                    [4, 12],
+                    [6, 14]
+                ],
+                "worker": 8
+            },
+            {
+                "host": "host-b",
+                "workers": [
+                    [1, 9],
+                    [3, 11],
+                    [5, 13],
+                    [7, 15]
+                ],
+                "worker": 8
+            }
+        ], assignments)
+
+    def test_multiple_host_assignment_less_clients_than_cores(self):
+        host_configs = [
+            {
+                "host": "host-a",
+                "cores": 4
+            },
+            {
+                "host": "host-b",
+                "cores": 4
+            }
+        ]
+
+        assignments = driver.calculate_worker_assignments(host_configs, client_count=4)
+
+        self.assertEqual([
+            {
+                "host": "host-a",
+                "workers": [
+                    [0],
+                    [2],
+                    [],
+                    []
+                ],
+                "worker": 2
+            },
+            {
+                "host": "host-b",
+                "workers": [
+                    [1],
+                    [3],
+                    [],
+                    []
+                ],
+                "worker": 2
+            }
+        ], assignments)
 
 
 class AllocatorTests(TestCase):

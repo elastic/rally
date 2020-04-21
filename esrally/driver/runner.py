@@ -269,6 +269,21 @@ def mandatory(params, key, op):
                                    " parameter source." % (str(op), key))
 
 
+def escape(v):
+    """
+    Escapes values so they can be used as query parameters
+
+    :param v: The raw value. May be None.
+    :return: The escaped value.
+    """
+    if v is None:
+        return None
+    elif isinstance(v, bool):
+        return str(v).lower()
+    else:
+        return str(v)
+
+
 class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
@@ -311,7 +326,7 @@ class BulkIndex(Runner):
 
         * ``index``: name of the affected index. May be `None` if it could not be derived.
         * ``bulk-size``: bulk size, e.g. 5.000.
-        * ``bulk-request-size-bytes``: size of the full bulk requset in bytes
+        * ``bulk-request-size-bytes``: size of the full bulk request in bytes
         * ``total-document-size-bytes``: size of all documents contained in the bulk request in bytes
         * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
         * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
@@ -772,15 +787,12 @@ class Query(Runner):
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
         detailed_results = params.get("detailed-results", False)
-        params = request_params
+        headers = self._headers(params)
 
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
-        if doc_type is not None:
-            r = await self._raw_search(es, doc_type, index, body, params)
-        else:
-            r = await es.search(index=index, body=body, params=params)
+        r = await self._raw_search(es, doc_type, index, body, request_params, headers)
 
         if detailed_results:
             props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
@@ -815,11 +827,7 @@ class Query(Runner):
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
         size = params.get("results-per-page")
-        # reduces overhead due to decompression of very large responses
-        if params.get("response-compression-enabled", True):
-            headers = None
-        else:
-            headers = {"Accept-Encoding": "identity"}
+        headers = self._headers(params)
         scroll_id = None
 
         # disable eager response parsing - responses might be huge thus skewing results
@@ -895,6 +903,13 @@ class Query(Runner):
         if cache is not None:
             request_params["request_cache"] = str(cache).lower()
         return request_params
+
+    def _headers(self, params):
+        # reduces overhead due to decompression of very large responses
+        if params.get("response-compression-enabled", True):
+            return None
+        else:
+            return {"Accept-Encoding": "identity"}
 
     def __repr__(self, *args, **kwargs):
         return "query"
@@ -1166,8 +1181,7 @@ class CreateMlDatafeed(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "PUT",
-                    "/_xpack/ml/datafeeds/%s" % datafeed_id,
-                    params=params,
+                    f"/_xpack/ml/datafeeds/{datafeed_id}",
                     body=body,
                 )
             else:
@@ -1194,8 +1208,11 @@ class DeleteMlDatafeed(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "DELETE",
-                    "/_xpack/ml/datafeeds/%s" % datafeed_id,
-                    params=params,
+                    f"/_xpack/ml/datafeeds/{datafeed_id}",
+                    params={
+                        "force": escape(force),
+                        "ignore": 404
+                    },
                 )
             else:
                 raise e
@@ -1223,8 +1240,7 @@ class StartMlDatafeed(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "POST",
-                    "/_xpack/ml/datafeeds/%s/_start" % datafeed_id,
-                    params=params,
+                    f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
                     body=body,
                 )
             else:
@@ -1249,10 +1265,15 @@ class StopMlDatafeed(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
+                request_params = {
+                    "force": escape(force),
+                }
+                if timeout:
+                    request_params["timeout"] = escape(timeout)
                 await es.transport.perform_request(
                     "POST",
-                    "/_xpack/ml/datafeeds/%s/_stop" % datafeed_id,
-                    params=params
+                    f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
+                    params=request_params
                 )
             else:
                 raise e
@@ -1277,8 +1298,7 @@ class CreateMlJob(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "PUT",
-                    "/_xpack/ml/anomaly_detectors/%s" % job_id,
-                    params=params,
+                    f"/_xpack/ml/anomaly_detectors/{job_id}",
                     body=body,
                 )
             else:
@@ -1303,10 +1323,13 @@ class DeleteMlJob(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                es.transport.perform_request(
+                await es.transport.perform_request(
                     "DELETE",
-                    "/_xpack/ml/anomaly_detectors/%s" % job_id,
-                    params=params,
+                    f"/_xpack/ml/anomaly_detectors/{job_id}",
+                    params={
+                        "force": escape(force),
+                        "ignore": 404
+                    },
                 )
             else:
                 raise e
@@ -1330,8 +1353,7 @@ class OpenMlJob(Runner):
             if e.status_code == 400:
                 await es.transport.perform_request(
                     "POST",
-                    "/_xpack/ml/anomaly_detectors/%s/_open" % job_id,
-                    params=params,
+                    f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
                 )
             else:
                 raise e
@@ -1355,10 +1377,16 @@ class CloseMlJob(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
+                request_params = {
+                    "force": escape(force),
+                }
+                if timeout:
+                    request_params["timeout"] = escape(timeout)
+
                 await es.transport.perform_request(
                     "POST",
-                    "/_xpack/ml/anomaly_detectors/%s/_close" % job_id,
-                    params=params,
+                    f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
+                    params=request_params,
                 )
             else:
                 raise e
