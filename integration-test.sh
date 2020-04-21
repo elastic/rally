@@ -476,27 +476,6 @@ function test_node_management_commands {
 }
 
 
-function assert_eq {
-  local expected="$1"
-  local actual="$2"
-
-  if [[ "$expected" == "$actual" ]]; then
-    return 0
-  else
-    error "$expected = $actual"
-    exit 1
-  fi
-}
-
-function assert_exists {
-  if [[ -f "$1" ]]; then
-    return 0
-  else
-    error "$1 does not exist!"
-    exit 1
-  fi
-}
-
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
     if [[ -z "${RALLY_VERSION}" ]]; then

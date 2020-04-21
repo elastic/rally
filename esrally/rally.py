@@ -152,7 +152,7 @@ def create_arg_parser():
     generate_parser.add_argument(
         "artifact",
         metavar="artifact",
-        help="The artifact to create. Possible values are: charts, track",
+        help="The artifact to create. Possible values are: charts",
         choices=["charts"])
     # We allow to either have a chart-spec-path *or* define a chart-spec on the fly with track, challenge and car. Convincing
     # argparse to validate that everything is correct *might* be doable but it is simpler to just do this manually.
@@ -914,7 +914,6 @@ def main():
             # other options are stored elsewhere already
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
     if sub_command == "generate-track":
-        # cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
         cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
         cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
 
