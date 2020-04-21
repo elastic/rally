@@ -103,7 +103,7 @@ def extract(client, outdir, index_pattern):
         filename = f"{index}.json"
         outpath = os.path.join(outdir, filename)
         with open(outpath, "w") as outfile:
-            json.dump(index_obj, outfile, indent=4, sort_keys=True)
+            json.dump(details, outfile, indent=4, sort_keys=True)
             outfile.write("\n")
         results.append({
             "name": index,
