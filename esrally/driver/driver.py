@@ -20,6 +20,7 @@ import collections
 import concurrent.futures
 import datetime
 import logging
+import math
 import multiprocessing
 import queue
 import threading
@@ -692,21 +693,38 @@ def calculate_worker_assignments(host_configs, client_count):
              in that list contains another list with the clients that should be assigned to these workers.
     """
     assignments = []
-
+    client_idx = 0
+    host_count = len(host_configs)
+    clients_per_host = math.ceil(client_count / host_count)
+    remaining_clients = client_count
     for host_config in host_configs:
-        assignments.append({
+        # the last host might not need to simulate as many clients as the rest of the hosts as we eagerly
+        # assign clients to hosts.
+        clients_on_this_host = min(clients_per_host, remaining_clients)
+        assignment = {
             "host": host_config["host"],
-            "workers": [[] for _ in range(host_config["cores"])],
-            "worker": 0
-        })
+            "workers": [],
+        }
+        assignments.append(assignment)
 
-    for client_idx in range(client_count):
-        host = assignments[client_idx % len(assignments)]
-        workers = host["workers"]
-        worker_idx = host["worker"]
-        worker = host["workers"][worker_idx % len(workers)]
-        worker.append(client_idx)
-        host["worker"] = worker_idx + 1
+        workers_on_this_host = host_config["cores"]
+        clients_per_worker = [0] * workers_on_this_host
+
+        # determine how many clients each worker should simulate
+        for c in range(clients_on_this_host):
+            clients_per_worker[c % workers_on_this_host] += 1
+
+        # assign client ids to workers
+        for worker_idx, client_count in enumerate(clients_per_worker):
+            worker_assignment = []
+            assignment["workers"].append(worker_assignment)
+            for c in range(client_idx, client_idx + client_count):
+                worker_assignment.append(c)
+            client_idx += client_count
+
+        remaining_clients -= clients_on_this_host
+
+    assert remaining_clients == 0
 
     return assignments
 
@@ -1135,7 +1153,13 @@ class AsyncIoAdapter:
         es = es_clients(self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options").all_client_options)
 
         aws = []
-        for client_id, task in self.task_allocations:
+        # A parameter source should only be created once per task - it is partitioned later on per client.
+        params_per_task = {}
+        for client_id, task_allocation in self.task_allocations:
+            task = task_allocation.task
+            if task not in params_per_task:
+                param_source = track.operation_parameters(self.track, task)
+                params_per_task[task] = param_source
             # We cannot use the global client index here because we need to support parallel execution of tasks
             # with multiple clients. Consider the following scenario:
             #
@@ -1144,9 +1168,9 @@ class AsyncIoAdapter:
             #
             # Now we need to ensure that we start partitioning parameters correctly in both cases. And that means we
             # need to start from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
-            schedule = schedule_for(self.track, task.task, task.client_index_in_task)
+            schedule = schedule_for(task, task_allocation.client_index_in_task, params_per_task[task])
             async_executor = AsyncExecutor(
-                client_id, task.task, schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
+                client_id, task, schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
             aws.append(final_executor())
         run_start = time.perf_counter()
@@ -1496,13 +1520,13 @@ class Allocator:
 
 # Runs a concrete schedule on one worker client
 # Needs to determine the runners and concrete iterations per client.
-def schedule_for(current_track, task, client_index):
+def schedule_for(task, client_index, parameter_source):
     """
     Calculates a client's schedule for a given task.
 
-    :param current_track: The current track.
     :param task: The task that should be executed.
     :param client_index: The current client index.  Must be in the range [0, `task.clients').
+    :param parameter_source: The parameter source that should be used for this task.
     :return: A generator for the operations the given client needs to perform for this task.
     """
     logger = logging.getLogger(__name__)
@@ -1511,7 +1535,7 @@ def schedule_for(current_track, task, client_index):
     sched = scheduler.scheduler_for(task.schedule, task.params)
     logger.info("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)
-    params_for_op = track.operation_parameters(current_track, task).partition(client_index, num_clients)
+    params_for_op = parameter_source.partition(client_index, num_clients)
 
     if requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
