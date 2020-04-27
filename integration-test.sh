@@ -475,6 +475,7 @@ function test_node_management_commands {
     esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}"
 }
 
+
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
     if [[ -z "${RALLY_VERSION}" ]]; then
@@ -575,6 +576,7 @@ if [[ $1 == "test_docker_release_image" ]]; then
 elif declare -f "$1" > /dev/null; then
     set_up
     $1
+    TEST_SUCCESS=1
     exit
 # otherwise run all functions
 else
