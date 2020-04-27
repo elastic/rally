@@ -6,14 +6,14 @@ Definition
 
 A track describes one or more benchmarking scenarios. Its structure is described in detail in the :doc:`track reference </track>`.
 
-.. _add_track_generate_track:
+.. _add_track_create_track:
 
-Generating a track from data in an existing cluster
----------------------------------------------------
+Creating a track from data in an existing cluster
+-------------------------------------------------
 
-If you already have a cluster with data in it you can use the ``generate-track`` subcommand of Rally to create a basic Rally track. To create a Rally track with data from the indices ``products`` and ``companies`` that are hosted by a locally running Elasticsearch cluster, issue the following command::
+If you already have a cluster with data in it you can use the ``create-track`` subcommand of Rally to create a basic Rally track. To create a Rally track with data from the indices ``products`` and ``companies`` that are hosted by a locally running Elasticsearch cluster, issue the following command::
 
-    esrally --track=acme --target-hosts=127.0.0.1:9200 --indices="products,companies" --output-path=~/tracks
+    esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --indices="products,companies" --output-path=~/tracks
 
 .. note::
    If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.

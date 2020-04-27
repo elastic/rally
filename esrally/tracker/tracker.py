@@ -55,7 +55,7 @@ def extract_mappings_and_corpora(client, output_path, indices_to_extract):
     return indices, corpora
 
 
-def generate_track(cfg):
+def create_track(cfg):
     logger = logging.getLogger(__name__)
 
     track_name = cfg.opts("track", "track.name")
@@ -64,7 +64,7 @@ def generate_track(cfg):
     target_hosts = cfg.opts("client", "hosts")
     client_options = cfg.opts("client", "options")
 
-    logger.info("Generating track [%s] matching indices [%s]", track_name, indices)
+    logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
 
     client = EsClientFactory(hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT],
                              client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]).create()
@@ -90,4 +90,4 @@ def generate_track(cfg):
     process_template(templates_path, "track.json.j2", template_vars, track_path)
 
     console.println("")
-    console.info(f"Track {track_name} has been generated. Run it with: {PROGRAM_NAME} --track-path={output_path}")
+    console.info(f"Track {track_name} has been created. Run it with: {PROGRAM_NAME} --track-path={output_path}")

@@ -38,17 +38,17 @@ def test_cluster():
 
 
 @it.rally_in_mem
-def test_generate_track(cfg, tmp_path, test_cluster):
+def test_create_track(cfg, tmp_path, test_cluster):
     # prepare some data
     cmd = f"--test-mode --pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} " \
           f" --track=geonames --challenge=append-no-conflicts-index-only --quiet"
     assert it.race(cfg, cmd) == 0
 
-    # generate the track
+    # create the track
     track_name = f"test-track-{uuid.uuid4()}"
     track_path = tmp_path / track_name
 
-    assert it.esrally(cfg, f"generate-track --target-hosts=127.0.0.1:{test_cluster.http_port} --indices=geonames "
+    assert it.esrally(cfg, f"create-track --target-hosts=127.0.0.1:{test_cluster.http_port} --indices=geonames "
                            f"--track={track_name} --output-path={tmp_path}") == 0
 
     expected_files = ["track.json",
@@ -62,6 +62,6 @@ def test_generate_track(cfg, tmp_path, test_cluster):
         full_path = track_path / f
         assert full_path.exists(), f"Expected file to exist at path [{full_path}]"
 
-    # run a benchmark with the generated track
+    # run a benchmark with the created track
     cmd = f"--test-mode --pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track-path={track_path}"
     assert it.race(cfg, cmd) == 0

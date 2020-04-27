@@ -124,26 +124,26 @@ def create_arg_parser():
         "--exclude-tasks",
         help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.")
 
-    generate_track_parser = subparsers.add_parser("generate-track", help="Generate a Rally track from existing data")
-    generate_track_parser.add_argument(
+    create_track_parser = subparsers.add_parser("create-track", help="Create a Rally track from existing data")
+    create_track_parser.add_argument(
         "--track",
         required=True,
         help="Name of the generated track")
-    generate_track_parser.add_argument(
+    create_track_parser.add_argument(
         "--indices",
         type=non_empty_list,
         required=True,
         help="Comma-separated list of indices to include in the track")
-    generate_track_parser.add_argument(
+    create_track_parser.add_argument(
         "--target-hosts",
         default="",
         required=True,
         help="Comma-separated list of host:port pairs which should be targeted")
-    generate_track_parser.add_argument(
+    create_track_parser.add_argument(
         "--client-options",
         default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS,
         help=f"Comma-separated list of client options to use. (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS})")
-    generate_track_parser.add_argument(
+    create_track_parser.add_argument(
         "--output-path",
         default=os.path.join(os.getcwd(), "tracks"),
         help="Track output directory (default: tracks/)")
@@ -571,7 +571,7 @@ def create_arg_parser():
             default=False)
 
     for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
-              start_parser, stop_parser, info_parser, generate_parser, generate_track_parser, async_race_parser]:
+              start_parser, stop_parser, info_parser, generate_parser, create_track_parser, async_race_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
@@ -768,8 +768,8 @@ def dispatch_sub_command(cfg, sub_command):
             racecontrol.run_async(cfg)
         elif sub_command == "generate":
             generate(cfg)
-        elif sub_command == "generate-track":
-            tracker.generate_track(cfg)
+        elif sub_command == "create-track":
+            tracker.create_track(cfg)
         elif sub_command == "info":
             track.track_info(cfg)
         else:
@@ -913,7 +913,7 @@ def main():
         else:
             # other options are stored elsewhere already
             cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
-    if sub_command == "generate-track":
+    if sub_command == "create-track":
         cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
         cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
 
