@@ -17,7 +17,7 @@ If you already have a cluster with data in it you can use the ``create-track`` s
 
 If TLS and basic authentication is enabled, also specify :ref:`--client-options <clr_client_options>` and change ``basic_auth_user`` and ``basic_auth_password`` accordingly::
 
-    esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --client-options="timeout:60,use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'" --indices="products,companies" --output-path=~/tracks
+    esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --client-options="timeout:60,use_ssl:true,verify_certs:true,basic_auth_user:'rally',basic_auth_password:'rally-password'" --indices="products,companies" --output-path=~/tracks
 
 The track generator will create a folder with the track's name in the specified output directory::
 
