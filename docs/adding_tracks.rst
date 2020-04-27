@@ -13,10 +13,11 @@ Creating a track from data in an existing cluster
 
 If you already have a cluster with data in it you can use the ``create-track`` subcommand of Rally to create a basic Rally track. To create a Rally track with data from the indices ``products`` and ``companies`` that are hosted by a locally running Elasticsearch cluster, issue the following command::
 
-    esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --indices="products,companies" --output-path=~/tracks
+    esrally create-track --track=acme --target-hosts=127.0.0.1: --indices="products,companies" --output-path=~/tracks
 
-.. note::
-   If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
+If TLS and basic authentication is enabled, also specify :ref:`--client-options <clr_client_options>` and change ``basic_auth_user`` and ``basic_auth_password`` accordingly::
+
+    esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --client-options="timeout:60,use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'" --indices="products,companies" --output-path=~/tracks
 
 The track generator will create a folder with the track's name in the specified output directory::
 

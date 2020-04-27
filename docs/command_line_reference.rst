@@ -814,6 +814,9 @@ Use index patterns::
     esrally create-track --track=my-logs --indices="logs-*" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
 
 
+.. note::
+   If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
+
 .. _command_line_reference_advanced_topics:
 
 Advanced topics
