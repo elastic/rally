@@ -302,24 +302,6 @@ function test_distribution_fails_with_wrong_track_params {
     restore_rally_log
 }
 
-function test_benchmark_only {
-    # we just use our metrics cluster for these benchmarks. It's not ideal but simpler.
-    local cfg
-    local dist
-    random_configuration cfg
-
-    info "test benchmark-only [--configuration-name=${cfg}]"
-    kill_rally_processes
-    esrally --target-host="localhost:${ES_METRICS_STORE_HTTP_PORT}" \
-            --configuration-name="${cfg}" \
-            --on-error=abort \
-            --pipeline=benchmark-only \
-            --track=geonames \
-            --test-mode \
-            --challenge=append-no-conflicts-index-only \
-            --track-params="cluster_health:'yellow'"
-}
-
 function test_proxy_connection {
     local cfg
 
@@ -475,6 +457,7 @@ function test_node_management_commands {
     esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}"
 }
 
+
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
     if [[ -z "${RALLY_VERSION}" ]]; then
@@ -518,8 +501,6 @@ function run_test {
     test_configure
     echo "**************************************** TESTING RALLY FAILS WITH UNUSED TRACK-PARAMS **************************"
     test_distribution_fails_with_wrong_track_params
-    echo "**************************************** TESTING RALLY BENCHMARK-ONLY PIPELINE *********************************"
-    test_benchmark_only
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
     test_docker_dev_image
     echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
@@ -575,6 +556,7 @@ if [[ $1 == "test_docker_release_image" ]]; then
 elif declare -f "$1" > /dev/null; then
     set_up
     $1
+    TEST_SUCCESS=1
     exit
 # otherwise run all functions
 else

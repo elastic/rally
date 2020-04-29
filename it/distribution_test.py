@@ -27,7 +27,7 @@ def test_tar_distributions(cfg):
     for dist in it.DISTRIBUTIONS:
         for track in it.TRACKS:
             it.wait_until_port_is_free()
-            assert it.esrally(cfg, f"--on-error=abort --distribution-version=\"{dist}\" --track=\"{track}\" "
+            assert it.race(cfg, f"--distribution-version=\"{dist}\" --track=\"{track}\" "
                                    f"--test-mode --car=4gheap") == 0
 
 
@@ -36,7 +36,7 @@ def test_docker_distribution(cfg):
     # only test the most recent Docker distribution
     dist = it.DISTRIBUTIONS[-1]
     it.wait_until_port_is_free(port_number=19200)
-    assert it.esrally(cfg, f"--on-error=abort --pipeline=\"docker\" --distribution-version=\"{dist}\" "
+    assert it.race(cfg, f"--pipeline=\"docker\" --distribution-version=\"{dist}\" "
                            f"--track=\"geonames\" --challenge=\"append-no-conflicts-index-only\" --test-mode "
                            f"--car=4gheap --target-hosts=127.0.0.1:19200") == 0
 
@@ -92,5 +92,5 @@ def execute_eventdata(cfg, test_cluster, challenges, track_params):
     for challenge in challenges:
         cmd = f"--test-mode --pipeline=benchmark-only --target-host=127.0.0.1:{test_cluster.http_port} " \
               f"--track-repository=eventdata --track=eventdata --track-params=\"{track_params}\" " \
-              f"--challenge={challenge} --on-error=abort"
-        assert it.esrally(cfg, cmd) == 0
+              f"--challenge={challenge}"
+        assert it.race(cfg, cmd) == 0

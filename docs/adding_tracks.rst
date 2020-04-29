@@ -6,8 +6,43 @@ Definition
 
 A track describes one or more benchmarking scenarios. Its structure is described in detail in the :doc:`track reference </track>`.
 
-Example track
--------------
+.. _add_track_create_track:
+
+Creating a track from data in an existing cluster
+-------------------------------------------------
+
+If you already have a cluster with data in it you can use the ``create-track`` subcommand of Rally to create a basic Rally track. To create a Rally track with data from the indices ``products`` and ``companies`` that are hosted by a locally running Elasticsearch cluster, issue the following command::
+
+    esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --indices="products,companies" --output-path=~/tracks
+
+If you want to connect to a cluster with TLS and basic authentication enabled, for example via Elastic Cloud, also specify :ref:`--client-options <clr_client_options>` and change ``basic_auth_user`` and ``basic_auth_password`` accordingly::
+
+    esrally create-track --track=acme --target-hosts=abcdef123.us-central-1.gcp.cloud.es.io:9243 --client-options="timeout:60,use_ssl:true,verify_certs:true,basic_auth_user:'elastic',basic_auth_password:'secret-password'" --indices="products,companies" --output-path=~/tracks
+
+The track generator will create a folder with the track's name in the specified output directory::
+
+    > find tracks/acme
+    tracks/acme
+    tracks/acme/companies-documents.json
+    tracks/acme/companies-documents.json.bz2
+    tracks/acme/companies-documents-1k.json
+    tracks/acme/companies-documents-1k.json.bz2
+    tracks/acme/companies.json
+    tracks/acme/products-documents.json
+    tracks/acme/products-documents.json.bz2
+    tracks/acme/products-documents-1k.json
+    tracks/acme/products-documents-1k.json.bz2
+    tracks/acme/products.json
+    tracks/acme/track.json
+
+The files are organized as follows:
+
+* ``track.json`` contains the actual Rally track. For details see the :doc:`track reference<track>`.
+* ``companies.json`` and ``products.json`` contain the mapping and settings for the extracted indices.
+* ``*-documents.json(.bz2)`` contains the sources of all the documents from the extracted indices. The files suffixed with ``-1k`` contain a smaller version of the document corpus to support :ref:`test mode <add_track_test_mode>`.
+
+Creating a track from scratch
+-----------------------------
 
 We will create the track "tutorial" step by step. We store everything in the directory ``~/rally-tracks/tutorial`` but you can choose any other location.
 
@@ -1045,3 +1080,4 @@ This implementation achieves the same rate independent of the number of clients.
         "lower-bound-millis": 50,
         "upper-bound-millis": 250
     }
+

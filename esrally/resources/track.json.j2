@@ -1,0 +1,44 @@
+{% raw %}{% import "rally.helpers" as rally with context %}{% endraw %}
+{
+  "version": 2,
+  "description": "Tracker-generated track for {{track_name}}",
+  "indices": [{% set comma = joiner() %}{% for index in indices %}{{comma()}}
+    {
+      "name": "{{index.name}}",
+      "body": "{{index.filename}}"
+    }{% endfor %}
+  ],
+  "corpora": [{% set comma = joiner() %}{% for corpus in corpora %}{{comma()}}
+    {
+      "name": "{{corpus.index_name}}",
+      "documents": [
+        {
+          "target-index": "{{corpus.index_name}}",
+          "source-file": "{{corpus.filename}}",
+          "document-count": {{corpus.doc_count}},
+          "compressed-bytes": {{corpus.compressed_bytes}},
+          "uncompressed-bytes": {{corpus.uncompressed_bytes}}
+        }
+      ]
+    }{% endfor %}
+  ],{% raw %}
+  "schedule": [
+    {
+      "operation": "delete-index"
+    },
+    {
+      "operation": {
+        "operation-type": "create-index",
+        "settings": {{index_settings | default({}) | tojson}}
+      }
+    },
+    {
+      "operation": {
+            "operation-type": "bulk",
+            "bulk-size": {{bulk_size | default(5000)}},
+            "ingest-percentage": {{ingest_percentage | default(100)}}
+      },
+      "clients": {{bulk_indexing_clients | default(8)}}
+    }
+  ]{% endraw %}
+}

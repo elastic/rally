@@ -6,9 +6,6 @@ Prerequisites
 
 Install the following software packages:
 
-* Python 3.6 or better available as ``python3`` on the path (verify with: ``python3 --version``)
-* ``pip3`` available on the path (verify with ``pip3 --version``)
-* ``virtualenv`` available on the path (verify with ``virtualenv --version``)
 * Pyenv installed and ``eval "$(pyenv init -)"`` is added to the shell configuration file. For more details please refer to the PyEnv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
 * JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/master/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
 * `Docker <https://docs.docker.com/install/>`_ and on Linux additionally `docker-compose <https://docs.docker.com/compose/install/>`_.

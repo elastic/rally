@@ -492,6 +492,10 @@ class BulkIndexParamSource(ParamSource):
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
 
         self.ingest_percentage = self.float_param(params, name="ingest-percentage", default_value=100, min_value=0, max_value=100)
+        self.param_source = PartitionBulkIndexParamSource(self.corpora, self.batch_size, self.bulk_size,
+                                                          self.ingest_percentage, self.id_conflicts,
+                                                          self.conflict_probability, self.on_conflict,
+                                                          self.recency, self.pipeline, self._params)
 
     def float_param(self, params, name, default_value, min_value, max_value, min_operator=operator.le):
         try:
@@ -525,22 +529,20 @@ class BulkIndexParamSource(ParamSource):
         return corpora
 
     def partition(self, partition_index, total_partitions):
-        return PartitionBulkIndexParamSource(self.corpora, partition_index, total_partitions, self.batch_size, self.bulk_size,
-                                             self.ingest_percentage, self.id_conflicts, self.conflict_probability, self.on_conflict,
-                                             self.recency, self.pipeline, self._params)
+        # register the new partition internally
+        self.param_source.partition(partition_index, total_partitions)
+        return self.param_source
 
     def params(self):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
 
 
 class PartitionBulkIndexParamSource:
-    def __init__(self, corpora, partition_index, total_partitions, batch_size, bulk_size, ingest_percentage,
-                 id_conflicts, conflict_probability, on_conflict, recency, pipeline=None, original_params=None):
+    def __init__(self, corpora, batch_size, bulk_size, ingest_percentage, id_conflicts, conflict_probability,
+                 on_conflict, recency, pipeline=None, original_params=None):
         """
 
         :param corpora: Specification of affected document corpora.
-        :param partition_index: The current partition index.  Must be in the range [0, `total_partitions`).
-        :param total_partitions: The total number of partitions (i.e. clients) for bulk index operations.
         :param batch_size: The number of documents to read in one go.
         :param bulk_size: The size of bulk index operations (number of documents per bulk).
         :param ingest_percentage: A number between (0.0, 100.0] that defines how much of the whole corpus should be ingested.
@@ -553,33 +555,55 @@ class PartitionBulkIndexParamSource:
         :param original_params: The original dict passed to the parent parameter source.
         """
         self.corpora = corpora
-        self.partition_index = partition_index
-        self.total_partitions = total_partitions
+        self.partitions = []
+        self.total_partitions = None
         self.batch_size = batch_size
         self.bulk_size = bulk_size
         self.ingest_percentage = ingest_percentage
         self.id_conflicts = id_conflicts
+        self.conflict_probability = conflict_probability
+        self.on_conflict = on_conflict
+        self.recency = recency
         self.pipeline = pipeline
+        self.original_params = original_params
         # this is only intended for unit-testing
-        create_reader = original_params.pop("__create_reader", create_default_reader)
-        self.internal_params = bulk_data_based(total_partitions, partition_index, corpora, batch_size,
-                                               bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
-                                               pipeline, original_params, create_reader)
+        self.create_reader = original_params.pop("__create_reader", create_default_reader)
         self.current_bulk = 0
-        all_bulks = number_of_bulks(self.corpora, self.partition_index, self.total_partitions, self.bulk_size)
-        self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
+        # use a value > 0 so percent_completed returns a sensible value
+        self.total_bulks = 1
         self.infinite = False
 
     def partition(self, partition_index, total_partitions):
-        raise exceptions.RallyError("Cannot partition a PartitionBulkIndexParamSource further")
+        if self.total_partitions is None:
+            self.total_partitions = total_partitions
+        elif self.total_partitions != total_partitions:
+            raise exceptions.RallyAssertionError(
+                f"Total partitions is expected to be [{self.total_partitions}] but was [{total_partitions}]")
+        self.partitions.append(partition_index)
 
     def params(self):
+        if self.current_bulk == 0:
+            self._init_internal_params()
         # self.internal_params always reads all files. This is necessary to ensure we terminate early in case
         # the user has specified ingest percentage.
         if self.current_bulk == self.total_bulks:
             raise StopIteration()
         self.current_bulk += 1
         return next(self.internal_params)
+
+    def _init_internal_params(self):
+        # contains a continuous range of client ids
+        self.partitions = sorted(self.partitions)
+        start_index = self.partitions[0]
+        end_index = self.partitions[-1]
+
+        self.internal_params = bulk_data_based(self.total_partitions, start_index, end_index, self.corpora,
+                                               self.batch_size, self.bulk_size, self.id_conflicts,
+                                               self.conflict_probability, self.on_conflict, self.recency,
+                                               self.pipeline, self.original_params, self.create_reader)
+
+        all_bulks = number_of_bulks(self.corpora, start_index, end_index, self.total_partitions, self.bulk_size)
+        self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
 
     @property
     def percent_completed(self):
@@ -606,15 +630,15 @@ class ForceMergeParamSource(ParamSource):
         }
 
 
-def number_of_bulks(corpora, partition_index, total_partitions, bulk_size):
+def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):
     """
     :return: The number of bulk operations that the given client will issue.
     """
     bulks = 0
     for corpus in corpora:
         for docs in corpus.documents:
-            _, num_docs, _ = bounds(docs.number_of_documents, partition_index, total_partitions,
-                                    docs.includes_action_and_meta_data)
+            _, num_docs, _ = bounds(docs.number_of_documents, start_partition_index, end_partition_index,
+                                    total_partitions, docs.includes_action_and_meta_data)
             complete_bulks, rest = (num_docs // bulk_size, num_docs % bulk_size)
             bulks += complete_bulks
             if rest > 0:
@@ -661,42 +685,45 @@ def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_si
         return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, docs.target_index, docs.target_type)
 
 
-def create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
-                   create_reader):
+def create_readers(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size, id_conflicts,
+                   conflict_probability, on_conflict, recency, create_reader):
     logger = logging.getLogger(__name__)
     readers = []
     for corpus in corpora:
         for docs in corpus.documents:
-            offset, num_docs, num_lines = bounds(docs.number_of_documents, client_index, num_clients,
-                                                 docs.includes_action_and_meta_data)
+            offset, num_docs, num_lines = bounds(docs.number_of_documents, start_client_index, end_client_index,
+                                                 num_clients, docs.includes_action_and_meta_data)
             if num_docs > 0:
-                logger.info("Task-relative client at index [%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
-                            "from corpus [%s].", client_index, num_docs, offset, docs.target_index, docs.target_type, corpus.name)
-                readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
-                                             on_conflict, recency))
+                logger.info("Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
+                            "from corpus [%s].", start_client_index, end_client_index, num_docs, offset,
+                            docs.target_index, docs.target_type, corpus.name)
+                readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts,
+                                             conflict_probability, on_conflict, recency))
             else:
-                logger.info("Task-relative client at index [%d] skips [%s] (no documents to read).", client_index, corpus.name)
+                logger.info("Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
+                            start_client_index, end_client_index, corpus.name)
     return readers
 
 
-def bounds(total_docs, client_index, num_clients, includes_action_and_meta_data):
+def bounds(total_docs, start_client_index, end_client_index, num_clients, includes_action_and_meta_data):
     """
 
-    Calculates the start offset and number of documents for each client.
+    Calculates the start offset and number of documents for a range of clients.
 
     :param total_docs: The total number of documents to index.
-    :param client_index: The current client index.  Must be in the range [0, `num_clients').
+    :param start_client_index: The first client index.  Must be in the range [0, `num_clients').
+    :param end_client_index: The last client index.  Must be in the range [0, `num_clients').
     :param num_clients: The total number of clients that will run bulk index operations.
     :param includes_action_and_meta_data: Whether the source file already includes the action and meta-data line.
-    :return: A tuple containing: the start offset (in lines) for the document corpus, the number documents that the client should index,
-    and the number of lines that the client should read.
+    :return: A tuple containing: the start offset (in lines) for the document corpus, the number documents that the
+             clients should index, and the number of lines that the clients should read.
     """
     source_lines_per_doc = 2 if includes_action_and_meta_data else 1
 
     docs_per_client = total_docs / num_clients
 
-    start_offset_docs = round(docs_per_client * client_index)
-    end_offset_docs = round(docs_per_client * (client_index + 1))
+    start_offset_docs = round(docs_per_client * start_client_index)
+    end_offset_docs = round(docs_per_client * (end_client_index + 1))
 
     offset_lines = start_offset_docs * source_lines_per_doc
     docs = end_offset_docs - start_offset_docs
@@ -705,7 +732,7 @@ def bounds(total_docs, client_index, num_clients, includes_action_and_meta_data)
     return offset_lines, docs, lines
 
 
-def bulk_generator(readers, client_index, pipeline, original_params):
+def bulk_generator(readers, pipeline, original_params):
     bulk_id = 0
     for index, type, batch in readers:
         # each batch can contain of one or more bulks
@@ -719,9 +746,7 @@ def bulk_generator(readers, client_index, pipeline, original_params):
                 "action-metadata-present": True,
                 "body": bulk,
                 # This is not always equal to the bulk_size we get as parameter. The last bulk may be less than the bulk size.
-                "bulk-size": docs_in_bulk,
-                # a globally unique id for this bulk
-                "bulk-id": "%d-%d" % (client_index, bulk_id)
+                "bulk-size": docs_in_bulk
             }
             if pipeline:
                 bulk_params["pipeline"] = pipeline
@@ -731,13 +756,14 @@ def bulk_generator(readers, client_index, pipeline, original_params):
             yield params
 
 
-def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency,
-                    pipeline, original_params, create_reader=create_default_reader):
+def bulk_data_based(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size, id_conflicts,
+                    conflict_probability, on_conflict, recency, pipeline, original_params, create_reader=create_default_reader):
     """
     Calculates the necessary schedule for bulk operations.
 
     :param num_clients: The total number of clients that will run the bulk operation.
-    :param client_index: The current client for which we calculated the schedule. Must be in the range [0, `num_clients').
+    :param start_client_index: The first client for which we calculated the schedule. Must be in the range [0, `num_clients').
+    :param end_client_index: The last client for which we calculated the schedule. Must be in the range [0, `num_clients').
     :param corpora: Specification of affected document corpora.
     :param batch_size: The number of documents to read in one go.
     :param bulk_size: The size of bulk index operations (number of documents per bulk).
@@ -752,9 +778,9 @@ def bulk_data_based(num_clients, client_index, corpora, batch_size, bulk_size, i
                       intended for testing only.
     :return: A generator for the bulk operations of the given client.
     """
-    readers = create_readers(num_clients, client_index, corpora, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict,
-                             recency, create_reader)
-    return bulk_generator(chain(*readers), client_index, pipeline, original_params)
+    readers = create_readers(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size,
+                             id_conflicts, conflict_probability, on_conflict, recency, create_reader)
+    return bulk_generator(chain(*readers), pipeline, original_params)
 
 
 class GenerateActionMetaData:
