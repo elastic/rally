@@ -175,6 +175,9 @@ class ProcessLauncher:
             self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep, prepend=True)
             # Don't merge here!
             env["JAVA_HOME"] = java_home
+        elif env.get("JAVA_HOME"):
+            # Assume that since java_home was not passed in, it should be unset in the environment if it exists
+            del env["JAVA_HOME"]
         env["ES_JAVA_OPTS"] = "-XX:+ExitOnOutOfMemoryError"
 
         # we just blindly trust telemetry here...
@@ -189,9 +192,9 @@ class ProcessLauncher:
             if k not in env:
                 env[k] = v
             elif prepend:
-                    env[k] = v + separator + env[k]
+                env[k] = v + separator + env[k]
             else:
-                    env[k] = env[k] + separator + v
+                env[k] = env[k] + separator + v
 
     @staticmethod
     def _run_subprocess(command_line, env):
