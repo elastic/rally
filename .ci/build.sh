@@ -21,13 +21,25 @@
 set -e
 # fail on pipeline errors, e.g. when grepping
 set -o pipefail
+# fail on any unset environment variables
+set -u
 
 function build {
+  export THESPLOG_FILE="${THESPLOG_FILE:-${RALLY_HOME}/.rally/logs/actor-system-internal.log}"
+  # this value is in bytes, the default is 50kB. We increase it to 200kiB.
+  export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
+  # adjust the default log level from WARNING
+  export THESPLOG_THRESHOLD="INFO"
+
+  # turn nounset off because some of the following commands fail if nounset is turned on
+  set +u
+
   export PATH="$HOME/.pyenv/bin:$PATH"
   export TERM=dumb
   export LC_ALL=en_US.UTF-8
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
+
   make prereq
   make install
   make precommit
