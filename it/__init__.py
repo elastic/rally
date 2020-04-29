@@ -67,12 +67,16 @@ def rally_es(t):
     return wrapper
 
 
+def esrally_command_line_for(cfg, command_line):
+    return f"esrally {command_line} --kill-running-processes --configuration-name='{cfg}'"
+
+
 def esrally(cfg, command_line):
     """
     This method should be used for rally invocations of the all commands besides race.
     These commands may have different CLI options than race.
     """
-    return os.system("esrally {} --kill-running-processes --configuration-name=\"{}\"".format(command_line, cfg))
+    return os.system(esrally_command_line_for(cfg, command_line))
 
 
 def race(cfg, command_line):
@@ -80,7 +84,7 @@ def race(cfg, command_line):
     This method should be used for rally invocations of the default race command.
     It sets up some defaults for how the integration tests expect to run races.
     """
-    return os.system("esrally race {} --kill-running-processes --configuration-name=\"{}\" --on-error=\"abort\"".format(command_line, cfg))
+    return esrally(cfg, f"race {command_line} --on-error='abort'")
 
 
 def wait_until_port_is_free(port_number=39200, timeout=120):
