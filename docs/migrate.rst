@@ -61,7 +61,7 @@ For more details please refer to the updated documentation on :ref:`custom runne
 ``trial-id`` and ``trial-timestamp`` are removed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Since Rally 1.4.0, Rally uses the properties ``race-id`` and ``race-timestamp`` when writing data to the Elasticsearch metrics store. The properties ``trial-id`` and ``trial-timestamp`` were populated but are removed in this release. Any visualizations that have still relied on these properties need to be changed to the new ones.
+Since Rally 1.4.0, Rally uses the properties ``race-id`` and ``race-timestamp`` when writing data to the Elasticsearch metrics store. The properties ``trial-id`` and ``trial-timestamp`` were populated but are removed in this release. Any visualizations that still rely on these properties need to be changed to the new ones.
 
 Migrating to Rally 1.4.1
 ------------------------
