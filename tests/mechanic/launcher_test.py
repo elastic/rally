@@ -238,6 +238,7 @@ class ProcessLauncherTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "system", "env.name", "test")
+        os.environ["JAVA_HOME"] = "/path/to/java"
 
         proc_launcher = launcher.ProcessLauncher(cfg)
 
@@ -247,6 +248,44 @@ class ProcessLauncherTests(TestCase):
 
         # unmodified
         self.assertEqual(os.environ["PATH"], env["PATH"])
+        self.assertIsNone(env.get("JAVA_HOME"))
+
+    def test_pass_env_vars(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
+        cfg.add(config.Scope.application, "system", "passenv", "JAVA_HOME,FOO1")
+        os.environ["JAVA_HOME"] = "/path/to/java"
+        os.environ["FOO1"] = "BAR1"
+
+        proc_launcher = launcher.ProcessLauncher(cfg)
+
+        t = telemetry.Telemetry()
+        # no JAVA_HOME -> use the bundled JDK
+        env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home=None, t=t)
+
+        # unmodified
+        self.assertEqual(os.environ["PATH"], env["PATH"])
+        self.assertEqual(os.environ["JAVA_HOME"], env["JAVA_HOME"])
+        self.assertEqual(os.environ["FOO1"], env["FOO1"])
+        self.assertEqual(env["ES_JAVA_OPTS"], "-XX:+ExitOnOutOfMemoryError")
+
+    def test_pass_java_opts(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
+        cfg.add(config.Scope.application, "system", "env.name", "test")
+        cfg.add(config.Scope.application, "system", "passenv", "ES_JAVA_OPTS")
+        os.environ["ES_JAVA_OPTS"] = "-XX:-someJunk"
+
+        proc_launcher = launcher.ProcessLauncher(cfg)
+
+        t = telemetry.Telemetry()
+        # no JAVA_HOME -> use the bundled JDK
+        env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home=None, t=t)
+
+        # unmodified
+        self.assertEqual(os.environ["PATH"], env["PATH"])
+        self.assertEqual(os.environ["ES_JAVA_OPTS"], env["ES_JAVA_OPTS"])
 
     @mock.patch("esrally.time.sleep")
     def test_pidfile_wait_race(self, sleep):

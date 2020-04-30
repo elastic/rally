@@ -23,7 +23,7 @@ import psutil
 
 from esrally import time, exceptions, telemetry
 from esrally.mechanic import cluster, java_resolver
-from esrally.utils import io, process
+from esrally.utils import io, opts, process
 
 
 class DockerLauncher:
@@ -126,6 +126,7 @@ class ProcessLauncher:
         self._clock = clock
         self.keep_running = self.cfg.opts("mechanic", "keep.running")
         self.logger = logging.getLogger(__name__)
+        self.pass_env_vars = opts.csv_to_list(self.cfg.opts("system", "passenv", mandatory=False, default_value="PATH"))
 
     def start(self, node_configurations):
         node_count_on_host = len(node_configurations)
@@ -168,17 +169,14 @@ class ProcessLauncher:
         return node
 
     def _prepare_env(self, car_env, node_name, java_home, t):
-        env = {}
-        env.update(os.environ)
+        env = {k: v for k, v in os.environ.items() if k in self.pass_env_vars or k == "PATH"}
         env.update(car_env)
         if java_home:
             self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep, prepend=True)
             # Don't merge here!
             env["JAVA_HOME"] = java_home
-        elif env.get("JAVA_HOME"):
-            # Assume that since java_home was not passed in, it should be unset in the environment if it exists
-            del env["JAVA_HOME"]
-        env["ES_JAVA_OPTS"] = "-XX:+ExitOnOutOfMemoryError"
+        if not env.get("ES_JAVA_OPTS"):
+            env["ES_JAVA_OPTS"] = "-XX:+ExitOnOutOfMemoryError"
 
         # we just blindly trust telemetry here...
         for v in t.instrument_candidate_java_opts():
