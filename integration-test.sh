@@ -453,8 +453,6 @@ function run_test {
     fi
     echo "**************************************** TESTING CONFIGURATION OF RALLY ****************************************"
     test_configure
-    echo "**************************************** TESTING RALLY FAILS WITH UNUSED TRACK-PARAMS **************************"
-    test_distribution_fails_with_wrong_track_params
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
     test_docker_dev_image
     echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
