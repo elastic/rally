@@ -169,7 +169,7 @@ class ProcessLauncher:
         return node
 
     def _prepare_env(self, car_env, node_name, java_home, t):
-        env = {k: v for k, v in os.environ.items() if k in self.pass_env_vars or k == "PATH"}
+        env = {k: v for k, v in os.environ.items() if k in self.pass_env_vars}
         env.update(car_env)
         if java_home:
             self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep, prepend=True)

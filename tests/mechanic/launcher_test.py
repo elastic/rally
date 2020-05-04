@@ -265,7 +265,6 @@ class ProcessLauncherTests(TestCase):
         env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home=None, t=t)
 
         # unmodified
-        self.assertEqual(os.environ["PATH"], env["PATH"])
         self.assertEqual(os.environ["JAVA_HOME"], env["JAVA_HOME"])
         self.assertEqual(os.environ["FOO1"], env["FOO1"])
         self.assertEqual(env["ES_JAVA_OPTS"], "-XX:+ExitOnOutOfMemoryError")
@@ -284,7 +283,6 @@ class ProcessLauncherTests(TestCase):
         env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home=None, t=t)
 
         # unmodified
-        self.assertEqual(os.environ["PATH"], env["PATH"])
         self.assertEqual(os.environ["ES_JAVA_OPTS"], env["ES_JAVA_OPTS"])
 
     @mock.patch("esrally.time.sleep")
