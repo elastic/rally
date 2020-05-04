@@ -1,6 +1,16 @@
 Migration Guide
 ===============
 
+
+Migrating to Rally 2.0.0
+------------------------
+
+JAVA_HOME and the bundled runtime JDK
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally can optionally use the bundled runtime JDK by setting ``--runtime-jdk="bundled"``. This setting will use the JDK that is bundled with
+elasticsearch and not honor any ``JAVA_HOME`` settings you may have set.
+
 Migrating to Rally 1.5.0
 ------------------------
 
