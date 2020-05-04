@@ -470,9 +470,10 @@ class Driver:
             self.logger.info("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
         worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
+        worker_id = 0
         for assignment in worker_assignments:
             host = assignment["host"]
-            for worker_id, clients in enumerate(assignment["workers"]):
+            for clients in assignment["workers"]:
                 # don't assign workers without any clients
                 if len(clients) > 0:
                     self.logger.info("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
@@ -484,6 +485,7 @@ class Driver:
                         self.clients_per_worker[client_id] = worker_id
                     self.target.start_worker(worker, worker_id, self.config, self.track, client_allocations)
                     self.workers.append(worker)
+                    worker_id += 1
 
         self.update_progress_message()
 
