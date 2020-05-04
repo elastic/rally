@@ -590,9 +590,6 @@ class MetricsStore:
         doc = {
             "@timestamp": time.to_epoch_millis(absolute_time),
             "relative-time": int(relative_time * 1000 * 1000),
-            # TODO #777: Remove trial-* with a later release. They are only here for BWC
-            "trial-id": self._race_id,
-            "trial-timestamp": self._race_timestamp,
             "race-id": self._race_id,
             "race-timestamp": self._race_timestamp,
             "environment": self._environment_name,
@@ -650,9 +647,6 @@ class MetricsStore:
         doc.update({
             "@timestamp": time.to_epoch_millis(absolute_time),
             "relative-time": int(relative_time * 1000 * 1000),
-            # TODO #777: Remove trial-* with a later release. They are only here for BWC
-            "trial-id": self._race_id,
-            "trial-timestamp": self._race_timestamp,
             "race-id": self._race_id,
             "race-timestamp": self._race_timestamp,
             "environment": self._environment_name,
@@ -1005,8 +999,7 @@ class EsMetricsStore(MetricsStore):
                 "filter": [
                     {
                         "term": {
-                            # TODO #777: Switch to "race-id" once we remove the trial-id parameter
-                            "trial-id": self._race_id
+                            "race-id": self._race_id
                         }
                     },
                     {
@@ -1288,9 +1281,6 @@ class Race:
             "rally-version": self.rally_version,
             "rally-revision": self.rally_revision,
             "environment": self.environment_name,
-            # TODO #777: Remove trial-* with a later release. They are only here for BWC
-            "trial-id": self.race_id,
-            "trial-timestamp": time.to_iso8601(self.race_timestamp),
             "race-id": self.race_id,
             "race-timestamp": time.to_iso8601(self.race_timestamp),
             "pipeline": self.pipeline,
@@ -1326,9 +1316,6 @@ class Race:
             "rally-version": self.rally_version,
             "rally-revision": self.rally_revision,
             "environment": self.environment_name,
-            # TODO #777: Remove trial-* with a later release. They are only here for BWC
-            "trial-id": self.race_id,
-            "trial-timestamp": time.to_iso8601(self.race_timestamp),
             "race-id": self.race_id,
             "race-timestamp": time.to_iso8601(self.race_timestamp),
             "distribution-version": self.distribution_version,
@@ -1366,21 +1353,13 @@ class Race:
 
     @classmethod
     def from_dict(cls, d):
-        # for backwards compatibility with Rally < 0.9.2
-        if "user-tag" in d:
-            user_tags = extract_user_tags_from_string(d["user-tag"])
-        elif "user-tags" in d:
-            user_tags = d["user-tags"]
-        else:
-            user_tags = {}
+        user_tags = d.get("user-tags", {})
         # TODO: cluster is optional for BWC. This can be removed after some grace period.
-        # TODO #777: Remove the backwards-compatibility layer with trial*
         cluster = d.get("cluster", {})
-        return Race(d["rally-version"], d.get("rally-revision"), d["environment"], d.get("race-id", d.get("trial-id")),
-                    time.from_is8601(d.get("race-timestamp", d.get("trial-timestamp"))),
-                    d["pipeline"], user_tags, d["track"], d.get("track-params"), d.get("challenge"), d["car"],
-                    d.get("car-params"), d.get("plugin-params"), track_revision=d.get("track-revision"),
-                    team_revision=cluster.get("team-revision"),
+        return Race(d["rally-version"], d.get("rally-revision"), d["environment"], d["race-id"],
+                    time.from_is8601(d["race-timestamp"]), d["pipeline"], user_tags, d["track"], d.get("track-params"),
+                    d.get("challenge"), d["car"], d.get("car-params"), d.get("plugin-params"),
+                    track_revision=d.get("track-revision"), team_revision=cluster.get("team-revision"),
                     distribution_version=cluster.get("distribution-version"),
                     distribution_flavor=cluster.get("distribution-flavor"),
                     revision=cluster.get("revision"), results=d.get("results"), meta_data=d.get("meta", {}))
@@ -1514,8 +1493,7 @@ class EsRaceStore(RaceStore):
             "size": self._max_results(),
             "sort": [
                 {
-                    # TODO #777: Switch to "race-timestamp" once we remove the trial-timestamp parameter
-                    "trial-timestamp": {
+                    "race-timestamp": {
                         "order": "desc"
                     }
                 }
@@ -1539,8 +1517,7 @@ class EsRaceStore(RaceStore):
             },
             {
                 "term": {
-                    # TODO #777: Switch to "race-id" once we remove the trial-id parameter
-                    "trial-id": race_id
+                    "race-id": race_id
                 }
             }]
 

@@ -309,8 +309,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "trial-id": EsMetricsTests.RACE_ID,
-            "trial-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
             "sample-type": "normal",
@@ -340,8 +338,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": 0,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "trial-id": EsMetricsTests.RACE_ID,
-            "trial-timestamp": "20160131T000000Z",
             "relative-time": 10000000,
             "environment": "unittest",
             "sample-type": "normal",
@@ -378,8 +374,6 @@ class EsMetricsTests(TestCase):
         self.metrics_store.put_value_node_level("node0", "indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
-            "trial-id": EsMetricsTests.RACE_ID,
-            "trial-timestamp": "20160131T000000Z",
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
@@ -420,8 +414,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "trial-id": EsMetricsTests.RACE_ID,
-            "trial-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
             "track": "test",
@@ -467,8 +459,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "trial-id": EsMetricsTests.RACE_ID,
-            "trial-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
             "track": "test",
@@ -520,7 +510,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "trial-id": EsMetricsTests.RACE_ID
+                                "race-id": EsMetricsTests.RACE_ID
                             }
                         },
                         {
@@ -564,7 +554,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "trial-id": EsMetricsTests.RACE_ID
+                                "race-id": EsMetricsTests.RACE_ID
                             }
                         },
                         {
@@ -614,7 +604,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "trial-id": EsMetricsTests.RACE_ID
+                                "race-id": EsMetricsTests.RACE_ID
                             }
                         },
                         {
@@ -665,7 +655,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "trial-id": EsMetricsTests.RACE_ID
+                                "race-id": EsMetricsTests.RACE_ID
                             }
                         },
                         {
@@ -794,7 +784,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "trial-id": EsMetricsTests.RACE_ID
+                                "race-id": EsMetricsTests.RACE_ID
                             }
                         },
                         {
@@ -862,8 +852,6 @@ class EsRaceStoreTests(TestCase):
                             "environment": "unittest",
                             "race-id": EsRaceStoreTests.RACE_ID,
                             "race-timestamp": "20160131T000000Z",
-                            "trial-id": EsRaceStoreTests.RACE_ID,
-                            "trial-timestamp": "20160131T000000Z",
                             "pipeline": "from-sources",
                             "track": "unittest",
                             "challenge": "index",
@@ -938,8 +926,6 @@ class EsRaceStoreTests(TestCase):
             "environment": "unittest",
             "race-id": EsRaceStoreTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "trial-id": EsRaceStoreTests.RACE_ID,
-            "trial-timestamp": "20160131T000000Z",
             "pipeline": "from-sources",
             "user-tags": {
                 "os": "Linux"
@@ -1048,8 +1034,6 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
-                "trial-id": EsResultsStoreTests.RACE_ID,
-                "trial-timestamp": "20160131T000000Z",
                 "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
@@ -1080,8 +1064,6 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
-                "trial-id": EsResultsStoreTests.RACE_ID,
-                "trial-timestamp": "20160131T000000Z",
                 "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
@@ -1118,8 +1100,6 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
-                "trial-id": EsResultsStoreTests.RACE_ID,
-                "trial-timestamp": "20160131T000000Z",
                 "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
                 "distribution-major-version": 5,
@@ -1197,8 +1177,6 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
-                "trial-id": EsResultsStoreTests.RACE_ID,
-                "trial-timestamp": "20160131T000000Z",
                 "distribution-flavor": None,
                 "distribution-version": None,
                 "user-tags": {
@@ -1225,8 +1203,6 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
-                "trial-id": EsResultsStoreTests.RACE_ID,
-                "trial-timestamp": "20160131T000000Z",
                 "distribution-flavor": None,
                 "distribution-version": None,
                 "user-tags": {
@@ -1259,8 +1235,6 @@ class EsResultsStoreTests(TestCase):
                 "environment": "unittest",
                 "race-id": EsResultsStoreTests.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
-                "trial-id": EsResultsStoreTests.RACE_ID,
-                "trial-timestamp": "20160131T000000Z",
                 "distribution-flavor": None,
                 "distribution-version": None,
                 "user-tags": {
