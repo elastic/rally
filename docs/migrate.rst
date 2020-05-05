@@ -13,7 +13,7 @@ JAVA_HOME and the bundled runtime JDK
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Rally can optionally use the bundled runtime JDK by setting ``--runtime-jdk="bundled"``. This setting will use the JDK that is bundled with
-elasticsearch and not honor any ``JAVA_HOME`` settings you may have set.
+Elasticsearch and not honor any ``JAVA_HOME`` settings you may have set.
 
 Meta-Data for queries are omitted
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
