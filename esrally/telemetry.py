@@ -240,8 +240,9 @@ class Gc(TelemetryDevice):
     human_name = "GC log"
     help = "Enables GC logs."
 
-    def __init__(self, log_root, java_major_version):
+    def __init__(self, telemetry_params, log_root, java_major_version):
         super().__init__()
+        self.telemetry_params = telemetry_params
         self.log_root = log_root
         self.java_major_version = java_major_version
 
@@ -257,8 +258,9 @@ class Gc(TelemetryDevice):
                     "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
                     "-XX:+PrintTenuringDistribution"]
         else:
+            log_config = self.telemetry_params.get("gc-log-config", "gc*=info,safepoint=info,age*=trace")
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
-            return ["-Xlog:gc*=info,safepoint=info,age*=trace:file={}:utctime,uptimemillis,level,tags:filecount=0".format(log_file)]
+            return [f"-Xlog:{log_config}:file={log_file}:utctime,uptimemillis,level,tags:filecount=0"]
 
 
 class Heapdump(TelemetryDevice):

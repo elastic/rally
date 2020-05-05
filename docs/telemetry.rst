@@ -67,6 +67,10 @@ gc
 
 The ``gc`` telemetry device enables GC logs for the benchmark candidate. You can use tools like `GCViewer <https://github.com/chewiebug/GCViewer>`_ to analyze the GC logs.
 
+If the runtime JDK is Java 9 or better, the following telemetry parameters can be specified:
+
+* ``gc-log-config`` (default: ``gc*=info,safepoint=info,age*=trace``): The GC logging configuration consisting of a list of tags and levels. Run ``java -Xlog:help`` to see the list of available levels and tags.
+
 heapdump
 --------
 
