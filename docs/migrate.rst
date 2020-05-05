@@ -1,9 +1,13 @@
 Migration Guide
 ===============
 
-
 Migrating to Rally 2.0.0
 ------------------------
+
+Minimum Python version is 3.8.0
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 2.0.0 requires Python 3.8.0. Check the :ref:`updated installation instructions <install_python>` for more details.
 
 JAVA_HOME and the bundled runtime JDK
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -11,18 +15,10 @@ JAVA_HOME and the bundled runtime JDK
 Rally can optionally use the bundled runtime JDK by setting ``--runtime-jdk="bundled"``. This setting will use the JDK that is bundled with
 elasticsearch and not honor any ``JAVA_HOME`` settings you may have set.
 
-Migrating to Rally 1.5.0
-------------------------
-
-Minimum Python version is 3.8.0
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Rally 1.5.0 requires Python 3.8.0. Check the :ref:`updated installation instructions <install_python>` for more details.
-
 Meta-Data for queries are omitted
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Rally 1.5.0 does not determine query meta-data anymore by default to reduce the risk of client-side bottlenecks. The following meta-data fields are affected:
+Rally 2.0.0 does not determine query meta-data anymore by default to reduce the risk of client-side bottlenecks. The following meta-data fields are affected:
 
 * ``hits``
 * ``hits_relation``
@@ -34,9 +30,9 @@ If you still want to retrieve them (risking skewed results due to additional ove
 Runner API uses asyncio
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-In order to support more concurrent clients in the future, Rally is moving from a synchronous model to an asynchronous model internally. With Rally 1.5.0 all custom runners need to be implemented using async APIs and a new bool argument ``async_runner=True`` needs to be provided upon registration. Below is an example how to migrate a custom runner function.
+In order to support more concurrent clients in the future, Rally is moving from a synchronous model to an asynchronous model internally. With Rally 2.0.0 all custom runners need to be implemented using async APIs and a new bool argument ``async_runner=True`` needs to be provided upon registration. Below is an example how to migrate a custom runner function.
 
-A custom runner prior to Rally 1.5.0::
+A custom runner prior to Rally 2.0.0::
 
     def percolate(es, params):
         es.percolate(
@@ -48,7 +44,7 @@ A custom runner prior to Rally 1.5.0::
     def register(registry):
         registry.register_runner("percolate", percolate)
 
-With Rally 1.5.0, the implementation changes as follows::
+With Rally 2.0.0, the implementation changes as follows::
 
     async def percolate(es, params):
         await es.percolate(
@@ -67,6 +63,11 @@ Apply to the following changes for each custom runner:
 * Add ``async_runner=True`` as the last argument to the ``register_runner`` function.
 
 For more details please refer to the updated documentation on :ref:`custom runners <adding_tracks_custom_runners>`.
+
+``trial-id`` and ``trial-timestamp`` are removed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Since Rally 1.4.0, Rally uses the properties ``race-id`` and ``race-timestamp`` when writing data to the Elasticsearch metrics store. The properties ``trial-id`` and ``trial-timestamp`` were populated but are removed in this release. Any visualizations that still rely on these properties need to be changed to the new ones.
 
 Migrating to Rally 1.4.1
 ------------------------

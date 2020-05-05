@@ -256,52 +256,6 @@ function test_configure {
     esrally configure --assume-defaults --configuration-name="config-integration-test"
 }
 
-function test_distribution_fails_with_wrong_track_params {
-    local cfg
-    local distribution
-    # TODO check if randomization of track is possible
-    local track="geonames" # fixed value for now, as the available track params vary between tracks
-    local track_params
-    local defined_track_params
-    local undefined_track_params
-
-    random_configuration cfg
-    random_distribution dist
-
-    undefined_track_params="number_of-replicas:0" # - simulates a typo
-
-    if [[ ${track} == "geonames" ]]; then
-        defined_track_params="conflict_probability:45,"
-    fi
-
-    local track_params="${defined_track_params}${undefined_track_params}"
-    readonly err_msg="Rally didn't fail trying to use the undefined track-param ${undefined_track_params}. Check ${RALLY_LOG}."
-
-    info "test distribution [--configuration-name=${cfg}], [--distribution-version=${dist}], [--track=${track}], [--track-params=${track_params}], [--car=4gheap]"
-    kill_rally_processes
-    wait_for_free_es_port
-
-    backup_rally_log
-    set +e
-    esrally --configuration-name="${cfg}" --on-error=abort --distribution-version="${dist}" --track="${track}" --track-params="${track_params}" --test-mode --car=4gheap
-    ret_code=$?
-    set -e
-
-    # we expect Rally to fail, with full details in its log file
-    if [[ ${ret_code} -eq 0 ]]; then
-        error "Rally didn't fail trying to use the undefined track-param ${undefined_track_params}. Check ${RALLY_LOG}."
-        error ${err_msg}
-        exit ${ret_code}
-    elif exit_if_docker_not_running && [[ ${ret_code} -ne 0 ]]; then
-        # need to use grep -P which is unavailable with macOS grep
-        if ! docker run --rm -v ${RALLY_LOG}:/rally.log:ro ubuntu:xenial grep -Pzoq '.*CRITICAL Some of your track parameter\(s\) "number_of-replicas" are not used by this track; perhaps you intend to use "number_of_replicas" instead\.\n\nAll track parameters you provided are:\n- conflict_probability\n- number_of-replicas\n\nAll parameters exposed by this track:\n*' /rally.log; then
-            error ${err_msg}
-            exit ${ret_code}
-        fi
-    fi
-    restore_rally_log
-}
-
 function test_proxy_connection {
     local cfg
 
@@ -499,8 +453,6 @@ function run_test {
     fi
     echo "**************************************** TESTING CONFIGURATION OF RALLY ****************************************"
     test_configure
-    echo "**************************************** TESTING RALLY FAILS WITH UNUSED TRACK-PARAMS **************************"
-    test_distribution_fails_with_wrong_track_params
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
     test_docker_dev_image
     echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
