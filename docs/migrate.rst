@@ -9,6 +9,12 @@ Minimum Python version is 3.8.0
 
 Rally 2.0.0 requires Python 3.8.0. Check the :ref:`updated installation instructions <install_python>` for more details.
 
+JAVA_HOME and the bundled runtime JDK
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally can optionally use the bundled runtime JDK by setting ``--runtime-jdk="bundled"``. This setting will use the JDK that is bundled with
+Elasticsearch and not honor any ``JAVA_HOME`` settings you may have set.
+
 Meta-Data for queries are omitted
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

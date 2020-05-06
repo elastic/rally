@@ -151,6 +151,7 @@ class AsyncDriverTests(TestCase):
                 datetime(year=2017, month=8, day=20, hour=1, minute=0, second=0))
         cfg.add(config.Scope.application, "system", "race.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
         cfg.add(config.Scope.application, "system", "offline.mode", False)
+        cfg.add(config.Scope.application, "node", "root.dir", "/tmp")
         cfg.add(config.Scope.application, "driver", "on.error", "abort")
         cfg.add(config.Scope.application, "driver", "profiling", False)
         cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")

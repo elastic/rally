@@ -22,7 +22,7 @@ import logging
 import threading
 import time
 
-from esrally import exceptions, metrics, track, client, telemetry
+from esrally import exceptions, metrics, paths, track, client, telemetry
 from esrally.driver import driver, runner, scheduler
 from esrally.utils import console
 
@@ -122,6 +122,7 @@ class AsyncDriver:
     def prepare_telemetry(self):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
+        log_root = paths.race_root(self.config)
 
         es = self.es_clients
         es_default = self.es_clients["default"]
@@ -132,6 +133,7 @@ class AsyncDriver:
             telemetry.JvmStatsSummary(es_default, self.metrics_store),
             telemetry.IndexStats(es_default, self.metrics_store),
             telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
+            telemetry.SegmentStats(log_root, es_default),
             telemetry.CcrStats(telemetry_params, es, self.metrics_store),
             telemetry.RecoveryStats(telemetry_params, es, self.metrics_store)
         ])
