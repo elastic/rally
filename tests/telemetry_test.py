@@ -20,6 +20,7 @@ import random
 import unittest.mock as mock
 from collections import namedtuple
 from unittest import TestCase
+from unittest.mock import call
 
 import elasticsearch
 
@@ -211,7 +212,7 @@ class JfrTests(TestCase):
 
 class GcTests(TestCase):
     def test_sets_options_for_pre_java_9(self):
-        gc = telemetry.Gc("/var/log", java_major_version=random.randint(0, 8))
+        gc = telemetry.Gc(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(0, 8))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
         self.assertEqual(7, len(gc_java_opts))
         self.assertEqual(["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps",
@@ -219,11 +220,21 @@ class GcTests(TestCase):
                           "-XX:+PrintTenuringDistribution"], gc_java_opts)
 
     def test_sets_options_for_java_9_or_above(self):
-        gc = telemetry.Gc("/var/log", java_major_version=random.randint(9, 999))
+        gc = telemetry.Gc(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(9, 999))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
         self.assertEqual(1, len(gc_java_opts))
         self.assertEqual(
             ["-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"],
+            gc_java_opts)
+
+    def test_can_override_options_for_java_9_or_above(self):
+        gc = telemetry.Gc(telemetry_params={"gc-log-config": "gc,safepoint"},
+                          log_root="/var/log",
+                          java_major_version=random.randint(9, 999))
+        gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
+        self.assertEqual(1, len(gc_java_opts))
+        self.assertEqual(
+            ["-Xlog:gc,safepoint:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"],
             gc_java_opts)
 
 
@@ -237,6 +248,29 @@ class HeapdumpTests(TestCase):
         t.attach_to_node(node)
         t.detach_from_node(node, running=True)
         run_subprocess_with_logging.assert_called_with("jmap -dump:format=b,file=/var/log/heap_at_exit_1234.hprof 1234")
+
+
+class SegmentStatsTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @mock.patch("builtins.open", new_callable=mock.mock_open)
+    def test_generates_log_file(self, file_mock, es):
+
+        stats_response = """
+        index    shard prirep ip        segment generation docs.count docs.deleted   size size.memory committed searchable version compound
+        geonames 0     p      127.0.0.1 _0               0        212            0 72.3kb        9621 true      true       8.4.0   true
+        """
+
+        es.cat.segments.return_value = stats_response
+
+        segment_stats = telemetry.SegmentStats("/var/log", es)
+        segment_stats.on_benchmark_stop()
+        es.cat.segments.assert_called_with(index="_all", v=True)
+        file_mock.assert_has_calls([
+            call("/var/log/segment_stats.log", "wt"),
+            call().__enter__(),
+            call().write(stats_response),
+            call().__exit__(None, None, None)
+        ])
 
 
 class CcrStatsTests(TestCase):

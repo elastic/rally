@@ -388,6 +388,7 @@ class Driver:
     def prepare_telemetry(self, es):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
+        log_root = paths.race_root(self.config)
 
         es_default = es["default"]
         self.telemetry = telemetry.Telemetry(enabled_devices, devices=[
@@ -397,6 +398,7 @@ class Driver:
             telemetry.JvmStatsSummary(es_default, self.metrics_store),
             telemetry.IndexStats(es_default, self.metrics_store),
             telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
+            telemetry.SegmentStats(log_root, es_default),
             telemetry.CcrStats(telemetry_params, es, self.metrics_store),
             telemetry.RecoveryStats(telemetry_params, es, self.metrics_store)
         ])

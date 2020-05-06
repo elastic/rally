@@ -32,7 +32,7 @@ def list_telemetry():
     console.println("Available telemetry devices:\n")
     devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder,
                                                                                Heapdump, NodeStats, RecoveryStats,
-                                                                               CcrStats]]
+                                                                               CcrStats, SegmentStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -240,8 +240,9 @@ class Gc(TelemetryDevice):
     human_name = "GC log"
     help = "Enables GC logs."
 
-    def __init__(self, log_root, java_major_version):
+    def __init__(self, telemetry_params, log_root, java_major_version):
         super().__init__()
+        self.telemetry_params = telemetry_params
         self.log_root = log_root
         self.java_major_version = java_major_version
 
@@ -257,8 +258,9 @@ class Gc(TelemetryDevice):
                     "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
                     "-XX:+PrintTenuringDistribution"]
         else:
+            log_config = self.telemetry_params.get("gc-log-config", "gc*=info,safepoint=info,age*=trace")
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
-            return ["-Xlog:gc*=info,safepoint=info,age*=trace:file={}:utctime,uptimemillis,level,tags:filecount=0".format(log_file)]
+            return [f"-Xlog:{log_config}:file={log_file}:utctime,uptimemillis,level,tags:filecount=0"]
 
 
 class Heapdump(TelemetryDevice):
@@ -278,6 +280,29 @@ class Heapdump(TelemetryDevice):
             cmd = "jmap -dump:format=b,file={} {}".format(heap_dump_file, node.pid)
             if process.run_subprocess_with_logging(cmd):
                 self.logger.warning("Could not write heap dump to [%s]", heap_dump_file)
+
+
+class SegmentStats(TelemetryDevice):
+    internal = False
+    command = "segment-stats"
+    human_name = "Segment Stats"
+    help = "Determines segment stats at the end of the benchmark."
+
+    def __init__(self, log_root, client):
+        super().__init__()
+        self.log_root = log_root
+        self.client = client
+
+    def on_benchmark_stop(self):
+        # noinspection PyBroadException
+        try:
+            segment_stats = self.client.cat.segments(index="_all", v=True)
+            stats_file = os.path.join(self.log_root, "segment_stats.log")
+            console.info(f"{self.human_name}: Writing segment stats to [{stats_file}]", logger=self.logger)
+            with open(stats_file, "wt") as f:
+                f.write(segment_stats)
+        except BaseException:
+            self.logger.exception("Could not retrieve segment stats.")
 
 
 class CcrStats(TelemetryDevice):
