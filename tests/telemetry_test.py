@@ -212,7 +212,7 @@ class JfrTests(TestCase):
 
 class GcTests(TestCase):
     def test_sets_options_for_pre_java_9(self):
-        gc = telemetry.Gc("/var/log", java_major_version=random.randint(0, 8))
+        gc = telemetry.Gc(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(0, 8))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
         self.assertEqual(7, len(gc_java_opts))
         self.assertEqual(["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps",
@@ -220,11 +220,21 @@ class GcTests(TestCase):
                           "-XX:+PrintTenuringDistribution"], gc_java_opts)
 
     def test_sets_options_for_java_9_or_above(self):
-        gc = telemetry.Gc("/var/log", java_major_version=random.randint(9, 999))
+        gc = telemetry.Gc(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(9, 999))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
         self.assertEqual(1, len(gc_java_opts))
         self.assertEqual(
             ["-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"],
+            gc_java_opts)
+
+    def test_can_override_options_for_java_9_or_above(self):
+        gc = telemetry.Gc(telemetry_params={"gc-log-config": "gc,safepoint"},
+                          log_root="/var/log",
+                          java_major_version=random.randint(9, 999))
+        gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
+        self.assertEqual(1, len(gc_java_opts))
+        self.assertEqual(
+            ["-Xlog:gc,safepoint:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"],
             gc_java_opts)
 
 
