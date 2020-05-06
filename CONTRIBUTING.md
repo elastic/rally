@@ -42,8 +42,9 @@ the [Github help page](https://help.github.com/articles/fork-a-repo) for help.
 
 Rally builds using virtualenv. When importing into IntelliJ you will need to define an appropriate Python SDK, which is provided by virtualenv.
 For more details on defining a Python SDK in IntelliJ please refer to their documentation. We recommend using the Python SDK that `make prereq` creates.
+This is typically created via `Virtualenv Environment` / `Existing Environment` and pointing to `.venv/bin/python3` within the Rally source directory.
 
-In order to run tests within the IDE, ensure the `Python Integrated Tools` `Default Test Runner` is set to `pytest`.
+In order to run tests within the IDE, ensure the `Python Integrated Tools` / `Testing` / `Default Test Runner` is set to `pytest`.
 
 ### Submitting your changes
 
