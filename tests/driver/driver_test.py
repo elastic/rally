@@ -88,6 +88,7 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "system", "time.start", datetime(year=2017, month=8, day=20, hour=1, minute=0, second=0))
         self.cfg.add(config.Scope.application, "system", "race.id", "6ebc6e53-ee20-4b0c-99b4-09697987e9f4")
         self.cfg.add(config.Scope.application, "system", "available.cores", 8)
+        self.cfg.add(config.Scope.application, "node", "root.dir", "/tmp")
         self.cfg.add(config.Scope.application, "track", "challenge.name", "default")
         self.cfg.add(config.Scope.application, "track", "params", {})
         self.cfg.add(config.Scope.application, "track", "test.mode.enabled", True)

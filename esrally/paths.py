@@ -30,7 +30,7 @@ def races_root(cfg):
     return os.path.join(cfg.opts("node", "root.dir"), "races")
 
 
-def race_root(cfg=None, race_id=None):
+def race_root(cfg, race_id=None):
     if not race_id:
         race_id = cfg.opts("system", "race.id")
     return os.path.join(races_root(cfg), race_id)
