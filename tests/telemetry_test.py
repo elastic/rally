@@ -20,6 +20,7 @@ import random
 import unittest.mock as mock
 from collections import namedtuple
 from unittest import TestCase
+from unittest.mock import call
 
 import elasticsearch
 
@@ -237,6 +238,29 @@ class HeapdumpTests(TestCase):
         t.attach_to_node(node)
         t.detach_from_node(node, running=True)
         run_subprocess_with_logging.assert_called_with("jmap -dump:format=b,file=/var/log/heap_at_exit_1234.hprof 1234")
+
+
+class SegmentStatsTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @mock.patch("builtins.open", new_callable=mock.mock_open)
+    def test_generates_log_file(self, file_mock, es):
+
+        stats_response = """
+        index    shard prirep ip        segment generation docs.count docs.deleted   size size.memory committed searchable version compound
+        geonames 0     p      127.0.0.1 _0               0        212            0 72.3kb        9621 true      true       8.4.0   true
+        """
+
+        es.cat.segments.return_value = stats_response
+
+        segment_stats = telemetry.SegmentStats("/var/log", es)
+        segment_stats.on_benchmark_stop()
+        es.cat.segments.assert_called_with(index="_all", v=True)
+        file_mock.assert_has_calls([
+            call("/var/log/segment_stats.log", "wt"),
+            call().__enter__(),
+            call().write(stats_response),
+            call().__exit__(None, None, None)
+        ])
 
 
 class CcrStatsTests(TestCase):
