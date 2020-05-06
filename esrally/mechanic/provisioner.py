@@ -463,7 +463,8 @@ class DockerProvisioner:
         with open(os.path.join(self.binary_path, "docker-compose.yml"), mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"), self.node_ip,
+        return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"),
+                                 self.car.mandatory_var("runtime.jdk.bundled"), self.node_ip,
                                  self.node_name, self.node_root_dir, self.binary_path, self.data_paths)
 
     def docker_vars(self, mounts):
