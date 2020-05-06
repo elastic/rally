@@ -21,7 +21,7 @@ from esrally import exceptions
 from esrally.utils import jvm
 
 
-def java_home(car_runtime_jdks, cfg):
+def java_home(car_runtime_jdks, allow_bundled_jvm, cfg):
     def determine_runtime_jdks():
         override_runtime_jdk = cfg.opts("mechanic", "runtime.jdk")
         if override_runtime_jdk:
@@ -39,6 +39,9 @@ def java_home(car_runtime_jdks, cfg):
 
     runtime_jdk_versions = determine_runtime_jdks()
     if runtime_jdk_versions[0] == "bundled":
+        if not allow_bundled_jvm:
+            raise exceptions.SystemSetupError("The bundled JDK is not allowed with the selected car(s): {}"
+                                              .format(cfg.opts("mechanic", "car.names")))
         logger.info("Using JDK bundled with Elasticsearch.")
         # assume that the bundled JDK is the highest available; the path is irrelevant
         return allowed_runtime_jdks[0], None

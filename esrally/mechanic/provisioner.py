@@ -34,11 +34,8 @@ def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_
     node_root_dir = os.path.join(target_root, node_name)
 
     runtime_jdk_bundled = convert.to_bool(car.mandatory_var("runtime.jdk.bundled"))
-    if runtime_jdk_bundled:
-        java_home = None
-    else:
-        runtime_jdk = car.mandatory_var("runtime.jdk")
-        _, java_home = java_resolver.java_home(runtime_jdk, cfg)
+    runtime_jdk = car.mandatory_var("runtime.jdk")
+    _, java_home = java_resolver.java_home(runtime_jdk, runtime_jdk_bundled, cfg)
 
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
@@ -57,10 +54,12 @@ def docker(cfg, car, cluster_settings, ip, http_port, target_root, node_name):
 
 
 class NodeConfiguration:
-    def __init__(self, build_type, car_env, car_runtime_jdks, ip, node_name, node_root_path, binary_path, data_paths):
+    def __init__(self, build_type, car_env, car_runtime_jdks, car_allow_bundled_jvm, ip, node_name, node_root_path,
+                 binary_path, data_paths):
         self.build_type = build_type
         self.car_env = car_env
         self.car_runtime_jdks = car_runtime_jdks
+        self.car_allow_bundled_jvm = convert.to_bool(car_allow_bundled_jvm)
         self.ip = ip
         self.node_name = node_name
         self.node_root_path = node_root_path
@@ -72,6 +71,7 @@ class NodeConfiguration:
             "build-type": self.build_type,
             "car-env": self.car_env,
             "car-runtime-jdks": self.car_runtime_jdks,
+            "car-allow-bundled-jvm": self.car_allow_bundled_jvm,
             "ip": self.ip,
             "node-name": self.node_name,
             "node-root-path": self.node_root_path,
@@ -81,7 +81,7 @@ class NodeConfiguration:
 
     @staticmethod
     def from_dict(d):
-        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["ip"], d["node-name"],
+        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["car-allow-bundled-jvm"], d["ip"], d["node-name"],
                                  d["node-root-path"], d["binary-path"], d["data-paths"])
 
 
@@ -197,6 +197,7 @@ class BareProvisioner:
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration("tar", self.es_installer.car.env, self.es_installer.car.mandatory_var("runtime.jdk"),
+                                 self.es_installer.car.mandatory_var("runtime.jdk.bundled"),
                                  self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path,
                                  self.es_installer.data_paths)

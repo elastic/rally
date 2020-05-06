@@ -18,7 +18,7 @@
 import unittest.mock as mock
 from unittest import TestCase
 
-from esrally import config
+from esrally import config, exceptions
 from esrally.mechanic import java_resolver
 
 
@@ -30,7 +30,7 @@ class JavaResolverTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "runtime.jdk", None)
 
-        major, java_home = java_resolver.java_home("12,11,10,9,8", cfg)
+        major, java_home = java_resolver.java_home("12,11,10,9,8", True, cfg)
 
         self.assertEqual(major, 12)
         self.assertEqual(java_home, "/opt/jdk12")
@@ -42,7 +42,7 @@ class JavaResolverTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "runtime.jdk", 8)
 
-        major, java_home = java_resolver.java_home("12,11,10,9,8", cfg)
+        major, java_home = java_resolver.java_home("12,11,10,9,8", True, cfg)
 
         self.assertEqual(major, 8)
         self.assertEqual(java_home, "/opt/jdk8")
@@ -53,9 +53,19 @@ class JavaResolverTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "runtime.jdk", "bundled")
 
-        major, java_home = java_resolver.java_home("12,11,10,9,8", cfg)
+        major, java_home = java_resolver.java_home("12,11,10,9,8", True, cfg)
 
         # assumes most recent JDK
         self.assertEqual(major, 12)
         # does not set JAVA_HOME for the bundled JDK
         self.assertEqual(java_home, None)
+
+    def test_disallowed_bundled_jdk(self):
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "mechanic", "runtime.jdk", "bundled")
+        cfg.add(config.Scope.application, "mechanic", "car.names", ["default"])
+
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            java_resolver.java_home("12,11,10,9,8", False, cfg)
+        self.assertEqual("The bundled JDK is not allowed with the selected car(s): ['default']", ctx.exception.args[0])
