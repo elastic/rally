@@ -1,3 +1,70 @@
+### 2.0.0
+
+#### Highlights
+
+* [#970](https://github.com/elastic/rally/pull/970): Add tooling to create a track from existing data
+* [#944](https://github.com/elastic/rally/pull/944): Allow to use significantly more clients
+* [#935](https://github.com/elastic/rally/pull/935): Add an asyncio-based load generator
+* [#875](https://github.com/elastic/rally/pull/875): Add 'Tracker' track-generation tool
+
+#### Enhancements
+
+* [#988](https://github.com/elastic/rally/pull/988): Add experimental segment stats telemetry device
+* [#986](https://github.com/elastic/rally/pull/986): Allow to override GC log parameters
+* [#977](https://github.com/elastic/rally/pull/977): Migrate track param check to new IT infrastructure
+* [#972](https://github.com/elastic/rally/pull/972): Pass actor system env vars in integration test
+* [#971](https://github.com/elastic/rally/pull/971): Add thespian logs to ci
+* [#969](https://github.com/elastic/rally/pull/969): Add an it method for rally race
+* [#968](https://github.com/elastic/rally/pull/968): Add integration tests with eventdata
+* [#967](https://github.com/elastic/rally/pull/967): Raise an error when attempting to bulk-index without any corpora
+* [#966](https://github.com/elastic/rally/pull/966): Migrate more integration tests
+* [#963](https://github.com/elastic/rally/pull/963): Reduce mapped memory with many bulk clients
+* [#962](https://github.com/elastic/rally/pull/962): Increase bulk size to metrics store
+* [#959](https://github.com/elastic/rally/pull/959): Clarify the impact on refreshes for node-stats telemetry
+* [#958](https://github.com/elastic/rally/pull/958): Avoid duplicate URL parsing for async connections
+* [#954](https://github.com/elastic/rally/pull/954): Add flag to handle running processes automatically
+* [#953](https://github.com/elastic/rally/pull/953): Pass JAVA14_HOME in build
+* [#952](https://github.com/elastic/rally/pull/952): Allow to disable HTTP compression for all queries
+* [#951](https://github.com/elastic/rally/pull/951): Upgrade Thespian to 3.10.0
+* [#950](https://github.com/elastic/rally/pull/950): Add support for a RALLY_HOME env var everywhere
+* [#949](https://github.com/elastic/rally/pull/949): Upgrade Elasticsearch client to 7.6.0
+* [#947](https://github.com/elastic/rally/pull/947): Use pbzip2/pigz to decompress corpora if available
+* [#945](https://github.com/elastic/rally/pull/945): Add an override for the rally homedir
+* [#941](https://github.com/elastic/rally/pull/941): Improve response processing
+* [#938](https://github.com/elastic/rally/pull/938): Store units in results
+* [#934](https://github.com/elastic/rally/pull/934) (Breaking): Bump minimum Python version to 3.8
+* [#932](https://github.com/elastic/rally/pull/932): Improve layout of generated dashboards
+* [#931](https://github.com/elastic/rally/pull/931): Store Rally revision in metrics metadata
+* [#930](https://github.com/elastic/rally/pull/930): Update psutil to latest version
+* [#929](https://github.com/elastic/rally/pull/929): Allow index-stats to compare non-existing path
+* [#928](https://github.com/elastic/rally/pull/928): Don't invoke setup.py directly
+* [#925](https://github.com/elastic/rally/pull/925): Allow to specify an indices stats condition
+* [#923](https://github.com/elastic/rally/pull/923): Assume a TTY for interactive commands
+* [#919](https://github.com/elastic/rally/pull/919): Run integration tests with pytest
+* [#914](https://github.com/elastic/rally/pull/914): Improve release docs and IT prechecks
+* [#913](https://github.com/elastic/rally/pull/913): Normalize handling of --preserve-install
+
+#### Bug Fixes
+
+* [#983](https://github.com/elastic/rally/pull/983): Assign worker-id globally
+* [#978](https://github.com/elastic/rally/pull/978): Remove os environment variables from env prep
+* [#965](https://github.com/elastic/rally/pull/965): Always shutdown worker thread pool
+* [#961](https://github.com/elastic/rally/pull/961): Determine most recent sample per client
+* [#960](https://github.com/elastic/rally/pull/960): Disable docstring linter check
+* [#956](https://github.com/elastic/rally/pull/956): Fix fallback implementation of ML-related runners
+* [#943](https://github.com/elastic/rally/pull/943): Fix request timeout handling
+* [#942](https://github.com/elastic/rally/pull/942): Honor response-compression-enabled parameter
+* [#927](https://github.com/elastic/rally/pull/927): Add unit for all query charts
+* [#918](https://github.com/elastic/rally/pull/918): Gather system metrics on Docker stop if possible
+
+#### Doc Changes
+
+* [#980](https://github.com/elastic/rally/pull/980): Change next Rally version in migration docs
+* [#955](https://github.com/elastic/rally/pull/955): Update docs to advise use of pbzip2 for new track corpus
+* [#948](https://github.com/elastic/rally/pull/948): Align track reference structure with track
+* [#939](https://github.com/elastic/rally/pull/939): Correct JMC download link
+* [#937](https://github.com/elastic/rally/pull/937): Fix port number in recipes docs
+
 ### 1.4.1
 
 #### Highlights
