@@ -38,6 +38,14 @@ If you want to get started in the project, a good idea is to check issues labele
 You will need to fork the Rally repository and clone it to your local machine. See 
 the [Github help page](https://help.github.com/articles/fork-a-repo) for help.
 
+### Importing the project into IntelliJ IDEA
+
+Rally builds using virtualenv. When importing into IntelliJ you will need to define an appropriate Python SDK, which is provided by virtualenv.
+For more details on defining a Python SDK in IntelliJ please refer to their documentation. We recommend using the Python SDK that `make prereq` creates.
+This is typically created via `Virtualenv Environment` / `Existing Environment` and pointing to `.venv/bin/python3` within the Rally source directory.
+
+In order to run tests within the IDE, ensure the `Python Integrated Tools` / `Testing` / `Default Test Runner` is set to `pytest`.
+
 ### Submitting your changes
 
 Once your changes and tests are ready to submit for review:
