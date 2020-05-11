@@ -276,12 +276,11 @@ class CachedElasticsearchSourceSupplier:
             # this can be None if the Elasticsearch does not reside in a git repo and the user has only
             # copied all source files. In that case, we cannot resolve a revision hash and thus we cannot cache.
             if self.cached_path:
-                # noinspection PyBroadException
                 try:
                     shutil.copy(original_path, self.cached_path)
                     self.logger.info("Caching artifact in [%s]", self.cached_path)
                     binaries["elasticsearch"] = self.cached_path
-                except BaseException:
+                except OSError:
                     self.logger.exception("Not caching [%s].", original_path)
             else:
                 self.logger.info("Not caching [%s] (no revision info).", original_path)
