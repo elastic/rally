@@ -19,6 +19,7 @@ import glob
 import logging
 import os
 import re
+import shutil
 import urllib.error
 
 from esrally import exceptions, paths, PROGRAM_NAME
@@ -52,29 +53,36 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     else:
         builder = None
 
+    distributions_root = os.path.join(cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
+    dist_cfg = {}
+    # car / plugin defines defaults...
+    dist_cfg.update(car.variables)
+    for plugin in plugins:
+        for k, v in plugin.variables.items():
+            dist_cfg["plugin_{}_{}".format(plugin.name, k)] = v
+    # ... but the user can override it in rally.ini
+    dist_cfg.update(cfg.all_opts("distributions"))
+
     if es_supplier_type == "source":
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        suppliers.append(
-            ElasticsearchSourceSupplier(es_version,
-                                        es_src_dir,
-                                        remote_url=cfg.opts("source", "remote.repo.url"),
-                                        car=car,
-                                        builder=builder,
-                                        template_renderer=template_renderer)
-        )
+
+        source_supplier = ElasticsearchSourceSupplier(es_version,
+                                                      es_src_dir,
+                                                      remote_url=cfg.opts("source", "remote.repo.url"),
+                                                      car=car,
+                                                      builder=builder,
+                                                      template_renderer=template_renderer)
+
+        if cfg.opts("source", "cache", mandatory=False, default_value=False):
+            logger.info("Enabling source artifact caching.")
+            source_supplier = CachedElasticsearchSourceSupplier(distributions_root,
+                                                                source_supplier,
+                                                                dist_cfg,
+                                                                template_renderer)
+        suppliers.append(source_supplier)
         repo = None
     else:
         es_src_dir = None
-        distributions_root = os.path.join(cfg.opts("node", "root.dir"), cfg.opts("source", "distribution.dir"))
-
-        dist_cfg = {}
-        # car / plugin defines defaults...
-        dist_cfg.update(car.variables)
-        for plugin in plugins:
-            for k, v in plugin.variables.items():
-                dist_cfg["plugin_{}_{}".format(plugin.name, k)] = v
-        # ... but the user can override it in rally.ini
-        dist_cfg.update(cfg.all_opts("distributions"))
         repo = DistributionRepository(name=cfg.opts("mechanic", "distribution.repository"),
                                       distribution_config=dist_cfg,
                                       template_renderer=template_renderer)
@@ -223,6 +231,58 @@ class CompositeSupplier:
         return binaries
 
 
+class CachedElasticsearchSourceSupplier:
+    def __init__(self, distributions_root, source_supplier, distribution_config, template_renderer):
+        self.distributions_root = distributions_root
+        self.source_supplier = source_supplier
+        self.template_renderer = template_renderer
+        self.cfg = distribution_config
+        self.runtime_jdk_bundled = convert.to_bool(self.cfg.get("runtime.jdk.bundled", False))
+        self.revision = None
+        self.cached_path = None
+        self.logger = logging.getLogger(__name__)
+
+    @property
+    def file_name(self):
+        if self.runtime_jdk_bundled:
+            url_key = "jdk.bundled.release_url"
+        else:
+            url_key = "jdk.unbundled.release_url"
+        url = self.template_renderer.render(self.cfg[url_key])
+        return url[url.rfind("/") + 1:]
+
+    @property
+    def cached(self):
+        return self.cached_path is not None and os.path.exists(self.cached_path)
+
+    def fetch(self):
+        resolved_revision = self.source_supplier.fetch()
+        if resolved_revision:
+            # ensure we use the resolved revision for rendering the artifact
+            self.template_renderer.version = resolved_revision
+            self.cached_path = os.path.join(self.distributions_root, self.file_name)
+
+    def prepare(self):
+        if not self.cached:
+            self.source_supplier.prepare()
+
+    def add(self, binaries):
+        if self.cached:
+            self.logger.info("Using cached artifact in [%s]", self.cached_path)
+            binaries["elasticsearch"] = self.cached_path
+        else:
+            self.source_supplier.add(binaries)
+            original_path = binaries["elasticsearch"]
+            # this can be None if the Elasticsearch does not reside in a git repo and the user has only
+            # copied all source files. In that case, we cannot resolve a revision hash and thus we cannot cache.
+            if self.cached_path:
+                shutil.copy(original_path, self.cached_path)
+                self.logger.info("Caching artifact in [%s]", self.cached_path)
+                binaries["elasticsearch"] = self.cached_path
+            else:
+                self.logger.info("Not caching [%s] (no revision info).", original_path)
+
+
 class ElasticsearchSourceSupplier:
     def __init__(self, revision, es_src_dir, remote_url, car, builder, template_renderer):
         self.revision = revision
@@ -233,7 +293,7 @@ class ElasticsearchSourceSupplier:
         self.template_renderer = template_renderer
 
     def fetch(self):
-        SourceRepository("Elasticsearch", self.remote_url, self.src_dir).fetch(self.revision)
+        return SourceRepository("Elasticsearch", self.remote_url, self.src_dir).fetch(self.revision)
 
     def prepare(self):
         if self.builder:
@@ -441,7 +501,7 @@ class SourceRepository:
     def fetch(self, revision):
         # if and only if we want to benchmark the current revision, Rally may skip repo initialization (if it is already present)
         self._try_init(may_skip_init=revision == "current")
-        self._update(revision)
+        return self._update(revision)
 
     def has_remote(self):
         return self.remote_url is not None
@@ -476,8 +536,10 @@ class SourceRepository:
         if git.is_working_copy(self.src_dir):
             git_revision = git.head_revision(self.src_dir)
             self.logger.info("User-specified revision [%s] for [%s] results in git revision [%s]", revision, self.name, git_revision)
+            return git_revision
         else:
             self.logger.info("Skipping git revision resolution for %s (%s is not a git repository).", self.name, self.src_dir)
+            return None
 
     @classmethod
     def is_commit_hash(cls, revision):

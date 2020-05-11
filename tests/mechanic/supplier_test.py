@@ -182,6 +182,84 @@ class TemplateRendererTests(TestCase):
                          renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."))
 
 
+class CachedElasticsearchSourceSupplierTests(TestCase):
+    @mock.patch("shutil.copy")
+    @mock.patch("esrally.mechanic.supplier.ElasticsearchSourceSupplier")
+    def test_does_not_cache_when_no_revision(self, es, copy):
+        def add_es_artifact(binaries):
+            binaries["elasticsearch"] = "/path/to/artifact.tar.gz"
+
+        es.fetch.return_value = None
+        es.add.side_effect = add_es_artifact
+
+        renderer = supplier.TemplateRenderer(version=None, os_name="linux", arch="x86_64")
+
+        cached_supplier = supplier.CachedElasticsearchSourceSupplier(distributions_root="/tmp",
+                                                                     source_supplier=es,
+                                                                     distribution_config={},
+                                                                     template_renderer=renderer)
+
+        cached_supplier.fetch()
+        cached_supplier.prepare()
+
+        binaries = {}
+
+        cached_supplier.add(binaries)
+
+        self.assertEqual(0, copy.call_count)
+        self.assertFalse(cached_supplier.cached)
+        self.assertIn("elasticsearch", binaries)
+
+    @mock.patch("os.path.exists")
+    @mock.patch("shutil.copy")
+    @mock.patch("esrally.mechanic.supplier.ElasticsearchSourceSupplier")
+    def test_caches_artifact(self, es, copy, path_exists):
+        def add_es_artifact(binaries):
+            binaries["elasticsearch"] = "/path/to/artifact.tar.gz"
+
+        path_exists.return_value = False
+
+        es.fetch.return_value = "abc123"
+        es.add.side_effect = add_es_artifact
+
+        renderer = supplier.TemplateRenderer(version="abc123", os_name="linux", arch="x86_64")
+
+        dist_cfg = {
+            "runtime.jdk.bundled": "true",
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+        }
+
+        cached_supplier = supplier.CachedElasticsearchSourceSupplier(distributions_root="/tmp",
+                                                                     source_supplier=es,
+                                                                     distribution_config=dist_cfg,
+                                                                     template_renderer=renderer)
+        cached_supplier.fetch()
+        cached_supplier.prepare()
+
+        binaries = {}
+
+        cached_supplier.add(binaries)
+        # path is cached now
+        path_exists.return_value = True
+
+        self.assertEqual(1, copy.call_count, "artifact has been copied")
+        self.assertEqual(1, es.add.call_count, "artifact has been added by internal supplier")
+        self.assertTrue(cached_supplier.cached)
+        self.assertIn("elasticsearch", binaries)
+
+        # simulate a second attempt
+        cached_supplier.fetch()
+        cached_supplier.prepare()
+
+        binaries = {}
+        cached_supplier.add(binaries)
+
+        self.assertEqual(1, copy.call_count, "artifact has not been copied twice")
+        # the internal supplier did not get called again as we reuse the cached artifact
+        self.assertEqual(1, es.add.call_count, "internal supplier is not called again")
+        self.assertTrue(cached_supplier.cached)
+
+
 class ElasticsearchSourceSupplierTests(TestCase):
     def test_no_build(self):
         car = team.Car("default", root_path=None, config_paths=[], variables={

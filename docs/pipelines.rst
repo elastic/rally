@@ -62,6 +62,7 @@ You have to specify a :ref:`revision <clr_revision>`.
 
    This pipeline is just mentioned for completeness but Rally will automatically select it for you. All you need to do is to define the ``--revision`` flag.
 
+To enable artifact caching for source builds, set ``cache`` to ``true`` in the section ``source`` in the configuration file in ``~/.rally/rally.ini``. Source builds will then be cached in ``~/.rally/benchmarks/distributions`` but artifacts will not be evicted automatically.
 
 from-sources-skip-build
 ~~~~~~~~~~~~~~~~~~~~~~~
