@@ -59,7 +59,7 @@ First `install Elasticsearch <https://www.elastic.co/downloads/elasticsearch>`_ 
 
 .. note::
 
-   Rally will choose the port range 39200-39300 (HTTP) and 39300-39400 (transport) for the benchmark cluster, so do not use this port range for the metrics store.
+   Rally will choose the port 39200 (HTTP) and 39300 (transport) for the benchmark cluster, so do not use these ports for the metrics store.
 
 Optional but recommended is to install also `Kibana <https://www.elastic.co/downloads/kibana>`_. However, note that Kibana will not be auto-configured by Rally.
 
