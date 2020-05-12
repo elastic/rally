@@ -3,11 +3,11 @@
 The release process in Rally is automated as much as possible.
 It will automatically run all tests (including integration tests), build and upload all artifacts and update the changelog and the list of contributors.
 
-### Example: suppose you want to release Rally 2.0.1
+### Example: suppose you want to release Rally 2.0.0
 
 1. Run release checks to validate requirements mentioned in [Preconditions](#preconditions) and [the Initial setup](#initial_setup) using:
 
-    `make release-checks release_version=2.0.1 next_version=2.0.1` before the release.
+    `make release-checks release_version=2.0.0 next_version=2.0.1` before the release.
 
 2. If 1. succeeds, run the actual release:
 
