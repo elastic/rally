@@ -69,8 +69,10 @@ When the race has finished, Rally will show a summary on the command line::
     |              Total refresh time |              |   4.49527 |    min |
     |       Total merge throttle time |              |  0.120433 |    min |
     |                Median CPU usage |              |     546.5 |      % |
-    |              Total Young Gen GC |              |    72.078 |      s |
-    |                Total Old Gen GC |              |     3.426 |      s |
+    |         Total Young Gen GC time |              |    72.078 |      s |
+    |        Total Young Gen GC count |              |        43 |        |
+    |           Total Old Gen GC time |              |     3.426 |      s |
+    |          Total Old Gen GC count |              |         1 |        |
     |                      Index size |              |   2.26661 |     GB |
     |                   Total written |              |    30.083 |     GB |
     |          Heap used for segments |              |   10.7148 |     MB |

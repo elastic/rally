@@ -68,8 +68,10 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
     |   All |              Median cumulative flush time across primary shards |                        |  0.118767 |     min |
     |   All |                 Max cumulative flush time across primary shards |                        |   0.14145 |     min |
     |   All |                                                Median CPU usage |                        |     284.4 |       % |
-    |   All |                                              Total Young Gen GC |                        |    12.868 |       s |
-    |   All |                                                Total Old Gen GC |                        |     3.803 |       s |
+    |   All |                                         Total Young Gen GC time |                        |    12.868 |       s |
+    |   All |                                        Total Young Gen GC count |                        |        17 |         |
+    |   All |                                           Total Old Gen GC time |                        |     3.803 |       s |
+    |   All |                                          Total Old Gen GC count |                        |         2 |         |
     |   All |                                                      Store size |                        |   3.17241 |      GB |
     |   All |                                                   Translog size |                        |   2.62736 |      GB |
     |   All |                                                      Index size |                        |   5.79977 |      GB |

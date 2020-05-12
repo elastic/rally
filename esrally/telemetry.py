@@ -979,19 +979,27 @@ class JvmStatsSummary(InternalTelemetryDevice):
     def on_benchmark_stop(self):
         jvm_stats_at_end = self.jvm_stats()
         total_old_gen_collection_time = 0
+        total_old_gen_collection_count = 0
         total_young_gen_collection_time = 0
+        total_young_gen_collection_count = 0
 
         for node_name, jvm_stats_end in jvm_stats_at_end.items():
             if node_name in self.jvm_stats_per_node:
                 jvm_stats_start = self.jvm_stats_per_node[node_name]
-                young_gc_time = max(jvm_stats_end["young_gc"] - jvm_stats_start["young_gc"], 0)
-                old_gc_time = max(jvm_stats_end["old_gc"] - jvm_stats_start["old_gc"], 0)
+                young_gc_time = max(jvm_stats_end["young_gc_time"] - jvm_stats_start["young_gc_time"], 0)
+                young_gc_count = max(jvm_stats_end["young_gc_count"] - jvm_stats_start["young_gc_count"], 0)
+                old_gc_time = max(jvm_stats_end["old_gc_time"] - jvm_stats_start["old_gc_time"], 0)
+                old_gc_count = max(jvm_stats_end["old_gc_count"] - jvm_stats_start["old_gc_count"], 0)
 
                 total_young_gen_collection_time += young_gc_time
+                total_young_gen_collection_count += young_gc_count
                 total_old_gen_collection_time += old_gc_time
+                total_old_gen_collection_count += old_gc_count
 
                 self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
+                self.metrics_store.put_count_node_level(node_name, "node_young_gen_gc_count", young_gc_count)
                 self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
+                self.metrics_store.put_count_node_level(node_name, "node_old_gen_gc_count", old_gc_count)
 
                 all_pool_stats = {
                     "name": "jvm_memory_pool_stats"
@@ -1007,7 +1015,9 @@ class JvmStatsSummary(InternalTelemetryDevice):
                 self.logger.warning("Cannot determine JVM stats for [%s] (not in the cluster at the start of the benchmark).", node_name)
 
         self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
+        self.metrics_store.put_count_cluster_level("node_total_young_gen_gc_count", total_young_gen_collection_count)
         self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
+        self.metrics_store.put_count_cluster_level("node_total_old_gen_gc_count", total_old_gen_collection_count)
 
         self.jvm_stats_per_node = None
 
@@ -1025,10 +1035,14 @@ class JvmStatsSummary(InternalTelemetryDevice):
             node_name = node["name"]
             gc = node["jvm"]["gc"]["collectors"]
             old_gen_collection_time = gc["old"]["collection_time_in_millis"]
+            old_gen_collection_count = gc["old"]["collection_count"]
             young_gen_collection_time = gc["young"]["collection_time_in_millis"]
+            young_gen_collection_count = gc["young"]["collection_count"]
             jvm_stats[node_name] = {
-                "young_gc": young_gen_collection_time,
-                "old_gc": old_gen_collection_time,
+                "young_gc_time": young_gen_collection_time,
+                "young_gc_count": young_gen_collection_count,
+                "old_gc_time": old_gen_collection_time,
+                "old_gc_count": old_gen_collection_count,
                 "pools": {}
             }
             pool_usage = node["jvm"]["mem"]["pools"]

@@ -2118,7 +2118,11 @@ class JvmStatsSummaryTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
     def test_stores_only_diff_of_gc_times(self,
+                                          metrics_store_count_node_level,
+                                          metrics_store_count_cluster_level,
                                           metrics_store_node_level,
                                           metrics_store_cluster_level,
                                           metrics_store_put_doc):
@@ -2144,10 +2148,12 @@ class JvmStatsSummaryTests(TestCase):
                         "gc": {
                             "collectors": {
                                 "old": {
-                                    "collection_time_in_millis": 1000
+                                    "collection_time_in_millis": 1000,
+                                    "collection_count": 1
                                 },
                                 "young": {
-                                    "collection_time_in_millis": 500
+                                    "collection_time_in_millis": 500,
+                                    "collection_count": 20
                                 }
                             }
                         }
@@ -2186,10 +2192,12 @@ class JvmStatsSummaryTests(TestCase):
                         "gc": {
                             "collectors": {
                                 "old": {
-                                    "collection_time_in_millis": 2500
+                                    "collection_time_in_millis": 2500,
+                                    "collection_count": 2
                                 },
                                 "young": {
-                                    "collection_time_in_millis": 1200
+                                    "collection_time_in_millis": 1200,
+                                    "collection_count": 4000
                                 }
                             }
                         }
@@ -2205,10 +2213,20 @@ class JvmStatsSummaryTests(TestCase):
             mock.call("rally0", "node_old_gen_gc_time", 1500, "ms"),
         ])
 
+        metrics_store_count_node_level.assert_has_calls([
+            mock.call("rally0", "node_young_gen_gc_count", 3980),
+            mock.call("rally0", "node_old_gen_gc_count", 1),
+        ])
+
         metrics_store_cluster_level.assert_has_calls([
             mock.call("node_total_young_gen_gc_time", 700, "ms"),
             mock.call("node_total_old_gen_gc_time", 1500, "ms")
         ])
+        metrics_store_count_cluster_level.assert_has_calls([
+            mock.call("node_total_young_gen_gc_count", 3980),
+            mock.call("node_total_old_gen_gc_count", 1),
+        ])
+
         metrics_store_put_doc.assert_has_calls([
             mock.call({
                 "name": "jvm_memory_pool_stats",

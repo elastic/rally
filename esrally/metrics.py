@@ -1654,7 +1654,9 @@ class GlobalStatsCalculator:
 
         self.logger.debug("Gathering garbage collection metrics.")
         result.young_gc_time = self.sum("node_total_young_gen_gc_time")
+        result.young_gc_count = self.sum("node_total_young_gen_gc_count")
         result.old_gc_time = self.sum("node_total_old_gen_gc_time")
+        result.old_gc_count = self.sum("node_total_old_gen_gc_count")
 
         self.logger.debug("Gathering segment memory metrics.")
         result.memory_segments = self.median("segments_memory_in_bytes")
@@ -1789,7 +1791,9 @@ class GlobalStats:
         self.ml_processing_time = self.v(d, "ml_processing_time", default=[])
 
         self.young_gc_time = self.v(d, "young_gc_time")
+        self.young_gc_count = self.v(d, "young_gc_count")
         self.old_gc_time = self.v(d, "old_gc_time")
+        self.old_gc_count = self.v(d, "old_gc_count")
 
         self.memory_segments = self.v(d, "memory_segments")
         self.memory_doc_values = self.v(d, "memory_doc_values")
