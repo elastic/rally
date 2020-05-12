@@ -1,10 +1,22 @@
 ### How to release Rally?
 
-The release process in Rally is automated as much as possible. Suppose you want to release Rally 1.2.0. Then just run `make release release_version=1.2.0 next_version=1.2.1`. The parameter `release_version` refers to the release that is being released and the parameter `next_version` refers to the next development version. 
+The release process in Rally is automated as much as possible.
+It will automatically run all tests (including integration tests), build and upload all artifacts and update the changelog and the list of contributors.
 
-This will automatically run all tests (including integration tests), build and upload all artifacts and update the changelog and the list of contributors.
+### Example: suppose you want to release Rally 2.0.0
 
-It is recommended to run `make release-checks release_version=1.2.0 next_version=1.2.1` before the release. The script will check for the requirements mentioned in [Preconditions](#preconditions) and [the Initial setup](#initial_setup).
+1. Run release checks to validate requirements mentioned in [Preconditions](#preconditions) and [the Initial setup](#initial_setup) using:
+
+    `make release-checks release_version=2.0.0 next_version=2.0.1` before the release.
+
+2. If 1. succeeds, run the actual release:
+
+    `make release release_version=2.0.0 next_version=2.0.1`.
+
+    The parameter `release_version` is the version to release and the parameter `next_version` refers to the next development version.
+
+**NOTE**:
+If you hit the error `github3.exceptions.ForbiddenError: 403 Resource protected by organization SAML enforcement. You must grant your personal token access to this organization.` visit [https://github.com/settings/tokens](https://github.com/settings/tokens) and click `Enable SSO` on your token.
 
 ### Manual Tasks
 
