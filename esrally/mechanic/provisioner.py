@@ -295,8 +295,8 @@ class ElasticsearchInstaller:
             # this is the IP address that the node will be bound to. Rally will bind to the node's IP address (but not to 0.0.0.0). The
             # reason is that we use the node's IP address as subject alternative name in x-pack.
             "network_host": network_host,
-            "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
-            "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
+            "http_port": str(self.http_port),
+            "transport_port": str(self.http_port + 100),
             "all_node_ips": "[\"%s\"]" % "\",\"".join(self.all_node_ips),
             "all_node_names": "[\"%s\"]" % "\",\"".join(self.all_node_names),
             # at the moment we are strict and enforce that all nodes are master eligible nodes
