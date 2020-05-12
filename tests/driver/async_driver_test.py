@@ -207,8 +207,10 @@ class AsyncDriverTests(TestCase):
         self.assertIsNotNone(metric_store.get_one(name="throughput", task="bulk-index", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get_one(name="node_total_young_gen_gc_time", sample_type=metrics.SampleType.Normal))
         self.assertIsNotNone(metric_store.get_one(name="node_total_old_gen_gc_time", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get_one(name="node_total_young_gen_gc_count", sample_type=metrics.SampleType.Normal))
+        self.assertIsNotNone(metric_store.get_one(name="node_total_old_gen_gc_count", sample_type=metrics.SampleType.Normal))
         # ensure that there are not more documents than we expect
-        self.assertEqual(6, len(metric_store.docs), msg=json.dumps(metric_store.docs, indent=2))
+        self.assertEqual(8, len(metric_store.docs), msg=json.dumps(metric_store.docs, indent=2))
 
     def tearDown(self):
         StaticClientFactory.close()

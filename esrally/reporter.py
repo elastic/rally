@@ -113,7 +113,7 @@ class SummaryReporter:
         metrics_table.extend(self.report_totals(stats))
         metrics_table.extend(self.report_ml_processing_times(stats))
 
-        metrics_table.extend(self.report_gc_times(stats))
+        metrics_table.extend(self.report_gc_metrics(stats))
 
         metrics_table.extend(self.report_disk_usage(stats))
         metrics_table.extend(self.report_segment_memory(stats))
@@ -237,10 +237,12 @@ class SummaryReporter:
             lines.append(self.line("Max ML processing time", job_name, processing_time["max"], unit))
         return lines
 
-    def report_gc_times(self, stats):
+    def report_gc_metrics(self, stats):
         return self.join(
-            self.line("Total Young Gen GC", "", stats.young_gc_time, "s", convert.ms_to_seconds),
-            self.line("Total Old Gen GC", "", stats.old_gc_time, "s", convert.ms_to_seconds)
+            self.line("Total Young Gen GC time", "", stats.young_gc_time, "s", convert.ms_to_seconds),
+            self.line("Total Young Gen GC count", "", stats.young_gc_count, ""),
+            self.line("Total Old Gen GC time", "", stats.old_gc_time, "s", convert.ms_to_seconds),
+            self.line("Total Old Gen GC count", "", stats.old_gc_count, "")
         )
 
     def report_disk_usage(self, stats):
@@ -327,7 +329,7 @@ class ComparisonReporter:
         metrics_table = []
         metrics_table.extend(self.report_total_times(baseline_stats, contender_stats))
         metrics_table.extend(self.report_ml_processing_times(baseline_stats, contender_stats))
-        metrics_table.extend(self.report_gc_times(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_gc_metrics(baseline_stats, contender_stats))
         metrics_table.extend(self.report_disk_usage(baseline_stats, contender_stats))
         metrics_table.extend(self.report_segment_memory(baseline_stats, contender_stats))
         metrics_table.extend(self.report_segment_counts(baseline_stats, contender_stats))
@@ -499,12 +501,16 @@ class ComparisonReporter:
                       treat_increase_as_improvement=False)
         )
 
-    def report_gc_times(self, baseline_stats, contender_stats):
+    def report_gc_metrics(self, baseline_stats, contender_stats):
         return self.join(
-            self.line("Total Young Gen GC", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
+            self.line("Total Young Gen GC time", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
-            self.line("Total Old Gen GC", baseline_stats.old_gc_time, contender_stats.old_gc_time, "", "s",
-                      treat_increase_as_improvement=False, formatter=convert.ms_to_seconds)
+            self.line("Total Young Gen GC count", baseline_stats.young_gc_count, contender_stats.young_gc_count, "", "",
+                      treat_increase_as_improvement=False),
+            self.line("Total Old Gen GC time", baseline_stats.old_gc_time, contender_stats.old_gc_time, "", "s",
+                      treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
+            self.line("Total Old Gen GC count", baseline_stats.old_gc_count, contender_stats.old_gc_count, "", "",
+                      treat_increase_as_improvement=False)
         )
 
     def report_disk_usage(self, baseline_stats, contender_stats):

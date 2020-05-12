@@ -93,8 +93,10 @@ We can see that the user tag helps us to recognize races. We want to compare the
                                 Median CPU usage (index) [%]     668.025       679.15   +11.12499
                                 Median CPU usage (stats) [%]      143.75        162.4   +18.64999
                                Median CPU usage (search) [%]       223.1        229.2    +6.10000
-                                      Total Young Gen GC [s]      39.447       40.456    +1.00900
-                                        Total Old Gen GC [s]       7.108        7.703    +0.59500
+                                 Total Young Gen GC time [s]      39.447       40.456    +1.00900
+                                    Total Young Gen GC count          10           11    +1.00000
+                                   Total Old Gen GC time [s]       7.108        7.703    +0.59500
+                                      Total Old Gen GC count          10           11    +1.00000
                                              Index size [GB]     3.25475      3.25098    -0.00377
                                           Total written [GB]     17.8434      18.3143    +0.47083
                                  Heap used for segments [MB]     21.7504      21.5901    -0.16037

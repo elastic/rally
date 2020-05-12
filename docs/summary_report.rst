@@ -101,18 +101,31 @@ ML processing time
 * **Corresponding metrics key**: ``ml_processing_time``
 
 
-Total Young Gen GC
-------------------
+Total Young Gen GC time
+-----------------------
 
 * **Definition**: The total runtime of the young generation garbage collector across the whole cluster as reported by the node stats API.
 * **Corresponding metrics key**: ``node_total_young_gen_gc_time``
 
 
-Total Old Gen GC
-----------------
+Total Young Gen GC count
+------------------------
+
+* **Definition**: The total number of young generation garbage collections across the whole cluster as reported by the node stats API.
+* **Corresponding metrics key**: ``node_total_young_gen_gc_count``
+
+
+Total Old Gen GC time
+---------------------
 
 * **Definition**: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
 * **Corresponding metrics key**: ``node_total_old_gen_gc_time``
+
+Total Old Gen GC count
+----------------------
+
+* **Definition**: The total number of old generation garbage collections across the whole cluster as reported by the node stats API.
+* **Corresponding metrics key**: ``node_total_old_gen_gc_count``
 
 Store size
 ----------

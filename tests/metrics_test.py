@@ -1678,7 +1678,9 @@ class GlobalStatsTests(TestCase):
                 },
             ],
             "young_gc_time": 68,
+            "young_gc_count": 7,
             "old_gc_time": 0,
+            "old_gc_count": 0,
             "merge_time": 3702,
             "merge_time_per_shard": {
                 "min": 40,
@@ -1828,6 +1830,12 @@ class GlobalStatsTests(TestCase):
                 "single": 68
             }
         }, select(metric_list, "young_gc_time"))
+        self.assertEqual({
+            "name": "young_gc_count",
+            "value": {
+                "single": 7
+            }
+        }, select(metric_list, "young_gc_count"))
 
         self.assertEqual({
             "name": "old_gc_time",
@@ -1835,6 +1843,12 @@ class GlobalStatsTests(TestCase):
                 "single": 0
             }
         }, select(metric_list, "old_gc_time"))
+        self.assertEqual({
+            "name": "old_gc_count",
+            "value": {
+                "single": 0
+            }
+        }, select(metric_list, "old_gc_count"))
 
         self.assertEqual({
             "name": "merge_time",

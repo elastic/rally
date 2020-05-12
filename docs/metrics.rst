@@ -124,8 +124,10 @@ Rally stores the following metrics:
 * ``disk_io_write_bytes``: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
 * ``disk_io_read_bytes``: number of bytes that have been read from disk during the benchmark. The same caveats apply on Mac OS X as for ``disk_io_write_bytes``.
 * ``node_startup_time``: The time in seconds it took from process start until the node is up.
-* ``node_total_old_gen_gc_time``: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
 * ``node_total_young_gen_gc_time``: The total runtime of the young generation garbage collector across the whole cluster as reported by the node stats API.
+* ``node_total_young_gen_gc_count``: The total number of young generation garbage collections across the whole cluster as reported by the node stats API.
+* ``node_total_old_gen_gc_time``: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
+* ``node_total_old_gen_gc_count``: The total number of old generation garbage collections across the whole cluster as reported by the node stats API.
 * ``segments_count``: Total number of segments as reported by the indices stats API.
 * ``segments_memory_in_bytes``: Number of bytes used for segments as reported by the indices stats API.
 * ``segments_doc_values_memory_in_bytes``: Number of bytes used for doc values as reported by the indices stats API.
