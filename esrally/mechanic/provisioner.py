@@ -411,8 +411,8 @@ class DockerProvisioner:
             # Docker container needs to expose service on external interfaces
             "network_host": "0.0.0.0",
             "discovery_type": "single-node",
-            "http_port": "%d-%d" % (self.http_port, self.http_port + 100),
-            "transport_port": "%d-%d" % (self.http_port + 100, self.http_port + 200),
+            "http_port": str(self.http_port),
+            "transport_port": str(self.http_port + 100),
             "cluster_settings": cluster_settings
         }
 

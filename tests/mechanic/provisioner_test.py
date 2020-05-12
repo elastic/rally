@@ -586,8 +586,8 @@ class DockerProvisionerTests(TestCase):
             "heap_dump_path": "/usr/share/elasticsearch/heapdump",
             "discovery_type": "single-node",
             "network_host": "0.0.0.0",
-            "http_port": "39200-39300",
-            "transport_port": "39300-39400",
+            "http_port": "39200",
+            "transport_port": "39300",
             "cluster_settings": {
                 "indices.query.bool.max_clause_count": 5000
             },
