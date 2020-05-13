@@ -183,9 +183,10 @@ class TemplateRendererTests(TestCase):
 
 
 class CachedElasticsearchSourceSupplierTests(TestCase):
+    @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("shutil.copy")
     @mock.patch("esrally.mechanic.supplier.ElasticsearchSourceSupplier")
-    def test_does_not_cache_when_no_revision(self, es, copy):
+    def test_does_not_cache_when_no_revision(self, es, copy, ensure_dir):
         def add_es_artifact(binaries):
             binaries["elasticsearch"] = "/path/to/artifact.tar.gz"
 
@@ -210,10 +211,11 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
         self.assertFalse(cached_supplier.cached)
         self.assertIn("elasticsearch", binaries)
 
+    @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.exists")
     @mock.patch("shutil.copy")
     @mock.patch("esrally.mechanic.supplier.ElasticsearchSourceSupplier")
-    def test_caches_artifact(self, es, copy, path_exists):
+    def test_caches_artifact(self, es, copy, path_exists, ensure_dir):
         def add_es_artifact(binaries):
             binaries["elasticsearch"] = "/path/to/artifact.tar.gz"
 
@@ -259,11 +261,11 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
         self.assertEqual(1, es.add.call_count, "internal supplier is not called again")
         self.assertTrue(cached_supplier.cached)
 
-
+    @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.exists")
     @mock.patch("shutil.copy")
     @mock.patch("esrally.mechanic.supplier.ElasticsearchSourceSupplier")
-    def test_does_not_cache_on_copy_error(self, es, copy, path_exists):
+    def test_does_not_cache_on_copy_error(self, es, copy, path_exists, ensure_dir):
         def add_es_artifact(binaries):
             binaries["elasticsearch"] = "/path/to/artifact.tar.gz"
 

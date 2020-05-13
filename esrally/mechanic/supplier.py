@@ -277,6 +277,7 @@ class CachedElasticsearchSourceSupplier:
             # copied all source files. In that case, we cannot resolve a revision hash and thus we cannot cache.
             if self.cached_path:
                 try:
+                    io.ensure_dir(io.dirname(self.cached_path))
                     shutil.copy(original_path, self.cached_path)
                     self.logger.info("Caching artifact in [%s]", self.cached_path)
                     binaries["elasticsearch"] = self.cached_path
