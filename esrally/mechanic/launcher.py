@@ -141,7 +141,7 @@ class ProcessLauncher:
 
         java_major_version, java_home = java_resolver.java_home(node_configuration.car_runtime_jdks,
                                                                 self.cfg.opts("mechanic", "runtime.jdk"),
-                                                                node_configuration.car_allow_bundled_jvm)
+                                                                node_configuration.car_provides_bundled_jdk)
 
         self.logger.info("Starting node [%s].", node_name)
 

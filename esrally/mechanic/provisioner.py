@@ -54,12 +54,12 @@ def docker(cfg, car, cluster_settings, ip, http_port, target_root, node_name):
 
 
 class NodeConfiguration:
-    def __init__(self, build_type, car_env, car_runtime_jdks, car_allow_bundled_jvm, ip, node_name, node_root_path,
+    def __init__(self, build_type, car_env, car_runtime_jdks, car_provides_bundled_jdk, ip, node_name, node_root_path,
                  binary_path, data_paths):
         self.build_type = build_type
         self.car_env = car_env
         self.car_runtime_jdks = car_runtime_jdks
-        self.car_allow_bundled_jvm = convert.to_bool(car_allow_bundled_jvm)
+        self.car_provides_bundled_jdk = convert.to_bool(car_provides_bundled_jdk)
         self.ip = ip
         self.node_name = node_name
         self.node_root_path = node_root_path
@@ -71,7 +71,7 @@ class NodeConfiguration:
             "build-type": self.build_type,
             "car-env": self.car_env,
             "car-runtime-jdks": self.car_runtime_jdks,
-            "car-allow-bundled-jvm": self.car_allow_bundled_jvm,
+            "car-provides-bundled-jdk": self.car_provides_bundled_jdk,
             "ip": self.ip,
             "node-name": self.node_name,
             "node-root-path": self.node_root_path,
@@ -81,8 +81,8 @@ class NodeConfiguration:
 
     @staticmethod
     def from_dict(d):
-        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["car-allow-bundled-jvm"], d["ip"], d["node-name"],
-                                 d["node-root-path"], d["binary-path"], d["data-paths"])
+        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["car-provides-bundled-jdk"], d["ip"],
+                                 d["node-name"], d["node-root-path"], d["binary-path"], d["data-paths"])
 
 
 def save_node_configuration(path, n):
