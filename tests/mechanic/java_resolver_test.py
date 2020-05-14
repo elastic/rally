@@ -74,4 +74,5 @@ class JavaResolverTests(TestCase):
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             java_resolver.java_home("12,11,10,9,8", specified_runtime_jdk=cfg.opts("mechanic", "runtime.jdk"))
-        self.assertEqual("This Elasticsearch version does not contain a bundled JDK. Please specify a different runtime JDK.", ctx.exception.args[0])
+        self.assertEqual("This Elasticsearch version does not contain a bundled JDK. Please specify a different runtime JDK.",
+                         ctx.exception.args[0])
