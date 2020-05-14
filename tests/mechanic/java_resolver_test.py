@@ -30,7 +30,9 @@ class JavaResolverTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "runtime.jdk", None)
 
-        major, java_home = java_resolver.java_home("12,11,10,9,8", cfg.opts("mechanic", "runtime.jdk"), True)
+        major, java_home = java_resolver.java_home("12,11,10,9,8",
+                                                   specified_runtime_jdk=cfg.opts("mechanic", "runtime.jdk"),
+                                                   provides_bundled_jdk=True)
 
         self.assertEqual(major, 12)
         self.assertEqual(java_home, "/opt/jdk12")
@@ -42,7 +44,9 @@ class JavaResolverTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "runtime.jdk", 8)
 
-        major, java_home = java_resolver.java_home("12,11,10,9,8", cfg.opts("mechanic", "runtime.jdk"), True)
+        major, java_home = java_resolver.java_home("12,11,10,9,8",
+                                                   specified_runtime_jdk=cfg.opts("mechanic", "runtime.jdk"),
+                                                   provides_bundled_jdk=True)
 
         self.assertEqual(major, 8)
         self.assertEqual(java_home, "/opt/jdk8")
@@ -53,7 +57,9 @@ class JavaResolverTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "runtime.jdk", "bundled")
 
-        major, java_home = java_resolver.java_home("12,11,10,9,8", cfg.opts("mechanic", "runtime.jdk"), True)
+        major, java_home = java_resolver.java_home("12,11,10,9,8",
+                                                   specified_runtime_jdk=cfg.opts("mechanic", "runtime.jdk"),
+                                                   provides_bundled_jdk=True)
 
         # assumes most recent JDK
         self.assertEqual(major, 12)
@@ -67,5 +73,5 @@ class JavaResolverTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.names", ["default"])
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            java_resolver.java_home("12,11,10,9,8", cfg.opts("mechanic", "runtime.jdk"))
+            java_resolver.java_home("12,11,10,9,8", specified_runtime_jdk=cfg.opts("mechanic", "runtime.jdk"))
         self.assertEqual("This Elasticsearch version does not contain a bundled JDK. Please specify a different runtime JDK.", ctx.exception.args[0])
