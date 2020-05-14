@@ -35,7 +35,7 @@ def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_
 
     runtime_jdk_bundled = convert.to_bool(car.mandatory_var("runtime.jdk.bundled"))
     runtime_jdk = car.mandatory_var("runtime.jdk")
-    _, java_home = java_resolver.java_home(runtime_jdk, runtime_jdk_bundled, cfg)
+    _, java_home = java_resolver.java_home(runtime_jdk, cfg.opts("mechanic", "runtime.jdk"), runtime_jdk_bundled)
 
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]

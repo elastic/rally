@@ -140,7 +140,8 @@ class ProcessLauncher:
         node_telemetry_dir = os.path.join(node_configuration.node_root_path, "telemetry")
 
         java_major_version, java_home = java_resolver.java_home(node_configuration.car_runtime_jdks,
-                                                                node_configuration.car_allow_bundled_jvm, self.cfg)
+                                                                self.cfg.opts("mechanic", "runtime.jdk"),
+                                                                node_configuration.car_allow_bundled_jvm)
 
         self.logger.info("Starting node [%s].", node_name)
 

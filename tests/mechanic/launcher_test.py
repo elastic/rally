@@ -168,6 +168,7 @@ class ProcessLauncherTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
         cfg.add(config.Scope.application, "mechanic", "keep.running", False)
+        cfg.add(config.Scope.application, "mechanic", "runtime.jdk", None)
         cfg.add(config.Scope.application, "telemetry", "devices", [])
         cfg.add(config.Scope.application, "telemetry", "params", None)
         cfg.add(config.Scope.application, "system", "env.name", "test")
