@@ -59,7 +59,7 @@ class NodeConfiguration:
         self.build_type = build_type
         self.car_env = car_env
         self.car_runtime_jdks = car_runtime_jdks
-        self.car_provides_bundled_jdk = convert.to_bool(car_provides_bundled_jdk)
+        self.car_provides_bundled_jdk = car_provides_bundled_jdk
         self.ip = ip
         self.node_name = node_name
         self.node_root_path = node_root_path
@@ -197,7 +197,7 @@ class BareProvisioner:
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration("tar", self.es_installer.car.env, self.es_installer.car.mandatory_var("runtime.jdk"),
-                                 self.es_installer.car.mandatory_var("runtime.jdk.bundled"),
+                                 convert.to_bool(self.es_installer.car.mandatory_var("runtime.jdk.bundled")),
                                  self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path,
                                  self.es_installer.data_paths)
@@ -464,7 +464,7 @@ class DockerProvisioner:
             f.write(docker_cfg)
 
         return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"),
-                                 self.car.mandatory_var("runtime.jdk.bundled"), self.node_ip,
+                                 convert.to_bool(self.car.mandatory_var("runtime.jdk.bundled")), self.node_ip,
                                  self.node_name, self.node_root_dir, self.binary_path, self.data_paths)
 
     def docker_vars(self, mounts):
