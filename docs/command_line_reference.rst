@@ -673,7 +673,7 @@ Client certificates can be presented regardless of the ``verify_certs`` setting,
 This option controls how Rally behaves when a response error occurs. The following values are possible:
 
 * ``continue``: only records that an error has happened and will continue with the benchmark. At the end of a race, errors show up in the "error rate" metric.
-* ``continue-on-non-fatal`` (default): Behaves as ``continue`` but aborts the benchmark immediately on all fatal errors. At the moment a refused connection is considered fatal. All other errors are considered non-fatal.
+* ``continue-on-non-fatal`` (default): Behaves as ``continue`` but aborts the benchmark immediately on all fatal errors. The only error that is considered fatal is "Connection Refused" (`ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_).
 * ``abort``: aborts the benchmark on the first request error with a detailed error message.
 
 ``load-driver-hosts``
