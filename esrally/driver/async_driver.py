@@ -99,7 +99,7 @@ class AsyncDriver:
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         # TODO: Change the default value to `False` once this implementation becomes the default
         self.debug_event_loop = self.config.opts("system", "async.debug", mandatory=False, default_value=True)
-        self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
+        self.on_error = self.config.opts("driver", "on.error")
         self.profiling_enabled = self.config.opts("driver", "profiling")
         self.sampler = None
 
@@ -249,7 +249,7 @@ class AsyncDriver:
                         # used to indicate that we want to prematurely consider this completed. This is *not* due to
                         # cancellation but a regular event in a benchmark and used to model task dependency of parallel tasks.
                         complete = threading.Event()
-                        e = driver.AsyncExecutor(client_id, sub_task, schedule, es, self.sampler, cancel, complete, self.abort_on_error)
+                        e = driver.AsyncExecutor(client_id, sub_task, schedule, es, self.sampler, cancel, complete, self.on_error)
                         aws.append(e())
                 # join point
                 _ = await asyncio.gather(*aws)

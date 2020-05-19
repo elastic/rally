@@ -948,7 +948,8 @@ class AsyncExecutorTests(TestCase):
                                                 },
                                                 sampler=sampler,
                                                 cancel=cancel,
-                                                complete=complete)
+                                                complete=complete,
+                                                on_error="continue")
         await execute_schedule()
 
         samples = sampler.samples
@@ -1006,7 +1007,8 @@ class AsyncExecutorTests(TestCase):
                                                 },
                                                 sampler=sampler,
                                                 cancel=cancel,
-                                                complete=complete)
+                                                complete=complete,
+                                                on_error="continue")
         await execute_schedule()
 
         samples = sampler.samples
@@ -1076,7 +1078,8 @@ class AsyncExecutorTests(TestCase):
                                                     },
                                                     sampler=sampler,
                                                     cancel=cancel,
-                                                    complete=complete)
+                                                    complete=complete,
+                                                    on_error="continue")
             await execute_schedule()
 
             samples = sampler.samples
@@ -1127,7 +1130,8 @@ class AsyncExecutorTests(TestCase):
                                                     },
                                                     sampler=sampler,
                                                     cancel=cancel,
-                                                    complete=complete)
+                                                    complete=complete,
+                                                    on_error="continue")
 
             cancel.set()
             await execute_schedule()
@@ -1167,7 +1171,8 @@ class AsyncExecutorTests(TestCase):
                                                 },
                                                 sampler=sampler,
                                                 cancel=cancel,
-                                                complete=complete)
+                                                complete=complete,
+                                                on_error="continue")
 
         with self.assertRaises(ExpectedUnitTestException):
             await execute_schedule()
@@ -1181,7 +1186,7 @@ class AsyncExecutorTests(TestCase):
         runner = mock.Mock()
         runner.return_value = as_future()
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
         self.assertEqual(1, ops)
         self.assertEqual("ops", unit)
@@ -1194,7 +1199,7 @@ class AsyncExecutorTests(TestCase):
         runner = mock.Mock()
         runner.return_value = as_future(result=(500, "MB"))
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
         self.assertEqual(500, ops)
         self.assertEqual("MB", unit)
@@ -1212,7 +1217,7 @@ class AsyncExecutorTests(TestCase):
             "http-status": 200
         })
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
         self.assertEqual(50, ops)
         self.assertEqual("docs", unit)
@@ -1223,14 +1228,29 @@ class AsyncExecutorTests(TestCase):
         }, request_meta_data)
 
     @run_async
-    async def test_execute_single_with_connection_error(self):
+    async def test_execute_single_with_connection_error_aborts_as_fatal(self):
         import elasticsearch
         es = None
         params = None
         # ES client uses pseudo-status "N/A" in this case...
         runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error="continue-on-non-fatal")
+        self.assertEqual(
+            "Request returned an error. Error type: transport, Description: no route to host",
+            ctx.exception.args[0])
+
+    @run_async
+    async def test_execute_single_with_connection_error_continues(self):
+        import elasticsearch
+        es = None
+        params = None
+        # ES client uses pseudo-status "N/A" in this case...
+        runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error="continue")
 
         self.assertEqual(0, ops)
         self.assertEqual("ops", unit)
@@ -1241,6 +1261,8 @@ class AsyncExecutorTests(TestCase):
             "success": False
         }, request_meta_data)
 
+
+
     @run_async
     async def test_execute_single_with_http_400(self):
         import elasticsearch
@@ -1249,7 +1271,8 @@ class AsyncExecutorTests(TestCase):
         runner = mock.Mock(side_effect=
                            as_future(exception=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found")))
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params)
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error="continue-on-non-fatal")
 
         self.assertEqual(0, ops)
         self.assertEqual("ops", unit)
@@ -1277,7 +1300,7 @@ class AsyncExecutorTests(TestCase):
         runner = FailingRunner()
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            await driver.execute_single(self.context_managed(runner), es, params)
+            await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
         self.assertEqual(
             "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing'].",
             ctx.exception.args[0])

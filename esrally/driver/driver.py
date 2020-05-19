@@ -776,7 +776,7 @@ class Worker(actor.RallyActor):
         self.client_allocations = None
         self.current_task_index = 0
         self.next_task_index = 0
-        self.abort_on_error = False
+        self.on_error = None
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
         self.cancel = threading.Event()
@@ -794,7 +794,7 @@ class Worker(actor.RallyActor):
         self.master = sender
         self.worker_id = msg.worker_id
         self.config = load_local_config(msg.config)
-        self.abort_on_error = self.config.opts("driver", "on.error") == "abort"
+        self.on_error = self.config.opts("driver", "on.error")
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
         self.client_allocations = msg.client_allocations
@@ -907,7 +907,7 @@ class Worker(actor.RallyActor):
                 # allow to buffer more events than by default as we expect to have way more clients.
                 self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=65536)
                 executor = AsyncIoAdapter(self.config, self.track, task_allocations, self.sampler,
-                                          self.cancel, self.complete, self.abort_on_error)
+                                          self.cancel, self.complete, self.on_error)
 
                 self.executor_future = self.pool.submit(executor)
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
@@ -1224,7 +1224,7 @@ class AsyncProfiler:
 
 
 class AsyncExecutor:
-    def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, abort_on_error=False):
+    def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, on_error):
         """
         Executes tasks according to the schedule for a given operation.
 
@@ -1234,6 +1234,7 @@ class AsyncExecutor:
         :param sampler: A container to store raw samples.
         :param cancel: A shared boolean that indicates we need to cancel execution.
         :param complete: A shared boolean that indicates we need to prematurely complete execution.
+        :param on_error: A string specifying how the load generator should behave on errors.
         """
         self.client_id = client_id
         self.task = task
@@ -1243,7 +1244,7 @@ class AsyncExecutor:
         self.sampler = sampler
         self.cancel = cancel
         self.complete = complete
-        self.abort_on_error = abort_on_error
+        self.on_error = on_error
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self, *args, **kwargs):
@@ -1267,7 +1268,7 @@ class AsyncExecutor:
                         await asyncio.sleep(rest)
                 request_context = self.es["default"].init_request_context()
                 processing_start = time.perf_counter()
-                total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.abort_on_error)
+                total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                 processing_end = time.perf_counter()
                 stop = request_context["request_end"]
                 service_time = request_context["request_end"] - request_context["request_start"]
@@ -1309,13 +1310,14 @@ class AsyncExecutor:
                 self.complete.set()
 
 
-async def execute_single(runner, es, params, abort_on_error=False):
+async def execute_single(runner, es, params, on_error):
     """
     Invokes the given runner once and provides the runner's return value in a uniform structure.
 
     :return: a triple of: total number of operations, unit of operations, a dict of request meta data (may be None).
     """
     import elasticsearch
+    fatal_error = False
     try:
         async with runner:
             return_value = await runner(es, params)
@@ -1333,6 +1335,11 @@ async def execute_single(runner, es, params, abort_on_error=False):
             total_ops_unit = "ops"
             request_meta_data = {"success": True}
     except elasticsearch.TransportError as e:
+        # we *specifically* want to distinguish connection refused (a node died?) from connection timeouts
+        # pylint: disable=unidiomatic-typecheck
+        if type(e) is elasticsearch.ConnectionError:
+            fatal_error = True
+
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {
@@ -1354,12 +1361,13 @@ async def execute_single(runner, es, params, abort_on_error=False):
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
         raise exceptions.SystemSetupError(msg)
 
-    if abort_on_error and not request_meta_data["success"]:
-        msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
-        description = request_meta_data.get("error-description")
-        if description:
-            msg += ", Description: %s" % description
-        raise exceptions.RallyAssertionError(msg)
+    if not request_meta_data["success"]:
+        if on_error == "abort" or (on_error == "continue-on-non-fatal" and fatal_error):
+            msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
+            description = request_meta_data.get("error-description")
+            if description:
+                msg += ", Description: %s" % description
+            raise exceptions.RallyAssertionError(msg)
     return total_ops, total_ops_unit, request_meta_data
 
 
