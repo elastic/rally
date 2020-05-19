@@ -46,6 +46,20 @@ function build {
   make it
 }
 
+function license-scan {
+  # turn nounset off because some of the following commands fail if nounset is turned on
+  set +u
+
+  export PATH="$HOME/.pyenv/bin:$PATH"
+  eval "$(pyenv init -)"
+  eval "$(pyenv virtualenv-init -)"
+
+  make prereq
+  # only install depdencies that are needed by end users
+  make install-user
+  fossa analyze
+}
+
 function archive {
   # Treat unset env variables as an error, but only in this function as there are other functions that allow unset variables
   set -u
