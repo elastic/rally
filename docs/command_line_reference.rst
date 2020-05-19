@@ -670,7 +670,11 @@ Client certificates can be presented regardless of the ``verify_certs`` setting,
 ``on-error``
 ~~~~~~~~~~~~
 
-This option controls whether Rally will ``continue`` or ``abort`` when a request error occurs. By default, Rally will just record errors and report the error rate at the end of a race. With ``--on-error=abort``, Rally will immediately abort the race on the first error and print a detailed error message.
+This option controls how Rally behaves when a response error occurs. The following values are possible:
+
+* ``continue``: only records that an error has happened and will continue with the benchmark. At the end of a race, errors show up in the "error rate" metric.
+* ``continue-on-non-fatal`` (default): Behaves as ``continue`` but aborts the benchmark immediately on all fatal errors. At the moment a refused connection is considered fatal. All other errors are considered non-fatal.
+* ``abort``: aborts the benchmark on the first request error with a detailed error message.
 
 ``load-driver-hosts``
 ~~~~~~~~~~~~~~~~~~~~~

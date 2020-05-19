@@ -484,9 +484,9 @@ def create_arg_parser():
                  "(default: {}).".format(opts.ClientOptions.DEFAULT_CLIENT_OPTIONS),
             default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
         p.add_argument("--on-error",
-                       choices=["continue", "abort"],
-                       help="Either 'continue' or 'abort' when Rally gets an error response (default: continue).",
-                       default="continue")
+                       choices=["continue", "continue-on-non-fatal", "abort"],
+                       help="Controls how Rally behaves on response errors (default: continue-on-non-fatal).",
+                       default="continue-on-non-fatal")
         p.add_argument(
             "--telemetry",
             help="Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
