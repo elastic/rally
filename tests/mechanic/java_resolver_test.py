@@ -30,8 +30,8 @@ class JavaResolverTests(TestCase):
                                                    specified_runtime_jdk=None,
                                                    provides_bundled_jdk=True)
 
-        self.assertEqual(major, resolve_jvm_path.return_value[0])
-        self.assertEqual(java_home, resolve_jvm_path.return_value[1])
+        self.assertEqual(major, 12)
+        self.assertEqual(java_home, "/opt/jdk12")
 
     @mock.patch("esrally.utils.jvm.resolve_path")
     def test_resolves_java_home_for_specific_runtime_jdk(self, resolve_jvm_path):
@@ -40,8 +40,8 @@ class JavaResolverTests(TestCase):
                                                    specified_runtime_jdk=8,
                                                    provides_bundled_jdk=True)
 
-        self.assertEqual(major, resolve_jvm_path.return_value[0])
-        self.assertEqual(java_home, resolve_jvm_path.return_value[1])
+        self.assertEqual(major, 8)
+        self.assertEqual(java_home, "/opt/jdk8")
         resolve_jvm_path.assert_called_with([8])
 
     def test_resolves_java_home_for_bundled_jdk(self):
