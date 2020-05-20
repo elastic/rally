@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import collections
+import datetime
 import unittest.mock as mock
 from unittest import TestCase
 
@@ -195,10 +197,12 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
 
         renderer = supplier.TemplateRenderer(version=None, os_name="linux", arch="x86_64")
 
-        cached_supplier = supplier.CachedElasticsearchSourceSupplier(distributions_root="/tmp",
-                                                                     source_supplier=es,
-                                                                     distribution_config={},
-                                                                     template_renderer=renderer)
+        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
+                                                        source_supplier=es,
+                                                        file_resolver=supplier.ElasticsearchFileNameResolver(
+                                                            distribution_config={},
+                                                            template_renderer=renderer
+                                                        ))
 
         cached_supplier.fetch()
         cached_supplier.prepare()
@@ -231,10 +235,12 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
             "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
         }
 
-        cached_supplier = supplier.CachedElasticsearchSourceSupplier(distributions_root="/tmp",
-                                                                     source_supplier=es,
-                                                                     distribution_config=dist_cfg,
-                                                                     template_renderer=renderer)
+        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
+                                                        source_supplier=es,
+                                                        file_resolver=supplier.ElasticsearchFileNameResolver(
+                                                            distribution_config=dist_cfg,
+                                                            template_renderer=renderer
+                                                        ))
         cached_supplier.fetch()
         cached_supplier.prepare()
 
@@ -282,10 +288,12 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
             "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
         }
 
-        cached_supplier = supplier.CachedElasticsearchSourceSupplier(distributions_root="/tmp",
-                                                                     source_supplier=es,
-                                                                     distribution_config=dist_cfg,
-                                                                     template_renderer=renderer)
+        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
+                                                        source_supplier=es,
+                                                        file_resolver=supplier.ElasticsearchFileNameResolver(
+                                                            distribution_config=dist_cfg,
+                                                            template_renderer=renderer
+                                                        ))
         cached_supplier.fetch()
         cached_supplier.prepare()
 
@@ -299,6 +307,99 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
         self.assertIn("elasticsearch", binaries)
         # still the uncached artifact
         self.assertEqual("/path/to/artifact.tar.gz", binaries["elasticsearch"])
+
+
+class ElasticsearchFileNameResolverTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        renderer = supplier.TemplateRenderer(version="8.0.0-SNAPSHOT", os_name="linux", arch="x86_64")
+
+        dist_cfg = {
+            "runtime.jdk.bundled": "true",
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+        }
+
+        self.resolver = supplier.ElasticsearchFileNameResolver(
+            distribution_config=dist_cfg,
+            template_renderer=renderer
+        )
+
+    def test_resolve(self):
+        self.resolver.revision = "abc123"
+        self.assertEqual("elasticsearch-abc123-linux-x86_64.tar.gz", self.resolver.file_name)
+
+    def test_artifact_key(self):
+        self.assertEqual("elasticsearch", self.resolver.artifact_key)
+
+    def test_to_artifact_path(self):
+        file_system_path = "/tmp/test"
+        self.assertEqual(file_system_path, self.resolver.to_artifact_path(file_system_path))
+
+    def test_to_file_system_path(self):
+        artifact_path = "/tmp/test"
+        self.assertEqual(artifact_path, self.resolver.to_file_system_path(artifact_path))
+
+
+class PluginFileNameResolverTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.resolver = supplier.PluginFileNameResolver("test-plugin")
+
+    def test_resolve(self):
+        self.resolver.revision = "abc123"
+        self.assertEqual("test-plugin-abc123.zip", self.resolver.file_name)
+
+    def test_artifact_key(self):
+        self.assertEqual("test-plugin", self.resolver.artifact_key)
+
+    def test_to_artifact_path(self):
+        file_system_path = "/tmp/test"
+        self.assertEqual(f"file://{file_system_path}", self.resolver.to_artifact_path(file_system_path))
+
+    def test_to_file_system_path(self):
+        file_system_path = "/tmp/test"
+        self.assertEqual(file_system_path, self.resolver.to_file_system_path(f"file://{file_system_path}"))
+
+
+class PruneTests(TestCase):
+    LStat = collections.namedtuple("LStat", "st_ctime")
+
+    @mock.patch("os.path.exists")
+    @mock.patch("os.listdir")
+    @mock.patch("os.path.isfile")
+    @mock.patch("os.lstat")
+    @mock.patch("os.remove")
+    def test_does_not_touch_nonexisting_directory(self, rm, lstat, isfile, listdir, exists):
+        exists.return_value = False
+
+        supplier._prune(root_path="/tmp/test", max_age_days=7)
+
+        self.assertEqual(0, listdir.call_count, "attempted to list a non-existing directory")
+
+    @mock.patch("os.path.exists")
+    @mock.patch("os.listdir")
+    @mock.patch("os.path.isfile")
+    @mock.patch("os.lstat")
+    @mock.patch("os.remove")
+    def test_prunes_old_files(self, rm, lstat, isfile, listdir, exists):
+        exists.return_value = True
+        listdir.return_value = ["elasticsearch-6.8.0.tar.gz", "some-subdir", "elasticsearch-7.3.0-darwin-x86_64.tar.gz"]
+        isfile.side_effect = [True, False, True]
+
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        ten_days_ago = now - datetime.timedelta(days=10)
+        one_day_ago = now - datetime.timedelta(days=1)
+
+        lstat.side_effect = [
+            # elasticsearch-6.8.0.tar.gz
+            PruneTests.LStat(st_ctime=int(ten_days_ago.timestamp())),
+            # elasticsearch-7.3.0-darwin-x86_64.tar.gz
+            PruneTests.LStat(st_ctime=int(one_day_ago.timestamp()))
+        ]
+
+        supplier._prune(root_path="/tmp/test", max_age_days=7)
+
+        rm.assert_called_with("/tmp/test/elasticsearch-6.8.0.tar.gz")
 
 
 class ElasticsearchSourceSupplierTests(TestCase):
@@ -581,9 +682,9 @@ class CreateSupplierTests(TestCase):
         self.assertIsInstance(composite_supplier.suppliers[0], supplier.ElasticsearchDistributionSupplier)
         self.assertIsInstance(composite_supplier.suppliers[1], supplier.PluginDistributionSupplier)
         self.assertEqual(core_plugin, composite_supplier.suppliers[1].plugin)
-        self.assertIsInstance(composite_supplier.suppliers[2], supplier.ExternalPluginSourceSupplier)
-        self.assertEqual(external_plugin, composite_supplier.suppliers[2].plugin)
-        self.assertIsNone(composite_supplier.suppliers[2].builder)
+        self.assertIsInstance(composite_supplier.suppliers[2].source_supplier, supplier.ExternalPluginSourceSupplier)
+        self.assertEqual(external_plugin, composite_supplier.suppliers[2].source_supplier.plugin)
+        self.assertIsNone(composite_supplier.suppliers[2].source_supplier.builder)
 
     def test_create_suppliers_for_es_missing_distribution_plugin_source_skip(self):
         cfg = config.Config()
@@ -639,9 +740,9 @@ class CreateSupplierTests(TestCase):
         self.assertIsInstance(composite_supplier.suppliers[0], supplier.ElasticsearchDistributionSupplier)
         self.assertIsInstance(composite_supplier.suppliers[1], supplier.PluginDistributionSupplier)
         self.assertEqual(core_plugin, composite_supplier.suppliers[1].plugin)
-        self.assertIsInstance(composite_supplier.suppliers[2], supplier.ExternalPluginSourceSupplier)
-        self.assertEqual(external_plugin, composite_supplier.suppliers[2].plugin)
-        self.assertIsNotNone(composite_supplier.suppliers[2].builder)
+        self.assertIsInstance(composite_supplier.suppliers[2].source_supplier, supplier.ExternalPluginSourceSupplier)
+        self.assertEqual(external_plugin, composite_supplier.suppliers[2].source_supplier.plugin)
+        self.assertIsNotNone(composite_supplier.suppliers[2].source_supplier.builder)
 
     @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
     def test_create_suppliers_for_es_and_plugin_source_build(self):
@@ -672,12 +773,12 @@ class CreateSupplierTests(TestCase):
         ])
 
         self.assertEqual(3, len(composite_supplier.suppliers))
-        self.assertIsInstance(composite_supplier.suppliers[0], supplier.ElasticsearchSourceSupplier)
-        self.assertIsInstance(composite_supplier.suppliers[1], supplier.CorePluginSourceSupplier)
-        self.assertEqual(core_plugin, composite_supplier.suppliers[1].plugin)
-        self.assertIsInstance(composite_supplier.suppliers[2], supplier.ExternalPluginSourceSupplier)
-        self.assertEqual(external_plugin, composite_supplier.suppliers[2].plugin)
-        self.assertIsNotNone(composite_supplier.suppliers[2].builder)
+        self.assertIsInstance(composite_supplier.suppliers[0].source_supplier, supplier.ElasticsearchSourceSupplier)
+        self.assertIsInstance(composite_supplier.suppliers[1].source_supplier, supplier.CorePluginSourceSupplier)
+        self.assertEqual(core_plugin, composite_supplier.suppliers[1].source_supplier.plugin)
+        self.assertIsInstance(composite_supplier.suppliers[2].source_supplier, supplier.ExternalPluginSourceSupplier)
+        self.assertEqual(external_plugin, composite_supplier.suppliers[2].source_supplier.plugin)
+        self.assertIsNotNone(composite_supplier.suppliers[2].source_supplier.builder)
 
 
 class DistributionRepositoryTests(TestCase):

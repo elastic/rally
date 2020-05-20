@@ -2,3 +2,4 @@
 #some-ignored-plugin
 my-analysis-plugin
 my-ingest-plugin
+my-core-plugin-with-config

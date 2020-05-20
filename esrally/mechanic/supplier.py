@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import datetime
 import glob
 import logging
 import os
@@ -34,6 +35,7 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     logger = logging.getLogger(__name__)
     if plugins is None:
         plugins = []
+    caching_enabled = cfg.opts("source", "cache", mandatory=False, default_value=True)
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision"))
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
@@ -63,6 +65,18 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     # ... but the user can override it in rally.ini
     dist_cfg.update(cfg.all_opts("distributions"))
 
+    if caching_enabled:
+        logger.info("Enabling source artifact caching.")
+        max_age_days = int(cfg.opts("source", "cache.days", mandatory=False, default_value=7))
+        if max_age_days <= 0:
+            raise exceptions.SystemSetupError(f"cache.days must be a positive number but is {max_age_days}")
+
+        source_distributions_root = os.path.join(distributions_root, "src")
+        _prune(source_distributions_root, max_age_days)
+    else:
+        logger.info("Disabling source artifact caching.")
+        source_distributions_root = None
+
     if es_supplier_type == "source":
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
 
@@ -73,12 +87,12 @@ def create(cfg, sources, distribution, build, car, plugins=None):
                                                       builder=builder,
                                                       template_renderer=template_renderer)
 
-        if cfg.opts("source", "cache", mandatory=False, default_value=False):
-            logger.info("Enabling source artifact caching.")
-            source_supplier = CachedElasticsearchSourceSupplier(distributions_root,
-                                                                source_supplier,
-                                                                dist_cfg,
-                                                                template_renderer)
+        if caching_enabled:
+            es_file_resolver = ElasticsearchFileNameResolver(dist_cfg, template_renderer)
+            source_supplier = CachedSourceSupplier(source_distributions_root,
+                                                   source_supplier,
+                                                   es_file_resolver)
+
         suppliers.append(source_supplier)
         repo = None
     else:
@@ -94,14 +108,21 @@ def create(cfg, sources, distribution, build, car, plugins=None):
         if supplier_type == "source":
             if CorePluginSourceSupplier.can_handle(plugin):
                 logger.info("Adding core plugin source supplier for [%s].", plugin.name)
-                assert es_src_dir is not None, "Cannot build core plugin %s when Elasticsearch is not built from source." % plugin.name
-                suppliers.append(CorePluginSourceSupplier(plugin, es_src_dir, builder))
+                assert es_src_dir is not None, f"Cannot build core plugin {plugin.name} when Elasticsearch is not built from source."
+                plugin_supplier = CorePluginSourceSupplier(plugin, es_src_dir, builder)
             elif ExternalPluginSourceSupplier.can_handle(plugin):
                 logger.info("Adding external plugin source supplier for [%s].", plugin.name)
-                suppliers.append(ExternalPluginSourceSupplier(plugin, plugin_version, _src_dir(cfg, mandatory=False), src_config, builder))
+                plugin_supplier = ExternalPluginSourceSupplier(plugin, plugin_version, _src_dir(cfg, mandatory=False), src_config, builder)
             else:
                 raise exceptions.RallyError("Plugin %s can neither be treated as core nor as external plugin. Requirements: %s" %
                                             (plugin.name, supply_requirements[plugin.name]))
+
+            if caching_enabled:
+                plugin_file_resolver = PluginFileNameResolver(plugin.name)
+                plugin_supplier = CachedSourceSupplier(source_distributions_root,
+                                                       plugin_supplier,
+                                                       plugin_file_resolver)
+            suppliers.append(plugin_supplier)
         else:
             logger.info("Adding plugin distribution supplier for [%s].", plugin.name)
             assert repo is not None, "Cannot benchmark plugin %s from a distribution version but Elasticsearch from sources" % plugin.name
@@ -192,6 +213,35 @@ def _src_dir(cfg, mandatory=True):
                                           " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
 
 
+def _prune(root_path, max_age_days):
+    """
+    Removes files that are older than ``max_age_days`` from ``root_path``. Subdirectories are not traversed.
+
+    :param root_path: A directory which should be checked.
+    :param max_age_days: Files that have been created more than ``max_age_days`` ago are deleted.
+    """
+    logger = logging.getLogger(__name__)
+    if not os.path.exists(root_path):
+        logger.info("[%s] does not exist. Skipping pruning.", root_path)
+        return
+
+    for f in os.listdir(root_path):
+        artifact = os.path.join(root_path, f)
+        if os.path.isfile(artifact):
+            max_age = datetime.datetime.now() - datetime.timedelta(days=max_age_days)
+            try:
+                created_at = datetime.datetime.fromtimestamp(os.lstat(artifact).st_ctime)
+                if created_at < max_age:
+                    logger.info("Deleting [%s] from artifact cache (reached max age).", f)
+                    os.remove(artifact)
+                else:
+                    logger.debug("Keeping [%s] (max age not yet reached)", f)
+            except OSError:
+                logger.exception("Could not check whether [%s] needs to be deleted from artifact cache.", artifact)
+        else:
+            logger.info("Skipping [%s] (not a file).", artifact)
+
+
 class TemplateRenderer:
     def __init__(self, version, os_name=None, arch=None):
         self.version = version
@@ -231,16 +281,19 @@ class CompositeSupplier:
         return binaries
 
 
-class CachedElasticsearchSourceSupplier:
-    def __init__(self, distributions_root, source_supplier, distribution_config, template_renderer):
-        self.distributions_root = distributions_root
-        self.source_supplier = source_supplier
-        self.template_renderer = template_renderer
+class ElasticsearchFileNameResolver:
+    def __init__(self, distribution_config, template_renderer):
         self.cfg = distribution_config
         self.runtime_jdk_bundled = convert.to_bool(self.cfg.get("runtime.jdk.bundled", False))
-        self.revision = None
-        self.cached_path = None
-        self.logger = logging.getLogger(__name__)
+        self.template_renderer = template_renderer
+
+    @property
+    def revision(self):
+        return self.template_renderer.version
+
+    @revision.setter
+    def revision(self, revision):
+        self.template_renderer.version = revision
 
     @property
     def file_name(self):
@@ -252,6 +305,29 @@ class CachedElasticsearchSourceSupplier:
         return url[url.rfind("/") + 1:]
 
     @property
+    def artifact_key(self):
+        return "elasticsearch"
+
+    def to_artifact_path(self, file_system_path):
+        return file_system_path
+
+    def to_file_system_path(self, artifact_path):
+        return artifact_path
+
+
+class CachedSourceSupplier:
+    def __init__(self, distributions_root, source_supplier, file_resolver):
+        self.distributions_root = distributions_root
+        self.source_supplier = source_supplier
+        self.file_resolver = file_resolver
+        self.cached_path = None
+        self.logger = logging.getLogger(__name__)
+
+    @property
+    def file_name(self):
+        return self.file_resolver.file_name
+
+    @property
     def cached(self):
         return self.cached_path is not None and os.path.exists(self.cached_path)
 
@@ -259,7 +335,7 @@ class CachedElasticsearchSourceSupplier:
         resolved_revision = self.source_supplier.fetch()
         if resolved_revision:
             # ensure we use the resolved revision for rendering the artifact
-            self.template_renderer.version = resolved_revision
+            self.file_resolver.revision = resolved_revision
             self.cached_path = os.path.join(self.distributions_root, self.file_name)
 
     def prepare(self):
@@ -269,10 +345,10 @@ class CachedElasticsearchSourceSupplier:
     def add(self, binaries):
         if self.cached:
             self.logger.info("Using cached artifact in [%s]", self.cached_path)
-            binaries["elasticsearch"] = self.cached_path
+            binaries[self.file_resolver.artifact_key] = self.file_resolver.to_artifact_path(self.cached_path)
         else:
             self.source_supplier.add(binaries)
-            original_path = binaries["elasticsearch"]
+            original_path = self.file_resolver.to_file_system_path(binaries[self.file_resolver.artifact_key])
             # this can be None if the Elasticsearch does not reside in a git repo and the user has only
             # copied all source files. In that case, we cannot resolve a revision hash and thus we cannot cache.
             if self.cached_path:
@@ -280,7 +356,7 @@ class CachedElasticsearchSourceSupplier:
                     io.ensure_dir(io.dirname(self.cached_path))
                     shutil.copy(original_path, self.cached_path)
                     self.logger.info("Caching artifact in [%s]", self.cached_path)
-                    binaries["elasticsearch"] = self.cached_path
+                    binaries[self.file_resolver.artifact_key] = self.file_resolver.to_artifact_path(self.cached_path)
                 except OSError:
                     self.logger.exception("Not caching [%s].", original_path)
             else:
@@ -318,6 +394,26 @@ class ElasticsearchSourceSupplier:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
 
 
+class PluginFileNameResolver:
+    def __init__(self, plugin_name):
+        self.plugin_name = plugin_name
+        self.revision = None
+
+    @property
+    def file_name(self):
+        return f"{self.plugin_name}-{self.revision}.zip"
+
+    @property
+    def artifact_key(self):
+        return self.plugin_name
+
+    def to_artifact_path(self, file_system_path):
+        return f"file://{file_system_path}"
+
+    def to_file_system_path(self, artifact_path):
+        return artifact_path[len("file://"):]
+
+
 class ExternalPluginSourceSupplier:
     def __init__(self, plugin, revision, src_dir, src_config, builder):
         assert not plugin.core_plugin, "Plugin %s is a core plugin" % plugin.name
@@ -348,7 +444,7 @@ class ExternalPluginSourceSupplier:
     def fetch(self):
         # optional (but then source code is assumed to be available locally)
         plugin_remote_url = self.src_config.get("plugin.%s.remote.repo.url" % self.plugin.name)
-        SourceRepository(self.plugin.name, plugin_remote_url, self.plugin_src_dir).fetch(self.revision)
+        return SourceRepository(self.plugin.name, plugin_remote_url, self.plugin_src_dir).fetch(self.revision)
 
     def prepare(self):
         if self.builder:
@@ -380,7 +476,8 @@ class CorePluginSourceSupplier:
         return plugin.core_plugin
 
     def fetch(self):
-        pass
+        # Just retrieve the current revision *number* and assume that Elasticsearch has prepared the source tree.
+        return SourceRepository("Elasticsearch", None, self.es_src_dir).fetch(revision="current")
 
     def prepare(self):
         if self.builder:

@@ -273,13 +273,20 @@ def set_default_hosts(cfg, host="127.0.0.1", port=9200):
 
 
 # Poor man's curry
-def from_sources_complete(cfg):
+def from_sources(cfg):
     port = cfg.opts("provisioning", "node.http.port")
     set_default_hosts(cfg, port=port)
     return race(cfg, sources=True, build=True)
 
 
+def from_sources_complete(cfg):
+    console.warn("The pipeline from-sources-complete is deprecated. Use the pipeline \"from-sources\" instead.")
+    return from_sources(cfg)
+
+
 def from_sources_skip_build(cfg):
+    console.warn("The pipeline from-sources-skip-build is deprecated. Rally caches artifacts now automatically. "
+                 "Use the pipeline \"from-sources\" instead")
     port = cfg.opts("provisioning", "node.http.port")
     set_default_hosts(cfg, port=port)
     return race(cfg, sources=True, build=False)
@@ -303,11 +310,14 @@ def docker(cfg):
     return race(cfg, docker=True)
 
 
+Pipeline("from-sources",
+         "Builds and provisions Elasticsearch, runs a benchmark and reports results.", from_sources)
+
 Pipeline("from-sources-complete",
-         "Builds and provisions Elasticsearch, runs a benchmark and reports results.", from_sources_complete)
+         "Builds and provisions Elasticsearch, runs a benchmark and reports results [deprecated].", from_sources_complete)
 
 Pipeline("from-sources-skip-build",
-         "Provisions Elasticsearch (skips the build), runs a benchmark and reports results.", from_sources_skip_build)
+         "Provisions Elasticsearch (skips the build), runs a benchmark and reports results [deprecated].", from_sources_skip_build)
 
 Pipeline("from-distribution",
          "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.", from_distribution)
@@ -338,7 +348,7 @@ def run(cfg):
         if cfg.exists("mechanic", "distribution.version"):
             name = "from-distribution"
         else:
-            name = "from-sources-complete"
+            name = "from-sources"
         logger.info("User specified no pipeline. Automatically derived pipeline [%s].", name)
         cfg.add(config.Scope.applicationOverride, "race", "pipeline", name)
     else:
