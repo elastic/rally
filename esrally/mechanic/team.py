@@ -353,12 +353,17 @@ class PluginLoader:
             self.logger.info("Loading plugin [%s] with default configuration.", name)
 
         root_path = self._plugin_root_path(name)
+        # used to determine whether this is a core plugin
+        core_plugin = self._core_plugin(name)
         if not config_names:
             # maybe we only have a config folder but nothing else (e.g. if there is only an install hook)
             if io.exists(root_path):
-                return PluginDescriptor(name=name, config=config_names, root_path=root_path, variables=plugin_params)
+                return PluginDescriptor(name=name,
+                                        core_plugin=core_plugin is not None,
+                                        config=config_names,
+                                        root_path=root_path,
+                                        variables=plugin_params)
             else:
-                core_plugin = self._core_plugin(name, plugin_params)
                 if core_plugin:
                     return core_plugin
                 # If we just have a plugin name then we assume that this is a community plugin and the user has specified a download URL
@@ -371,8 +376,6 @@ class PluginLoader:
             config_paths = []
             # used for deduplication
             known_config_bases = set()
-            # used to determine whether this is a core plugin
-            core_plugin = self._core_plugin(name)
 
             for config_name in config_names:
                 config_file = self._plugin_file(name, config_name)

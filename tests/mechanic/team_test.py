@@ -150,12 +150,28 @@ class PluginLoaderTests(TestCase):
                 team.PluginDescriptor(name="complex-plugin", config="config-a"),
                 team.PluginDescriptor(name="complex-plugin", config="config-b"),
                 team.PluginDescriptor(name="my-analysis-plugin", core_plugin=True),
-                team.PluginDescriptor(name="my-ingest-plugin", core_plugin=True)
+                team.PluginDescriptor(name="my-ingest-plugin", core_plugin=True),
+                team.PluginDescriptor(name="my-core-plugin-with-config", core_plugin=True)
             ], self.loader.plugins())
 
     def test_loads_core_plugin(self):
         self.assertEqual(team.PluginDescriptor(name="my-analysis-plugin", core_plugin=True, variables={"dbg": True}),
                          self.loader.load_plugin("my-analysis-plugin", config_names=None, plugin_params={"dbg": True}))
+
+    def test_loads_core_plugin_with_config(self):
+        plugin = self.loader.load_plugin("my-core-plugin-with-config", config_names=None, plugin_params={"dbg": True})
+        self.assertEqual("my-core-plugin-with-config", plugin.name)
+        self.assertTrue(plugin.core_plugin)
+
+        expected_root_path = os.path.join(current_dir, "data", "plugins", "v1", "my_core_plugin_with_config")
+
+        self.assertEqual(expected_root_path, plugin.root_path)
+        self.assertEqual(0, len(plugin.config_paths))
+
+        self.assertEqual({
+            # from plugin params
+            "dbg": True
+        }, plugin.variables)
 
     def test_cannot_load_plugin_with_missing_config(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
@@ -176,6 +192,7 @@ class PluginLoaderTests(TestCase):
     def test_loads_configured_plugin(self):
         plugin = self.loader.load_plugin("complex-plugin", ["config-a", "config-b"], plugin_params={"dbg": True})
         self.assertEqual("complex-plugin", plugin.name)
+        self.assertFalse(plugin.core_plugin)
         self.assertCountEqual(["config-a", "config-b"], plugin.config)
 
         expected_root_path = os.path.join(current_dir, "data", "plugins", "v1", "complex_plugin")
