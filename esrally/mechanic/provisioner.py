@@ -34,11 +34,8 @@ def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_
     node_root_dir = os.path.join(target_root, node_name)
 
     runtime_jdk_bundled = convert.to_bool(car.mandatory_var("runtime.jdk.bundled"))
-    if runtime_jdk_bundled:
-        java_home = None
-    else:
-        runtime_jdk = car.mandatory_var("runtime.jdk")
-        _, java_home = java_resolver.java_home(runtime_jdk, cfg)
+    runtime_jdk = car.mandatory_var("runtime.jdk")
+    _, java_home = java_resolver.java_home(runtime_jdk, cfg.opts("mechanic", "runtime.jdk"), runtime_jdk_bundled)
 
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
@@ -57,10 +54,12 @@ def docker(cfg, car, cluster_settings, ip, http_port, target_root, node_name):
 
 
 class NodeConfiguration:
-    def __init__(self, build_type, car_env, car_runtime_jdks, ip, node_name, node_root_path, binary_path, data_paths):
+    def __init__(self, build_type, car_env, car_runtime_jdks, car_provides_bundled_jdk, ip, node_name, node_root_path,
+                 binary_path, data_paths):
         self.build_type = build_type
         self.car_env = car_env
         self.car_runtime_jdks = car_runtime_jdks
+        self.car_provides_bundled_jdk = car_provides_bundled_jdk
         self.ip = ip
         self.node_name = node_name
         self.node_root_path = node_root_path
@@ -72,6 +71,7 @@ class NodeConfiguration:
             "build-type": self.build_type,
             "car-env": self.car_env,
             "car-runtime-jdks": self.car_runtime_jdks,
+            "car-provides-bundled-jdk": self.car_provides_bundled_jdk,
             "ip": self.ip,
             "node-name": self.node_name,
             "node-root-path": self.node_root_path,
@@ -81,8 +81,8 @@ class NodeConfiguration:
 
     @staticmethod
     def from_dict(d):
-        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["ip"], d["node-name"],
-                                 d["node-root-path"], d["binary-path"], d["data-paths"])
+        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["car-provides-bundled-jdk"], d["ip"],
+                                 d["node-name"], d["node-root-path"], d["binary-path"], d["data-paths"])
 
 
 def save_node_configuration(path, n):
@@ -197,6 +197,7 @@ class BareProvisioner:
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
         return NodeConfiguration("tar", self.es_installer.car.env, self.es_installer.car.mandatory_var("runtime.jdk"),
+                                 convert.to_bool(self.es_installer.car.mandatory_var("runtime.jdk.bundled")),
                                  self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path,
                                  self.es_installer.data_paths)
@@ -462,7 +463,8 @@ class DockerProvisioner:
         with open(os.path.join(self.binary_path, "docker-compose.yml"), mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"), self.node_ip,
+        return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"),
+                                 convert.to_bool(self.car.mandatory_var("runtime.jdk.bundled")), self.node_ip,
                                  self.node_name, self.node_root_dir, self.binary_path, self.data_paths)
 
     def docker_vars(self, mounts):
