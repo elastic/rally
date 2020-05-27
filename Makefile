@@ -97,7 +97,7 @@ serve-docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
 
 test: check-venv
-	pytest tests/
+	. $(VENV_ACTIVATE_FILE); pytest tests/
 
 precommit: lint
 
@@ -108,7 +108,7 @@ it38: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38
 
 benchmark: check-venv
-	$(VEPYTHON) setup.py pytest --addopts="-s benchmarks"
+	. $(VENV_ACTIVATE_FILE); pytest benchmarks/
 
 coverage: check-venv
 	. $(VENV_ACTIVATE_FILE); coverage run setup.py test
