@@ -144,9 +144,6 @@ setup(name="esrally",
       extras_require={
           "develop": tests_require + develop_require
       },
-      setup_requires=[
-          "pytest-runner==5.1",
-      ],
       entry_points={
           "console_scripts": [
               "esrally=esrally.rally:main",
