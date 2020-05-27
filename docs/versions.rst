@@ -17,4 +17,4 @@ Version-specific Limitations
 The following features require at least Elasticsearch 5.0.0:
 
 * :doc:`Benchmarking with plugins </elasticsearch_plugins>`
-* :ref:`Benchmarking source builds <pipelines_from-sources-complete>`
+* :ref:`Benchmarking source builds <pipelines_from-sources>`

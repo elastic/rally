@@ -46,6 +46,8 @@ However, this feature is mainly intended for continuous integration environments
 
    This pipeline is just mentioned for completeness but Rally will autoselect it for you. All you need to do is to define the ``--distribution-version`` flag.
 
+.. _pipelines_from-sources:
+
 from-sources
 ~~~~~~~~~~~~
 
