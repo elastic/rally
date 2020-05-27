@@ -24,7 +24,7 @@ from esrally.track import params
 
 class StaticSource:
     def __init__(self, contents, mode, encoding="utf-8"):
-        self.contents = '{"geonameid": 2986043, "name": "Pic de Font Blanca", "asciiname": "Pic de Font Blanca"}'
+        self.contents = b'{"geonameid": 2986043, "name": "Pic de Font Blanca", "asciiname": "Pic de Font Blanca"}'
         self.current_index = 0
         self.opened = False
 
