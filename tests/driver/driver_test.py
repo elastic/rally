@@ -249,6 +249,89 @@ def op(name, operation_type):
     return track.Operation(name, operation_type, param_source="driver-test-param-source")
 
 
+class SamplePostprocessorTests(TestCase):
+    def throughput(self, absolute_time, relative_time, value):
+        return mock.call(name="throughput",
+                         value=value,
+                         unit="docs/s",
+                         task="index",
+                         operation="index",
+                         operation_type=track.OperationType.Bulk,
+                         sample_type=metrics.SampleType.Normal,
+                         absolute_time=absolute_time,
+                         relative_time=relative_time,
+                         meta_data={})
+
+    def service_time(self, absolute_time, relative_time, value):
+        return self.request_metric(absolute_time, relative_time, "service_time", value)
+
+    def processing_time(self, absolute_time, relative_time, value):
+        return self.request_metric(absolute_time, relative_time, "processing_time", value)
+
+    def latency(self, absolute_time, relative_time, value):
+        return self.request_metric(absolute_time, relative_time, "latency", value)
+
+    def request_metric(self, absolute_time, relative_time, name, value):
+        return mock.call(name=name,
+                         value=value,
+                         unit="ms",
+                         task="index",
+                         operation="index",
+                         operation_type=track.OperationType.Bulk,
+                         sample_type=metrics.SampleType.Normal,
+                         absolute_time=absolute_time,
+                         relative_time=relative_time,
+                         meta_data={})
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_all_samples(self, metrics_store):
+        post_process = driver.SamplePostprocessor(metrics_store,
+                                                  downsample_factor=1,
+                                                  track_meta_data={},
+                                                  challenge_meta_data={})
+
+        task = track.Task("index",
+                        track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source"))
+        samples = [
+            driver.Sample(0, 38598, 24, task, metrics.SampleType.Normal, None, 10, 7, 9, 5000, "docs", 1, 1 / 2),
+            driver.Sample(0, 38599, 25, task, metrics.SampleType.Normal, None, 10, 7, 9, 5000, "docs", 2, 2 / 2),
+        ]
+
+        post_process(samples)
+
+        calls = [
+            self.latency(38598, 24, 10), self.service_time(38598, 24, 7), self.processing_time(38598, 24, 9),
+            self.latency(38599, 25, 10), self.service_time(38599, 25, 7), self.processing_time(38599, 25, 9),
+            self.throughput(38598, 24, 5000),
+            self.throughput(38599, 25, 5000),
+        ]
+        metrics_store.put_value_cluster_level.assert_has_calls(calls)
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_downsamples(self, metrics_store):
+        post_process = driver.SamplePostprocessor(metrics_store,
+                                                  downsample_factor=2,
+                                                  track_meta_data={},
+                                                  challenge_meta_data={})
+
+        task = track.Task("index",
+                          track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source"))
+        samples = [
+            driver.Sample(0, 38598, 24, task, metrics.SampleType.Normal, None, 10, 7, 9, 5000, "docs", 1, 1 / 2),
+            driver.Sample(0, 38599, 25, task, metrics.SampleType.Normal, None, 10, 7, 9, 5000, "docs", 2, 2 / 2),
+        ]
+
+        post_process(samples)
+
+        calls = [
+            # only the first out of two request samples is included, throughput metrics are still complete
+            self.latency(38598, 24, 10), self.service_time(38598, 24, 7), self.processing_time(38598, 24, 9),
+            self.throughput(38598, 24, 5000),
+            self.throughput(38599, 25, 5000),
+        ]
+        metrics_store.put_value_cluster_level.assert_has_calls(calls)
+
+
 class WorkerAssignmentTests(TestCase):
     def test_single_host_assignment_clients_matches_cores(self):
         host_configs = [{

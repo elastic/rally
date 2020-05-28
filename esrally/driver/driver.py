@@ -362,8 +362,8 @@ class Driver:
         self.quiet = False
         self.allocations = None
         self.raw_samples = []
-        self.throughput_calculator = None
         self.most_recent_sample_per_client = {}
+        self.sample_post_processor = None
 
         self.number_of_steps = 0
         self.currently_completed = 0
@@ -427,11 +427,17 @@ class Driver:
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
-        self.throughput_calculator = ThroughputCalculator()
+        downsample_factor = int(self.config.opts("reporting", "metrics.request.downsample.factor", mandatory=False, default_value=1))
         self.metrics_store = metrics.metrics_store(cfg=self.config,
                                                    track=self.track.name,
                                                    challenge=self.challenge.name,
                                                    read_only=False)
+
+        self.sample_post_processor = SamplePostprocessor(self.metrics_store,
+                                                         downsample_factor,
+                                                         self.track.meta_data,
+                                                         self.challenge.meta_data)
+
         es_clients = self.create_es_clients()
         self.wait_for_rest_api(es_clients)
         self.prepare_telemetry(es_clients)
@@ -613,37 +619,54 @@ class Driver:
                 self.progress_reporter.finish()
 
     def post_process_samples(self):
-        if len(self.raw_samples) == 0:
-            return
-        total_start = time.perf_counter()
-        start = total_start
         # we do *not* do this here to avoid concurrent updates (actors are single-threaded) but rather to make it clear that we use
         # only a snapshot and that new data will go to a new sample set.
         raw_samples = self.raw_samples
         self.raw_samples = []
-        for sample in raw_samples:
-            meta_data = self.merge(
-                self.track.meta_data,
-                self.challenge.meta_data,
-                sample.operation.meta_data,
-                sample.task.meta_data,
-                sample.request_meta_data)
+        self.sample_post_processor(raw_samples)
 
-            self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", task=sample.task.name,
-                                                       operation=sample.operation.name, operation_type=sample.operation.type,
-                                                       sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                       relative_time=sample.relative_time, meta_data=meta_data)
 
-            self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms, unit="ms", task=sample.task.name,
-                                                       operation=sample.task.name, operation_type=sample.operation.type,
-                                                       sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                       relative_time=sample.relative_time, meta_data=meta_data)
+class SamplePostprocessor:
+    def __init__(self, metrics_store, downsample_factor, track_meta_data, challenge_meta_data):
+        self.logger = logging.getLogger(__name__)
+        self.metrics_store = metrics_store
+        self.track_meta_data = track_meta_data
+        self.challenge_meta_data = challenge_meta_data
+        self.throughput_calculator = ThroughputCalculator()
+        self.downsample_factor = downsample_factor
 
-            self.metrics_store.put_value_cluster_level(name="processing_time", value=sample.processing_time_ms,
-                                                       unit="ms", task=sample.task.name,
-                                                       operation=sample.task.name, operation_type=sample.operation.type,
-                                                       sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                       relative_time=sample.relative_time, meta_data=meta_data)
+    def __call__(self, raw_samples):
+        if len(raw_samples) == 0:
+            return
+        total_start = time.perf_counter()
+        start = total_start
+        final_sample_count = 0
+        for idx, sample in enumerate(raw_samples):
+            if idx % self.downsample_factor == 0:
+                final_sample_count += 1
+                meta_data = self.merge(
+                    self.track_meta_data,
+                    self.challenge_meta_data,
+                    sample.operation.meta_data,
+                    sample.task.meta_data,
+                    sample.request_meta_data)
+
+                self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", task=sample.task.name,
+                                                           operation=sample.operation.name, operation_type=sample.operation.type,
+                                                           sample_type=sample.sample_type, absolute_time=sample.absolute_time,
+                                                           relative_time=sample.relative_time, meta_data=meta_data)
+
+                self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms,
+                                                           unit="ms", task=sample.task.name,
+                                                           operation=sample.task.name, operation_type=sample.operation.type,
+                                                           sample_type=sample.sample_type, absolute_time=sample.absolute_time,
+                                                           relative_time=sample.relative_time, meta_data=meta_data)
+
+                self.metrics_store.put_value_cluster_level(name="processing_time", value=sample.processing_time_ms,
+                                                           unit="ms", task=sample.task.name,
+                                                           operation=sample.task.name, operation_type=sample.operation.type,
+                                                           sample_type=sample.sample_type, absolute_time=sample.absolute_time,
+                                                           relative_time=sample.relative_time, meta_data=meta_data)
 
         end = time.perf_counter()
         self.logger.debug("Storing latency and service time took [%f] seconds.", (end - start))
@@ -654,8 +677,8 @@ class Driver:
         start = end
         for task, samples in aggregates.items():
             meta_data = self.merge(
-                self.track.meta_data,
-                self.challenge.meta_data,
+                self.track_meta_data,
+                self.challenge_meta_data,
                 task.operation.meta_data,
                 task.meta_data
             )
@@ -676,7 +699,8 @@ class Driver:
         self.metrics_store.flush(refresh=False)
         end = time.perf_counter()
         self.logger.debug("Flushing the metrics store took [%f] seconds.", (end - start))
-        self.logger.debug("Postprocessing [%d] raw samples took [%f] seconds in total.", len(raw_samples), (end - total_start))
+        self.logger.debug("Postprocessing [%d] raw samples (downsampled to [%d] samples) took [%f] seconds in total.",
+                          len(raw_samples), final_sample_count, (end - total_start))
 
     def merge(self, *args):
         result = {}
