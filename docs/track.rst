@@ -113,6 +113,7 @@ A track JSON file consists of the following sections:
 * corpora
 * operations
 * schedule
+* challenges
 
 In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally.
 
@@ -121,6 +122,10 @@ In the ``corpora`` section you define all document corpora (i.e. data files) tha
 In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it, if you want to share operation definitions between challenges.
 
 In the ``schedule`` section you describe the workload for the benchmark, for example index with two clients at maximum throughput while searching with another two clients with ten operations per second. The schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline.
+
+In the ``challenges`` section you describe more than one set of operations, in the event your track needs to test than one set of scenarios. If only one set of operations is needed, they can be specified in ``schedule`` instead.
+
+Creating a track does not require all of the above sections to be used. Tracks that are used against existing data may only rely on querying ``challenges`` and can omit the ``indices``, ``templates``, and ``corpora`` sections.
 
 Track elements
 ==============
