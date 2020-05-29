@@ -55,7 +55,20 @@ You can query the status of the local Rally daemon with::
 Troubleshooting
 ---------------
 
-Rally uses the actor system `Thespian <https://github.com/kquick/Thespian>`_ under the hood. To inspect its status in more detail you can use the `Thespian shell <https://thespianpy.com/doc/in_depth.html#hH-058d8939-b973-4270-975b-3afd9c607176>`_. Below is an example invocation that demonstrates how to retrieve the actor system status::
+Rally uses the actor system `Thespian <https://github.com/kquick/Thespian>`_ under the hood.
+
+At startup, `Thespian attempts to detect an appropriate IP address <https://thespianpy.com/doc/using#hH-9d33a877-b4f0-4012-9510-442d81b0837c>`_. If Rally fails to startup the actor system indicated by the following message::
+
+    thespian.actors.InvalidActorAddress: ActorAddr-(T|:1900) is not a valid ActorSystem admin
+
+then set the IP address yourself by setting the environment variable ``THESPIAN_BASE_IPADDR`` before starting Rally.
+
+.. note::
+
+   This issue often occurs when Rally is started on a machine that is connected via a VPN to the Internet. We advise against such a setup for benchmarking and suggest to setup the load generator and the target machines close to each other, ideally in the same subnet.
+
+
+To inspect Thespian's status in more detail you can use the `Thespian shell <https://thespianpy.com/doc/in_depth.html#hH-058d8939-b973-4270-975b-3afd9c607176>`_. Below is an example invocation that demonstrates how to retrieve the actor system status::
 
     python3 -m thespian.shell
     Thespian Actor shell.  Type help or '?' to list commands.'
