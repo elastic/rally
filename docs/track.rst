@@ -123,9 +123,9 @@ In the ``operations`` section you describe which operations are available for th
 
 In the ``schedule`` section you describe the workload for the benchmark, for example index with two clients at maximum throughput while searching with another two clients with ten operations per second. The schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline.
 
-In the ``challenges`` section you describe more than one set of operations, in the event your track needs to test than one set of scenarios. If only one set of operations is needed, they can be specified in ``schedule`` instead.
+In the ``challenges`` section you describe more than one set of operations, in the event your track needs to test more than one set of scenarios. This section is optional, and more information on ``challenges`` :ref:`can be found here <track_challenge>`.
 
-Creating a track does not require all of the above sections to be used. Tracks that are used against existing data may only rely on querying ``challenges`` and can omit the ``indices``, ``templates``, and ``corpora`` sections.
+Creating a track does not require all of the above sections to be used. Tracks that are used against existing data may only rely on querying ``operations`` and can omit the ``indices``, ``templates``, and ``corpora`` sections.
 
 Track elements
 ==============
@@ -292,6 +292,8 @@ We can also define default values on document corpus level but override some of 
         }
       ]
 
+
+.. _track_challenge:
 
 challenge
 .........
