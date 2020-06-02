@@ -378,25 +378,3 @@ def run(cfg):
     except BaseException:
         tb = sys.exc_info()[2]
         raise exceptions.RallyError("This race ended with a fatal crash.").with_traceback(tb)
-
-
-def run_async(cfg):
-    console.warn("The race-async command is experimental.")
-    logger = logging.getLogger(__name__)
-    # We'll use a special car name for external benchmarks.
-    cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
-    coordinator = BenchmarkCoordinator(cfg)
-
-    try:
-        coordinator.setup()
-        race_driver = driver.AsyncDriver(cfg, coordinator.current_track, coordinator.current_challenge)
-        distribution_flavor, distribution_version, revision = race_driver.setup()
-        coordinator.on_preparation_complete(distribution_flavor, distribution_version, revision)
-
-        new_metrics = race_driver.run()
-        coordinator.on_benchmark_complete(new_metrics)
-    except KeyboardInterrupt:
-        logger.info("User has cancelled the benchmark.")
-    except BaseException as e:
-        tb = sys.exc_info()[2]
-        raise exceptions.RallyError(str(e)).with_traceback(tb)

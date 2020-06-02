@@ -375,42 +375,6 @@ function test_docker_dev_image {
     tests_for_all_docker_images
 }
 
-function test_node_management_commands {
-    local cfg
-    local dist
-    local build_type
-    random_configuration cfg
-    random_distribution dist
-    random_build_type build_type
-
-    # for Docker we force the most recent distribution as we don't have Docker images for all versions that are tested
-    if [[ "$build_type" == "docker" ]]; then
-      dist="${DISTRIBUTIONS[${#DISTRIBUTIONS[@]}-1]}"
-    fi
-
-    info "test install [--configuration-name=${cfg}] [--build-type=${build_type}]"
-    kill_rally_processes
-    wait_for_free_es_port
-
-    raw_install_id=$(esrally install --quiet --configuration-name="${cfg}" --distribution-version="${dist}" --build-type="${build_type}" --node-name="rally-node-0" --master-nodes="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --seed-hosts="127.0.0.1:39300")
-    install_id=$(echo "${raw_install_id}" | grep installation-id | cut -d '"' -f4)
-
-    info "test start [--configuration-name=${cfg}]"
-    esrally start --quiet --configuration-name="${cfg}" --installation-id="${install_id}" --race-id="rally-integration-test"
-
-    esrally race-async \
-            --target-host="localhost:39200" \
-            --configuration-name="${cfg}" \
-            --race-id="rally-integration-test" \
-            --on-error=abort \
-            --track=geonames \
-            --test-mode \
-            --challenge=append-no-conflicts-index-only
-
-    info "test stop [--configuration-name=${cfg}]"
-    esrally stop --quiet --configuration-name="${cfg}" --installation-id="${install_id}"
-}
-
 
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
@@ -455,8 +419,6 @@ function run_test {
     test_configure
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
     test_docker_dev_image
-    echo "**************************************** TESTING RALLY NODE MANAGEMENT COMMANDS ********************************************"
-    test_node_management_commands
     TEST_SUCCESS=1
 }
 
