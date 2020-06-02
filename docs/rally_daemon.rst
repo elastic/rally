@@ -61,7 +61,7 @@ At startup, `Thespian attempts to detect an appropriate IP address <https://thes
 
     thespian.actors.InvalidActorAddress: ActorAddr-(T|:1900) is not a valid ActorSystem admin
 
-then set the IP address yourself by setting the environment variable ``THESPIAN_BASE_IPADDR`` before starting Rally.
+then set a routable IP address yourself by setting the environment variable ``THESPIAN_BASE_IPADDR`` before starting Rally.
 
 .. note::
 
