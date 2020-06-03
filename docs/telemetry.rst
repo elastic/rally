@@ -92,7 +92,7 @@ node-stats
 The node-stats telemetry device regularly calls the `cluster node-stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records metrics from the following sections:
 
 * Indices stats (key ``indices`` in the node-stats API)
-* Thread pool stats (key ``jvm.thread_pool`` in the node-stats API)
+* Thread pool stats (key ``thread_pool`` in the node-stats API)
 * JVM buffer pool stats (key ``jvm.buffer_pools`` in the node-stats API)
 * JVM gc stats (key ``jvm.gc`` in the node-stats API)
 * JVM mem stats (key ``jvm.mem`` in the node-stats API)
