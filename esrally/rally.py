@@ -283,6 +283,11 @@ def create_arg_parser():
         "--team-path",
         help="Define the path to the car and plugin configurations to use.")
     install_parser.add_argument(
+        "--runtime-jdk",
+        type=runtime_jdk,
+        help="The major version of the runtime JDK to use during installation.",
+        default=None)
+    install_parser.add_argument(
         "--distribution-repository",
         help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
         default="release")
