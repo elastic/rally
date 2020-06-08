@@ -528,57 +528,63 @@ class Driver:
                 self.logger.debug("Sending benchmark results...")
                 self.target.on_benchmark_complete(m)
             else:
-                if self.config.opts("track", "test.mode.enabled"):
-                    # don't wait if test mode is enabled and start the next task immediately.
-                    waiting_period = 0
-                else:
-                    # start the next task in one second (relative to master's timestamp)
-                    #
-                    # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
-                    #             (it doesn't matter too much if we're a few ms off).
-                    waiting_period = 1.0
-                m = self.metrics_store.to_externalizable(clear=True)
-                self.target.on_task_finished(m, waiting_period)
-                # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
-                # a relative instead of an absolute value.
-                start_next_task = time.perf_counter() + waiting_period
-                for worker_id, driver in enumerate(self.workers):
-                    worker_ended_task_at, master_received_msg_at = workers_curr_step[worker_id]
-                    worker_start_timestamp = worker_ended_task_at + (start_next_task - master_received_msg_at)
-                    self.logger.info("Scheduling next task for worker id [%d] at their timestamp [%f] (master timestamp [%f])",
-                                     worker_id, worker_start_timestamp, start_next_task)
-                    self.target.drive_at(driver, worker_start_timestamp)
+                self.move_to_next_task(workers_curr_step)
         else:
-            joinpoints_completing_parent = [a for a in task_allocations if a.task.preceding_task_completes_parent]
-            # we need to actively send CompleteCurrentTask messages to all remaining workers.
-            if len(joinpoints_completing_parent) > 0 and not self.complete_current_task_sent:
-                # while this list could contain multiple items, it should always be the same task (but multiple
-                # different clients) so any item is sufficient.
-                current_join_point = joinpoints_completing_parent[0].task
-                self.logger.info("Tasks before join point [%s] are able to complete the parent structure. Checking "
-                                 "if all [%d] clients have finished yet.",
-                                 current_join_point, len(current_join_point.clients_executing_completing_task))
+            self.may_complete_current_task(task_allocations)
 
-                pending_client_ids = []
-                for client_id in current_join_point.clients_executing_completing_task:
-                    # We assume that all clients have finished if their corresponding worker has finished
-                    worker_id = self.clients_per_worker[client_id]
-                    if worker_id not in self.workers_completed_current_step:
-                        pending_client_ids.append(client_id)
+    def move_to_next_task(self, workers_curr_step):
+        if self.config.opts("track", "test.mode.enabled"):
+            # don't wait if test mode is enabled and start the next task immediately.
+            waiting_period = 0
+        else:
+            # start the next task in one second (relative to master's timestamp)
+            #
+            # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
+            #             (it doesn't matter too much if we're a few ms off).
+            waiting_period = 1.0
+        m = self.metrics_store.to_externalizable(clear=True)
+        self.target.on_task_finished(m, waiting_period)
+        # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
+        # a relative instead of an absolute value.
+        start_next_task = time.perf_counter() + waiting_period
+        for worker_id, worker in enumerate(self.workers):
+            worker_ended_task_at, master_received_msg_at = workers_curr_step[worker_id]
+            worker_start_timestamp = worker_ended_task_at + (start_next_task - master_received_msg_at)
+            self.logger.info("Scheduling next task for worker id [%d] at their timestamp [%f] (master timestamp [%f])",
+                             worker_id, worker_start_timestamp, start_next_task)
+            self.target.drive_at(worker, worker_start_timestamp)
 
-                # are all clients executing said task already done? if so we need to notify the remaining clients
-                if len(pending_client_ids) == 0:
-                    # As we are waiting for other clients to finish, we would send this message over and over again.
-                    # Hence we need to memorize whether we have already sent it for the current step.
-                    self.complete_current_task_sent = True
-                    self.logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
-                    for worker_id, worker in enumerate(self.workers):
-                        self.target.complete_current_task(worker)
+    def may_complete_current_task(self, task_allocations):
+        joinpoints_completing_parent = [a for a in task_allocations if a.task.preceding_task_completes_parent]
+        # we need to actively send CompleteCurrentTask messages to all remaining workers.
+        if len(joinpoints_completing_parent) > 0 and not self.complete_current_task_sent:
+            # while this list could contain multiple items, it should always be the same task (but multiple
+            # different clients) so any item is sufficient.
+            current_join_point = joinpoints_completing_parent[0].task
+            self.logger.info("Tasks before join point [%s] are able to complete the parent structure. Checking "
+                             "if all [%d] clients have finished yet.",
+                             current_join_point, len(current_join_point.clients_executing_completing_task))
+
+            pending_client_ids = []
+            for client_id in current_join_point.clients_executing_completing_task:
+                # We assume that all clients have finished if their corresponding worker has finished
+                worker_id = self.clients_per_worker[client_id]
+                if worker_id not in self.workers_completed_current_step:
+                    pending_client_ids.append(client_id)
+
+            # are all clients executing said task already done? if so we need to notify the remaining clients
+            if len(pending_client_ids) == 0:
+                # As we are waiting for other clients to finish, we would send this message over and over again.
+                # Hence we need to memorize whether we have already sent it for the current step.
+                self.complete_current_task_sent = True
+                self.logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
+                for worker in self.workers:
+                    self.target.complete_current_task(worker)
+            else:
+                if len(pending_client_ids) > 32:
+                    self.logger.info("[%d] clients did not yet finish.", len(pending_client_ids))
                 else:
-                    if len(pending_client_ids) > 32:
-                        self.logger.info("[%d] clients did not yet finish.", len(pending_client_ids))
-                    else:
-                        self.logger.info("Client id(s) [%s] did not yet finish.", ",".join(map(str, pending_client_ids)))
+                    self.logger.info("Client id(s) [%s] did not yet finish.", ",".join(map(str, pending_client_ids)))
 
     def reset_relative_time(self):
         self.logger.debug("Resetting relative time of request metrics store.")
@@ -743,12 +749,12 @@ def calculate_worker_assignments(host_configs, client_count):
             clients_per_worker[c % workers_on_this_host] += 1
 
         # assign client ids to workers
-        for worker_idx, client_count in enumerate(clients_per_worker):
+        for worker_idx, client_count_for_worker in enumerate(clients_per_worker):
             worker_assignment = []
             assignment["workers"].append(worker_assignment)
-            for c in range(client_idx, client_idx + client_count):
+            for c in range(client_idx, client_idx + client_count_for_worker):
                 worker_assignment.append(c)
-            client_idx += client_count
+            client_idx += client_count_for_worker
 
         remaining_clients -= clients_on_this_host
 
