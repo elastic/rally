@@ -420,6 +420,8 @@ class OperationType(Enum):
     RawRequest = 5
     WaitForRecovery = 6
     CreateSnapshot = 7
+    ExecuteTransform = 6
+
 
     # administrative actions
     ForceMerge = 1001
@@ -523,6 +525,8 @@ class OperationType(Enum):
             return OperationType.StopTransform
         elif v == "delete-transform":
             return OperationType.DeleteTransform
+        elif v == "execute-transform":
+            return OperationType.ExecuteTransform
         else:
             raise KeyError("No enum value for [%s]" % v)
 

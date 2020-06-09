@@ -799,6 +799,8 @@ class TransformStats(TelemetryDevice):
         if self.samplers:
             for sampler in self.samplers:
                 sampler.finish()
+                # record the final stats
+                sampler.recorder.record()
 
 
 class TransformStatsRecorder:

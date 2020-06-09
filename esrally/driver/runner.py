@@ -68,6 +68,7 @@ def register_default_runners():
     register_runner(track.OperationType.CreateTransform.name, Retry(CreateTransform()), async_runner=True)
     register_runner(track.OperationType.StartTransform.name, Retry(StartTransform()), async_runner=True)
     register_runner(track.OperationType.StopTransform.name, Retry(StopTransform()), async_runner=True)
+    register_runner(track.OperationType.ExecuteTransform.name, Retry(ExecuteTransform()), async_runner=True)
     register_runner(track.OperationType.DeleteTransform.name, Retry(DeleteTransform()), async_runner=True)
 
 
@@ -1619,6 +1620,46 @@ class StopTransform(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "stop-transform"
+
+
+class ExecuteTransform(Runner):
+    """
+    Execute start and stop
+    """
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+
+        await es.transform.start_transform(transform_id=transform_id)
+        await es.transform.stop_transform(transform_id=transform_id,
+                                          wait_for_completion=True,
+                                          wait_for_checkpoint=True)
+
+        stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
+        transform_stats = stats_response['transforms'][0].get("stats", {})
+
+        ops = {
+            "pages_processed": transform_stats.get("pages_processed", 0),
+            "documents_processed": transform_stats.get("documents_processed", 0),
+            "documents_indexed": transform_stats.get("documents_indexed", 0),
+            "index_total": transform_stats.get("index_total", 0),
+            "transform_index_failures": transform_stats.get("index_failures", 0),
+            "transform_search_total": transform_stats.get("search_total", 0),
+            "transform_search_failures": transform_stats.get("search_failures", 0),
+            "transform_processing_total": transform_stats.get("processing_total", 0)
+        }
+        stats = {
+            "search_time": transform_stats.get("search_time_in_ms", 0),
+            "processing_time": transform_stats.get("processing_time_in_ms", 0),
+            "index_time": transform_stats.get("index_time_in_ms", 0),
+            "unit": "ms",
+            "ops": ops
+        }
+
+        return stats
+
+
+    def __repr__(self, *args, **kwargs):
+        return "execute-transform"
 
 
 class DeleteTransform(Runner):
