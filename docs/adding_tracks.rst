@@ -729,7 +729,7 @@ The data set that is used in the ``http_logs`` track starts on 26-04-1998 but we
 * ``rally.exists_set_param(setting_name, value, default_value=None, comma=True)``: a `macro <https://jinja.pocoo.org/docs/dev/templates/#macros>`_ that you can use to set the value of a track parameter without having to check if it exists.
 
 .. important::
-    To use macros you must declare ``{% import "rally.helpers" as rally with context %}`` at the top of your track; see :ref:`the docs<track_collect_helper>` for more details and `geonames track <https://github.com/elastic/rally-tracks/blob/b2f86df5f0c18461fdb64dd9ee1fe16bd3653b9d/geonames/track.json#L1>`_ for an example.
+    To use macros you must declare ``{% import "rally.helpers" as rally with context %}`` at the top of your track; see :ref:`the docs<track_collect_helper>` for more details and the `geonames track <https://github.com/elastic/rally-tracks/blob/b2f86df5f0c18461fdb64dd9ee1fe16bd3653b9d/geonames/track.json#L1>`_ for an example.
 
 Example:
 
