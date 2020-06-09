@@ -725,15 +725,15 @@ You can find an example in the ``http_logs`` track::
 
 The data set that is used in the ``http_logs`` track starts on 26-04-1998 but we want to ignore the first few days for this query, so we start on 15-05-1998. The expression ``{{'15-05-1998' | days_ago(now)}}`` yields the difference in days between now and the fixed start date and allows us to benchmark time range queries relative to now with a predetermined data set.
 
-* ``rally.collect(parts)``: a `macro <https://jinja.pocoo.org/docs/dev/templates/#macros>`_ that you can use to join track fragments. An example can be seen :ref:`above<track_collect_helper>`.
+* ``rally.collect(parts)``: a `macro <https://jinja.pocoo.org/docs/dev/templates/#macros>`_ that you can use to join track fragments. See the :ref:`example above<track_collect_helper>`.
 * ``rally.exists_set_param(setting_name, value, default_value=None, comma=True)``: a `macro <https://jinja.pocoo.org/docs/dev/templates/#macros>`_ that you can use to set the value of a track parameter without having to check if it exists.
 
 .. important::
-    To use macros you must declare ``{% import "rally.helpers" as rally with context %}`` at the top of your track; see :ref:`the docs<track_collect_helper>` for more details and `the geonames track <https://github.com/elastic/rally-tracks/blob/b2f86df5f0c18461fdb64dd9ee1fe16bd3653b9d/geonames/track.json#L1>`_ for an example.
+    To use macros you must declare ``{% import "rally.helpers" as rally with context %}`` at the top of your track; see :ref:`the docs<track_collect_helper>` for more details and `geonames track <https://github.com/elastic/rally-tracks/blob/b2f86df5f0c18461fdb64dd9ee1fe16bd3653b9d/geonames/track.json#L1>`_ for an example.
 
 Example:
 
-Suppose you need an operation that specifies the Elasticsearch transient setting ``indices.recovery.max_bytes_per_sec`` if and only if it's been provided as a track parameter.
+Suppose you need an operation that specifies the Elasticsearch transient setting ``indices.recovery.max_bytes_per_sec`` if and only if it has been provided as a track parameter.
 
 Your operation could look like::
 
@@ -751,9 +751,9 @@ Your operation could look like::
       }
     }
 
-Note the lack of a comma after the first setting ``cluster.routing.allocation.node_initial_primaries_recoveries``. This is intentional since the helper with insert it if the parameter exists (this behavior can be changed using ``comma=False``).
+Note the lack of a comma after the first setting ``cluster.routing.allocation.node_initial_primaries_recoveries``. This is intentional since the helper will insert it if the parameter exists (this behavior can be changed using ``comma=False``).
 
-Assuming we pass ``--track-params="es_snapshot_restore_recovery_max_bytes_per_sec:-1"`` the helper will end up rending the operation as::
+Assuming we pass ``--track-params="es_snapshot_restore_recovery_max_bytes_per_sec:-1"`` the helper will end up rendering the operation as::
 
     {
       "operation": {
@@ -769,7 +769,7 @@ Assuming we pass ``--track-params="es_snapshot_restore_recovery_max_bytes_per_se
     }
 
 
-The parameter ``default_value`` controls the value to use for the setting if it's undefined.
+The parameter ``default_value`` controls the value to use for the setting if it is undefined.
 
 .. _adding_tracks_custom_param_sources:
 
