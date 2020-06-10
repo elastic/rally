@@ -1669,7 +1669,7 @@ class ExecuteTransform(Runner):
         stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
         state = stats_response['transforms'][0].get("state")
 
-        while state == "started" or state == "indexing":
+        while state in ('started', 'indexing'):
             if (time.time() - start_time) > transform_timeout:
                 raise exceptions.RallyAssertionError(
                     "Transform [{}] timed out after [{}] seconds. "
