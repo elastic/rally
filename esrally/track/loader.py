@@ -607,7 +607,8 @@ def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock):
 
 
 def render_template(template_source, template_vars=None, template_internal_vars=None, loader=None):
-    macros = """
+    macros = [
+        """
         {% macro collect(parts) -%}
             {% set comma = joiner() %}
             {% for part in glob(parts) %}
@@ -615,12 +616,25 @@ def render_template(template_source, template_vars=None, template_internal_vars=
                 {% include part %}
             {% endfor %}
         {%- endmacro %}
-    """
+        """,
+        """
+        {% macro exists_set_param(setting_name, value, default_value=None, comma=True) -%}
+            {% if value is defined or default_value is not none %}
+                {% if comma %} , {% endif %}
+                {% if default_value is not none %}
+                  "{{ setting_name }}": {{ value | default(default_value) | tojson }}
+                {% else %}
+                  "{{ setting_name }}": {{ value | tojson }}
+                {% endif %}
+              {% endif %}
+        {%- endmacro %}
+        """
+    ]
 
     # place helpers dict loader first to prevent users from overriding our macros.
     env = jinja2.Environment(
         loader=jinja2.ChoiceLoader([
-            jinja2.DictLoader({"rally.helpers": macros}),
+            jinja2.DictLoader({"rally.helpers": "".join(macros)}),
             jinja2.BaseLoader(),
             loader
         ])
