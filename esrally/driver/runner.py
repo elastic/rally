@@ -68,7 +68,7 @@ def register_default_runners():
     register_runner(track.OperationType.CreateTransform.name, Retry(CreateTransform()), async_runner=True)
     register_runner(track.OperationType.StartTransform.name, Retry(StartTransform()), async_runner=True)
     register_runner(track.OperationType.StopTransform.name, Retry(StopTransform()), async_runner=True)
-    register_runner(track.OperationType.ExecuteTransform.name, Retry(ExecuteTransform()), async_runner=True)
+    register_runner(track.OperationType.ExecuteTransform.name, ExecuteTransform(), async_runner=True)
     register_runner(track.OperationType.DeleteTransform.name, Retry(DeleteTransform()), async_runner=True)
 
 
@@ -1624,17 +1624,70 @@ class StopTransform(Runner):
 
 class ExecuteTransform(Runner):
     """
-    Execute start and stop
+    Execute - start and wait for stop - a batch transform and report its stats.
     """
-    async def __call__(self, es, params):
-        transform_id = mandatory(params, "transform-id", self)
 
+    def __init__(self):
+        super().__init__()
+        self._completed = False
+        self._percent_completed = 0.0
+
+    @property
+    def completed(self):
+        return self._completed
+
+    # todo: progress reporting does not work at the moment, although self._percent_completed gets set
+    @property
+    def percent_completed(self):
+        return self._percent_completed
+
+    async def __call__(self, es, params):
+        """
+        Runs a batch transform
+
+        :param es: The Elasticsearch client.
+        :param params: A hash with all parameters. See below for details.
+        :return: A hash with stats from the run.
+
+        It expects a parameter dict with the following mandatory keys:
+
+        * ``transform_id``: the transform id to start, the transform must have been created upfront.
+
+        The following keys are optional:
+
+        * ``poll-interval``: how often transform stats are polled, used to set progress and check the state,
+                             default 0.5.
+        * ``transform-timeout``: overall runtime timeout of the batch transform in seconds, default 1800 (1h)
+        """
+        import time
+        transform_id = mandatory(params, "transform-id", self)
+        poll_interval = params.get("poll-interval", 0.5)
+        transform_timeout = params.get("transform-timeout", 60.0 * 60.0)
+        start_time = time.time()
         await es.transform.start_transform(transform_id=transform_id)
-        await es.transform.stop_transform(transform_id=transform_id,
-                                          wait_for_completion=True,
-                                          wait_for_checkpoint=True)
 
         stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
+        state = stats_response['transforms'][0].get("state")
+
+        while state == "started" or state == "indexing":
+            if (time.time() - start_time) > transform_timeout:
+                raise exceptions.RallyAssertionError(
+                    "Transform [{}] timed out after [{}] seconds. "
+                    "Please consider increasing the timeout in the track.".format(
+                        transform_id, transform_timeout))
+            await asyncio.sleep(poll_interval)
+            stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
+            state = stats_response['transforms'][0].get("state")
+
+            self._percent_completed = stats_response['transforms'][0].get("checkpointing", {}).get("next", {}).get(
+                "checkpoint_progress", {}).get("percent_complete",  )
+
+        if state == "failed":
+            raise exceptions.RallyAssertionError(
+                "Transform [{}] failed with [{}].".format(transform_id,
+                                                          stats_response['transforms'][0].get("reason", "unknown")))
+
+        self._completed = True
         transform_stats = stats_response['transforms'][0].get("stats", {})
 
         ops = {
