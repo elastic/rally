@@ -49,7 +49,7 @@ supported_python_versions = [(3, 8)]
 install_requires = [
     # License: Apache 2.0
     # transitive dependency urllib3: MIT
-    "elasticsearch==7.6.0",
+    "elasticsearch==7.7.0",
     # License: Apache 2.0
     # transitive dependencies:
     #   aiohttp: Apache 2.0
