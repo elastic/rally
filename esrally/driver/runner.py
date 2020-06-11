@@ -42,6 +42,7 @@ def register_default_runners():
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep.name, Sleep(), async_runner=True)
     # these requests should not be retried as they are not idempotent
+    register_runner(track.OperationType.CreateSnapshot.name, CreateSnapshot(), async_runner=True)
     register_runner(track.OperationType.RestoreSnapshot.name, RestoreSnapshot(), async_runner=True)
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()), async_runner=True)
@@ -1449,6 +1450,43 @@ class CreateSnapshotRepository(Runner):
         return "create-snapshot-repository"
 
 
+class CreateSnapshot(Runner):
+    """
+    Creates a new snapshot repository
+    """
+    async def __call__(self, es, params):
+        request_params = params.get("request-params", {})
+        wait_for_completion = params.get("wait-for-completion", False)
+        repository = mandatory(params, "repository", repr(self))
+        snapshot = mandatory(params, "snapshot", repr(self))
+        body = mandatory(params, "body", repr(self))
+        response = await es.snapshot.create(repository=repository,
+                                            snapshot=snapshot,
+                                            body=body,
+                                            params=request_params,
+                                            wait_for_completion=wait_for_completion)
+
+        # We can derive a more useful throughput metric if the snapshot has successfully completed
+        if wait_for_completion and response.get("snapshot", {}).get("state") == "SUCCESS":
+            stats_response = await es.snapshot.status(repository=repository,
+                                                      snapshot=snapshot)
+            size = stats_response["snapshots"][0]["stats"]["total"]["size_in_bytes"]
+            # while the actual service time as determined by Rally should be pretty accurate, the actual time it took
+            # to restore allows for a correct calculation of achieved throughput.
+            time_in_millis = stats_response["snapshots"][0]["stats"]["time_in_millis"]
+            time_in_seconds = time_in_millis / 1000
+            return {
+                "weight": size,
+                "unit": "byte",
+                "success": True,
+                "service_time": time_in_seconds,
+                "time_period": time_in_seconds
+            }
+
+    def __repr__(self, *args, **kwargs):
+        return "create-snapshot"
+
+
 class RestoreSnapshot(Runner):
     """
     Restores a snapshot from an already registered repository
@@ -1466,58 +1504,48 @@ class RestoreSnapshot(Runner):
 
 
 class IndicesRecovery(Runner):
-    def __init__(self):
-        super().__init__()
-        self._completed = False
-        self._percent_completed = 0.0
-        self._last_recovered = None
-
-    @property
-    def completed(self):
-        return self._completed
-
-    @property
-    def percent_completed(self):
-        return self._percent_completed
-
     async def __call__(self, es, params):
-        remaining_attempts = params.get("completion-recheck-attempts", 3)
-        wait_period = params.get("completion-recheck-wait-period", 2)
-        response = None
-        while not response and remaining_attempts > 0:
-            response = await es.indices.recovery(active_only=True)
-            remaining_attempts -= 1
-            # This might also happen if all recoveries have just finished and we happen to call the API
-            # before the next recovery is scheduled.
+        index = mandatory(params, "index", repr(self))
+        wait_period = params.get("completion-recheck-wait-period", 1)
+
+        all_shards_done = False
+        total_recovered = 0
+        total_start_millis = sys.maxsize
+        total_end_millis = 0
+
+        # wait until recovery is done
+        while not all_shards_done:
+            response = await es.indices.recovery(index=index)
+            # This might happen if we happen to call the API before the next recovery is scheduled.
             if not response:
+                self.logger.debug("Empty index recovery response for [%s].", index)
+            else:
+                # check whether all shards are done
+                all_shards_done = True
+                total_recovered = 0
+                total_start_millis = sys.maxsize
+                total_end_millis = 0
+                for _, idx_data in response.items():
+                    for _, shard_data in idx_data.items():
+                        for shard in shard_data:
+                            all_shards_done = all_shards_done and (shard["stage"] == "DONE")
+                            total_start_millis = min(total_start_millis, shard["start_time_in_millis"])
+                            total_end_millis = max(total_end_millis, shard["stop_time_in_millis"])
+                            idx_size = shard["index"]["size"]
+                            total_recovered += idx_size["recovered_in_bytes"]
+                self.logger.debug("All shards done for [%s]: [%s].", index, all_shards_done)
+
+            if not all_shards_done:
                 await asyncio.sleep(wait_period)
 
-        if not response:
-            self._completed = True
-            self._percent_completed = 1.0
-            self._last_recovered = None
-            return 0, "bytes"
-        else:
-            recovered = 0
-            total_size = 0
-            for _, idx_data in response.items():
-                for _, shard_data in idx_data.items():
-                    for shard in shard_data:
-                        idx_size = shard["index"]["size"]
-                        recovered += idx_size["recovered_in_bytes"]
-                        total_size += idx_size["total_in_bytes"]
-                        # translog is not in size but rather in absolute numbers. Ignore it for progress reporting.
-                        # translog = shard_data["translog"]
-            # we only consider it completed if we get an empty response
-            self._completed = False
-            self._percent_completed = recovered / total_size
-            # this is cumulative so we need to consider the data from last time
-            if self._last_recovered:
-                newly_recovered = max(recovered - self._last_recovered, 0)
-            else:
-                newly_recovered = recovered
-            self._last_recovered = recovered
-            return newly_recovered, "bytes"
+        response_time_in_seconds = (total_end_millis - total_start_millis) / 1000
+        return {
+            "weight": total_recovered,
+            "unit": "byte",
+            "success": True,
+            "service_time": response_time_in_seconds,
+            "time_period": response_time_in_seconds
+        }
 
     def __repr__(self, *args, **kwargs):
         return "wait-for-recovery"

@@ -2696,6 +2696,121 @@ class CreateSnapshotRepositoryTests(TestCase):
                                                               params={})
 
 
+class CreateSnapshotTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_create_snapshot_no_wait(self, es):
+        es.snapshot.create.return_value = as_future({})
+        # should not be called
+        es.snapshot.status.return_value = as_future({})
+
+        params = {
+            "repository": "backups",
+            "snapshot": "snapshot-001",
+            "body": {
+                "indices": "logs-*"
+            },
+            "wait-for-completion": False,
+            "request-params": {
+                "request_timeout": 7200
+            }
+        }
+
+        r = runner.CreateSnapshot()
+        await r(es, params)
+
+        es.snapshot.create.assert_called_once_with(repository="backups",
+                                                   snapshot="snapshot-001",
+                                                   body={
+                                                       "indices": "logs-*"
+                                                   },
+                                                   params={"request_timeout": 7200},
+                                                   wait_for_completion=False)
+        self.assertEqual(0, es.snapshot.status.call_count)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_create_snapshot_wait_for_completion(self, es):
+        es.snapshot.create.return_value = as_future({
+            "snapshot": {
+                "snapshot": "snapshot-001",
+                "uuid": "wjt6zFEIRua_-jutT5vrAw",
+                "version_id": 7070099,
+                "version": "7.7.0",
+                "indices": [
+                    "logs-2020-01-01"
+                ],
+                "include_global_state": False,
+                "state": "SUCCESS",
+                "start_time": "2020-06-10T07:38:53.811Z",
+                "start_time_in_millis": 1591774733811,
+                "end_time": "2020-06-10T07:38:55.015Z",
+                "end_time_in_millis": 1591774735015,
+                "duration_in_millis": 1204,
+                "failures": [],
+                "shards": {
+                    "total": 5,
+                    "failed": 0,
+                    "successful": 5
+                }
+            }
+        })
+
+        es.snapshot.status.return_value = as_future({
+            "snapshots": [
+                {
+                    "snapshot": "snapshot-001",
+                    "repository": "backups",
+                    "uuid": "5uZiG1bhRri2DsBpZxj91A",
+                    "state": "SUCCESS",
+                    "include_global_state": False,
+                    "stats": {
+                        "total": {
+                            "file_count": 70,
+                            "size_in_bytes": 9399505
+                        },
+                        "start_time_in_millis": 1591776481060,
+                        "time_in_millis": 200
+                    }
+                }
+            ]
+        })
+
+        params = {
+            "repository": "backups",
+            "snapshot": "snapshot-001",
+            "body": {
+                "indices": "logs-*"
+            },
+            "wait-for-completion": True,
+            "request-params": {
+                "request_timeout": 7200
+            }
+        }
+
+        r = runner.CreateSnapshot()
+        result = await r(es, params)
+
+        self.assertDictEqual({
+            "weight": 9399505,
+            "unit": "byte",
+            "success": True,
+            "service_time": 0.2,
+            "time_period": 0.2
+        }, result)
+
+        es.snapshot.create.assert_called_once_with(repository="backups",
+                                                   snapshot="snapshot-001",
+                                                   body={
+                                                       "indices": "logs-*"
+                                                   },
+                                                   params={"request_timeout": 7200},
+                                                   wait_for_completion=True)
+
+        es.snapshot.status.assert_called_once_with(repository="backups",
+                                                   snapshot="snapshot-001")
+
+
 class RestoreSnapshotTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2759,36 +2874,22 @@ class RestoreSnapshotTests(TestCase):
 class IndicesRecoveryTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
-    async def test_indices_recovery_already_finished(self, es):
-        # empty response
-        es.indices.recovery.return_value = as_future({})
-
-        r = runner.IndicesRecovery()
-        self.assertFalse(r.completed)
-        self.assertEqual(r.percent_completed, 0.0)
-
-        await r(es, {
-            "completion-recheck-wait-period": 0
-        })
-
-        self.assertTrue(r.completed)
-        self.assertEqual(r.percent_completed, 1.0)
-
-        es.indices.recovery.assert_called_with(active_only=True)
-        # retries three times
-        self.assertEqual(3, es.indices.recovery.call_count)
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
     async def test_waits_for_ongoing_indices_recovery(self, es):
         # empty response
         es.indices.recovery.side_effect = [
-            # active recovery
+            # recovery did not yet start
+            as_future({}),
+            # active recovery - one shard is not yet finished
             as_future({
                 "index1": {
                     "shards": [
                         {
                             "id": 0,
+                            "type": "SNAPSHOT",
+                            "stage": "INDEX",
+                            "primary": True,
+                            "start_time_in_millis": 1393244159716,
+                            "stop_time_in_millis": 0,
                             "index": {
                                 "size": {
                                     "total": "75.4mb",
@@ -2800,6 +2901,11 @@ class IndicesRecoveryTests(TestCase):
                         },
                         {
                             "id": 1,
+                            "type": "SNAPSHOT",
+                            "stage": "DONE",
+                            "primary": True,
+                            "start_time_in_millis": 1393244155000,
+                            "stop_time_in_millis": 1393244158000,
                             "index": {
                                 "size": {
                                     "total": "175.4mb",
@@ -2812,29 +2918,65 @@ class IndicesRecoveryTests(TestCase):
                     ]
                 }
             }),
-            # completed - will be called three times
-            as_future({}),
-            as_future({}),
-            as_future({}),
+            # completed
+            as_future({
+                "index1": {
+                    "shards": [
+                        {
+                            "id": 0,
+                            "type": "SNAPSHOT",
+                            "stage": "DONE",
+                            "primary": True,
+                            "start_time_in_millis": 1393244159716,
+                            "stop_time_in_millis": 1393244160000,
+                            "index": {
+                                "size": {
+                                    "total": "75.4mb",
+                                    "total_in_bytes": 79063092,
+                                    "recovered": "65.7mb",
+                                    "recovered_in_bytes": 68891939,
+                                }
+                            }
+                        },
+                        {
+                            "id": 1,
+                            "type": "SNAPSHOT",
+                            "stage": "DONE",
+                            "primary": True,
+                            "start_time_in_millis": 1393244155000,
+                            "stop_time_in_millis": 1393244158000,
+                            "index": {
+                                "size": {
+                                    "total": "175.4mb",
+                                    "total_in_bytes": 179063092,
+                                    "recovered": "165.7mb",
+                                    "recovered_in_bytes": 168891939,
+                                }
+                            }
+                        }
+                    ]
+                }
+            }),
         ]
 
         r = runner.IndicesRecovery()
-        self.assertFalse(r.completed)
-        self.assertEqual(r.percent_completed, 0.0)
 
-        while not r.completed:
-            recovered_bytes, unit = await r(es, {
-                "completion-recheck-wait-period": 0
-            })
-            if r.completed:
-                # no additional bytes recovered since the last call
-                self.assertEqual(recovered_bytes, 0)
-                self.assertEqual(r.percent_completed, 1.0)
-            else:
-                # sum of both shards
-                self.assertEqual(recovered_bytes, 237783878)
-                self.assertAlmostEqual(r.percent_completed, 0.9211, places=3)
-            self.assertEqual(unit, "bytes")
+        result = await r(es, {
+            "completion-recheck-wait-period": 0,
+            "index": "index1"
+        })
+
+        # sum of both shards
+        self.assertEqual(237783878, result["weight"])
+        self.assertEqual("byte", result["unit"])
+        self.assertTrue(result["success"])
+        # 5 seconds
+        self.assertEqual(5, result["service_time"])
+        self.assertEqual(5, result["time_period"])
+
+        es.indices.recovery.assert_called_with(index="index1")
+        # retries three times
+        self.assertEqual(3, es.indices.recovery.call_count)
 
 
 class ShrinkIndexTests(TestCase):

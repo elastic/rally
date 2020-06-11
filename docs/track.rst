@@ -1107,6 +1107,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+create-snapshot
+~~~~~~~~~~~~~~~
+
+With the operation ``create-snapshot`` you can `create a snapshot <https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshots-take-snapshot.html>`_. The ``create-snapshot`` operation supports the following parameters:
+
+* ``repository`` (mandatory): The name of the snapshot repository to use.
+* ``snapshot`` (mandatory): The name of the snapshot to create.
+* ``body`` (mandatory): The body of the create snapshot request.
+* ``wait-for-completion`` (optional, defaults to ``False``): Whether this call should return immediately or block until the snapshot is created.
+* ``request-params`` (optional): A structure containing HTTP request parameters.
+
+.. note::
+    When ``wait-for-completion`` is set to ``true`` Rally will report the achieved throughput in byte/s.
+
 restore-snapshot
 ~~~~~~~~~~~~~~~~
 
@@ -1125,34 +1139,15 @@ With the operation ``restore-snapshot`` you can restore a snapshot from an alrea
             "request_timeout": 7200
         }
 
-    However, this might not work if a proxy is in between the client and Elasticsearch and the proxy has a shorter request timeout configured than the client. In this case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step. This has the additional advantage that you'll get a progress report while the snapshot is being restored.
-
-This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+    However, this might not work if a proxy is in between the client and Elasticsearch and the proxy has a shorter request timeout configured than the client. In this case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step.
 
 wait-for-recovery
 ~~~~~~~~~~~~~~~~~
 
 With the operation ``wait-for-recovery`` you can wait until an ongoing shard recovery finishes. The ``wait-for-recovery`` operation supports the following parameters:
 
-* ``completion-recheck-attempts`` (optional, defaults to 3): It might be possible that the `index recovery API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-recovery.html>`_ reports that there are no active shard recoveries when a new one might be scheduled shortly afterwards. Therefore, this operation will check several times whether there are still no active recoveries. In between those attempts, it will wait for a time period specified by ``completion-recheck-wait-period``.
-* ``completion-recheck-wait-period`` (optional, defaults to 2 seconds): Time in seconds to wait in between consecutive attempts.
-
-.. warning::
-
-    By default this operation will run unthrottled (like any other) but you should limit the number of calls by specifying one of the ``target-throughput`` or ``target-interval`` properties on the corresponding task::
-
-        {
-          "operation": {
-            "operation-type": "wait-for-recovery",
-            "completion-recheck-attempts": 2,
-            "completion-recheck-wait-period": 5
-          },
-          "target-interval": 10
-        }
-
-    In this example, Rally will check the progress of shard recovery every ten seconds (as specified by ``target-throughput``). When the index recovery API reports that there are no active recoveries, it will still check this twice (``completion-recheck-attempts``), waiting for five seconds in between those calls (``completion-recheck-wait-period``).
-
-This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+* ``index`` (mandatory): The name of the index or an index pattern which is being recovered.
+* ``completion-recheck-wait-period`` (optional, defaults to 1 seconds): Time in seconds to wait in between consecutive attempts.
 
 This operation is :ref:`retryable <track_operations>`.
 

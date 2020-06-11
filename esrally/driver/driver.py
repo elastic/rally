@@ -1294,9 +1294,17 @@ class AsyncExecutor:
                 processing_start = time.perf_counter()
                 total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                 processing_end = time.perf_counter()
-                stop = request_context["request_end"]
-                service_time = request_context["request_end"] - request_context["request_start"]
                 processing_time = processing_end - processing_start
+                stop = request_context["request_end"]
+                # allow runners to override service time with request metadata in *very* specific cases. By default we
+                # will determine this by measuring actual times.
+                service_time = request_meta_data.pop("service_time",
+                                                     request_context["request_end"] - request_context["request_start"])
+                # also allow runners to override the time period. This is relevant for throughput calculation and we
+                # assume *if* this is overridden via request meta data, the corresponding operation is executed only
+                # once but not for several iterations. Otherwise, the time period would need to monotonically increase
+                # as is evident by the regular calculation (stop - total_start).
+                time_period = request_meta_data.pop("time_period", stop - total_start)
                 # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
                 latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
                 # If this task completes the parent task we should *not* check for completion by another client but
@@ -1318,7 +1326,7 @@ class AsyncExecutor:
                 self.sampler.add(self.task, self.client_id, sample_type, request_meta_data,
                                  convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
                                  convert.seconds_to_ms(processing_time), total_ops, total_ops_unit,
-                                 (stop - total_start), progress)
+                                 time_period, progress)
 
                 if completed:
                     self.logger.info("Task is considered completed due to external event.")

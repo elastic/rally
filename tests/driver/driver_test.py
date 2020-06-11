@@ -981,6 +981,15 @@ class AsyncExecutorTests(TestCase):
         async def __call__(self, es, params):
             self.iterations_left -= 1
 
+    class RunnerOverridingTimes:
+        async def __call__(self, es, params):
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "service_time": 1.23,
+                "time_period": 1.23
+            }
+
     def __init__(self, methodName):
         super().__init__(methodName)
         self.runner_with_progress = None
@@ -991,7 +1000,9 @@ class AsyncExecutorTests(TestCase):
     def setUp(self):
         runner.register_default_runners()
         self.runner_with_progress = AsyncExecutorTests.RunnerWithProgress()
+        self.runner_overriding_times = AsyncExecutorTests.RunnerOverridingTimes()
         runner.register_runner("unit-test-recovery", self.runner_with_progress, async_runner=True)
+        runner.register_runner("override-times", self.runner_overriding_times, async_runner=True)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1063,7 +1074,6 @@ class AsyncExecutorTests(TestCase):
             "request_start": 0,
             "request_end": 10
         }
-        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -1115,6 +1125,61 @@ class AsyncExecutorTests(TestCase):
             self.assertEqual(sample.latency_ms, sample.service_time_ms)
             self.assertEqual(1, sample.total_ops)
             self.assertEqual("ops", sample.total_ops_unit)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_execute_schedule_runner_overrides_times(self, es):
+        es.init_request_context.return_value = {
+            "request_start": 0,
+            "request_end": 10
+        }
+
+        params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+        test_track = track.Track(name="unittest", description="unittest track",
+                                 indices=None,
+                                 challenges=None)
+
+        task = track.Task("override-times", track.Operation("override-times", operation_type="override-times", params={
+            # we need this because DriverTestParamSource does not know that we only have one iteration and hence
+            # size() returns incorrect results
+            "size": 1
+        },
+                                                            param_source="driver-test-param-source"),
+                          warmup_iterations=0, iterations=1, clients=1)
+        param_source = track.operation_parameters(test_track, task)
+        schedule = driver.schedule_for(task, 0, param_source)
+
+        sampler = driver.Sampler(start_timestamp=time.perf_counter())
+        cancel = threading.Event()
+        complete = threading.Event()
+
+        execute_schedule = driver.AsyncExecutor(client_id=0,
+                                                task=task,
+                                                schedule=schedule,
+                                                es={
+                                                    "default": es
+                                                },
+                                                sampler=sampler,
+                                                cancel=cancel,
+                                                complete=complete,
+                                                on_error="continue")
+        await execute_schedule()
+
+        samples = sampler.samples
+
+        self.assertFalse(complete.is_set(), "Executor should not auto-complete a normal task")
+        self.assertEqual(1, len(samples))
+        sample = samples[0]
+        self.assertEqual(0, sample.client_id)
+        self.assertEqual(task, sample.task)
+        # we don't have any warmup samples
+        self.assertEqual(metrics.SampleType.Normal, sample.sample_type)
+        self.assertEqual(sample.latency_ms, sample.service_time_ms)
+        self.assertEqual(1, sample.total_ops)
+        self.assertEqual("ops", sample.total_ops_unit)
+        self.assertEqual(1230, sample.service_time_ms)
+        self.assertEqual(1.23, sample.time_period)
+
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
