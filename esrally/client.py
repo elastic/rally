@@ -23,7 +23,7 @@ import certifi
 import urllib3
 
 from esrally import exceptions, doc_link
-from esrally.utils import console
+from esrally.utils import console, convert
 
 
 class EsClientFactory:
@@ -117,6 +117,9 @@ class EsClientFactory:
                 self.logger.info("HTTP compression: on")
         else:
             self.logger.info("HTTP compression: off")
+
+        if self._is_set(self.client_options, "enable_cleanup_closed"):
+            self.client_options["enable_cleanup_closed"] = convert.to_bool(self.client_options.pop("enable_cleanup_closed"))
 
     def _is_set(self, client_opts, k):
         try:

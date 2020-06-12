@@ -83,6 +83,7 @@ class AIOHttpConnection(Connection):
 
         trace_configs = [trace_config] if trace_config else None
         max_connections = max(256, kwargs.get("max_connections", 0))
+        enable_cleanup_closed = kwargs.get("enable_cleanup_closed", False)
         self.session = aiohttp.ClientSession(
             auth=http_auth,
             timeout=self.timeout,
@@ -91,7 +92,8 @@ class AIOHttpConnection(Connection):
                 verify_ssl=verify_certs,
                 use_dns_cache=use_dns_cache,
                 ssl_context=ssl_context,
-                limit=max_connections
+                limit=max_connections,
+                enable_cleanup_closed=enable_cleanup_closed
             ),
             headers=headers,
             trace_configs=trace_configs,
