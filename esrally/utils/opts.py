@@ -202,3 +202,12 @@ class ClientOptions(ConnectOptions):
     def all_client_options(self):
         """Return a dict with all client options"""
         return self.all_options
+
+    def with_max_connections(self, max_connections):
+        final_client_options = {}
+        for cluster, original_opts in self.all_client_options.items():
+            amended_opts = dict(original_opts)
+            if "max_connections" not in amended_opts:
+                amended_opts["max_connections"] = max_connections
+            final_client_options[cluster] = amended_opts
+        return final_client_options

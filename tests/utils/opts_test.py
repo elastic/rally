@@ -208,7 +208,6 @@ class TestClientOptions(TestCase):
             opts.ClientOptions(client_options_string).all_client_options
         )
 
-
     def test_jsonstring_client_options_parses(self):
         client_options_string = '{"default": {"timeout": 60},' \
             '"remote_1": {"use_ssl":true,"verify_certs":true,"basic_auth_user": "elastic", "basic_auth_password": "changeme"},'\
@@ -228,7 +227,6 @@ class TestClientOptions(TestCase):
              'remote_2': {'use_ssl': True,'verify_certs': True, 'ca_certs':'/path/to/cacert.pem'}},
             opts.ClientOptions(client_options_string).all_client_options)
 
-
     def test_json_file_parameter_parses(self):
         self.assertEqual(
             {'default': {'timeout':60},
@@ -239,7 +237,6 @@ class TestClientOptions(TestCase):
         self.assertEqual(
             {'default': {'timeout':60}},
             opts.ClientOptions(os.path.join(os.path.dirname(__file__), "resources", "client_options_2.json")).all_client_options)
-
 
     def test_no_client_option_parses_to_default(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
@@ -260,7 +257,6 @@ class TestClientOptions(TestCase):
             opts.ClientOptions(client_options_string,
                                  target_hosts=target_hosts).default)
 
-
     def test_no_client_option_parses_to_default_with_multicluster(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = opts.TargetHosts('{"default": ["127.0.0.1:9200,10.17.0.5:19200"], "remote": ["88.33.22.15:19200"]}')
@@ -279,3 +275,17 @@ class TestClientOptions(TestCase):
             {"timeout": 60},
             opts.ClientOptions(client_options_string,
                                  target_hosts=target_hosts).default)
+
+    def test_amends_with_max_connections(self):
+        client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
+        target_hosts = opts.TargetHosts('{"default": ["10.17.0.5:9200"], "remote": ["88.33.22.15:9200"]}')
+        self.assertEqual(
+            {"default": {"timeout": 60, "max_connections": 128}, "remote": {"timeout": 60, "max_connections": 128}},
+            opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(128))
+
+    def test_keeps_already_specified_max_connections(self):
+        client_options_string = '{"default": {"timeout":60,"max_connections":5}, "remote": {"timeout":60}}'
+        target_hosts = opts.TargetHosts('{"default": ["10.17.0.5:9200"], "remote": ["88.33.22.15:9200"]}')
+        self.assertEqual(
+            {"default": {"timeout": 60, "max_connections": 5}, "remote": {"timeout": 60, "max_connections": 32}},
+            opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(32))
