@@ -82,7 +82,7 @@ class AIOHttpConnection(Connection):
                 use_ssl = True
 
         trace_configs = [trace_config] if trace_config else None
-
+        max_connections = max(256, kwargs.get("max_connections", 0))
         self.session = aiohttp.ClientSession(
             auth=http_auth,
             timeout=self.timeout,
@@ -91,8 +91,7 @@ class AIOHttpConnection(Connection):
                 verify_ssl=verify_certs,
                 use_dns_cache=use_dns_cache,
                 ssl_context=ssl_context,
-                # this has been changed from the default (100)
-                limit=100000
+                limit=max_connections
             ),
             headers=headers,
             trace_configs=trace_configs,

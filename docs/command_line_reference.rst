@@ -641,6 +641,10 @@ Default value: ``timeout:60``
 .. warning::
    If you provide your own client options, the default value will not be magically merged. You have to specify all client options explicitly. The only exceptions to this rule is ``ca_cert`` (see below).
 
+Rally recognizes the following client options in addition:
+
+* ``max_connections``: By default, Rally will choose the maximum allowed number of connections automatically (equal to the number of simulated clients but at least 256 connections). With this property it is possible to override that logic but a minimum of 256 is enforced internally.
+
 **Examples**
 
 Here are a few common examples:

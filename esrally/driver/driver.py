@@ -1184,7 +1184,11 @@ class AsyncIoAdapter:
                 es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async()
             return es
 
-        es = es_clients(self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options").all_client_options)
+        # Properly size the internal connection pool to match the number of expected clients but allow the user
+        # to override it if needed.
+        client_count = len(self.task_allocations)
+        es = es_clients(self.cfg.opts("client", "hosts").all_hosts,
+                        self.cfg.opts("client", "options").with_max_connections(client_count))
 
         aws = []
         # A parameter source should only be created once per task - it is partitioned later on per client.
