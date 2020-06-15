@@ -2879,6 +2879,45 @@ class IndicesRecoveryTests(TestCase):
         es.indices.recovery.side_effect = [
             # recovery did not yet start
             as_future({}),
+            # recovery about to be started
+            as_future({
+                "index1": {
+                    "shards": [
+                        {
+                            "id": 0,
+                            "type": "SNAPSHOT",
+                            "stage": "INIT",
+                            "primary": True,
+                            "start_time_in_millis": 1393244159716,
+                            "index": {
+                                "size": {
+                                    "total": "75.4mb",
+                                    "total_in_bytes": 79063092,
+                                    "recovered": "0mb",
+                                    "recovered_in_bytes": 0,
+                                }
+                            }
+                        },
+                        {
+                            "id": 1,
+                            "type": "SNAPSHOT",
+                            "stage": "DONE",
+                            "primary": True,
+                            "start_time_in_millis": 1393244155000,
+                            "stop_time_in_millis": 1393244158000,
+                            "index": {
+                                "size": {
+                                    "total": "175.4mb",
+                                    "total_in_bytes": 179063092,
+                                    "recovered": "165.7mb",
+                                    "recovered_in_bytes": 168891939,
+                                }
+                            }
+                        }
+                    ]
+                }
+            }),
+
             # active recovery - one shard is not yet finished
             as_future({
                 "index1": {
@@ -2975,8 +3014,8 @@ class IndicesRecoveryTests(TestCase):
         self.assertEqual(5, result["time_period"])
 
         es.indices.recovery.assert_called_with(index="index1")
-        # retries three times
-        self.assertEqual(3, es.indices.recovery.call_count)
+        # retries four times
+        self.assertEqual(4, es.indices.recovery.call_count)
 
 
 class ShrinkIndexTests(TestCase):

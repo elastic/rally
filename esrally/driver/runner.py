@@ -1514,6 +1514,8 @@ class IndicesRecovery(Runner):
         total_end_millis = 0
 
         # wait until recovery is done
+        # The nesting level is ok here given the structure of the API response
+        # pylint: disable=too-many-nested-blocks
         while not all_shards_done:
             response = await es.indices.recovery(index=index)
             # This might happen if we happen to call the API before the next recovery is scheduled.
@@ -1528,11 +1530,13 @@ class IndicesRecovery(Runner):
                 for _, idx_data in response.items():
                     for _, shard_data in idx_data.items():
                         for shard in shard_data:
-                            all_shards_done = all_shards_done and (shard["stage"] == "DONE")
-                            total_start_millis = min(total_start_millis, shard["start_time_in_millis"])
-                            total_end_millis = max(total_end_millis, shard["stop_time_in_millis"])
-                            idx_size = shard["index"]["size"]
-                            total_recovered += idx_size["recovered_in_bytes"]
+                            current_shard_done = shard["stage"] == "DONE"
+                            all_shards_done = all_shards_done and current_shard_done
+                            if current_shard_done:
+                                total_start_millis = min(total_start_millis, shard["start_time_in_millis"])
+                                total_end_millis = max(total_end_millis, shard["stop_time_in_millis"])
+                                idx_size = shard["index"]["size"]
+                                total_recovered += idx_size["recovered_in_bytes"]
                 self.logger.debug("All shards done for [%s]: [%s].", index, all_shards_done)
 
             if not all_shards_done:
