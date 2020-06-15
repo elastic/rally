@@ -1514,6 +1514,8 @@ class IndicesRecovery(Runner):
         total_end_millis = 0
 
         # wait until recovery is done
+        # The nesting level is ok here given the structure of the API response
+        # pylint: disable=too-many-nested-blocks
         while not all_shards_done:
             response = await es.indices.recovery(index=index)
             # This might happen if we happen to call the API before the next recovery is scheduled.
