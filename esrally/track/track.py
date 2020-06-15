@@ -418,6 +418,9 @@ class OperationType(Enum):
     Search = 3
     Bulk = 4
     RawRequest = 5
+    WaitForRecovery = 6
+    CreateSnapshot = 7
+
     # administrative actions
     ForceMerge = 1001
     ClusterHealth = 1002
@@ -440,8 +443,7 @@ class OperationType(Enum):
     DeleteSnapshotRepository = 1019
     CreateSnapshotRepository = 1020
     RestoreSnapshot = 1021
-    WaitForRecovery = 1022
-    PutSettings = 1023
+    PutSettings = 1022
 
     @property
     def admin_op(self):
@@ -501,6 +503,8 @@ class OperationType(Enum):
             return OperationType.DeleteSnapshotRepository
         elif v == "create-snapshot-repository":
             return OperationType.CreateSnapshotRepository
+        elif v == "create-snapshot":
+            return OperationType.CreateSnapshot
         elif v == "restore-snapshot":
             return OperationType.RestoreSnapshot
         elif v == "wait-for-recovery":

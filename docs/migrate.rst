@@ -9,6 +9,10 @@ Pipelines from-sources-complete and from-sources-skip-build are deprecated
 
 Rally 2.0.1 caches source artifacts automatically in ``~/.rally/benchmarks/distributions/src``. Therefore, it is not necessary anymore to explicitly skip the build with ``--pipeline=from-sources-skip-build``. Specify ``--pipeline=from-sources`` instead. See the :doc:`pipeline reference documentation </pipelines>` for more details.
 
+wait-for-recovery requires an ``index`` parameter
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously, the ``wait-for-recovery`` operation checked all indices but with Rally 2.0.1 an ``index`` parameter is required and only that index (or index pattern) is checked.
 
 Migrating to Rally 2.0.0
 ------------------------
