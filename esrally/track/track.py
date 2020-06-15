@@ -420,7 +420,7 @@ class OperationType(Enum):
     RawRequest = 5
     WaitForRecovery = 6
     CreateSnapshot = 7
-    ExecuteTransform = 6
+    ExecuteTransform = 8
 
 
     # administrative actions
@@ -446,10 +446,10 @@ class OperationType(Enum):
     CreateSnapshotRepository = 1020
     RestoreSnapshot = 1021
     PutSettings = 1022
-    CreateTransform = 1024
-    StartTransform = 1025
-    StopTransform = 1026
-    DeleteTransform = 1027
+    CreateTransform = 1023
+    StartTransform = 1024
+    StopTransform = 1025
+    DeleteTransform = 1026
 
     @property
     def admin_op(self):
