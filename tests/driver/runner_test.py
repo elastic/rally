@@ -3012,6 +3012,8 @@ class IndicesRecoveryTests(TestCase):
         # 5 seconds
         self.assertEqual(5, result["service_time"])
         self.assertEqual(5, result["time_period"])
+        self.assertEqual(1393244155000, result["start_time_millis"])
+        self.assertEqual(1393244160000, result["stop_time_millis"])
 
         es.indices.recovery.assert_called_with(index="index1")
         # retries four times
