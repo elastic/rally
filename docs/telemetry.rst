@@ -18,13 +18,15 @@ You probably want to gain additional insights from a race. Therefore, we have ad
 
    Command         Name                   Description
    --------------  ---------------------  --------------------------------------------------------------------
-   jit             JIT Compiler Profiler  Enables JIT compiler logs.
-   gc              GC log                 Enables GC logs.
-   jfr             Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
-   heapdump        Heap Dump              Captures a heap dump.
-   node-stats      Node Stats             Regularly samples node stats
-   recovery-stats  Recovery Stats         Regularly samples shard recovery stats
-   ccr-stats       CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
+   jit              JIT Compiler Profiler  Enables JIT compiler logs.
+   gc               GC log                 Enables GC logs.
+   jfr              Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
+   heapdump         Heap Dump              Captures a heap dump.
+   node-stats       Node Stats             Regularly samples node stats
+   recovery-stats   Recovery Stats         Regularly samples shard recovery stats
+   ccr-stats        CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
+   segment-stats    Segment Stats          Determines segment stats at the end of the benchmark.
+   transform-stats  Transform Stats        Regularly samples transform stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
