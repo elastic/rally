@@ -1680,7 +1680,7 @@ class ExecuteTransform(Runner):
             state = stats_response['transforms'][0].get("state")
 
             self._percent_completed = stats_response['transforms'][0].get("checkpointing", {}).get("next", {}).get(
-                "checkpoint_progress", {}).get("percent_complete",  )
+                "checkpoint_progress", {}).get("percent_complete", 0.0)
 
         if state == "failed":
             raise exceptions.RallyAssertionError(
