@@ -3134,6 +3134,8 @@ class PutSettingsTests(TestCase):
                 "indices.recovery.max_bytes_per_sec": "20mb"
             }
         })
+
+
 class CreateTransformTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
