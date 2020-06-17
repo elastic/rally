@@ -3238,6 +3238,28 @@ class DeleteTransformTests(TestCase):
                                                               ignore=[404])
 
 
+class ExecuteTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_execute_transform(self, es):
+        es.transform.start_transform.return_value = as_future()
+        es.transform.stop_transform.return_value = as_future()
+
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id
+        }
+
+        es.transform.get_transform_stats.return_value = as_future({"transforms": [{"state": "stopped",
+                                                                                   "stats": {}}]})
+
+        r = runner.ExecuteTransform()
+        await r(es, params)
+
+        es.transform.start_transform.assert_called_once_with(transform_id=transform_id)
+        es.transform.get_transform_stats.assert_called_once_with(transform_id=transform_id)
+
+
 class RetryTests(TestCase):
     @run_async
     async def test_is_transparent_on_success_when_no_retries(self):
