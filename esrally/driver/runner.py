@@ -1576,7 +1576,7 @@ class CreateTransform(Runner):
     async def __call__(self, es, params):
         transform_id = mandatory(params, "transform-id", self)
         body = mandatory(params, "body", self)
-        defer_validation = params.get("defer_validation", False)
+        defer_validation = params.get("defer-validation", False)
         await es.transform.put_transform(transform_id=transform_id, body=body, defer_validation=defer_validation)
 
     def __repr__(self, *args, **kwargs):
@@ -1609,8 +1609,8 @@ class StopTransform(Runner):
         transform_id = mandatory(params, "transform-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
-        wait_for_completion = params.get("wait_for_completion", False)
-        wait_for_checkpoint = params.get("wait_for_checkpoint", False)
+        wait_for_completion = params.get("wait-for-completion", False)
+        wait_for_checkpoint = params.get("wait-for-checkpoint", False)
 
         await es.transform.stop_transform(transform_id=transform_id,
                                           force=force,

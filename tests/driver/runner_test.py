@@ -3134,6 +3134,108 @@ class PutSettingsTests(TestCase):
                 "indices.recovery.max_bytes_per_sec": "20mb"
             }
         })
+class CreateTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_create_transform(self, es):
+        es.transform.put_transform.return_value = as_future()
+
+        params = {
+            "transform-id": "a-transform",
+            "body": {
+                "source": {
+                    "index": "source"
+                },
+                "pivot": {
+                    "group_by": {
+                        "event_id": {
+                            "terms": {
+                                "field": "event_id"
+                            }
+                        }
+                    },
+                    "aggregations": {
+                        "max_metric": {
+                            "max": {
+                                "field": "metric"
+                            }
+                        }
+                    }
+                },
+                "description": "an example transform",
+                "dest": {
+                    "index": "dest"
+                }
+            },
+            "defer-validation": random.choice([False, True])
+        }
+
+        r = runner.CreateTransform()
+        await r(es, params)
+
+        es.transform.put_transform.assert_called_once_with(transform_id=params["transform-id"], body=params["body"],
+                                                           defer_validation=params["defer-validation"])
+
+
+class StartTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_start_transform(self, es):
+        es.transform.start_transform.return_value = as_future()
+
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id,
+            "timeout": "5s"
+        }
+
+        r = runner.StartTransform()
+        await r(es, params)
+
+        es.transform.start_transform.assert_called_once_with(transform_id=transform_id, timeout=params["timeout"])
+
+
+class StopTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_stop_transform(self, es):
+        es.transform.stop_transform.return_value = as_future()
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id,
+            "force": random.choice([False, True]),
+            "timeout": "5s",
+            "wait-for-completion": random.choice([False, True]),
+            "wait-for-checkpoint": random.choice([False, True]),
+        }
+
+        r = runner.StopTransform()
+        await r(es, params)
+
+        es.transform.stop_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
+                                                            timeout=params["timeout"],
+                                                            wait_for_completion=params["wait-for-completion"],
+                                                            wait_for_checkpoint=params["wait-for-checkpoint"]
+                                                            )
+
+
+class DeleteTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_delete_transform(self, es):
+        es.transform.delete_transform.return_value = as_future()
+
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id,
+            "force": random.choice([False, True])
+        }
+
+        r = runner.DeleteTransform()
+        await r(es, params)
+
+        es.transform.delete_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
+                                                              ignore=[404])
 
 
 class RetryTests(TestCase):
