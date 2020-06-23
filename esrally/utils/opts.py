@@ -191,7 +191,7 @@ class ClientOptions(ConnectOptions):
 
             return {TargetHosts.DEFAULT: kv_to_map(arg)}
 
-        if self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts != None:
+        if self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts is not None:
             # --client-options unset but multi-clusters used in --target-hosts? apply options defaults for all cluster names.
             self.parsed_options = {cluster_name: kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS])
                                    for cluster_name in self.target_hosts.all_hosts.keys()}

@@ -114,7 +114,7 @@ class EsClientFactory:
             self.client_options["http_compress"] = self.client_options.pop("compressed")
 
         if self._is_set(self.client_options, "http_compress"):
-                self.logger.info("HTTP compression: on")
+            self.logger.info("HTTP compression: on")
         else:
             self.logger.info("HTTP compression: off")
 
