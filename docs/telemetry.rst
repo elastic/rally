@@ -25,7 +25,6 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    node-stats       Node Stats             Regularly samples node stats
    recovery-stats   Recovery Stats         Regularly samples shard recovery stats
    ccr-stats        CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
-   segment-stats    Segment Stats          Determines segment stats at the end of the benchmark.
    transform-stats  Transform Stats        Regularly samples transform stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
