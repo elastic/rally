@@ -1209,7 +1209,7 @@ execute-transform
 With the operation ``execute-transform`` you can execute a full run of data transformation, it starts the transform and stops it once all data has been transformed. The transform must be created upfront. The ``execute-transform`` operation supports the following parameters:
 
 * ``transform-id`` (mandatory): The id of the transform to execute.
-* ``poll-interval`` (optional, defaults to `0.5`) How often transform stats are polled, used to set progress and check the state.
+* ``poll-interval`` (optional, defaults to `0.5`) How often transform stats are polled, used to set progress and check the state. You should not set this too low, because polling can skew the result.
 * ``transform-timeout`` (optional, defaults to `1800` (`1h`)) Overall runtime timeout of the batch transform in seconds.
 
 This operation requires at least Elasticsearch 7.5.0 (non-OSS).
