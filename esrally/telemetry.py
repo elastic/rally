@@ -857,7 +857,7 @@ class TransformStatsRecorder:
 
             except KeyError:
                 self.logger.warning(
-                    f"The 'transform' key does not contain a 'transform' or 'stats' key "
+                    "The 'transform' key does not contain a 'transform' or 'stats' key "
                     "Maybe the output format has changed. Skipping."
                 )
 
