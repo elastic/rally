@@ -1672,9 +1672,8 @@ class ExecuteTransform(Runner):
         while state in ("started", "indexing"):
             if (time.time() - start_time) > transform_timeout:
                 raise exceptions.RallyAssertionError(
-                    "Transform [{}] timed out after [{}] seconds. "
-                    "Please consider increasing the timeout in the track.".format(
-                        transform_id, transform_timeout))
+                    f"Transform [{transform_id}] timed out after [{transform_timeout}] seconds. "
+                    "Please consider increasing the timeout in the track.")
             await asyncio.sleep(poll_interval)
             stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
             state = stats_response["transforms"][0].get("state")
@@ -1683,9 +1682,9 @@ class ExecuteTransform(Runner):
                 "checkpoint_progress", {}).get("percent_complete", 0.0)
 
         if state == "failed":
+            failure_reason = stats_response["transforms'"][0].get("reason", "unknown")
             raise exceptions.RallyAssertionError(
-                "Transform [{}] failed with [{}].".format(transform_id,
-                                                          stats_response["transforms"][0].get("reason", "unknown")))
+                f"Transform [{transform_id}] failed with [{failure_reason}].")
 
         self._completed = True
         transform_stats = stats_response["transforms"][0].get("stats", {})

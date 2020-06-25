@@ -766,17 +766,17 @@ class TransformStats(TelemetryDevice):
         self.sample_interval = telemetry_params.get("transform-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                "The telemetry parameter 'transform-stats-sample-interval' must be greater than zero but was {}.".format(
-                    self.sample_interval))
+                f"The telemetry parameter 'transform-stats-sample-interval' must be greater than zero "
+                f"but was [{self.sample_interval}].")
         self.specified_cluster_names = self.clients.keys()
         self.transforms_per_cluster = self.telemetry_params.get("transform-stats-transforms", False)
         if self.transforms_per_cluster:
             for cluster_name in self.transforms_per_cluster.keys():
                 if cluster_name not in clients:
                     raise exceptions.SystemSetupError(
-                        "The telemetry parameter 'transform-stats-transforms' must be a JSON Object with keys matching "
-                        "the cluster names [{}] specified in --target-hosts "
-                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name))
+                        f"The telemetry parameter 'transform-stats-transforms' must be a JSON Object with keys "
+                        f"matching the cluster names [{','.join(sorted(clients.keys()))}] specified in --target-hosts "
+                        f"but it had [{cluster_name}].")
             self.specified_cluster_names = self.transforms_per_cluster.keys()
 
         self.metrics_store = metrics_store
@@ -842,8 +842,8 @@ class TransformStatsRecorder:
             stats = self.client.transform.get_transform_stats("_all")
 
         except elasticsearch.TransportError as e:
-            msg = "A transport error occurred while collecting transform stats on " \
-                  "cluster [{}]".format(self.cluster_name)
+            msg = f"A transport error occurred while collecting transform stats on " \
+                  f"cluster [{self.cluster_name}]"
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
@@ -857,7 +857,7 @@ class TransformStatsRecorder:
 
             except KeyError:
                 self.logger.warning(
-                    "The 'transform' key in %s does not contain a 'transform' or 'stats' key "
+                    f"The 'transform' key does not contain a 'transform' or 'stats' key "
                     "Maybe the output format has changed. Skipping."
                 )
 
