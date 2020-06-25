@@ -1703,7 +1703,8 @@ class ExecuteTransform(Runner):
             "search_time": transform_stats.get("search_time_in_ms", 0),
             "processing_time": transform_stats.get("processing_time_in_ms", 0),
             "index_time": transform_stats.get("index_time_in_ms", 0),
-            "unit": "ms",
+            "weight": transform_stats.get("documents_processed", 0),
+            "unit": "docs",
             "ops": ops
         }
 
