@@ -839,7 +839,7 @@ class TransformStatsRecorder:
         import elasticsearch
 
         try:
-            stats = self.client.transform.get_transform_stats('_all')
+            stats = self.client.transform.get_transform_stats("_all")
 
         except elasticsearch.TransportError as e:
             msg = "A transport error occurred while collecting transform stats on " \
@@ -847,9 +847,9 @@ class TransformStatsRecorder:
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        for transform in stats['transforms']:
+        for transform in stats["transforms"]:
             try:
-                if self.transforms and transform['id'] not in self.transforms:
+                if self.transforms and transform["id"] not in self.transforms:
                     # Skip metrics for transform not part of user supplied whitelist (transform-stats-transforms)
                     # in telemetry params.
                     continue

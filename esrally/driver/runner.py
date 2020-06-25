@@ -1667,9 +1667,9 @@ class ExecuteTransform(Runner):
         await es.transform.start_transform(transform_id=transform_id)
 
         stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
-        state = stats_response['transforms'][0].get("state")
+        state = stats_response["transforms"][0].get("state")
 
-        while state in ('started', 'indexing'):
+        while state in ("started", "indexing"):
             if (time.time() - start_time) > transform_timeout:
                 raise exceptions.RallyAssertionError(
                     "Transform [{}] timed out after [{}] seconds. "
@@ -1677,18 +1677,18 @@ class ExecuteTransform(Runner):
                         transform_id, transform_timeout))
             await asyncio.sleep(poll_interval)
             stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
-            state = stats_response['transforms'][0].get("state")
+            state = stats_response["transforms"][0].get("state")
 
-            self._percent_completed = stats_response['transforms'][0].get("checkpointing", {}).get("next", {}).get(
+            self._percent_completed = stats_response["transforms"][0].get("checkpointing", {}).get("next", {}).get(
                 "checkpoint_progress", {}).get("percent_complete", 0.0)
 
         if state == "failed":
             raise exceptions.RallyAssertionError(
                 "Transform [{}] failed with [{}].".format(transform_id,
-                                                          stats_response['transforms'][0].get("reason", "unknown")))
+                                                          stats_response["transforms"][0].get("reason", "unknown")))
 
         self._completed = True
-        transform_stats = stats_response['transforms'][0].get("stats", {})
+        transform_stats = stats_response["transforms"][0].get("stats", {})
 
         ops = {
             "pages_processed": transform_stats.get("pages_processed", 0),

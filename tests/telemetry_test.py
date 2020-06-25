@@ -1859,9 +1859,9 @@ class TransformStatsRecorderTests(TestCase):
         ])
 
         metrics_store_put_value.assert_has_calls([
-            mock.call("transform_search_time_in_ms", 8, 'ms'),
-            mock.call("transform_index_time_in_ms", 5, 'ms'),
-            mock.call("transform_processing_time_in_ms", 11, 'ms')
+            mock.call("transform_search_time_in_ms", 8, "ms"),
+            mock.call("transform_index_time_in_ms", 5, "ms"),
+            mock.call("transform_processing_time_in_ms", 11, "ms")
         ])
 
 
