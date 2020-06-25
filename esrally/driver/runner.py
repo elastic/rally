@@ -1682,7 +1682,7 @@ class ExecuteTransform(Runner):
                 "checkpoint_progress", {}).get("percent_complete", 0.0)
 
         if state == "failed":
-            failure_reason = stats_response["transforms'"][0].get("reason", "unknown")
+            failure_reason = stats_response["transforms"][0].get("reason", "unknown")
             raise exceptions.RallyAssertionError(
                 f"Transform [{transform_id}] failed with [{failure_reason}].")
 
