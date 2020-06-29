@@ -1151,6 +1151,59 @@ With the operation ``wait-for-recovery`` you can wait until an ongoing shard rec
 
 This operation is :ref:`retryable <track_operations>`.
 
+create-transform
+~~~~~~~~~~~~~~~~
+
+With the operation ``create-transform`` you can execute the `create transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-transform.html>`_. It supports the following parameters:
+
+* ``transform-id`` (mandatory): The id of the transform to create.
+* ``body`` (mandatory): Request body containing the configuration of the transform. Please see the `create transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-transform.html>`__ documentation for more details.
+* ``defer-validation`` (optional, defaults to false): When true, deferrable validations are not run. This behavior may be desired if the source index does not exist until after the transform is created.
+
+This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+start-transform
+~~~~~~~~~~~~~~~
+
+With the operation ``start-transform`` you can execute the `start transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/start-transform.html>`_. It supports the following parameters:
+
+* ``transform-id`` (mandatory): The id of the transform to start.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a transform starts.
+
+This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+stop-transform
+~~~~~~~~~~~~~~
+
+With the operation ``stop-transform`` you can execute the `stop transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/stop-transform.html>`_. It supports the following parameters:
+
+* ``transform-id`` (mandatory): The id of the transform to stop.
+* ``force`` (optional, defaults to false): Whether to forcefully stop the transform.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a transform stops.
+* ``wait-for-completion`` (optional, defaults to true) If set to true, causes the API to block until the indexer state completely stops.
+* ``wait-for-checkpoint`` (optional, defaults to true) If set to true, the transform will not completely stop until the current checkpoint is completed.
+* ``transform-timeout`` (optional, defaults to `1800` (`1h`)) Overall runtime timeout of the batch transform in seconds.
+
+This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+delete-transform
+~~~~~~~~~~~~~~~~
+
+With the operation ``delete-transform`` you can execute the `delete transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-transform.html>`_. It supports the following parameters:
+
+* ``transform-id`` (mandatory): The id of the transform to delete.
+* ``force`` (optional, defaults to false): Whether to delete the transform regardless of its current state.
+
+This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
 Examples
 ========
 

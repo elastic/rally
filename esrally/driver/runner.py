@@ -65,6 +65,10 @@ def register_default_runners():
     register_runner(track.OperationType.CreateSnapshotRepository.name, Retry(CreateSnapshotRepository()), async_runner=True)
     register_runner(track.OperationType.WaitForRecovery.name, Retry(IndicesRecovery()), async_runner=True)
     register_runner(track.OperationType.PutSettings.name, Retry(PutSettings()), async_runner=True)
+    register_runner(track.OperationType.CreateTransform.name, Retry(CreateTransform()), async_runner=True)
+    register_runner(track.OperationType.StartTransform.name, Retry(StartTransform()), async_runner=True)
+    register_runner(track.OperationType.StopTransform.name, Retry(StopTransform()), async_runner=True)
+    register_runner(track.OperationType.DeleteTransform.name, Retry(DeleteTransform()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -1566,6 +1570,180 @@ class PutSettings(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "put-settings"
+
+
+class CreateTransform(Runner):
+    """
+    Execute the `create transform API https://www.elastic.co/guide/en/elasticsearch/reference/current/put-transform.html`_.
+    """
+
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+        body = mandatory(params, "body", self)
+        defer_validation = params.get("defer-validation", False)
+        await es.transform.put_transform(transform_id=transform_id, body=body, defer_validation=defer_validation)
+
+    def __repr__(self, *args, **kwargs):
+        return "create-transform"
+
+
+class StartTransform(Runner):
+    """
+    Execute the `start transform API
+    https://www.elastic.co/guide/en/elasticsearch/reference/current/start-transform.html`_.
+    """
+
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+        timeout = params.get("timeout")
+
+        await es.transform.start_transform(transform_id=transform_id, timeout=timeout)
+
+    def __repr__(self, *args, **kwargs):
+        return "start-transform"
+
+
+class StopTransform(Runner):
+    """
+    Execute the `stop transform API
+    https://www.elastic.co/guide/en/elasticsearch/reference/current/stop-transform.html`_.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._completed = False
+        self._percent_completed = 0.0
+        self._start_time = None
+
+    @property
+    def completed(self):
+        return self._completed
+
+    @property
+    def percent_completed(self):
+        return self._percent_completed
+
+    async def __call__(self, es, params):
+        """
+        stop the transform and return stats
+
+        :param es: The Elasticsearch client.
+        :param params: A hash with all parameters. See below for details.
+        :return: A hash with stats from the run.
+
+        Different to the `stop transform API
+        https://www.elastic.co/guide/en/elasticsearch/reference/current/stop-transform.html`_ this command will wait
+        until the transform is stopped and a checkpoint has been reached.
+
+        It expects a parameter dict with the following mandatory keys:
+
+        * ``transform-id``: the transform id to start, the transform must have been created upfront.
+
+        The following keys are optional:
+        * ``force``: forcefully stop a transform, default false
+        * ``wait-for-checkpoint``: whether to wait until all data has been processed till the next checkpoint, default true
+        * ``wait-for-completion``: whether to block until the transform has stopped, default true
+        * ``transform-timeout``: overall runtime timeout of the transform in seconds, default 1800 (1h)
+
+        Returned meta data
+        `
+        The following meta data are always returned:
+
+        * ``search-time-ms``: The amount of time spent searching, in milliseconds.
+        * ``processing-time-ms``: The amount of time spent processing results, in milliseconds.
+        * ``index_time-ms``: The amount of time spent indexing, in milliseconds.
+        * ``weight``: operation-agnostic representation of the processed documents (used internally by Rally for throughput calculation).
+        * ``unit``: The unit in which to interpret, always "docs".
+        * ``ops``: A dictionary of counters, see below.
+
+        ``ops`` contains the following meta data:
+
+        * ``pages-processed``: The number of search or bulk index operations processed.
+        * ``documents-processed``: The number of documents that have been processed from the source index of the transform.
+        * ``documents-indexed``: The number of documents that have been indexed into the destination index for the transform.
+        * ``index-total``: The number of index operations on the dest index for the transform.
+        * ``index-failures``: The number of indexing failures.
+        * ``search-total``: The number of search operations on the source index for the transform.
+        * ``search-failures``: The number of search failures.
+        * ``processing-total``: The number of processing operations.
+
+        """
+        import time
+
+        transform_id = mandatory(params, "transform-id", self)
+        force = params.get("force", False)
+        timeout = params.get("timeout")
+        wait_for_completion = params.get("wait-for-completion", True)
+        wait_for_checkpoint = params.get("wait-for-checkpoint", True)
+        transform_timeout = params.get("transform-timeout", 60.0 * 60.0)
+
+        if not self._start_time:
+            self._start_time = time.time()
+            await es.transform.stop_transform(transform_id=transform_id,
+                                              force=force,
+                                              timeout=timeout,
+                                              wait_for_completion=False,
+                                              wait_for_checkpoint=wait_for_checkpoint)
+
+        stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
+        state = stats_response["transforms"][0].get("state")
+        transform_stats = stats_response["transforms"][0].get("stats", {})
+
+        if (time.time() - self._start_time) > transform_timeout:
+            raise exceptions.RallyAssertionError(
+                f"Transform [{transform_id}] timed out after [{transform_timeout}] seconds. "
+                "Please consider increasing the timeout in the track.")
+
+        if state == "failed":
+            failure_reason = stats_response["transforms"][0].get("reason", "unknown")
+            raise exceptions.RallyAssertionError(
+                f"Transform [{transform_id}] failed with [{failure_reason}].")
+        elif state == "stopped" or wait_for_completion is False:
+            self._completed = True
+            self._percent_completed = 1.0
+        else:
+            self._percent_completed = stats_response["transforms"][0].get("checkpointing", {}).get("next", {}).get(
+                "checkpoint_progress", {}).get("percent_complete", 0.0) / 100.0
+
+        ops = {
+            "pages-processed": transform_stats.get("pages_processed", 0),
+            "documents-processed": transform_stats.get("documents_processed", 0),
+            "documents-indexed": transform_stats.get("documents_indexed", 0),
+            "index-total": transform_stats.get("index_total", 0),
+            "index-failures": transform_stats.get("index_failures", 0),
+            "search-total": transform_stats.get("search_total", 0),
+            "search-failures": transform_stats.get("search_failures", 0),
+            "processing-total": transform_stats.get("processing_total", 0)
+        }
+        stats = {
+            "search-time-ms": transform_stats.get("search_time_in_ms", 0),
+            "processing-time-ms": transform_stats.get("processing_time_in_ms", 0),
+            "index-time-ms": transform_stats.get("index_time_in_ms", 0),
+            "weight": transform_stats.get("documents_processed", 0),
+            "unit": "docs",
+            "ops": ops
+        }
+
+        return stats
+
+    def __repr__(self, *args, **kwargs):
+        return "stop-transform"
+
+
+class DeleteTransform(Runner):
+    """
+    Execute the `delete transform API
+    https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-transform.html`_.
+    """
+
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+        force = params.get("force", False)
+        # we don't want to fail if a job does not exist, thus we ignore 404s.
+        await es.transform.delete_transform(transform_id=transform_id, force=force, ignore=[404])
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-transform"
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
