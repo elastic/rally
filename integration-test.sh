@@ -250,12 +250,6 @@ function random_build_type {
     eval "$1='${BUILD_TYPES[$((RANDOM%num_build_types))]}'"
 }
 
-function test_configure {
-    info "test configure()"
-    # just run to test the configuration procedure, don't use this configuration in other tests.
-    esrally configure --assume-defaults --configuration-name="config-integration-test"
-}
-
 function test_proxy_connection {
     local cfg
 
