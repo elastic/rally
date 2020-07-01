@@ -409,8 +409,6 @@ function run_test {
         echo "**************************************** TESTING PROXY CONNECTIONS *********************************"
         test_proxy_connection
     fi
-    echo "**************************************** TESTING CONFIGURATION OF RALLY ****************************************"
-    test_configure
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
     test_docker_dev_image
     TEST_SUCCESS=1
