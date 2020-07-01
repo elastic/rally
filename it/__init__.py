@@ -198,8 +198,8 @@ def install_integration_test_config():
         copy_config(n)
 
 
-def remove_integration_test_config():
-    for n in CONFIG_NAMES:
+def remove_integration_test_config(config_names=None):
+    for n in config_names or CONFIG_NAMES:
         os.remove(ConfigFile(n).target_path)
 
 

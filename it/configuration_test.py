@@ -18,7 +18,14 @@
 import it
 
 
-@it.rally_in_mem
-def test_configure(cfg):
-    # just run to test the configuration procedure, don't use this configuration in other tests.
-    it.esrally_command_line_for(cfg, "configure --assume-defaults --configuration-name='config-integration-test'")
+CFG_FILE = "rally-config-integration-test"
+
+
+class TestConfigure:
+    def test_configure(self):
+        # just run to test the configuration procedure, don't use this configuration in other tests.
+        assert it.esrally(CFG_FILE, f"configure --assume-defaults --configuration-name='{CFG_FILE}'") == 0
+
+    @classmethod
+    def teardown_class(cls):
+        it.remove_integration_test_config([CFG_FILE])
