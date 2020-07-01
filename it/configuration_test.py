@@ -24,7 +24,7 @@ CFG_FILE = "rally-config-integration-test"
 class TestConfigure:
     def test_configure(self):
         # just run to test the configuration procedure, don't use this configuration in other tests.
-        assert it.esrally(CFG_FILE, f"configure --assume-defaults --configuration-name='{CFG_FILE}'") == 0
+        assert it.esrally(CFG_FILE, f"configure --assume-defaults") == 0
 
     @classmethod
     def teardown_class(cls):
