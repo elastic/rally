@@ -3009,9 +3009,8 @@ class IndicesRecoveryTests(TestCase):
         self.assertEqual(237783878, result["weight"])
         self.assertEqual("byte", result["unit"])
         self.assertTrue(result["success"])
-        # 5 seconds
-        self.assertEqual(5, result["service_time"])
-        self.assertEqual(5, result["time_period"])
+        # bytes recovered within these 5 seconds
+        self.assertEqual(47556775.6, result["throughput"])
         self.assertEqual(1393244155000, result["start_time_millis"])
         self.assertEqual(1393244160000, result["stop_time_millis"])
 
