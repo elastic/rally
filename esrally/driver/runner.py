@@ -68,6 +68,7 @@ def register_default_runners():
     register_runner(track.OperationType.CreateTransform.name, Retry(CreateTransform()), async_runner=True)
     register_runner(track.OperationType.StartTransform.name, Retry(StartTransform()), async_runner=True)
     register_runner(track.OperationType.StopTransform.name, Retry(StopTransform()), async_runner=True)
+    register_runner(track.OperationType.WaitForTransform.name, Retry(WaitForTransform()), async_runner=True)
     register_runner(track.OperationType.DeleteTransform.name, Retry(DeleteTransform()), async_runner=True)
 
 
@@ -1609,11 +1610,35 @@ class StopTransform(Runner):
     https://www.elastic.co/guide/en/elasticsearch/reference/current/stop-transform.html`_.
     """
 
+    async def __call__(self, es, params):
+        transform_id = mandatory(params, "transform-id", self)
+        force = params.get("force", False)
+        timeout = params.get("timeout")
+        wait_for_completion = params.get("wait-for-completion", False)
+        wait_for_checkpoint = params.get("wait-for-checkpoint", False)
+
+        await es.transform.stop_transform(transform_id=transform_id,
+                                          force=force,
+                                          timeout=timeout,
+                                          wait_for_completion=wait_for_completion,
+                                          wait_for_checkpoint=wait_for_checkpoint)
+
+    def __repr__(self, *args, **kwargs):
+        return "stop-transform"
+
+
+class WaitForTransform(Runner):
+    """
+    Wait for the transform until it reaches a certain checkpoint.
+    """
+
     def __init__(self):
         super().__init__()
         self._completed = False
         self._percent_completed = 0.0
         self._start_time = None
+        self._last_documents_processed = 0
+        self._last_processing_time = 0
 
     @property
     def completed(self):
@@ -1644,6 +1669,7 @@ class StopTransform(Runner):
         * ``wait-for-checkpoint``: whether to wait until all data has been processed till the next checkpoint, default true
         * ``wait-for-completion``: whether to block until the transform has stopped, default true
         * ``transform-timeout``: overall runtime timeout of the transform in seconds, default 1800 (1h)
+        * ``poll-interval``: how often transform stats are polled, used to set progress and check the state, default 0.5.
 
         Returned meta data
         `
@@ -1676,6 +1702,7 @@ class StopTransform(Runner):
         wait_for_completion = params.get("wait-for-completion", True)
         wait_for_checkpoint = params.get("wait-for-checkpoint", True)
         transform_timeout = params.get("transform-timeout", 60.0 * 60.0)
+        poll_interval = params.get("poll-interval", 0.5)
 
         if not self._start_time:
             self._start_time = time.time()
@@ -1685,49 +1712,77 @@ class StopTransform(Runner):
                                               wait_for_completion=False,
                                               wait_for_checkpoint=wait_for_checkpoint)
 
-        stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
-        state = stats_response["transforms"][0].get("state")
-        transform_stats = stats_response["transforms"][0].get("stats", {})
+        while True:
+            # sleep for a while, so stats is not called to often, note this is very basic,
+            # but because we return performance data from `_stats` this is ok
+            # await asyncio.sleep(poll_interval)
 
-        if (time.time() - self._start_time) > transform_timeout:
-            raise exceptions.RallyAssertionError(
-                f"Transform [{transform_id}] timed out after [{transform_timeout}] seconds. "
-                "Please consider increasing the timeout in the track.")
+            stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
+            state = stats_response["transforms"][0].get("state")
+            transform_stats = stats_response["transforms"][0].get("stats", {})
 
-        if state == "failed":
-            failure_reason = stats_response["transforms"][0].get("reason", "unknown")
-            raise exceptions.RallyAssertionError(
-                f"Transform [{transform_id}] failed with [{failure_reason}].")
-        elif state == "stopped" or wait_for_completion is False:
-            self._completed = True
-            self._percent_completed = 1.0
-        else:
-            self._percent_completed = stats_response["transforms"][0].get("checkpointing", {}).get("next", {}).get(
-                "checkpoint_progress", {}).get("percent_complete", 0.0) / 100.0
+            if (time.time() - self._start_time) > transform_timeout:
+                raise exceptions.RallyAssertionError(
+                    f"Transform [{transform_id}] timed out after [{transform_timeout}] seconds. "
+                    "Please consider increasing the timeout in the track.")
 
-        ops = {
-            "pages-processed": transform_stats.get("pages_processed", 0),
-            "documents-processed": transform_stats.get("documents_processed", 0),
-            "documents-indexed": transform_stats.get("documents_indexed", 0),
-            "index-total": transform_stats.get("index_total", 0),
-            "index-failures": transform_stats.get("index_failures", 0),
-            "search-total": transform_stats.get("search_total", 0),
-            "search-failures": transform_stats.get("search_failures", 0),
-            "processing-total": transform_stats.get("processing_total", 0)
-        }
-        stats = {
-            "search-time-ms": transform_stats.get("search_time_in_ms", 0),
-            "processing-time-ms": transform_stats.get("processing_time_in_ms", 0),
-            "index-time-ms": transform_stats.get("index_time_in_ms", 0),
-            "weight": transform_stats.get("documents_processed", 0),
-            "unit": "docs",
-            "ops": ops
-        }
+            if state == "failed":
+                failure_reason = stats_response["transforms"][0].get("reason", "unknown")
+                raise exceptions.RallyAssertionError(
+                    f"Transform [{transform_id}] failed with [{failure_reason}].")
+            elif state == "stopped" or wait_for_completion is False:
+                self._completed = True
+                self._percent_completed = 1.0
+            else:
+                self._percent_completed = stats_response["transforms"][0].get("checkpointing", {}).get("next", {}).get(
+                    "checkpoint_progress", {}).get("percent_complete", 0.0) / 100.0
 
-        return stats
+            ops = {
+                "pages-processed": transform_stats.get("pages_processed", 0),
+                "documents-processed": transform_stats.get("documents_processed", 0),
+                "documents-indexed": transform_stats.get("documents_indexed", 0),
+                "index-total": transform_stats.get("index_total", 0),
+                "index-failures": transform_stats.get("index_failures", 0),
+                "search-total": transform_stats.get("search_total", 0),
+                "search-failures": transform_stats.get("search_failures", 0),
+                "processing-total": transform_stats.get("processing_total", 0)
+            }
+
+            documents_processed = transform_stats.get("documents_processed", 0)
+            processing_time = transform_stats.get("search_time_in_ms", 0)
+            processing_time += transform_stats.get("processing_time_in_ms", 0)
+            processing_time += transform_stats.get("index_time_in_ms", 0)
+            documents_processed_delta = documents_processed - self._last_documents_processed
+            processing_time_delta = processing_time - self._last_processing_time
+
+            # only report if we have enough data or transform has completed
+            if self._completed or documents_processed_delta > 5000 or processing_time_delta > 500:
+                stats = {
+                    "transform-id": transform_id,
+                    "search-time-ms": transform_stats.get("search_time_in_ms", 0),
+                    "processing-time-ms": transform_stats.get("processing_time_in_ms", 0),
+                    "index-time-ms": transform_stats.get("index_time_in_ms", 0),
+                    "weight": transform_stats.get("documents_processed", 0),
+                    "unit": "docs",
+                    "ops": ops
+                }
+
+                if self._completed:
+                    # take the overall throughput
+                    throughput = documents_processed / processing_time * 1000
+                else:
+                    throughput = documents_processed_delta / processing_time_delta * 1000
+
+                stats["throughput"] = throughput
+
+                self._last_documents_processed = documents_processed
+                self._last_processing_time = processing_time
+                return stats
+            else:
+                await asyncio.sleep(poll_interval)
 
     def __repr__(self, *args, **kwargs):
-        return "stop-transform"
+        return "wait-for-transform"
 
 
 class DeleteTransform(Runner):

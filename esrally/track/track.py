@@ -420,7 +420,7 @@ class OperationType(Enum):
     RawRequest = 5
     WaitForRecovery = 6
     CreateSnapshot = 7
-    StopTransform = 8
+    WaitForTransform = 8
 
 
     # administrative actions
@@ -448,7 +448,8 @@ class OperationType(Enum):
     PutSettings = 1022
     CreateTransform = 1023
     StartTransform = 1024
-    DeleteTransform = 1025
+    StopTransform = 1025
+    DeleteTransform = 1026
 
     @property
     def admin_op(self):
@@ -522,6 +523,8 @@ class OperationType(Enum):
             return OperationType.StartTransform
         elif v == "stop-transform":
             return OperationType.StopTransform
+        elif v == "wait-for-transform":
+            return OperationType.WaitForTransform
         elif v == "delete-transform":
             return OperationType.DeleteTransform
         else:

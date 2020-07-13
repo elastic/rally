@@ -3242,6 +3242,31 @@ class StopTransformTests(TestCase):
     @run_async
     async def test_stop_transform(self, es):
         es.transform.stop_transform.return_value = as_future()
+
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id,
+            "force": random.choice([False, True]),
+            "timeout": "5s",
+            "wait-for-completion": random.choice([False, True]),
+            "wait-for-checkpoint": random.choice([False, True]),
+        }
+
+        r = runner.StopTransform()
+        await r(es, params)
+
+        es.transform.stop_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
+                                                            timeout=params["timeout"],
+                                                            wait_for_completion=params["wait-for-completion"],
+                                                            wait_for_checkpoint=params["wait-for-checkpoint"]
+                                                            )
+
+
+class WaitForTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_wait_for_transform(self, es):
+        es.transform.stop_transform.return_value = as_future()
         transform_id = "a-transform"
         params = {
             "transform-id": transform_id,
@@ -3285,7 +3310,7 @@ class StopTransformTests(TestCase):
             ]
         })
 
-        r = runner.StopTransform()
+        r = runner.WaitForTransform()
         self.assertFalse(r.completed)
         self.assertEqual(r.percent_completed, 0.0)
 
@@ -3317,7 +3342,7 @@ class StopTransformTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
-    async def test_stop_transform_progress(self, es):
+    async def test_wait_for_transform_progress(self, es):
         es.transform.stop_transform.return_value = as_future()
         transform_id = "a-transform"
         params = {
@@ -3334,7 +3359,23 @@ class StopTransformTests(TestCase):
                     {
                         "id": "a-transform",
                         "state": "indexing",
-                        "stats": {},
+                        "stats": {
+                            "pages_processed": 1,
+                            "documents_processed": 10000,
+                            "documents_indexed": 3,
+                            "trigger_count": 4,
+                            "index_time_in_ms": 200,
+                            "index_total": 6,
+                            "index_failures": 7,
+                            "search_time_in_ms": 300,
+                            "search_total": 9,
+                            "search_failures": 10,
+                            "processing_time_in_ms": 50,
+                            "processing_total": 12,
+                            "exponential_avg_checkpoint_duration_ms": 13.13,
+                            "exponential_avg_documents_indexed": 14.14,
+                            "exponential_avg_documents_processed": 15.15
+                        },
                         "checkpointing": {
                             "last": {},
                             "next": {
@@ -3355,7 +3396,23 @@ class StopTransformTests(TestCase):
                     {
                         "id": "a-transform",
                         "state": "indexing",
-                        "stats": {},
+                        "stats": {
+                            "pages_processed": 2,
+                            "documents_processed": 20000,
+                            "documents_indexed": 3,
+                            "trigger_count": 4,
+                            "index_time_in_ms": 500,
+                            "index_total": 6,
+                            "index_failures": 7,
+                            "search_time_in_ms": 1500,
+                            "search_total": 9,
+                            "search_failures": 10,
+                            "processing_time_in_ms": 300,
+                            "processing_total": 12,
+                            "exponential_avg_checkpoint_duration_ms": 13.13,
+                            "exponential_avg_documents_indexed": 14.14,
+                            "exponential_avg_documents_processed": 15.15
+                        },
                         "checkpointing": {
                             "last": {},
                             "next": {
@@ -3376,7 +3433,23 @@ class StopTransformTests(TestCase):
                     {
                         "id": "a-transform",
                         "state": "started",
-                        "stats": {},
+                        "stats": {
+                            "pages_processed": 1,
+                            "documents_processed": 30000,
+                            "documents_indexed": 3,
+                            "trigger_count": 4,
+                            "index_time_in_ms": 1000,
+                            "index_total": 6,
+                            "index_failures": 7,
+                            "search_time_in_ms": 2000,
+                            "search_total": 9,
+                            "search_failures": 10,
+                            "processing_time_in_ms": 600,
+                            "processing_total": 12,
+                            "exponential_avg_checkpoint_duration_ms": 13.13,
+                            "exponential_avg_documents_indexed": 14.14,
+                            "exponential_avg_documents_processed": 15.15
+                        },
                         "checkpointing": {
                             "last": {},
                             "next": {
@@ -3399,16 +3472,16 @@ class StopTransformTests(TestCase):
                         "state": "stopped",
                         "stats": {
                             "pages_processed": 1,
-                            "documents_processed": 2,
+                            "documents_processed": 60000,
                             "documents_indexed": 3,
                             "trigger_count": 4,
-                            "index_time_in_ms": 5,
+                            "index_time_in_ms": 1500,
                             "index_total": 6,
                             "index_failures": 7,
-                            "search_time_in_ms": 8,
+                            "search_time_in_ms": 3000,
                             "search_total": 9,
                             "search_failures": 10,
-                            "processing_time_in_ms": 11,
+                            "processing_time_in_ms": 1000,
                             "processing_total": 12,
                             "exponential_avg_checkpoint_duration_ms": 13.13,
                             "exponential_avg_documents_indexed": 14.14,
@@ -3426,7 +3499,7 @@ class StopTransformTests(TestCase):
             })
         ]
 
-        r = runner.StopTransform()
+        r = runner.WaitForTransform()
         self.assertFalse(r.completed)
         self.assertEqual(r.percent_completed, 0.0)
 
@@ -3442,7 +3515,7 @@ class StopTransformTests(TestCase):
         self.assertEqual(r.percent_completed, 1.0)
 
         self.assertEqual(result["ops"]["pages-processed"], 1)
-        self.assertEqual(result["ops"]["documents-processed"], 2)
+        self.assertEqual(result["ops"]["documents-processed"], 60000)
         self.assertEqual(result["ops"]["documents-indexed"], 3)
         self.assertEqual(result["ops"]["index-total"], 6)
         self.assertEqual(result["ops"]["index-failures"], 7)
@@ -3450,10 +3523,10 @@ class StopTransformTests(TestCase):
         self.assertEqual(result["ops"]["search-failures"], 10)
         self.assertEqual(result["ops"]["processing-total"], 12)
 
-        self.assertEqual(result["search-time-ms"], 8)
-        self.assertEqual(11, result["processing-time-ms"], 11)
-        self.assertEqual(5, result["index-time-ms"], 5)
-        self.assertEqual(2, result["weight"], 2)
+        self.assertEqual(result["search-time-ms"], 3000)
+        self.assertEqual(result["processing-time-ms"], 1000)
+        self.assertEqual(result["index-time-ms"], 1500)
+        self.assertEqual(result["weight"], 60000)
         self.assertEqual(result["unit"], "docs")
 
         es.transform.stop_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],

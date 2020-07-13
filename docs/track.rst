@@ -1178,7 +1178,6 @@ This operation is :ref:`retryable <track_operations>`.
 
 stop-transform
 ~~~~~~~~~~~~~~
-
 With the operation ``stop-transform`` you can execute the `stop transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/stop-transform.html>`_. It supports the following parameters:
 
 * ``transform-id`` (mandatory): The id of the transform to stop.
@@ -1186,7 +1185,23 @@ With the operation ``stop-transform`` you can execute the `stop transform API <h
 * ``timeout`` (optional, defaults to empty): Amount of time to wait until a transform stops.
 * ``wait-for-completion`` (optional, defaults to true) If set to true, causes the API to block until the indexer state completely stops.
 * ``wait-for-checkpoint`` (optional, defaults to true) If set to true, the transform will not completely stop until the current checkpoint is completed.
+
+This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+wait-for-transform
+~~~~~~~~~~~~~~
+
+With the operation ``wait-for-transform`` you can stop a transform after a certain amount of work is done. Use this operation for measuring performance. It supports the following parameters:
+
+* ``transform-id`` (mandatory): The id of the transform to stop.
+* ``force`` (optional, defaults to false): Whether to forcefully stop the transform.
+* ``timeout`` (optional, defaults to empty): Amount of time to wait until a transform stops.
+* ``wait-for-completion`` (optional, defaults to true) If set to true, causes the API to block until the indexer state completely stops.
+* ``wait-for-checkpoint`` (optional, defaults to true) If set to true, the transform will not completely stop until the current checkpoint is completed.
 * ``transform-timeout`` (optional, defaults to `1800` (`1h`)) Overall runtime timeout of the batch transform in seconds.
+* ``poll-interval`` (optional, defaults to `0.5`) How often transform stats are polled, used to set progress and check the state. You should not set this too low, because polling can skew the result.
 
 This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
