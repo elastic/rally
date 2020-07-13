@@ -1547,8 +1547,7 @@ class IndicesRecovery(Runner):
             "weight": total_recovered,
             "unit": "byte",
             "success": True,
-            "service_time": response_time_in_seconds,
-            "time_period": response_time_in_seconds,
+            "throughput": total_recovered / response_time_in_seconds,
             "start_time_millis": total_start_millis,
             "stop_time_millis": total_end_millis
         }
