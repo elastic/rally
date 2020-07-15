@@ -29,6 +29,7 @@ from esrally.utils import process, io
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.6.0"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
 def all_rally_configs(t):
@@ -205,11 +206,36 @@ def remove_integration_test_config(config_names=None):
 
 ES_METRICS_STORE = EsMetricsStore()
 
+def get_license():
+    lines = process.run_subprocess_with_output("awk 'FNR>=2 && FNR<=2' LICENSE", path=ROOT_DIR)
+    return lines[0]
+
+
+def get_version_from_file():
+    lines = process.run_subprocess_with_output("cat version.txt", path=ROOT_DIR)
+    return lines[0]
+
+
+def build_docker_image():
+    # First ensure any left overs have been cleaned up
+    if process.run_subprocess_in_path(ROOT_DIR, "docker-compose -f docker/docker-compose-tests.yml down -v") != 0:
+        raise AssertionError("Failed to clean up running containers when building docker image")
+
+    rally_version = get_version_from_file()
+
+    os.environ['RALLY_VERSION'] = rally_version
+    os.environ['RALLY_LICENSE'] = get_license()
+
+    command = f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/Dockerfile-dev $PWD"
+    if process.run_subprocess_in_path(ROOT_DIR, command) != 0:
+        raise AssertionError("It was not possible to build the docker image from Dockerfile-dev")
+
 
 def setup_module():
     check_prerequisites()
     install_integration_test_config()
     ES_METRICS_STORE.start()
+    build_docker_image()
 
 
 def teardown_module():
