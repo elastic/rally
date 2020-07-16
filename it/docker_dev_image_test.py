@@ -16,16 +16,52 @@
 # under the License.
 
 import os
+import it
 
 from esrally.utils import process
-from it import ROOT_DIR
-
-DOCKER_COMPOSE_UP = "docker-compose -f docker/docker-compose-tests.yml up --abort-on-container-exit"
+from esrally.version import version
 
 
 def test_docker_geonames():
-    test_command = "--pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
-    os.environ["TEST_COMMAND"] = test_command
+    test_command = "--pipeline=benchmark-only --test-mode --track=geonames " \
+                   "--challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    run_docker_compose_test(test_command)
 
-    if process.run_subprocess_in_path(ROOT_DIR, DOCKER_COMPOSE_UP) != 0:
-        raise AssertionError("It was not possible to run the test_docker_geoname successfully")
+
+def test_docker_list_tracks():
+    test_command = "list tracks"
+    run_docker_compose_test(test_command)
+
+
+def test_docker_help():
+    test_command = "--help"
+    run_docker_compose_test(test_command)
+
+
+def test_docker_override_cmd():
+    test_command = "esrally --pipeline=benchmark-only --test-mode --track=geonames " \
+                   "--challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    run_docker_compose_test(test_command)
+
+
+def run_docker_compose_test(test_command):
+    try:
+        if run_docker_compose_up(test_command) != 0:
+            raise AssertionError(f"The docker-compose test failed with test command: {test_command}")
+    finally:
+        # Always ensure proper cleanup regardless of results
+        run_docker_compose_down()
+
+
+def run_docker_compose_up(test_command):
+    env_variables = os.environ.copy()
+    env_variables["TEST_COMMAND"] = test_command
+    env_variables['RALLY_VERSION'] = version().split(" ")[0]
+
+    return process.run_subprocess_with_logging(f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml up "
+                                               f"--abort-on-container-exit", env=env_variables)
+
+
+def run_docker_compose_down():
+    if process.run_subprocess_with_logging(f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml down -v") != 0:
+        raise AssertionError(f"Failed to stop running containers from docker-compose-tests.yml")

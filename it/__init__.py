@@ -25,6 +25,8 @@ import pytest
 
 from esrally import client
 from esrally.utils import process, io
+from esrally.version import version
+from it.docker_dev_image_test import run_docker_compose_down
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.6.0"]
@@ -206,28 +208,27 @@ def remove_integration_test_config(config_names=None):
 
 ES_METRICS_STORE = EsMetricsStore()
 
+
 def get_license():
-    lines = process.run_subprocess_with_output("awk 'FNR>=2 && FNR<=2' LICENSE", path=ROOT_DIR)
-    return lines[0]
-
-
-def get_version_from_file():
-    lines = process.run_subprocess_with_output("cat version.txt", path=ROOT_DIR)
-    return lines[0]
+    with open(os.path.join(ROOT_DIR, 'LICENSE')) as license_file:
+        return license_file.readlines()[1].strip()
 
 
 def build_docker_image():
     # First ensure any left overs have been cleaned up
-    if process.run_subprocess_in_path(ROOT_DIR, "docker-compose -f docker/docker-compose-tests.yml down -v") != 0:
-        raise AssertionError("Failed to clean up running containers when building docker image")
+    run_docker_compose_down()
 
-    rally_version = get_version_from_file()
+    # We just want the release version without suffix
+    rally_version = version().split(" ")[0]
 
-    os.environ['RALLY_VERSION'] = rally_version
-    os.environ['RALLY_LICENSE'] = get_license()
+    env_variables = os.environ.copy()
+    env_variables['RALLY_VERSION'] = rally_version
+    env_variables['RALLY_LICENSE'] = get_license()
 
-    command = f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/Dockerfile-dev $PWD"
-    if process.run_subprocess_in_path(ROOT_DIR, command) != 0:
+    command = f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE " \
+              f"-f {ROOT_DIR}/docker/Dockerfiles/Dockerfile-dev {ROOT_DIR}"
+
+    if process.run_subprocess_with_logging(command, env=env_variables) != 0:
         raise AssertionError("It was not possible to build the docker image from Dockerfile-dev")
 
 
