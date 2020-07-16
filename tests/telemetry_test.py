@@ -1806,7 +1806,7 @@ class TransformStatsRecorderTests(TestCase):
                 "state": random.choice(["stopped", "indexing", "started", "failed"]),
                 "stats": {
                     "pages_processed": 1,
-                    "documents_processed": 2,
+                    "documents_processed": 240,
                     "documents_indexed": 3,
                     "trigger_count": 4,
                     "index_time_in_ms": 5,
@@ -1853,7 +1853,7 @@ class TransformStatsRecorderTests(TestCase):
 
         metrics_store_put_count.assert_has_calls([
             mock.call("transform_pages_processed", 1, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
-            mock.call("transform_documents_processed", 2, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
+            mock.call("transform_documents_processed", 240, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
             mock.call("transform_documents_indexed", 3, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
             mock.call("transform_index_total", 6, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
             mock.call("transform_index_failures", 7, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
@@ -1868,6 +1868,8 @@ class TransformStatsRecorderTests(TestCase):
             mock.call("transform_index_time_in_ms", 5, "ms", sample_type=metrics.SampleType.Normal,
                       meta_data=meta_data),
             mock.call("transform_processing_time_in_ms", 11, "ms", sample_type=metrics.SampleType.Normal,
+                      meta_data=meta_data),
+            mock.call("transform_throughput", 10000, "docs/s", sample_type=metrics.SampleType.Normal,
                       meta_data=meta_data)
         ])
 

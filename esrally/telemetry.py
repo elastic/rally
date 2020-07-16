@@ -914,9 +914,8 @@ class TransformStatsRecorder:
 
         if processing_time > 0:
             throughput = documents_processed / processing_time * 1000
-
-        self.metrics_store.put_value_cluster_level("transform_throughput", throughput,
-                                                   "docs/s", sample_type=sample_type, meta_data=meta_data)
+            self.metrics_store.put_value_cluster_level("transform_throughput", throughput,
+                                                       "docs/s", sample_type=sample_type, meta_data=meta_data)
 
 
 class StartupTime(InternalTelemetryDevice):
