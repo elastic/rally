@@ -3293,19 +3293,6 @@ class WaitForTransformTests(TestCase):
 
         self.assertTrue(r.completed)
         self.assertEqual(r.percent_completed, 1.0)
-
-        self.assertEqual(result["ops"]["pages-processed"], 1)
-        self.assertEqual(result["ops"]["documents-processed"], 2)
-        self.assertEqual(result["ops"]["documents-indexed"], 3)
-        self.assertEqual(result["ops"]["index-total"], 6)
-        self.assertEqual(result["ops"]["index-failures"], 7)
-        self.assertEqual(result["ops"]["search-total"], 9)
-        self.assertEqual(result["ops"]["search-failures"], 10)
-        self.assertEqual(result["ops"]["processing-total"], 12)
-
-        self.assertEqual(result["search-time-ms"], 8)
-        self.assertEqual(11, result["processing-time-ms"], 11)
-        self.assertEqual(5, result["index-time-ms"], 5)
         self.assertEqual(2, result["weight"], 2)
         self.assertEqual(result["unit"], "docs")
 
@@ -3488,19 +3475,6 @@ class WaitForTransformTests(TestCase):
         self.assertEqual(total_calls, 4)
         self.assertTrue(r.completed)
         self.assertEqual(r.percent_completed, 1.0)
-
-        self.assertEqual(result["ops"]["pages-processed"], 1)
-        self.assertEqual(result["ops"]["documents-processed"], 60000)
-        self.assertEqual(result["ops"]["documents-indexed"], 3)
-        self.assertEqual(result["ops"]["index-total"], 6)
-        self.assertEqual(result["ops"]["index-failures"], 7)
-        self.assertEqual(result["ops"]["search-total"], 9)
-        self.assertEqual(result["ops"]["search-failures"], 10)
-        self.assertEqual(result["ops"]["processing-total"], 12)
-
-        self.assertEqual(result["search-time-ms"], 3000)
-        self.assertEqual(result["processing-time-ms"], 1000)
-        self.assertEqual(result["index-time-ms"], 1500)
         self.assertEqual(result["weight"], 60000)
         self.assertEqual(result["unit"], "docs")
 
