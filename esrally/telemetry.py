@@ -907,6 +907,17 @@ class TransformStatsRecorder:
                                                    stats.get("processing_time_in_ms", 0), "ms", sample_type=sample_type,
                                                    meta_data=meta_data)
 
+        documents_processed = stats.get("documents_processed", 0)
+        processing_time = stats.get("search_time_in_ms", 0)
+        processing_time += stats.get("processing_time_in_ms", 0)
+        processing_time += stats.get("index_time_in_ms", 0)
+
+        if processing_time > 0:
+            throughput = documents_processed / processing_time * 1000
+
+        self.metrics_store.put_value_cluster_level("transform_throughput", throughput,
+                                                   "docs/s", sample_type=sample_type, meta_data=meta_data)
+
 
 class StartupTime(InternalTelemetryDevice):
     def __init__(self, stopwatch=time.StopWatch):

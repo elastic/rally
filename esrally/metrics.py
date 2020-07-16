@@ -1675,6 +1675,7 @@ class GlobalStatsCalculator:
 
         self.logger.debug("Gathering transform processing times.")
         result.transform_processing_times = self.transform_processing_time_stats()
+        result.transform_throughput = self.transform_throughput()
 
         return result
 
@@ -1770,6 +1771,20 @@ class GlobalStatsCalculator:
             )
         return flat_results
 
+    def transform_throughput(self):
+        values = self.store.get_raw("transform_throughput", sample_type=SampleType.Final)
+        result = []
+        if values:
+            for v in values:
+                transform_id = v.get("meta", {}).get("transform_id")
+                if transform_id is not None:
+                    result.append({
+                        "id": transform_id,
+                        "throughput": v["value"],
+                        "unit": v["unit"]
+                    })
+        return result
+
     def error_rate(self, task_name):
         return self.store.get_error_rate(task=task_name, sample_type=SampleType.Normal)
 
@@ -1835,6 +1850,7 @@ class GlobalStats:
         self.segment_count = self.v(d, "segment_count")
 
         self.transform_processing_times = self.v(d, "transform_processing_times", default=[])
+        self.transform_throughput = self.v(d, "transform_throughput", default=[])
 
     def as_dict(self):
         return self.__dict__
@@ -1889,6 +1905,15 @@ class GlobalStats:
                             "search": item["search"],
                             "index": item["index"],
                             "processing": item["processing"]
+                        }
+                    })
+            elif metric == "transform_throughput":
+                for item in value:
+                    all_results.append({
+                        "id": item["id"],
+                        "name": "transform_throughput",
+                        "value": {
+                            "throughput": item["throughput"]
                         }
                     })
             elif metric.endswith("_time_per_shard"):
