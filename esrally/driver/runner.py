@@ -1646,29 +1646,6 @@ class WaitForTransform(Runner):
         * ``wait-for-completion``: whether to block until the transform has stopped, default true
         * ``transform-timeout``: overall runtime timeout of the transform in seconds, default 1800 (1h)
         * ``poll-interval``: how often transform stats are polled, used to set progress and check the state, default 0.5.
-
-        Returned meta data
-        `
-        The following meta data are always returned:
-
-        * ``search-time-ms``: The amount of time spent searching, in milliseconds.
-        * ``processing-time-ms``: The amount of time spent processing results, in milliseconds.
-        * ``index_time-ms``: The amount of time spent indexing, in milliseconds.
-        * ``weight``: operation-agnostic representation of the processed documents (used internally by Rally for throughput calculation).
-        * ``unit``: The unit in which to interpret, always "docs".
-        * ``ops``: A dictionary of counters, see below.
-
-        ``ops`` contains the following meta data:
-
-        * ``pages-processed``: The number of search or bulk index operations processed.
-        * ``documents-processed``: The number of documents that have been processed from the source index of the transform.
-        * ``documents-indexed``: The number of documents that have been indexed into the destination index for the transform.
-        * ``index-total``: The number of index operations on the dest index for the transform.
-        * ``index-failures``: The number of indexing failures.
-        * ``search-total``: The number of search operations on the source index for the transform.
-        * ``search-failures``: The number of search failures.
-        * ``processing-total``: The number of processing operations.
-
         """
         import time
 
@@ -1689,10 +1666,6 @@ class WaitForTransform(Runner):
                                               wait_for_checkpoint=wait_for_checkpoint)
 
         while True:
-            # sleep for a while, so stats is not called to often, note this is very basic,
-            # but because we return performance data from `_stats` this is ok
-            # await asyncio.sleep(poll_interval)
-
             stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
             state = stats_response["transforms"][0].get("state")
             transform_stats = stats_response["transforms"][0].get("stats", {})
@@ -1713,17 +1686,6 @@ class WaitForTransform(Runner):
                 self._percent_completed = stats_response["transforms"][0].get("checkpointing", {}).get("next", {}).get(
                     "checkpoint_progress", {}).get("percent_complete", 0.0) / 100.0
 
-            ops = {
-                "pages-processed": transform_stats.get("pages_processed", 0),
-                "documents-processed": transform_stats.get("documents_processed", 0),
-                "documents-indexed": transform_stats.get("documents_indexed", 0),
-                "index-total": transform_stats.get("index_total", 0),
-                "index-failures": transform_stats.get("index_failures", 0),
-                "search-total": transform_stats.get("search_total", 0),
-                "search-failures": transform_stats.get("search_failures", 0),
-                "processing-total": transform_stats.get("processing_total", 0)
-            }
-
             documents_processed = transform_stats.get("documents_processed", 0)
             processing_time = transform_stats.get("search_time_in_ms", 0)
             processing_time += transform_stats.get("processing_time_in_ms", 0)
@@ -1735,12 +1697,8 @@ class WaitForTransform(Runner):
             if self._completed or (documents_processed_delta > 5000 and processing_time_delta > 500):
                 stats = {
                     "transform-id": transform_id,
-                    "search-time-ms": transform_stats.get("search_time_in_ms", 0),
-                    "processing-time-ms": transform_stats.get("processing_time_in_ms", 0),
-                    "index-time-ms": transform_stats.get("index_time_in_ms", 0),
                     "weight": transform_stats.get("documents_processed", 0),
                     "unit": "docs",
-                    "ops": ops
                 }
 
                 throughput = 0
@@ -1757,6 +1715,7 @@ class WaitForTransform(Runner):
                 self._last_processing_time = processing_time
                 return stats
             else:
+                # sleep for a while, so stats is not called to often
                 await asyncio.sleep(poll_interval)
 
     def __repr__(self, *args, **kwargs):
