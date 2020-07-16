@@ -119,6 +119,8 @@ class SummaryReporter:
         metrics_table.extend(self.report_segment_memory(stats))
         metrics_table.extend(self.report_segment_counts(stats))
 
+        metrics_table.extend(self.report_transform_stats(stats))
+
         for record in stats.op_metrics:
             task = record["task"]
             metrics_table.extend(self.report_throughput(record, task))
@@ -267,6 +269,17 @@ class SummaryReporter:
             self.line("Segment count", "", stats.segment_count, "")
         )
 
+    def report_transform_stats(self, stats):
+        lines = []
+        for processing_time in stats.transform_processing_times:
+            transform_id = processing_time["id"]
+            unit = processing_time["unit"]
+            lines.append(self.line("Search processing time", transform_id, processing_time["search"], unit))
+            lines.append(self.line("Indexing processing time", transform_id, processing_time["index"], unit))
+            lines.append(self.line("Task processing time", transform_id, processing_time["processing"], unit))
+
+        return lines
+
     def join(self, *args):
         lines = []
         for arg in args:
@@ -333,6 +346,7 @@ class ComparisonReporter:
         metrics_table.extend(self.report_disk_usage(baseline_stats, contender_stats))
         metrics_table.extend(self.report_segment_memory(baseline_stats, contender_stats))
         metrics_table.extend(self.report_segment_counts(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_transform_processing_times(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
@@ -406,6 +420,25 @@ class ComparisonReporter:
                                            job_name, unit, treat_increase_as_improvement=False))
                     lines.append(self.line("Max ML processing time", baseline["max"], contender["max"],
                                            job_name, unit, treat_increase_as_improvement=False))
+        return lines
+
+    def report_transform_processing_times(self, baseline_stats, contender_stats):
+        lines = []
+        for baseline in baseline_stats.transform_processing_times:
+            transform_id = baseline["id"]
+            unit = baseline["unit"]
+            # O(n^2) but we assume here only a *very* limited number of jobs (usually just one)
+            for contender in contender_stats.transform_processing_times:
+                if contender["id"] == transform_id:
+                    lines.append(
+                        self.line("Search processing time", baseline["search"], contender["search"],
+                                  transform_id, unit, treat_increase_as_improvement=False))
+                    lines.append(
+                        self.line("Indexing processing time", baseline["index"], contender["index"],
+                                  transform_id, unit, treat_increase_as_improvement=False))
+                    lines.append(
+                        self.line("Task processing time", baseline["processing"], contender["processing"],
+                                  transform_id, unit, treat_increase_as_improvement=False))
         return lines
 
     def report_total_times(self, baseline_stats, contender_stats):

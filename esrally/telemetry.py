@@ -32,7 +32,7 @@ def list_telemetry():
     console.println("Available telemetry devices:\n")
     devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder,
                                                                                Heapdump, NodeStats, RecoveryStats,
-                                                                               CcrStats, SegmentStats]]
+                                                                               CcrStats, SegmentStats, TransformStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -741,6 +741,171 @@ class NodeStatsRecorder:
             logging.getLogger(__name__).exception("Could not retrieve node stats.")
             return {}
         return stats["nodes"].values()
+
+
+class TransformStats(TelemetryDevice):
+    internal = False
+    command = "transform-stats"
+    human_name = "Transform Stats"
+    help = "Regularly samples transform stats"
+
+    """
+    Gathers Transform stats
+    """
+
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.sample_interval = telemetry_params.get("transform-stats-sample-interval", 1)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                f"The telemetry parameter 'transform-stats-sample-interval' must be greater than zero "
+                f"but was [{self.sample_interval}].")
+        self.specified_cluster_names = self.clients.keys()
+        self.transforms_per_cluster = self.telemetry_params.get("transform-stats-transforms", False)
+        if self.transforms_per_cluster:
+            for cluster_name in self.transforms_per_cluster.keys():
+                if cluster_name not in clients:
+                    raise exceptions.SystemSetupError(
+                        f"The telemetry parameter 'transform-stats-transforms' must be a JSON Object with keys "
+                        f"matching the cluster names [{','.join(sorted(clients.keys()))}] specified in --target-hosts "
+                        f"but it had [{cluster_name}].")
+            self.specified_cluster_names = self.transforms_per_cluster.keys()
+
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def on_benchmark_start(self):
+        recorder = []
+        for cluster_name in self.specified_cluster_names:
+            recorder = TransformStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
+                                              self.sample_interval,
+                                              self.transforms_per_cluster[
+                                                  cluster_name] if self.transforms_per_cluster else None)
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.setDaemon(True)
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+                # record the final stats
+                sampler.recorder.record_final()
+
+
+class TransformStatsRecorder:
+    """
+    Collects and pushes Transform stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, transforms=None):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
+        :param transforms: optional list of transforms to filter results from.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.transforms = transforms
+        self.logger = logging.getLogger(__name__)
+
+        self.logger.info("transform stats recorder")
+
+    def __str__(self):
+        return "transform stats"
+
+    def record(self):
+        """
+        Collect Transform stats for transforms (optionally) specified in telemetry parameters and push to metrics store.
+        """
+
+        self._record(metrics.SampleType.Normal)
+
+    def record_final(self):
+        """
+        Collect final Transform stats for transforms (optionally) specified in telemetry parameters and push to metrics store.
+        """
+
+        self._record(metrics.SampleType.Final)
+
+    def _record(self, sample_type):
+        # ES returns all stats values in bytes or ms via "human: false"
+
+        import elasticsearch
+
+        try:
+            stats = self.client.transform.get_transform_stats("_all")
+
+        except elasticsearch.TransportError as e:
+            msg = f"A transport error occurred while collecting transform stats on " \
+                  f"cluster [{self.cluster_name}]"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        for transform in stats["transforms"]:
+            try:
+                if self.transforms and transform["id"] not in self.transforms:
+                    # Skip metrics for transform not part of user supplied whitelist (transform-stats-transforms)
+                    # in telemetry params.
+                    continue
+                self.record_stats_per_transform(transform["id"], transform["stats"], sample_type)
+
+            except KeyError:
+                self.logger.warning(
+                    "The 'transform' key does not contain a 'transform' or 'stats' key "
+                    "Maybe the output format has changed. Skipping."
+                )
+
+    def record_stats_per_transform(self, transform_id, stats, sample_type):
+        """
+        :param transform_id: The transform id.
+        :param stats: A dict with returned transform stats for the transform.
+        :param sample_type: The sample type.
+        """
+
+        meta_data = {
+            "transform_id": transform_id
+        }
+
+        self.metrics_store.put_count_cluster_level("transform_pages_processed", stats.get("pages_processed", 0),
+                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level("transform_documents_processed", stats.get("documents_processed", 0),
+                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level("transform_documents_indexed", stats.get("documents_indexed", 0),
+                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level("transform_index_total", stats.get("index_total", 0),
+                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level("transform_index_failures", stats.get("index_failures", 0),
+                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level("transform_search_total", stats.get("search_total", 0),
+                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level("transform_search_failures", stats.get("search_failures", 0),
+                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level("transform_processing_total", stats.get("processing_total", 0),
+                                                   sample_type=sample_type, meta_data=meta_data)
+
+        self.metrics_store.put_value_cluster_level("transform_search_time_in_ms", stats.get("search_time_in_ms", 0),
+                                                   "ms", sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level("transform_index_time_in_ms", stats.get("index_time_in_ms", 0), "ms",
+                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level("transform_processing_time_in_ms",
+                                                   stats.get("processing_time_in_ms", 0), "ms", sample_type=sample_type,
+                                                   meta_data=meta_data)
 
 
 class StartupTime(InternalTelemetryDevice):

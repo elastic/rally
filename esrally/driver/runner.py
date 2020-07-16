@@ -1756,7 +1756,7 @@ class WaitForTransform(Runner):
             processing_time_delta = processing_time - self._last_processing_time
 
             # only report if we have enough data or transform has completed
-            if self._completed or documents_processed_delta > 5000 or processing_time_delta > 500:
+            if self._completed or (documents_processed_delta > 5000 and processing_time_delta > 500):
                 stats = {
                     "transform-id": transform_id,
                     "search-time-ms": transform_stats.get("search_time_in_ms", 0),
@@ -1767,9 +1767,11 @@ class WaitForTransform(Runner):
                     "ops": ops
                 }
 
+                throughput = 0
                 if self._completed:
                     # take the overall throughput
-                    throughput = documents_processed / processing_time * 1000
+                    if processing_time > 0:
+                        throughput = documents_processed / processing_time * 1000
                 else:
                     throughput = documents_processed_delta / processing_time_delta * 1000
 

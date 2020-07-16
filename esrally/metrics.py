@@ -318,7 +318,8 @@ def extract_user_tags_from_string(user_tags):
 
 class SampleType(IntEnum):
     Warmup = 0,
-    Normal = 1
+    Normal = 1,
+    Final = 2
 
 
 class MetricsStore:
@@ -1671,6 +1672,10 @@ class GlobalStatsCalculator:
         # convert to int, fraction counts are senseless
         median_segment_count = self.median("segments_count")
         result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
+
+        self.logger.debug("Gathering transform processing times.")
+        result.transform_processing_times = self.transform_processing_time_stats()
+
         return result
 
     def merge(self, *args):
@@ -1741,6 +1746,30 @@ class GlobalStatsCalculator:
                 })
         return result
 
+    def transform_processing_time_stats(self):
+        def combine(raw_values, result_dict, name):
+            for v in raw_values:
+                transform_id = v.get("meta", {}).get("transform_id")
+                if transform_id is not None:
+                    result_dict.setdefault(transform_id, {})[name] = v.get("value")
+
+        result = {}
+        combine(self.store.get_raw("transform_search_time_in_ms", sample_type=SampleType.Final), result,
+                "search")
+        combine(self.store.get_raw("transform_processing_time_in_ms", sample_type=SampleType.Final), result,
+                "processing")
+        combine(self.store.get_raw("transform_index_time_in_ms", sample_type=SampleType.Final), result,
+                "index")
+
+        flat_results = []
+        for k, v in result.items():
+            v['id'] = k
+            v['unit'] = 'ms'
+            flat_results.append(
+                v
+            )
+        return flat_results
+
     def error_rate(self, task_name):
         return self.store.get_error_rate(task=task_name, sample_type=SampleType.Normal)
 
@@ -1805,6 +1834,8 @@ class GlobalStats:
         self.translog_size = self.v(d, "translog_size")
         self.segment_count = self.v(d, "segment_count")
 
+        self.transform_processing_times = self.v(d, "transform_processing_times", default=[])
+
     def as_dict(self):
         return self.__dict__
 
@@ -1847,6 +1878,17 @@ class GlobalStats:
                             "mean": item["mean"],
                             "median": item["median"],
                             "max": item["max"]
+                        }
+                    })
+            elif metric == "transform_processing_times":
+                for item in value:
+                    all_results.append({
+                        "id": item["id"],
+                        "name": "transform_processing_times",
+                        "value": {
+                            "search": item["search"],
+                            "index": item["index"],
+                            "processing": item["processing"]
                         }
                     })
             elif metric.endswith("_time_per_shard"):
