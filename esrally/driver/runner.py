@@ -67,7 +67,6 @@ def register_default_runners():
     register_runner(track.OperationType.PutSettings.name, Retry(PutSettings()), async_runner=True)
     register_runner(track.OperationType.CreateTransform.name, Retry(CreateTransform()), async_runner=True)
     register_runner(track.OperationType.StartTransform.name, Retry(StartTransform()), async_runner=True)
-    register_runner(track.OperationType.StopTransform.name, Retry(StopTransform()), async_runner=True)
     register_runner(track.OperationType.WaitForTransform.name, Retry(WaitForTransform()), async_runner=True)
     register_runner(track.OperationType.DeleteTransform.name, Retry(DeleteTransform()), async_runner=True)
 
@@ -1604,29 +1603,6 @@ class StartTransform(Runner):
         return "start-transform"
 
 
-class StopTransform(Runner):
-    """
-    Execute the `stop transform API
-    https://www.elastic.co/guide/en/elasticsearch/reference/current/stop-transform.html`_.
-    """
-
-    async def __call__(self, es, params):
-        transform_id = mandatory(params, "transform-id", self)
-        force = params.get("force", False)
-        timeout = params.get("timeout")
-        wait_for_completion = params.get("wait-for-completion", False)
-        wait_for_checkpoint = params.get("wait-for-checkpoint", False)
-
-        await es.transform.stop_transform(transform_id=transform_id,
-                                          force=force,
-                                          timeout=timeout,
-                                          wait_for_completion=wait_for_completion,
-                                          wait_for_checkpoint=wait_for_checkpoint)
-
-    def __repr__(self, *args, **kwargs):
-        return "stop-transform"
-
-
 class WaitForTransform(Runner):
     """
     Wait for the transform until it reaches a certain checkpoint.
@@ -1650,7 +1626,7 @@ class WaitForTransform(Runner):
 
     async def __call__(self, es, params):
         """
-        stop the transform and return stats
+        stop the transform and wait until transform has finished return stats
 
         :param es: The Elasticsearch client.
         :param params: A hash with all parameters. See below for details.

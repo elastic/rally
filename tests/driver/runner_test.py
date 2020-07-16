@@ -3237,31 +3237,6 @@ class StartTransformTests(TestCase):
         es.transform.start_transform.assert_called_once_with(transform_id=transform_id, timeout=params["timeout"])
 
 
-class StopTransformTests(TestCase):
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
-    async def test_stop_transform(self, es):
-        es.transform.stop_transform.return_value = as_future()
-
-        transform_id = "a-transform"
-        params = {
-            "transform-id": transform_id,
-            "force": random.choice([False, True]),
-            "timeout": "5s",
-            "wait-for-completion": random.choice([False, True]),
-            "wait-for-checkpoint": random.choice([False, True]),
-        }
-
-        r = runner.StopTransform()
-        await r(es, params)
-
-        es.transform.stop_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
-                                                            timeout=params["timeout"],
-                                                            wait_for_completion=params["wait-for-completion"],
-                                                            wait_for_checkpoint=params["wait-for-checkpoint"]
-                                                            )
-
-
 class WaitForTransformTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async

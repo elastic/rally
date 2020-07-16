@@ -420,7 +420,6 @@ class OperationType(Enum):
     RawRequest = 5
     WaitForRecovery = 6
     CreateSnapshot = 7
-    WaitForTransform = 8
 
 
     # administrative actions
@@ -448,7 +447,7 @@ class OperationType(Enum):
     PutSettings = 1022
     CreateTransform = 1023
     StartTransform = 1024
-    StopTransform = 1025
+    WaitForTransform = 1025
     DeleteTransform = 1026
 
     @property
@@ -521,8 +520,6 @@ class OperationType(Enum):
             return OperationType.CreateTransform
         elif v == "start-transform":
             return OperationType.StartTransform
-        elif v == "stop-transform":
-            return OperationType.StopTransform
         elif v == "wait-for-transform":
             return OperationType.WaitForTransform
         elif v == "delete-transform":
