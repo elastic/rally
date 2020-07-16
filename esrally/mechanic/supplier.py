@@ -49,9 +49,14 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     template_renderer = TemplateRenderer(version=es_version, os_name=target_os, arch=target_arch)
 
     if build_needed:
-        java_home = _java_home(car)
+        raw_build_jdk = car.mandatory_var("build.jdk")
+        try:
+            build_jdk = int(raw_build_jdk)
+        except ValueError:
+            raise exceptions.SystemSetupError(f"Car config key \"build.jdk\" is invalid: \"{raw_build_jdk}\" (must be int)")
+
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        builder = Builder(es_src_dir, java_home, paths.logs())
+        builder = Builder(es_src_dir, build_jdk, paths.logs())
     else:
         builder = None
 
@@ -129,15 +134,6 @@ def create(cfg, sources, distribution, build, car, plugins=None):
             suppliers.append(PluginDistributionSupplier(repo, plugin))
 
     return CompositeSupplier(suppliers)
-
-
-def _java_home(car):
-    build_jdk = car.mandatory_var("build.jdk")
-    try:
-        _, path = jvm.resolve_path(int(build_jdk))
-        return path
-    except ValueError:
-        raise exceptions.SystemSetupError("Car config key \"build.jdk\" is invalid: \"{}\" (must be int)".format(build_jdk))
 
 
 def _required_version(version):
@@ -654,11 +650,18 @@ class Builder:
     It is not intended to be used directly but should be triggered by its mechanic.
     """
 
-    def __init__(self, src_dir, java_home=None, log_dir=None):
+    def __init__(self, src_dir, build_jdk=None, log_dir=None):
         self.src_dir = src_dir
-        self.java_home = java_home
+        self.build_jdk = build_jdk
+        self._java_home = None
         self.log_dir = log_dir
         self.logger = logging.getLogger(__name__)
+
+    @property
+    def java_home(self):
+        if not self._java_home:
+            _, self._java_home = jvm.resolve_path(self.build_jdk)
+        return self._java_home
 
     def build(self, commands, override_src_dir=None):
         for command in commands:
