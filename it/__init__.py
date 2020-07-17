@@ -23,10 +23,8 @@ from string import Template
 
 import pytest
 
-from esrally import client
+from esrally import client, version
 from esrally.utils import process, io
-from esrally.version import version
-from it.docker_dev_image_test import run_docker_compose_down
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.6.0"]
@@ -215,11 +213,7 @@ def get_license():
 
 
 def build_docker_image():
-    # First ensure any left overs have been cleaned up
-    run_docker_compose_down()
-
-    # We just want the release version without suffix
-    rally_version = version().split(" ")[0]
+    rally_version = version.__version__
 
     env_variables = os.environ.copy()
     env_variables['RALLY_VERSION'] = rally_version

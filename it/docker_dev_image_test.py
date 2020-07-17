@@ -19,7 +19,7 @@ import os
 import it
 
 from esrally.utils import process
-from esrally.version import version
+from esrally import version
 
 
 def test_docker_geonames():
@@ -56,7 +56,7 @@ def run_docker_compose_test(test_command):
 def run_docker_compose_up(test_command):
     env_variables = os.environ.copy()
     env_variables["TEST_COMMAND"] = test_command
-    env_variables['RALLY_VERSION'] = version().split(" ")[0]
+    env_variables['RALLY_VERSION'] = version.__version__
 
     return process.run_subprocess_with_logging(f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml up "
                                                f"--abort-on-container-exit", env=env_variables)
