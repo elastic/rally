@@ -1852,25 +1852,21 @@ class TransformStatsRecorderTests(TestCase):
         }
 
         metrics_store_put_count.assert_has_calls([
-            mock.call("transform_pages_processed", 1, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
-            mock.call("transform_documents_processed", 240, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
-            mock.call("transform_documents_indexed", 3, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
-            mock.call("transform_index_total", 6, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
-            mock.call("transform_index_failures", 7, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
-            mock.call("transform_search_total", 9, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
-            mock.call("transform_search_failures", 10, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
-            mock.call("transform_processing_total", 12, sample_type=metrics.SampleType.Normal, meta_data=meta_data),
+            mock.call("transform_pages_processed", 1, meta_data=meta_data),
+            mock.call("transform_documents_processed", 240, meta_data=meta_data),
+            mock.call("transform_documents_indexed", 3, meta_data=meta_data),
+            mock.call("transform_index_total", 6, meta_data=meta_data),
+            mock.call("transform_index_failures", 7, meta_data=meta_data),
+            mock.call("transform_search_total", 9, meta_data=meta_data),
+            mock.call("transform_search_failures", 10, meta_data=meta_data),
+            mock.call("transform_processing_total", 12, meta_data=meta_data),
         ])
 
         metrics_store_put_value.assert_has_calls([
-            mock.call("transform_search_time_in_ms", 8, "ms", sample_type=metrics.SampleType.Normal,
-                      meta_data=meta_data),
-            mock.call("transform_index_time_in_ms", 5, "ms", sample_type=metrics.SampleType.Normal,
-                      meta_data=meta_data),
-            mock.call("transform_processing_time_in_ms", 11, "ms", sample_type=metrics.SampleType.Normal,
-                      meta_data=meta_data),
-            mock.call("transform_throughput", 10000, "docs/s", sample_type=metrics.SampleType.Normal,
-                      meta_data=meta_data)
+            mock.call("transform_search_time", 8, "ms", meta_data=meta_data),
+            mock.call("transform_index_time", 5, "ms", meta_data=meta_data),
+            mock.call("transform_processing_time", 11, "ms", meta_data=meta_data),
+            mock.call("transform_throughput", 10000, "docs/s", meta_data=meta_data)
         ])
 
 
