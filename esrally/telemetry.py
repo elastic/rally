@@ -783,7 +783,6 @@ class TransformStats(TelemetryDevice):
         self.samplers = []
 
     def on_benchmark_start(self):
-        recorder = []
         for cluster_name in self.specified_cluster_names:
             recorder = TransformStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
                                               self.sample_interval,
@@ -834,16 +833,16 @@ class TransformStatsRecorder:
         Collect Transform stats for transforms (optionally) specified in telemetry parameters and push to metrics store.
         """
 
-        self._record(metrics.SampleType.Normal)
+        self._record()
 
     def record_final(self):
         """
         Collect final Transform stats for transforms (optionally) specified in telemetry parameters and push to metrics store.
         """
 
-        self._record(metrics.SampleType.Final)
+        self._record("total_")
 
-    def _record(self, sample_type):
+    def _record(self, prefix=""):
         # ES returns all stats values in bytes or ms via "human: false"
 
         import elasticsearch
@@ -863,7 +862,7 @@ class TransformStatsRecorder:
                     # Skip metrics for transform not part of user supplied whitelist (transform-stats-transforms)
                     # in telemetry params.
                     continue
-                self.record_stats_per_transform(transform["id"], transform["stats"], sample_type)
+                self.record_stats_per_transform(transform["id"], transform["stats"], prefix)
 
             except KeyError:
                 self.logger.warning(
@@ -871,40 +870,47 @@ class TransformStatsRecorder:
                     "Maybe the output format has changed. Skipping."
                 )
 
-    def record_stats_per_transform(self, transform_id, stats, sample_type):
+    def record_stats_per_transform(self, transform_id, stats, prefix=""):
         """
         :param transform_id: The transform id.
         :param stats: A dict with returned transform stats for the transform.
-        :param sample_type: The sample type.
+        :param prefix: A prefix for the counters/values, e.g. for total runtimes
         """
 
         meta_data = {
             "transform_id": transform_id
         }
 
-        self.metrics_store.put_count_cluster_level("transform_pages_processed", stats.get("pages_processed", 0),
-                                                   sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level("transform_documents_processed", stats.get("documents_processed", 0),
-                                                   sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level("transform_documents_indexed", stats.get("documents_indexed", 0),
-                                                   sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level("transform_index_total", stats.get("index_total", 0),
-                                                   sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level("transform_index_failures", stats.get("index_failures", 0),
-                                                   sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level("transform_search_total", stats.get("search_total", 0),
-                                                   sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level("transform_search_failures", stats.get("search_failures", 0),
-                                                   sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level("transform_processing_total", stats.get("processing_total", 0),
-                                                   sample_type=sample_type, meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level(prefix + "transform_pages_processed",
+                                                   stats.get("pages_processed", 0),
+                                                   meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level(prefix + "transform_documents_processed",
+                                                   stats.get("documents_processed", 0),
+                                                   meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level(prefix + "transform_documents_indexed",
+                                                   stats.get("documents_indexed", 0),
+                                                   meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level(prefix + "transform_index_total", stats.get("index_total", 0),
+                                                   meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level(prefix + "transform_index_failures", stats.get("index_failures", 0),
+                                                   meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level(prefix + "transform_search_total", stats.get("search_total", 0),
+                                                   meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level(prefix + "transform_search_failures",
+                                                   stats.get("search_failures", 0),
+                                                   meta_data=meta_data)
+        self.metrics_store.put_count_cluster_level(prefix + "transform_processing_total",
+                                                   stats.get("processing_total", 0),
+                                                   meta_data=meta_data)
 
-        self.metrics_store.put_value_cluster_level("transform_search_time_in_ms", stats.get("search_time_in_ms", 0),
-                                                   "ms", sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level("transform_index_time_in_ms", stats.get("index_time_in_ms", 0), "ms",
-                                                   sample_type=sample_type, meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level("transform_processing_time_in_ms",
-                                                   stats.get("processing_time_in_ms", 0), "ms", sample_type=sample_type,
+        self.metrics_store.put_value_cluster_level(prefix + "transform_search_time",
+                                                   stats.get("search_time_in_ms", 0),
+                                                   "ms", meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level(prefix + "transform_index_time",
+                                                   stats.get("index_time_in_ms", 0), "ms",
+                                                   meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level(prefix + "transform_processing_time",
+                                                   stats.get("processing_time_in_ms", 0), "ms",
                                                    meta_data=meta_data)
 
         documents_processed = stats.get("documents_processed", 0)
@@ -914,8 +920,8 @@ class TransformStatsRecorder:
 
         if processing_time > 0:
             throughput = documents_processed / processing_time * 1000
-            self.metrics_store.put_value_cluster_level("transform_throughput", throughput,
-                                                       "docs/s", sample_type=sample_type, meta_data=meta_data)
+            self.metrics_store.put_value_cluster_level(prefix + "transform_throughput", throughput,
+                                                       "docs/s", meta_data=meta_data)
 
 
 class StartupTime(InternalTelemetryDevice):

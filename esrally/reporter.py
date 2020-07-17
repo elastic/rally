@@ -271,16 +271,19 @@ class SummaryReporter:
 
     def report_transform_stats(self, stats):
         lines = []
-        for processing_time in stats.transform_processing_times:
-            transform_id = processing_time["id"]
-            unit = processing_time["unit"]
-            lines.append(self.line("Transform search processing time", transform_id, processing_time["search"], unit))
-            lines.append(self.line("Transform indexing processing time", transform_id, processing_time["index"], unit))
-            lines.append(self.line("Transform task processing time", transform_id, processing_time["processing"], unit))
-
-        for throughput in stats.transform_throughput:
+        for processing_time in stats.total_transform_processing_times:
             lines.append(
-                self.line("Transform throughput", throughput["id"], throughput["throughput"], throughput["unit"]))
+                self.line("Transform processing time", processing_time["id"], processing_time["value"],
+                          processing_time["unit"]))
+        for index_time in stats.total_transform_index_times:
+            lines.append(
+                self.line("Transform indexing time", index_time["id"], index_time["value"], index_time["unit"]))
+        for search_time in stats.total_transform_search_times:
+            lines.append(
+                self.line("Transform search time", search_time["id"], search_time["value"], search_time["unit"]))
+        for throughput in stats.total_transform_throughput:
+            lines.append(
+                self.line("Transform throughput", throughput["id"], throughput["value"], throughput["unit"]))
 
         return lines
 
@@ -428,29 +431,34 @@ class ComparisonReporter:
 
     def report_transform_processing_times(self, baseline_stats, contender_stats):
         lines = []
-        for baseline in baseline_stats.transform_processing_times:
+        for baseline in baseline_stats.total_transform_processing_times:
             transform_id = baseline["id"]
-            unit = baseline["unit"]
-            # O(n^2) but we assume here only a *very* limited number of jobs (usually just one)
-            for contender in contender_stats.transform_processing_times:
+            for contender in contender_stats.total_transform_processing_times:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self.line("Transform search processing time", baseline["search"], contender["search"],
-                                  transform_id, unit, treat_increase_as_improvement=False))
-                    lines.append(
-                        self.line("Transform indexing processing time", baseline["index"], contender["index"],
-                                  transform_id, unit, treat_increase_as_improvement=False))
-                    lines.append(
-                        self.line("Transform task processing time", baseline["processing"], contender["processing"],
-                                  transform_id, unit, treat_increase_as_improvement=False))
-        for baseline in baseline_stats.transform_throughput:
+                        self.line("Transform processing time", baseline["value"], contender["value"],
+                                  transform_id, baseline["unit"], treat_increase_as_improvement=True))
+        for baseline in baseline_stats.total_transform_index_times:
             transform_id = baseline["id"]
-            unit = baseline["unit"]
-            for contender in contender_stats.transform_throughput:
+            for contender in contender_stats.total_transform_index_times:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self.line("Transform throughput", baseline["throughput"], contender["throughput"],
-                                  transform_id, unit, treat_increase_as_improvement=True))
+                        self.line("Transform indexing time", baseline["value"], contender["value"],
+                                  transform_id, baseline["unit"], treat_increase_as_improvement=True))
+        for baseline in baseline_stats.total_transform_search_times:
+            transform_id = baseline["id"]
+            for contender in contender_stats.total_transform_search_times:
+                if contender["id"] == transform_id:
+                    lines.append(
+                        self.line("Transform search time", baseline["value"], contender["value"],
+                                  transform_id, baseline["unit"], treat_increase_as_improvement=True))
+        for baseline in baseline_stats.total_transform_throughput:
+            transform_id = baseline["id"]
+            for contender in contender_stats.total_transform_throughput:
+                if contender["id"] == transform_id:
+                    lines.append(
+                        self.line("Transform throughput", baseline["value"], contender["value"],
+                                  transform_id, baseline["unit"], treat_increase_as_improvement=True))
         return lines
 
     def report_total_times(self, baseline_stats, contender_stats):

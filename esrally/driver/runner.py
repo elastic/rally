@@ -1644,7 +1644,7 @@ class WaitForTransform(Runner):
         * ``force``: forcefully stop a transform, default false
         * ``wait-for-checkpoint``: whether to wait until all data has been processed till the next checkpoint, default true
         * ``wait-for-completion``: whether to block until the transform has stopped, default true
-        * ``transform-timeout``: overall runtime timeout of the transform in seconds, default 1800 (1h)
+        * ``transform-timeout``: overall runtime timeout of the transform in seconds, default 3600 (1h)
         * ``poll-interval``: how often transform stats are polled, used to set progress and check the state, default 0.5.
         """
         import time
@@ -1658,7 +1658,7 @@ class WaitForTransform(Runner):
         poll_interval = params.get("poll-interval", 0.5)
 
         if not self._start_time:
-            self._start_time = time.time()
+            self._start_time = time.monotonic()
             await es.transform.stop_transform(transform_id=transform_id,
                                               force=force,
                                               timeout=timeout,
@@ -1670,7 +1670,7 @@ class WaitForTransform(Runner):
             state = stats_response["transforms"][0].get("state")
             transform_stats = stats_response["transforms"][0].get("stats", {})
 
-            if (time.time() - self._start_time) > transform_timeout:
+            if (time.monotonic() - self._start_time) > transform_timeout:
                 raise exceptions.RallyAssertionError(
                     f"Transform [{transform_id}] timed out after [{transform_timeout}] seconds. "
                     "Please consider increasing the timeout in the track.")
@@ -1706,7 +1706,7 @@ class WaitForTransform(Runner):
                     # take the overall throughput
                     if processing_time > 0:
                         throughput = documents_processed / processing_time * 1000
-                else:
+                elif processing_time_delta > 0:
                     throughput = documents_processed_delta / processing_time_delta * 1000
 
                 stats["throughput"] = throughput

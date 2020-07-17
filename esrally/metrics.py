@@ -318,8 +318,7 @@ def extract_user_tags_from_string(user_tags):
 
 class SampleType(IntEnum):
     Warmup = 0,
-    Normal = 1,
-    Final = 2
+    Normal = 1
 
 
 class MetricsStore:
@@ -1674,8 +1673,10 @@ class GlobalStatsCalculator:
         result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
 
         self.logger.debug("Gathering transform processing times.")
-        result.transform_processing_times = self.transform_processing_time_stats()
-        result.transform_throughput = self.transform_throughput()
+        result.total_transform_processing_times = self.total_transform_metric("total_transform_processing_time")
+        result.total_transform_index_times = self.total_transform_metric("total_transform_index_time")
+        result.total_transform_search_times = self.total_transform_metric("total_transform_search_time")
+        result.total_transform_throughput = self.total_transform_metric("total_transform_throughput")
 
         return result
 
@@ -1747,32 +1748,8 @@ class GlobalStatsCalculator:
                 })
         return result
 
-    def transform_processing_time_stats(self):
-        def combine(raw_values, result_dict, name):
-            for v in raw_values:
-                transform_id = v.get("meta", {}).get("transform_id")
-                if transform_id is not None:
-                    result_dict.setdefault(transform_id, {})[name] = v.get("value")
-
-        result = {}
-        combine(self.store.get_raw("transform_search_time_in_ms", sample_type=SampleType.Final), result,
-                "search")
-        combine(self.store.get_raw("transform_processing_time_in_ms", sample_type=SampleType.Final), result,
-                "processing")
-        combine(self.store.get_raw("transform_index_time_in_ms", sample_type=SampleType.Final), result,
-                "index")
-
-        flat_results = []
-        for k, v in result.items():
-            v['id'] = k
-            v['unit'] = 'ms'
-            flat_results.append(
-                v
-            )
-        return flat_results
-
-    def transform_throughput(self):
-        values = self.store.get_raw("transform_throughput", sample_type=SampleType.Final)
+    def total_transform_metric(self, metric_name):
+        values = self.store.get_raw(metric_name)
         result = []
         if values:
             for v in values:
@@ -1780,7 +1757,7 @@ class GlobalStatsCalculator:
                 if transform_id is not None:
                     result.append({
                         "id": transform_id,
-                        "throughput": v["value"],
+                        "value": v["value"],
                         "unit": v["unit"]
                     })
         return result
@@ -1849,8 +1826,10 @@ class GlobalStats:
         self.translog_size = self.v(d, "translog_size")
         self.segment_count = self.v(d, "segment_count")
 
-        self.transform_processing_times = self.v(d, "transform_processing_times", default=[])
-        self.transform_throughput = self.v(d, "transform_throughput", default=[])
+        self.total_transform_search_times = self.v(d, "total_transform_search_times")
+        self.total_transform_index_times = self.v(d, "total_transform_index_times")
+        self.total_transform_processing_times = self.v(d, "total_transform_processing_times")
+        self.total_transform_throughput = self.v(d, "total_transform_throughput")
 
     def as_dict(self):
         return self.__dict__
@@ -1896,24 +1875,13 @@ class GlobalStats:
                             "max": item["max"]
                         }
                     })
-            elif metric == "transform_processing_times":
+            elif metric.startswith("total_transform_"):
                 for item in value:
                     all_results.append({
                         "id": item["id"],
-                        "name": "transform_processing_times",
+                        "name": metric,
                         "value": {
-                            "search": item["search"],
-                            "index": item["index"],
-                            "processing": item["processing"]
-                        }
-                    })
-            elif metric == "transform_throughput":
-                for item in value:
-                    all_results.append({
-                        "id": item["id"],
-                        "name": "transform_throughput",
-                        "value": {
-                            "throughput": item["throughput"]
+                            "single": item["value"]
                         }
                     })
             elif metric.endswith("_time_per_shard"):
