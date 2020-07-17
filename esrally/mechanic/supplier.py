@@ -53,7 +53,7 @@ def create(cfg, sources, distribution, build, car, plugins=None):
         try:
             build_jdk = int(raw_build_jdk)
         except ValueError:
-            raise exceptions.SystemSetupError(f"Car config key \"build.jdk\" is invalid: \"{raw_build_jdk}\" (must be int)")
+            raise exceptions.SystemSetupError(f"Car config key [build.jdk] is invalid: [{raw_build_jdk}] (must be int)")
 
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
         builder = Builder(es_src_dir, build_jdk, paths.logs())
