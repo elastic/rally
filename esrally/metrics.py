@@ -1757,7 +1757,7 @@ class GlobalStatsCalculator:
                 if transform_id is not None:
                     result.append({
                         "id": transform_id,
-                        "value": v["value"],
+                        "mean": v["value"],
                         "unit": v["unit"]
                     })
         return result
@@ -1875,13 +1875,13 @@ class GlobalStats:
                             "max": item["max"]
                         }
                     })
-            elif metric.startswith("total_transform_"):
+            elif metric.startswith("total_transform_") and value is not None:
                 for item in value:
                     all_results.append({
                         "id": item["id"],
                         "name": metric,
                         "value": {
-                            "single": item["value"]
+                            "single": item["mean"]
                         }
                     })
             elif metric.endswith("_time_per_shard"):

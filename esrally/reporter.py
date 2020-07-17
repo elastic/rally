@@ -273,17 +273,17 @@ class SummaryReporter:
         lines = []
         for processing_time in stats.total_transform_processing_times:
             lines.append(
-                self.line("Transform processing time", processing_time["id"], processing_time["value"],
+                self.line("Transform processing time", processing_time["id"], processing_time["mean"],
                           processing_time["unit"]))
         for index_time in stats.total_transform_index_times:
             lines.append(
-                self.line("Transform indexing time", index_time["id"], index_time["value"], index_time["unit"]))
+                self.line("Transform indexing time", index_time["id"], index_time["mean"], index_time["unit"]))
         for search_time in stats.total_transform_search_times:
             lines.append(
-                self.line("Transform search time", search_time["id"], search_time["value"], search_time["unit"]))
+                self.line("Transform search time", search_time["id"], search_time["mean"], search_time["unit"]))
         for throughput in stats.total_transform_throughput:
             lines.append(
-                self.line("Transform throughput", throughput["id"], throughput["value"], throughput["unit"]))
+                self.line("Transform throughput", throughput["id"], throughput["mean"], throughput["unit"]))
 
         return lines
 
@@ -436,28 +436,28 @@ class ComparisonReporter:
             for contender in contender_stats.total_transform_processing_times:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self.line("Transform processing time", baseline["value"], contender["value"],
+                        self.line("Transform processing time", baseline["mean"], contender["mean"],
                                   transform_id, baseline["unit"], treat_increase_as_improvement=True))
         for baseline in baseline_stats.total_transform_index_times:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_index_times:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self.line("Transform indexing time", baseline["value"], contender["value"],
+                        self.line("Transform indexing time", baseline["mean"], contender["mean"],
                                   transform_id, baseline["unit"], treat_increase_as_improvement=True))
         for baseline in baseline_stats.total_transform_search_times:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_search_times:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self.line("Transform search time", baseline["value"], contender["value"],
+                        self.line("Transform search time", baseline["mean"], contender["mean"],
                                   transform_id, baseline["unit"], treat_increase_as_improvement=True))
         for baseline in baseline_stats.total_transform_throughput:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_throughput:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self.line("Transform throughput", baseline["value"], contender["value"],
+                        self.line("Transform throughput", baseline["mean"], contender["mean"],
                                   transform_id, baseline["unit"], treat_increase_as_improvement=True))
         return lines
 
