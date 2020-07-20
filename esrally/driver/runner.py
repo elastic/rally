@@ -81,7 +81,7 @@ def register_runner(operation_type, runner, **kwargs):
         raise exceptions.RallyAssertionError(
             "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner)))
 
-    if getattr(runner, "multi_cluster", False) == True:
+    if getattr(runner, "multi_cluster", False):
         if "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
@@ -1547,8 +1547,9 @@ class IndicesRecovery(Runner):
             "weight": total_recovered,
             "unit": "byte",
             "success": True,
-            "service_time": response_time_in_seconds,
-            "time_period": response_time_in_seconds
+            "throughput": total_recovered / response_time_in_seconds,
+            "start_time_millis": total_start_millis,
+            "stop_time_millis": total_end_millis
         }
 
     def __repr__(self, *args, **kwargs):

@@ -23,12 +23,13 @@ from string import Template
 
 import pytest
 
-from esrally import client
+from esrally import client, version
 from esrally.utils import process, io
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["2.4.6", "5.6.16", "6.8.0", "7.6.0"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
 def all_rally_configs(t):
@@ -198,18 +199,38 @@ def install_integration_test_config():
         copy_config(n)
 
 
-def remove_integration_test_config():
-    for n in CONFIG_NAMES:
+def remove_integration_test_config(config_names=None):
+    for n in config_names or CONFIG_NAMES:
         os.remove(ConfigFile(n).target_path)
 
 
 ES_METRICS_STORE = EsMetricsStore()
 
 
+def get_license():
+    with open(os.path.join(ROOT_DIR, 'LICENSE')) as license_file:
+        return license_file.readlines()[1].strip()
+
+
+def build_docker_image():
+    rally_version = version.__version__
+
+    env_variables = os.environ.copy()
+    env_variables['RALLY_VERSION'] = rally_version
+    env_variables['RALLY_LICENSE'] = get_license()
+
+    command = f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE " \
+              f"-f {ROOT_DIR}/docker/Dockerfiles/Dockerfile-dev {ROOT_DIR}"
+
+    if process.run_subprocess_with_logging(command, env=env_variables) != 0:
+        raise AssertionError("It was not possible to build the docker image from Dockerfile-dev")
+
+
 def setup_module():
     check_prerequisites()
     install_integration_test_config()
     ES_METRICS_STORE.start()
+    build_docker_image()
 
 
 def teardown_module():

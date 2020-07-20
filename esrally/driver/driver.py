@@ -971,12 +971,12 @@ class Sampler:
         self.q = queue.Queue(maxsize=buffer_size)
         self.logger = logging.getLogger(__name__)
 
-    def add(self, task, client_id, sample_type, meta_data, latency, service_time, processing_time, ops, ops_unit,
-            time_period, percent_completed):
+    def add(self, task, client_id, sample_type, meta_data, latency, service_time, processing_time, throughput,
+            ops, ops_unit, time_period, percent_completed):
         try:
-            self.q.put_nowait(Sample(client_id, time.time(), time.perf_counter() - self.start_timestamp, task,
-                                     sample_type, meta_data, latency, service_time, processing_time, ops,
-                                     ops_unit, time_period, percent_completed))
+            self.q.put_nowait(
+                Sample(client_id, time.time(), time.perf_counter() - self.start_timestamp, task, sample_type, meta_data,
+                       latency, service_time, processing_time, throughput, ops, ops_unit, time_period, percent_completed))
         except queue.Full:
             self.logger.warning("Dropping sample for [%s] due to a full sampling queue.", task.operation.name)
 
@@ -993,7 +993,8 @@ class Sampler:
 
 class Sample:
     def __init__(self, client_id, absolute_time, relative_time, task, sample_type, request_meta_data, latency_ms,
-                 service_time_ms, processing_time_ms, total_ops, total_ops_unit, time_period, percent_completed):
+                 service_time_ms, processing_time_ms, throughput, total_ops, total_ops_unit, time_period,
+                 percent_completed):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.relative_time = relative_time
@@ -1003,6 +1004,7 @@ class Sample:
         self.latency_ms = latency_ms
         self.service_time_ms = service_time_ms
         self.processing_time_ms = processing_time_ms
+        self.throughput = throughput
         self.total_ops = total_ops
         self.total_ops_unit = total_ops_unit
         self.time_period = time_period
@@ -1105,44 +1107,75 @@ class ThroughputCalculator:
                 samples = v
             current_samples = sorted(samples, key=lambda s: s.absolute_time)
 
-            if task not in self.task_stats:
-                first_sample = current_samples[0]
-                self.task_stats[task] = ThroughputCalculator.TaskStats(bucket_interval=bucket_interval_secs,
-                                                                       sample_type=first_sample.sample_type,
-                                                                       start_time=first_sample.absolute_time - first_sample.time_period)
-            current = self.task_stats[task]
-            count = current.total_count
-            for sample in current_samples:
-                # print("%d,%f,%f,%s,%s,%d,%f" %
-                #       (sample.client_id, sample.absolute_time, sample.relative_time, sample.operation, sample.sample_type,
-                #        sample.total_ops, sample.time_period), file=sample_log)
-
-                # once we have seen a new sample type, we stick to it.
-                current.maybe_update_sample_type(sample.sample_type)
-
-                # we need to store the total count separately and cannot update `current.total_count` immediately here because we would
-                # count all raw samples in `unprocessed` twice. Hence, we'll only update `current.total_count` when we have calculated a new
-                # throughput sample.
-                count += sample.total_ops
-                current.update_interval(sample.absolute_time)
-
-                if current.can_calculate_throughput():
-                    current.finish_bucket(count)
-                    global_throughput[task].append(
-                        (sample.absolute_time, sample.relative_time, current.sample_type, current.throughput,
-                         # we calculate throughput per second
-                         "%s/s" % sample.total_ops_unit))
-                else:
-                    current.unprocessed.append(sample)
-
-            # also include the last sample if we don't have one for the current sample type, even if it is below the bucket interval
-            # (mainly needed to ensure we show throughput data in test mode)
-            if current.can_add_final_throughput_sample():
-                current.finish_bucket(count)
-                global_throughput[task].append(
-                    (sample.absolute_time, sample.relative_time, current.sample_type, current.throughput, "%s/s" % sample.total_ops_unit))
+            # Calculate throughput based on service time if the runner does not provide one, otherwise use it as is and
+            # only transform the values into the expected structure.
+            first_sample = current_samples[0]
+            if first_sample.throughput is None:
+                task_throughput = self.calculate_task_throughput(task, current_samples, bucket_interval_secs)
+            else:
+                task_throughput = self.map_task_throughput(current_samples)
+            global_throughput[task].extend(task_throughput)
 
         return global_throughput
+
+    def calculate_task_throughput(self, task, current_samples, bucket_interval_secs):
+        task_throughput = []
+
+        if task not in self.task_stats:
+            first_sample = current_samples[0]
+            self.task_stats[task] = ThroughputCalculator.TaskStats(bucket_interval=bucket_interval_secs,
+                                                                   sample_type=first_sample.sample_type,
+                                                                   start_time=first_sample.absolute_time - first_sample.time_period)
+        current = self.task_stats[task]
+        count = current.total_count
+        last_sample = None
+        for sample in current_samples:
+            last_sample = sample
+            # print("%d,%f,%f,%s,%s,%d,%f" %
+            #       (sample.client_id, sample.absolute_time, sample.relative_time, sample.operation, sample.sample_type,
+            #        sample.total_ops, sample.time_period), file=sample_log)
+
+            # once we have seen a new sample type, we stick to it.
+            current.maybe_update_sample_type(sample.sample_type)
+
+            # we need to store the total count separately and cannot update `current.total_count` immediately here
+            # because we would count all raw samples in `unprocessed` twice. Hence, we'll only update
+            # `current.total_count` when we have calculated a new throughput sample.
+            count += sample.total_ops
+            current.update_interval(sample.absolute_time)
+
+            if current.can_calculate_throughput():
+                current.finish_bucket(count)
+                task_throughput.append((sample.absolute_time,
+                                        sample.relative_time,
+                                        current.sample_type,
+                                        current.throughput,
+                                        # we calculate throughput per second
+                                        f"{sample.total_ops_unit}/s"))
+            else:
+                current.unprocessed.append(sample)
+
+        # also include the last sample if we don't have one for the current sample type, even if it is below the bucket
+        # interval (mainly needed to ensure we show throughput data in test mode)
+        if last_sample is not None and current.can_add_final_throughput_sample():
+            current.finish_bucket(count)
+            task_throughput.append((last_sample.absolute_time,
+                                    last_sample.relative_time,
+                                    current.sample_type,
+                                    current.throughput,
+                                    f"{last_sample.total_ops_unit}/s"))
+
+        return task_throughput
+
+    def map_task_throughput(self, current_samples):
+        throughput = []
+        for sample in current_samples:
+            throughput.append((sample.absolute_time,
+                               sample.relative_time,
+                               sample.sample_type,
+                               sample.throughput,
+                               f"{sample.total_ops_unit}/s"))
+        return throughput
 
 
 class AsyncIoAdapter:
@@ -1306,16 +1339,20 @@ class AsyncExecutor:
                 processing_end = time.perf_counter()
                 processing_time = processing_end - processing_start
                 stop = request_context["request_end"]
-                # allow runners to override service time with request metadata in *very* specific cases. By default we
-                # will determine this by measuring actual times.
-                service_time = request_meta_data.pop("service_time",
-                                                     request_context["request_end"] - request_context["request_start"])
-                # also allow runners to override the time period. This is relevant for throughput calculation and we
-                # assume *if* this is overridden via request meta data, the corresponding operation is executed only
-                # once but not for several iterations. Otherwise, the time period would need to monotonically increase
-                # as is evident by the regular calculation (stop - total_start).
-                time_period = request_meta_data.pop("time_period", stop - total_start)
-                # Do not calculate latency separately when we don't throttle throughput. This metric is just confusing then.
+                service_time = request_context["request_end"] - request_context["request_start"]
+                time_period = stop - total_start
+                # Allow runners to override the throughput calculation in very specific circumstances. Usually, Rally
+                # assumes that throughput is the "amount of work" (determined by the "weight") per unit of time
+                # (determined by the elapsed time period). However, in certain cases (e.g. shard recovery or other
+                # long running operations where there is a dedicated stats API to determine progress), it is
+                # advantageous if the runner calculates throughput directly. The following restrictions apply:
+                #
+                # * Only one client must call that runner (when throughput is calculated, it is aggregated across
+                #   all clients but if the runner provides it, we take the value as is).
+                # * The runner should be rate-limited as each runner call will result in one throughput sample.
+                #
+                throughput = request_meta_data.pop("throughput", None)
+                # Do not calculate latency separately when we run unthrottled. This metric is just confusing then.
                 latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
                 # If this task completes the parent task we should *not* check for completion by another client but
                 # instead continue until our own runner has completed. We need to do this because the current
@@ -1335,7 +1372,7 @@ class AsyncExecutor:
                     progress = percent_completed
                 self.sampler.add(self.task, self.client_id, sample_type, request_meta_data,
                                  convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
-                                 convert.seconds_to_ms(processing_time), total_ops, total_ops_unit,
+                                 convert.seconds_to_ms(processing_time), throughput, total_ops, total_ops_unit,
                                  time_period, progress)
 
                 if completed:

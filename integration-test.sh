@@ -250,12 +250,6 @@ function random_build_type {
     eval "$1='${BUILD_TYPES[$((RANDOM%num_build_types))]}'"
 }
 
-function test_configure {
-    info "test configure()"
-    # just run to test the configuration procedure, don't use this configuration in other tests.
-    esrally configure --assume-defaults --configuration-name="config-integration-test"
-}
-
 function test_proxy_connection {
     local cfg
 
@@ -362,20 +356,6 @@ function tests_for_all_docker_images {
     unset TEST_COMMAND
 }
 
-function test_docker_dev_image {
-    # First ensure any left overs have been cleaned up
-    docker_compose down
-
-    export RALLY_VERSION=$(cat version.txt)
-    export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
-
-    # Build the docker image
-    docker build -t elastic/rally:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/Dockerfile-dev $PWD
-
-    tests_for_all_docker_images
-}
-
-
 # This function gets called by release-docker.sh and assumes the image has been already built
 function test_docker_release_image {
     if [[ -z "${RALLY_VERSION}" ]]; then
@@ -415,8 +395,6 @@ function run_test {
         echo "**************************************** TESTING PROXY CONNECTIONS *********************************"
         test_proxy_connection
     fi
-    echo "**************************************** TESTING CONFIGURATION OF RALLY ****************************************"
-    test_configure
     echo "**************************************** TESTING RALLY DOCKER IMAGE ********************************************"
     test_docker_dev_image
     TEST_SUCCESS=1
