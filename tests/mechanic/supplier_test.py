@@ -134,12 +134,12 @@ class SourceRepositoryTests(TestCase):
 
 class BuilderTests(TestCase):
     @mock.patch("esrally.utils.process.run_subprocess")
-    @mock.patch("esrally.utils.jvm.major_version")
-    def test_build_on_jdk_8(self, jvm_major_version, mock_run_subprocess):
-        jvm_major_version.return_value = 8
+    @mock.patch("esrally.utils.jvm.resolve_path")
+    def test_build_on_jdk_8(self, jvm_resolve_path, mock_run_subprocess):
+        jvm_resolve_path.return_value = (8, "/opt/jdk8")
         mock_run_subprocess.return_value = False
 
-        b = supplier.Builder(src_dir="/src", java_home="/opt/jdk8", log_dir="logs")
+        b = supplier.Builder(src_dir="/src", build_jdk=8, log_dir="logs")
         b.build(["./gradlew clean", "./gradlew assemble"])
 
         calls = [
@@ -152,12 +152,12 @@ class BuilderTests(TestCase):
         mock_run_subprocess.assert_has_calls(calls)
 
     @mock.patch("esrally.utils.process.run_subprocess")
-    @mock.patch("esrally.utils.jvm.major_version")
-    def test_build_on_jdk_10(self, jvm_major_version, mock_run_subprocess):
-        jvm_major_version.return_value = 10
+    @mock.patch("esrally.utils.jvm.resolve_path")
+    def test_build_on_jdk_10(self, jvm_resolve_path, mock_run_subprocess):
+        jvm_resolve_path.return_value = (10, "/opt/jdk10")
         mock_run_subprocess.return_value = False
 
-        b = supplier.Builder(src_dir="/src", java_home="/opt/jdk10", log_dir="logs")
+        b = supplier.Builder(src_dir="/src", build_jdk=8, log_dir="logs")
         b.build(["./gradlew clean", "./gradlew assemble"])
 
         calls = [
