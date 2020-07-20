@@ -17,6 +17,8 @@
 
 import collections
 import os
+import shutil
+import tempfile
 
 import pytest
 
@@ -42,62 +44,52 @@ def http_proxy():
     process.run_subprocess(f"docker rm {proxy_container_id}")
 
 
-@it.rally_in_mem
-def test_run_with_direct_internet_connection(cfg, http_proxy):
-    assert it.esrally(cfg, "list tracks") == 0
-    # TODO: add proper assertions
-    # if grep -F -q "Connecting directly to the Internet" "$RALLY_LOG"; then
-    # info "Successfully checked that direct internet connection is used."
-    # rm -f ${RALLY_LOG}
-    # else
-    # error "Could not find indication that direct internet connection is used. Check ${RALLY_LOG}."
-    # exit 1
-    # fi
+# ensures that a fresh log file is available
+@pytest.fixture(scope="function")
+def fresh_log_file():
+    cfg = it.ConfigFile(config_name=None)
+    log_file = os.path.join(cfg.rally_home, "logs", "rally.log")
+
+    if os.path.exists(log_file):
+        bak = os.path.join(tempfile.mkdtemp(), "rally.log")
+        shutil.move(log_file, bak)
+        yield log_file
+        # append log lines to the original file and move it back to its original
+        with open(log_file, "r") as src:
+            with open(bak, "a") as dst:
+                dst.write(src.read())
+        shutil.move(bak, log_file)
+    else:
+        yield log_file
+
+
+def assert_log_line_present(log_file, text):
+    with open(log_file, "r") as f:
+        assert any(text in line for line in f), f"Could not find [{text}] in [{log_file}]."
 
 
 @it.rally_in_mem
-def test_anonymous_proxy_no_connection(cfg, http_proxy):
-    # TODO: Use http_proxy.anonymous_url
+def test_run_with_direct_internet_connection(cfg, http_proxy, fresh_log_file):
     assert it.esrally(cfg, "list tracks") == 0
-    # TODO: add proper assertions
-    # if grep -F -q "Connecting via proxy URL [http://127.0.0.1:3128] to the Internet" "$RALLY_LOG"; then
-    # info "Successfully checked that proxy is used."
-    # else
-    # error "Could not find indication that proxy access is used. Check ${RALLY_LOG}."
-    # exit 1
-    # fi
-    #
-    # if grep -F -q "No Internet connection detected" "$RALLY_LOG"; then
-    # info "Successfully checked that unauthenticated proxy access is prevented."
-    # rm -f ${RALLY_LOG}
-    # else
-    # error "Could not find indication that unauthenticated proxy access is prevented. Check ${RALLY_LOG}."
-    # exit 1
-    # fi
+    assert_log_line_present(fresh_log_file, "Connecting directly to the Internet")
 
 
 @it.rally_in_mem
-def test_authenticated_proxy_user_can_connect(cfg, http_proxy):
-    # TODO: Use http_proxy.authenticated_url
-    assert it.esrally(cfg, "list tracks") == 0
-    # TODO: add proper assertions
-    # export http_proxy=http://testuser:testuser@127.0.0.1:3128
-    # # this invocation *may* lead to an error but this is ok
-    # set +e
-    # esrally list tracks --configuration-name="${cfg}"
-    # unset http_proxy
-    # set -e
-    #
-    # if grep -F -q "Connecting via proxy URL [http://testuser:testuser@127.0.0.1:3128] to the Internet" "$RALLY_LOG"; then
-    # info "Successfully checked that proxy is used."
-    # else
-    # error "Could not find indication that proxy access is used. Check ${RALLY_LOG}."
-    # exit 1
-    # fi
-    #
-    # if grep -F -q "Detected a working Internet connection" "$RALLY_LOG"; then
-    # info "Successfully checked that authenticated proxy access is allowed."
-    # rm -f ${RALLY_LOG}
-    # else
-    # error "Could not find indication that authenticated proxy access is allowed. Check ${RALLY_LOG}."
-    # exit 1
+def test_anonymous_proxy_no_connection(cfg, http_proxy, fresh_log_file):
+    env = dict(os.environ)
+    env["http_proxy"] = http_proxy.anonymous_url
+    assert process.run_subprocess_with_logging(it.esrally_command_line_for(cfg, "list tracks"), env=env) == 0
+    assert_log_line_present(fresh_log_file, f"Connecting via proxy URL [{http_proxy.anonymous_url}] to the Internet")
+    # unauthenticated proxy access is prevented
+    assert_log_line_present(fresh_log_file, "No Internet connection detected")
+
+
+@it.rally_in_mem
+def test_authenticated_proxy_user_can_connect(cfg, http_proxy, fresh_log_file):
+    env = dict(os.environ)
+    env["http_proxy"] = http_proxy.authenticated_url
+    assert process.run_subprocess_with_logging(it.esrally_command_line_for(cfg, "list tracks"), env=env) == 0
+    assert_log_line_present(fresh_log_file,
+                            f"Connecting via proxy URL [{http_proxy.authenticated_url}] to the Internet")
+    # authenticated proxy access is allowed
+    assert_log_line_present(fresh_log_file, "Detected a working Internet connection")
