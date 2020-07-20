@@ -123,7 +123,7 @@ def create(cfg, sources, distribution, build, car, plugins=None):
                                             (plugin.name, supply_requirements[plugin.name]))
 
             if caching_enabled:
-                plugin_file_resolver = PluginFileNameResolver(plugin.name)
+                plugin_file_resolver = PluginFileNameResolver(plugin.name, plugin_version)
                 plugin_supplier = CachedSourceSupplier(source_distributions_root,
                                                        plugin_supplier,
                                                        plugin_file_resolver)
@@ -258,7 +258,7 @@ class TemplateRenderer:
         }
         r = template
         for key, replacement in substitutions.items():
-            r = r.replace(key, replacement)
+            r = r.replace(key, str(replacement))
         return r
 
 
@@ -328,11 +328,19 @@ class CachedSourceSupplier:
         return self.cached_path is not None and os.path.exists(self.cached_path)
 
     def fetch(self):
-        resolved_revision = self.source_supplier.fetch()
-        if resolved_revision:
-            # ensure we use the resolved revision for rendering the artifact
-            self.file_resolver.revision = resolved_revision
-            self.cached_path = os.path.join(self.distributions_root, self.file_name)
+        # Can we already resolve the artifact without fetching the source tree at all? This is the case when a specific
+        # revision (instead of a meta-revision like "current") is provided and the artifact is already cached. This is
+        # also needed if an external process pushes artifacts to Rally's cache which might have been built from a
+        # fork. In that case the provided commit hash would not be present in any case in the main ES repo.
+        maybe_an_artifact = os.path.join(self.distributions_root, self.file_name)
+        if os.path.exists(maybe_an_artifact):
+            self.cached_path = maybe_an_artifact
+        else:
+            resolved_revision = self.source_supplier.fetch()
+            if resolved_revision:
+                # ensure we use the resolved revision for rendering the artifact
+                self.file_resolver.revision = resolved_revision
+                self.cached_path = os.path.join(self.distributions_root, self.file_name)
 
     def prepare(self):
         if not self.cached:
@@ -391,9 +399,9 @@ class ElasticsearchSourceSupplier:
 
 
 class PluginFileNameResolver:
-    def __init__(self, plugin_name):
+    def __init__(self, plugin_name, revision=None):
         self.plugin_name = plugin_name
-        self.revision = None
+        self.revision = revision
 
     @property
     def file_name(self):

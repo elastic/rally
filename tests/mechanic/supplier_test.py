@@ -195,14 +195,20 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
         es.fetch.return_value = None
         es.add.side_effect = add_es_artifact
 
+        # no version / revision provided
         renderer = supplier.TemplateRenderer(version=None, os_name="linux", arch="x86_64")
 
+        dist_cfg = {
+            "runtime.jdk.bundled": "true",
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+        }
+        file_resolver = supplier.ElasticsearchFileNameResolver(
+            distribution_config=dist_cfg,
+            template_renderer=renderer
+        )
         cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
                                                         source_supplier=es,
-                                                        file_resolver=supplier.ElasticsearchFileNameResolver(
-                                                            distribution_config={},
-                                                            template_renderer=renderer
-                                                        ))
+                                                        file_resolver=file_resolver)
 
         cached_supplier.fetch()
         cached_supplier.prepare()
@@ -214,6 +220,39 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
         self.assertEqual(0, copy.call_count)
         self.assertFalse(cached_supplier.cached)
         self.assertIn("elasticsearch", binaries)
+
+    @mock.patch("os.path.exists")
+    @mock.patch("esrally.mechanic.supplier.ElasticsearchSourceSupplier")
+    def test_uses_already_cached_artifact(self, es, path_exists):
+        # assume that the artifact is already cached
+        path_exists.return_value = True
+        renderer = supplier.TemplateRenderer(version="abc123", os_name="linux", arch="x86_64")
+
+        dist_cfg = {
+            "runtime.jdk.bundled": "true",
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+        }
+        file_resolver = supplier.ElasticsearchFileNameResolver(
+            distribution_config=dist_cfg,
+            template_renderer=renderer
+        )
+        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
+                                                        source_supplier=es,
+                                                        file_resolver=file_resolver)
+
+        cached_supplier.fetch()
+        cached_supplier.prepare()
+
+        binaries = {}
+
+        cached_supplier.add(binaries)
+
+        self.assertEqual(0, es.fetch.call_count)
+        self.assertEqual(0, es.prepare.call_count)
+        self.assertEqual(0, es.add.call_count)
+        self.assertTrue(cached_supplier.cached)
+        self.assertIn("elasticsearch", binaries)
+        self.assertEqual("/tmp/elasticsearch-abc123-linux-x86_64.tar.gz", binaries["elasticsearch"])
 
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.exists")
