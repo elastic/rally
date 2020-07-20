@@ -119,6 +119,8 @@ class SummaryReporter:
         metrics_table.extend(self.report_segment_memory(stats))
         metrics_table.extend(self.report_segment_counts(stats))
 
+        metrics_table.extend(self.report_transform_stats(stats))
+
         for record in stats.op_metrics:
             task = record["task"]
             metrics_table.extend(self.report_throughput(record, task))
@@ -267,6 +269,24 @@ class SummaryReporter:
             self.line("Segment count", "", stats.segment_count, "")
         )
 
+    def report_transform_stats(self, stats):
+        lines = []
+        for processing_time in stats.total_transform_processing_times:
+            lines.append(
+                self.line("Transform processing time", processing_time["id"], processing_time["mean"],
+                          processing_time["unit"]))
+        for index_time in stats.total_transform_index_times:
+            lines.append(
+                self.line("Transform indexing time", index_time["id"], index_time["mean"], index_time["unit"]))
+        for search_time in stats.total_transform_search_times:
+            lines.append(
+                self.line("Transform search time", search_time["id"], search_time["mean"], search_time["unit"]))
+        for throughput in stats.total_transform_throughput:
+            lines.append(
+                self.line("Transform throughput", throughput["id"], throughput["mean"], throughput["unit"]))
+
+        return lines
+
     def join(self, *args):
         lines = []
         for arg in args:
@@ -333,6 +353,7 @@ class ComparisonReporter:
         metrics_table.extend(self.report_disk_usage(baseline_stats, contender_stats))
         metrics_table.extend(self.report_segment_memory(baseline_stats, contender_stats))
         metrics_table.extend(self.report_segment_counts(baseline_stats, contender_stats))
+        metrics_table.extend(self.report_transform_processing_times(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
@@ -406,6 +427,38 @@ class ComparisonReporter:
                                            job_name, unit, treat_increase_as_improvement=False))
                     lines.append(self.line("Max ML processing time", baseline["max"], contender["max"],
                                            job_name, unit, treat_increase_as_improvement=False))
+        return lines
+
+    def report_transform_processing_times(self, baseline_stats, contender_stats):
+        lines = []
+        for baseline in baseline_stats.total_transform_processing_times:
+            transform_id = baseline["id"]
+            for contender in contender_stats.total_transform_processing_times:
+                if contender["id"] == transform_id:
+                    lines.append(
+                        self.line("Transform processing time", baseline["mean"], contender["mean"],
+                                  transform_id, baseline["unit"], treat_increase_as_improvement=True))
+        for baseline in baseline_stats.total_transform_index_times:
+            transform_id = baseline["id"]
+            for contender in contender_stats.total_transform_index_times:
+                if contender["id"] == transform_id:
+                    lines.append(
+                        self.line("Transform indexing time", baseline["mean"], contender["mean"],
+                                  transform_id, baseline["unit"], treat_increase_as_improvement=True))
+        for baseline in baseline_stats.total_transform_search_times:
+            transform_id = baseline["id"]
+            for contender in contender_stats.total_transform_search_times:
+                if contender["id"] == transform_id:
+                    lines.append(
+                        self.line("Transform search time", baseline["mean"], contender["mean"],
+                                  transform_id, baseline["unit"], treat_increase_as_improvement=True))
+        for baseline in baseline_stats.total_transform_throughput:
+            transform_id = baseline["id"]
+            for contender in contender_stats.total_transform_throughput:
+                if contender["id"] == transform_id:
+                    lines.append(
+                        self.line("Transform throughput", baseline["mean"], contender["mean"],
+                                  transform_id, baseline["unit"], treat_increase_as_improvement=True))
         return lines
 
     def report_total_times(self, baseline_stats, contender_stats):

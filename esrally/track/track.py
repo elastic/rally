@@ -421,6 +421,7 @@ class OperationType(Enum):
     WaitForRecovery = 6
     CreateSnapshot = 7
 
+
     # administrative actions
     ForceMerge = 1001
     ClusterHealth = 1002
@@ -444,6 +445,10 @@ class OperationType(Enum):
     CreateSnapshotRepository = 1020
     RestoreSnapshot = 1021
     PutSettings = 1022
+    CreateTransform = 1023
+    StartTransform = 1024
+    WaitForTransform = 1025
+    DeleteTransform = 1026
 
     @property
     def admin_op(self):
@@ -511,6 +516,14 @@ class OperationType(Enum):
             return OperationType.WaitForRecovery
         elif v == "put-settings":
             return OperationType.PutSettings
+        elif v == "create-transform":
+            return OperationType.CreateTransform
+        elif v == "start-transform":
+            return OperationType.StartTransform
+        elif v == "wait-for-transform":
+            return OperationType.WaitForTransform
+        elif v == "delete-transform":
+            return OperationType.DeleteTransform
         else:
             raise KeyError("No enum value for [%s]" % v)
 

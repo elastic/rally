@@ -3176,6 +3176,334 @@ class PutSettingsTests(TestCase):
         })
 
 
+class CreateTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_create_transform(self, es):
+        es.transform.put_transform.return_value = as_future()
+
+        params = {
+            "transform-id": "a-transform",
+            "body": {
+                "source": {
+                    "index": "source"
+                },
+                "pivot": {
+                    "group_by": {
+                        "event_id": {
+                            "terms": {
+                                "field": "event_id"
+                            }
+                        }
+                    },
+                    "aggregations": {
+                        "max_metric": {
+                            "max": {
+                                "field": "metric"
+                            }
+                        }
+                    }
+                },
+                "description": "an example transform",
+                "dest": {
+                    "index": "dest"
+                }
+            },
+            "defer-validation": random.choice([False, True])
+        }
+
+        r = runner.CreateTransform()
+        await r(es, params)
+
+        es.transform.put_transform.assert_called_once_with(transform_id=params["transform-id"], body=params["body"],
+                                                           defer_validation=params["defer-validation"])
+
+
+class StartTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_start_transform(self, es):
+        es.transform.start_transform.return_value = as_future()
+
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id,
+            "timeout": "5s"
+        }
+
+        r = runner.StartTransform()
+        await r(es, params)
+
+        es.transform.start_transform.assert_called_once_with(transform_id=transform_id, timeout=params["timeout"])
+
+
+class WaitForTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_wait_for_transform(self, es):
+        es.transform.stop_transform.return_value = as_future()
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id,
+            "force": random.choice([False, True]),
+            "timeout": "5s",
+            "wait-for-completion": random.choice([False, True]),
+            "wait-for-checkpoint": random.choice([False, True]),
+        }
+
+        es.transform.get_transform_stats.return_value = as_future({
+            "count": 1,
+            "transforms": [
+                {
+                    "id": "a-transform",
+                    "state": "stopped",
+                    "stats": {
+                        "pages_processed": 1,
+                        "documents_processed": 2,
+                        "documents_indexed": 3,
+                        "trigger_count": 4,
+                        "index_time_in_ms": 5,
+                        "index_total": 6,
+                        "index_failures": 7,
+                        "search_time_in_ms": 8,
+                        "search_total": 9,
+                        "search_failures": 10,
+                        "processing_time_in_ms": 11,
+                        "processing_total": 12,
+                        "exponential_avg_checkpoint_duration_ms": 13.13,
+                        "exponential_avg_documents_indexed": 14.14,
+                        "exponential_avg_documents_processed": 15.15
+                    },
+                    "checkpointing": {
+                        "last": {
+                            "checkpoint": 1,
+                            "timestamp_millis": 16
+                        },
+                        "changes_last_detected_at": 16
+                    }
+                }
+            ]
+        })
+
+        r = runner.WaitForTransform()
+        self.assertFalse(r.completed)
+        self.assertEqual(r.percent_completed, 0.0)
+
+        result = await r(es, params)
+
+        self.assertTrue(r.completed)
+        self.assertEqual(r.percent_completed, 1.0)
+        self.assertEqual(2, result["weight"], 2)
+        self.assertEqual(result["unit"], "docs")
+
+        es.transform.stop_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
+                                                            timeout=params["timeout"],
+                                                            wait_for_completion=False,
+                                                            wait_for_checkpoint=params["wait-for-checkpoint"]
+                                                            )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_wait_for_transform_progress(self, es):
+        es.transform.stop_transform.return_value = as_future()
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id,
+            "force": random.choice([False, True]),
+            "timeout": "5s"
+        }
+
+        # return 4 times, simulating progress
+        es.transform.get_transform_stats.side_effect = [
+            as_future({
+                "count": 1,
+                "transforms": [
+                    {
+                        "id": "a-transform",
+                        "state": "indexing",
+                        "stats": {
+                            "pages_processed": 1,
+                            "documents_processed": 10000,
+                            "documents_indexed": 3,
+                            "trigger_count": 4,
+                            "index_time_in_ms": 200,
+                            "index_total": 6,
+                            "index_failures": 7,
+                            "search_time_in_ms": 300,
+                            "search_total": 9,
+                            "search_failures": 10,
+                            "processing_time_in_ms": 50,
+                            "processing_total": 12,
+                            "exponential_avg_checkpoint_duration_ms": 13.13,
+                            "exponential_avg_documents_indexed": 14.14,
+                            "exponential_avg_documents_processed": 15.15
+                        },
+                        "checkpointing": {
+                            "last": {},
+                            "next": {
+                                "checkpoint": 1,
+                                "timestamp_millis": 16,
+                                "checkpoint_progress": {
+                                    "percent_complete": 10.20
+                                }
+                            },
+                            "changes_last_detected_at": 16
+                        }
+                    }
+                ]
+            }),
+            as_future({
+                "count": 1,
+                "transforms": [
+                    {
+                        "id": "a-transform",
+                        "state": "indexing",
+                        "stats": {
+                            "pages_processed": 2,
+                            "documents_processed": 20000,
+                            "documents_indexed": 3,
+                            "trigger_count": 4,
+                            "index_time_in_ms": 500,
+                            "index_total": 6,
+                            "index_failures": 7,
+                            "search_time_in_ms": 1500,
+                            "search_total": 9,
+                            "search_failures": 10,
+                            "processing_time_in_ms": 300,
+                            "processing_total": 12,
+                            "exponential_avg_checkpoint_duration_ms": 13.13,
+                            "exponential_avg_documents_indexed": 14.14,
+                            "exponential_avg_documents_processed": 15.15
+                        },
+                        "checkpointing": {
+                            "last": {},
+                            "next": {
+                                "checkpoint": 1,
+                                "timestamp_millis": 16,
+                                "checkpoint_progress": {
+                                    "percent_complete": 20.40
+                                }
+                            },
+                            "changes_last_detected_at": 16
+                        }
+                    }
+                ]
+            }),
+            as_future({
+                "count": 1,
+                "transforms": [
+                    {
+                        "id": "a-transform",
+                        "state": "started",
+                        "stats": {
+                            "pages_processed": 1,
+                            "documents_processed": 30000,
+                            "documents_indexed": 3,
+                            "trigger_count": 4,
+                            "index_time_in_ms": 1000,
+                            "index_total": 6,
+                            "index_failures": 7,
+                            "search_time_in_ms": 2000,
+                            "search_total": 9,
+                            "search_failures": 10,
+                            "processing_time_in_ms": 600,
+                            "processing_total": 12,
+                            "exponential_avg_checkpoint_duration_ms": 13.13,
+                            "exponential_avg_documents_indexed": 14.14,
+                            "exponential_avg_documents_processed": 15.15
+                        },
+                        "checkpointing": {
+                            "last": {},
+                            "next": {
+                                "checkpoint": 1,
+                                "timestamp_millis": 16,
+                                "checkpoint_progress": {
+                                    "percent_complete": 30.60
+                                }
+                            },
+                            "changes_last_detected_at": 16
+                        }
+                    }
+                ]
+            }),
+            as_future({
+                "count": 1,
+                "transforms": [
+                    {
+                        "id": "a-transform",
+                        "state": "stopped",
+                        "stats": {
+                            "pages_processed": 1,
+                            "documents_processed": 60000,
+                            "documents_indexed": 3,
+                            "trigger_count": 4,
+                            "index_time_in_ms": 1500,
+                            "index_total": 6,
+                            "index_failures": 7,
+                            "search_time_in_ms": 3000,
+                            "search_total": 9,
+                            "search_failures": 10,
+                            "processing_time_in_ms": 1000,
+                            "processing_total": 12,
+                            "exponential_avg_checkpoint_duration_ms": 13.13,
+                            "exponential_avg_documents_indexed": 14.14,
+                            "exponential_avg_documents_processed": 15.15
+                        },
+                        "checkpointing": {
+                            "last": {
+                                "checkpoint": 1,
+                                "timestamp_millis": 16
+                            },
+                            "changes_last_detected_at": 16
+                        }
+                    }
+                ]
+            })
+        ]
+
+        r = runner.WaitForTransform()
+        self.assertFalse(r.completed)
+        self.assertEqual(r.percent_completed, 0.0)
+
+        total_calls = 0
+        while not r.completed:
+            result = await r(es, params)
+            total_calls += 1
+            if total_calls < 4:
+                self.assertAlmostEqual(r.percent_completed, (total_calls * 10.20) / 100.0)
+
+        self.assertEqual(total_calls, 4)
+        self.assertTrue(r.completed)
+        self.assertEqual(r.percent_completed, 1.0)
+        self.assertEqual(result["weight"], 60000)
+        self.assertEqual(result["unit"], "docs")
+
+        es.transform.stop_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
+                                                            timeout=params["timeout"],
+                                                            wait_for_completion=False,
+                                                            wait_for_checkpoint=True
+                                                            )
+
+
+class DeleteTransformTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_delete_transform(self, es):
+        es.transform.delete_transform.return_value = as_future()
+
+        transform_id = "a-transform"
+        params = {
+            "transform-id": transform_id,
+            "force": random.choice([False, True])
+        }
+
+        r = runner.DeleteTransform()
+        await r(es, params)
+
+        es.transform.delete_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
+                                                              ignore=[404])
+
+
 class RetryTests(TestCase):
     @run_async
     async def test_is_transparent_on_success_when_no_retries(self):

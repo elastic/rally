@@ -18,13 +18,14 @@ You probably want to gain additional insights from a race. Therefore, we have ad
 
    Command         Name                   Description
    --------------  ---------------------  --------------------------------------------------------------------
-   jit             JIT Compiler Profiler  Enables JIT compiler logs.
-   gc              GC log                 Enables GC logs.
-   jfr             Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
-   heapdump        Heap Dump              Captures a heap dump.
-   node-stats      Node Stats             Regularly samples node stats
-   recovery-stats  Recovery Stats         Regularly samples shard recovery stats
-   ccr-stats       CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
+   jit              JIT Compiler Profiler  Enables JIT compiler logs.
+   gc               GC log                 Enables GC logs.
+   jfr              Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
+   heapdump         Heap Dump              Captures a heap dump.
+   node-stats       Node Stats             Regularly samples node stats
+   recovery-stats   Recovery Stats         Regularly samples shard recovery stats
+   ccr-stats        CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
+   transform-stats  Transform Stats        Regularly samples transform stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -134,3 +135,13 @@ Supported telemetry parameters:
 
 * ``ccr-stats-indices`` (default: all indices): An index pattern for which ccr stats should be checked.
 * ``ccr-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+
+transform-stats
+---------------
+
+The transform-stats telemetry device regularly calls the `transform stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/get-transform-stats.html>` and records one metrics document per transform.
+
+Supported telemetry parameters:
+
+* ``transform-stats-transforms`` (default: all transforms): A list of transforms per cluster for which transform stats should be checked.
+* ``transform-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.

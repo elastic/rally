@@ -1671,6 +1671,13 @@ class GlobalStatsCalculator:
         # convert to int, fraction counts are senseless
         median_segment_count = self.median("segments_count")
         result.segment_count = int(median_segment_count) if median_segment_count is not None else median_segment_count
+
+        self.logger.debug("Gathering transform processing times.")
+        result.total_transform_processing_times = self.total_transform_metric("total_transform_processing_time")
+        result.total_transform_index_times = self.total_transform_metric("total_transform_index_time")
+        result.total_transform_search_times = self.total_transform_metric("total_transform_search_time")
+        result.total_transform_throughput = self.total_transform_metric("total_transform_throughput")
+
         return result
 
     def merge(self, *args):
@@ -1741,6 +1748,20 @@ class GlobalStatsCalculator:
                 })
         return result
 
+    def total_transform_metric(self, metric_name):
+        values = self.store.get_raw(metric_name)
+        result = []
+        if values:
+            for v in values:
+                transform_id = v.get("meta", {}).get("transform_id")
+                if transform_id is not None:
+                    result.append({
+                        "id": transform_id,
+                        "mean": v["value"],
+                        "unit": v["unit"]
+                    })
+        return result
+
     def error_rate(self, task_name):
         return self.store.get_error_rate(task=task_name, sample_type=SampleType.Normal)
 
@@ -1805,6 +1826,11 @@ class GlobalStats:
         self.translog_size = self.v(d, "translog_size")
         self.segment_count = self.v(d, "segment_count")
 
+        self.total_transform_search_times = self.v(d, "total_transform_search_times")
+        self.total_transform_index_times = self.v(d, "total_transform_index_times")
+        self.total_transform_processing_times = self.v(d, "total_transform_processing_times")
+        self.total_transform_throughput = self.v(d, "total_transform_throughput")
+
     def as_dict(self):
         return self.__dict__
 
@@ -1847,6 +1873,15 @@ class GlobalStats:
                             "mean": item["mean"],
                             "median": item["median"],
                             "max": item["max"]
+                        }
+                    })
+            elif metric.startswith("total_transform_") and value is not None:
+                for item in value:
+                    all_results.append({
+                        "id": item["id"],
+                        "name": metric,
+                        "value": {
+                            "single": item["mean"]
                         }
                     })
             elif metric.endswith("_time_per_shard"):
