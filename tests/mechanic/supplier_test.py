@@ -220,6 +220,7 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
         self.assertEqual(0, copy.call_count)
         self.assertFalse(cached_supplier.cached)
         self.assertIn("elasticsearch", binaries)
+        self.assertEqual("/path/to/artifact.tar.gz", binaries["elasticsearch"])
 
     @mock.patch("os.path.exists")
     @mock.patch("esrally.mechanic.supplier.ElasticsearchSourceSupplier")
