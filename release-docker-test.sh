@@ -21,8 +21,6 @@ set -e
 
 readonly MIN_DOCKER_MEM_BYTES=$(expr 6 \* 1024 \* 1024 \* 1024)
 
-TEST_SUCCESS=0
-
 function check_prerequisites {
     exit_if_docker_not_running
 
@@ -147,7 +145,6 @@ function test_docker_release_image {
     docker_compose up
     docker_compose down
     unset TEST_COMMAND
-    TEST_SUCCESS=1
 }
 
 function main {
@@ -158,26 +155,9 @@ function main {
 
 function tear_down {
     info "tearing down"
-    # just let tear down finish
-    set +e
-    if [ "${TEST_SUCCESS}" != "1" ]; then
-      error "Tests have failed - Printing last 200 lines of logs"
-      error "===================== LOG FILE START =============================="
-      tail -n 200 "${RALLY_LOG}"
-      error "====================== LOG FILE END ==============================="
-    fi
-
     kill_related_es_processes
 }
 
 trap "tear_down" EXIT
 
-# allow invocation from release-docker.sh
-if [[ $1 == "test_docker_release_image" ]]; then
-    test_docker_release_image
-    exit
-# otherwise exit
-else
-  error "function $1 is unsupported"
-  exit 1
-fi
+main
