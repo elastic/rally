@@ -139,6 +139,8 @@ class SummaryReporter:
                 console.warn(warning)
 
     def add_warnings(self, warnings, values, op):
+        if values["error_rate"] > 0:
+            warnings.append(f"Error rate is {values['error_rate']} for operation '{op}'. Please check the logs.")
         if values["throughput"]["median"] is None:
             error_rate = values["error_rate"]
             if error_rate:

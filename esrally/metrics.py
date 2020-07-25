@@ -1615,8 +1615,9 @@ class GlobalStatsCalculator:
 
         for tasks in self.challenge.schedule:
             for task in tasks:
-                if task.operation.include_in_reporting:
-                    t = task.name
+                t = task.name
+                error_rate = self.error_rate(t)
+                if task.operation.include_in_reporting or error_rate > 0:
                     self.logger.debug("Gathering request metrics for [%s].", t)
                     result.add_op_metrics(
                         t,
@@ -1625,7 +1626,7 @@ class GlobalStatsCalculator:
                         self.single_latency(t),
                         self.single_latency(t, metric_name="service_time"),
                         self.single_latency(t, metric_name="processing_time"),
-                        self.error_rate(t),
+                        error_rate,
                         self.merge(
                             self.track.meta_data,
                             self.challenge.meta_data,
