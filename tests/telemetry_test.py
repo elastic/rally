@@ -28,6 +28,7 @@ from esrally import config, metrics, exceptions, telemetry
 from esrally.mechanic import cluster
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console
+from tests import load_test_resource
 
 
 def create_config():
@@ -683,74 +684,7 @@ class RecoveryStatsTests(TestCase):
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_single_shard_stats(self, metrics_store_put_doc):
-        response = {
-            "index1": {
-                "shards": [{
-                    "id": 0,
-                    "type": "STORE",
-                    "stage": "DONE",
-                    "primary": True,
-                    "start_time": "2014-02-24T12:38:06.349",
-                    "start_time_in_millis": "1393245486349",
-                    "stop_time": "2014-02-24T12:38:08.464",
-                    "stop_time_in_millis": "1393245488464",
-                    "total_time": "2.1s",
-                    "total_time_in_millis": 2115,
-                    "source": {
-                        "id": "RGMdRc-yQWWKIBM4DGvwqQ",
-                        "host": "my.fqdn",
-                        "transport_address": "my.fqdn",
-                        "ip": "10.0.1.7",
-                        "name": "my_es_node"
-                    },
-                    "target": {
-                        "id": "RGMdRc-yQWWKIBM4DGvwqQ",
-                        "host": "my.fqdn",
-                        "transport_address": "my.fqdn",
-                        "ip": "10.0.1.7",
-                        "name": "my_es_node"
-                    },
-                    "index": {
-                        "size": {
-                            "total": "24.7mb",
-                            "total_in_bytes": 26001617,
-                            "reused": "24.7mb",
-                            "reused_in_bytes": 26001617,
-                            "recovered": "0b",
-                            "recovered_in_bytes": 0,
-                            "percent": "100.0%"
-                        },
-                        "files": {
-                            "total": 26,
-                            "reused": 26,
-                            "recovered": 0,
-                            "percent": "100.0%"
-                        },
-                        "total_time": "2ms",
-                        "total_time_in_millis": 2,
-                        "source_throttle_time": "0s",
-                        "source_throttle_time_in_millis": 0,
-                        "target_throttle_time": "0s",
-                        "target_throttle_time_in_millis": 0
-                    },
-                    "translog": {
-                        "recovered": 71,
-                        "total": 0,
-                        "percent": "100.0%",
-                        "total_on_start": 0,
-                        "total_time": "2.0s",
-                        "total_time_in_millis": 2025
-                    },
-                    "verify_index": {
-                        "check_index_time": 0,
-                        "check_index_time_in_millis": 0,
-                        "total_time": "88ms",
-                        "total_time_in_millis": 88
-                    }
-                }
-                ]
-            }
-        }
+        response = load_test_resource()
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
