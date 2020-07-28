@@ -106,7 +106,7 @@ Example::
 
     * Type esrally --help
     * Read the documentation at https://esrally.readthedocs.io/en/latest/
-    * Ask a question on the forum at https://discuss.elastic.co/c/elasticsearch/rally
+    * Ask a question on the forum at https://discuss.elastic.co/tags/c/elastic-stack/elasticsearch/rally
 
     # now run our benchmark
     docker run --rm -v $PWD/myrally:/rally/.rally elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200

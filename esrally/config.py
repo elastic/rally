@@ -23,7 +23,7 @@ import re
 import shutil
 from enum import Enum
 
-from esrally import PROGRAM_NAME, doc_link, exceptions, paths
+from esrally import FORUM_LINK, PROGRAM_NAME, doc_link, exceptions, paths
 from esrally.utils import io, git, console, convert
 
 
@@ -411,13 +411,13 @@ class ConfigFactory:
 
         config_file.store(config)
 
-        self.o("Configuration successfully written to %s. Happy benchmarking!" % config_file.location)
+        self.o(f"Configuration successfully written to {config_file.location}. Happy benchmarking!")
         self.o("")
         self.o("More info about Rally:")
         self.o("")
-        self.o("* Type %s --help" % PROGRAM_NAME)
-        self.o("* Read the documentation at %s" % console.format.link(doc_link()))
-        self.o("* Ask a question on the forum at %s" % console.format.link("https://discuss.elastic.co/c/elasticsearch/rally"))
+        self.o(f"* Type {PROGRAM_NAME} --help")
+        self.o(f"* Read the documentation at {console.format.link(doc_link())}")
+        self.o(f"* Ask a question on the forum at {console.format.link(FORUM_LINK)}")
 
     def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
         self.logger.debug("Autodetected %s at [%s]", what, result)
