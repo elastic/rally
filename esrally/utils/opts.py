@@ -146,13 +146,13 @@ class TargetHosts(ConnectOptions):
 
     def parse_options(self):
         def normalize_to_dict(arg):
-            from elasticsearch.client import _normalize_hosts
             """
             Return parsed comma separated host string as dict with "default" key.
             This is needed to support backwards compatible --target-hosts for single clusters that are not
             defined as a json string or file.
             """
 
+            from elasticsearch.client import _normalize_hosts
             return {TargetHosts.DEFAULT: _normalize_hosts(arg)}
 
         self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)

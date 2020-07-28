@@ -439,12 +439,6 @@ class MechanicActor(actor.RallyActor):
 
 @thespian.actors.requireCapability('coordinator')
 class Dispatcher(actor.RallyActor):
-    def __init__(self):
-        super().__init__()
-        self.start_sender = None
-        self.pending = None
-        self.remotes = None
-
     """This Actor receives a copy of the startmsg (with the computed hosts
        attached) and creates a NodeMechanicActor on each targeted
        remote host.  It uses Thespian SystemRegistration to get
@@ -455,6 +449,12 @@ class Dispatcher(actor.RallyActor):
        reply-to back to the actor that made the request of the
        Dispatcher.
     """
+
+    def __init__(self):
+        super().__init__()
+        self.start_sender = None
+        self.pending = None
+        self.remotes = None
 
     @actor.no_retry("mechanic dispatcher")
     def receiveMsg_StartEngine(self, startmsg, sender):
