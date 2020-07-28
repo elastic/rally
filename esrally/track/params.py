@@ -425,8 +425,8 @@ class IndexIdConflict(Enum):
 
     Note that this assumes that each document in the benchmark corpus has an id between [1, size_of(corpus)]
     """
-    NoConflicts = 0,
-    SequentialConflicts = 1,
+    NoConflicts = 0
+    SequentialConflicts = 1
     RandomConflicts = 2
 
 
