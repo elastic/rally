@@ -22,7 +22,7 @@ We have also put considerable effort in Rally to ensure that benchmarking data a
 Getting Help or Contributing to Rally
 -------------------------------------
 
-* Use our `Discuss forum <https://discuss.elastic.co/c/elasticsearch/rally>`_ to provide feedback or ask questions about Rally.
+* Use our `Discuss forum <https://discuss.elastic.co/tags/c/elastic-stack/elasticsearch/rally>`_ to provide feedback or ask questions about Rally.
 * See our `contribution guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_ on guidelines for contributors.
 
 Source Code

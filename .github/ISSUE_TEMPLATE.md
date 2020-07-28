@@ -4,7 +4,7 @@
 
 Please ask questions in our forum at 
 
-https://discuss.elastic.co/c/elasticsearch/rally
+https://discuss.elastic.co/tags/c/elastic-stack/elasticsearch/rally
 
 GitHub is reserved for bug reports and feature requests only and we will 
 close your issue immediately if it is just a question.
