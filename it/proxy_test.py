@@ -41,7 +41,6 @@ def http_proxy():
                       anonymous_url=f"http://127.0.0.1:3128")
     yield proxy
     process.run_subprocess(f"docker stop {proxy_container_id}")
-    process.run_subprocess(f"docker rm {proxy_container_id}")
 
 
 # ensures that a fresh log file is available

@@ -80,7 +80,6 @@ function exit_if_docker_not_running {
     fi
 }
 
-
 function docker_compose {
     if [[ "$1" == "up" ]]; then
         docker-compose -f docker/docker-compose-tests.yml up --abort-on-container-exit
