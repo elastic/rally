@@ -1085,6 +1085,27 @@ class NodeStatsRecorderTests(TestCase):
                         "overhead": 1.0,
                         "tripped": 0
                     }
+                },
+                "indexing_pressure": {
+                    "memory": {
+                        "current": {
+                            "combined_coordinating_and_primary_in_bytes": 0,
+                            "coordinating_in_bytes": 0,
+                            "primary_in_bytes": 0,
+                            "replica_in_bytes": 0,
+                            "all_in_bytes": 0
+                        },
+                        "total": {
+                            "combined_coordinating_and_primary_in_bytes": 0,
+                            "coordinating_in_bytes": 0,
+                            "primary_in_bytes": 0,
+                            "replica_in_bytes": 0,
+                            "all_in_bytes": 0,
+                            "coordinating_rejections": 0,
+                            "primary_rejections": 0,
+                            "replica_rejections": 0
+                        }
+                    }
                 }
             }
         }
@@ -1168,7 +1189,20 @@ class NodeStatsRecorderTests(TestCase):
         "thread_pool_generic_active": 0,
         "thread_pool_generic_rejected": 0,
         "thread_pool_generic_largest": 4,
-        "thread_pool_generic_completed": 8
+        "thread_pool_generic_completed": 8,
+        "indexing_pressure_memory_current_combined_coordinating_and_primary_in_bytes": 0,
+        "indexing_pressure_memory_current_coordinating_in_bytes": 0,
+        "indexing_pressure_memory_current_primary_in_bytes": 0,
+        "indexing_pressure_memory_current_replica_in_bytes": 0,
+        "indexing_pressure_memory_current_all_in_bytes": 0,
+        "indexing_pressure_memory_total_combined_coordinating_and_primary_in_bytes": 0,
+        "indexing_pressure_memory_total_coordinating_in_bytes": 0,
+        "indexing_pressure_memory_total_primary_in_bytes": 0,
+        "indexing_pressure_memory_total_replica_in_bytes": 0,
+        "indexing_pressure_memory_total_all_in_bytes": 0,
+        "indexing_pressure_memory_total_coordinating_rejections": 0,
+        "indexing_pressure_memory_total_primary_rejections": 0,
+        "indexing_pressure_memory_total_replica_rejections": 0
     })
 
     def test_negative_sample_interval_forbidden(self):
@@ -1396,6 +1430,27 @@ class NodeStatsRecorderTests(TestCase):
                             "overhead": 1.0,
                             "tripped": 0
                         }
+                    },
+                    "indexing_pressure": {
+                        "memory": {
+                            "current": {
+                                "combined_coordinating_and_primary_in_bytes": 0,
+                                "coordinating_in_bytes": 0,
+                                "primary_in_bytes": 0,
+                                "replica_in_bytes": 0,
+                                "all_in_bytes": 0
+                            },
+                            "total": {
+                                "combined_coordinating_and_primary_in_bytes": 0,
+                                "coordinating_in_bytes": 0,
+                                "primary_in_bytes": 0,
+                                "replica_in_bytes": 0,
+                                "all_in_bytes": 0,
+                                "coordinating_rejections": 0,
+                                "primary_rejections": 0,
+                                "replica_rejections": 0
+                            }
+                        }
                     }
                 }
             }
@@ -1488,7 +1543,20 @@ class NodeStatsRecorderTests(TestCase):
              "transport_tx_count": 88,
              "transport_tx_size_in_bytes": 23879803,
              "process_cpu_percent": 10,
-             "process_cpu_total_in_millis": 56520},
+             "process_cpu_total_in_millis": 56520,
+             "indexing_pressure_memory_current_combined_coordinating_and_primary_in_bytes": 0,
+             "indexing_pressure_memory_current_coordinating_in_bytes": 0,
+             "indexing_pressure_memory_current_primary_in_bytes": 0,
+             "indexing_pressure_memory_current_replica_in_bytes": 0,
+             "indexing_pressure_memory_current_all_in_bytes": 0,
+             "indexing_pressure_memory_total_combined_coordinating_and_primary_in_bytes": 0,
+             "indexing_pressure_memory_total_coordinating_in_bytes": 0,
+             "indexing_pressure_memory_total_primary_in_bytes": 0,
+             "indexing_pressure_memory_total_replica_in_bytes": 0,
+             "indexing_pressure_memory_total_all_in_bytes": 0,
+             "indexing_pressure_memory_total_coordinating_rejections": 0,
+             "indexing_pressure_memory_total_primary_rejections": 0,
+             "indexing_pressure_memory_total_replica_rejections": 0},
             level=MetaInfoScope.node,
             node_name="rally0",
             meta_data=metrics_store_meta_data)
@@ -1673,6 +1741,27 @@ class NodeStatsRecorderTests(TestCase):
                             "overhead": 1.0,
                             "tripped": 0
                         }
+                    },
+                    "indexing_pressure": {
+                        "memory": {
+                            "current": {
+                                "combined_coordinating_and_primary_in_bytes": 0,
+                                "coordinating_in_bytes": 0,
+                                "primary_in_bytes": 0,
+                                "replica_in_bytes": 0,
+                                "all_in_bytes": 0
+                            },
+                            "total": {
+                                "combined_coordinating_and_primary_in_bytes": 0,
+                                "coordinating_in_bytes": 0,
+                                "primary_in_bytes": 0,
+                                "replica_in_bytes": 0,
+                                "all_in_bytes": 0,
+                                "coordinating_rejections": 0,
+                                "primary_rejections": 0,
+                                "replica_rejections": 0
+                            }
+                        }
                     }
                 }
             }
@@ -1740,7 +1829,20 @@ class NodeStatsRecorderTests(TestCase):
              "transport_tx_count": 88,
              "transport_tx_size_in_bytes": 23879803,
              "process_cpu_percent": 10,
-             "process_cpu_total_in_millis": 56520},
+             "process_cpu_total_in_millis": 56520,
+             "indexing_pressure_memory_current_combined_coordinating_and_primary_in_bytes": 0,
+             "indexing_pressure_memory_current_coordinating_in_bytes": 0,
+             "indexing_pressure_memory_current_primary_in_bytes": 0,
+             "indexing_pressure_memory_current_replica_in_bytes": 0,
+             "indexing_pressure_memory_current_all_in_bytes": 0,
+             "indexing_pressure_memory_total_combined_coordinating_and_primary_in_bytes": 0,
+             "indexing_pressure_memory_total_coordinating_in_bytes": 0,
+             "indexing_pressure_memory_total_primary_in_bytes": 0,
+             "indexing_pressure_memory_total_replica_in_bytes": 0,
+             "indexing_pressure_memory_total_all_in_bytes": 0,
+             "indexing_pressure_memory_total_coordinating_rejections": 0,
+             "indexing_pressure_memory_total_primary_rejections": 0,
+             "indexing_pressure_memory_total_replica_rejections": 0},
             level=MetaInfoScope.node,
             node_name="rally0",
             meta_data=metrics_store_meta_data)
