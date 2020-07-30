@@ -33,9 +33,8 @@ Once ``pyenv`` is installed, install a compatible Python version::
     # see https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-global for details
     pyenv global 3.8.0
 
-    # Install pip3
-    curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-    python3 get-pip.py --user
+    # Upgrade pip
+    python3 -m pip install --user --upgrade pip
 
 git
 ~~~
@@ -113,32 +112,19 @@ To find the JDK, Rally expects the environment variable ``JAVA_HOME`` to be set 
 Installing Rally
 ----------------
 
-Simply install Rally with pip: ``pip3 install esrally``
-
-.. note::
-
-   Depending on your system setup you may need to prepend this command with ``sudo``.
+1. Ensure ``~/.local/bin`` is in your ``$PATH``.
+2. Install Rally: ``python3 -m pip install --user esrally``.
 
 If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Ensure that you have installed the Python development package as documented in the prerequisites section above.
-
-Non-sudo Install
-----------------
-
-If you don't want to use ``sudo`` when installing Rally, installation is still possible but a little more involved:
-
-1. Specify the ``--user`` option when installing Rally (step 2 above), so the command to be issued is: ``python3 setup.py develop --user``.
-2. Check the output of the install script or lookup the `Python documentation on the variable site.USER_BASE <https://docs.python.org/3/library/site.html#site.USER_BASE>`_ to find out where the script is located. On Linux, this is typically ``~/.local/bin``.
-
-You can now either add ``~/.local/bin`` to your path or invoke Rally via ``~/.local/bin/esrally`` instead of just ``esrally``.
 
 VirtualEnv Install
 ------------------
 
 You can also use Virtualenv to install Rally into an isolated Python environment without sudo.
 
-1. Set up a new virtualenv environment in a directory with ``virtualenv --python=python3 .``
+1. Set up a new virtualenv environment in a directory with ``python3 -m venv .``
 2. Activate the environment with ``source /path/to/virtualenv/dir/bin/activate``
-3. Install Rally with ``pip install esrally``
+3. Install Rally with ``python3 -m pip install esrally``
 
 Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
 
@@ -161,12 +147,12 @@ Offline Install
         This documentation is for the version of Rally currently under development. We do not provide offline installation packages for development versions.
         Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
 
-If you are in a corporate environment where your servers do not have any access to the Internet, you can use Rally's offline installation package. Follow these steps to install Rally:
+If you are in a corporate environment using Linux servers that do not have any access to the Internet, you can use Rally's offline installation package. Follow these steps to install Rally:
 
 1. Install all prerequisites as documented above.
 2. Download the offline installation package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
-3. Decompress the installation package with ``tar -xzf esrally-dist-*.tar.gz``.
-4. Run the install script with ``sudo ./esrally-dist-*/install.sh``.
+3. Decompress the installation package with ``tar -xzf esrally-dist-linux-*.tar.gz``.
+4. Run the install script with ``sudo ./esrally-dist-linux-*/install.sh``.
 
 Next Steps
 ----------

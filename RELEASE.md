@@ -30,6 +30,7 @@ Please execute the following tasks after `make release` has finished:
 
 ### Preconditions
 
+* This procedure requires a Linux workstation as the offline installation references platform specific artifacts. A Vagrant box will work fine.
 * Ensure that the master branch is checked out and your working copy is clean (run `git status`).
 * Ensure that integration tests can run to completion successfully on your machine (run `make it`).
 * Ensure that the associated milestone on Github contains no open tickets (otherwise the release will fail).
