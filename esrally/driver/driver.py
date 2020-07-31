@@ -818,6 +818,7 @@ class Worker(actor.RallyActor):
         self.sampler = None
         self.start_driving = False
         self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
+        self.sample_queue_size = None
 
     @actor.no_retry("worker")
     def receiveMsg_StartWorker(self, msg, sender):
@@ -826,6 +827,7 @@ class Worker(actor.RallyActor):
         self.worker_id = msg.worker_id
         self.config = load_local_config(msg.config)
         self.on_error = self.config.opts("driver", "on.error")
+        self.sample_queue_size = int(self.config.opts("system", "sample.queue.size", mandatory=False, default_value=1 << 20))
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
         self.client_allocations = msg.client_allocations
@@ -935,8 +937,7 @@ class Worker(actor.RallyActor):
                                  "tasks until next join point.", self.worker_id, self.current_task_index)
             else:
                 self.logger.info("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
-                # allow to buffer more events than by default as we expect to have way more clients.
-                self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=65536)
+                self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=self.sample_queue_size)
                 executor = AsyncIoAdapter(self.config, self.track, task_allocations, self.sampler,
                                           self.cancel, self.complete, self.on_error)
 
@@ -1625,15 +1626,19 @@ def schedule_for(task, client_index, parameter_source):
     op = task.operation
     num_clients = task.clients
     sched = scheduler.scheduler_for(task.schedule, task.params)
-    logger.info("Choosing [%s] for [%s].", sched, task)
+    # guard all logging statements with the client index and only emit them for the first client. This information is
+    # repetitive and may cause issues in thespian with many clients (an excessive number of actor messages is sent).
+    if client_index == 0:
+        logger.info("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)
     params_for_op = parameter_source.partition(client_index, num_clients)
 
     if requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
-        logger.info("Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] "
-                    "seconds and a time period of [%s] seconds.", task.schedule, task.name,
-                    str(warmup_time_period), str(task.time_period))
+        if client_index == 0:
+            logger.info("Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] "
+                        "seconds and a time period of [%s] seconds.", task.schedule, task.name,
+                        str(warmup_time_period), str(task.time_period))
         loop_control = TimePeriodBased(warmup_time_period, task.time_period)
     else:
         warmup_iterations = task.warmup_iterations if task.warmup_iterations else 0
@@ -1644,9 +1649,16 @@ def schedule_for(task, client_index, parameter_source):
             iterations = 1
         else:
             iterations = None
-        logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%s] warmup "
-                    "iterations and [%s] iterations.", task.schedule, task.name, str(warmup_iterations), str(iterations))
+        if client_index == 0:
+            logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%s] warmup "
+                        "iterations and [%s] iterations.", task.schedule, task.name, str(warmup_iterations), str(iterations))
         loop_control = IterationBased(warmup_iterations, iterations)
+
+    if client_index == 0:
+        if loop_control.infinite:
+            logger.info("Parameter source will determine when the schedule for [%s] terminates.", task.name)
+        else:
+            logger.info("%s schedule will determine when the schedule for [%s] terminates.", str(loop_control), task.name)
 
     return ScheduleHandle(task.name, sched, loop_control, runner_for_op, params_for_op)
 
@@ -1681,7 +1693,6 @@ class ScheduleHandle:
         self.task_progress_control = task_progress_control
         self.runner = runner
         self.params = params
-        self.logger = logging.getLogger(__name__)
         # TODO: Can we offload the parameter source execution to a different thread / process? Is this too heavy-weight?
         #from concurrent.futures import ThreadPoolExecutor
         #import asyncio
@@ -1691,7 +1702,6 @@ class ScheduleHandle:
     async def __call__(self):
         next_scheduled = 0
         if self.task_progress_control.infinite:
-            self.logger.info("Parameter source will determine when the schedule for [%s] terminates.", self.task_name)
             param_source_knows_progress = hasattr(self.params, "percent_completed")
             self.task_progress_control.start()
             while True:
@@ -1704,13 +1714,9 @@ class ScheduleHandle:
                     next_scheduled = self.sched.next(next_scheduled)
                     self.task_progress_control.next()
                 except StopIteration:
-                    self.logger.info("%s schedule for [%s] stopped due to StopIteration.",
-                                     str(self.task_progress_control), self.task_name)
                     return
         else:
             self.task_progress_control.start()
-            self.logger.info("%s schedule will determine when the schedule for [%s] terminates.",
-                             str(self.task_progress_control), self.task_name)
             while not self.task_progress_control.completed:
                 try:
                     #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
@@ -1722,10 +1728,7 @@ class ScheduleHandle:
                     next_scheduled = self.sched.next(next_scheduled)
                     self.task_progress_control.next()
                 except StopIteration:
-                    self.logger.info("%s schedule for [%s] stopped due to StopIteration.",
-                                     str(self.task_progress_control), self.task_name)
                     return
-            self.logger.info("%s schedule for [%s] stopped regularly.", str(self.task_progress_control), self.task_name)
 
 
 class TimePeriodBased:
