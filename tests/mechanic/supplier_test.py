@@ -857,6 +857,7 @@ class DistributionRepositoryTests(TestCase):
             "release.cache": "true"
         }, template_renderer=renderer)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            # pylint: disable=pointless-statement
             # noinspection PyStatementEffect
             repo.download_url
         self.assertEqual("Neither config key [miss.url] nor [jdk.unbundled.miss_url] is defined.", ctx.exception.args[0])
@@ -868,6 +869,7 @@ class DistributionRepositoryTests(TestCase):
             "runtime.jdk.bundled": "false"
         }, template_renderer=renderer)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            # pylint: disable=pointless-statement
             # noinspection PyStatementEffect
             repo.cache
         self.assertEqual("Mandatory config key [release.cache] is undefined.", ctx.exception.args[0])
@@ -880,6 +882,7 @@ class DistributionRepositoryTests(TestCase):
             "release.cache": "Invalid"
         }, template_renderer=renderer)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
+            # pylint: disable=pointless-statement
             # noinspection PyStatementEffect
             repo.cache
         self.assertEqual("Value [Invalid] for config key [release.cache] is not a valid boolean value.", ctx.exception.args[0])

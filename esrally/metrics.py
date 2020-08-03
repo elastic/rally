@@ -238,10 +238,6 @@ class MetaInfoScope(Enum):
     """
     Cluster level meta-information is valid for all nodes in the cluster (e.g. the benchmarked Elasticsearch version)
     """
-    # host = 2
-    """
-    Host level meta-information is valid for all nodes on the same host (e.g. the OS name and version)
-    """
     node = 3
     """
     Node level meta-information is valid for a single node (e.g. GC times)
@@ -412,11 +408,11 @@ class MetricsStore:
         raise NotImplementedError("abstract method")
 
     def close(self):
-        self.logger.info("Closing metrics store.")
         """
         Closes the metric store. Note that it is mandatory to close the metrics store when it is no longer needed as it only persists
         metrics on close (in order to avoid additional latency during the benchmark).
         """
+        self.logger.info("Closing metrics store.")
         self.flush()
         self.clear_meta_info()
         self.opened = False
