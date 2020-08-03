@@ -31,12 +31,22 @@ then
     exit 1
 fi
 
+KERNEL_NAME=$(uname -s)
+if [[ ${KERNEL_NAME} != *"Linux"* ]]
+then
+  echo "Error: this script needs to be run on a Linux workstation but you are running on ${KERNEL_NAME}."
+  echo "Switch to a Linux workstation and try again."
+  exit 1
+fi
+
 readonly RALLY_VERSION=$1
 
 readonly WD=$(pwd)
 readonly RELATIVE_DOWNLOAD_DIR="esrally-dist-${RALLY_VERSION}"
 readonly ABSOLUTE_DOWNLOAD_DIR="${WD}/${RELATIVE_DOWNLOAD_DIR}"
 readonly ABSOLUTE_DOWNLOAD_BIN_DIR="${ABSOLUTE_DOWNLOAD_DIR}/bin"
+readonly PYTHON_INSTALL_LINK="https://esrally.readthedocs.io/en/stable/install.html#python"
+readonly PYTHON_ERROR_MSG="is required but not installed. Follow the instructions in ${PYTHON_INSTALL_LINK} and try again."
 
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
@@ -47,7 +57,7 @@ done
 SCRIPT_SRC_HOME="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 function main {
-    local archive_name="esrally-dist-${RALLY_VERSION}.tar.gz"
+    local archive_name="esrally-dist-linux-${RALLY_VERSION}.tar.gz"
     local install_script_file="install.sh"
     local install_script="${ABSOLUTE_DOWNLOAD_DIR}/${install_script_file}"
 
@@ -84,8 +94,8 @@ SRC_HOME="\$( cd -P "\$( dirname "\$SOURCE" )" && pwd )"
 echo "Installing Rally ${RALLY_VERSION}..."
 
 # Check if mandatory prerequisites are installed
-command -v python3 >/dev/null 2>&1 || { echo >&2 "Python3 is required but not installed."; exit 1; }
-command -v pip3 >/dev/null 2>&1 || { echo >&2 "pip3 is required but not installed."; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo >&2 "Python3 ${PYTHON_ERROR_MSG}"; exit 1; }
+command -v pip3 >/dev/null 2>&1 || { echo >&2 "pip3 ${PYTHON_ERROR_MSG}"; exit 1; }
 
 pip3 install esrally==${RALLY_VERSION} --no-index --find-links file://\${SRC_HOME}/bin
 EOL

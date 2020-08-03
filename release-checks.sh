@@ -21,6 +21,14 @@
 set -eu
 RELEASE_VERSION=$1
 
+KERNEL_NAME=$(uname -s)
+if [[ ${KERNEL_NAME} != *"Linux"* ]]
+then
+  echo "Error: release needs to be run on a Linux workstation but you are running on ${KERNEL_NAME}."
+  echo "Switch to a Linux workstation and try again."
+  exit 1
+fi
+
 # test number of parameters
 if [[ $# != 2 ]]
 then
@@ -41,12 +49,6 @@ if [[ ! -f ~/.github/rally_release_changelog.token ]]
 then
     echo "Error: didn't find a valid GitHub token in ~/.github/rally_release_changelog.token."
     echo "The release process requires a valid GitHub token. See RELEASE.md for details."
-    exit 1
-fi
-
-if [[ $(uname) == "Darwin" && -z "${GPG_TTY+set}" ]]
-then
-    echo "Error: to allow git to create signed commits on Mac OS you need to set \"export GPG_TTY=\$(tty)\"."
     exit 1
 fi
 
