@@ -39,7 +39,7 @@ class TimeTests(TestCase):
 
     def test_total_time_roughly_in_expected_range(self):
         wait_period_seconds = 0.05
-        acceptable_delta_seconds = 0.01
+        acceptable_delta_seconds = 0.03
 
         stop_watch = esrally.time.Clock.stop_watch()
         stop_watch.start()
@@ -53,7 +53,7 @@ class TimeTests(TestCase):
 
     def test_millis_conversion_roughly_in_expected_range(self):
         wait_period_millis = 50
-        acceptable_delta_millis = 10
+        acceptable_delta_millis = 30
 
         start = esrally.time.to_epoch_millis(esrally.time.Clock.now())
         time.sleep(wait_period_millis / 1000.0)
