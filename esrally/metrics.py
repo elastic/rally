@@ -317,7 +317,7 @@ def extract_user_tags_from_string(user_tags):
 
 
 class SampleType(IntEnum):
-    Warmup = 0,
+    Warmup = 0
     Normal = 1
 
 
