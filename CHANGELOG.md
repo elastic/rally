@@ -1,3 +1,48 @@
+### 2.0.1
+
+#### Enhancements
+
+* [#1041](https://github.com/elastic/rally/pull/1041): Add indexing_pressure to nodes stats
+* [#1039](https://github.com/elastic/rally/pull/1039): Check for pointless statements
+* [#1038](https://github.com/elastic/rally/pull/1038): Check for trailing comma tuple
+* [#1029](https://github.com/elastic/rally/pull/1029): Add integration test for proxy
+* [#1028](https://github.com/elastic/rally/pull/1028): Fetch artifact revision lazily on build
+* [#1026](https://github.com/elastic/rally/pull/1026): [WIP] Migrate first test_docker_dev_image 
+* [#1025](https://github.com/elastic/rally/pull/1025): Upgrade to Thespian 3.10.1
+* [#1024](https://github.com/elastic/rally/pull/1024): Allow runners to determine throughput
+* [#1023](https://github.com/elastic/rally/pull/1023): Migrate configure test to new IT infrastructure
+* [#1022](https://github.com/elastic/rally/pull/1022): add transform support
+* [#1019](https://github.com/elastic/rally/pull/1019): Add timestamps as meta-info in index recovery
+* [#1016](https://github.com/elastic/rally/pull/1016): Allow to forcefully close SSL connections
+* [#1015](https://github.com/elastic/rally/pull/1015): Scale connection pool automatically
+* [#1013](https://github.com/elastic/rally/pull/1013): Allow to measure create/restore snapshot speed
+* [#1012](https://github.com/elastic/rally/pull/1012): Make exists_set_param macro available to tracks
+* [#1011](https://github.com/elastic/rally/pull/1011): add support for transform API's
+* [#1001](https://github.com/elastic/rally/pull/1001): Allow to downsample request metrics
+* [#998](https://github.com/elastic/rally/pull/998): Cache source artifacts by default
+* [#997](https://github.com/elastic/rally/pull/997): Allow to abort on fatal errors
+* [#994](https://github.com/elastic/rally/pull/994): Report number of GCs
+* [#992](https://github.com/elastic/rally/pull/992): Cache source artifacts
+
+#### Bug Fixes
+
+* [#1044](https://github.com/elastic/rally/pull/1044): Improve support for benchmarks with many clients
+* [#1027](https://github.com/elastic/rally/pull/1027): Resolve JAVA_HOME for source builds lazily
+* [#1018](https://github.com/elastic/rally/pull/1018): Check for recovery details when finished
+* [#1008](https://github.com/elastic/rally/pull/1008): Allow to specify a runtime-jdk during installation
+* [#1007](https://github.com/elastic/rally/pull/1007): Wait until indices are green in generated track
+* [#996](https://github.com/elastic/rally/pull/996): Ensure artifact cache directory exists
+* [#987](https://github.com/elastic/rally/pull/987): Validate if car allows for using the bundled JDK
+
+#### Doc Changes
+
+* [#1043](https://github.com/elastic/rally/pull/1043): Installation and offline dist improvements
+* [#1037](https://github.com/elastic/rally/pull/1037): Correct Rally forum URL
+* [#1006](https://github.com/elastic/rally/pull/1006): Add info about querying challenges in the docs
+* [#1003](https://github.com/elastic/rally/pull/1003): Add network troubleshooting tips
+* [#993](https://github.com/elastic/rally/pull/993): Update the release process
+* [#984](https://github.com/elastic/rally/pull/984): Add developer info about intellij
+
 ### 2.0.0
 
 #### Highlights
