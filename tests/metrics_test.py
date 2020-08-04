@@ -27,6 +27,8 @@ from unittest import TestCase
 import elasticsearch.exceptions
 
 from esrally import config, metrics, track, exceptions, paths
+from esrally.metrics import GlobalStatsCalculator
+from esrally.track import Task, Operation, Challenge, Track
 
 
 class MockClientFactory:
@@ -1612,6 +1614,43 @@ def select(l, name, operation=None, job=None, node=None):
         if item["name"] == name and item.get("operation") == operation and item.get("node") == node and item.get("job") == job:
             return item
     return None
+
+
+class GlobalStatsCalculatorTests(TestCase):
+    RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    RACE_ID = "fb26018b-428d-4528-b36b-cf8c54a303ec"
+
+    def setUp(self):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.cfg.add(config.Scope.application, "track", "params", {})
+        self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock)
+
+    def tearDown(self):
+        del self.metrics_store
+        del self.cfg
+
+    def test_add_administrative_task_with_error_rate_in_report(self):
+        op = Operation(name='delete-index', operation_type='DeleteIndex', params={'include-in-reporting': False})
+        task = Task('delete-index', operation=op, schedule='deterministic')
+        challenge = Challenge(name='append-fast-with-conflicts', schedule=[task], meta_data={})
+
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-fast-with-conflicts", "defaults", create=True)
+        self.metrics_store.put_doc(doc={"@timestamp": 1595896761994, "relative-time": 283382,
+                                        "race-id": "fb26018b-428d-4528-b36b-cf8c54a303ec",
+                                        "race-timestamp": "20200728T003905Z", "environment": "local",
+                                        "track": "geonames", "challenge": "append-fast-with-conflicts",
+                                        "car": "defaults", "name": "service_time", "value": 72.67997100007051,
+                                        "unit": "ms", "sample-type": "normal",
+                                        "meta": {"source_revision": "7f634e9f44834fbc12724506cc1da681b0c3b1e3",
+                                                 "distribution_version": "7.6.0", "distribution_flavor": "oss",
+                                                 "success": False}, "task": "delete-index", "operation": "delete-index",
+                                        "operation-type": "DeleteIndex"})
+
+        result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name='geonames', meta_data={}),
+                                       challenge=challenge)()
+        assert "delete-index" in [op_metric.get('task') for op_metric in result.op_metrics]
 
 
 class GlobalStatsTests(TestCase):
