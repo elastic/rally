@@ -55,9 +55,9 @@ install_requires = [
     # License: BSD
     "psutil==5.7.0",
     # License: MIT
-    "py-cpuinfo==3.2.0",
+    "py-cpuinfo==7.0.0",
     # License: MIT
-    "tabulate==0.8.5",
+    "tabulate==0.8.7",
     # License: MIT
     "jsonschema==3.1.1",
     # License: BSD

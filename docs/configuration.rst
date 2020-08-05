@@ -35,7 +35,7 @@ Let's go through an example step by step: First run ``esrally``::
 
     * Type esrally --help
     * Read the documentation at https://esrally.readthedocs.io/en/latest/
-    * Ask a question on the forum at https://discuss.elastic.co/c/elasticsearch/rally
+    * Ask a question on the forum at https://discuss.elastic.co/tags/c/elastic-stack/elasticsearch/rally
 
 Congratulations! Time to :doc:`run your first benchmark </race>`.
 

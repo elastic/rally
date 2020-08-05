@@ -24,7 +24,7 @@ import sys
 import time
 import uuid
 
-from esrally import PROGRAM_NAME, BANNER, SKULL, check_python_version, doc_link, telemetry
+from esrally import PROGRAM_NAME, BANNER, FORUM_LINK, SKULL, check_python_version, doc_link, telemetry
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, \
     log
 from esrally.mechanic import team, mechanic
@@ -644,11 +644,11 @@ def print_help_on_errors():
     heading = "Getting further help:"
     console.println(console.format.bold(heading))
     console.println(console.format.underline_for(heading))
-    console.println("* Check the log files in {} for errors.".format(paths.logs()))
-    console.println("* Read the documentation at {}".format(console.format.link(doc_link())))
-    console.println("* Ask a question on the forum at {}".format(console.format.link("https://discuss.elastic.co/c/elasticsearch/rally")))
-    console.println("* Raise an issue at {} and include the log files in {}."
-                    .format(console.format.link("https://github.com/elastic/rally/issues"), paths.logs()))
+    console.println(f"* Check the log files in {paths.logs()} for errors.")
+    console.println(f"* Read the documentation at {console.format.link(doc_link())}.")
+    console.println(f"* Ask a question on the forum at {console.format.link(FORUM_LINK)}.")
+    console.println(f"* Raise an issue at {console.format.link('https://github.com/elastic/rally/issues')} "
+                    f"and include the log files in {paths.logs()}.")
 
 
 def race(cfg):

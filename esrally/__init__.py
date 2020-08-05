@@ -31,6 +31,9 @@ if __version__.endswith("dev0"):
 else:
     DOC_LINK = "https://esrally.readthedocs.io/en/%s/" % __version__
 
+
+FORUM_LINK = "https://discuss.elastic.co/tags/c/elastic-stack/elasticsearch/rally"
+
 BANNER = r"""
     ____        ____
    / __ \____ _/ / /_  __

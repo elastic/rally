@@ -123,7 +123,10 @@ class ConfigFile:
     def __init__(self, config_name):
         self.user_home = os.getenv("RALLY_HOME", os.path.expanduser("~"))
         self.rally_home = os.path.join(self.user_home, ".rally")
-        self.config_file_name = "rally-{}.ini".format(config_name)
+        if config_name is not None:
+            self.config_file_name = f"rally-{config_name}.ini"
+        else:
+            self.config_file_name = "rally.ini"
         self.source_path = os.path.join(os.path.dirname(__file__), "resources", self.config_file_name)
         self.target_path = os.path.join(self.rally_home, self.config_file_name)
 

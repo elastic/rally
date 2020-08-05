@@ -115,6 +115,7 @@ Supported telemetry parameters:
 * ``node-stats-include-mem`` (default: ``true``): A boolean indicating whether JVM heap stats should be included.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
 * ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
+* ``node-stats-include-indexing-pressure`` (default: ``true``): A boolean indicating whether indexing pressuer stats should be included.
 
 recovery-stats
 --------------
