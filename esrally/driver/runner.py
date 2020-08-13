@@ -63,6 +63,7 @@ def register_default_runners():
     register_runner(track.OperationType.CloseMlJob.name, Retry(CloseMlJob()), async_runner=True)
     register_runner(track.OperationType.DeleteSnapshotRepository.name, Retry(DeleteSnapshotRepository()), async_runner=True)
     register_runner(track.OperationType.CreateSnapshotRepository.name, Retry(CreateSnapshotRepository()), async_runner=True)
+    register_runner(track.OperationType.WaitForSnapshotCreate.name, Retry(WaitForSnapshotCreate()), async_runner=True)
     register_runner(track.OperationType.WaitForRecovery.name, Retry(IndicesRecovery()), async_runner=True)
     register_runner(track.OperationType.PutSettings.name, Retry(PutSettings()), async_runner=True)
     register_runner(track.OperationType.CreateTransform.name, Retry(CreateTransform()), async_runner=True)
@@ -1464,31 +1465,64 @@ class CreateSnapshot(Runner):
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
         body = mandatory(params, "body", repr(self))
-        response = await es.snapshot.create(repository=repository,
-                                            snapshot=snapshot,
-                                            body=body,
-                                            params=request_params,
-                                            wait_for_completion=wait_for_completion)
-
-        # We can derive a more useful throughput metric if the snapshot has successfully completed
-        if wait_for_completion and response.get("snapshot", {}).get("state") == "SUCCESS":
-            stats_response = await es.snapshot.status(repository=repository,
-                                                      snapshot=snapshot)
-            size = stats_response["snapshots"][0]["stats"]["total"]["size_in_bytes"]
-            # while the actual service time as determined by Rally should be pretty accurate, the actual time it took
-            # to restore allows for a correct calculation of achieved throughput.
-            time_in_millis = stats_response["snapshots"][0]["stats"]["time_in_millis"]
-            time_in_seconds = time_in_millis / 1000
-            return {
-                "weight": size,
-                "unit": "byte",
-                "success": True,
-                "service_time": time_in_seconds,
-                "time_period": time_in_seconds
-            }
+        await es.snapshot.create(repository=repository,
+                                 snapshot=snapshot,
+                                 body=body,
+                                 params=request_params,
+                                 wait_for_completion=wait_for_completion)
 
     def __repr__(self, *args, **kwargs):
         return "create-snapshot"
+
+
+class WaitForSnapshotCreate(Runner):
+    async def __call__(self, es, params):
+        repository = mandatory(params, "repository", repr(self))
+        snapshot = mandatory(params, "snapshot", repr(self))
+        wait_period = params.get("completion-recheck-wait-period", 1)
+
+        snapshot_done = False
+        stats = {}
+
+        while not snapshot_done:
+            response = await es.snapshot.status(repository=repository,
+                                                snapshot=snapshot,
+                                                ignore_unavailable=True)
+
+            if "snapshots" in response:
+                response_state = response["snapshots"][0]["state"]
+                # Possible states:
+                # https://www.elastic.co/guide/en/elasticsearch/reference/current/get-snapshot-status-api.html#get-snapshot-status-api-response-body
+                if response_state == "FAILED":
+                    self.logger.error("Snapshot [%s] failed. Response status:\n%s", snapshot, json.dumps(response))
+                    raise exceptions.RallyAssertionError(
+                        f"Snapshot [{snapshot}] failed. Please check logs."
+                    )
+                snapshot_done = response_state == "SUCCESS"
+                stats = response["snapshots"][0]["stats"]
+
+            if not snapshot_done:
+                await asyncio.sleep(wait_period)
+
+        size = stats["total"]["size_in_bytes"]
+        file_count = stats["total"]["file_count"]
+        start_time_in_millis = stats["start_time_in_millis"]
+        duration_in_millis = stats["time_in_millis"]
+        duration_in_seconds = duration_in_millis / 1000
+
+        return {
+            "weight": size,
+            "unit": "byte",
+            "success": True,
+            "throughput": size / duration_in_seconds,
+            "start_time_millis": start_time_in_millis,
+            "stop_time_millis": start_time_in_millis + duration_in_millis,
+            "duration": duration_in_millis,
+            "file_count": file_count
+        }
+
+    def __repr__(self, *args, **kwargs):
+        return "wait-for-snapshot-create"
 
 
 class RestoreSnapshot(Runner):

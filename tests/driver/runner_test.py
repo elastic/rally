@@ -17,6 +17,7 @@
 
 import io
 import json
+import logging
 import random
 import unittest.mock as mock
 from unittest import TestCase
@@ -2756,6 +2757,140 @@ class CreateSnapshotTests(TestCase):
             }
         })
 
+        params = {
+            "repository": "backups",
+            "snapshot": "snapshot-001",
+            "body": {
+                "indices": "logs-*"
+            },
+            "wait-for-completion": True,
+            "request-params": {
+                "request_timeout": 7200
+            }
+        }
+
+        r = runner.CreateSnapshot()
+        await r(es, params)
+
+        es.snapshot.create.assert_called_once_with(repository="backups",
+                                                   snapshot="snapshot-001",
+                                                   body={
+                                                       "indices": "logs-*"
+                                                   },
+                                                   params={"request_timeout": 7200},
+                                                   wait_for_completion=True)
+
+
+class WaitForSnapshotCreateTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_wait_for_snapshot_create_entire_lifecycle(self, es):
+        es.snapshot.status.side_effect = [
+            # empty response
+            as_future({}),
+            # active snapshot
+            as_future({
+                "snapshots": [{
+                    "snapshot": "restore_speed_snapshot",
+                    "repository": "restore_speed",
+                    "uuid": "92efRcQxRCCwJuuC2lb-Ow",
+                    "state": "STARTED",
+                    "include_global_state": True,
+                    "shards_stats": {
+                        "initializing": 0,
+                        "started": 10,
+                        "finalizing": 0,
+                        "done": 3,
+                        "failed": 0,
+                        "total": 13},
+                    "stats": {
+                        "incremental": {
+                            "file_count": 222,
+                            "size_in_bytes": 243468220144
+                        },
+                        "processed": {
+                            "file_count": 18,
+                            "size_in_bytes": 82839346
+                        },
+                        "total": {
+                            "file_count": 222,
+                            "size_in_bytes": 243468220144
+                        },
+                        "start_time_in_millis": 1597319858606,
+                        "time_in_millis": 6606
+                    },
+                    "indices": {
+                        # skipping content as we don"t parse this
+                    }
+                }]
+            }
+            ),
+            # completed
+            as_future({
+                "snapshots": [{
+                    "snapshot": "restore_speed_snapshot",
+                    "repository": "restore_speed",
+                    "uuid": "6gDpGbxOTpWKIutWdpWCFw",
+                    "state": "SUCCESS",
+                    "include_global_state": True,
+                    "shards_stats": {
+                        "initializing": 0,
+                        "started": 0,
+                        "finalizing": 0,
+                        "done": 13,
+                        "failed": 0,
+                        "total": 13
+                    },
+                    "stats": {
+                        "incremental": {
+                            "file_count": 204,
+                            "size_in_bytes": 243468188055
+                        },
+                        "total": {
+                            "file_count": 204,
+                            "size_in_bytes": 243468188055
+                        },
+                        "start_time_in_millis": 1597317564956,
+                        "time_in_millis": 1113462
+                    },
+                    "indices": {
+                        # skipping content here as don"t parse this
+                    }
+                }]
+            })
+        ]
+
+        basic_params = {
+            "repository": "restore_speed",
+            "snapshot": "restore_speed_snapshot",
+            "completion-recheck-wait-period": 0
+        }
+
+        r = runner.WaitForSnapshotCreate()
+        result = await r(es, basic_params)
+
+        es.snapshot.status.assert_called_with(
+            repository="restore_speed",
+            snapshot="restore_speed_snapshot",
+            ignore_unavailable=True
+        )
+
+        self.assertDictEqual({
+            "weight": 243468188055,
+            "unit": "byte",
+            "success": True,
+            "duration": 1113462,
+            "file_count": 204,
+            "throughput": 218658731.10622546,
+            "start_time_millis": 1597317564956,
+            "stop_time_millis": 1597317564956 + 1113462
+        }, result)
+
+        self.assertEqual(3, es.snapshot.status.call_count)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_wait_for_snapshot_create_immediate_success(self, es):
         es.snapshot.status.return_value = as_future({
             "snapshots": [
                 {
@@ -2779,36 +2914,56 @@ class CreateSnapshotTests(TestCase):
         params = {
             "repository": "backups",
             "snapshot": "snapshot-001",
-            "body": {
-                "indices": "logs-*"
-            },
-            "wait-for-completion": True,
-            "request-params": {
-                "request_timeout": 7200
-            }
         }
 
-        r = runner.CreateSnapshot()
+        r = runner.WaitForSnapshotCreate()
         result = await r(es, params)
 
         self.assertDictEqual({
             "weight": 9399505,
             "unit": "byte",
             "success": True,
-            "service_time": 0.2,
-            "time_period": 0.2
+            "duration": 200,
+            "file_count": 70,
+            "throughput": 46997525.0,
+            "start_time_millis": 1591776481060,
+            "stop_time_millis": 1591776481060 + 200
         }, result)
 
-        es.snapshot.create.assert_called_once_with(repository="backups",
-                                                   snapshot="snapshot-001",
-                                                   body={
-                                                       "indices": "logs-*"
-                                                   },
-                                                   params={"request_timeout": 7200},
-                                                   wait_for_completion=True)
-
         es.snapshot.status.assert_called_once_with(repository="backups",
-                                                   snapshot="snapshot-001")
+                                                   snapshot="snapshot-001",
+                                                   ignore_unavailable=True)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_wait_for_snapshot_create_failure(self, es):
+        snapshot_status = {
+            "snapshots": [
+                {
+                    "snapshot": "snapshot-001",
+                    "repository": "backups",
+                    "state": "FAILED",
+                    "include_global_state": False
+                }
+            ]
+        }
+        es.snapshot.status.return_value = as_future(snapshot_status)
+
+        params = {
+            "repository": "backups",
+            "snapshot": "snapshot-001",
+        }
+
+        r = runner.WaitForSnapshotCreate()
+
+        logger = logging.getLogger("esrally.driver.runner")
+        with mock.patch.object(logger, "error") as mocked_error_logger:
+            with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+                await r(es, params)
+                self.assertEqual("Snapshot [snapshot-001] failed. Please check logs.", ctx.exception.args[0])
+            mocked_error_logger.assert_has_calls([
+                mock.call("Snapshot [%s] failed. Response status:\n%s", "snapshot-001", json.dumps(snapshot_status))
+            ])
 
 
 class RestoreSnapshotTests(TestCase):

@@ -420,7 +420,7 @@ class OperationType(Enum):
     RawRequest = 5
     WaitForRecovery = 6
     CreateSnapshot = 7
-
+    WaitForSnapshotCreate = 8
 
     # administrative actions
     ForceMerge = 1001
@@ -510,6 +510,8 @@ class OperationType(Enum):
             return OperationType.CreateSnapshotRepository
         elif v == "create-snapshot":
             return OperationType.CreateSnapshot
+        elif v == "wait-for-snapshot-create":
+            return OperationType.WaitForSnapshotCreate
         elif v == "restore-snapshot":
             return OperationType.RestoreSnapshot
         elif v == "wait-for-recovery":
