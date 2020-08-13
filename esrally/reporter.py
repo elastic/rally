@@ -312,6 +312,8 @@ class ComparisonReporter:
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
         self.cwd = config.opts("node", "rally.cwd")
+        self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime",
+                                                                mandatory=False, default_value=False))
         self.plain = False
 
     def report(self, r1, r2):
@@ -362,6 +364,8 @@ class ComparisonReporter:
                 metrics_table.extend(self.report_throughput(baseline_stats, contender_stats, t))
                 metrics_table.extend(self.report_latency(baseline_stats, contender_stats, t))
                 metrics_table.extend(self.report_service_time(baseline_stats, contender_stats, t))
+                if self.show_processing_time:
+                    metrics_table.extend(self.report_processing_time(baseline_stats, contender_stats, t))
                 metrics_table.extend(self.report_error_rate(baseline_stats, contender_stats, t))
         return metrics_table
 
@@ -395,6 +399,11 @@ class ComparisonReporter:
         baseline_service_time = baseline_stats.metrics(task)["service_time"]
         contender_service_time = contender_stats.metrics(task)["service_time"]
         return self.report_percentiles("service time", task, baseline_service_time, contender_service_time)
+
+    def report_processing_time(self, baseline_stats, contender_stats, task):
+        baseline_processing_time = baseline_stats.metrics(task)["processing_time"]
+        contender_processing_time = contender_stats.metrics(task)["processing_time"]
+        return self.report_percentiles("processing time", task, baseline_processing_time, contender_processing_time)
 
     def report_percentiles(self, name, task, baseline_values, contender_values):
         lines = []
