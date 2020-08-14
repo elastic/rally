@@ -2701,8 +2701,6 @@ class CreateSnapshotTests(TestCase):
     @run_async
     async def test_create_snapshot_no_wait(self, es):
         es.snapshot.create.return_value = as_future({})
-        # should not be called
-        es.snapshot.status.return_value = as_future({})
 
         params = {
             "repository": "backups",
