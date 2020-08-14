@@ -17,7 +17,6 @@
 
 import io
 import json
-import logging
 import random
 import unittest.mock as mock
 from unittest import TestCase
@@ -2727,7 +2726,6 @@ class CreateSnapshotTests(TestCase):
                                                    },
                                                    params={"request_timeout": 7200},
                                                    wait_for_completion=False)
-        self.assertEqual(0, es.snapshot.status.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2956,8 +2954,7 @@ class WaitForSnapshotCreateTests(TestCase):
 
         r = runner.WaitForSnapshotCreate()
 
-        logger = logging.getLogger("esrally.driver.runner")
-        with mock.patch.object(logger, "error") as mocked_error_logger:
+        with mock.patch.object(r.logger, "error") as mocked_error_logger:
             with self.assertRaises(exceptions.RallyAssertionError) as ctx:
                 await r(es, params)
                 self.assertEqual("Snapshot [snapshot-001] failed. Please check logs.", ctx.exception.args[0])

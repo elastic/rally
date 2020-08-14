@@ -1494,10 +1494,8 @@ class WaitForSnapshotCreate(Runner):
                 # Possible states:
                 # https://www.elastic.co/guide/en/elasticsearch/reference/current/get-snapshot-status-api.html#get-snapshot-status-api-response-body
                 if response_state == "FAILED":
-                    self.logger.error("Snapshot [%s] failed. Response status:\n%s", snapshot, json.dumps(response))
-                    raise exceptions.RallyAssertionError(
-                        f"Snapshot [{snapshot}] failed. Please check logs."
-                    )
+                    self.logger.error("Snapshot [%s] failed. Response:\n%s", snapshot, json.dumps(response, indent=2))
+                    raise exceptions.RallyAssertionError(f"Snapshot [{snapshot}] failed. Please check logs.")
                 snapshot_done = response_state == "SUCCESS"
                 stats = response["snapshots"][0]["stats"]
 

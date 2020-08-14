@@ -419,8 +419,7 @@ class OperationType(Enum):
     Bulk = 4
     RawRequest = 5
     WaitForRecovery = 6
-    CreateSnapshot = 7
-    WaitForSnapshotCreate = 8
+    WaitForSnapshotCreate = 7
 
     # administrative actions
     ForceMerge = 1001
@@ -443,12 +442,13 @@ class OperationType(Enum):
     Sleep = 1018
     DeleteSnapshotRepository = 1019
     CreateSnapshotRepository = 1020
-    RestoreSnapshot = 1021
-    PutSettings = 1022
-    CreateTransform = 1023
-    StartTransform = 1024
-    WaitForTransform = 1025
-    DeleteTransform = 1026
+    CreateSnapshot = 1021
+    RestoreSnapshot = 1022
+    PutSettings = 1023
+    CreateTransform = 1024
+    StartTransform = 1025
+    WaitForTransform = 1026
+    DeleteTransform = 1027
 
     @property
     def admin_op(self):
