@@ -2959,7 +2959,7 @@ class WaitForSnapshotCreateTests(TestCase):
                 await r(es, params)
                 self.assertEqual("Snapshot [snapshot-001] failed. Please check logs.", ctx.exception.args[0])
             mocked_error_logger.assert_has_calls([
-                mock.call("Snapshot [%s] failed. Response status:\n%s", "snapshot-001", json.dumps(snapshot_status))
+                mock.call("Snapshot [%s] failed. Response:\n%s", "snapshot-001", json.dumps(snapshot_status, indent=2))
             ])
 
 
