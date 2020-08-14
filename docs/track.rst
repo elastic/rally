@@ -1119,7 +1119,24 @@ With the operation ``create-snapshot`` you can `create a snapshot <https://www.e
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 
 .. note::
-    When ``wait-for-completion`` is set to ``true`` Rally will report the achieved throughput in byte/s.
+    It's not recommended to rely on ``wait-for-completion=true``. Instead you should keep the default value (``False``) and use an additional ``wait-for-snapshot-create`` operation in the next step.
+    This is mandatory on `Elastic Cloud <https://www.elastic.co/cloud>`_ or environments where Elasticsearch is connected via intermediate network components, such as proxies, that may terminate the blocking connection after a timeout.
+
+wait-for-snapshot-create
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``wait-for-snapshot-create`` you can wait until a `snapshot has finished successfully <https://www.elastic.co/guide/en/elasticsearch/reference/current/get-snapshot-status-api.html>`_.
+Typically you'll use this operation directly after a ``create-snapshot`` operation.
+
+It supports the following parameters:
+
+* ``repository`` (mandatory): The name of the snapshot repository to use.
+* ``snapshot`` (mandatory): The name of the snapshot that this operation will wait until it succeeds.
+* ``completion-recheck-wait-period`` (optional, defaults to 1 second): Time in seconds to wait in between consecutive attempts.
+
+Rally will report the achieved throughput in byte/s.
+
+This operation is :ref:`retryable <track_operations>`.
 
 restore-snapshot
 ~~~~~~~~~~~~~~~~
