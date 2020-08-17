@@ -43,7 +43,6 @@ function main {
     printf "The source code can be obtained at https://github.com/certifi/python-certifi\n" >> "${OUTPUT_FILE}"
     add_license "certifi" "https://raw.githubusercontent.com/certifi/python-certifi/master/LICENSE"
     add_license "elasticsearch" "https://raw.githubusercontent.com/elastic/elasticsearch-py/master/LICENSE"
-    add_license "elasticsearch-async" "https://raw.githubusercontent.com/elastic/elasticsearch-py-async/master/LICENSE"
     add_license "jinja2" "https://raw.githubusercontent.com/pallets/jinja/master/LICENSE.rst"
     add_license "jsonschema" "https://raw.githubusercontent.com/Julian/jsonschema/master/COPYING"
     add_license "psutil" "https://raw.githubusercontent.com/giampaolo/psutil/master/LICENSE"
@@ -55,19 +54,24 @@ function main {
     add_license "ijson" "https://raw.githubusercontent.com/ICRAR/ijson/master/LICENSE.txt"
 
     # transitive dependencies
-    # Jinja2 -> Markupsafe
+    # Jinja2 dependencies
     add_license "Markupsafe" "https://raw.githubusercontent.com/pallets/markupsafe/master/LICENSE.rst"
-    # elasticsearch -> urllib3
+    # elasticsearch dependencies
     add_license "urllib3" "https://raw.githubusercontent.com/shazow/urllib3/master/LICENSE.txt"
-    #elasticsearch_async -> aiohttp
+    #elasticsearch[async] dependencies
     add_license "aiohttp" "https://raw.githubusercontent.com/aio-libs/aiohttp/master/LICENSE.txt"
-    #elasticsearch_async -> async_timeout
+    #aiohttp dependencies
     add_license "async_timeout" "https://raw.githubusercontent.com/aio-libs/async-timeout/master/LICENSE"
-    # boto3 -> s3transfer
+    add_license "attrs" "https://raw.githubusercontent.com/python-attrs/attrs/master/LICENSE"
+    add_license "chardet" "https://raw.githubusercontent.com/chardet/chardet/master/LICENSE"
+    add_license "multidict" "https://raw.githubusercontent.com/aio-libs/multidict/master/LICENSE"
+    add_license "yarl" "https://github.com/aio-libs/yarl/blob/master/LICENSE"
+    # yarl dependencies
+    add_license "idna" "https://raw.githubusercontent.com/kjd/idna/master/LICENSE.md"
+    # yarl dependency "multidict" is already coverered above
+    # boto3 dependencies
     add_license "s3transfer" "https://raw.githubusercontent.com/boto/s3transfer/develop/LICENSE.txt"
-    # boto3 -> jmespath
     add_license "jmespath" "https://raw.githubusercontent.com/jmespath/jmespath.py/develop/LICENSE.txt"
-    # boto3 -> botocore
     add_license "botocore" "https://raw.githubusercontent.com/boto/botocore/develop/LICENSE.txt"
 }
 

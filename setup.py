@@ -48,13 +48,10 @@ supported_python_versions = [(3, 8)]
 ################################################################################################
 install_requires = [
     # License: Apache 2.0
-    # transitive dependency urllib3: MIT
-    "elasticsearch==7.6.0",
-    # License: Apache 2.0
     # transitive dependencies:
+    #   urllib3: MIT
     #   aiohttp: Apache 2.0
-    #   async_timeout: Apache 2.0
-    "elasticsearch-async==6.2.0",
+    "elasticsearch[async]==7.8.0",
     # License: BSD
     "psutil==5.7.0",
     # License: MIT

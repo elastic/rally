@@ -132,11 +132,7 @@ class EsClientFactory:
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
     def create_async(self):
-        # keep imports confined as we do some temporary patching to work around unsolved issues in the async ES connector
-        import elasticsearch.transport
-        import elasticsearch.compat
-        import elasticsearch_async
-        from aiohttp.client import ClientTimeout
+        import elasticsearch
         import esrally.async_connection
         import io
         import aiohttp
@@ -167,30 +163,12 @@ class EsClientFactory:
         # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
         trace_config.on_request_exception.append(on_request_end)
 
-        # needs patching as https://github.com/elastic/elasticsearch-py-async/pull/68 is not merged yet
-        class RallyAsyncTransport(elasticsearch_async.transport.AsyncTransport):
-            def __init__(self, hosts, connection_class=esrally.async_connection.AIOHttpConnection, loop=None,
-                         connection_pool_class=elasticsearch_async.connection_pool.AsyncConnectionPool,
-                         sniff_on_start=False, raise_on_sniff_error=True, **kwargs):
-                super().__init__(hosts, connection_class, loop, connection_pool_class, sniff_on_start, raise_on_sniff_error, **kwargs)
-
-        if "timeout" in self.client_options and not isinstance(self.client_options["timeout"], ClientTimeout):
-            self.client_options["timeout"] = ClientTimeout(total=self.client_options["timeout"])
-        else:
-            # 10 seconds is the Elasticsearch default, ensure we always set a ClientTimeout object here
-            self.client_options["timeout"] = ClientTimeout(total=10)
-
         # override the builtin JSON serializer
         self.client_options["serializer"] = LazyJSONSerializer()
         self.client_options["trace_config"] = trace_config
 
-        # copy of AsyncElasticsearch as https://github.com/elastic/elasticsearch-py-async/pull/49 is not yet released.
-        # That PR (also) fixes the behavior reported in https://github.com/elastic/elasticsearch-py-async/issues/43.
-        class RallyAsyncElasticsearch(elasticsearch.Elasticsearch):
+        class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch):
             request_context = contextvars.ContextVar("rally_request_context")
-
-            def __init__(self, hosts=None, transport_class=RallyAsyncTransport, **kwargs):
-                super().__init__(hosts, transport_class=transport_class, **kwargs)
 
             def init_request_context(self):
                 ctx = {}
@@ -201,51 +179,8 @@ class EsClientFactory:
                 ctx = RallyAsyncElasticsearch.request_context.get()
                 ctx["raw_response"] = True
 
-            # workaround for https://github.com/elastic/elasticsearch-py/issues/919
-            @elasticsearch.client.utils.query_params(
-                "_source",
-                "_source_excludes",
-                "_source_includes",
-                "pipeline",
-                "refresh",
-                "routing",
-                "timeout",
-                "wait_for_active_shards",
-            )
-            def bulk(self, body, index=None, doc_type=None, params=None, headers=None):
-                if body in elasticsearch.client.utils.SKIP_IN_PATH:
-                    raise ValueError("Empty value passed for a required argument 'body'.")
-
-                body = self._bulk_body(body)
-                return self.transport.perform_request(
-                    "POST",
-                    elasticsearch.client.utils._make_path(index, doc_type, "_bulk"),
-                    params=params,
-                    headers=headers,
-                    body=body,
-                )
-
-            def _bulk_body(self, body):
-                # if not passed in a string, serialize items and join by newline
-                if not isinstance(body, elasticsearch.compat.string_types):
-                    body = "\n".join(map(self.transport.serializer.dumps, body))
-
-                # bulk body must end with a newline
-                if isinstance(body, bytes) and not body.endswith(b"\n"):
-                    body += b"\n"
-                elif isinstance(body, str) and not body.endswith("\n"):
-                    body += "\n"
-
-                return body
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
-                yield self.transport.close()
-
         return RallyAsyncElasticsearch(hosts=self.hosts,
-                                       transport_class=RallyAsyncTransport,
+                                       connection_class=esrally.async_connection.AIOHttpConnection,
                                        ssl_context=self.ssl_context,
                                        **self.client_options)
 
