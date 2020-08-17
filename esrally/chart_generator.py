@@ -254,9 +254,9 @@ class BarCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
@@ -433,9 +433,9 @@ class BarCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
@@ -591,9 +591,9 @@ class BarCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
@@ -767,9 +767,9 @@ class BarCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
@@ -896,16 +896,16 @@ class TimeSeriesCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "gc",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
                 }
             }
         }
@@ -988,16 +988,16 @@ class TimeSeriesCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "io",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
                 }
             }
         }
@@ -1103,16 +1103,16 @@ class TimeSeriesCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "segment_memory",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query\":{\"query_string\":{\"query\":\"*\"}},\"language\":\"lucene\"},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":{\"query\":\"*\",\"language\":\"lucene\"},\"filter\":[]}"
                 }
             }
         }
@@ -1262,16 +1262,16 @@ class TimeSeriesCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "query",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
                 }
             }
         }
@@ -1355,16 +1355,16 @@ class TimeSeriesCharts:
             "listeners": {}
         }
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "index",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
                 }
             }
         }
@@ -1462,7 +1462,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
     for idx, chart in enumerate(charts):
         panelIndex = idx + 1
         # make index charts wider
-        if chart["_source"]["description"] == "index":
+        if chart["attributes"]["description"] == "index":
             chart_width = 2 * width
             # force one panel per row
             next_col = 0
@@ -1472,7 +1472,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
             next_col = (col + 1) % 2
 
         panel = {
-            "id": chart["_id"],
+            "id": chart["id"],
             "panelIndex": panelIndex,
             "gridData": {
                 "x": (col * chart_width),
@@ -1482,7 +1482,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
                 "i": "{}".format(panelIndex)
             },
             "type": "visualization",
-            "version": "6.3.2"
+            "version": "7.8.0"
         }
         panels.append(panel)
         col = next_col
@@ -1490,9 +1490,9 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
             row += 1
 
     return {
-        "_id": str(uuid.uuid4()),
-        "_type": "dashboard",
-        "_source": {
+        "id": str(uuid.uuid4()),
+        "type": "dashboard",
+        "attributes": {
             "title": chart_type.format_title(environment, track.name, flavor=flavor),
             "hits": 0,
             "description": "",
@@ -1729,6 +1729,8 @@ def generate(cfg):
     output_path = cfg.opts("generator", "output.path")
     if output_path:
         with open(io.normalize_path(output_path), mode="wt", encoding="utf-8") as f:
-            print(json.dumps(structures, indent=4), file=f)
+            for record in structures:
+                print(json.dumps(record), file=f)
     else:
-        print(json.dumps(structures, indent=4))
+        for record in structures:
+              print(json.dumps(structures))
