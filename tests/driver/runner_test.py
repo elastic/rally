@@ -927,6 +927,16 @@ class ForceMergeRunnerTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
+    async def test_force_merge_with_polling(self, es):
+        es.indices.forcemerge.return_value = as_future()
+
+        force_merge = runner.ForceMerge()
+
+
+
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
     async def test_optimize_with_defaults(self, es):
         es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
         es.transport.perform_request.return_value = as_future()
