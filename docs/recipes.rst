@@ -172,3 +172,112 @@ Rally will push metrics to the metric store configured in 1. and they can be vis
 To tear down everything issue ``./stop.sh``.
 
 It is possible to specify a different version of Elasticsearch for step 3. by setting ``export ES_VERSION=<the_desired_version>``.
+
+Identifying when errors have been encountered
+--------------------------------------------------------------
+
+Custom track development can be error prone especially if you are testing a new query. A number of reasons can lead to queries returning errors.
+
+Consider a simple example Rally operation:
+
+    {
+      "name": "geo_distance",
+      "operation-type": "search",
+      "index": "logs-*",
+      "body": {
+        "query": {
+           "geo_distance": {
+              "distance": "12km",
+              "source.geo.location": "40,-70"
+           }
+        }
+      }
+    }
+This query requires the field ``source.geo.location`` to be mapped as a ``geo_point`` type. If incorrectly mapped, Elasticsearch will respond with an error. 
+
+Rally will not exit on errors (unless fatal e.g. [http://man7.org/linux/man-pages/man2/connect.2.html](ECONNREFUSED)) by default, instead reporting errors in the summary report via the [Error Rate](https://esrally.readthedocs.io/en/stable/summary_report.html?highlight=on-error#error-rate) statistic. This can potentially leading to misleading results. This behavior is by design and consistent with other load testing tools such as JMeter i.e. In most cases it is desirable that a large long running benchmark should not fail because of a single error response. 
+
+ This behavior can also be changed, by invoking Rally with the [--on-error](https://esrally.readthedocs.io/en/stable/command_line_reference.html?highlight=on-error#on-error) switch e.g.
+
+	esrally --track=geonames --on-error=abort
+	
+Errors can also be investigated if you have configured a [dedicated Elasticsearch metrics store](https://esrally.readthedocs.io/en/stable/configuration.html#advanced-configuration).
+
+Checking Queries and Responses
+--------------------------------------------------------------
+
+As described above, errors can lead to misleading benchmarking results. Some issues, however, are more subtle and the result of queries not behaving and matching as intended.
+
+Consider the following simple Rally operation:
+
+    {
+      "name": "geo_distance",
+      "operation-type": "search",
+      "index": "logs-*",
+      "body": {
+        "query": {
+           "term": {
+		      "http.request.method": {
+		        "value": "GET"
+		      }
+		    }
+        }
+      }
+    }
+For this term query to match the field ``http.request.method`` needs to be type `keyword`. Should this field be [dynamically mapped](https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic-field-mapping.html), its default type will be ``text`` causing the value `GET` to be [analyzed](https://www.elastic.co/guide/en/elasticsearch/reference/current/text.html), and indexed as `get`. The above query will in turn return `0` hits. The field should either be correctly mapped or the query modified to match on `http.request.method.keyword`.
+
+Issues such as this can lead to misleading benchmarking results. Prior to running any benchmarks for analysis, we therefore recommended users ascertain whether queries are behaving as intended. Rally provides several tools to assist with this.
+
+Firstly, users can modify the [logging level](https://esrally.readthedocs.io/en/stable/configuration.html?highlight=logging#logging) of Rally to `DEBUG`. Specifically, modify the ``elasticsearch`` logger i.e.:
+
+	"loggers": {
+	  "elasticsearch": {
+	    "handlers": ["rally_log_handler"],
+	    "level": "DEBUG",
+	    "propagate": false
+	  },
+	  "rally.profile": {
+	    "handlers": ["rally_profile_handler"],
+	    "level": "INFO",
+	    "propagate": false
+	  }
+	}
+
+This will inturn ensure logs include the Elasticsearch query and accompanying response e.g.
+
+	2019-12-16 14:56:08,389 -not-actor-/PID:9790 elasticsearch DEBUG > {"sort":[{"geonameid":"asc"}],"query":{"match_all":{}}}
+	2019-12-16 14:56:08,389 -not-actor-/PID:9790 elasticsearch DEBUG < {"took":1,"timed_out":false,"_shards":{"total":5,"successful":5,"skipped":0,"failed":0},"hits":{"total":{"value":1000,"relation":"eq"},"max_score":null,"hits":[{"_index":"geonames","_type":"_doc","_id":"Lb81D28Bu7VEEZ3mXFGw","_score":null,"_source":{"geonameid": 2986043, "name": "Pic de Font Blanca", "asciiname": "Pic de Font Blanca", "alternatenames": "Pic de Font Blanca,Pic du Port", "feature_class": "T", "feature_code": "PK", "country_code": "AD", "admin1_code": "00", "population": 0, "dem": "2860", "timezone": "Europe/Andorra", "location": [1.53335, 42.64991]},"sort":[2986043]},
+
+Users should discard any performance metrics collected from a benchmark with DEBUG logging. This will likely cause a client-side bottleneck so once the correctness of the queries have been established, disable this setting and re-run any benchmarks.
+
+The number of hits from queries can also be investigated if you have configured a [dedicated Elasticsearch metrics store](https://esrally.readthedocs.io/en/stable/configuration.html#advanced-configuration). Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with summary of individual responses e.g.
+
+	{
+	  "@timestamp" : 1597681313435,
+	  "relative-time" : 130273374,
+	  "race-id" : "452ad9d7-9c21-4828-848e-89974af3230e",
+	  "race-timestamp" : "20200817T160412Z",
+	  "environment" : "Personal",
+	  "track" : "geonames",
+	  "challenge" : "append-no-conflicts",
+	  "car" : "defaults",
+	  "name" : "latency",
+	  "value" : 270.77871300025436,
+	  "unit" : "ms",
+	  "sample-type" : "warmup",
+	  "meta" : {
+	    "source_revision" : "757314695644ea9a1dc2fecd26d1a43856725e65",
+	    "distribution_version" : "7.8.0",
+	    "distribution_flavor" : "oss",
+	    "pages" : 25,
+	    "hits" : 11396503,
+	    "hits_relation" : "eq",
+	    "timed_out" : false,
+	    "took" : 110,
+	    "success" : true
+	  },
+	  "task" : "scroll",
+	  "operation" : "scroll",
+	  "operation-type" : "Search"
+	}
+
