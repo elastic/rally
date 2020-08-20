@@ -178,7 +178,7 @@ Identifying when errors have been encountered
 
 Custom track development can be error prone especially if you are testing a new query. A number of reasons can lead to queries returning errors.
 
-Consider a simple example Rally operation:
+Consider a simple example Rally operation::
 
     {
       "name": "geo_distance",
@@ -193,6 +193,7 @@ Consider a simple example Rally operation:
         }
       }
     }
+
 This query requires the field ``source.geo.location`` to be mapped as a ``geo_point`` type. If incorrectly mapped, Elasticsearch will respond with an error. 
 
 Rally will not exit on errors (unless fatal e.g. [http://man7.org/linux/man-pages/man2/connect.2.html](ECONNREFUSED)) by default, instead reporting errors in the summary report via the [Error Rate](https://esrally.readthedocs.io/en/stable/summary_report.html?highlight=on-error#error-rate) statistic. This can potentially leading to misleading results. This behavior is by design and consistent with other load testing tools such as JMeter i.e. In most cases it is desirable that a large long running benchmark should not fail because of a single error response. 
@@ -208,7 +209,7 @@ Checking Queries and Responses
 
 As described above, errors can lead to misleading benchmarking results. Some issues, however, are more subtle and the result of queries not behaving and matching as intended.
 
-Consider the following simple Rally operation:
+Consider the following simple Rally operation::
 
     {
       "name": "geo_distance",
@@ -224,11 +225,12 @@ Consider the following simple Rally operation:
         }
       }
     }
+
 For this term query to match the field ``http.request.method`` needs to be type `keyword`. Should this field be [dynamically mapped](https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic-field-mapping.html), its default type will be ``text`` causing the value `GET` to be [analyzed](https://www.elastic.co/guide/en/elasticsearch/reference/current/text.html), and indexed as `get`. The above query will in turn return `0` hits. The field should either be correctly mapped or the query modified to match on `http.request.method.keyword`.
 
 Issues such as this can lead to misleading benchmarking results. Prior to running any benchmarks for analysis, we therefore recommended users ascertain whether queries are behaving as intended. Rally provides several tools to assist with this.
 
-Firstly, users can modify the [logging level](https://esrally.readthedocs.io/en/stable/configuration.html?highlight=logging#logging) of Rally to `DEBUG`. Specifically, modify the ``elasticsearch`` logger i.e.:
+Firstly, users can modify the [logging level](https://esrally.readthedocs.io/en/stable/configuration.html?highlight=logging#logging) of Rally to `DEBUG`. Specifically, modify the ``elasticsearch`` logger i.e.::
 
 	"loggers": {
 	  "elasticsearch": {
@@ -250,7 +252,7 @@ This will inturn ensure logs include the Elasticsearch query and accompanying re
 
 Users should discard any performance metrics collected from a benchmark with DEBUG logging. This will likely cause a client-side bottleneck so once the correctness of the queries have been established, disable this setting and re-run any benchmarks.
 
-The number of hits from queries can also be investigated if you have configured a [dedicated Elasticsearch metrics store](https://esrally.readthedocs.io/en/stable/configuration.html#advanced-configuration). Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with summary of individual responses e.g.
+The number of hits from queries can also be investigated if you have configured a [dedicated Elasticsearch metrics store](https://esrally.readthedocs.io/en/stable/configuration.html#advanced-configuration). Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with summary of individual responses e.g.::
 
 	{
 	  "@timestamp" : 1597681313435,
