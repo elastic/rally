@@ -436,6 +436,11 @@
           "body": {
             "type": "object",
             "description": "[Only for type 'search']: The query body."
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["blocking", "polling"],
+            "description": "[Only for type 'force-merge']: Determines whether forced merged is blocking, causing a potential client timeout, or if it polls until no further force merge tasks."
           }
         },
         "required": [
