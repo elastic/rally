@@ -230,7 +230,7 @@ For this term query to match the field ``http.request.method`` needs to be type 
 
 Issues such as this can lead to misleading benchmarking results. Prior to running any benchmarks for analysis, we therefore recommended users ascertain whether queries are behaving as intended. Rally provides several tools to assist with this.
 
-Firstly, users can modify the :ref:`logging level <logging>` of Rally to ``DEBUG``. Specifically, modify the ``elasticsearch`` logger i.e.::
+Firstly, users can set the :ref:`log level <logging>` for the Elasticsearch client to ``DEBUG`` i.e.::
 
 	"loggers": {
 	  "elasticsearch": {
@@ -250,9 +250,9 @@ This will in turn ensure logs include the Elasticsearch query and accompanying r
 	2019-12-16 14:56:08,389 -not-actor-/PID:9790 elasticsearch DEBUG > {"sort":[{"geonameid":"asc"}],"query":{"match_all":{}}}
 	2019-12-16 14:56:08,389 -not-actor-/PID:9790 elasticsearch DEBUG < {"took":1,"timed_out":false,"_shards":{"total":5,"successful":5,"skipped":0,"failed":0},"hits":{"total":{"value":1000,"relation":"eq"},"max_score":null,"hits":[{"_index":"geonames","_type":"_doc","_id":"Lb81D28Bu7VEEZ3mXFGw","_score":null,"_source":{"geonameid": 2986043, "name": "Pic de Font Blanca", "asciiname": "Pic de Font Blanca", "alternatenames": "Pic de Font Blanca,Pic du Port", "feature_class": "T", "feature_code": "PK", "country_code": "AD", "admin1_code": "00", "population": 0, "dem": "2860", "timezone": "Europe/Andorra", "location": [1.53335, 42.64991]},"sort":[2986043]},
 
-Users should discard any performance metrics collected from a benchmark with DEBUG logging. This will likely cause a client-side bottleneck so once the correctness of the queries have been established, disable this setting and re-run any benchmarks.
+Users should discard any performance metrics collected from a benchmark with ``DEBUG`` logging. This will likely cause a client-side bottleneck so once the correctness of the queries has been established, disable this setting and re-run any benchmarks.
 
-The number of hits from queries can also be investigated if you have configured a :ref:`dedicated Elasticsearch metrics store <advanced_configuration>`. Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with summary of individual responses e.g.::
+The number of hits from queries can also be investigated if you have configured a :ref:`dedicated Elasticsearch metrics store <advanced_configuration>`. Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with a summary of individual responses e.g.::
 
 	{
 	  "@timestamp" : 1597681313435,
