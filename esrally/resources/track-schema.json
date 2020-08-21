@@ -441,6 +441,11 @@
             "type": "string",
             "enum": ["blocking", "polling"],
             "description": "[Only for type 'force-merge']: Determines whether forced merged is blocking, causing a potential client timeout, or if it polls until no further force merge tasks."
+          },
+          "poll-period": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "[Only for type 'force-merge']: Poll period in seconds for which to check action completion. Used on force-merge action when mode is 'polling' to determine periodicity of check to tasks API for merge completion. By default, set to 10s."
           }
         },
         "required": [
