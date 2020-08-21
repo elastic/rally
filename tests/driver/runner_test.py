@@ -22,7 +22,6 @@ import unittest.mock as mock
 from unittest import TestCase
 
 import elasticsearch
-from elasticsearch._async.client import TasksClient
 
 from esrally import exceptions
 from esrally.driver import runner
