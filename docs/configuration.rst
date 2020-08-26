@@ -39,6 +39,8 @@ Let's go through an example step by step: First run ``esrally``::
 
 Congratulations! Time to :doc:`run your first benchmark </race>`.
 
+.. _advanced_configuration:
+
 Advanced Configuration
 ----------------------
 
@@ -111,6 +113,8 @@ To verify that Rally will connect via the proxy server you can check the log fil
 .. note::
 
    Rally will use this proxy server only for downloading benchmark-related data. It will not use this proxy for the actual benchmark.
+
+.. _logging:
 
 Logging
 -------

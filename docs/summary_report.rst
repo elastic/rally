@@ -187,6 +187,8 @@ Rally reports several percentile numbers for each task. Which percentiles are sh
 * **Definition**: Time period between start of request processing and receiving the complete response. This metric can easily be mixed up with ``latency`` but does not include waiting time. This is what most load testing tools refer to as "latency" (although it is incorrect).
 * **Corresponding metrics key**: ``service_time``
 
+.. _summary_report_error_rate:
+
 Error rate
 ----------
 

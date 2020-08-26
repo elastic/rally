@@ -672,6 +672,8 @@ Client certificates can be presented regardless of the ``verify_certs`` setting,
 * Enable SSL, verify server certificates using private CA: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"``
 * Enable SSL, verify server certificates using private CA, present client certificates: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key:'/path/to/client_key.pem'"``
 
+.. _command_line_reference_on_error:
+
 ``on-error``
 ~~~~~~~~~~~~
 
