@@ -440,7 +440,7 @@
           "mode": {
             "type": "string",
             "enum": ["blocking", "polling"],
-            "description": "[Only for type 'force-merge']: Determines whether forced merged is blocking, causing a potential client timeout, or if it polls until no further force merge tasks."
+            "description": "[Only for type 'force-merge']: Determines whether forced merge is blocking, causing a potential client timeout, or if it polls until no further force merge tasks."
           },
           "poll-period": {
             "type": "integer",
