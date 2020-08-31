@@ -620,6 +620,7 @@ class ForceMergeParamSource(ParamSource):
         self._index_name = params.get("index", default_index)
         self._max_num_segments = params.get("max-num-segments")
         self._request_timeout = params.get("request-timeout")
+        self._poll_period = params.get("poll-period", 1)
         self._mode = params.get("mode", "blocking")
 
     def params(self):
@@ -627,7 +628,8 @@ class ForceMergeParamSource(ParamSource):
             "index": self._index_name,
             "max-num-segments": self._max_num_segments,
             "request-timeout": self._request_timeout,
-            "mode": self._mode
+            "mode": self._mode,
+            "poll-period": self._poll_period
         }
 
 

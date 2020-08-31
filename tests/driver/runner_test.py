@@ -927,13 +927,116 @@ class ForceMergeRunnerTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
-    async def test_force_merge_with_polling(self, es):
+    async def test_force_merge_with_polling_no_timeout(self, es):
         es.indices.forcemerge.return_value = as_future()
 
         force_merge = runner.ForceMerge()
+        await force_merge(es, params={"index" : "_all", "mode": "polling", 'poll-period': 0})
+        es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=1)
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_force_merge_with_polling(self, es):
+        es.indices.forcemerge.return_value = as_future(exception=elasticsearch.ConnectionTimeout())
+        es.tasks.list.side_effect = [
+            as_future({
+                "nodes": {
+                    "Ap3OfntPT7qL4CBeKvamxg": {
+                        "name": "instance-0000000001",
+                        "transport_address": "10.46.79.231:19693",
+                        "host": "10.46.79.231",
+                        "ip": "10.46.79.231:19693",
+                        "roles": [
+                            "data",
+                            "ingest",
+                            "master",
+                            "remote_cluster_client",
+                            "transform"
+                        ],
+                        "attributes": {
+                            "logical_availability_zone": "zone-1",
+                            "server_name": "instance-0000000001.64cb4c66f4f24d85b41f120ef2df5526",
+                            "availability_zone": "us-east4-a",
+                            "xpack.installed": "true",
+                            "instance_configuration": "gcp.data.highio.1",
+                            "transform.node": "true",
+                            "region": "unknown-region"
+                        },
+                        "tasks": {
+                            "Ap3OfntPT7qL4CBeKvamxg:417009036": {
+                                "node": "Ap3OfntPT7qL4CBeKvamxg",
+                                "id": 417009036,
+                                "type": "transport",
+                                "action": "indices:admin/forcemerge",
+                                "start_time_in_millis": 1598018980850,
+                                "running_time_in_nanos": 3659821411,
+                                "cancellable": False,
+                                "headers": {}
+                            }
+                        }
+                    }
+                }
+            }),
+            as_future({
+                "nodes":{}
+            })
+        ]
+        force_merge = runner.ForceMerge()
+        await force_merge(es, params={"index" : "_all", "mode": "polling", 'poll-period': 0})
+        es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=1)
 
-
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_force_merge_with_polling_and_params(self, es):
+        es.indices.forcemerge.return_value = as_future(exception=elasticsearch.ConnectionTimeout())
+        es.tasks.list.side_effect = [
+            as_future({
+                "nodes": {
+                    "Ap3OfntPT7qL4CBeKvamxg": {
+                        "name": "instance-0000000001",
+                        "transport_address": "10.46.79.231:19693",
+                        "host": "10.46.79.231",
+                        "ip": "10.46.79.231:19693",
+                        "roles": [
+                            "data",
+                            "ingest",
+                            "master",
+                            "remote_cluster_client",
+                            "transform"
+                        ],
+                        "attributes": {
+                            "logical_availability_zone": "zone-1",
+                            "server_name": "instance-0000000001.64cb4c66f4f24d85b41f120ef2df5526",
+                            "availability_zone": "us-east4-a",
+                            "xpack.installed": "true",
+                            "instance_configuration": "gcp.data.highio.1",
+                            "transform.node": "true",
+                            "region": "unknown-region"
+                        },
+                        "tasks": {
+                            "Ap3OfntPT7qL4CBeKvamxg:417009036": {
+                                "node": "Ap3OfntPT7qL4CBeKvamxg",
+                                "id": 417009036,
+                                "type": "transport",
+                                "action": "indices:admin/forcemerge",
+                                "start_time_in_millis": 1598018980850,
+                                "running_time_in_nanos": 3659821411,
+                                "cancellable": False,
+                                "headers": {}
+                            }
+                        }
+                    }
+                }
+            }),
+            as_future({
+                "nodes":{}
+            })
+        ]
+        force_merge = runner.ForceMerge()
+        # request-timeout should be ignored as mode:polling
+        await force_merge(es, params={"index" : "_all", "mode": "polling", "max-num-segments": 1,
+                                      "request-timeout": 50000, 'poll-period': 0})
+        es.indices.forcemerge.assert_called_once_with(index="_all", max_num_segments=1, request_timeout=1)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async

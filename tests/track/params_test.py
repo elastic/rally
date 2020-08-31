@@ -1811,7 +1811,6 @@ class SearchParamSourceTests(TestCase):
 
         self.assertNotEqual(first, second)
 
-#TODO: TEST New Params
 class ForceMergeParamSourceTests(TestCase):
     def test_force_merge_index_from_track(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test", indices=[
@@ -1823,6 +1822,7 @@ class ForceMergeParamSourceTests(TestCase):
         p = source.params()
 
         self.assertEqual("index1,index2,index3", p["index"])
+        self.assertEqual("blocking", p["mode"])
 
     def test_force_merge_index_by_name(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2"})
@@ -1830,6 +1830,7 @@ class ForceMergeParamSourceTests(TestCase):
         p = source.params()
 
         self.assertEqual("index2", p["index"])
+        self.assertEqual("blocking", p["mode"])
 
     def test_default_force_merge_index(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={})
@@ -1837,14 +1838,18 @@ class ForceMergeParamSourceTests(TestCase):
         p = source.params()
 
         self.assertEqual("_all", p["index"])
+        self.assertEqual("blocking", p["mode"])
 
     def test_force_merge_all_params(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2",
                                                                                       "request-timeout": 30,
-                                                                                      "max-num-segments": 1})
+                                                                                      "max-num-segments": 1,
+                                                                                      "polling-period": 20,
+                                                                                     "mode": "polling"})
 
         p = source.params()
 
         self.assertEqual("index2", p["index"])
         self.assertEqual(30, p["request-timeout"])
         self.assertEqual(1, p["max-num-segments"])
+        self.assertEqual("polling", p["mode"])
