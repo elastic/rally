@@ -1811,6 +1811,7 @@ class SearchParamSourceTests(TestCase):
 
         self.assertNotEqual(first, second)
 
+
 class ForceMergeParamSourceTests(TestCase):
     def test_force_merge_index_from_track(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test", indices=[
@@ -1842,9 +1843,9 @@ class ForceMergeParamSourceTests(TestCase):
 
     def test_force_merge_all_params(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2",
-                                                                                      "request-timeout": 30,
-                                                                                      "max-num-segments": 1,
-                                                                                      "polling-period": 20,
+                                                                                     "request-timeout": 30,
+                                                                                     "max-num-segments": 1,
+                                                                                     "polling-period": 20,
                                                                                      "mode": "polling"})
 
         p = source.params()

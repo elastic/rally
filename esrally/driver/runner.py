@@ -605,6 +605,7 @@ class BulkIndex(Runner):
     def __repr__(self, *args, **kwargs):
         return "bulk-index"
 
+
 class ForceMerge(Runner):
     """
     Runs a force merge operation against Elasticsearch.
@@ -618,7 +619,7 @@ class ForceMerge(Runner):
         # a special handling for the force-merge API.
         request_timeout = params.get("request-timeout")
         mode = params.get("mode")
-        merge_params = { "request_timeout": request_timeout}
+        merge_params = {"request_timeout": request_timeout}
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         try:

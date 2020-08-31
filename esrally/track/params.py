@@ -609,6 +609,7 @@ class PartitionBulkIndexParamSource:
     def percent_completed(self):
         return self.current_bulk / self.total_bulks
 
+
 class ForceMergeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
