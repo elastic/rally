@@ -442,6 +442,8 @@ class ComparisonReporter:
 
     def report_transform_processing_times(self, baseline_stats, contender_stats):
         lines = []
+        if baseline_stats.total_transform_processing_times is None:
+            return lines
         for baseline in baseline_stats.total_transform_processing_times:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_processing_times:
