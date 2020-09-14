@@ -30,6 +30,7 @@ class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
+
     def __init__(self, hosts, client_options):
         self.hosts = hosts
         self.client_options = dict(client_options)
@@ -60,14 +61,15 @@ class EsClientFactory:
                 self.ssl_context.verify_mode = ssl.CERT_NONE
                 self.ssl_context.check_hostname = False
 
-                self.logger.warning("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a "
-                                    "benchmark. Disabling urllib warnings now to avoid a logging storm. "
-                                    "See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings for details.")
+                self.logger.warning(
+                    "User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a "
+                    "benchmark. Disabling urllib warnings now to avoid a logging storm. "
+                    "See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings for details.")
                 # disable:  "InsecureRequestWarning: Unverified HTTPS request is being made. Adding certificate verification is strongly \
                 # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
                 urllib3.disable_warnings()
             else:
-                self.ssl_context.verify_mode=ssl.CERT_REQUIRED
+                self.ssl_context.verify_mode = ssl.CERT_REQUIRED
                 self.ssl_context.check_hostname = True
                 self.logger.info("SSL certificate verification: on")
 
@@ -103,14 +105,17 @@ class EsClientFactory:
             self.logger.info("SSL support: off")
             self.client_options["scheme"] = "http"
 
-        if self._is_set(self.client_options, "basic_auth_user") and self._is_set(self.client_options, "basic_auth_password"):
+        if self._is_set(self.client_options, "basic_auth_user") and self._is_set(self.client_options,
+                                                                                 "basic_auth_password"):
             self.logger.info("HTTP basic authentication: on")
-            self.client_options["http_auth"] = (self.client_options.pop("basic_auth_user"), self.client_options.pop("basic_auth_password"))
+            self.client_options["http_auth"] = (
+            self.client_options.pop("basic_auth_user"), self.client_options.pop("basic_auth_password"))
         else:
             self.logger.info("HTTP basic authentication: off")
 
         if self._is_set(self.client_options, "compressed"):
-            console.warn("You set the deprecated client option 'compressed‘. Please use 'http_compress' instead.", logger=self.logger)
+            console.warn("You set the deprecated client option 'compressed‘. Please use 'http_compress' instead.",
+                         logger=self.logger)
             self.client_options["http_compress"] = self.client_options.pop("compressed")
 
         if self._is_set(self.client_options, "http_compress"):
@@ -119,7 +124,8 @@ class EsClientFactory:
             self.logger.info("HTTP compression: off")
 
         if self._is_set(self.client_options, "enable_cleanup_closed"):
-            self.client_options["enable_cleanup_closed"] = convert.to_bool(self.client_options.pop("enable_cleanup_closed"))
+            self.client_options["enable_cleanup_closed"] = convert.to_bool(
+                self.client_options.pop("enable_cleanup_closed"))
 
     def _is_set(self, client_opts, k):
         try:
@@ -179,6 +185,17 @@ class EsClientFactory:
                 ctx = RallyAsyncElasticsearch.request_context.get()
                 ctx["raw_response"] = True
 
+            def noop(self, request_start=None, request_end=None):
+                ctx = RallyAsyncElasticsearch.request_context.get()
+                if request_start:
+                    ctx["request_start"] = request_start
+                else:
+                    ctx["request_start"] = time.perf_counter()
+                if request_end and request_end > request_start:
+                    ctx["request_end"] = time.perf_counter()
+                else:
+                    ctx["request_end"] = time.perf_counter()
+
         return RallyAsyncElasticsearch(hosts=self.hosts,
                                        connection_class=esrally.async_connection.AIOHttpConnection,
                                        ssl_context=self.ssl_context,
@@ -209,7 +226,8 @@ def wait_for_rest_layer(es, max_attempts=40):
             return True
         except elasticsearch.ConnectionError as e:
             if "SSL: UNKNOWN_PROTOCOL" in str(e):
-                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
+                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?",
+                                                  e)
             else:
                 logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
                 time.sleep(3)
