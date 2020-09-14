@@ -187,14 +187,11 @@ class EsClientFactory:
 
             def noop(self, request_start=None, request_end=None):
                 ctx = RallyAsyncElasticsearch.request_context.get()
-                if request_start:
-                    ctx["request_start"] = request_start
-                else:
-                    ctx["request_start"] = time.perf_counter()
-                if request_end and request_end > request_start:
-                    ctx["request_end"] = time.perf_counter()
-                else:
-                    ctx["request_end"] = time.perf_counter()
+                current_time = time.perf_counter()
+                ctx["request_start"] = request_start if request_start else current_time
+                ctx["request_end"] = request_end if request_end else current_time
+                if ctx["request_end"] < ctx["request_start"]:
+                    raise exceptions.RallyAssertionError("request_end cannot be less than request_start")
 
         return RallyAsyncElasticsearch(hosts=self.hosts,
                                        connection_class=esrally.async_connection.AIOHttpConnection,
