@@ -618,11 +618,28 @@ class ForceMerge(Runner):
         # the raw transport API (where the keyword argument is called `timeout`) in some cases we will always need
         # a special handling for the force-merge API.
         request_timeout = params.get("request-timeout")
+        mode = params.get("mode")
+        merge_params = {"request_timeout": request_timeout}
+        if max_num_segments:
+            merge_params["max_num_segments"] = max_num_segments
         try:
-            if max_num_segments:
-                await es.indices.forcemerge(index=params.get("index"), max_num_segments=max_num_segments, request_timeout=request_timeout)
+            if mode == "polling":
+                # we ignore the request_timeout if we are in polling mode and deliberately timeout early
+                merge_params["request_timeout"] = 1
+                complete = False
+                try:
+                    await es.indices.forcemerge(index=params.get("index"), **merge_params)
+                    complete = True
+                except elasticsearch.ConnectionTimeout:
+                    pass
+                while not complete:
+                    await asyncio.sleep(params.get("poll-period"))
+                    tasks = await es.tasks.list(params={"actions":"indices:admin/forcemerge"})
+                    if len(tasks["nodes"]) == 0:
+                        # empty nodes response indicates no tasks
+                        complete = True
             else:
-                await es.indices.forcemerge(index=params.get("index"), request_timeout=request_timeout)
+                await es.indices.forcemerge(index=params.get("index"), **merge_params)
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
