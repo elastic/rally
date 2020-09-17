@@ -1378,7 +1378,7 @@ class AsyncExecutor:
                                  time_period, progress)
 
                 if completed:
-                    self.logger.info("Task is considered completed due to external event.")
+                    self.logger.info("Task [%s] is considered completed due to external event.", self.task)
                     break
         except BaseException:
             self.logger.exception("Could not execute schedule")
