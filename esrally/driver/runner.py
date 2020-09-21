@@ -1427,7 +1427,7 @@ class RawRequest(Runner):
 
         path = mandatory(params, "path", self)
         if not path.startswith("/"):
-            self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'", path)
+            self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
             raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
 
         await es.transport.perform_request(method=params.get("method", "GET"),
