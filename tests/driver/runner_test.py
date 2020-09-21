@@ -2652,7 +2652,7 @@ class RawRequestRunnerTests(TestCase):
                 await r(es, params)
                 self.assertEqual("RawRequest [_cat/count] failed. Path parameter must begin with a '/'.", ctx.exception.args[0])
             mocked_error_logger.assert_has_calls([
-                mock.call("RawRequest failed. Path parameter: [%s] must begin with a '/'", params["path"])
+                mock.call("RawRequest failed. Path parameter: [%s] must begin with a '/'.", params["path"])
             ])
 
     @mock.patch("elasticsearch.Elasticsearch")
