@@ -1425,8 +1425,13 @@ class RawRequest(Runner):
             request_params["ignore"] = params["ignore"]
         request_params.update(params.get("request-params", {}))
 
+        path = mandatory(params, "path", self)
+        if not path.startswith("/"):
+            self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
+            raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
+
         await es.transport.perform_request(method=params.get("method", "GET"),
-                                           url=mandatory(params, "path", self),
+                                           url=path,
                                            headers=params.get("headers"),
                                            body=params.get("body"),
                                            params=request_params)
