@@ -266,7 +266,7 @@ class DocumentCorpus:
         return ", ".join(r)
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.documents)
+        return hash(self.name) ^ hash(self.documents) ^ hash(frozenset(self.meta_data.items()))
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
