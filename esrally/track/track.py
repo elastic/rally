@@ -108,7 +108,8 @@ class Documents:
     SOURCE_FORMAT_BULK = "bulk"
 
     def __init__(self, source_format, document_file=None, document_archive=None, base_url=None, includes_action_and_meta_data=False,
-                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, target_index=None, target_type=None):
+                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, target_index=None, target_type=None,
+                 meta_data=None):
         """
 
         :param source_format: The format of these documents. Mandatory.
@@ -127,7 +128,8 @@ class Documents:
         document_archive is given (optional but recommended to be set).
         :param target_index: The index to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data`` is ``False``.
         :param target_type: The document type to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data``
-        is ``False``.
+                            is ``False``.
+        :param meta_data: A dict containing key-value pairs with additional meta-data describing documents. Optional.
         """
 
         self.source_format = source_format
@@ -140,6 +142,7 @@ class Documents:
         self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
         self.target_index = target_index
         self.target_type = target_type
+        self.meta_data = meta_data or {}
 
     def has_compressed_corpus(self):
         return self.document_archive is not None
@@ -170,29 +173,30 @@ class Documents:
     def __hash__(self):
         return hash(self.source_format) ^ hash(self.document_file) ^ hash(self.document_archive) ^ hash(self.base_url) ^ \
                hash(self.includes_action_and_meta_data) ^ hash(self.number_of_documents) ^ hash(self.compressed_size_in_bytes) ^ \
-               hash(self.uncompressed_size_in_bytes) ^ hash(self.target_index) ^ hash(self.target_type)
+               hash(self.uncompressed_size_in_bytes) ^ hash(self.target_index) ^ hash(self.target_type) ^ \
+               hash(frozenset(self.meta_data.items()))
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
                 (self.source_format, self.document_file, self.document_archive, self.base_url, self.includes_action_and_meta_data,
                  self.number_of_documents, self.compressed_size_in_bytes, self.uncompressed_size_in_bytes,
-                 self.target_type, self.target_type) ==
+                 self.target_type, self.target_type, self.meta_data) ==
                 (othr.source_format, othr.document_file, othr.document_archive, othr.base_url, othr.includes_action_and_meta_data,
                  othr.number_of_documents, othr.compressed_size_in_bytes, othr.uncompressed_size_in_bytes,
-                 othr.target_type, othr.target_type))
+                 othr.target_type, othr.target_type, othr.meta_data))
 
 
 class DocumentCorpus:
-    def __init__(self, name, documents=None):
+    def __init__(self, name, documents=None, meta_data=None):
         """
 
         :param name: The name of this document corpus. Mandatory.
         :param documents: A list of ``Documents`` instances that belong to this corpus.
+        :param meta_data: A dict containing key-value pairs with additional meta-data describing this corpus. Optional.
         """
-        if documents is None:
-            documents = []
         self.name = name
-        self.documents = documents
+        self.documents = documents or []
+        self.meta_data = meta_data or {}
 
     def number_of_documents(self, source_format):
         num = 0
@@ -229,15 +233,28 @@ class DocumentCorpus:
                 continue
 
             filtered.append(d)
-        return DocumentCorpus(self.name, filtered)
+        return DocumentCorpus(self.name, filtered, meta_data=dict(self.meta_data))
 
     def union(self, other):
+        """
+        Creates a new corpus based on the current and the provided other corpus. This is not meant as a generic union
+        of two arbitrary corpora but rather to unify the documents referenced by two instances of the same corpus. This
+        is useful when two tasks reference different subsets of a corpus and a unified view (e.g. for downloading the
+        appropriate document files) is required.
+
+        :param other: The other corpus to unify with this one. Must have the same name and meta-data.
+        :return: A document corpus instance with the same and meta-data but with documents from both corpora.
+        """
         if self.name != other.name:
-            raise exceptions.RallyAssertionError("Both document corpora must have the same name")
+            raise exceptions.RallyAssertionError(f"Corpora names differ: [{self.name}] and [{other.name}].")
+        if self.meta_data != other.meta_data:
+            raise exceptions.RallyAssertionError(f"Corpora meta-data differ: [{self.meta_data}] and [{other.meta_data}].")
         if self is other:
             return self
         else:
-            return DocumentCorpus(self.name, list(set(self.documents).union(other.documents)))
+            return DocumentCorpus(name=self.name,
+                                  documents=list(set(self.documents).union(other.documents)),
+                                  meta_data=dict(self.meta_data))
 
     def __str__(self):
         return self.name
@@ -253,8 +270,8 @@ class DocumentCorpus:
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.documents) ==
-                (othr.name, othr.documents))
+                (self.name, self.documents, self.meta_data) ==
+                (othr.name, othr.documents, othr.meta_data))
 
 
 class Track:

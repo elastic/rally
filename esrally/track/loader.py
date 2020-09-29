@@ -1067,7 +1067,8 @@ class TrackSpecificationReader:
                 self._error("Duplicate document corpus name [%s]." % name)
             known_corpora_names.add(name)
 
-            corpus = track.DocumentCorpus(name=name)
+            meta_data = self._r(corpus_spec, "meta", error_ctx=name, mandatory=False)
+            corpus = track.DocumentCorpus(name=name, meta_data=meta_data)
             # defaults on corpus level
             default_base_url = self._r(corpus_spec, "base-url", mandatory=False, default_value=None)
             default_source_format = self._r(corpus_spec, "source-format", mandatory=False, default_value=track.Documents.SOURCE_FORMAT_BULK)
@@ -1098,6 +1099,7 @@ class TrackSpecificationReader:
                     num_docs = self._r(doc_spec, "document-count")
                     compressed_bytes = self._r(doc_spec, "compressed-bytes", mandatory=False)
                     uncompressed_bytes = self._r(doc_spec, "uncompressed-bytes", mandatory=False)
+                    doc_meta_data = self._r(doc_spec, "meta", error_ctx=name, mandatory=False)
 
                     includes_action_and_meta_data = self._r(doc_spec, "includes-action-and-meta-data", mandatory=False,
                                                             default_value=default_action_and_meta_data)
@@ -1119,7 +1121,8 @@ class TrackSpecificationReader:
                                            number_of_documents=num_docs,
                                            compressed_size_in_bytes=compressed_bytes,
                                            uncompressed_size_in_bytes=uncompressed_bytes,
-                                           target_index=target_idx, target_type=target_type)
+                                           target_index=target_idx, target_type=target_type,
+                                           meta_data=doc_meta_data)
                     corpus.documents.append(docs)
                 else:
                     self._error("Unknown source-format [%s] in document corpus [%s]." % (source_format, name))

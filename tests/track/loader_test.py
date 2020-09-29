@@ -1437,6 +1437,7 @@ class TrackFilterTests(TestCase):
         self.assertEqual("node-stats", schedule[1].name)
         self.assertEqual("cluster-stats", schedule[2].name)
 
+
 class TrackSpecificationReaderTests(TestCase):
     def test_description_is_optional(self):
         track_specification = {
@@ -1830,6 +1831,9 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "test",
                     "base-url": "https://localhost/data",
+                    "meta": {
+                        "test-corpus": True
+                    },
                     "documents": [
                         {
                             "source-file": "documents-main.json.bz2",
@@ -1837,14 +1841,23 @@ class TrackSpecificationReaderTests(TestCase):
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
                             "target-index": "index-historical",
-                            "target-type": "main"
+                            "target-type": "main",
+                            "meta": {
+                                "test-docs": True,
+                                "role": "main"
+                            }
                         },
                         {
                             "source-file": "documents-secondary.json.bz2",
                             "includes-action-and-meta-data": True,
                             "document-count": 20,
                             "compressed-bytes": 200,
-                            "uncompressed-bytes": 20000
+                            "uncompressed-bytes": 20000,
+                            "meta": {
+                                "test-docs": True,
+                                "role": "secondary"
+                            }
+
                         }
                     ]
                 }
@@ -1932,6 +1945,7 @@ class TrackSpecificationReaderTests(TestCase):
         # corpora
         self.assertEqual(1, len(resulting_track.corpora))
         self.assertEqual("test", resulting_track.corpora[0].name)
+        self.assertDictEqual({"test-corpus": True}, resulting_track.corpora[0].meta_data)
         self.assertEqual(2, len(resulting_track.corpora[0].documents))
 
         docs_primary = resulting_track.corpora[0].documents[0]
@@ -1945,6 +1959,10 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(10000, docs_primary.uncompressed_size_in_bytes)
         self.assertEqual("index-historical", docs_primary.target_index)
         self.assertEqual("main", docs_primary.target_type)
+        self.assertDictEqual({
+            "test-docs": True,
+            "role": "main"
+        }, docs_primary.meta_data)
 
         docs_secondary = resulting_track.corpora[0].documents[1]
         self.assertEqual(track.Documents.SOURCE_FORMAT_BULK, docs_secondary.source_format)
@@ -1958,6 +1976,11 @@ class TrackSpecificationReaderTests(TestCase):
         # This is defined by the action-and-meta-data line!
         self.assertIsNone(docs_secondary.target_index)
         self.assertIsNone(docs_secondary.target_type)
+        self.assertDictEqual({
+            "test-docs": True,
+            "role": "secondary"
+        }, docs_secondary.meta_data)
+
 
         # challenges
         self.assertEqual(1, len(resulting_track.challenges))
