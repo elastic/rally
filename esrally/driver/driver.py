@@ -314,9 +314,6 @@ def load_local_config(coordinator_config):
 
 
 class TrackPreparationActor(actor.RallyActor):
-    def __init__(self):
-        super().__init__()
-
     @actor.no_retry("track preparator")
     def receiveMsg_PrepareTrack(self, msg, sender):
         # load node-specific config to have correct paths available
