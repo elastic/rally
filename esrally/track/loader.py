@@ -1251,7 +1251,8 @@ class TrackSpecificationReader:
             op = self.parse_operation(op_spec, error_ctx="inline operation in challenge %s" % challenge_name)
 
         schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False, default_value="deterministic")
-        task = track.Task(name=self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name),
+        task_name = self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name)
+        task = track.Task(name=task_name,
                           operation=op,
                           meta_data=self._r(task_spec, "meta", error_ctx=op.name, mandatory=False),
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op.name, mandatory=False,
@@ -1263,7 +1264,7 @@ class TrackSpecificationReader:
                                               default_value=default_time_period),
                           clients=self._r(task_spec, "clients", error_ctx=op.name, mandatory=False, default_value=1),
                           # this will work because op_name must always be set, i.e. it is never `None`.
-                          completes_parent=(op.name == completed_by_name),
+                          completes_parent=(task_name == completed_by_name),
                           schedule=schedule,
                           # this is to provide scheduler-specific parameters for custom schedulers.
                           params=task_spec)
