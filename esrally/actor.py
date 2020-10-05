@@ -37,7 +37,6 @@ class BenchmarkCancelled:
     """
     Indicates that the benchmark has been cancelled (by the user).
     """
-    pass
 
 
 def parametrized(decorator):
