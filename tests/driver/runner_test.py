@@ -2639,6 +2639,24 @@ class CloseMlJobTests(TestCase):
 class RawRequestRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
+    async def test_raises_missing_slash(self, es):
+        es.transport.perform_request.return_value = as_future()
+        r = runner.RawRequest()
+
+        params = {
+            "path": "_cat/count"
+        }
+
+        with mock.patch.object(r.logger, "error") as mocked_error_logger:
+            with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+                await r(es, params)
+                self.assertEqual("RawRequest [_cat/count] failed. Path parameter must begin with a '/'.", ctx.exception.args[0])
+            mocked_error_logger.assert_has_calls([
+                mock.call("RawRequest failed. Path parameter: [%s] must begin with a '/'.", params["path"])
+            ])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
     async def test_issue_request_with_defaults(self, es):
         es.transport.perform_request.return_value = as_future()
         r = runner.RawRequest()

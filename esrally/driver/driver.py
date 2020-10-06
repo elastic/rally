@@ -114,7 +114,6 @@ class CompleteCurrentTask:
     specific task that is marked accordingly in the track finishes, it will also signal termination of all other tasks in the same parallel
     element).
     """
-    pass
 
 
 class UpdateSamples:
