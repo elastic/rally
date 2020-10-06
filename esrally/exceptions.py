@@ -75,7 +75,6 @@ class TrackConfigError(RallyError):
     Thrown when something is wrong with the track config e.g. user supplied a track-param
     that can't be set
     """
-    pass
 
 
 class NotFound(RallyError):
