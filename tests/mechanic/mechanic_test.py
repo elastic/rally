@@ -105,9 +105,6 @@ class MechanicTests(TestCase):
 
     # We stub irrelevant methods for the test
     class TestMechanic(mechanic.Mechanic):
-        def __init__(self, cfg, metrics_store, supply, provisioners, launcher):
-            super().__init__(cfg, metrics_store, supply, provisioners, launcher)
-
         def _current_race(self):
             return "race 17"
 
