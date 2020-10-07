@@ -1228,9 +1228,6 @@ class TrackPostProcessingTests(TestCase):
 class TrackPathTests(TestCase):
     @mock.patch("os.path.exists")
     def test_sets_absolute_path(self, path_exists):
-        from esrally import config
-        from esrally.track import track
-
         path_exists.return_value = True
 
         cfg = config.Config()
