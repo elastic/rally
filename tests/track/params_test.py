@@ -466,7 +466,7 @@ class IndexDataReaderTests(TestCase):
         # consume all bulks
         bulks = []
         with reader:
-            for index, type, batch in reader:
+            for _, _, batch in reader:
                 for bulk_size, bulk in batch:
                     bulks.append(bulk)
 
@@ -508,7 +508,7 @@ class IndexDataReaderTests(TestCase):
         # consume all bulks
         bulks = []
         with reader:
-            for index, type, batch in reader:
+            for _, _, batch in reader:
                 for bulk_size, bulk in batch:
                     bulks.append(bulk)
 
@@ -528,7 +528,7 @@ class IndexDataReaderTests(TestCase):
         self.assertEqual(len(expected_bulk_sizes), len(expected_line_sizes), "Bulk sizes and line sizes must be equal")
         with reader:
             bulk_index = 0
-            for index, type, batch in reader:
+            for _, _, batch in reader:
                 for bulk_size, bulk in batch:
                     self.assertEqual(expected_bulk_sizes[bulk_index], bulk_size, msg="bulk size")
                     self.assertEqual(expected_line_sizes[bulk_index], bulk.count(b"\n"))
@@ -1495,7 +1495,7 @@ class CreateIndexParamSourceTests(TestCase):
         p = source.params()
         self.assertEqual(1, len(p["indices"]))
 
-        index, body = p["indices"][0]
+        index, _ = p["indices"][0]
         self.assertEqual("index2", index)
 
 

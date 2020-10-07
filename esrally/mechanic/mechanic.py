@@ -281,7 +281,7 @@ def to_ip_port(hosts):
 
 def extract_all_node_ips(ip_port_pairs):
     all_node_ips = set()
-    for ip, port in ip_port_pairs:
+    for ip, _ in ip_port_pairs:
         all_node_ips.add(ip)
     return all_node_ips
 
@@ -569,7 +569,7 @@ class NodeMechanicActor(actor.RallyActor):
             self.logger.exception("Cannot process message [%s]", msg)
             # avoid "can't pickle traceback objects"
             import traceback
-            ex_type, ex_value, ex_traceback = sys.exc_info()
+            _, ex_value, _ = sys.exc_info()
             self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure(ex_value, traceback.format_exc()))
 
     def receiveMsg_PoisonMessage(self, msg, sender):

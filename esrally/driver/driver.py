@@ -746,7 +746,7 @@ def calculate_worker_assignments(host_configs, client_count):
             clients_per_worker[c % workers_on_this_host] += 1
 
         # assign client ids to workers
-        for worker_idx, client_count_for_worker in enumerate(clients_per_worker):
+        for client_count_for_worker in clients_per_worker:
             worker_assignment = []
             assignment["workers"].append(worker_assignment)
             for c in range(client_idx, client_idx + client_count_for_worker):

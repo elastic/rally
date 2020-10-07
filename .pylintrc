@@ -181,7 +181,6 @@ disable=print-statement,
         W0212,
         W0221,
         W0404,
-        W0612,
         W0613,
         W0621,
         invalid-docstring-quote

@@ -1341,8 +1341,8 @@ class IndexStats(InternalTelemetryDevice):
     def primary_shard_stats(self, stats, path):
         shard_stats = []
         try:
-            for idx, shards in stats["indices"].items():
-                for shard_number, shard in shards["shards"].items():
+            for shards in stats["indices"].values():
+                for shard in shards["shards"].values():
                     for shard_metrics in shard:
                         if shard_metrics["routing"]["primary"]:
                             shard_stats.append(self.extract_value(shard_metrics, path, default_value=0))

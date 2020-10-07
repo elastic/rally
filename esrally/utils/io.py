@@ -230,7 +230,7 @@ def ensure_dir(directory, mode=0o777):
 
 
 def _zipdir(source_directory, archive):
-    for root, dirs, files in os.walk(source_directory):
+    for root, _, files in os.walk(source_directory):
         for file in files:
             archive.write(
                 filename=os.path.join(root, file),
@@ -479,7 +479,7 @@ def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
 
 def get_size(start_path="."):
     total_size = 0
-    for dirpath, dirnames, filenames in os.walk(start_path):
+    for dirpath, _, filenames in os.walk(start_path):
         for f in filenames:
             fp = os.path.join(dirpath, f)
             total_size += os.path.getsize(fp)

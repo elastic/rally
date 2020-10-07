@@ -161,7 +161,7 @@ class EsClientTests(TestCase):
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
-        f = metrics.EsClientFactory(cfg)
+        metrics.EsClientFactory(cfg)
         expected_client_options = {
             "use_ssl": True,
             "timeout": 120,
