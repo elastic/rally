@@ -689,7 +689,7 @@ class TemplateSource(TestCase):
     @mock.patch("esrally.utils.io.dirname")
     @mock.patch.object(loader.TemplateSource, "read_glob_files")
     def test_entrypoint_of_replace_includes(self, patched_read_glob, patched_dirname):
-        track = textwrap.dedent('''
+        track = textwrap.dedent("""
         {% import "rally.helpers" as rally with context %}
         {
           "version": 2,
@@ -722,7 +722,7 @@ class TemplateSource(TestCase):
             {{ rally.collect(parts="challenges/*.json") }}
           ]
         }
-        ''')
+        """)
 
         def dummy_read_glob(c):
             return "{{\"replaced {}\": \"true\"}}".format(c)
@@ -733,7 +733,7 @@ class TemplateSource(TestCase):
         template_file_name = "track.json"
         tmpl_src = loader.TemplateSource(base_path, template_file_name)
         # pylint: disable=trailing-whitespace
-        expected_response = textwrap.dedent('''                                    
+        expected_response = textwrap.dedent("""                                
             {% import "rally.helpers" as rally with context %}
             {
               "version": 2,
@@ -766,7 +766,7 @@ class TemplateSource(TestCase):
                 {"replaced ~/.rally/benchmarks/tracks/default/geonames/challenges/*.json": "true"}
               ]
             }
-            ''')
+            """)
 
         self.assertEqual(
             expected_response,
@@ -908,12 +908,12 @@ class TemplateRenderTests(TestCase):
 
 
 class CompleteTrackParamsTests(TestCase):
-    assembled_source = textwrap.dedent('''{% import "rally.helpers" as rally with context %}
+    assembled_source = textwrap.dedent("""{% import "rally.helpers" as rally with context %}
         "key1": "value1",
         "key2": {{ value2 | default(3) }},
         "key3": {{ value3 | default("default_value3") }}
         "key4": {{ value2 | default(3) }}
-    ''')
+    """)
 
     def test_check_complete_track_params_contains_all_track_params(self):
         complete_track_params = loader.CompleteTrackParams()
@@ -973,7 +973,7 @@ class CompleteTrackParamsTests(TestCase):
 
 
 class TrackPostProcessingTests(TestCase):
-    track_with_params_as_string = textwrap.dedent('''{
+    track_with_params_as_string = textwrap.dedent("""{
         "indices": [
             {
                 "name": "test-index",
@@ -1047,7 +1047,7 @@ class TrackPostProcessingTests(TestCase):
                 ]
             }
         ]
-    }''')
+    }""")
 
     def test_post_processes_track_spec(self):
         track_specification = {
