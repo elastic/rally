@@ -1432,7 +1432,11 @@ async def execute_single(runner, es, params, on_error):
         elif e.info:
             request_meta_data["error-description"] = "%s (%s)" % (e.error, e.info)
         else:
-            request_meta_data["error-description"] = e.error
+            if isinstance(e.error, bytes):
+                error_description = e.error.decode("utf-8")
+            else:
+                error_description = str(e.error)
+            request_meta_data["error-description"] = error_description
     except KeyError as e:
         logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters.", str(runner))
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
