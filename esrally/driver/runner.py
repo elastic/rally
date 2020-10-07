@@ -121,7 +121,7 @@ class Runner:
     """
 
     def __init__(self, *args, **kwargs):
-        super(Runner, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
 
     async def __aenter__(self):
@@ -148,7 +148,7 @@ class Delegator:
     Mixin to unify delegate handling
     """
     def __init__(self, delegate, *args, **kwargs):
-        super(Delegator, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.delegate = delegate
 
 

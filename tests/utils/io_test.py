@@ -125,7 +125,7 @@ class TestDecompression:
                     f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
 
             if ext in ["bz2", "gz"]:
-                assert f"not found in PATH. Using standard library, decompression will take longer." in mocked_console_warn.call_args[0][0]
+                assert "not found in PATH. Using standard library, decompression will take longer." in mocked_console_warn.call_args[0][0]
 
     @mock.patch("subprocess.run")
     def test_decompress_manually_external_fails_if_tool_missing(self, mocked_run):
