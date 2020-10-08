@@ -1262,7 +1262,6 @@ class TrackSpecificationReader:
                           time_period=self._r(task_spec, "time-period", error_ctx=op.name, mandatory=False,
                                               default_value=default_time_period),
                           clients=self._r(task_spec, "clients", error_ctx=op.name, mandatory=False, default_value=1),
-                          # this will work because op_name must always be set, i.e. it is never `None`.
                           completes_parent=(task_name == completed_by_name),
                           schedule=schedule,
                           # this is to provide scheduler-specific parameters for custom schedulers.
