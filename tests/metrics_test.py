@@ -264,7 +264,7 @@ class EsClientTests(TestCase):
                           all_err_codes[rnd_err_code], rnd_err_code,
                           rnd_err_idx + 1, max_retry + 1, sleep_slots[rnd_err_idx])
             )
-
+        # pylint: disable=no-value-for-parameter
         test_transport_error_retries(rnd_side_effects,
                                      rnd_mocked_logger_calls,
                                      mocked_sleep_calls)

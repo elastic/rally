@@ -42,7 +42,7 @@ def create_arg_parser():
     def non_empty_list(arg):
         lst = opts.csv_to_list(arg)
         if len(lst) < 1:
-            raise argparse.ArgumentError("At least one argument required!")
+            raise argparse.ArgumentError(argument=None, message="At least one argument required!")
         return lst
 
     def runtime_jdk(v):
