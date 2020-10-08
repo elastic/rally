@@ -38,7 +38,6 @@ class TrackSyntaxError(exceptions.InvalidSyntax):
     """
     Raised whenever a syntax problem is encountered when loading the track specification.
     """
-    pass
 
 
 def tracks(cfg):

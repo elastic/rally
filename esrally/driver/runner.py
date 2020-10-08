@@ -121,7 +121,7 @@ class Runner:
     """
 
     def __init__(self, *args, **kwargs):
-        super(Runner, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
 
     async def __aenter__(self):
@@ -148,7 +148,7 @@ class Delegator:
     Mixin to unify delegate handling
     """
     def __init__(self, delegate, *args, **kwargs):
-        super(Delegator, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.delegate = delegate
 
 
@@ -294,10 +294,6 @@ class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
     """
-
-    def __init__(self):
-        super().__init__()
-
     async def __call__(self, es, params):
         """
         Runs one bulk indexing operation.
@@ -794,10 +790,6 @@ class Query(Runner):
 
     * ``pages``: Total number of pages that have been retrieved.
     """
-
-    def __init__(self):
-        super().__init__()
-
     async def __call__(self, es, params):
         if "pages" in params and "results-per-page" in params:
             return await self.scroll_query(es, params)
@@ -1425,8 +1417,13 @@ class RawRequest(Runner):
             request_params["ignore"] = params["ignore"]
         request_params.update(params.get("request-params", {}))
 
+        path = mandatory(params, "path", self)
+        if not path.startswith("/"):
+            self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
+            raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
+
         await es.transport.perform_request(method=params.get("method", "GET"),
-                                           url=mandatory(params, "path", self),
+                                           url=path,
                                            headers=params.get("headers"),
                                            body=params.get("body"),
                                            params=request_params)
