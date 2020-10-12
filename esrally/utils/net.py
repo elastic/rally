@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import functools
 import logging
 import os
 import urllib.error
@@ -97,7 +97,7 @@ def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size
 def download_s3(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
     logger = logging.getLogger(__name__)
 
-    bucket_and_path = url[5:]
+    bucket_and_path = url[5:]  # s3:// or gs:// prefix
     bucket_end_index = bucket_and_path.find("/")
     bucket = bucket_and_path[:bucket_end_index]
     # we need to remove the leading "/"
@@ -105,6 +105,62 @@ def download_s3(url, local_path, expected_size_in_bytes=None, progress_indicator
 
     logger.info("Downloading from S3 bucket [%s] and path [%s] to [%s].", bucket, bucket_path, local_path)
     _download_from_s3_bucket(bucket, bucket_path, local_path, expected_size_in_bytes, progress_indicator)
+
+    return expected_size_in_bytes
+
+
+def _download_from_gcs_bucket(bucket_name, bucket_path, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    # lazily initialize Google Cloud Storage support - we might not need it
+    import google.oauth2.credentials
+    import google.auth.transport.requests as tr_requests
+    import google.auth
+    # Using Google Resumable Media as the standard storage library doesn't support progress
+    # (https://github.com/googleapis/python-storage/issues/27)
+    from google.resumable_media.requests import ChunkedDownload
+    ro_scope = "https://www.googleapis.com/auth/devstorage.read_only"
+
+    access_token = os.environ.get("GOOGLE_AUTH_TOKEN")
+    if access_token:
+        credentials = google.oauth2.credentials.Credentials(token=access_token, scopes=(ro_scope, ))
+    else:
+        # https://google-auth.readthedocs.io/en/latest/user-guide.html
+        credentials, _ = google.auth.default(scopes=(ro_scope,))
+
+    transport = tr_requests.AuthorizedSession(credentials)
+    chunk_size = 50 * 1024 * 1024  # 50MB
+
+    with open(local_path, "wb") as local_fp:
+        # / must be urlencoded: https://cloud.google.com/storage/docs/request-endpoints#encoding
+        # media_url = f"https://storage.googleapis.com/storage/v1/b/{bucket_name}/o/{urllib.parse.quote(bucket_path, safe='')}?alt=media"
+        media_url = functools.reduce(urllib.parse.urljoin, [
+            "https://storage.googleapis.com/storage/v1/b/",
+            f"{bucket_name}/",
+            "o/",
+            f"{urllib.parse.quote(bucket_path, safe='')}/",
+            "?alt=media"
+            ])
+        download = ChunkedDownload(media_url, chunk_size, local_fp)
+        # allow us to calculate the total bytes
+        download.consume_next_chunk(transport)
+        if not expected_size_in_bytes:
+            expected_size_in_bytes = download.total_bytes
+        while not download.finished:
+            if progress_indicator and download.bytes_downloaded and download.total_bytes:
+                progress_indicator(download.bytes_downloaded, expected_size_in_bytes)
+            download.consume_next_chunk(transport)
+
+
+def download_gcs(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    logger = logging.getLogger(__name__)
+
+    bucket_and_path = url[5:]  # gs:// prefix
+    bucket_end_index = bucket_and_path.find("/")
+    bucket = bucket_and_path[:bucket_end_index]
+    # we need to remove the leading "/"
+    bucket_path = bucket_and_path[bucket_end_index + 1:]
+
+    logger.info("Downloading from GCS bucket [%s] and path [%s] to [%s].", bucket, bucket_path, local_path)
+    _download_from_gcs_bucket(bucket, bucket_path, local_path, expected_size_in_bytes, progress_indicator)
 
     return expected_size_in_bytes
 
@@ -148,6 +204,8 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
     try:
         if url.startswith("s3"):
             expected_size_in_bytes = download_s3(url, tmp_data_set_path, expected_size_in_bytes, progress_indicator)
+        elif url.startswith("gs://"):
+            expected_size_in_bytes = download_gcs(url, tmp_data_set_path, expected_size_in_bytes, progress_indicator)
         else:
             expected_size_in_bytes = download_http(url, tmp_data_set_path, expected_size_in_bytes, progress_indicator)
     except BaseException:
