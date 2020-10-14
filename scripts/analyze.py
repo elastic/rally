@@ -37,7 +37,7 @@ try:
     import matplotlib.pyplot as plt
 except ImportError:
     print("This script requires matplotlib. Please install with 'pip3 install matplotlib' and retry.", file=sys.stderr)
-    exit(1)
+    sys.exit(1)
 
 
 def create_plot():
