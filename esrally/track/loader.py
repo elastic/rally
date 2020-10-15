@@ -987,13 +987,15 @@ class TrackSpecificationReader:
         meta_data = self._r(track_specification, "meta", mandatory=False)
         indices = [self._create_index(idx, mapping_dir)
                    for idx in self._r(track_specification, "indices", mandatory=False, default_value=[])]
+        data_streams = [self._create_data_stream(idx)
+                   for idx in self._r(track_specification, "data-streams", mandatory=False, default_value=[])]
         templates = [self._create_index_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices)
         challenges = self._create_challenges(track_specification)
         # at this point, *all* track params must have been referenced in the templates
-        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges, indices=indices,
-                           templates=templates, corpora=corpora)
+        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges,
+                           indices=indices, data_streams=data_streams, templates=templates, corpora=corpora)
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
@@ -1030,6 +1032,9 @@ class TrackSpecificationReader:
             body = None
 
         return track.Index(name=index_name, body=body, types=self._r(index_spec, "types", mandatory=False, default_value=[]))
+
+    def _create_data_stream(self, data_stream_spec):
+        return track.DataStream(name=self._r(data_stream_spec, "name"))
 
     def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")

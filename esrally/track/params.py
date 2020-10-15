@@ -202,6 +202,70 @@ class CreateIndexParamSource(ParamSource):
         return p
 
 
+class CreateDataStreamParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.request_params = params.get("request-params", {})
+        self.data_stream_definitions = []
+        if track.data_streams:
+            filter_ds = params.get("data-stream")
+            if isinstance(filter_ds, str):
+                filter_ds = [filter_ds]
+            for ds in track.data_streams:
+                if not filter_ds or ds.name in filter_ds:
+                    self.data_stream_definitions.append(ds.name)
+        else:
+            try:
+                idx = params["data-stream"]
+                if isinstance(idx, str):
+                    idx = [idx]
+                for i in idx:
+                    self.data_stream_definitions.append(i)
+            except KeyError:
+                raise exceptions.InvalidSyntax("Please set the property 'data-stream' for the create-data-stream operation")
+
+    def params(self):
+        p = {}
+        # ensure we pass all parameters...
+        p.update(self._params)
+        p.update({
+            "data_streams": self.data_stream_definitions,
+            "request-params": self.request_params
+        })
+        return p
+
+
+class DeleteDataStreamParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.request_params = params.get("request-params", {})
+        self.only_if_exists = params.get("only-if-exists", True)
+
+        self.data_stream_definitions = []
+        target_data_stream = params.get("data-stream")
+        if target_data_stream:
+            if isinstance(target_data_stream, str):
+                target_data_stream = [target_data_stream]
+            for ds in target_data_stream:
+                self.data_stream_definitions.append(ds)
+        elif track.data_streams:
+            for ds in track.data_streams:
+                self.data_stream_definitions.append(ds.name)
+        else:
+            raise exceptions.InvalidSyntax("delete-data-stream operation targets no data stream")
+
+    def params(self):
+        p = {}
+        # ensure we pass all parameters...
+        p.update(self._params)
+        p.update({
+            "data_streams": self.data_stream_definitions,
+            "request-params": self.request_params,
+            "only-if-exists": self.only_if_exists
+        })
+        return p
+
+
 class DeleteIndexParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
@@ -344,10 +408,14 @@ class SearchParamSource(ParamSource):
         super().__init__(track, params, **kwargs)
         if len(track.indices) == 1:
             default_index = track.indices[0].name
+        elif len(track.data_streams) == 1:
+            default_index = track.data_streams[0].name
         else:
             default_index = None
 
-        index_name = params.get("index", default_index)
+        index_name = params.get("index")
+        if not index_name:
+            index_name = params.get("data-stream", default_index)
         type_name = params.get("type")
         request_cache = params.get("cache", None)
         query_body = params.get("body", None)
@@ -614,7 +682,8 @@ class ForceMergeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
         if len(track.indices) > 0:
-            default_index = ','.join(map(str, track.indices))
+            # force merge data streams and indices
+            default_index = ','.join(map(str, track.indices + track.data_streams))
         else:
             default_index = "_all"
 
@@ -679,14 +748,21 @@ def chain(*iterables):
 def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
                           on_conflict, recency):
     source = Slice(io.MmapSource, offset, num_lines)
+    target = None
+    use_create = False
+    if docs.target_index:
+        target = docs.target_index
+    elif docs.target_data_stream:
+        target = docs.target_data_stream
+        use_create = True
 
     if docs.includes_action_and_meta_data:
-        return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, docs.target_index, docs.target_type)
+        return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, target, docs.target_type)
     else:
-        am_handler = GenerateActionMetaData(docs.target_index, docs.target_type,
+        am_handler = GenerateActionMetaData(target, docs.target_type,
                                             build_conflicting_ids(id_conflicts, num_docs, offset), conflict_probability,
-                                            on_conflict, recency)
-        return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, docs.target_index, docs.target_type)
+                                            on_conflict, recency, use_create=use_create)
+        return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, target, docs.target_type)
 
 
 def create_readers(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size, id_conflicts,
@@ -698,9 +774,14 @@ def create_readers(num_clients, start_client_index, end_client_index, corpora, b
             offset, num_docs, num_lines = bounds(docs.number_of_documents, start_client_index, end_client_index,
                                                  num_clients, docs.includes_action_and_meta_data)
             if num_docs > 0:
-                logger.info("Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
+                target = "/"
+                if docs.target_index:
+                    target = f"{docs.target_index}/{docs.target_type}"
+                elif docs.target_data_stream:
+                    target = docs.target_data_stream
+                logger.info("Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
                             "from corpus [%s].", start_client_index, end_client_index, num_docs, offset,
-                            docs.target_index, docs.target_type, corpus.name)
+                            target, corpus.name)
                 readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts,
                                              conflict_probability, on_conflict, recency))
             else:
@@ -790,8 +871,8 @@ def bulk_data_based(num_clients, start_client_index, end_client_index, corpora, 
 class GenerateActionMetaData:
     RECENCY_SLOPE = 30
 
-    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None,
-                 recency=None, rand=random.random, randint=random.randint, randexp=random.expovariate):
+    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None, recency=None,
+                 rand=random.random, randint=random.randint, randexp=random.expovariate, use_create=False):
         if type_name:
             self.meta_data_index_with_id = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % \
                                            (index_name, type_name, "%s")
@@ -802,9 +883,11 @@ class GenerateActionMetaData:
             self.meta_data_index_with_id = '{"index": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
             self.meta_data_update_with_id = '{"update": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
             self.meta_data_index_no_id = '{"index": {"_index": "%s"}}\n' % index_name
+            self.meta_data_create_no_id = '{"create": {"_index": "%s"}}\n' % index_name
 
         self.conflicting_ids = conflicting_ids
         self.on_conflict = on_conflict
+        self.use_create = use_create
         # random() produces numbers between 0 and 1 and the user denotes the probability in percentage between 0 and 100
         self.conflict_probability = conflict_probability / 100.0 if conflict_probability is not None else 0
         self.recency = recency if recency is not None else 0
@@ -857,6 +940,8 @@ class GenerateActionMetaData:
             else:
                 raise exceptions.RallyAssertionError("Unknown action [{}]".format(action))
         else:
+            if self.use_create:
+                return "create", self.meta_data_create_no_id
             return "index", self.meta_data_index_no_id
 
 
@@ -1020,6 +1105,8 @@ register_param_source_for_operation(track.OperationType.Bulk, BulkIndexParamSour
 register_param_source_for_operation(track.OperationType.Search, SearchParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndex, CreateIndexParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndexParamSource)
+register_param_source_for_operation(track.OperationType.CreateDataStream, CreateDataStreamParamSource)
+register_param_source_for_operation(track.OperationType.DeleteDataStream, DeleteDataStreamParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndexTemplate, CreateIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndexTemplate, DeleteIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
