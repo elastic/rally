@@ -1461,6 +1461,26 @@ class AsyncExecutorTests(TestCase):
         }, request_meta_data)
 
     @run_async
+    async def test_execute_single_with_http_413(self):
+        import elasticsearch
+        es = None
+        params = None
+        runner = mock.Mock(side_effect=
+                           as_future(exception=elasticsearch.NotFoundError(413, b"", b"")))
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error="continue-on-non-fatal")
+
+        self.assertEqual(0, ops)
+        self.assertEqual("ops", unit)
+        self.assertEqual({
+            "http-status": 413,
+            "error-type": "transport",
+            "error-description": "",
+            "success": False
+        }, request_meta_data)
+
+    @run_async
     async def test_execute_single_with_key_error(self):
         class FailingRunner:
             async def __call__(self, *args):
