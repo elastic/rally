@@ -585,7 +585,9 @@ class BulkIndexParamSource(ParamSource):
 
         for corpus in t.corpora:
             if corpus.name in corpora_names:
-                filtered_corpus = corpus.filter(source_format=track.Documents.SOURCE_FORMAT_BULK, target_indices=params.get("indices"))
+                filtered_corpus = corpus.filter(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                target_indices=params.get("indices"),
+                                                target_data_streams=params.get("data-streams"))
                 if filtered_corpus.number_of_documents(source_format=track.Documents.SOURCE_FORMAT_BULK) > 0:
                     corpora.append(filtered_corpus)
 

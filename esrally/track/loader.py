@@ -991,7 +991,7 @@ class TrackSpecificationReader:
                    for idx in self._r(track_specification, "data-streams", mandatory=False, default_value=[])]
         templates = [self._create_index_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
-        corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices)
+        corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices, data_streams)
         challenges = self._create_challenges(track_specification)
         # at this point, *all* track params must have been referenced in the templates
         return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges,
@@ -1061,7 +1061,7 @@ class TrackSpecificationReader:
             self.logger.exception("Could not load file template for %s.", description)
             raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
-    def _create_corpora(self, corpora_specs, indices):
+    def _create_corpora(self, corpora_specs, indices, data_streams):
         document_corpora = []
         known_corpora_names = set()
         for corpus_spec in corpora_specs:
@@ -1081,6 +1081,11 @@ class TrackSpecificationReader:
                 corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False, default_value=indices[0].name)
             else:
                 corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False)
+
+            if len(data_streams) == 1:
+                corpus_target_ds = self._r(corpus_spec, "target-data-stream", mandatory=False, default_value=data_streams[0].name)
+            else:
+                corpus_target_ds = self._r(corpus_spec, "target-data-stream", mandatory=False)
 
             if len(indices) == 1 and len(indices[0].types) == 1:
                 corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False, default_value=indices[0].types[0])
@@ -1110,10 +1115,21 @@ class TrackSpecificationReader:
                         target_type = None
                     else:
                         # we need an index if no meta-data are present.
-                        target_idx = self._r(doc_spec, "target-index", mandatory=corpus_target_idx is None,
-                                             default_value=corpus_target_idx, error_ctx=docs)
+                        target_idx = self._r(doc_spec, "target-index",
+                                             mandatory=corpus_target_idx is None and corpus_target_ds is None,
+                                             error_ctx=docs)
                         target_type = self._r(doc_spec, "target-type", mandatory=False,
                                               default_value=corpus_target_type, error_ctx=docs)
+                        # not mandatory as we defn have corpus_target_idx or corpus_target_ds here
+                        target_ds = self._r(doc_spec, "target-data-stream", mandatory=False,
+                                             error_ctx=docs)
+                        # here we choose to use either an index or data streams. If either are explicitly specified
+                        # (index takes precedence) this is preferred over any defaults
+                        if not target_idx and not target_ds:
+                            if corpus_target_idx:
+                                target_idx = corpus_target_idx
+                            else:
+                                target_ds = corpus_target_ds
 
                     docs = track.Documents(source_format=source_format,
                                            document_file=document_file,
@@ -1123,7 +1139,8 @@ class TrackSpecificationReader:
                                            number_of_documents=num_docs,
                                            compressed_size_in_bytes=compressed_bytes,
                                            uncompressed_size_in_bytes=uncompressed_bytes,
-                                           target_index=target_idx, target_type=target_type)
+                                           target_index=target_idx, target_type=target_type,
+                                           target_data_stream=target_ds)
                     corpus.documents.append(docs)
                 else:
                     self._error("Unknown source-format [%s] in document corpus [%s]." % (source_format, name))

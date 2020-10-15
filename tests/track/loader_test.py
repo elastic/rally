@@ -1453,6 +1453,7 @@ class TrackSpecificationReaderTests(TestCase):
         track_specification = {
             "description": "description for unit test",
             "indices": [{"name": "test-index", "types": ["test-type"]}],
+            "data-streams": [],
             "corpora": [],
             "operations": [],
             "challenges": []
@@ -1490,6 +1491,11 @@ class TrackSpecificationReaderTests(TestCase):
                     "name": "test-index",
                     "body": "index.json",
                     "types": [ "docs" ]
+                }
+            ],
+            "data-streams": [
+                {
+                    "name": "test-data-stream"
                 }
             ],
             "corpora": [
@@ -1826,6 +1832,11 @@ class TrackSpecificationReaderTests(TestCase):
                     "types": ["main", "secondary"]
                 }
             ],
+            "data-streams": [
+                {
+                    "name": "historical-data-stream"
+                }
+            ],
             "corpora": [
                 {
                     "name": "test",
@@ -1845,6 +1856,13 @@ class TrackSpecificationReaderTests(TestCase):
                             "document-count": 20,
                             "compressed-bytes": 200,
                             "uncompressed-bytes": 20000
+                        },
+                        {
+                            "source-file": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                            "target-data-stream": "historical-data-stream"
                         }
                     ]
                 }
@@ -1929,10 +1947,12 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(2, len(resulting_track.indices[0].types))
         self.assertEqual("main", resulting_track.indices[0].types[0])
         self.assertEqual("secondary", resulting_track.indices[0].types[1])
+        # data streams
+        self.assertEqual("historical-data-stream", resulting_track.data_streams[0].name)
         # corpora
         self.assertEqual(1, len(resulting_track.corpora))
         self.assertEqual("test", resulting_track.corpora[0].name)
-        self.assertEqual(2, len(resulting_track.corpora[0].documents))
+        self.assertEqual(3, len(resulting_track.corpora[0].documents))
 
         docs_primary = resulting_track.corpora[0].documents[0]
         self.assertEqual(track.Documents.SOURCE_FORMAT_BULK, docs_primary.source_format)
@@ -1959,6 +1979,18 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertIsNone(docs_secondary.target_index)
         self.assertIsNone(docs_secondary.target_type)
 
+        docs_tertiary = resulting_track.corpora[0].documents[2]
+        self.assertEqual(track.Documents.SOURCE_FORMAT_BULK, docs_tertiary.source_format)
+        self.assertEqual("documents-main.json", docs_tertiary.document_file)
+        self.assertEqual("documents-main.json.bz2", docs_tertiary.document_archive)
+        self.assertEqual("https://localhost/data", docs_tertiary.base_url)
+        self.assertFalse(docs_tertiary.includes_action_and_meta_data)
+        self.assertEqual(10, docs_tertiary.number_of_documents)
+        self.assertEqual(100, docs_tertiary.compressed_size_in_bytes)
+        self.assertIsNone(docs_tertiary.target_index)
+        self.assertIsNone(docs_tertiary.target_type)
+        self.assertEqual("historical-data-stream", docs_tertiary.target_data_stream)
+
         # challenges
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)
@@ -1977,6 +2009,11 @@ class TrackSpecificationReaderTests(TestCase):
                     "name": "index-historical",
                     "body": "body.json"
                     # no type information here
+                }
+            ],
+            "data-streams": [
+                {
+                    "name": "historical-data-stream"
                 }
             ],
             "corpora": [
@@ -2021,12 +2058,15 @@ class TrackSpecificationReaderTests(TestCase):
         # indices
         self.assertEqual(1, len(resulting_track.indices))
         self.assertEqual("index-historical", resulting_track.indices[0].name)
+        self.assertEqual("historical-data-stream", resulting_track.data_streams[0].name)
         self.assertDictEqual({
             "settings": {
                 "number_of_shards": 3
             }
         }, resulting_track.indices[0].body)
         self.assertEqual(0, len(resulting_track.indices[0].types))
+        # data streams
+        self.assertEqual(1, len(resulting_track.data_streams))
         # corpora
         self.assertEqual(1, len(resulting_track.corpora))
         self.assertEqual("test", resulting_track.corpora[0].name)
@@ -2043,6 +2083,81 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(10000, docs_primary.uncompressed_size_in_bytes)
         self.assertEqual("index-historical", docs_primary.target_index)
         self.assertIsNone(docs_primary.target_type)
+        self.assertIsNone(docs_primary.target_data_stream)
+
+        # challenges
+        self.assertEqual(1, len(resulting_track.challenges))
+
+    @mock.patch("esrally.track.loader.register_all_params_in_track")
+    def test_parse_valid_without_indices(self, mocked_param_checker):
+        track_specification = {
+            "description": "description for unit test",
+            "data-streams": [
+                {
+                    "name": "historical-data-stream"
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "base-url": "https://localhost/data",
+                    "documents": [
+                        {
+                            "source-file": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                        },
+                    ]
+                }
+            ],
+            "schedule": [
+                {
+                    "clients": 8,
+                    "operation": {
+                        "name": "index-append",
+                        "operation-type": "bulk",
+                        "bulk-size": 5000
+                    }
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader(
+            track_params={"number_of_shards": 3},
+            source=io.DictStringFileSourceFactory({
+                "/mappings/body.json": ["""
+                {
+                    "settings": {
+                        "number_of_shards": {{ number_of_shards }}
+                    }
+                }
+                """]
+            }))
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual("unittest", resulting_track.name)
+        self.assertEqual("description for unit test", resulting_track.description)
+        # indices
+        self.assertEqual(0, len(resulting_track.indices))
+        # data streams
+        self.assertEqual(1, len(resulting_track.data_streams))
+        self.assertEqual("historical-data-stream", resulting_track.data_streams[0].name)
+        # corpora
+        self.assertEqual(1, len(resulting_track.corpora))
+        self.assertEqual("test", resulting_track.corpora[0].name)
+        self.assertEqual(1, len(resulting_track.corpora[0].documents))
+
+        docs_primary = resulting_track.corpora[0].documents[0]
+        self.assertEqual(track.Documents.SOURCE_FORMAT_BULK, docs_primary.source_format)
+        self.assertEqual("documents-main.json", docs_primary.document_file)
+        self.assertEqual("documents-main.json.bz2", docs_primary.document_archive)
+        self.assertEqual("https://localhost/data", docs_primary.base_url)
+        self.assertFalse(docs_primary.includes_action_and_meta_data)
+        self.assertEqual(10, docs_primary.number_of_documents)
+        self.assertEqual(100, docs_primary.compressed_size_in_bytes)
+        self.assertEqual(10000, docs_primary.uncompressed_size_in_bytes)
+        self.assertEqual("historical-data-stream", docs_primary.target_data_stream)
+        self.assertIsNone(docs_primary.target_type)
+        self.assertIsNone(docs_primary.target_index)
 
         # challenges
         self.assertEqual(1, len(resulting_track.challenges))
