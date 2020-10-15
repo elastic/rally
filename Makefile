@@ -60,9 +60,9 @@ check-venv:
 
 install: venv-create
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip setuptools wheel
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e . --use-feature=2020-resolver
 	# Also install development dependencies
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop]
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop] --use-feature=2020-resolver
 
 clean: nondocs-clean docs-clean
 
