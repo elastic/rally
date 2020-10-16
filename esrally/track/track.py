@@ -147,8 +147,10 @@ class IndexTemplate:
 class Documents:
     SOURCE_FORMAT_BULK = "bulk"
 
-    def __init__(self, source_format, document_file=None, document_archive=None, base_url=None, includes_action_and_meta_data=False,
-                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, target_index=None, target_data_stream=None, target_type=None):
+    def __init__(self, source_format, document_file=None, document_archive=None, base_url=None,
+                 includes_action_and_meta_data=False,
+                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, target_index=None,
+                 target_data_stream=None, target_type=None):
         """
 
         :param source_format: The format of these documents. Mandatory.
@@ -163,10 +165,11 @@ class Documents:
          a document_archive is given.
         :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
          user reporting. Only useful if a document_archive is given (optional but recommended to be set).
-        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only useful if a
-        document_archive is given (optional but recommended to be set).
+        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it.
+        Only useful if a document_archive is given (optional but recommended to be set).
         :param target_index: The index to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data`` is ``False``.
-        :param target_data_stream: The datastream to target for bulk operations. Maybe be ``None`` if ``includes_action_and_meta_data`` is ``False``.
+        :param target_data_stream: The data stream to target for bulk operations.
+        Maybe be ``None`` if ``includes_action_and_meta_data`` is ``False``.
         :param target_type: The document type to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data``
         is ``False``.
         """
@@ -306,8 +309,8 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, description=None, meta_data=None, challenges=None, indices=None, data_streams=None, templates=None, corpora=None,
-                 has_plugins=False):
+    def __init__(self, name, description=None, meta_data=None, challenges=None, indices=None, data_streams=None,
+                 templates=None, corpora=None, has_plugins=False):
         """
 
         Creates a new track.
@@ -404,8 +407,10 @@ class Track:
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.meta_data, self.description, self.challenges, self.indices, self.data_streams, self.templates, self.corpora) ==
-                (othr.name, othr.meta_data, othr.description, othr.challenges, othr.indices, othr.data_streams, othr.templates, othr.corpora))
+                (self.name, self.meta_data, self.description, self.challenges, self.indices, self.data_streams,
+                 self.templates, self.corpora) ==
+                (othr.name, othr.meta_data, othr.description, othr.challenges, othr.indices, othr.data_streams,
+                 othr.templates, othr.corpora))
 
 
 class Challenge:

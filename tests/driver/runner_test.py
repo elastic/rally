@@ -2154,8 +2154,8 @@ class CreateDataStreamRunnerTests(TestCase):
 
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'create-data-stream' did not provide the mandatory parameter 'data-streams'. "
-                                    "Please add it to your parameter source."):
+                                    "Parameter source for operation 'create-data-stream' did not provide the "
+                                    "mandatory parameter 'data-streams'. Please add it to your parameter source."):
             await r(es, params)
 
         self.assertEqual(0, es.indices.create_data_stream.call_count)

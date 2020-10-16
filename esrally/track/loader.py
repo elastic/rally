@@ -1114,22 +1114,25 @@ class TrackSpecificationReader:
                         target_idx = None
                         target_type = None
                     else:
+                        target_ds = self._r(doc_spec, "target-data-stream", mandatory=False,
+                                             error_ctx=docs)
+
                         # we need an index if no meta-data are present.
                         target_idx = self._r(doc_spec, "target-index",
-                                             mandatory=corpus_target_idx is None and corpus_target_ds is None,
+                                             mandatory=corpus_target_idx is None and corpus_target_ds is None
+                                                       and target_ds is None,
                                              error_ctx=docs)
                         target_type = self._r(doc_spec, "target-type", mandatory=False,
                                               default_value=corpus_target_type, error_ctx=docs)
-                        # not mandatory as we defn have corpus_target_idx or corpus_target_ds here
-                        target_ds = self._r(doc_spec, "target-data-stream", mandatory=False,
-                                             error_ctx=docs)
+
                         # here we choose to use either an index or data streams. If either are explicitly specified
-                        # (index takes precedence) this is preferred over any defaults
-                        if not target_idx and not target_ds:
-                            if corpus_target_idx:
-                                target_idx = corpus_target_idx
-                            else:
-                                target_ds = corpus_target_ds
+                        # (index takes precedence) this is preferred over any defaults. Index then takes precedence.
+                        if target_idx:
+                            target_ds = None
+                        elif target_ds is None and corpus_target_idx:
+                            target_idx = corpus_target_idx
+                        elif target_ds is None:
+                            target_ds = corpus_target_ds
 
                     docs = track.Documents(source_format=source_format,
                                            document_file=document_file,

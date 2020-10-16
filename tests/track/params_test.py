@@ -2061,5 +2061,3 @@ class ForceMergeParamSourceTests(TestCase):
         self.assertEqual(30, p["request-timeout"])
         self.assertEqual(1, p["max-num-segments"])
         self.assertEqual("polling", p["mode"])
-
-

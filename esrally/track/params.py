@@ -435,7 +435,9 @@ class SearchParamSource(ParamSource):
         }
 
         if not index_name:
-            raise exceptions.InvalidSyntax("'index' or 'data-stream' is mandatory and is missing for operation '{}'".format(kwargs.get("operation_name")))
+            raise exceptions.InvalidSyntax(
+                "'index' or 'data-stream' is mandatory and is missing for operation '{}'".format(
+                    kwargs.get("operation_name")))
 
         if pages:
             self.query_params["pages"] = pages
