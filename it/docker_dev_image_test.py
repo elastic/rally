@@ -64,4 +64,4 @@ def run_docker_compose_up(test_command):
 
 def run_docker_compose_down():
     if process.run_subprocess_with_logging(f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml down -v") != 0:
-        raise AssertionError(f"Failed to stop running containers from docker-compose-tests.yml")
+        raise AssertionError("Failed to stop running containers from docker-compose-tests.yml")
