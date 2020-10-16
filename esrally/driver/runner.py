@@ -324,7 +324,8 @@ class BulkIndex(Runner):
          is in the single digit microsecond range when this feature is disabled and in the single digit millisecond range when this feature
          is enabled; numbers based on a bulk size of 500 elements and no errors). For details please refer to the respective benchmarks
          in ``benchmarks/driver``.
-
+        * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present, defaults to
+         ``None`` and potentially falls back to the global timeout setting.
 
         Returned meta data
         `
@@ -464,6 +465,8 @@ class BulkIndex(Runner):
         detailed_results = params.get("detailed-results", False)
         index = params.get("index")
 
+        request_timeout = params.get("request-timeout")
+
         bulk_params = {}
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
@@ -478,9 +481,9 @@ class BulkIndex(Runner):
 
         if with_action_metadata:
             # only half of the lines are documents
-            response = await es.bulk(body=params["body"], params=bulk_params)
+            response = await es.bulk(body=params["body"], params=bulk_params, request_timeout=request_timeout)
         else:
-            response = await es.bulk(body=params["body"], index=index, doc_type=params.get("type"), params=bulk_params)
+            response = await es.bulk(body=params["body"], index=index, doc_type=params.get("type"), params=bulk_params, request_timeout=request_timeout)
 
         stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
@@ -614,9 +617,6 @@ class ForceMerge(Runner):
     async def __call__(self, es, params):
         import elasticsearch
         max_num_segments = params.get("max-num-segments")
-        # preliminary support for overriding the global request timeout (see #567). As force-merge falls back to
-        # the raw transport API (where the keyword argument is called `timeout`) in some cases we will always need
-        # a special handling for the force-merge API.
         request_timeout = params.get("request-timeout")
         mode = params.get("mode")
         merge_params = {"request_timeout": request_timeout}
@@ -625,6 +625,7 @@ class ForceMerge(Runner):
         try:
             if mode == "polling":
                 # we ignore the request_timeout if we are in polling mode and deliberately timeout early
+                # no reason to wait as long as a whole {polling-period} (which has a minimum of 1 second)
                 merge_params["request_timeout"] = 1
                 complete = False
                 try:
@@ -643,11 +644,7 @@ class ForceMerge(Runner):
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
-                if max_num_segments:
-                    await es.transport.perform_request("POST", f"/_optimize?max_num_segments={max_num_segments}",
-                                                       timeout=request_timeout)
-                else:
-                    await es.transport.perform_request("POST", "/_optimize", timeout=request_timeout)
+                await es.transport.perform_request(method="POST", url="/_optimize", params=merge_params)
             else:
                 raise e
 
@@ -674,8 +671,8 @@ class IndicesStats(Runner):
     async def __call__(self, es, params):
         index = params.get("index", "_all")
         condition = params.get("condition")
-
-        response = await es.indices.stats(index=index, metric="_all")
+        request_timeout = params.get("request-timeout")
+        response = await es.indices.stats(index=index, metric="_all", request_timeout=request_timeout)
         if condition:
             path = mandatory(condition, "path", repr(self))
             expected_value = mandatory(condition, "expected-value", repr(self))
@@ -709,7 +706,8 @@ class NodeStats(Runner):
     """
 
     async def __call__(self, es, params):
-        await es.nodes.stats(metric="_all")
+        request_timeout = params.get("request-timeout")
+        await es.nodes.stats(metric="_all", request_timeout=request_timeout)
 
     def __repr__(self, *args, **kwargs):
         return "node-stats"
@@ -771,7 +769,8 @@ class Query(Runner):
                                                corresponding response in more detail, this might incur additional
                                                overhead which can skew measurement results. This flag is ineffective
                                                for scroll queries (detailed meta-data are always returned).
-
+    * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present,
+                           defaults to ``None`` and potentially falls back to the global timeout setting.
     If the following parameters are present in addition, a scroll query will be issued:
 
     * `pages`: Number of pages to retrieve at most for this scroll. If a scroll query does yield less results than the specified number of
@@ -811,11 +810,12 @@ class Query(Runner):
         doc_type = params.get("type")
         detailed_results = params.get("detailed-results", False)
         headers = self._headers(params)
+        request_timeout = params.get("request-timeout")
 
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
-        r = await self._raw_search(es, doc_type, index, body, request_params, headers)
+        r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
 
         if detailed_results:
             props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
@@ -864,7 +864,7 @@ class Query(Runner):
                     sort = "_doc"
                     scroll = "10s"
                     doc_type = params.get("type")
-                    params = request_params
+                    params = request_params.copy()
                     params["sort"] = sort
                     params["scroll"] = scroll
                     params["size"] = size
@@ -882,6 +882,7 @@ class Query(Runner):
                 else:
                     r = await es.transport.perform_request("GET", "/_search/scroll",
                                                            body={"scroll_id": scroll_id, "scroll": "10s"},
+                                                           params=request_params,
                                                            headers=headers)
                     props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"])
                     timed_out = timed_out or props.get("timed_out", False)
@@ -925,6 +926,7 @@ class Query(Runner):
         cache = params.get("cache")
         if cache is not None:
             request_params["request_cache"] = str(cache).lower()
+        request_params["request_timeout"] = params.get("request-timeout")
         return request_params
 
     def _headers(self, params):
@@ -1424,7 +1426,7 @@ class RawRequest(Runner):
         if "ignore" in params:
             request_params["ignore"] = params["ignore"]
         request_params.update(params.get("request-params", {}))
-
+        request_params['request_timeout'] = params.get('request-timeout')
         path = mandatory(params, "path", self)
         if not path.startswith("/"):
             self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
@@ -1487,10 +1489,12 @@ class CreateSnapshot(Runner):
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
         body = mandatory(params, "body", repr(self))
+        request_timeout = params.get("request-timeout")
         await es.snapshot.create(repository=repository,
                                  snapshot=snapshot,
                                  body=body,
                                  params=request_params,
+                                 request_timeout=request_timeout,
                                  wait_for_completion=wait_for_completion)
 
     def __repr__(self, *args, **kwargs):
@@ -1551,10 +1555,12 @@ class RestoreSnapshot(Runner):
     """
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
+        request_timeout = params.get("request-timeout")
         await es.snapshot.restore(repository=mandatory(params, "repository", repr(self)),
                                   snapshot=mandatory(params, "snapshot", repr(self)),
                                   body=params.get("body"),
                                   wait_for_completion=params.get("wait-for-completion", False),
+                                  request_timeout=request_timeout,
                                   params=request_params)
 
     def __repr__(self, *args, **kwargs):
