@@ -15,13 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import inspect
 import logging
 import math
 import numbers
 import operator
 import random
 import time
-import types
 from enum import Enum
 
 from esrally import exceptions
@@ -43,18 +43,24 @@ def param_source_for_operation(op_type, track, params, task_name):
 def param_source_for_name(name, track, params):
     param_source = __PARAM_SOURCES_BY_NAME[name]
 
-    # we'd rather use callable() but this will erroneously also classify a class as callable...
-    if isinstance(param_source, types.FunctionType):
+    if inspect.isfunction(param_source):
         return DelegatingParamSource(track, params, param_source)
     else:
         return param_source(track, params)
 
 
+def ensure_valid_param_source(param_source):
+    if not inspect.isfunction(param_source) and not inspect.isclass(param_source):
+        raise exceptions.RallyAssertionError(f"Parameter source [{param_source}] must be either a function or a class.")
+
+
 def register_param_source_for_operation(op_type, param_source_class):
+    ensure_valid_param_source(param_source_class)
     __PARAM_SOURCES_BY_OP[op_type.name] = param_source_class
 
 
 def register_param_source_for_name(name, param_source_class):
+    ensure_valid_param_source(param_source_class)
     __PARAM_SOURCES_BY_NAME[name] = param_source_class
 
 
