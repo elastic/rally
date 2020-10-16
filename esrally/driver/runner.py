@@ -121,7 +121,7 @@ class Runner:
     """
 
     def __init__(self, *args, **kwargs):
-        super(Runner, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
 
     async def __aenter__(self):
@@ -148,7 +148,7 @@ class Delegator:
     Mixin to unify delegate handling
     """
     def __init__(self, delegate, *args, **kwargs):
-        super(Delegator, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.delegate = delegate
 
 
@@ -294,10 +294,6 @@ class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
     """
-
-    def __init__(self):
-        super().__init__()
-
     async def __call__(self, es, params):
         """
         Runs one bulk indexing operation.
@@ -618,11 +614,28 @@ class ForceMerge(Runner):
         # the raw transport API (where the keyword argument is called `timeout`) in some cases we will always need
         # a special handling for the force-merge API.
         request_timeout = params.get("request-timeout")
+        mode = params.get("mode")
+        merge_params = {"request_timeout": request_timeout}
+        if max_num_segments:
+            merge_params["max_num_segments"] = max_num_segments
         try:
-            if max_num_segments:
-                await es.indices.forcemerge(index=params.get("index"), max_num_segments=max_num_segments, request_timeout=request_timeout)
+            if mode == "polling":
+                # we ignore the request_timeout if we are in polling mode and deliberately timeout early
+                merge_params["request_timeout"] = 1
+                complete = False
+                try:
+                    await es.indices.forcemerge(index=params.get("index"), **merge_params)
+                    complete = True
+                except elasticsearch.ConnectionTimeout:
+                    pass
+                while not complete:
+                    await asyncio.sleep(params.get("poll-period"))
+                    tasks = await es.tasks.list(params={"actions":"indices:admin/forcemerge"})
+                    if len(tasks["nodes"]) == 0:
+                        # empty nodes response indicates no tasks
+                        complete = True
             else:
-                await es.indices.forcemerge(index=params.get("index"), request_timeout=request_timeout)
+                await es.indices.forcemerge(index=params.get("index"), **merge_params)
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
@@ -777,10 +790,6 @@ class Query(Runner):
 
     * ``pages``: Total number of pages that have been retrieved.
     """
-
-    def __init__(self):
-        super().__init__()
-
     async def __call__(self, es, params):
         if "pages" in params and "results-per-page" in params:
             return await self.scroll_query(es, params)
@@ -1408,8 +1417,13 @@ class RawRequest(Runner):
             request_params["ignore"] = params["ignore"]
         request_params.update(params.get("request-params", {}))
 
+        path = mandatory(params, "path", self)
+        if not path.startswith("/"):
+            self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
+            raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
+
         await es.transport.perform_request(method=params.get("method", "GET"),
-                                           url=mandatory(params, "path", self),
+                                           url=path,
                                            headers=params.get("headers"),
                                            body=params.get("body"),
                                            params=request_params)

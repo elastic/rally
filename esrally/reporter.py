@@ -235,9 +235,9 @@ class SummaryReporter:
         for processing_time in stats.ml_processing_time:
             job_name = processing_time["job"]
             unit = processing_time["unit"]
-            lines.append(self.line("Min ML processing time", job_name, processing_time["min"], unit)),
-            lines.append(self.line("Mean ML processing time", job_name, processing_time["mean"], unit)),
-            lines.append(self.line("Median ML processing time", job_name, processing_time["median"], unit)),
+            lines.append(self.line("Min ML processing time", job_name, processing_time["min"], unit))
+            lines.append(self.line("Mean ML processing time", job_name, processing_time["mean"], unit))
+            lines.append(self.line("Median ML processing time", job_name, processing_time["median"], unit))
             lines.append(self.line("Max ML processing time", job_name, processing_time["max"], unit))
         return lines
 
@@ -442,6 +442,8 @@ class ComparisonReporter:
 
     def report_transform_processing_times(self, baseline_stats, contender_stats):
         lines = []
+        if baseline_stats.total_transform_processing_times is None:
+            return lines
         for baseline in baseline_stats.total_transform_processing_times:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_processing_times:

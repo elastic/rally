@@ -3,6 +3,19 @@ Tips and Tricks
 
 This section covers various tips and tricks in a recipe-style fashion.
 
+Benchmarking an Elastic Cloud cluster
+-------------------------------------
+
+.. note::
+
+    We assume in this recipe, that Rally is already properly :doc:`configured </configuration>`.
+
+Benchmarking an `Elastic Cloud <https://www.elastic.co/cloud/>`_ cluster with Rally is similar to :ref:`benchmarking any other existing cluster <recipe_benchmark_existing_cluster>`. In the following example we will run a benchmark against a cluster reachable via the endpoint ``https://abcdef123456.europe-west1.gcp.cloud.es.io:9243`` by the user ``elastic`` with the password ``changeme``::
+
+    esrally --track=pmc --target-hosts=abcdef123456.europe-west1.gcp.cloud.es.io:9243 --pipeline=benchmark-only --client-options="timeout:60,use_ssl:true,verify_certs:true,basic_auth_user:'elastic',basic_auth_password:'changeme'"
+
+.. _recipe_benchmark_existing_cluster:
+
 Benchmarking an existing cluster
 --------------------------------
 
