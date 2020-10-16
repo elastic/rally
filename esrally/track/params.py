@@ -229,7 +229,7 @@ class CreateDataStreamParamSource(ParamSource):
         # ensure we pass all parameters...
         p.update(self._params)
         p.update({
-            "data_streams": self.data_stream_definitions,
+            "data-streams": self.data_stream_definitions,
             "request-params": self.request_params
         })
         return p
@@ -259,7 +259,7 @@ class DeleteDataStreamParamSource(ParamSource):
         # ensure we pass all parameters...
         p.update(self._params)
         p.update({
-            "data_streams": self.data_stream_definitions,
+            "data-streams": self.data_stream_definitions,
             "request-params": self.request_params,
             "only-if-exists": self.only_if_exists
         })
@@ -412,7 +412,7 @@ class SearchParamSource(ParamSource):
             default_index = track.data_streams[0].name
         else:
             default_index = None
-
+        # indexes are preferred by data streams can also be queried the same way
         index_name = params.get("index")
         if not index_name:
             index_name = params.get("data-stream", default_index)
@@ -435,7 +435,7 @@ class SearchParamSource(ParamSource):
         }
 
         if not index_name:
-            raise exceptions.InvalidSyntax("'index' is mandatory and is missing for operation '{}'".format(kwargs.get("operation_name")))
+            raise exceptions.InvalidSyntax("'index' or 'data-stream' is mandatory and is missing for operation '{}'".format(kwargs.get("operation_name")))
 
         if pages:
             self.query_params["pages"] = pages
@@ -510,6 +510,9 @@ class BulkIndexParamSource(ParamSource):
             self.id_conflicts = IndexIdConflict.RandomConflicts
         else:
             raise exceptions.InvalidSyntax("Unknown 'conflicts' setting [%s]" % id_conflicts)
+
+        if params.get("data-streams", None) and self.id_conflicts != IndexIdConflict.NoConflicts:
+            raise exceptions.InvalidSyntax("'conflicts' cannot be used with 'data-streams'")
 
         if self.id_conflicts != IndexIdConflict.NoConflicts:
             self.conflict_probability = self.float_param(params, name="conflict-probability", default_value=25, min_value=0, max_value=100,
@@ -683,13 +686,16 @@ class PartitionBulkIndexParamSource:
 class ForceMergeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
-        if len(track.indices) > 0:
-            # force merge data streams and indices
+        if len(track.indices) > 0 or len(track.data_streams) > 0:
+            # force merge data streams and indices - API call is the same so treat as indexes
             default_index = ','.join(map(str, track.indices + track.data_streams))
         else:
             default_index = "_all"
 
-        self._index_name = params.get("index", default_index)
+        self._index_name = params.get("index")
+        if not self._index_name:
+            self._index_name = params.get("data-stream", default_index)
+
         self._max_num_segments = params.get("max-num-segments")
         self._request_timeout = params.get("request-timeout")
         self._poll_period = params.get("poll-period", 10)
@@ -757,6 +763,9 @@ def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_si
     elif docs.target_data_stream:
         target = docs.target_data_stream
         use_create = True
+        if id_conflicts != IndexIdConflict.NoConflicts:
+            # can only create docs in data streams
+            raise exceptions.RallyError("Do not create readers for docs targeting data streams with conflicts")
 
     if docs.includes_action_and_meta_data:
         return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, target, docs.target_type)
@@ -886,7 +895,8 @@ class GenerateActionMetaData:
             self.meta_data_update_with_id = '{"update": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
             self.meta_data_index_no_id = '{"index": {"_index": "%s"}}\n' % index_name
             self.meta_data_create_no_id = '{"create": {"_index": "%s"}}\n' % index_name
-
+        if use_create and conflicting_ids:
+            raise exceptions.RallyError("'use_create' be True with 'conflicting_ids'")
         self.conflicting_ids = conflicting_ids
         self.on_conflict = on_conflict
         self.use_create = use_create
