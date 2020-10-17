@@ -142,6 +142,28 @@ class Runner:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         return False
 
+    def _default_kw_params(self, params):
+        # map of API kwargs to Rally config parameters
+        kw_dict = {
+            "body": "body",
+            "index": "index",
+            "opaque_id": "opaque-id",
+            "params": "request-params",
+            "request_timeout": "request-timeout",
+        }
+        full_result =  {k: params.get(v) for (k, v) in kw_dict.items()}
+        # filter Nones
+        return dict(filter(lambda kv: kv[1] is not None, full_result.items()))
+
+    def _transport_request_params(self, params):
+        request_params = params.get("request-params", {})
+        cache = params.get("cache")
+        if cache is not None:
+            request_params["request_cache"] = str(cache).lower()
+        request_timeout = params.get("request-timeout")
+        if request_timeout is not None:
+            request_params["request_timeout"] = request_timeout
+        return request_params
 
 class Delegator:
     """
@@ -463,9 +485,7 @@ class BulkIndex(Runner):
             }
         """
         detailed_results = params.get("detailed-results", False)
-        index = params.get("index")
-
-        request_timeout = params.get("request-timeout")
+        api_kwargs = self._default_kw_params(params)
 
         bulk_params = {}
         if "pipeline" in params:
@@ -480,15 +500,16 @@ class BulkIndex(Runner):
             es.return_raw_response()
 
         if with_action_metadata:
+            api_kwargs.pop("index", None)
             # only half of the lines are documents
-            response = await es.bulk(body=params["body"], params=bulk_params, request_timeout=request_timeout)
+            response = await es.bulk(params=bulk_params, **api_kwargs)
         else:
-            response = await es.bulk(body=params["body"], index=index, doc_type=params.get("type"), params=bulk_params, request_timeout=request_timeout)
+            response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
 
         stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
         meta_data = {
-            "index": str(index) if index else None,
+            "index": params.get('index'),
             "weight": bulk_size,
             "unit": "docs",
             "bulk-size": bulk_size
@@ -617,9 +638,8 @@ class ForceMerge(Runner):
     async def __call__(self, es, params):
         import elasticsearch
         max_num_segments = params.get("max-num-segments")
-        request_timeout = params.get("request-timeout")
         mode = params.get("mode")
-        merge_params = {"request_timeout": request_timeout}
+        merge_params = self._default_kw_params(params)
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         try:
@@ -629,7 +649,7 @@ class ForceMerge(Runner):
                 merge_params["request_timeout"] = 1
                 complete = False
                 try:
-                    await es.indices.forcemerge(index=params.get("index"), **merge_params)
+                    await es.indices.forcemerge(**merge_params)
                     complete = True
                 except elasticsearch.ConnectionTimeout:
                     pass
@@ -640,10 +660,11 @@ class ForceMerge(Runner):
                         # empty nodes response indicates no tasks
                         complete = True
             else:
-                await es.indices.forcemerge(index=params.get("index"), **merge_params)
+                await es.indices.forcemerge(**merge_params)
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
+                merge_params['request_timeout'] = params.get('request-timeout')
                 await es.transport.perform_request(method="POST", url="/_optimize", params=merge_params)
             else:
                 raise e
@@ -669,10 +690,10 @@ class IndicesStats(Runner):
         return str(v) if v is not None else None
 
     async def __call__(self, es, params):
-        index = params.get("index", "_all")
+        api_kwargs = self._default_kw_params(params)
+        index = api_kwargs.pop("index", "_all")
         condition = params.get("condition")
-        request_timeout = params.get("request-timeout")
-        response = await es.indices.stats(index=index, metric="_all", request_timeout=request_timeout)
+        response = await es.indices.stats(index=index, metric="_all", **api_kwargs)
         if condition:
             path = mandatory(condition, "path", repr(self))
             expected_value = mandatory(condition, "expected-value", repr(self))
@@ -804,13 +825,12 @@ class Query(Runner):
             return await self.request_body_query(es, params)
 
     async def request_body_query(self, es, params):
-        request_params = self._default_request_params(params)
+        request_params = self._transport_request_params(params)
         index = params.get("index", "_all")
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
         detailed_results = params.get("detailed-results", False)
         headers = self._headers(params)
-        request_timeout = params.get("request-timeout")
 
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
@@ -841,7 +861,7 @@ class Query(Runner):
             }
 
     async def scroll_query(self, es, params):
-        request_params = self._default_request_params(params)
+        request_params = self._transport_request_params(params)
         hits = 0
         hits_relation = None
         retrieved_pages = 0
@@ -920,14 +940,6 @@ class Query(Runner):
         components.append("_search")
         path = "/".join(components)
         return await es.transport.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
-
-    def _default_request_params(self, params):
-        request_params = params.get("request-params", {})
-        cache = params.get("cache")
-        if cache is not None:
-            request_params["request_cache"] = str(cache).lower()
-        request_params["request_timeout"] = params.get("request-timeout")
-        return request_params
 
     def _headers(self, params):
         # reduces overhead due to decompression of very large responses
@@ -1422,11 +1434,9 @@ class CloseMlJob(Runner):
 
 class RawRequest(Runner):
     async def __call__(self, es, params):
-        request_params = {}
+        request_params = self._transport_request_params(params)
         if "ignore" in params:
             request_params["ignore"] = params["ignore"]
-        request_params.update(params.get("request-params", {}))
-        request_params['request_timeout'] = params.get('request-timeout')
         path = mandatory(params, "path", self)
         if not path.startswith("/"):
             self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
@@ -1484,18 +1494,15 @@ class CreateSnapshot(Runner):
     Creates a new snapshot repository
     """
     async def __call__(self, es, params):
-        request_params = params.get("request-params", {})
         wait_for_completion = params.get("wait-for-completion", False)
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
         body = mandatory(params, "body", repr(self))
-        request_timeout = params.get("request-timeout")
+        api_kwargs = self._default_kw_params(params)
         await es.snapshot.create(repository=repository,
                                  snapshot=snapshot,
-                                 body=body,
-                                 params=request_params,
-                                 request_timeout=request_timeout,
-                                 wait_for_completion=wait_for_completion)
+                                 wait_for_completion=wait_for_completion,
+                                 **api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "create-snapshot"
@@ -1554,14 +1561,11 @@ class RestoreSnapshot(Runner):
     Restores a snapshot from an already registered repository
     """
     async def __call__(self, es, params):
-        request_params = params.get("request-params", {})
-        request_timeout = params.get("request-timeout")
+        api_kwargs = self._default_kw_params(params)
         await es.snapshot.restore(repository=mandatory(params, "repository", repr(self)),
                                   snapshot=mandatory(params, "snapshot", repr(self)),
-                                  body=params.get("body"),
                                   wait_for_completion=params.get("wait-for-completion", False),
-                                  request_timeout=request_timeout,
-                                  params=request_params)
+                                  **api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "restore-snapshot"

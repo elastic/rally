@@ -271,7 +271,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(0, result["error-count"])
         self.assertFalse("error-type" in result)
 
-        es.bulk.assert_called_with(body=bulk_params["body"], params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -304,7 +304,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(0, result["error-count"])
         self.assertFalse("error-type" in result)
 
-        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="_doc", params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="_doc", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -336,7 +336,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(0, result["error-count"])
         self.assertFalse("error-type" in result)
 
-        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type=None, params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type=None, params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -405,7 +405,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(2, result["error-count"])
         self.assertEqual("bulk", result["error-type"])
 
-        es.bulk.assert_called_with(body=bulk_params["body"], params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -472,7 +472,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(3, result["error-count"])
         self.assertEqual("bulk", result["error-type"])
 
-        es.bulk.assert_called_with(body=bulk_params["body"], params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -580,7 +580,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(2, result["error-count"])
         self.assertEqual("bulk", result["error-type"])
 
-        es.bulk.assert_called_with(body=bulk_params["body"], params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -768,7 +768,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(582, result["bulk-request-size-bytes"])
         self.assertEqual(234, result["total-document-size-bytes"])
 
-        es.bulk.assert_called_with(body=bulk_params["body"], params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
         es.bulk.return_value.result().pop("ingest_took")
         result = await bulk(es, bulk_params)
@@ -843,7 +843,7 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(93, result["bulk-request-size-bytes"])
         self.assertEqual(39, result["total-document-size-bytes"])
 
-        es.bulk.assert_called_with(body=bulk_params["body"], params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
         es.bulk.return_value.result().pop("ingest_took")
         result = await bulk(es, bulk_params)
@@ -892,43 +892,8 @@ class BulkIndexRunnerTests(TestCase):
         with self.assertRaisesRegex(exceptions.DataError, "bulk body is neither string nor list"):
             await bulk(es, bulk_params)
 
-        es.bulk.assert_called_with(body=bulk_params["body"], params={}, request_timeout=None)
+        es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
-    async def test_bulk_index_with_timeout(self, es):
-        bulk_response = {
-            "errors": False,
-            "took": 8
-        }
-        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
-
-        bulk = runner.BulkIndex()
-
-        bulk_params = {
-            "body": "action_meta_data\n" +
-                    "index_line\n" +
-                    "action_meta_data\n" +
-                    "index_line\n" +
-                    "action_meta_data\n" +
-                    "index_line\n",
-            "request-timeout": 0.1,
-            "action-metadata-present": True,
-            "bulk-size": 3
-        }
-
-        result = await bulk(es, bulk_params)
-
-        self.assertEqual(8, result["took"])
-        self.assertIsNone(result["index"])
-        self.assertEqual(3, result["weight"])
-        self.assertEqual(3, result["bulk-size"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(True, result["success"])
-        self.assertEqual(0, result["error-count"])
-        self.assertFalse("error-type" in result)
-
-        es.bulk.assert_called_with(body=bulk_params["body"], params={}, request_timeout=0.1)
 
 class ForceMergeRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
@@ -938,7 +903,7 @@ class ForceMergeRunnerTests(TestCase):
         force_merge = runner.ForceMerge()
         await force_merge(es, params={"index" : "_all"})
 
-        es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=None)
+        es.indices.forcemerge.assert_called_once_with(index="_all")
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1106,7 +1071,7 @@ class IndicesStatsRunnerTests(TestCase):
         self.assertEqual("ops", result["unit"])
         self.assertTrue(result["success"])
 
-        es.indices.stats.assert_called_once_with(index="_all", metric="_all", request_timeout=None)
+        es.indices.stats.assert_called_once_with(index="_all", metric="_all")
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1140,7 +1105,7 @@ class IndicesStatsRunnerTests(TestCase):
             "expected-value": "0"
         }, result["condition"])
 
-        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all", request_timeout=None)
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1174,7 +1139,7 @@ class IndicesStatsRunnerTests(TestCase):
             "expected-value": "0"
         }, result["condition"])
 
-        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all", request_timeout=None)
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1208,7 +1173,7 @@ class IndicesStatsRunnerTests(TestCase):
             "expected-value": "0"
         }, result["condition"])
 
-        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all", request_timeout=None)
+        es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
 
 class QueryRunnerTests(TestCase):
@@ -1261,7 +1226,7 @@ class QueryRunnerTests(TestCase):
         es.transport.perform_request.assert_called_once_with(
             "GET",
             "/_all/_search",
-            params={"request_cache": "true", "request_timeout": None},
+            params={"request_cache": "true"},
             body=params["body"],
             headers=None
         )
@@ -1317,7 +1282,6 @@ class QueryRunnerTests(TestCase):
             "/_all/_search",
             params={
                 "request_cache": "false",
-                "request_timeout": None,
                 "q": "user:kimchy"
             },
             body=params["body"],
@@ -1372,7 +1336,7 @@ class QueryRunnerTests(TestCase):
         es.transport.perform_request.assert_called_once_with(
             "GET",
             "/_all/_search",
-            params={"request_timeout": None, "q": "user:kimchy"},
+            params={"q": "user:kimchy"},
             body=params["body"],
             headers=None
         )
@@ -1425,8 +1389,7 @@ class QueryRunnerTests(TestCase):
             "GET",
             "/_all/_search",
             params={
-                "request_cache": "true",
-                "request_timeout": None
+                "request_cache": "true"
             },
             body=params["body"],
             headers=None
@@ -1483,7 +1446,7 @@ class QueryRunnerTests(TestCase):
         es.transport.perform_request.assert_called_once_with(
             "GET",
             "/unittest/_search",
-            params={"request_timeout": None},
+            params={},
             body=params["body"],
             headers={"Accept-Encoding": "identity"}
         )
@@ -1541,7 +1504,7 @@ class QueryRunnerTests(TestCase):
         es.transport.perform_request.assert_called_once_with(
             "GET", "/unittest/type/_search",
             body=params["body"],
-            params={"request_timeout": None},
+            params={},
             headers=None
         )
         es.clear_scroll.assert_not_called()
@@ -1602,7 +1565,7 @@ class QueryRunnerTests(TestCase):
         es.transport.perform_request.assert_called_once_with(
             "GET",
             "/unittest/_search",
-            params={"request_cache": "true", "request_timeout": None, "sort": "_doc", "scroll": "10s", "size": 100},
+            params={"request_cache": "true", "sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
             headers=None
         )
@@ -1664,7 +1627,7 @@ class QueryRunnerTests(TestCase):
         es.transport.perform_request.assert_called_once_with(
             "GET",
             "/unittest/_search",
-            params={"request_timeout": None, "sort": "_doc", "scroll": "10s", "size": 100},
+            params={"sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
             headers={"Accept-Encoding": "identity"}
         )
@@ -1724,7 +1687,7 @@ class QueryRunnerTests(TestCase):
         es.transport.perform_request.assert_called_once_with(
             "GET",
             "/_all/_search",
-            params={"request_timeout": None, "sort": "_doc", "scroll": "10s", "size": 100},
+            params={"sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
             headers=None
         )
@@ -2707,7 +2670,7 @@ class RawRequestRunnerTests(TestCase):
                                                              url="/_cat/count",
                                                              headers=None,
                                                              body=None,
-                                                             params={"request_timeout": None})
+                                                             params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2729,7 +2692,7 @@ class RawRequestRunnerTests(TestCase):
                                                              url="/twitter",
                                                              headers=None,
                                                              body=None,
-                                                             params={"request_timeout": None, "ignore": [400, 404], "pretty": "true"})
+                                                             params={"ignore": [400, 404], "pretty": "true"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2760,7 +2723,7 @@ class RawRequestRunnerTests(TestCase):
                                                                      }
                                                                  }
                                                              },
-                                                             params={"request_timeout": None})
+                                                             params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2791,7 +2754,7 @@ class RawRequestRunnerTests(TestCase):
                                                                  {"index": "test", "search_type": "dfs_query_then_fetch"},
                                                                  {"query": {"match_all": {}}}
                                                              ],
-                                                             params={"request_timeout": None})
+                                                             params={})
 
 
 class SleepTests(TestCase):
@@ -2891,7 +2854,6 @@ class CreateSnapshotTests(TestCase):
                                                        "indices": "logs-*"
                                                    },
                                                    params={"request_timeout": 7200},
-                                                   request_timeout=None,
                                                    wait_for_completion=False)
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -2943,7 +2905,6 @@ class CreateSnapshotTests(TestCase):
                                                        "indices": "logs-*"
                                                    },
                                                    params={"request_timeout": 7200},
-                                                   request_timeout=None,
                                                    wait_for_completion=True)
 
 
@@ -3142,7 +3103,7 @@ class RestoreSnapshotTests(TestCase):
             "snapshot": "snapshot-001",
             "wait-for-completion": True,
             "request-params": {
-                "timeout": 7200
+                "request_timeout": 7200
             }
         }
 
@@ -3151,10 +3112,8 @@ class RestoreSnapshotTests(TestCase):
 
         es.snapshot.restore.assert_called_once_with(repository="backups",
                                                     snapshot="snapshot-001",
-                                                    body=None,
                                                     wait_for_completion=True,
-                                                    request_timeout= None,
-                                                    params={"timeout": 7200})
+                                                    params={"request_timeout": 7200})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -3172,7 +3131,7 @@ class RestoreSnapshotTests(TestCase):
             },
             "wait-for-completion": True,
             "request-params": {
-                "timeout": 7200
+                "request_timeout": 7200
             }
         }
 
@@ -3189,8 +3148,7 @@ class RestoreSnapshotTests(TestCase):
                                                         }
                                                     },
                                                     wait_for_completion=True,
-                                                    request_timeout=None,
-                                                    params={"timeout": 7200})
+                                                    params={"request_timeout": 7200})
 
 
 class IndicesRecoveryTests(TestCase):
