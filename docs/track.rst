@@ -472,6 +472,9 @@ Each operation consists of the following properties:
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
 * ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
 * ``include-in-reporting`` (optional, defaults to ``true`` for normal operations and to ``false`` for administrative operations): Whether or not this operation should be included in the command line report. For example you might want Rally to create an index for you but you are not interested in detailed metrics about it. Note that Rally will still record all metrics in the metrics store.
+* ``request-timeout`` (optional, defaults to ``None``): The client-side timeout for this operation.  Represented as a floating-point number in seconds, e.g. ``1.5``.
+* ``headers`` (optional, defaults to ``None``): A dictionary of key-value pairs to pass as headers in the operation.
+* ``opaque-id`` (optional, defaults to ``None`` [unused]): A special ID set as the value of ``x-opaque-id`` in the client headers of the operation.  Overrides existing ``x-opaque-id`` entries in ``headers`` (case-insensitive).
 
 Some of the operations below are also retryable (marked accordingly below). Retryable operations expose the following properties:
 
