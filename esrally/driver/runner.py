@@ -146,6 +146,7 @@ class Runner:
         # map of API kwargs to Rally config parameters
         kw_dict = {
             "body": "body",
+            "headers": "headers",
             "index": "index",
             "opaque_id": "opaque-id",
             "params": "request-params",
@@ -157,13 +158,14 @@ class Runner:
 
     def _transport_request_params(self, params):
         request_params = params.get("request-params", {})
-        cache = params.get("cache")
-        if cache is not None:
-            request_params["request_cache"] = str(cache).lower()
         request_timeout = params.get("request-timeout")
         if request_timeout is not None:
             request_params["request_timeout"] = request_timeout
-        return request_params
+        headers = params.get("headers") or {}
+        opaque_id = params.get("opaque-id")
+        if opaque_id is not None:
+            headers.update({"x-opaque-id": opaque_id})
+        return request_params, headers
 
 class Delegator:
     """
@@ -664,8 +666,10 @@ class ForceMerge(Runner):
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
-                merge_params['request_timeout'] = params.get('request-timeout')
-                await es.transport.perform_request(method="POST", url="/_optimize", params=merge_params)
+                params, headers = self._transport_request_params(params)
+                if max_num_segments:
+                    params["max_num_segments"] = max_num_segments
+                await es.transport.perform_request(method="POST", url="/_optimize", params=params, headers=headers)
             else:
                 raise e
 
@@ -825,13 +829,21 @@ class Query(Runner):
             return await self.request_body_query(es, params)
 
     async def request_body_query(self, es, params):
-        request_params = self._transport_request_params(params)
+        request_params, headers = self._transport_request_params(params)
         index = params.get("index", "_all")
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
         detailed_results = params.get("detailed-results", False)
-        headers = self._headers(params)
+        encoding_header = self._query_headers(params)
+        if encoding_header is not None:
+            headers.update(encoding_header)
 
+        cache = params.get("cache")
+        if cache is not None:
+            request_params["request_cache"] = str(cache).lower()
+        if not bool(headers):
+            # counter-intuitive but preserves prior behavior
+            headers = None
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
@@ -861,7 +873,7 @@ class Query(Runner):
             }
 
     async def scroll_query(self, es, params):
-        request_params = self._transport_request_params(params)
+        request_params, headers = self._transport_request_params(params)
         hits = 0
         hits_relation = None
         retrieved_pages = 0
@@ -870,9 +882,16 @@ class Query(Runner):
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
         size = params.get("results-per-page")
-        headers = self._headers(params)
+        encoding_header = self._query_headers(params)
+        if encoding_header is not None:
+            headers.update(encoding_header)
         scroll_id = None
-
+        cache = params.get("cache")
+        if cache is not None:
+            request_params["request_cache"] = str(cache).lower()
+        if not bool(headers):
+            # counter-intuitive but preserves prior behavior
+            headers = None
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
@@ -941,7 +960,7 @@ class Query(Runner):
         path = "/".join(components)
         return await es.transport.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
 
-    def _headers(self, params):
+    def _query_headers(self, params):
         # reduces overhead due to decompression of very large responses
         if params.get("response-compression-enabled", True):
             return None
@@ -980,8 +999,8 @@ class ClusterHealth(Runner):
             except (KeyError, AttributeError):
                 return ClusterHealthStatus.UNKNOWN
 
-        index = params.get("index")
         request_params = params.get("request-params", {})
+        api_kw_params = self._default_kw_params(params)
         # by default, Elasticsearch will not wait and thus we treat this as success
         expected_cluster_status = request_params.get("wait_for_status", str(ClusterHealthStatus.UNKNOWN))
         # newer ES versions >= 5.0
@@ -992,7 +1011,7 @@ class ClusterHealth(Runner):
             # either the user has defined something or we're good with any count of relocating shards.
             expected_relocating_shards = int(request_params.get("wait_for_relocating_shards", sys.maxsize))
 
-        result = await es.cluster.health(index=index, params=request_params)
+        result = await es.cluster.health(**api_kw_params)
         cluster_status = result["status"]
         relocating_shards = result["relocating_shards"]
 
@@ -1044,9 +1063,12 @@ class CreateIndex(Runner):
 
     async def __call__(self, es, params):
         indices = mandatory(params, "indices", self)
-        request_params = params.get("request-params", {})
+        api_params = self._default_kw_params(params)
+        ## ignore invalid entries rather than erroring
+        for term in ["index", "body"]:
+            api_params.pop(term, None)
         for index, body in indices:
-            await es.indices.create(index=index, body=body, params=request_params)
+            await es.indices.create(index=index, body=body, **api_params)
         return len(indices), "ops"
 
     def __repr__(self, *args, **kwargs):
@@ -1434,17 +1456,20 @@ class CloseMlJob(Runner):
 
 class RawRequest(Runner):
     async def __call__(self, es, params):
-        request_params = self._transport_request_params(params)
+        request_params, headers = self._transport_request_params(params)
         if "ignore" in params:
             request_params["ignore"] = params["ignore"]
         path = mandatory(params, "path", self)
         if not path.startswith("/"):
             self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
             raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
+        if not bool(headers):
+            #counter-intuitive, but preserves prior behavior
+            headers = None
 
         await es.transport.perform_request(method=params.get("method", "GET"),
                                            url=path,
-                                           headers=params.get("headers"),
+                                           headers=headers,
                                            body=params.get("body"),
                                            params=request_params)
 
