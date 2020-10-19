@@ -407,6 +407,7 @@ class SearchParamSource(ParamSource):
         # the value is now the inner-most dictionary and the last path element is its key
         v[path[-1]] = val
 
+    # pylint: disable=arguments-differ
     def params(self, choice=random.choice):
         if self.query_body_params:
             # needs to replace params first

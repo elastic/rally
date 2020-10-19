@@ -541,7 +541,7 @@ class TemplateSource:
     rally.collect(parts=...
     """
 
-    collect_parts_re = re.compile(r'''{{\ +?rally\.collect\(parts="(.+?(?="))"\)\ +?}}''')
+    collect_parts_re = re.compile(r"{{\ +?rally\.collect\(parts=\"(.+?(?=\"))\"\)\ +?}}")
 
     def __init__(self, base_path, template_file_name, source=io.FileSource, fileglobber=glob.glob):
         self.base_path = base_path
