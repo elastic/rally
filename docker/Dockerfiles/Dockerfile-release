@@ -12,7 +12,8 @@ RUN apt-get -y update && \
 RUN groupadd --gid 1000 rally && \
     useradd -d /rally -m -k /dev/null -g 1000 -N -u 1000 -l -s /bin/bash rally
 
-RUN pip3 install esrally==$RALLY_VERSION
+RUN pip3 install --upgrade pip setuptools wheel
+RUN pip3 install esrally==$RALLY_VERSION --use-feature=2020-resolver
 
 WORKDIR /rally
 COPY --chown=1000:0 docker/bin/entrypoint.sh /entrypoint.sh
