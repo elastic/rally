@@ -52,6 +52,8 @@ function main {
     add_license "boto3" "https://raw.githubusercontent.com/boto/boto3/develop/LICENSE"
     add_license "yappi" "https://raw.githubusercontent.com/sumerc/yappi/master/LICENSE"
     add_license "ijson" "https://raw.githubusercontent.com/ICRAR/ijson/master/LICENSE.txt"
+    add_license "google-resumable-media" "https://raw.githubusercontent.com/googleapis/google-resumable-media-python/master/LICENSE"
+    add_license "google-auth" "https://raw.githubusercontent.com/googleapis/google-auth-library-python/master/LICENSE"
 
     # transitive dependencies
     # Jinja2 dependencies
@@ -65,7 +67,7 @@ function main {
     add_license "attrs" "https://raw.githubusercontent.com/python-attrs/attrs/master/LICENSE"
     add_license "chardet" "https://raw.githubusercontent.com/chardet/chardet/master/LICENSE"
     add_license "multidict" "https://raw.githubusercontent.com/aio-libs/multidict/master/LICENSE"
-    add_license "yarl" "https://github.com/aio-libs/yarl/blob/master/LICENSE"
+    add_license "yarl" "https://raw.githubusercontent.com/aio-libs/yarl/master/LICENSE"
     # yarl dependencies
     add_license "idna" "https://raw.githubusercontent.com/kjd/idna/master/LICENSE.md"
     # yarl dependency "multidict" is already coverered above
@@ -73,6 +75,8 @@ function main {
     add_license "s3transfer" "https://raw.githubusercontent.com/boto/s3transfer/develop/LICENSE.txt"
     add_license "jmespath" "https://raw.githubusercontent.com/jmespath/jmespath.py/develop/LICENSE.txt"
     add_license "botocore" "https://raw.githubusercontent.com/boto/botocore/develop/LICENSE.txt"
+    # google-resumable-media dependencies
+    add_license "google-crc32c": "https://raw.githubusercontent.com/googleapis/python-crc32c/master/LICENSE"
 }
 
 main
