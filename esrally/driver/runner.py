@@ -507,7 +507,7 @@ class BulkIndex(Runner):
         stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
 
         meta_data = {
-            "index": params.get('index'),
+            "index": params.get("index"),
             "weight": bulk_size,
             "unit": "docs",
             "bulk-size": bulk_size

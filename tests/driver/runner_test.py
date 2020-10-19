@@ -307,7 +307,13 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(0, result["error-count"])
         self.assertFalse("error-type" in result)
 
-        es.bulk.assert_called_with(doc_type="_doc", params={}, body="index_line\nindex_line\nindex_line\n", headers={"x-test-id": "1234"}, index="test1", opaque_id="DESIRED-OPAQUE-ID", request_timeout=3.0)
+        es.bulk.assert_called_with(doc_type="_doc",
+                                   params={},
+                                   body="index_line\nindex_line\nindex_line\n",
+                                   headers={"x-test-id": "1234"},
+                                   index="test1",
+                                   opaque_id="DESIRED-OPAQUE-ID",
+                                   request_timeout=3.0)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2163,7 +2169,7 @@ class ClusterHealthRunnerTests(TestCase):
             "status": "green",
             "relocating_shards": 0
         })
-        r = runner.ClusterHealth()
+        cluster_health_runner = runner.ClusterHealth()
 
         params = {
             "request-params": {
@@ -2174,7 +2180,7 @@ class ClusterHealthRunnerTests(TestCase):
             "opaque-id": "testid-1"
         }
 
-        result = await r(es, params)
+        result = await cluster_health_runner(es, params)
 
         self.assertDictEqual({
             "weight": 1,
@@ -2281,7 +2287,7 @@ class CreateIndexRunnerTests(TestCase):
     async def test_create_with_timeout_and_headers(self, es):
         es.indices.create.return_value = as_future()
 
-        r = runner.CreateIndex()
+        create_index_runner = runner.CreateIndex()
 
         request_params = {
             "wait_for_active_shards": "true"
@@ -2297,7 +2303,7 @@ class CreateIndexRunnerTests(TestCase):
             "request-params": request_params
         }
 
-        result = await r(es, params)
+        result = await create_index_runner(es, params)
 
         self.assertEqual((1, "ops"), result)
 
