@@ -16,22 +16,48 @@
 # under the License.
 import random
 import unittest.mock as mock
-from unittest import TestCase
+
+import pytest
 
 from esrally.utils import net
 
 
-class NetTests(TestCase):
+class TestNetUtils:
     # Mocking boto3 objects directly is too complex so we keep all code in a helper function and mock this instead
+    @pytest.mark.parametrize("seed", range(1))
     @mock.patch("esrally.utils.net._download_from_s3_bucket")
-    def test_download_from_s3_bucket(self, download):
+    def test_download_from_s3_bucket(self, download, seed):
+        random.seed(seed)
         expected_size = random.choice([None, random.randint(0, 1000)])
         progress_indicator = random.choice([None, "some progress indicator"])
 
-        net.download_s3("s3://mybucket.elasticsearch.org/data/documents.json.bz2", "/tmp/documents.json.bz2",
-                        expected_size, progress_indicator)
+        net.download_from_bucket("s3", "s3://mybucket.elasticsearch.org/data/documents.json.bz2", "/tmp/documents.json.bz2",
+                                 expected_size, progress_indicator)
         download.assert_called_once_with("mybucket.elasticsearch.org", "data/documents.json.bz2",
                                          "/tmp/documents.json.bz2", expected_size, progress_indicator)
+
+    @pytest.mark.parametrize("seed", range(1))
+    @mock.patch("esrally.utils.net._download_from_gcs_bucket")
+    def test_download_from_gs_bucket(self, download, seed):
+        random.seed(seed)
+        expected_size = random.choice([None, random.randint(0, 1000)])
+        progress_indicator = random.choice([None, "some progress indicator"])
+
+        net.download_from_bucket("gs", "gs://unittest-gcp-bucket.test.org/data/documents.json.bz2", "/tmp/documents.json.bz2",
+                                 expected_size, progress_indicator)
+        download.assert_called_once_with("unittest-gcp-bucket.test.org", "data/documents.json.bz2",
+                                         "/tmp/documents.json.bz2", expected_size, progress_indicator)
+
+    @pytest.mark.parametrize("seed", range(40))
+    def test_gcs_object_url(self, seed):
+        random.seed(seed)
+        bucket_name = random.choice(["unittest-bucket.test.me", "/unittest-bucket.test.me",
+                                     "/unittest-bucket.test.me/", "unittest-bucket.test.me/"])
+        bucket_path = random.choice(["path/to/object", "/path/to/object",
+                                     "/path/to/object/", "path/to/object/"])
+
+        assert net._build_gcs_object_url(bucket_name, bucket_path) == \
+               "https://storage.googleapis.com/storage/v1/b/unittest-bucket.test.me/o/path%2Fto%2Fobject?alt=media"
 
     def test_progress(self):
         progress = net.Progress("test")

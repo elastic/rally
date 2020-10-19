@@ -79,7 +79,13 @@ install_requires = [
     # License: Apache 2.0
     "yappi==1.2.3",
     # License: BSD
-    "ijson==2.6.1"
+    "ijson==2.6.1",
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   google-crc32c: Apache 2.0
+    "google-resumable-media==1.1.0",
+    # License: Apache 2.0
+    "google-auth==1.21.1"
 ]
 
 tests_require = [
@@ -97,7 +103,7 @@ develop_require = [
     "twine==1.15.0",
     "wheel==0.33.6",
     "github3.py==1.3.0",
-    "pylint==2.4.2",
+    "pylint==2.6.0",
     "pylint-quotes==0.2.1"
 ]
 
