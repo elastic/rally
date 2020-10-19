@@ -127,7 +127,7 @@ class Runner:
     async def __aenter__(self):
         return self
 
-    async def __call__(self, *args):
+    async def __call__(self, es, params):
         """
         Runs the actual method that should be benchmarked.
 

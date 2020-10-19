@@ -1300,12 +1300,12 @@ class IndexStats(InternalTelemetryDevice):
 
     def index_times(self, stats, per_shard_stats=True):
         times = []
-        self.index_time(times, stats, "merges_total_time", ["merges", "total_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "merges_total_throttled_time", ["merges", "total_throttled_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "indexing_total_time", ["indexing", "index_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "indexing_throttle_time", ["indexing", "throttle_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "refresh_total_time", ["refresh", "total_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "flush_total_time", ["flush", "total_time_in_millis"], per_shard_stats),
+        self.index_time(times, stats, "merges_total_time", ["merges", "total_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "merges_total_throttled_time", ["merges", "total_throttled_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "indexing_total_time", ["indexing", "index_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "indexing_throttle_time", ["indexing", "throttle_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "refresh_total_time", ["refresh", "total_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "flush_total_time", ["flush", "total_time_in_millis"], per_shard_stats)
         return times
 
     def index_time(self, values, stats, name, path, per_shard_stats):
