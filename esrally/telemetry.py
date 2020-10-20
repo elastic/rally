@@ -404,7 +404,7 @@ class CcrStatsRecorder:
             filter_path = "follow_stats"
             stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false",
                                                                                                  "filter_path": filter_path})
-        except elasticsearch.TransportError as e:
+        except elasticsearch.TransportError:
             msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on " \
                   "cluster [{}]".format(ccr_stats_api_endpoint, filter_path, self.cluster_name)
             self.logger.exception(msg)
@@ -856,7 +856,7 @@ class TransformStatsRecorder:
         try:
             stats = self.client.transform.get_transform_stats("_all")
 
-        except elasticsearch.TransportError as e:
+        except elasticsearch.TransportError:
             msg = f"A transport error occurred while collecting transform stats on " \
                   f"cluster [{self.cluster_name}]"
             self.logger.exception(msg)

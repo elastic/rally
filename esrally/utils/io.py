@@ -284,7 +284,7 @@ def decompress(zip_name, target_directory):
     :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling
     this function.
     """
-    path_without_extension, extension = splitext(zip_name)
+    _, extension = splitext(zip_name)
     if extension == ".zip":
         _do_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
