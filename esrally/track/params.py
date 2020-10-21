@@ -216,11 +216,10 @@ class CreateDataStreamParamSource(ParamSource):
                     self.data_stream_definitions.append(ds.name)
         else:
             try:
-                idx = params["data-stream"]
-                if isinstance(idx, str):
-                    idx = [idx]
-                for i in idx:
-                    self.data_stream_definitions.append(i)
+                data_stream = params["data-stream"]
+                data_streams = [data_stream] if isinstance(data_stream, str) else data_stream
+                for ds in data_streams:
+                    self.data_stream_definitions.append(ds)
             except KeyError:
                 raise exceptions.InvalidSyntax("Please set the property 'data-stream' for the create-data-stream operation")
 
@@ -244,8 +243,7 @@ class DeleteDataStreamParamSource(ParamSource):
         self.data_stream_definitions = []
         target_data_stream = params.get("data-stream")
         if target_data_stream:
-            if isinstance(target_data_stream, str):
-                target_data_stream = [target_data_stream]
+            target_data_stream = [target_data_stream] if isinstance(target_data_stream, str) else target_data_stream
             for ds in target_data_stream:
                 self.data_stream_definitions.append(ds)
         elif track.data_streams:
@@ -385,7 +383,7 @@ class DeleteIndexTemplateParamSource(ParamSource):
 #                 "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.19 (KHTML, like Gecko) Chrome/1.0.154.53 Safari/525.19",
 #                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; Trident/7.0; .NET4.0E; .NET4.0C; rv:11.0) like Gecko",
 #                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; WOW64; Trident/7.0; Touch; rv:11.0) like Gecko"
-#             ] if not index_name:
+#             ]
 #         },
 #         "index": "logs-*",
 #         "body": {
@@ -412,7 +410,7 @@ class SearchParamSource(ParamSource):
             default_target = track.data_streams[0].name
         else:
             default_target = None
-        # indexes are preferred by data streams can also be queried the same way
+        # indices are preferred by data streams can also be queried the same way
         target_name = params.get("index")
         type_name = params.get("type")
         if not target_name:
@@ -691,7 +689,7 @@ class ForceMergeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
         if len(track.indices) > 0 or len(track.data_streams) > 0:
-            # force merge data streams and indices - API call is the same so treat as indexes
+            # force merge data streams and indices - API call is the same so treat as indices
             default_target = ','.join(map(str, track.indices + track.data_streams))
         else:
             default_target = "_all"
@@ -769,7 +767,7 @@ def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_si
         use_create = True
         if id_conflicts != IndexIdConflict.NoConflicts:
             # can only create docs in data streams
-            raise exceptions.RallyError("Do not create readers for docs targeting data streams with conflicts")
+            raise exceptions.RallyError("Conflicts cannot be generated with append only data streams")
 
     if docs.includes_action_and_meta_data:
         return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, target, docs.target_type)
@@ -789,10 +787,8 @@ def create_readers(num_clients, start_client_index, end_client_index, corpora, b
             offset, num_docs, num_lines = bounds(docs.number_of_documents, start_client_index, end_client_index,
                                                  num_clients, docs.includes_action_and_meta_data)
             if num_docs > 0:
-                target = "/"
-                if docs.target_index:
-                    target = f"{docs.target_index}/{docs.target_type}"
-                elif docs.target_data_stream:
+                target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
+                if docs.target_data_stream:
                     target = docs.target_data_stream
                 logger.info("Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
                             "from corpus [%s].", start_client_index, end_client_index, num_docs, offset,
@@ -900,7 +896,7 @@ class GenerateActionMetaData:
             self.meta_data_index_no_id = '{"index": {"_index": "%s"}}\n' % index_name
             self.meta_data_create_no_id = '{"create": {"_index": "%s"}}\n' % index_name
         if use_create and conflicting_ids:
-            raise exceptions.RallyError("'use_create' be True with 'conflicting_ids'")
+            raise exceptions.RallyError("Index mode '_create' cannot be used with conflicting ids")
         self.conflicting_ids = conflicting_ids
         self.on_conflict = on_conflict
         self.use_create = use_create

@@ -1152,7 +1152,7 @@ class TrackSpecificationReader:
                         target_type = self._r(doc_spec, "target-type", mandatory=False,
                                               default_value=corpus_target_type, error_ctx=docs)
 
-                        # require to be specified id we're using data streams and we have no default
+                        # require to be specified if we're using data streams and we have no default
                         target_ds = self._r(doc_spec, "target-data-stream",
                                             mandatory=len(data_streams) > 0 and corpus_target_ds is None,
                                             default_value=corpus_target_ds,

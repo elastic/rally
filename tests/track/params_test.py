@@ -150,7 +150,7 @@ class ActionMetaDataTests(TestCase):
     def test_generate_action_meta_data_create_with_conflicts(self):
         with self.assertRaises(exceptions.RallyError) as ctx:
             params.GenerateActionMetaData("test_index", None, conflicting_ids=[100, 200, 300, 400], use_create=True)
-        self.assertEqual("'use_create' be True with 'conflicting_ids'",
+        self.assertEqual("Index mode '_create' cannot be used with conflicting ids",
                          ctx.exception.args[0])
 
     def test_generate_action_meta_data_typeless(self):
