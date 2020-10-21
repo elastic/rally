@@ -267,7 +267,7 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": {
-        "title": "Index",
+        "title": "Data Stream",
         "type": "object",
         "properties": {
           "name": {

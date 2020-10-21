@@ -1040,7 +1040,7 @@ class CreateDataStream(Runner):
 
     async def __call__(self, es, params):
         data_streams = mandatory(params, "data-streams", self)
-        request_params = params.get("request-params", {})
+        request_params = mandatory(params, "request-params", self)
         for data_stream in data_streams:
             await es.indices.create_data_stream(data_stream, params=request_params)
         return len(data_streams), "ops"
@@ -1085,8 +1085,8 @@ class DeleteDataStream(Runner):
         ops = 0
 
         data_streams = mandatory(params, "data-streams", self)
-        only_if_exists = params.get("only-if-exists", False)
-        request_params = params.get("request-params", {})
+        only_if_exists = mandatory(params, "only-if-exists", self)
+        request_params = mandatory(params, "request-params", self)
 
         for data_stream in data_streams:
             if not only_if_exists:

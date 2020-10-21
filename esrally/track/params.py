@@ -385,7 +385,7 @@ class DeleteIndexTemplateParamSource(ParamSource):
 #                 "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.19 (KHTML, like Gecko) Chrome/1.0.154.53 Safari/525.19",
 #                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; Trident/7.0; .NET4.0E; .NET4.0C; rv:11.0) like Gecko",
 #                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; WOW64; Trident/7.0; Touch; rv:11.0) like Gecko"
-#             ]
+#             ] if not index_name:
 #         },
 #         "index": "logs-*",
 #         "body": {
@@ -407,16 +407,19 @@ class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
         if len(track.indices) == 1:
-            default_index = track.indices[0].name
+            default_target = track.indices[0].name
         elif len(track.data_streams) == 1:
-            default_index = track.data_streams[0].name
+            default_target = track.data_streams[0].name
         else:
-            default_index = None
+            default_target = None
         # indexes are preferred by data streams can also be queried the same way
-        index_name = params.get("index")
-        if not index_name:
-            index_name = params.get("data-stream", default_index)
+        target_name = params.get("index")
         type_name = params.get("type")
+        if not target_name:
+            target_name = params.get("data-stream", default_target)
+            if target_name and type_name:
+                raise exceptions.InvalidSyntax(
+                    f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         request_cache = params.get("cache", None)
         query_body = params.get("body", None)
         query_body_params = params.get("body-params", None)
@@ -426,7 +429,7 @@ class SearchParamSource(ParamSource):
         response_compression_enabled = params.get("response-compression-enabled", True)
 
         self.query_params = {
-            "index": index_name,
+            "index": target_name,
             "type": type_name,
             "cache": request_cache,
             "request-params": request_params,
@@ -434,10 +437,9 @@ class SearchParamSource(ParamSource):
             "body": query_body
         }
 
-        if not index_name:
+        if not target_name:
             raise exceptions.InvalidSyntax(
-                "'index' or 'data-stream' is mandatory and is missing for operation '{}'".format(
-                    kwargs.get("operation_name")))
+                f"'index' or 'data-stream' is mandatory and is missing for operation '{kwargs.get('operation_name')}'")
 
         if pages:
             self.query_params["pages"] = pages
@@ -690,13 +692,13 @@ class ForceMergeParamSource(ParamSource):
         super().__init__(track, params, **kwargs)
         if len(track.indices) > 0 or len(track.data_streams) > 0:
             # force merge data streams and indices - API call is the same so treat as indexes
-            default_index = ','.join(map(str, track.indices + track.data_streams))
+            default_target = ','.join(map(str, track.indices + track.data_streams))
         else:
-            default_index = "_all"
+            default_target = "_all"
 
-        self._index_name = params.get("index")
-        if not self._index_name:
-            self._index_name = params.get("data-stream", default_index)
+        self._target_name = params.get("index")
+        if not self._target_name:
+            self._target_name = params.get("data-stream", default_target)
 
         self._max_num_segments = params.get("max-num-segments")
         self._request_timeout = params.get("request-timeout")
@@ -705,7 +707,7 @@ class ForceMergeParamSource(ParamSource):
 
     def params(self):
         return {
-            "index": self._index_name,
+            "index": self._target_name,
             "max-num-segments": self._max_num_segments,
             "request-timeout": self._request_timeout,
             "mode": self._mode,

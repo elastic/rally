@@ -2219,7 +2219,8 @@ class DeleteDataStreamRunnerTests(TestCase):
 
         params = {
             "data-streams": ["data-stream-A", "data-stream-B"],
-            "only-if-exists": True
+            "only-if-exists": True,
+            "request-params": {}
         }
 
         result = await r(es, params)
