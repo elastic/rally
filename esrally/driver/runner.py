@@ -517,7 +517,7 @@ class BulkIndex(Runner):
 
             bulk_request_size_bytes += line_size
 
-        for idx, item in enumerate(response["items"]):
+        for item in response["items"]:
             # there is only one (top-level) item
             op, data = next(iter(item.items()))
             if op not in ops:
@@ -565,7 +565,7 @@ class BulkIndex(Runner):
         if props.get("errors", False):
             # Reparse fully in case of errors - this will be slower
             parsed_response = json.loads(response.getvalue())
-            for idx, item in enumerate(parsed_response["items"]):
+            for item in parsed_response["items"]:
                 data = next(iter(item.values()))
                 if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1

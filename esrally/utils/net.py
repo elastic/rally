@@ -246,7 +246,7 @@ def resolve(hostname_or_ip):
 
     import socket
     addrinfo = socket.getaddrinfo(hostname_or_ip, 22, 0, 0, socket.IPPROTO_TCP)
-    for family, socktype, proto, canonname, sockaddr in addrinfo:
+    for family, _, _, _, sockaddr in addrinfo:
         # we're interested in the IPv4 address
         if family == socket.AddressFamily.AF_INET:
             ip, _ = sockaddr

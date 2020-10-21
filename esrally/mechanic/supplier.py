@@ -40,7 +40,7 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
     build_needed = any([build for _, _, build in supply_requirements.values()])
-    es_supplier_type, es_version, es_build = supply_requirements["elasticsearch"]
+    es_supplier_type, es_version, _ = supply_requirements["elasticsearch"]
     src_config = cfg.all_opts("source")
     suppliers = []
 
@@ -108,7 +108,7 @@ def create(cfg, sources, distribution, build, car, plugins=None):
         suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))
 
     for plugin in plugins:
-        supplier_type, plugin_version, build_plugin = supply_requirements[plugin.name]
+        supplier_type, plugin_version, _ = supply_requirements[plugin.name]
 
         if supplier_type == "source":
             if CorePluginSourceSupplier.can_handle(plugin):
