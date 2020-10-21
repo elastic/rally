@@ -209,32 +209,32 @@ class DriverActor(actor.RallyActor):
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.info("Main driver received unknown message [%s] (ignoring).", str(msg))
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator = Driver(self, msg.config)
         self.coordinator.prepare_benchmark(msg.track)
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator.start_benchmark()
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_TrackPrepared(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg,
                                                     expected_status=None, new_status=None, transition=self.after_track_prepared)
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_JoinPointReached(self, msg, sender):
         self.coordinator.joinpoint_reached(msg.worker_id, msg.worker_timestamp, msg.task)
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_UpdateSamples(self, msg, sender):
         self.coordinator.update_samples(msg.samples)
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WakeupMessage(self, msg, sender):
         if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
             self.coordinator.reset_relative_time()
@@ -313,7 +313,7 @@ def load_local_config(coordinator_config):
 
 
 class TrackPreparationActor(actor.RallyActor):
-    @actor.no_retry("track preparator")
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
         # load node-specific config to have correct paths available
         cfg = load_local_config(msg.config)
@@ -816,7 +816,7 @@ class Worker(actor.RallyActor):
         self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
         self.sample_queue_size = None
 
-    @actor.no_retry("worker")
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
         self.logger.info("Worker[%d] is about to start.", msg.worker_id)
         self.master = sender
@@ -837,7 +837,7 @@ class Worker(actor.RallyActor):
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         self.drive()
 
-    @actor.no_retry("worker")
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Drive(self, msg, sender):
         sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
         self.logger.info("Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
@@ -845,7 +845,7 @@ class Worker(actor.RallyActor):
         self.start_driving = True
         self.wakeupAfter(sleep_time)
 
-    @actor.no_retry("worker")
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_CompleteCurrentTask(self, msg, sender):
         # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
         # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
@@ -857,7 +857,7 @@ class Worker(actor.RallyActor):
                              str(self.worker_id), self.current_task_index)
             self.complete.set()
 
-    @actor.no_retry("worker")
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WakeupMessage(self, msg, sender):
         # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
         if self.start_driving:
