@@ -995,12 +995,17 @@ class TrackSpecificationReader:
             raise TrackSyntaxError("indices and data-streams cannot both be specified")
         templates = [self._create_index_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
+        composable_templates = [self._create_index_template(tpl, mapping_dir)
+                     for tpl in self._r(track_specification, "composable-templates", mandatory=False, default_value=[])]
+        component_templates = [self._create_component_template(tpl, mapping_dir)
+                     for tpl in self._r(track_specification, "component-templates", mandatory=False, default_value=[])]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]),
                                        indices, data_streams)
         challenges = self._create_challenges(track_specification)
         # at this point, *all* track params must have been referenced in the templates
-        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges,
-                           indices=indices, data_streams=data_streams, templates=templates, corpora=corpora)
+        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges, indices=indices,
+                           data_streams=data_streams, templates=templates, composable_templates=composable_templates, component_templates=component_templates,
+                           corpora=corpora)
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
@@ -1040,6 +1045,18 @@ class TrackSpecificationReader:
 
     def _create_data_stream(self, data_stream_spec):
         return track.DataStream(name=self._r(data_stream_spec, "name"))
+
+    def _create_component_template(self, tpl_spec, mapping_dir):
+        name = self._r(tpl_spec, "name")
+        template_file = self._r(tpl_spec, "template")
+        template_file = os.path.join(mapping_dir, template_file)
+        idx_tmpl_src = TemplateSource(mapping_dir, template_file, self.source)
+        with self.source(template_file, "rt") as f:
+            idx_tmpl_src.load_template_from_string(f.read())
+            template_content = self._load_template(
+                idx_tmpl_src.assembled_source,
+                f"definition for index template {name} in {template_file}")
+        return track.ComponentTemplate(name, template_content)
 
     def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")

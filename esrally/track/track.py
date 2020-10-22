@@ -144,6 +144,20 @@ class IndexTemplate:
         return self.name == other.name
 
 
+class ComponentTemplate(IndexTemplate):
+    """
+    Defines a component template in Elasticsearch.
+    """
+
+    def __init__(self, name, content):
+        """
+        Creates a new index template.
+        :param name: Name of the index template. Mandatory.
+        :param content: The content of the corresponding template. Mandatory.
+        """
+        super(ComponentTemplate, self).__init__(name, None, content, delete_matching_indices=False)
+
+
 class Documents:
     SOURCE_FORMAT_BULK = "bulk"
 
@@ -310,7 +324,7 @@ class Track:
     """
 
     def __init__(self, name, description=None, meta_data=None, challenges=None, indices=None, data_streams=None,
-                 templates=None, corpora=None, has_plugins=False):
+                 templates=None, composable_templates=None, component_templates=None, corpora=None, has_plugins=False):
         """
 
         Creates a new track.
@@ -334,6 +348,8 @@ class Track:
         self.data_streams = data_streams if data_streams else []
         self.corpora = corpora if corpora else []
         self.templates = templates if templates else []
+        self.composable_templates = composable_templates if composable_templates else []
+        self.component_templates = component_templates if component_templates else []
         self.has_plugins = has_plugins
 
     @property
@@ -403,14 +419,15 @@ class Track:
 
     def __hash__(self):
         return hash(self.name) ^ hash(self.meta_data) ^ hash(self.description) ^ hash(self.challenges) ^ \
-               hash(self.indices) ^ hash(self.data_streams) ^ hash(self.templates) ^ hash(self.corpora)
+               hash(self.indices) ^ hash(self.templates) ^ hash(self.composable_templates) ^ hash(self.component_templates) \
+               ^ hash(self.corpora)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
                 (self.name, self.meta_data, self.description, self.challenges, self.indices, self.data_streams,
-                 self.templates, self.corpora) ==
+                 self.templates, self.composable_templates, self.component_templates, self.corpora) ==
                 (othr.name, othr.meta_data, othr.description, othr.challenges, othr.indices, othr.data_streams,
-                 othr.templates, othr.corpora))
+                 othr.templates, othr.composable_templates, othr.component_templates, othr.corpora))
 
 
 class Challenge:
@@ -502,6 +519,10 @@ class OperationType(Enum):
     DeleteTransform = 1027
     CreateDataStream = 1028
     DeleteDataStream = 1029
+    CreateComposableTemplate = 1030
+    DeleteComposableTemplate = 1031
+    CreateComponentTemplate = 1032
+    DeleteComponentTemplate = 1033
 
     @property
     def admin_op(self):
@@ -537,6 +558,14 @@ class OperationType(Enum):
             return OperationType.CreateIndexTemplate
         elif v == "delete-index-template":
             return OperationType.DeleteIndexTemplate
+        elif v == "create-composable-template":
+            return OperationType.CreateComposableTemplate
+        elif v == "delete-composable-template":
+            return OperationType.DeleteComposableTemplate
+        elif v == "create-component-template":
+            return OperationType.CreateComponentTemplate
+        elif v == "delete-component-template":
+            return OperationType.DeleteComponentTemplate
         elif v == "shrink-index":
             return OperationType.ShrinkIndex
         elif v == "create-ml-datafeed":

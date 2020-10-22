@@ -2371,6 +2371,227 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         self.assertEqual(0, es.indices.delete_template.call_count)
 
 
+class CreateComponentTemplateRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_create_index_templates(self, es):
+        es.cluster.put_component_template.return_value = as_future()
+        r = runner.CreateComponentTemplate()
+        params = {
+            "templates": [
+                ("templateA", {"template":{"mappings":{"properties":{"@timestamp":{"type": "date"}}}}}),
+                ("templateB", {"template":{"settings": {"index.number_of_shards": 1,"index.number_of_replicas": 1}}}),
+            ],
+            "request-params": {
+                "timeout": 50,
+                "create": "true"
+            }
+        }
+
+        result = await r(es, params)
+        self.assertEqual((2, "ops"), result)
+        es.cluster.put_component_template.assert_has_calls([
+            mock.call(name="templateA", body={"template":{"mappings":{"properties":{"@timestamp":{"type": "date"}}}}}, params=params["request-params"]),
+            mock.call(name="templateB", body={"template":{"settings": {"index.number_of_shards": 1,"index.number_of_replicas": 1}}}, params=params["request-params"])
+        ])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_param_templates_mandatory(self, es):
+        es.cluster.put_component_template.return_value = as_future()
+
+        r = runner.CreateComponentTemplate()
+
+        params = {}
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'create-component-template' did not provide the mandatory parameter "
+                                    "'templates'. Please add it to your parameter source."):
+            await r(es, params)
+
+        self.assertEqual(0, es.cluster.put_component_template.call_count)
+
+
+class DeleteComponentTemplateRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_deletes_all_index_templates(self, es):
+        es.cluster.delete_component_template.return_value = as_future()
+        es.cluster.delete_component_template.return_value = as_future()
+
+        r = runner.DeleteComponentTemplate()
+
+        params = {
+            "templates": [
+                "templateA",
+                "templateB",
+            ],
+            "request-params": {
+                "timeout": 60
+            }
+        }
+        result = await r(es, params)
+        self.assertEqual((2, "ops"), result)
+
+        es.cluster.delete_component_template.assert_has_calls([
+            mock.call(name="templateA", params=params["request-params"], ignore=[404]),
+            mock.call(name="templateB", params=params["request-params"], ignore=[404])
+        ])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_deletes_only_existing_index_templates(self, es):
+
+        def _side_effect(http_method, path):
+            if http_method == "HEAD":
+                return as_future(path == "/_component_template/templateB")
+            return as_future()
+
+        es.transport.perform_request.side_effect = _side_effect
+        es.cluster.delete_component_template.return_value = as_future()
+
+        r = runner.DeleteComponentTemplate()
+
+        params = {
+            "templates": [
+                "templateA",
+                "templateB",
+            ],
+            "request-params": {
+                "timeout": 60
+            },
+            "only-if-exists": True
+        }
+        result = await r(es, params)
+
+        self.assertEqual((1, "ops"), result)
+
+        es.cluster.delete_component_template.assert_called_once_with(name="templateB", params=params["request-params"])
+
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_param_templates_mandatory(self, es):
+        r = runner.DeleteComponentTemplate()
+
+        params = {}
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'delete-component-template' did not provide the mandatory parameter "
+                                    "'templates'. Please add it to your parameter source."):
+            await r(es, params)
+
+        self.assertEqual(0, es.indices.delete_template.call_count)
+
+
+class CreateComposableTemplateRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_create_index_templates(self, es):
+        es.cluster.put_index_template.return_value = as_future()
+        r = runner.CreateComposableTemplate()
+        params = {
+            "templates": [
+                ("templateA", {"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},"composed_of":["ct1","ct2"]}),
+                ("templateB", {"index_patterns":["metrics-*"],"template":{"settings":{"index.number_of_shards":2}},"composed_of":["ct3","ct4"]}),
+            ],
+            "request-params": {
+                "timeout": 50
+            }
+        }
+
+        result = await r(es, params)
+        self.assertEqual((2, "ops"), result)
+        es.cluster.put_index_template.assert_has_calls([
+            mock.call(name="templateA", body={"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},"composed_of":["ct1","ct2"]}, params=params["request-params"]),
+            mock.call(name="templateB", body={"index_patterns":["metrics-*"],"template":{"settings":{"index.number_of_shards":2}},"composed_of":["ct3","ct4"]}, params=params["request-params"])
+        ])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_param_templates_mandatory(self, es):
+        es.cluster.put_index_template.return_value = as_future()
+
+        r = runner.CreateComposableTemplate()
+
+        params = {}
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'create-composable-template' did not provide the mandatory parameter "
+                                    "'templates'. Please add it to your parameter source."):
+            await r(es, params)
+
+        self.assertEqual(0, es.cluster.put_index_template.call_count)
+
+
+class DeleteComposableTemplateRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_deletes_all_index_templates(self, es):
+        es.indices.delete_index_template.return_value = as_future()
+        es.indices.delete.return_value = as_future()
+
+        r = runner.DeleteComposableTemplate()
+
+        params = {
+            "templates": [
+                ("templateA", False, None),
+                ("templateB", True, "logs-*"),
+            ],
+            "request-params": {
+                "timeout": 60
+            }
+        }
+        result = await r(es, params)
+
+        # 2 times delete index template, one time delete matching indices
+        self.assertEqual((3, "ops"), result)
+
+        es.indices.delete_index_template.assert_has_calls([
+            mock.call(name="templateA", params=params["request-params"], ignore=[404]),
+            mock.call(name="templateB", params=params["request-params"], ignore=[404])
+        ])
+        es.indices.delete.assert_called_once_with(index="logs-*")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_deletes_only_existing_index_templates(self, es):
+        es.indices.exists_template.side_effect = [as_future(False), as_future(True)]
+        es.indices.delete_index_template.return_value = as_future()
+
+        r = runner.DeleteComposableTemplate()
+
+        params = {
+            "templates": [
+                ("templateA", False, None),
+                # will not accidentally delete all indices
+                ("templateB", True, ""),
+            ],
+            "request-params": {
+                "timeout": 60
+            },
+            "only-if-exists": True
+        }
+        result = await r(es, params)
+
+        # 2 times delete index template, one time delete matching indices
+        self.assertEqual((1, "ops"), result)
+
+        es.indices.delete_index_template.assert_called_once_with(name="templateB", params=params["request-params"])
+        # not called because the matching index is empty.
+        self.assertEqual(0, es.indices.delete.call_count)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_param_templates_mandatory(self, es):
+        r = runner.DeleteComposableTemplate()
+
+        params = {}
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'delete-composable-template' did not provide the mandatory parameter "
+                                    "'templates'. Please add it to your parameter source."):
+            await r(es, params)
+
+        self.assertEqual(0, es.indices.delete_index_template.call_count)
+
+
 class CreateMlDatafeedTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
