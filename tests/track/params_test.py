@@ -143,6 +143,16 @@ class ActionMetaDataTests(TestCase):
         self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type"}}\n'),
                          next(params.GenerateActionMetaData("test_index", "test_type")))
 
+    def test_generate_action_meta_data_create(self):
+        self.assertEqual(("create", '{"create": {"_index": "test_index"}}\n'),
+                         next(params.GenerateActionMetaData("test_index", None, use_create=True)))
+
+    def test_generate_action_meta_data_create_with_conflicts(self):
+        with self.assertRaises(exceptions.RallyError) as ctx:
+            params.GenerateActionMetaData("test_index", None, conflicting_ids=[100, 200, 300, 400], use_create=True)
+        self.assertEqual("Index mode '_create' cannot be used with conflicting ids",
+                         ctx.exception.args[0])
+
     def test_generate_action_meta_data_typeless(self):
         self.assertEqual(("index", '{"index": {"_index": "test_index"}}\n'),
                          next(params.GenerateActionMetaData("test_index", type_name=None)))
@@ -471,16 +481,16 @@ class IndexDataReaderTests(TestCase):
                     bulks.append(bulk)
 
         self.assertEqual([
-                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
-                b'{"key": "value1"}\n' +
-                b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-                b'{"doc":{"key": "value2"}}\n',
-                b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
-                b'{"doc":{"key": "value3"}}\n' +
-                b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
-                b'{"doc":{"key": "value4"}}\n',
-                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-                b'{"key": "value5"}\n'
+            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
+            b'{"key": "value1"}\n' +
+            b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+            b'{"doc":{"key": "value2"}}\n',
+            b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
+            b'{"doc":{"key": "value3"}}\n' +
+            b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
+            b'{"doc":{"key": "value4"}}\n',
+            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+            b'{"key": "value5"}\n'
         ], bulks)
 
     def test_read_bulk_with_external_id_and_zero_conflict_probability(self):
@@ -513,15 +523,15 @@ class IndexDataReaderTests(TestCase):
                     bulks.append(bulk)
 
         self.assertEqual([
-                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
-                b'{"key": "value1"}\n' +
-                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-                b'{"key": "value2"}\n',
+            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
+            b'{"key": "value1"}\n' +
+            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
+            b'{"key": "value2"}\n',
 
-                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
-                b'{"key": "value3"}\n' +
-                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
-                b'{"key": "value4"}\n'
+            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
+            b'{"key": "value3"}\n' +
+            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
+            b'{"key": "value4"}\n'
         ], bulks)
 
     def assert_bulks_sized(self, reader, expected_bulk_sizes, expected_line_sizes):
@@ -588,22 +598,22 @@ class InvocationGeneratorTests(TestCase):
 
         num_docs = 1000
         clients = 2
-        self.assertEqual((  0, 500, 500), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
+        self.assertEqual((0, 500, 500), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
         self.assertEqual((500, 500, 500), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
 
         num_docs = 800
         clients = 4
-        self.assertEqual((   0, 200, 400), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True))
-        self.assertEqual(( 400, 200, 400), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=True))
-        self.assertEqual(( 800, 200, 400), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=True))
+        self.assertEqual((0, 200, 400), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True))
+        self.assertEqual((400, 200, 400), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=True))
+        self.assertEqual((800, 200, 400), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=True))
         self.assertEqual((1200, 200, 400), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=True))
 
         num_docs = 2000
         clients = 8
-        self.assertEqual((   0, 250, 250), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 250, 250, 250), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 500, 250, 250), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 750, 250, 250), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False))
+        self.assertEqual((0, 250, 250), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
+        self.assertEqual((250, 250, 250), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
+        self.assertEqual((500, 250, 250), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False))
+        self.assertEqual((750, 250, 250), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False))
         self.assertEqual((1000, 250, 250), params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False))
         self.assertEqual((1250, 250, 250), params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False))
         self.assertEqual((1500, 250, 250), params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False))
@@ -614,14 +624,14 @@ class InvocationGeneratorTests(TestCase):
         # lines and every third client, one line more (1334).
         num_docs = 16000
         clients = 12
-        self.assertEqual((    0, 1333, 1333), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 1333, 1334, 1334), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 2667, 1333, 1333), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 4000, 1333, 1333), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 5333, 1334, 1334), params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 6667, 1333, 1333), params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 8000, 1333, 1333), params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False))
-        self.assertEqual(( 9333, 1334, 1334), params.bounds(num_docs, 7, 7, clients, includes_action_and_meta_data=False))
+        self.assertEqual((0, 1333, 1333), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
+        self.assertEqual((1333, 1334, 1334), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
+        self.assertEqual((2667, 1333, 1333), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False))
+        self.assertEqual((4000, 1333, 1333), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False))
+        self.assertEqual((5333, 1334, 1334), params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False))
+        self.assertEqual((6667, 1333, 1333), params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False))
+        self.assertEqual((8000, 1333, 1333), params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False))
+        self.assertEqual((9333, 1334, 1334), params.bounds(num_docs, 7, 7, clients, includes_action_and_meta_data=False))
         self.assertEqual((10667, 1333, 1333), params.bounds(num_docs, 8, 8, clients, includes_action_and_meta_data=False))
         self.assertEqual((12000, 1333, 1333), params.bounds(num_docs, 9, 9, clients, includes_action_and_meta_data=False))
         self.assertEqual((13333, 1334, 1334), params.bounds(num_docs, 10, 10, clients, includes_action_and_meta_data=False))
@@ -632,7 +642,7 @@ class InvocationGeneratorTests(TestCase):
         # 2 * 583.333 docs = 1166.6666 lines per client. We let them read 1166 and 1168 lines respectively (583 and 584 docs).
         num_docs = 3500
         clients = 6
-        self.assertEqual((   0, 583, 1166), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True))
+        self.assertEqual((0, 583, 1166), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True))
         self.assertEqual((1166, 584, 1168), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=True))
         self.assertEqual((2334, 583, 1166), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=True))
         self.assertEqual((3500, 583, 1166), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=True))
@@ -643,11 +653,11 @@ class InvocationGeneratorTests(TestCase):
         num_docs = 2000
         clients = 8
         # four clients per worker, each reads 250 lines
-        self.assertEqual((   0, 1000, 1000), params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=False))
+        self.assertEqual((0, 1000, 1000), params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=False))
         self.assertEqual((1000, 1000, 1000), params.bounds(num_docs, 4, 7, clients, includes_action_and_meta_data=False))
 
         # four clients per worker, each reads 500 lines (includes action and metadata)
-        self.assertEqual((   0, 1000, 2000), params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=True))
+        self.assertEqual((0, 1000, 2000), params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=True))
         self.assertEqual((2000, 1000, 2000), params.bounds(num_docs, 4, 7, clients, includes_action_and_meta_data=True))
 
     def test_calculate_number_of_bulks(self):
@@ -716,7 +726,6 @@ class BulkIndexParamSourceTests(TestCase):
 
         self.assertEqual("There is no document corpus definition for track unit-test. "
                          "You must add at least one before making bulk requests to Elasticsearch.", ctx.exception.args[0])
-
 
     def test_create_with_non_numeric_bulk_size(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -813,6 +822,15 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         self.assertEqual("Unknown 'on-conflict' setting [delete]", ctx.exception.args[0])
+
+    def test_create_with_conflicts_and_data_streams(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
+                "data-streams": ["test-data-stream-1", "test-data-stream-2"],
+                "conflicts": "sequential"
+            })
+
+        self.assertEqual("'conflicts' cannot be used with 'data-streams'", ctx.exception.args[0])
 
     def test_create_with_ingest_percentage_too_low(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -938,6 +956,41 @@ class BulkIndexParamSourceTests(TestCase):
 
         partition = source.partition(0, 1)
         self.assertEqual(partition.corpora, [corpora[1]])
+
+    def test_filters_corpora_by_data_stream(self):
+        corpora = [
+            track.DocumentCorpus(name="default", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=10,
+                                target_data_stream="test-data-stream-1"
+                                )
+            ]),
+            track.DocumentCorpus(name="special", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=100,
+                                target_index="test-idx2",
+                                target_type="type"
+                                )
+            ]),
+            track.DocumentCorpus(name="special-2", documents=[
+                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                number_of_documents=10,
+                                target_data_stream="test-data-stream-2"
+                                )
+            ])
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "data-streams": ["test-data-stream-1", "test-data-stream-2"],
+                "bulk-size": 5000,
+                "batch-size": 20000,
+                "pipeline": "test-pipeline"
+            })
+
+        partition = source.partition(0, 1)
+        self.assertEqual(partition.corpora, [corpora[0], corpora[2]])
 
     def test_raises_exception_if_no_corpus_matches(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -1499,6 +1552,47 @@ class CreateIndexParamSourceTests(TestCase):
         self.assertEqual("index2", index)
 
 
+class CreateDataStreamParamSourceTests(TestCase):
+    def test_create_data_stream(self):
+        source = params.CreateDataStreamParamSource(track.Track(name="unit-test"), params={
+            "data-stream": "test-data-stream"
+        })
+        p = source.params()
+        self.assertEqual(1, len(p["data-streams"]))
+        ds = p["data-streams"][0]
+        self.assertEqual("test-data-stream", ds)
+        self.assertEqual({}, p["request-params"])
+
+    def test_create_data_stream_inline_without_body(self):
+        source = params.CreateDataStreamParamSource(track.Track(name="unit-test"), params={
+            "data-stream": "test-data-stream",
+            "request-params": {
+                "wait_for_active_shards": True
+            }
+        })
+
+        p = source.params()
+        self.assertEqual(1, len(p["data-streams"]))
+        ds = p["data-streams"][0]
+        self.assertEqual("test-data-stream", ds)
+        self.assertDictEqual({
+            "wait_for_active_shards": True
+        }, p["request-params"])
+
+    def test_filter_data_stream(self):
+        source = params.CreateDataStreamParamSource(
+            track.Track(name="unit-test", data_streams=[track.DataStream(name="data-stream-1"),
+                                                        track.DataStream(name="data-stream-2"),
+                                                        track.DataStream(name="data-stream-3")]),
+            params={"data-stream": "data-stream-2"})
+
+        p = source.params()
+        self.assertEqual(1, len(p["data-streams"]))
+
+        ds = p["data-streams"][0]
+        self.assertEqual("data-stream-2", ds)
+
+
 class DeleteIndexParamSourceTests(TestCase):
     def test_delete_index_from_track(self):
         source = params.DeleteIndexParamSource(track.Track(name="unit-test", indices=[
@@ -1537,6 +1631,48 @@ class DeleteIndexParamSourceTests(TestCase):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             params.DeleteIndexParamSource(track.Track(name="unit-test"), params={})
         self.assertEqual("delete-index operation targets no index", ctx.exception.args[0])
+
+
+class DeleteDataStreamParamSourceTests(TestCase):
+    def test_delete_data_stream_from_track(self):
+        source = params.DeleteDataStreamParamSource(track.Track(name="unit-test", data_streams=[
+            track.DataStream(name="data-stream-1"),
+            track.DataStream(name="data-stream-2"),
+            track.DataStream(name="data-stream-3")
+        ]), params={})
+
+        p = source.params()
+
+        self.assertEqual(["data-stream-1", "data-stream-2", "data-stream-3"], p["data-streams"])
+        self.assertDictEqual({}, p["request-params"])
+        self.assertTrue(p["only-if-exists"])
+
+    def test_filter_data_stream_from_track(self):
+        source = params.DeleteDataStreamParamSource(track.Track(name="unit-test", data_streams=[
+            track.DataStream(name="data-stream-1"),
+            track.DataStream(name="data-stream-2"),
+            track.DataStream(name="data-stream-3")
+        ]), params={"data-stream": "data-stream-2", "only-if-exists": False,
+                    "request-params": {"allow_no_indices": True}})
+
+        p = source.params()
+
+        self.assertEqual(["data-stream-2"], p["data-streams"])
+        self.assertDictEqual({"allow_no_indices": True}, p["request-params"])
+        self.assertFalse(p["only-if-exists"])
+
+    def test_delete_data_stream_by_name(self):
+        source = params.DeleteDataStreamParamSource(track.Track(name="unit-test"),
+                                                    params={"data-stream": "data-stream-2"})
+
+        p = source.params()
+
+        self.assertEqual(["data-stream-2"], p["data-streams"])
+
+    def test_delete_no_data_stream(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.DeleteDataStreamParamSource(track.Track(name="unit-test"), params={})
+        self.assertEqual("delete-data-stream operation targets no data stream", ctx.exception.args[0])
 
 
 class CreateIndexTemplateParamSourceTests(TestCase):
@@ -1711,6 +1847,31 @@ class SearchParamSourceTests(TestCase):
             }
         }, p["body"])
 
+    def test_uses_data_stream(self):
+        ds1 = track.DataStream(name="data-stream-1")
+
+        source = params.SearchParamSource(track=track.Track(name="unit-test", data_streams=[ds1]), params={
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            },
+            "cache": True
+        })
+        p = source.params()
+
+        self.assertEqual(6, len(p))
+        self.assertEqual("data-stream-1", p["index"])
+        self.assertIsNone(p["type"])
+        self.assertEqual({}, p["request-params"])
+        self.assertEqual(True, p["cache"])
+        self.assertEqual(True, p["response-compression-enabled"])
+        self.assertEqual({
+            "query": {
+                "match_all": {}
+            }
+        }, p["body"])
+
     def test_create_without_index(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             params.SearchParamSource(track=track.Track(name="unit-test"), params={
@@ -1718,11 +1879,11 @@ class SearchParamSourceTests(TestCase):
                 "body": {
                     "query": {
                         "match_all": {}
-                        }
                     }
+                }
             }, operation_name="test_operation")
 
-        self.assertEqual("'index' is mandatory and is missing for operation 'test_operation'", ctx.exception.args[0])
+        self.assertEqual("'index' or 'data-stream' is mandatory and is missing for operation 'test_operation'", ctx.exception.args[0])
 
     def test_passes_request_parameters(self):
         index1 = track.Index(name="index1", types=["type1"])
@@ -1782,6 +1943,34 @@ class SearchParamSourceTests(TestCase):
             }
         }, p["body"])
 
+    def test_user_specified_data_stream_overrides_defaults(self):
+        ds1 = track.DataStream(name="data-stream-1")
+
+        source = params.SearchParamSource(track=track.Track(name="unit-test", data_streams=[ds1]), params={
+            "data-stream": "data-stream-2",
+            "cache": False,
+            "response-compression-enabled": False,
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        })
+        p = source.params()
+
+        self.assertEqual(6, len(p))
+        self.assertEqual("data-stream-2", p["index"])
+        self.assertIsNone(p["type"])
+        self.assertDictEqual({}, p["request-params"])
+        # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
+        self.assertEqual(False, p["cache"])
+        self.assertEqual(False, p["response-compression-enabled"])
+        self.assertEqual({
+            "query": {
+                "match_all": {}
+            }
+        }, p["body"])
+
     def test_replaces_body_params(self):
         import copy
 
@@ -1808,8 +1997,26 @@ class SearchParamSourceTests(TestCase):
         # the implementation modifies the internal dict in-place (safe because we only have one client per process) hence we need to copy.
         first = copy.deepcopy(search.params(choice=lambda d: d[0]))
         second = copy.deepcopy(search.params(choice=lambda d: d[1]))
-
         self.assertNotEqual(first, second)
+
+    def test_invalid_data_stream_with_type(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            ds1 = track.DataStream(name="data-stream-1")
+
+            params.SearchParamSource(track=track.Track(name="unit-test", data_streams=[ds1]), params={
+                "data-stream": "data-stream-2",
+                "type": "_doc",
+                "cache": False,
+                "response-compression-enabled": False,
+                "body": {
+                    "query": {
+                        "match_all": {}
+                    }
+                }
+            }, operation_name="test_operation")
+
+        self.assertEqual("'type' not supported with 'data-stream' for operation 'test_operation'",
+                         ctx.exception.args[0])
 
 
 class ForceMergeParamSourceTests(TestCase):
@@ -1825,12 +2032,32 @@ class ForceMergeParamSourceTests(TestCase):
         self.assertEqual("index1,index2,index3", p["index"])
         self.assertEqual("blocking", p["mode"])
 
+    def test_force_merge_data_stream_from_track(self):
+        source = params.ForceMergeParamSource(track.Track(name="unit-test", data_streams=[
+            track.DataStream(name="data-stream-1"),
+            track.DataStream(name="data-stream-2"),
+            track.DataStream(name="data-stream-3")
+        ]), params={})
+
+        p = source.params()
+
+        self.assertEqual("data-stream-1,data-stream-2,data-stream-3", p["index"])
+        self.assertEqual("blocking", p["mode"])
+
     def test_force_merge_index_by_name(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2"})
 
         p = source.params()
 
         self.assertEqual("index2", p["index"])
+        self.assertEqual("blocking", p["mode"])
+
+    def test_force_merge_by_data_stream_name(self):
+        source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"data-stream": "data-stream-2"})
+
+        p = source.params()
+
+        self.assertEqual("data-stream-2", p["index"])
         self.assertEqual("blocking", p["mode"])
 
     def test_default_force_merge_index(self):

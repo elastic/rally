@@ -2115,6 +2115,52 @@ class CreateIndexRunnerTests(TestCase):
         self.assertEqual(0, es.indices.create.call_count)
 
 
+class CreateDataStreamRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_creates_multiple_data_streams(self, es):
+        es.indices.create_data_stream.return_value = as_future()
+
+        r = runner.CreateDataStream()
+
+        request_params = {
+            "wait_for_active_shards": "true"
+        }
+
+        params = {
+            "data-streams": [
+                "data-stream-A",
+                "data-stream-B"
+            ],
+            "request-params": request_params
+        }
+
+        result = await r(es, params)
+
+        self.assertEqual((2, "ops"), result)
+
+        es.indices.create_data_stream.assert_has_calls([
+            mock.call("data-stream-A", params=request_params),
+            mock.call("data-stream-B", params=request_params)
+        ])
+
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_param_data_streams_mandatory(self, es):
+        es.indices.create_data_stream.return_value = as_future()
+
+        r = runner.CreateDataStream()
+
+        params = {}
+        with self.assertRaisesRegex(exceptions.DataError,
+                                    "Parameter source for operation 'create-data-stream' did not provide the "
+                                    "mandatory parameter 'data-streams'. Please add it to your parameter source."):
+            await r(es, params)
+
+        self.assertEqual(0, es.indices.create_data_stream.call_count)
+
+
 class DeleteIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2158,6 +2204,54 @@ class DeleteIndexRunnerTests(TestCase):
         es.indices.delete.assert_has_calls([
             mock.call(index="indexA", params=params["request-params"]),
             mock.call(index="indexB", params=params["request-params"])
+        ])
+        self.assertEqual(0, es.indices.exists.call_count)
+
+
+class DeleteDataStreamRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_deletes_existing_data_streams(self, es):
+        es.indices.exists.side_effect = [as_future(False), as_future(True)]
+        es.indices.delete_data_stream.return_value = as_future()
+
+        r = runner.DeleteDataStream()
+
+        params = {
+            "data-streams": ["data-stream-A", "data-stream-B"],
+            "only-if-exists": True,
+            "request-params": {}
+        }
+
+        result = await r(es, params)
+
+        self.assertEqual((1, "ops"), result)
+
+        es.indices.delete_data_stream.assert_called_once_with("data-stream-B", params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_deletes_all_data_streams(self, es):
+        es.indices.delete_data_stream.return_value = as_future()
+
+        r = runner.DeleteDataStream()
+
+        params = {
+            "data-streams": ["data-stream-A", "data-stream-B"],
+            "only-if-exists": False,
+            "request-params": {
+                "ignore_unavailable": "true",
+                "expand_wildcards": "none"
+            }
+        }
+
+        result = await r(es, params)
+
+        self.assertEqual((2, "ops"), result)
+
+        es.indices.delete_data_stream.assert_has_calls([
+            mock.call("data-stream-A", ignore=[404], params=params["request-params"]),
+            mock.call("data-stream-B", ignore=[404], params=params["request-params"])
         ])
         self.assertEqual(0, es.indices.exists.call_count)
 

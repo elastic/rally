@@ -68,6 +68,46 @@ class Index:
         return self.name == other.name
 
 
+class DataStream:
+    """
+    Defines a data stream in Elasticsearch.
+    """
+
+    def __init__(self, name):
+        """
+
+        Creates a new data stream.
+
+        :param name: The data stream name. Mandatory.
+        """
+        self.name = name
+
+    def matches(self, pattern):
+        if pattern is None:
+            return True
+        elif pattern in ["_all", "*"]:
+            return True
+        elif self.name == pattern:
+            return True
+        else:
+            return False
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+
 class IndexTemplate:
     """
     Defines an index template in Elasticsearch.
@@ -107,8 +147,10 @@ class IndexTemplate:
 class Documents:
     SOURCE_FORMAT_BULK = "bulk"
 
-    def __init__(self, source_format, document_file=None, document_archive=None, base_url=None, includes_action_and_meta_data=False,
-                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, target_index=None, target_type=None):
+    def __init__(self, source_format, document_file=None, document_archive=None, base_url=None,
+                 includes_action_and_meta_data=False,
+                 number_of_documents=0, compressed_size_in_bytes=0, uncompressed_size_in_bytes=0, target_index=None,
+                 target_data_stream=None, target_type=None):
         """
 
         :param source_format: The format of these documents. Mandatory.
@@ -123,9 +165,11 @@ class Documents:
          a document_archive is given.
         :param compressed_size_in_bytes: The compressed size in bytes of the benchmark document. Needed for verification of the download and
          user reporting. Only useful if a document_archive is given (optional but recommended to be set).
-        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it. Only useful if a
-        document_archive is given (optional but recommended to be set).
+        :param uncompressed_size_in_bytes: The size in bytes of the benchmark document after decompressing it.
+        Only useful if a document_archive is given (optional but recommended to be set).
         :param target_index: The index to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data`` is ``False``.
+        :param target_data_stream: The data stream to target for bulk operations.
+        Maybe be ``None`` if ``includes_action_and_meta_data`` is ``False``.
         :param target_type: The document type to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data``
         is ``False``.
         """
@@ -139,6 +183,7 @@ class Documents:
         self.compressed_size_in_bytes = compressed_size_in_bytes
         self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
         self.target_index = target_index
+        self.target_data_stream = target_data_stream
         self.target_type = target_type
 
     def has_compressed_corpus(self):
@@ -170,16 +215,16 @@ class Documents:
     def __hash__(self):
         return hash(self.source_format) ^ hash(self.document_file) ^ hash(self.document_archive) ^ hash(self.base_url) ^ \
                hash(self.includes_action_and_meta_data) ^ hash(self.number_of_documents) ^ hash(self.compressed_size_in_bytes) ^ \
-               hash(self.uncompressed_size_in_bytes) ^ hash(self.target_index) ^ hash(self.target_type)
+               hash(self.uncompressed_size_in_bytes) ^ hash(self.target_index) ^ hash(self.target_data_stream) ^ hash(self.target_type)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
                 (self.source_format, self.document_file, self.document_archive, self.base_url, self.includes_action_and_meta_data,
                  self.number_of_documents, self.compressed_size_in_bytes, self.uncompressed_size_in_bytes,
-                 self.target_type, self.target_type) ==
+                 self.target_type, self.target_data_stream, self.target_type) ==
                 (othr.source_format, othr.document_file, othr.document_archive, othr.base_url, othr.includes_action_and_meta_data,
                  othr.number_of_documents, othr.compressed_size_in_bytes, othr.uncompressed_size_in_bytes,
-                 othr.target_type, othr.target_type))
+                 othr.target_type, othr.target_data_stream, othr.target_type))
 
 
 class DocumentCorpus:
@@ -219,13 +264,15 @@ class DocumentCorpus:
                 return None
         return num
 
-    def filter(self, source_format=None, target_indices=None):
+    def filter(self, source_format=None, target_indices=None, target_data_streams=None):
         filtered = []
         for d in self.documents:
             # skip if source format or target index does not match
             if source_format and d.source_format != source_format:
                 continue
             if target_indices and d.target_index not in target_indices:
+                continue
+            if target_data_streams and d.target_data_stream not in target_data_streams:
                 continue
 
             filtered.append(d)
@@ -262,8 +309,8 @@ class Track:
     A track defines the data set that is used. It corresponds loosely to a use case (e.g. logging, event processing, analytics, ...)
     """
 
-    def __init__(self, name, description=None, meta_data=None, challenges=None, indices=None, templates=None, corpora=None,
-                 has_plugins=False):
+    def __init__(self, name, description=None, meta_data=None, challenges=None, indices=None, data_streams=None,
+                 templates=None, corpora=None, has_plugins=False):
         """
 
         Creates a new track.
@@ -274,6 +321,7 @@ class Track:
         :param challenges: A list of one or more challenges to use. Precondition: If the list is non-empty it contains exactly one element
         with its ``default`` property set to ``True``.
         :param indices: A list of indices for this track. May be None.
+        :param data_streams: A list of data streams for this track. May be None.
         :param templates: A list of index templates for this track. May be None.
         :param corpora: A list of document corpus definitions for this track. May be None.
         :param has_plugins: True iff the track also defines plugins (e.g. custom runners or parameter sources).
@@ -283,6 +331,7 @@ class Track:
         self.description = description if description is not None else ""
         self.challenges = challenges if challenges else []
         self.indices = indices if indices else []
+        self.data_streams = data_streams if data_streams else []
         self.corpora = corpora if corpora else []
         self.templates = templates if templates else []
         self.has_plugins = has_plugins
@@ -354,12 +403,14 @@ class Track:
 
     def __hash__(self):
         return hash(self.name) ^ hash(self.meta_data) ^ hash(self.description) ^ hash(self.challenges) ^ \
-               hash(self.indices) ^ hash(self.templates) ^ hash(self.corpora)
+               hash(self.indices) ^ hash(self.data_streams) ^ hash(self.templates) ^ hash(self.corpora)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.meta_data, self.description, self.challenges, self.indices, self.templates, self.corpora) ==
-                (othr.name, othr.meta_data, othr.description, othr.challenges, othr.indices, othr.templates, othr.corpora))
+                (self.name, self.meta_data, self.description, self.challenges, self.indices, self.data_streams,
+                 self.templates, self.corpora) ==
+                (othr.name, othr.meta_data, othr.description, othr.challenges, othr.indices, othr.data_streams,
+                 othr.templates, othr.corpora))
 
 
 class Challenge:
@@ -449,6 +500,8 @@ class OperationType(Enum):
     StartTransform = 1025
     WaitForTransform = 1026
     DeleteTransform = 1027
+    CreateDataStream = 1028
+    DeleteDataStream = 1029
 
     @property
     def admin_op(self):
@@ -526,6 +579,10 @@ class OperationType(Enum):
             return OperationType.WaitForTransform
         elif v == "delete-transform":
             return OperationType.DeleteTransform
+        elif v == "create-data-stream":
+            return OperationType.CreateDataStream
+        elif v == "delete-data-stream":
+            return OperationType.DeleteDataStream
         else:
             raise KeyError("No enum value for [%s]" % v)
 
