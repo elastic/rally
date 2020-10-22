@@ -155,7 +155,7 @@ class ComponentTemplate(IndexTemplate):
         :param name: Name of the index template. Mandatory.
         :param content: The content of the corresponding template. Mandatory.
         """
-        super(ComponentTemplate, self).__init__(name, None, content, delete_matching_indices=False)
+        super().__init__(name, None, content, delete_matching_indices=False)
 
 
 class Documents:

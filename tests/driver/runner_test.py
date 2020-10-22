@@ -2391,8 +2391,10 @@ class CreateComponentTemplateRunnerTests(TestCase):
         result = await r(es, params)
         self.assertEqual((2, "ops"), result)
         es.cluster.put_component_template.assert_has_calls([
-            mock.call(name="templateA", body={"template":{"mappings":{"properties":{"@timestamp":{"type": "date"}}}}}, params=params["request-params"]),
-            mock.call(name="templateB", body={"template":{"settings": {"index.number_of_shards": 1,"index.number_of_replicas": 1}}}, params=params["request-params"])
+            mock.call(name="templateA", body={"template":{"mappings":{"properties":{"@timestamp":{"type": "date"}}}}},
+                      params=params["request-params"]),
+            mock.call(name="templateB", body={"template":{"settings": {"index.number_of_shards": 1,"index.number_of_replicas": 1}}},
+                      params=params["request-params"])
         ])
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -2490,8 +2492,10 @@ class CreateComposableTemplateRunnerTests(TestCase):
         r = runner.CreateComposableTemplate()
         params = {
             "templates": [
-                ("templateA", {"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},"composed_of":["ct1","ct2"]}),
-                ("templateB", {"index_patterns":["metrics-*"],"template":{"settings":{"index.number_of_shards":2}},"composed_of":["ct3","ct4"]}),
+                ("templateA", {"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},
+                               "composed_of":["ct1","ct2"]}),
+                ("templateB", {"index_patterns":["metrics-*"],"template":{"settings":{"index.number_of_shards":2}},
+                               "composed_of":["ct3","ct4"]}),
             ],
             "request-params": {
                 "timeout": 50
@@ -2501,8 +2505,10 @@ class CreateComposableTemplateRunnerTests(TestCase):
         result = await r(es, params)
         self.assertEqual((2, "ops"), result)
         es.cluster.put_index_template.assert_has_calls([
-            mock.call(name="templateA", body={"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},"composed_of":["ct1","ct2"]}, params=params["request-params"]),
-            mock.call(name="templateB", body={"index_patterns":["metrics-*"],"template":{"settings":{"index.number_of_shards":2}},"composed_of":["ct3","ct4"]}, params=params["request-params"])
+            mock.call(name="templateA", body={"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},
+                                              "composed_of":["ct1","ct2"]}, params=params["request-params"]),
+            mock.call(name="templateB", body={"index_patterns":["metrics-*"],"template":{"settings":{"index.number_of_shards":2}},
+                                              "composed_of":["ct3","ct4"]}, params=params["request-params"])
         ])
 
     @mock.patch("elasticsearch.Elasticsearch")

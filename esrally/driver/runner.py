@@ -1126,7 +1126,8 @@ class CreateComponentTemplate(Runner):
 
 class DeleteComponentTemplate(Runner):
     """
-    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-component-template.html>`_.
+    Execute the `PUT index template API
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-component-template.html>`_.
     """
 
     async def __call__(self, es, params):

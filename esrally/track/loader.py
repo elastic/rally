@@ -1004,8 +1004,8 @@ class TrackSpecificationReader:
         challenges = self._create_challenges(track_specification)
         # at this point, *all* track params must have been referenced in the templates
         return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges, indices=indices,
-                           data_streams=data_streams, templates=templates, composable_templates=composable_templates, component_templates=component_templates,
-                           corpora=corpora)
+                           data_streams=data_streams, templates=templates, composable_templates=composable_templates,
+                           component_templates=component_templates, corpora=corpora)
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))

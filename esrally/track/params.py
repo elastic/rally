@@ -422,16 +422,16 @@ class CreateComposableTemplateParamSource(ParamSource):
     def _create_or_merge(content, path, new_content):
         original_content = content
         if new_content:
-            for path in path:
-                if path not in content:
-                    content[path] = {}
-                content = content[path]
+            for sub_path in path:
+                if sub_path not in content:
+                    content[sub_path] = {}
+                content = content[sub_path]
             CreateComposableTemplateParamSource.__merge(content, new_content)
         return original_content
 
     @staticmethod
     def __merge(dct, merge_dct):
-        for k, v in merge_dct.items():
+        for k in merge_dct.keys():
             if (k in dct and isinstance(dct[k], dict)
                     and isinstance(merge_dct[k], collections.Mapping)):
                 CreateComposableTemplateParamSource.__merge(dct[k], merge_dct[k])

@@ -1925,8 +1925,8 @@ class CreateComposableTemplateParamSourceTests(TestCase):
                     },
                     "operation-type": "create-composable-template"
                 })
-        self.assertEqual("Please set the properties 'template' and 'body' for the create-composable-template operation or declare composable and/or component templates in the track",
-                         ctx.exception.args[0])
+        self.assertEqual("Please set the properties 'template' and 'body' for the create-composable-template operation "
+                         "or declare composable and/or component templates in the track", ctx.exception.args[0])
 
 
 class CreateComponentTemplateParamSourceTests(TestCase):
