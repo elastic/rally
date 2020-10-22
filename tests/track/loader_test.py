@@ -2229,7 +2229,7 @@ class TrackSpecificationReaderTests(TestCase):
         complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             complete_track_params=complete_track_params)
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+        with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
     @mock.patch("esrally.track.loader.register_all_params_in_track")
@@ -2270,7 +2270,7 @@ class TrackSpecificationReaderTests(TestCase):
         complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             complete_track_params=complete_track_params)
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+        with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
     @mock.patch("esrally.track.loader.register_all_params_in_track")
@@ -2311,7 +2311,7 @@ class TrackSpecificationReaderTests(TestCase):
         complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             complete_track_params=complete_track_params)
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+        with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
     @mock.patch("esrally.track.loader.register_all_params_in_track")
@@ -2354,7 +2354,7 @@ class TrackSpecificationReaderTests(TestCase):
         complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             complete_track_params=complete_track_params)
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+        with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
     @mock.patch("esrally.track.loader.register_all_params_in_track")
