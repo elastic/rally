@@ -85,7 +85,7 @@ install_requires = [
     #   google-crc32c: Apache 2.0
     "google-resumable-media==1.1.0",
     # License: Apache 2.0
-    "google-auth==1.21.1"
+    "google-auth==1.22.1"
 ]
 
 tests_require = [
