@@ -513,7 +513,7 @@ class BulkIndexParamSource(ParamSource):
         else:
             raise exceptions.InvalidSyntax("Unknown 'conflicts' setting [%s]" % id_conflicts)
 
-        if params.get("data-streams", None) and self.id_conflicts != IndexIdConflict.NoConflicts:
+        if "data-streams" in params and self.id_conflicts != IndexIdConflict.NoConflicts:
             raise exceptions.InvalidSyntax("'conflicts' cannot be used with 'data-streams'")
 
         if self.id_conflicts != IndexIdConflict.NoConflicts:

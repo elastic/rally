@@ -211,8 +211,7 @@ class ActionMetaDataTests(TestCase):
 
         def conflict(action, type_name, id):
             if type_name:
-                return action, '{"%s": {"_index": "test_index", "_type": "%s", "_id": "%s"}}\n' % (
-                action, type_name, id)
+                return action, '{"%s": {"_index": "test_index", "_type": "%s", "_id": "%s"}}\n' % (action, type_name, id)
             else:
                 return action, '{"%s": {"_index": "test_index", "_id": "%s"}}\n' % (action, id)
 
@@ -626,28 +625,17 @@ class InvocationGeneratorTests(TestCase):
         num_docs = 16000
         clients = 12
         self.assertEqual((0, 1333, 1333), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
-        self.assertEqual((1333, 1334, 1334),
-                         params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
-        self.assertEqual((2667, 1333, 1333),
-                         params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False))
-        self.assertEqual((4000, 1333, 1333),
-                         params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False))
-        self.assertEqual((5333, 1334, 1334),
-                         params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False))
-        self.assertEqual((6667, 1333, 1333),
-                         params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False))
-        self.assertEqual((8000, 1333, 1333),
-                         params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False))
-        self.assertEqual((9333, 1334, 1334),
-                         params.bounds(num_docs, 7, 7, clients, includes_action_and_meta_data=False))
-        self.assertEqual((10667, 1333, 1333),
-                         params.bounds(num_docs, 8, 8, clients, includes_action_and_meta_data=False))
-        self.assertEqual((12000, 1333, 1333),
-                         params.bounds(num_docs, 9, 9, clients, includes_action_and_meta_data=False))
-        self.assertEqual((13333, 1334, 1334),
-                         params.bounds(num_docs, 10, 10, clients, includes_action_and_meta_data=False))
-        self.assertEqual((14667, 1333, 1333),
-                         params.bounds(num_docs, 11, 11, clients, includes_action_and_meta_data=False))
+        self.assertEqual((1333, 1334, 1334), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
+        self.assertEqual((2667, 1333, 1333), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False))
+        self.assertEqual((4000, 1333, 1333), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False))
+        self.assertEqual((5333, 1334, 1334), params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False))
+        self.assertEqual((6667, 1333, 1333), params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False))
+        self.assertEqual((8000, 1333, 1333), params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False))
+        self.assertEqual((9333, 1334, 1334), params.bounds(num_docs, 7, 7, clients, includes_action_and_meta_data=False))
+        self.assertEqual((10667, 1333, 1333), params.bounds(num_docs, 8, 8, clients, includes_action_and_meta_data=False))
+        self.assertEqual((12000, 1333, 1333), params.bounds(num_docs, 9, 9, clients, includes_action_and_meta_data=False))
+        self.assertEqual((13333, 1334, 1334), params.bounds(num_docs, 10, 10, clients, includes_action_and_meta_data=False))
+        self.assertEqual((14667, 1333, 1333), params.bounds(num_docs, 11, 11, clients, includes_action_and_meta_data=False))
 
     def test_calculate_non_multiple_bounds_6_clients(self):
         # With 3500 docs and 6 clients, every client needs to read 583.33 docs. We have two lines per doc, which makes it
@@ -666,8 +654,7 @@ class InvocationGeneratorTests(TestCase):
         clients = 8
         # four clients per worker, each reads 250 lines
         self.assertEqual((0, 1000, 1000), params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=False))
-        self.assertEqual((1000, 1000, 1000),
-                         params.bounds(num_docs, 4, 7, clients, includes_action_and_meta_data=False))
+        self.assertEqual((1000, 1000, 1000), params.bounds(num_docs, 4, 7, clients, includes_action_and_meta_data=False))
 
         # four clients per worker, each reads 500 lines (includes action and metadata)
         self.assertEqual((0, 1000, 2000), params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=True))
@@ -738,8 +725,7 @@ class BulkIndexParamSourceTests(TestCase):
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={})
 
         self.assertEqual("There is no document corpus definition for track unit-test. "
-                         "You must add at least one before making bulk requests to Elasticsearch.",
-                         ctx.exception.args[0])
+                         "You must add at least one before making bulk requests to Elasticsearch.", ctx.exception.args[0])
 
     def test_create_with_non_numeric_bulk_size(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -817,9 +803,8 @@ class BulkIndexParamSourceTests(TestCase):
                 "conflicts": "random"
             })
 
-        self.assertEqual(
-            "Cannot generate id conflicts [random] as [docs.json.bz2] in document corpus [default] already contains "
-            "an action and meta-data line.", ctx.exception.args[0])
+        self.assertEqual("Cannot generate id conflicts [random] as [docs.json.bz2] in document corpus [default] already contains "
+                         "an action and meta-data line.", ctx.exception.args[0])
 
     def test_create_with_unknown_id_conflicts(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
@@ -1026,8 +1011,7 @@ class BulkIndexParamSourceTests(TestCase):
                     "pipeline": "test-pipeline"
                 })
 
-        self.assertEqual("The provided corpus ['does_not_exist'] does not match any of the corpora ['default'].",
-                         ctx.exception.args[0])
+        self.assertEqual("The provided corpus ['does_not_exist'] does not match any of the corpora ['default'].", ctx.exception.args[0])
 
     def test_ingests_all_documents_by_default(self):
         corpora = [
@@ -1143,8 +1127,7 @@ class BulkIndexParamSourceTests(TestCase):
                 "conflict-probability": 100.1
             })
 
-        self.assertEqual("'conflict-probability' must be in the range [0.0, 100.0] but was 100.1",
-                         ctx.exception.args[0])
+        self.assertEqual("'conflict-probability' must be in the range [0.0, 100.0] but was 100.1", ctx.exception.args[0])
 
     def test_create_with_conflict_probability_not_numeric(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
@@ -1177,8 +1160,7 @@ class BulkDataGeneratorTests(TestCase):
 
         bulks = params.bulk_data_based(num_clients=1, start_client_index=0, end_client_index=0, corpora=[corpus],
                                        batch_size=5, bulk_size=5,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None,
-                                       on_conflict=None,
+                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
                                        recency=None, pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
@@ -1210,18 +1192,18 @@ class BulkDataGeneratorTests(TestCase):
     def test_generate_bulks_from_multiple_corpora(self):
         corpora = [
             track.DocumentCorpus(name="default", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=5,
-                                target_index="logs-2018-01",
-                                target_type="docs"
-                                ),
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=5,
-                                target_index="logs-2018-02",
-                                target_type="docs"
-                                ),
+                        track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                        number_of_documents=5,
+                                        target_index="logs-2018-01",
+                                        target_type="docs"
+                                        ),
+                        track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                        number_of_documents=5,
+                                        target_index="logs-2018-02",
+                                        target_type="docs"
+                                        ),
 
-            ]),
+                    ]),
             track.DocumentCorpus(name="special", documents=[
                 track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                 number_of_documents=5,
@@ -1230,12 +1212,11 @@ class BulkDataGeneratorTests(TestCase):
                                 )
             ])
 
-        ]
+            ]
 
         bulks = params.bulk_data_based(num_clients=1, start_client_index=0, end_client_index=0, corpora=corpora,
                                        batch_size=5, bulk_size=5,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None,
-                                       on_conflict=None,
+                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
                                        recency=None, pipeline=None,
                                        original_params={
                                            "my-custom-parameter": "foo",
@@ -1809,9 +1790,8 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
                                                       "template": "default",
                                                       "delete-matching-indices": True
                                                   })
-        self.assertEqual(
-            "The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true.",
-            ctx.exception.args[0])
+        self.assertEqual("The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true.",
+                         ctx.exception.args[0])
 
     def test_delete_index_template_from_track(self):
         tpl1 = track.IndexTemplate(name="metrics", pattern="metrics-*", delete_matching_indices=True, content={
@@ -1903,8 +1883,7 @@ class SearchParamSourceTests(TestCase):
                 }
             }, operation_name="test_operation")
 
-        self.assertEqual("'index' or 'data-stream' is mandatory and is missing for operation 'test_operation'",
-                         ctx.exception.args[0])
+        self.assertEqual("'index' or 'data-stream' is mandatory and is missing for operation 'test_operation'", ctx.exception.args[0])
 
     def test_passes_request_parameters(self):
         index1 = track.Index(name="index1", types=["type1"])

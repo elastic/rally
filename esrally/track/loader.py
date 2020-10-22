@@ -301,8 +301,7 @@ class SimpleTrackRepository:
         return [self.track_name]
 
     def track_dir(self, track_name):
-        assert track_name == self.track_name, "Expect provided track name [%s] to match [%s]" % (
-        track_name, self.track_name)
+        assert track_name == self.track_name, "Expect provided track name [%s] to match [%s]" % (track_name, self.track_name)
         return self._track_dir
 
     def track_file(self, track_name):
@@ -344,8 +343,7 @@ def prepare_track(t, cfg):
     test_mode = cfg.opts("track", "test.mode.enabled")
     for corpus in used_corpora(t, cfg):
         data_root = data_dir(cfg, t.name, corpus.name)
-        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s.", corpus.name, t.name,
-                    data_root)
+        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s.", corpus.name, t.name, data_root)
         prep = DocumentSetPreparator(t.name, offline, test_mode)
 
         for document_set in corpus.documents:
@@ -382,9 +380,8 @@ class DocumentSetPreparator:
         io.decompress(archive_path, io.dirname(archive_path))
         console.println("[OK]")
         if not os.path.isfile(documents_path):
-            raise exceptions.DataError(
-                "Decompressing [%s] did not create [%s]. Please check with the track author if the compressed "
-                "archive has been created correctly." % (archive_path, documents_path))
+            raise exceptions.DataError("Decompressing [%s] did not create [%s]. Please check with the track author if the compressed "
+                                       "archive has been created correctly." % (archive_path, documents_path))
 
         extracted_bytes = os.path.getsize(documents_path)
         if uncompressed_size is not None and extracted_bytes != uncompressed_size:
@@ -398,8 +395,7 @@ class DocumentSetPreparator:
             raise exceptions.DataError("%s and it cannot be downloaded because no base URL is provided."
                                        % detail_on_missing_root_url)
         if self.offline:
-            raise exceptions.SystemSetupError(
-                "Cannot find %s. Please disable offline mode and retry again." % target_path)
+            raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
 
         data_url = "%s/%s" % (base_url, file_name)
         try:
@@ -417,9 +413,8 @@ class DocumentSetPreparator:
             self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
         except urllib.error.HTTPError as e:
             if e.code == 404 and self.test_mode:
-                raise exceptions.DataError(
-                    "Track [%s] does not support test mode. Please ask the track author to add it or "
-                    "disable test mode and retry." % self.track_name)
+                raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
+                                           "disable test mode and retry." % self.track_name)
             else:
                 msg = "Could not download [%s] to [%s]" % (data_url, target_path)
                 if e.reason:
@@ -466,8 +461,7 @@ class DocumentSetPreparator:
         :param data_root: The data root directory for this document set.
         """
         doc_path = os.path.join(data_root, document_set.document_file)
-        archive_path = os.path.join(data_root,
-                                    document_set.document_archive) if document_set.has_compressed_corpus() else None
+        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
         while True:
             if self.is_locally_available(doc_path) and \
                     self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
@@ -489,8 +483,7 @@ class DocumentSetPreparator:
                 # provide a specific error message in case there is no download URL
                 if self.is_locally_available(target_path):
                     # convert expected_size eagerly to a string as it might be None (but in that case we'll never see that error message)
-                    msg = "%s is present but does not have the expected size of %s bytes" % (
-                    target_path, str(expected_size))
+                    msg = "%s is present but does not have the expected size of %s bytes" % (target_path, str(expected_size))
                 else:
                     msg = "%s is missing" % target_path
 
@@ -518,8 +511,7 @@ class DocumentSetPreparator:
         :return: See postcondition.
         """
         doc_path = os.path.join(data_root, document_set.document_file)
-        archive_path = os.path.join(data_root,
-                                    document_set.document_archive) if document_set.has_compressed_corpus() else None
+        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
 
         while True:
             if self.is_locally_available(doc_path):
@@ -579,8 +571,7 @@ class TemplateSource:
             for glob_pattern in match:
                 full_glob_path = os.path.join(base_path, glob_pattern)
                 sub_source = self.read_glob_files(full_glob_path)
-                repl[glob_pattern] = self.replace_includes(base_path=io.dirname(full_glob_path),
-                                                           track_fragment=sub_source)
+                repl[glob_pattern] = self.replace_includes(base_path=io.dirname(full_glob_path), track_fragment=sub_source)
 
             def replstring(matchobj):
                 # matchobj.groups() is a tuple and first element contains the matched group id
@@ -692,8 +683,7 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
     return render_template(loader=jinja2.FileSystemLoader(base_path),
                            template_source=template_source.assembled_source,
                            template_vars=template_vars,
-                           template_internal_vars=default_internal_template_vars(
-                               glob_helper=lambda f: relative_glob(base_path, f)))
+                           template_internal_vars=default_internal_template_vars(glob_helper=lambda f: relative_glob(base_path, f)))
 
 
 def filter_tasks(t, filters, exclude=False):
@@ -773,9 +763,8 @@ def post_process_for_test_mode(t):
                     path, ext = io.splitext(document_set.document_file)
                     document_set.document_file = "%s-1k%s" % (path, ext)
                 else:
-                    raise exceptions.RallyAssertionError(
-                        "Document corpus [%s] has neither compressed nor uncompressed corpus." %
-                        corpus.name)
+                    raise exceptions.RallyAssertionError("Document corpus [%s] has neither compressed nor uncompressed corpus." %
+                                                         corpus.name)
 
                 # we don't want to check sizes
                 document_set.compressed_size_in_bytes = None
@@ -799,13 +788,11 @@ def post_process_for_test_mode(t):
                 if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                     leaf_task.warmup_time_period = 0
                     if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug("Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task),
-                                     leaf_task.warmup_time_period)
+                        logger.debug("Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.warmup_time_period)
                 if leaf_task.time_period is not None and leaf_task.time_period > 10:
                     leaf_task.time_period = 10
                     if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task),
-                                     leaf_task.time_period)
+                        logger.debug("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
 
                 leaf_task.params.pop("target-throughput", None)
                 leaf_task.params.pop("target-interval", None)
@@ -865,8 +852,7 @@ class TrackFileReader:
         # involving lines numbers and it also does not bloat Rally's log file so much.
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
         try:
-            rendered = render_template_from_file(track_spec_file, self.track_params,
-                                                 complete_track_params=self.complete_track_params)
+            rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
             with open(tmp.name, "wt", encoding="utf-8") as f:
                 f.write(rendered)
             self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
@@ -890,8 +876,7 @@ class TrackFileReader:
             raise TrackSyntaxError(msg)
         except Exception as e:
             self.logger.exception("Could not load [%s].", track_spec_file)
-            msg = "Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(
-                track_spec_file, tmp.name)
+            msg = "Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name)
             # Convert to string early on to avoid serialization errors with Jinja exceptions.
             raise TrackSyntaxError(msg, str(e))
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
@@ -899,25 +884,21 @@ class TrackFileReader:
         try:
             track_version = int(raw_version)
         except ValueError:
-            raise exceptions.InvalidSyntax(
-                "version identifier for track %s must be numeric but was [%s]" % (track_name, str(raw_version)))
+            raise exceptions.InvalidSyntax("version identifier for track %s must be numeric but was [%s]" % (track_name, str(raw_version)))
         if TrackFileReader.MINIMUM_SUPPORTED_TRACK_VERSION > track_version:
-            raise exceptions.RallyError(
-                "Track {} is on version {} but needs to be updated at least to version {} to work with the "
-                "current version of Rally.".format(track_name, track_version,
-                                                   TrackFileReader.MINIMUM_SUPPORTED_TRACK_VERSION))
+            raise exceptions.RallyError("Track {} is on version {} but needs to be updated at least to version {} to work with the "
+                                        "current version of Rally.".format(track_name, track_version,
+                                                                           TrackFileReader.MINIMUM_SUPPORTED_TRACK_VERSION))
         if TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION < track_version:
-            raise exceptions.RallyError(
-                "Track {} requires a newer version of Rally. Please upgrade Rally (supported track version: {}, "
-                "required track version: {}).".format(track_name, TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION,
-                                                      track_version))
+            raise exceptions.RallyError("Track {} requires a newer version of Rally. Please upgrade Rally (supported track version: {}, "
+                                        "required track version: {}).".format(track_name, TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION,
+                                                                              track_version))
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
             raise TrackSyntaxError(
                 "Track '{}' is invalid.\n\nError details: {}\nInstance: {}\nPath: {}\nSchema path: {}".format(
-                    track_name, ve.message, json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path,
-                    ve.absolute_schema_path))
+                    track_name, ve.message, json.dumps(ve.instance, indent=4, sort_keys=True), ve.absolute_path, ve.absolute_schema_path))
 
         current_track = self.read_track(track_name, track_spec, mapping_dir)
 
@@ -1055,8 +1036,7 @@ class TrackSpecificationReader:
         else:
             body = None
 
-        return track.Index(name=index_name, body=body,
-                           types=self._r(index_spec, "types", mandatory=False, default_value=[]))
+        return track.Index(name=index_name, body=body, types=self._r(index_spec, "types", mandatory=False, default_value=[]))
 
     def _create_data_stream(self, data_stream_spec):
         return track.DataStream(name=self._r(data_stream_spec, "name"))
@@ -1214,9 +1194,8 @@ class TrackSpecificationReader:
                              "explicit call to the cluster settings API.".format(self.name), logger=self.logger)
 
             if default and default_challenge is not None:
-                self._error(
-                    "Both '%s' and '%s' are defined as default challenges. Please define only one of them as default."
-                    % (default_challenge.name, name))
+                self._error("Both '%s' and '%s' are defined as default challenges. Please define only one of them as default."
+                            % (default_challenge.name, name))
             if name in known_challenge_names:
                 self._error("Duplicate challenge with name '%s'." % name)
             known_challenge_names.add(name)
@@ -1235,9 +1214,8 @@ class TrackSpecificationReader:
             for task in schedule:
                 for sub_task in task:
                     if sub_task.name in known_task_names:
-                        self._error(
-                            "Challenge '%s' contains multiple tasks with the name '%s'. Please use the task's name property to "
-                            "assign a unique name for each task." % (name, sub_task.name))
+                        self._error("Challenge '%s' contains multiple tasks with the name '%s'. Please use the task's name property to "
+                                    "assign a unique name for each task." % (name, sub_task.name))
                     else:
                         known_task_names.add(sub_task.name)
 
@@ -1255,9 +1233,8 @@ class TrackSpecificationReader:
             challenges.append(challenge)
 
         if challenges and default_challenge is None:
-            self._error(
-                "No default challenge specified. Please edit the track and add \"default\": true to one of the challenges %s."
-                % ", ".join([c.name for c in challenges]))
+            self._error("No default challenge specified. Please edit the track and add \"default\": true to one of the challenges %s."
+                        % ", ".join([c.name for c in challenges]))
         return challenges
 
     def _get_challenge_specs(self, track_spec):
@@ -1270,8 +1247,7 @@ class TrackSpecificationReader:
         if count_defined == 0:
             self._error("You must define 'challenge', 'challenges' or 'schedule' but none is specified.")
         elif count_defined > 1:
-            self._error(
-                "Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only one of them is allowed.")
+            self._error("Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only one of them is allowed.")
         elif challenge is not None:
             return [challenge], False
         elif challenges is not None:
@@ -1282,8 +1258,7 @@ class TrackSpecificationReader:
                 "schedule": schedule
             }], True
         else:
-            raise AssertionError(
-                "Unexpected: schedule=[{}], challenge=[{}], challenges=[{}]".format(schedule, challenge, challenges))
+            raise AssertionError("Unexpected: schedule=[{}], challenge=[{}], challenges=[{}]".format(schedule, challenge, challenges))
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
         # use same default values as #parseTask() in case the 'parallel' element did not specify anything
@@ -1305,13 +1280,11 @@ class TrackSpecificationReader:
                 if task.completes_parent and not completion_task:
                     completion_task = task
                 elif task.completes_parent:
-                    self._error(
-                        "'parallel' element for challenge '%s' contains multiple tasks with the name '%s' which are marked with "
-                        "'completed-by' but only task is allowed to match." % (challenge_name, completed_by))
+                    self._error("'parallel' element for challenge '%s' contains multiple tasks with the name '%s' which are marked with "
+                                "'completed-by' but only task is allowed to match." % (challenge_name, completed_by))
             if not completion_task:
-                self._error(
-                    "'parallel' element for challenge '%s' is marked with 'completed-by' with task name '%s' but no task with "
-                    "this name exists." % (challenge_name, completed_by))
+                self._error("'parallel' element for challenge '%s' is marked with 'completed-by' with task name '%s' but no task with "
+                            "this name exists." % (challenge_name, completed_by))
         return track.Parallel(tasks, clients)
 
     def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=None, default_iterations=None,
@@ -1331,8 +1304,7 @@ class TrackSpecificationReader:
                           meta_data=self._r(task_spec, "meta", error_ctx=op.name, mandatory=False),
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op.name, mandatory=False,
                                                     default_value=default_warmup_iterations),
-                          iterations=self._r(task_spec, "iterations", error_ctx=op.name, mandatory=False,
-                                             default_value=default_iterations),
+                          iterations=self._r(task_spec, "iterations", error_ctx=op.name, mandatory=False, default_value=default_iterations),
                           warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op.name,
                                                      mandatory=False,
                                                      default_value=default_warmup_time_period),
@@ -1344,15 +1316,11 @@ class TrackSpecificationReader:
                           # this is to provide scheduler-specific parameters for custom schedulers.
                           params=task_spec)
         if task.warmup_iterations is not None and task.time_period is not None:
-            self._error(
-                "Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
-                "mix time periods and iterations." % (
-                op.name, challenge_name, task.warmup_iterations, task.time_period))
+            self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
+                        "mix time periods and iterations." % (op.name, challenge_name, task.warmup_iterations, task.time_period))
         elif task.warmup_time_period is not None and task.iterations is not None:
-            self._error(
-                "Operation '%s' in challenge '%s' defines a warmup time period of '%d' seconds and '%d' iterations. Please do not "
-                "mix time periods and iterations." % (
-                op.name, challenge_name, task.warmup_time_period, task.iterations))
+            self._error("Operation '%s' in challenge '%s' defines a warmup time period of '%d' seconds and '%d' iterations. Please do not "
+                        "mix time periods and iterations." % (op.name, challenge_name, task.warmup_time_period, task.iterations))
 
         return task
 
@@ -1397,7 +1365,6 @@ class TrackSpecificationReader:
             op_type = op_type_name
 
         try:
-            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=params,
-                                   param_source=param_source)
+            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=params, param_source=param_source)
         except exceptions.InvalidSyntax as e:
             raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
