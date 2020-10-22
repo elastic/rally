@@ -658,8 +658,7 @@ class TrackPreparationTests(TestCase):
                                                                         uncompressed_size_in_bytes=2000),
                                            data_root=".")
 
-        self.assertEqual("./docs.json.bz2 is present but does not have the expected size of 200 bytes.",
-                         ctx.exception.args[0])
+        self.assertEqual("./docs.json.bz2 is present but does not have the expected size of 200 bytes.", ctx.exception.args[0])
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -2458,7 +2457,7 @@ class TrackSpecificationReaderTests(TestCase):
                     }
                 }
                 """],
-            }))
+        }))
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(
             ["index_pattern", "number_of_shards"],
