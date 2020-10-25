@@ -141,7 +141,7 @@ def cleanup(preserve, install_dir, data_paths):
 
 def _apply_config(source_root_path, target_root_path, config_vars):
     logger = logging.getLogger(__name__)
-    for root, dirs, files in os.walk(source_root_path):
+    for root, _, files in os.walk(source_root_path):
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
 
         relative_root = root[len(source_root_path) + 1:]
@@ -438,7 +438,7 @@ class DockerProvisioner:
         mounts = {}
 
         for car_config_path in self.car.config_paths:
-            for root, dirs, files in os.walk(car_config_path):
+            for root, _, files in os.walk(car_config_path):
                 env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
 
                 relative_root = root[len(car_config_path) + 1:]

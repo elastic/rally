@@ -202,6 +202,68 @@ class CreateIndexParamSource(ParamSource):
         return p
 
 
+class CreateDataStreamParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.request_params = params.get("request-params", {})
+        self.data_stream_definitions = []
+        if track.data_streams:
+            filter_ds = params.get("data-stream")
+            if isinstance(filter_ds, str):
+                filter_ds = [filter_ds]
+            for ds in track.data_streams:
+                if not filter_ds or ds.name in filter_ds:
+                    self.data_stream_definitions.append(ds.name)
+        else:
+            try:
+                data_stream = params["data-stream"]
+                data_streams = [data_stream] if isinstance(data_stream, str) else data_stream
+                for ds in data_streams:
+                    self.data_stream_definitions.append(ds)
+            except KeyError:
+                raise exceptions.InvalidSyntax("Please set the property 'data-stream' for the create-data-stream operation")
+
+    def params(self):
+        p = {}
+        # ensure we pass all parameters...
+        p.update(self._params)
+        p.update({
+            "data-streams": self.data_stream_definitions,
+            "request-params": self.request_params
+        })
+        return p
+
+
+class DeleteDataStreamParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.request_params = params.get("request-params", {})
+        self.only_if_exists = params.get("only-if-exists", True)
+
+        self.data_stream_definitions = []
+        target_data_stream = params.get("data-stream")
+        if target_data_stream:
+            target_data_stream = [target_data_stream] if isinstance(target_data_stream, str) else target_data_stream
+            for ds in target_data_stream:
+                self.data_stream_definitions.append(ds)
+        elif track.data_streams:
+            for ds in track.data_streams:
+                self.data_stream_definitions.append(ds.name)
+        else:
+            raise exceptions.InvalidSyntax("delete-data-stream operation targets no data stream")
+
+    def params(self):
+        p = {}
+        # ensure we pass all parameters...
+        p.update(self._params)
+        p.update({
+            "data-streams": self.data_stream_definitions,
+            "request-params": self.request_params,
+            "only-if-exists": self.only_if_exists
+        })
+        return p
+
+
 class DeleteIndexParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
@@ -343,12 +405,19 @@ class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
         if len(track.indices) == 1:
-            default_index = track.indices[0].name
+            default_target = track.indices[0].name
+        elif len(track.data_streams) == 1:
+            default_target = track.data_streams[0].name
         else:
-            default_index = None
-
-        index_name = params.get("index", default_index)
+            default_target = None
+        # indices are preferred by data streams can also be queried the same way
+        target_name = params.get("index")
         type_name = params.get("type")
+        if not target_name:
+            target_name = params.get("data-stream", default_target)
+            if target_name and type_name:
+                raise exceptions.InvalidSyntax(
+                    f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         request_cache = params.get("cache", None)
         query_body = params.get("body", None)
         query_body_params = params.get("body-params", None)
@@ -358,7 +427,7 @@ class SearchParamSource(ParamSource):
         response_compression_enabled = params.get("response-compression-enabled", True)
 
         self.query_params = {
-            "index": index_name,
+            "index": target_name,
             "type": type_name,
             "cache": request_cache,
             "request-params": request_params,
@@ -366,8 +435,9 @@ class SearchParamSource(ParamSource):
             "body": query_body
         }
 
-        if not index_name:
-            raise exceptions.InvalidSyntax("'index' is mandatory and is missing for operation '{}'".format(kwargs.get("operation_name")))
+        if not target_name:
+            raise exceptions.InvalidSyntax(
+                f"'index' or 'data-stream' is mandatory and is missing for operation '{kwargs.get('operation_name')}'")
 
         if pages:
             self.query_params["pages"] = pages
@@ -407,6 +477,7 @@ class SearchParamSource(ParamSource):
         # the value is now the inner-most dictionary and the last path element is its key
         v[path[-1]] = val
 
+    # pylint: disable=arguments-differ
     def params(self, choice=random.choice):
         if self.query_body_params:
             # needs to replace params first
@@ -442,6 +513,9 @@ class BulkIndexParamSource(ParamSource):
             self.id_conflicts = IndexIdConflict.RandomConflicts
         else:
             raise exceptions.InvalidSyntax("Unknown 'conflicts' setting [%s]" % id_conflicts)
+
+        if "data-streams" in params and self.id_conflicts != IndexIdConflict.NoConflicts:
+            raise exceptions.InvalidSyntax("'conflicts' cannot be used with 'data-streams'")
 
         if self.id_conflicts != IndexIdConflict.NoConflicts:
             self.conflict_probability = self.float_param(params, name="conflict-probability", default_value=25, min_value=0, max_value=100,
@@ -517,7 +591,9 @@ class BulkIndexParamSource(ParamSource):
 
         for corpus in t.corpora:
             if corpus.name in corpora_names:
-                filtered_corpus = corpus.filter(source_format=track.Documents.SOURCE_FORMAT_BULK, target_indices=params.get("indices"))
+                filtered_corpus = corpus.filter(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                target_indices=params.get("indices"),
+                                                target_data_streams=params.get("data-streams"))
                 if filtered_corpus.number_of_documents(source_format=track.Documents.SOURCE_FORMAT_BULK) > 0:
                     corpora.append(filtered_corpus)
 
@@ -613,12 +689,16 @@ class PartitionBulkIndexParamSource:
 class ForceMergeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
-        if len(track.indices) > 0:
-            default_index = ','.join(map(str, track.indices))
+        if len(track.indices) > 0 or len(track.data_streams) > 0:
+            # force merge data streams and indices - API call is the same so treat as indices
+            default_target = ','.join(map(str, track.indices + track.data_streams))
         else:
-            default_index = "_all"
+            default_target = "_all"
 
-        self._index_name = params.get("index", default_index)
+        self._target_name = params.get("index")
+        if not self._target_name:
+            self._target_name = params.get("data-stream", default_target)
+
         self._max_num_segments = params.get("max-num-segments")
         self._request_timeout = params.get("request-timeout")
         self._poll_period = params.get("poll-period", 10)
@@ -626,7 +706,7 @@ class ForceMergeParamSource(ParamSource):
 
     def params(self):
         return {
-            "index": self._index_name,
+            "index": self._target_name,
             "max-num-segments": self._max_num_segments,
             "request-timeout": self._request_timeout,
             "mode": self._mode,
@@ -679,14 +759,24 @@ def chain(*iterables):
 def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
                           on_conflict, recency):
     source = Slice(io.MmapSource, offset, num_lines)
+    target = None
+    use_create = False
+    if docs.target_index:
+        target = docs.target_index
+    elif docs.target_data_stream:
+        target = docs.target_data_stream
+        use_create = True
+        if id_conflicts != IndexIdConflict.NoConflicts:
+            # can only create docs in data streams
+            raise exceptions.RallyError("Conflicts cannot be generated with append only data streams")
 
     if docs.includes_action_and_meta_data:
-        return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, docs.target_index, docs.target_type)
+        return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, target, docs.target_type)
     else:
-        am_handler = GenerateActionMetaData(docs.target_index, docs.target_type,
+        am_handler = GenerateActionMetaData(target, docs.target_type,
                                             build_conflicting_ids(id_conflicts, num_docs, offset), conflict_probability,
-                                            on_conflict, recency)
-        return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, docs.target_index, docs.target_type)
+                                            on_conflict, recency, use_create=use_create)
+        return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, target, docs.target_type)
 
 
 def create_readers(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size, id_conflicts,
@@ -698,9 +788,12 @@ def create_readers(num_clients, start_client_index, end_client_index, corpora, b
             offset, num_docs, num_lines = bounds(docs.number_of_documents, start_client_index, end_client_index,
                                                  num_clients, docs.includes_action_and_meta_data)
             if num_docs > 0:
-                logger.info("Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s/%s] "
+                target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
+                if docs.target_data_stream:
+                    target = docs.target_data_stream
+                logger.info("Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
                             "from corpus [%s].", start_client_index, end_client_index, num_docs, offset,
-                            docs.target_index, docs.target_type, corpus.name)
+                            target, corpus.name)
                 readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts,
                                              conflict_probability, on_conflict, recency))
             else:
@@ -790,8 +883,8 @@ def bulk_data_based(num_clients, start_client_index, end_client_index, corpora, 
 class GenerateActionMetaData:
     RECENCY_SLOPE = 30
 
-    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None,
-                 recency=None, rand=random.random, randint=random.randint, randexp=random.expovariate):
+    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None, recency=None,
+                 rand=random.random, randint=random.randint, randexp=random.expovariate, use_create=False):
         if type_name:
             self.meta_data_index_with_id = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % \
                                            (index_name, type_name, "%s")
@@ -802,9 +895,12 @@ class GenerateActionMetaData:
             self.meta_data_index_with_id = '{"index": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
             self.meta_data_update_with_id = '{"update": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
             self.meta_data_index_no_id = '{"index": {"_index": "%s"}}\n' % index_name
-
+            self.meta_data_create_no_id = '{"create": {"_index": "%s"}}\n' % index_name
+        if use_create and conflicting_ids:
+            raise exceptions.RallyError("Index mode '_create' cannot be used with conflicting ids")
         self.conflicting_ids = conflicting_ids
         self.on_conflict = on_conflict
+        self.use_create = use_create
         # random() produces numbers between 0 and 1 and the user denotes the probability in percentage between 0 and 100
         self.conflict_probability = conflict_probability / 100.0 if conflict_probability is not None else 0
         self.recency = recency if recency is not None else 0
@@ -857,6 +953,8 @@ class GenerateActionMetaData:
             else:
                 raise exceptions.RallyAssertionError("Unknown action [{}]".format(action))
         else:
+            if self.use_create:
+                return "create", self.meta_data_create_no_id
             return "index", self.meta_data_index_no_id
 
 
@@ -1020,6 +1118,8 @@ register_param_source_for_operation(track.OperationType.Bulk, BulkIndexParamSour
 register_param_source_for_operation(track.OperationType.Search, SearchParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndex, CreateIndexParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndexParamSource)
+register_param_source_for_operation(track.OperationType.CreateDataStream, CreateDataStreamParamSource)
+register_param_source_for_operation(track.OperationType.DeleteDataStream, DeleteDataStreamParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndexTemplate, CreateIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndexTemplate, DeleteIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)

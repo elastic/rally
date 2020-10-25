@@ -541,7 +541,7 @@ class TemplateSource:
     rally.collect(parts=...
     """
 
-    collect_parts_re = re.compile(r'''{{\ +?rally\.collect\(parts="(.+?(?="))"\)\ +?}}''')
+    collect_parts_re = re.compile(r"{{\ +?rally\.collect\(parts=\"(.+?(?=\"))\"\)\ +?}}")
 
     def __init__(self, base_path, template_file_name, source=io.FileSource, fileglobber=glob.glob):
         self.base_path = base_path
@@ -722,6 +722,7 @@ def filter_tasks(t, filters, exclude=False):
             challenge.remove_task(task)
 
     return t
+
 
 def filters_from_filtered_tasks(filtered_tasks):
     filters = []
@@ -987,13 +988,19 @@ class TrackSpecificationReader:
         meta_data = self._r(track_specification, "meta", mandatory=False)
         indices = [self._create_index(idx, mapping_dir)
                    for idx in self._r(track_specification, "indices", mandatory=False, default_value=[])]
+        data_streams = [self._create_data_stream(idx)
+                        for idx in self._r(track_specification, "data-streams", mandatory=False, default_value=[])]
+        if len(indices) > 0 and len(data_streams) > 0:
+            # we guard against this early and support either or
+            raise TrackSyntaxError("indices and data-streams cannot both be specified")
         templates = [self._create_index_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
-        corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices)
+        corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]),
+                                       indices, data_streams)
         challenges = self._create_challenges(track_specification)
         # at this point, *all* track params must have been referenced in the templates
-        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges, indices=indices,
-                           templates=templates, corpora=corpora)
+        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges,
+                           indices=indices, data_streams=data_streams, templates=templates, corpora=corpora)
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
@@ -1031,6 +1038,9 @@ class TrackSpecificationReader:
 
         return track.Index(name=index_name, body=body, types=self._r(index_spec, "types", mandatory=False, default_value=[]))
 
+    def _create_data_stream(self, data_stream_spec):
+        return track.DataStream(name=self._r(data_stream_spec, "name"))
+
     def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
         template_file = self._r(tpl_spec, "template")
@@ -1056,7 +1066,9 @@ class TrackSpecificationReader:
             self.logger.exception("Could not load file template for %s.", description)
             raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
-    def _create_corpora(self, corpora_specs, indices):
+    def _create_corpora(self, corpora_specs, indices, data_streams):
+        if len(indices) > 0 and len(data_streams) > 0:
+            raise TrackSyntaxError("indices and data-streams cannot both be specified")
         document_corpora = []
         known_corpora_names = set()
         for corpus_spec in corpora_specs:
@@ -1069,17 +1081,29 @@ class TrackSpecificationReader:
             corpus = track.DocumentCorpus(name=name)
             # defaults on corpus level
             default_base_url = self._r(corpus_spec, "base-url", mandatory=False, default_value=None)
-            default_source_format = self._r(corpus_spec, "source-format", mandatory=False, default_value=track.Documents.SOURCE_FORMAT_BULK)
-            default_action_and_meta_data = self._r(corpus_spec, "includes-action-and-meta-data", mandatory=False, default_value=False)
+            default_source_format = self._r(corpus_spec, "source-format", mandatory=False,
+                                            default_value=track.Documents.SOURCE_FORMAT_BULK)
+            default_action_and_meta_data = self._r(corpus_spec, "includes-action-and-meta-data", mandatory=False,
+                                                   default_value=False)
+            corpus_target_idx = None
+            corpus_target_ds = None
+            corpus_target_type = None
 
             if len(indices) == 1:
                 corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False, default_value=indices[0].name)
-            else:
+            elif len(indices) > 0:
                 corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False)
 
+            if len(data_streams) == 1:
+                corpus_target_ds = self._r(corpus_spec, "target-data-stream", mandatory=False,
+                                           default_value=data_streams[0].name)
+            elif len(data_streams) > 0:
+                corpus_target_ds = self._r(corpus_spec, "target-data-stream", mandatory=False)
+
             if len(indices) == 1 and len(indices[0].types) == 1:
-                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False, default_value=indices[0].types[0])
-            else:
+                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False,
+                                             default_value=indices[0].types[0])
+            elif len(indices) > 0:
                 corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False)
 
             for doc_spec in self._r(corpus_spec, "documents"):
@@ -1103,12 +1127,36 @@ class TrackSpecificationReader:
                     if includes_action_and_meta_data:
                         target_idx = None
                         target_type = None
+                        target_ds = None
                     else:
-                        # we need an index if no meta-data are present.
-                        target_idx = self._r(doc_spec, "target-index", mandatory=corpus_target_idx is None,
-                                             default_value=corpus_target_idx, error_ctx=docs)
                         target_type = self._r(doc_spec, "target-type", mandatory=False,
                                               default_value=corpus_target_type, error_ctx=docs)
+
+                        # require to be specified if we're using data streams and we have no default
+                        target_ds = self._r(doc_spec, "target-data-stream",
+                                            mandatory=len(data_streams) > 0 and corpus_target_ds is None,
+                                            default_value=corpus_target_ds,
+                                            error_ctx=docs)
+                        if target_ds and len(indices) > 0:
+                            # if indices are in use we error
+                            raise TrackSyntaxError("target-data-stream cannot be used when using indices")
+                        elif target_ds and target_type:
+                            raise TrackSyntaxError("target-type cannot be used when using data-streams")
+
+                        # need an index if we're using indices and no meta-data are present and we don't have a default
+                        target_idx = self._r(doc_spec, "target-index",
+                                             mandatory=len(indices) > 0 and corpus_target_idx is None,
+                                             default_value=corpus_target_idx,
+                                             error_ctx=docs)
+                        # either target_idx or target_ds
+                        if target_idx and len(data_streams) > 0:
+                            # if data streams are in use we error
+                            raise TrackSyntaxError("target-index cannot be used when using data-streams")
+
+                        # we need one or the other
+                        if target_idx is None and target_ds is None:
+                            raise TrackSyntaxError(f"a {'target-index' if len(indices) > 0 else 'target-data-stream'} "
+                                                   f"is required for {docs}" )
 
                     docs = track.Documents(source_format=source_format,
                                            document_file=document_file,
@@ -1118,11 +1166,11 @@ class TrackSpecificationReader:
                                            number_of_documents=num_docs,
                                            compressed_size_in_bytes=compressed_bytes,
                                            uncompressed_size_in_bytes=uncompressed_bytes,
-                                           target_index=target_idx, target_type=target_type)
+                                           target_index=target_idx, target_type=target_type,
+                                           target_data_stream=target_ds)
                     corpus.documents.append(docs)
                 else:
                     self._error("Unknown source-format [%s] in document corpus [%s]." % (source_format, name))
-
             document_corpora.append(corpus)
         return document_corpora
 
@@ -1257,7 +1305,8 @@ class TrackSpecificationReader:
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op.name, mandatory=False,
                                                     default_value=default_warmup_iterations),
                           iterations=self._r(task_spec, "iterations", error_ctx=op.name, mandatory=False, default_value=default_iterations),
-                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op.name, mandatory=False,
+                          warmup_time_period=self._r(task_spec, "warmup-time-period", error_ctx=op.name,
+                                                     mandatory=False,
                                                      default_value=default_warmup_time_period),
                           time_period=self._r(task_spec, "time-period", error_ctx=op.name, mandatory=False,
                                               default_value=default_time_period),

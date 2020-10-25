@@ -262,6 +262,24 @@
         ]
       }
     },
+    "data-streams": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Data Stream",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the data stream to create."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
     "corpora": {
       "type": "array",
       "minItems": 1,
@@ -290,6 +308,10 @@
           "target-index": {
             "type": "string",
             "description": "The name of the associated index (if any)."
+          },
+          "target-data-stream": {
+            "type": "string",
+            "description": "The name of the associated data stream (if any)."
           },
           "target-type": {
             "type": "string",

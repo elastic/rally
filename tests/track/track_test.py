@@ -86,6 +86,22 @@ class IndexTests(TestCase):
         self.assertEqual("test", str(track.Index("test")))
 
 
+class DataStreamTests(TestCase):
+    def test_matches_exactly(self):
+        self.assertTrue(track.DataStream("test").matches("test"))
+        self.assertFalse(track.DataStream("test").matches(" test"))
+
+    def test_matches_if_no_pattern_is_defined(self):
+        self.assertTrue(track.DataStream("test").matches(pattern=None))
+
+    def test_matches_if_catch_all_pattern_is_defined(self):
+        self.assertTrue(track.DataStream("test").matches(pattern="*"))
+        self.assertTrue(track.DataStream("test").matches(pattern="_all"))
+
+    def test_str(self):
+        self.assertEqual("test", str(track.DataStream("test")))
+
+
 class DocumentCorpusTests(TestCase):
     def test_do_not_filter(self):
         corpus = track.DocumentCorpus("test", documents=[
@@ -128,6 +144,21 @@ class DocumentCorpusTests(TestCase):
         self.assertEqual("test", filtered_corpus.name)
         self.assertEqual(1, len(filtered_corpus.documents))
         self.assertEqual("logs-02", filtered_corpus.documents[0].target_index)
+
+    def test_filter_documents_by_data_streams(self):
+        corpus = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5,
+                            target_data_stream="logs-01"),
+            track.Documents(source_format="other", number_of_documents=6, target_data_stream="logs-02"),
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=7,
+                            target_data_stream="logs-03"),
+            track.Documents(source_format=None, number_of_documents=8, target_data_stream=None)
+        ])
+
+        filtered_corpus = corpus.filter(target_data_streams=["logs-02"])
+        self.assertEqual("test", filtered_corpus.name)
+        self.assertEqual(1, len(filtered_corpus.documents))
+        self.assertEqual("logs-02", filtered_corpus.documents[0].target_data_stream)
 
     def test_filter_documents_by_format_and_indices(self):
         corpus = track.DocumentCorpus("test", documents=[

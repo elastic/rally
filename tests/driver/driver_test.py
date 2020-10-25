@@ -1282,7 +1282,7 @@ class AsyncExecutorTests(TestCase):
                                  challenges=None)
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
-        for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
+        for target_throughput in [10, 100, 1000]:
             task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
                 "body": ["action_metadata_line", "index_line"],
                 "action-metadata-present": True,
@@ -1316,6 +1316,7 @@ class AsyncExecutorTests(TestCase):
 
             sample_size = len(samples)
             self.assertEqual(0, sample_size)
+
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
