@@ -20,6 +20,7 @@ import logging
 import time
 
 import certifi
+import elasticsearch
 import urllib3
 
 from esrally import exceptions, doc_link
@@ -127,31 +128,38 @@ class EsClientFactory:
         except KeyError:
             return False
 
-    def create(self):
-        import elasticsearch
-        instance = elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
+    def _postprocess_client_options(self):
+        """
+        This method is used to do any non init processing of the client options, prior to creating a client
+        """
         if self._is_set(self.client_options, "use_api_key"):
+            self._generate_api_key()
+
+    def _generate_api_key(self):
+        with self._create_sync_client() as instance:
             # an api_key is generated per client, which happens after an initial handshake using an existing auth scheme
             # once this key is generated, a new client is created using the api_key client option and http_auth is removed
             # the reason the options were not removed in place was because of the logic to coalesce the key tuple into a
             # header that the client could use.
             api_key_response = instance.security.create_api_key({"name": "rally-api-key"})
-            self.client_options.pop("http_auth")
+            self.client_options.pop("http_auth", None)
             self.client_options["api_key"] = (api_key_response["id"], api_key_response["api_key"])
-            instance = elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
-        return instance
+
+    def _create_sync_client(self):
+        return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
+
+    def create(self):
+        self._postprocess_client_options()
+        return self._create_sync_client()
 
     def create_async(self):
-        import elasticsearch
         import esrally.async_connection
         import io
         import aiohttp
 
         from elasticsearch.serializer import JSONSerializer
 
-        if self._is_set(self.client_options, "use_api_key"):
-            # Temporarily create a non async version of the client to generate an api_key and put it into client_options
-            self.create()
+        self._postprocess_client_options()
 
         class LazyJSONSerializer(JSONSerializer):
             def loads(self, s):

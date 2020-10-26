@@ -275,6 +275,24 @@ class EsClientFactoryTests(TestCase):
 
         self.assertDictEqual(original_client_options, client_options)
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_use_api_keys(self, _):
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        client_options = {"use_api_key": True, "http_auth": ("a", "b")}
+
+        f = client.EsClientFactory(hosts, client_options)
+        self.assertIsNotNone(f.client_options["http_auth"])
+        f.create()
+        self.assertIsNone(f.client_options.get("http_auth", None))
+        self.assertIsNotNone(f.client_options["api_key"])
+
+        # now assert that not having a http_auth client option does not cause issue
+        del f.client_options["api_key"]
+        self.assertIsNone(f.client_options.get("api_key", None))
+        f.create()
+        self.assertIsNone(f.client_options.get("http_auth", None))
+        self.assertIsNotNone(f.client_options["api_key"])
+
 
 class RestLayerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
