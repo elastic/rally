@@ -1559,7 +1559,8 @@ class CreateSnapshot(Runner):
         wait_for_completion = params.get("wait-for-completion", False)
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
-        body = mandatory(params, "body", repr(self))
+        # just assert, gets set in _default_kw_params
+        mandatory(params, "body", repr(self))
         api_kwargs = self._default_kw_params(params)
         await es.snapshot.create(repository=repository,
                                  snapshot=snapshot,
