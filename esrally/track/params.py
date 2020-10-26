@@ -127,6 +127,18 @@ class ParamSource:
         """
         return self._params
 
+    def _client_params(self):
+        """
+        For use when a ParamSource does not propagate self._params but does use elasticsearch client under the hood
+
+        :param params: A hash containing the source parameters from the track definition JSON
+        :return: all applicable parameters that are global to Rally and apply to the elasticsearch-py client
+        """
+        defaults = {}
+        defaults["request-timeout"] = self._params.get("request-timeout")
+        defaults["headers"] = self._params.get("headers")
+        defaults["opaque-id"] = self._params.get("opaque-id")
+        return defaults
 
 class DelegatingParamSource(ParamSource):
     def __init__(self, track, params, delegate, **kwargs):
@@ -479,6 +491,8 @@ class SearchParamSource(ParamSource):
 
     # pylint: disable=arguments-differ
     def params(self, choice=random.choice):
+        # Ensure we pass global parameters
+        self.query_params.update(self._client_params())
         if self.query_body_params:
             # needs to replace params first
             for path, data in self.query_body_params:
@@ -700,18 +714,18 @@ class ForceMergeParamSource(ParamSource):
             self._target_name = params.get("data-stream", default_target)
 
         self._max_num_segments = params.get("max-num-segments")
-        self._request_timeout = params.get("request-timeout")
         self._poll_period = params.get("poll-period", 10)
         self._mode = params.get("mode", "blocking")
 
     def params(self):
-        return {
+        parsed_params = {
             "index": self._target_name,
             "max-num-segments": self._max_num_segments,
-            "request-timeout": self._request_timeout,
             "mode": self._mode,
             "poll-period": self._poll_period
         }
+        parsed_params.update(self._client_params())
+        return parsed_params
 
 
 def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):

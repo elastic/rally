@@ -1831,13 +1831,19 @@ class SearchParamSourceTests(TestCase):
                     "match_all": {}
                 }
             },
+            "headers": {
+                "header1": "value1"
+            },
             "cache": True
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
+        self.assertIsNone(p["request-timeout"])
+        self.assertIsNone(p["opaque-id"])
+        self.assertDictEqual({"header1": "value1"}, p["headers"])
         self.assertEqual({}, p["request-params"])
         self.assertEqual(True, p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
@@ -1856,13 +1862,25 @@ class SearchParamSourceTests(TestCase):
                     "match_all": {}
                 }
             },
+            "request-timeout": 1.0,
+            "headers": {
+                "header1": "value1",
+                "header2": "value2"
+            },
+            "opaque-id": "12345abcde",
             "cache": True
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("data-stream-1", p["index"])
         self.assertIsNone(p["type"])
+        self.assertEqual(1.0, p["request-timeout"])
+        self.assertDictEqual({
+            "header1": "value1",
+            "header2": "value2"
+        }, p["headers"])
+        self.assertEqual("12345abcde", p["opaque-id"])
         self.assertEqual({}, p["request-params"])
         self.assertEqual(True, p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
@@ -1900,9 +1918,12 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
+        self.assertIsNone(p["request-timeout"])
+        self.assertIsNone(p["headers"])
+        self.assertIsNone(p["opaque-id"])
         self.assertEqual({
             "_source_include": "some_field"
         }, p["request-params"])
@@ -1922,6 +1943,7 @@ class SearchParamSourceTests(TestCase):
             "type": "type1",
             "cache": False,
             "response-compression-enabled": False,
+            "opaque-id": "12345abcde",
             "body": {
                 "query": {
                     "match_all": {}
@@ -1930,10 +1952,13 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("_all", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
+        self.assertIsNone(p["request-timeout"])
+        self.assertIsNone(p["headers"])
+        self.assertEqual("12345abcde", p["opaque-id"])
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
         self.assertEqual(False, p["cache"])
         self.assertEqual(False, p["response-compression-enabled"])
@@ -1950,6 +1975,7 @@ class SearchParamSourceTests(TestCase):
             "data-stream": "data-stream-2",
             "cache": False,
             "response-compression-enabled": False,
+            "request-timeout": 1.0,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1958,9 +1984,12 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("data-stream-2", p["index"])
         self.assertIsNone(p["type"])
+        self.assertEqual(1.0, p["request-timeout"])
+        self.assertIsNone(p["headers"])
+        self.assertIsNone(p["opaque-id"])
         self.assertDictEqual({}, p["request-params"])
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
         self.assertEqual(False, p["cache"])
