@@ -406,6 +406,11 @@
             "type": "string",
             "description": "Type of this operation."
           },
+          "request-timeout": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Client-side per-request timeout in seconds for this operation."
+          },
           "bulk-size": {
             "type": "integer",
             "minimum": 1,
