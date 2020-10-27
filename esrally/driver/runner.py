@@ -50,6 +50,8 @@ def register_default_runners():
     register_runner(track.OperationType.Refresh.name, Retry(Refresh()), async_runner=True)
     register_runner(track.OperationType.CreateIndex.name, Retry(CreateIndex()), async_runner=True)
     register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()), async_runner=True)
+    register_runner(track.OperationType.CreateDataStream.name, Retry(CreateDataStream()), async_runner=True)
+    register_runner(track.OperationType.DeleteDataStream.name, Retry(DeleteDataStream()), async_runner=True)
     register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()), async_runner=True)
     register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()), async_runner=True)
     register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()), async_runner=True)
@@ -127,7 +129,7 @@ class Runner:
     async def __aenter__(self):
         return self
 
-    async def __call__(self, *args):
+    async def __call__(self, es, params):
         """
         Runs the actual method that should be benchmarked.
 
@@ -517,7 +519,7 @@ class BulkIndex(Runner):
 
             bulk_request_size_bytes += line_size
 
-        for idx, item in enumerate(response["items"]):
+        for item in response["items"]:
             # there is only one (top-level) item
             op, data = next(iter(item.items()))
             if op not in ops:
@@ -565,7 +567,7 @@ class BulkIndex(Runner):
         if props.get("errors", False):
             # Reparse fully in case of errors - this will be slower
             parsed_response = json.loads(response.getvalue())
-            for idx, item in enumerate(parsed_response["items"]):
+            for item in parsed_response["items"]:
                 data = next(iter(item.values()))
                 if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1
@@ -1031,6 +1033,22 @@ class CreateIndex(Runner):
         return "create-index"
 
 
+class CreateDataStream(Runner):
+    """
+    Execute the `create data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-data-stream.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        data_streams = mandatory(params, "data-streams", self)
+        request_params = mandatory(params, "request-params", self)
+        for data_stream in data_streams:
+            await es.indices.create_data_stream(data_stream, params=request_params)
+        return len(data_streams), "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "create-data-stream"
+
+
 class DeleteIndex(Runner):
     """
     Execute the `delete index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_.
@@ -1056,6 +1074,33 @@ class DeleteIndex(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-index"
+
+
+class DeleteDataStream(Runner):
+    """
+    Execute the `delete data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-data-stream.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        ops = 0
+
+        data_streams = mandatory(params, "data-streams", self)
+        only_if_exists = mandatory(params, "only-if-exists", self)
+        request_params = mandatory(params, "request-params", self)
+
+        for data_stream in data_streams:
+            if not only_if_exists:
+                await es.indices.delete_data_stream(data_stream, ignore=[404], params=request_params)
+                ops += 1
+            elif only_if_exists and await es.indices.exists(index=data_stream):
+                self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
+                await es.indices.delete_data_stream(data_stream, params=request_params)
+                ops += 1
+
+        return ops, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-data-stream"
 
 
 class CreateIndexTemplate(Runner):

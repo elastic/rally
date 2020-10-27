@@ -608,7 +608,7 @@ class BarCharts:
     @staticmethod
     def index(environment, race_configs, title):
         filters = []
-        for idx, race_config in enumerate(race_configs):
+        for race_config in race_configs:
             label = index_label(race_config)
             # the assumption is that we only have one bulk task
             for bulk_task in race_config.bulk_tasks:
