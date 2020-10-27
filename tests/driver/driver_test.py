@@ -1282,7 +1282,7 @@ class AsyncExecutorTests(TestCase):
                                  challenges=None)
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
-        for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [245, 255]}.items():
+        for target_throughput in [10, 100, 1000]:
             task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
                 "body": ["action_metadata_line", "index_line"],
                 "action-metadata-present": True,
@@ -1316,6 +1316,7 @@ class AsyncExecutorTests(TestCase):
 
             sample_size = len(samples)
             self.assertEqual(0, sample_size)
+
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1456,6 +1457,26 @@ class AsyncExecutorTests(TestCase):
             "http-status": 404,
             "error-type": "transport",
             "error-description": "not found (the requested document could not be found)",
+            "success": False
+        }, request_meta_data)
+
+    @run_async
+    async def test_execute_single_with_http_413(self):
+        import elasticsearch
+        es = None
+        params = None
+        runner = mock.Mock(side_effect=
+                           as_future(exception=elasticsearch.NotFoundError(413, b"", b"")))
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error="continue-on-non-fatal")
+
+        self.assertEqual(0, ops)
+        self.assertEqual("ops", unit)
+        self.assertEqual({
+            "http-status": 413,
+            "error-type": "transport",
+            "error-description": "",
             "success": False
         }, request_meta_data)
 

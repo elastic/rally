@@ -28,7 +28,7 @@ class TimeTests(TestCase):
         stop_watch = esrally.time.Clock.stop_watch()
         stop_watch.start()
         prev_split_time = 0
-        for i in range(3):
+        for _ in range(3):
             time.sleep(wait_period_seconds)
             split_time = stop_watch.split_time()
             self.assertLess(prev_split_time, split_time)

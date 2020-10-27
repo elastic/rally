@@ -25,7 +25,8 @@ WORKDIR /rally
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN pip3 install /rally
+RUN pip3 install --upgrade pip setuptools wheel
+RUN pip3 install --use-feature=2020-resolver /rally
 
 ################################################################################
 # Build stage 1 (the actual Rally image):
