@@ -1733,4 +1733,4 @@ def generate(cfg):
                 print(json.dumps(record), file=f)
     else:
         for record in structures:
-              print(json.dumps(structures))
+            print(json.dumps(record))
