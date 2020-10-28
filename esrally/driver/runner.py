@@ -1131,7 +1131,7 @@ class DeleteComponentTemplate(Runner):
 
     async def __call__(self, es, params):
         template_names = mandatory(params, "templates", self)
-        only_if_exists = params.get("only-if-exists", False)
+        only_if_exists = mandatory(params, "only-if-exists", self)
         request_params = mandatory(params, "request-params", self)
 
         async def _exists(name):
