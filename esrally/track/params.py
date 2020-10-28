@@ -21,6 +21,8 @@ import math
 import numbers
 import operator
 import random
+from abc import ABC
+
 import time
 import types
 from enum import Enum
@@ -395,9 +397,8 @@ class DeleteComponentTemplateParamSource(ParamSource):
         }
 
 
-class CreateComposableTemplateParamSource(ParamSource):
-    def __init__(self, track, params, templates=None, **kwargs):
-        templates = track.composable_templates if templates is None else templates
+class CreateTemplateParamSource(ABC, ParamSource):
+    def __init__(self, track, params, templates, **kwargs):
         super().__init__(track, params, **kwargs)
         self.request_params = params.get("request-params", {})
         self.template_definitions = []
@@ -445,9 +446,14 @@ class CreateComposableTemplateParamSource(ParamSource):
         }
 
 
-class CreateComponentTemplateParamSource(CreateComposableTemplateParamSource):
+class CreateComposableTemplateParamSource(CreateTemplateParamSource):
     def __init__(self, track, params, **kwargs):
-        super().__init__(track, params, templates=track.component_templates, **kwargs)
+        super().__init__(track, params, track.composable_templates, **kwargs)
+
+
+class CreateComponentTemplateParamSource(CreateTemplateParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, track.component_templates, **kwargs)
 
 # TODO #365: This contains "body-params" as an undocumented feature. Get more experience and expand it to make it actually usable.
 #
