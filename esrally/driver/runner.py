@@ -1108,7 +1108,8 @@ class DeleteDataStream(Runner):
 
 class CreateComponentTemplate(Runner):
     """
-    Execute the `PUT component template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_.
+    Execute the `PUT component template API
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_.
     """
 
     async def __call__(self, es, params):
