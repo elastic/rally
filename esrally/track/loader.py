@@ -1055,7 +1055,7 @@ class TrackSpecificationReader:
             idx_tmpl_src.load_template_from_string(f.read())
             template_content = self._load_template(
                 idx_tmpl_src.assembled_source,
-                f"definition for index template {name} in {template_file}")
+                f"definition for component template {name} in {template_file}")
         return track.ComponentTemplate(name, template_content)
 
     def _create_index_template(self, tpl_spec, mapping_dir):

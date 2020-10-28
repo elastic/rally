@@ -2543,7 +2543,8 @@ class DeleteComposableTemplateRunnerTests(TestCase):
             ],
             "request-params": {
                 "timeout": 60
-            }
+            },
+            "only-if-exists": False
         }
         result = await r(es, params)
 

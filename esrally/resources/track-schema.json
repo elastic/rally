@@ -207,7 +207,7 @@
       "type": "object",
       "description": "Meta-information which will be added to each metrics-record of this track."
     },
-    "component_templates": {
+    "component-templates": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
@@ -230,7 +230,7 @@
         ]
       }
     },
-    "composable_templates": {
+    "composable-templates": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,

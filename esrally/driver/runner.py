@@ -23,7 +23,6 @@ import sys
 import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
-from elasticsearch.client import _make_path
 import ijson
 
 from esrally import exceptions, track
@@ -1109,12 +1108,12 @@ class DeleteDataStream(Runner):
 
 class CreateComponentTemplate(Runner):
     """
-    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_.
+    Execute the `PUT component template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_.
     """
 
     async def __call__(self, es, params):
         templates = mandatory(params, "templates", self)
-        request_params = params.get("request-params", {})
+        request_params = mandatory(params, "request-params", self)
         for template, body in templates:
             await es.cluster.put_component_template(name=template, body=body,
                                                     params=request_params)
@@ -1126,16 +1125,18 @@ class CreateComponentTemplate(Runner):
 
 class DeleteComponentTemplate(Runner):
     """
-    Execute the `PUT index template API
+    Execute the `DELETE component template API
     <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-component-template.html>`_.
     """
 
     async def __call__(self, es, params):
         template_names = mandatory(params, "templates", self)
         only_if_exists = params.get("only-if-exists", False)
-        request_params = params.get("request-params", {})
+        request_params = mandatory(params, "request-params", self)
 
         async def _exists(name):
+            from elasticsearch.client import _make_path
+            # currently not supported by client and hence custom request
             return await es.transport.perform_request(
                 "HEAD", _make_path("_component_template", name)
             )
@@ -1162,7 +1163,7 @@ class CreateComposableTemplate(Runner):
 
     async def __call__(self, es, params):
         templates = mandatory(params, "templates", self)
-        request_params = params.get("request-params", {})
+        request_params = mandatory(params, "request-params", self)
         for template, body in templates:
             await es.cluster.put_index_template(name=template, body=body,
                                                     params=request_params)
@@ -1178,12 +1179,12 @@ class DeleteComposableTemplate(Runner):
     """
 
     async def __call__(self, es, params):
-        template_names = mandatory(params, "templates", self)
-        only_if_exists = params.get("only-if-exists", False)
-        request_params = params.get("request-params", {})
+        templates = mandatory(params, "templates", self)
+        only_if_exists = mandatory(params, "only-if-exists", self)
+        request_params = mandatory(params, "request-params", self)
         ops_count = 0
 
-        for template_name, delete_matching_indices, index_pattern in template_names:
+        for template_name, delete_matching_indices, index_pattern in templates:
             if not only_if_exists:
                 await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
