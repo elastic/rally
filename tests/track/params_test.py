@@ -1331,6 +1331,9 @@ class ParamsRegistrationTests(TestCase):
                 "class-key": self._params["parameter"]
             }
 
+        def __str__(self):
+            return "test param source"
+
     def test_can_register_legacy_function_as_param_source(self):
         source_name = "legacy-params-test-function-param-source"
 
@@ -1366,6 +1369,13 @@ class ParamsRegistrationTests(TestCase):
         self.assertEqual({"class-key": 42}, source.params())
 
         params._unregister_param_source_for_name(source_name)
+
+    def test_cannot_register_an_instance_as_param_source(self):
+        source_name = "params-test-class-param-source"
+        # we create an instance, instead of passing the class
+        with self.assertRaisesRegex(exceptions.RallyAssertionError,
+                                    "Parameter source \\[test param source\\] must be either a function or a class\\."):
+            params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceClass())
 
 
 class SleepParamSourceTests(TestCase):
