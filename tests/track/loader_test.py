@@ -1981,7 +1981,6 @@ class TrackSpecificationReaderTests(TestCase):
             "role": "secondary"
         }, docs_secondary.meta_data)
 
-
         # challenges
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("default-challenge", resulting_track.challenges[0].name)

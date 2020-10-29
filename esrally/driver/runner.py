@@ -169,6 +169,7 @@ class Runner:
             headers.update({"x-opaque-id": opaque_id})
         return request_params, headers
 
+
 class Delegator:
     """
     Mixin to unify delegate handling

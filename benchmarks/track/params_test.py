@@ -55,6 +55,7 @@ def test_search_params_with_one_body_param_small(benchmark):
     })
     benchmark(search.params)
 
+
 @pytest.mark.benchmark(
     group="search-params",
     warmup="on",

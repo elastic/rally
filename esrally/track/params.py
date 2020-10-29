@@ -146,6 +146,7 @@ class ParamSource:
         defaults["opaque-id"] = self._params.get("opaque-id")
         return defaults
 
+
 class DelegatingParamSource(ParamSource):
     def __init__(self, track, params, delegate, **kwargs):
         super().__init__(track, params, **kwargs)

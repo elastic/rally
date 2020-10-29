@@ -2387,7 +2387,6 @@ class CreateDataStreamRunnerTests(TestCase):
             mock.call("data-stream-B", params=request_params)
         ])
 
-
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_param_data_streams_mandatory(self, es):
