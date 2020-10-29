@@ -321,6 +321,11 @@ class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.first_request = True
+
     async def __call__(self, es, params):
         """
         Runs one bulk indexing operation.
@@ -332,7 +337,8 @@ class BulkIndex(Runner):
         It expects a parameter dict with the following mandatory keys:
 
         * ``body``: containing all documents for the current bulk request.
-        * ``bulk-size``: the number of documents in this bulk.
+        * ``bulk-size``: An indication of the bulk size denoted in ``unit``.
+        * ``unit``: The name of the unit in which the bulk size is provided.
         * ``action_metadata_present``: if ``True``, assume that an action and metadata line is present (meaning only half of the lines
         contain actual documents to index)
         * ``index``: The name of the affected index in case ``action_metadata_present`` is ``False``.
@@ -351,18 +357,16 @@ class BulkIndex(Runner):
          ``None`` and potentially falls back to the global timeout setting.
 
         Returned meta data
-        `
+
         The following meta data are always returned:
 
         * ``index``: name of the affected index. May be `None` if it could not be derived.
-        * ``bulk-size``: bulk size, e.g. 5.000.
-        * ``bulk-request-size-bytes``: size of the full bulk request in bytes
-        * ``total-document-size-bytes``: size of all documents contained in the bulk request in bytes
-        * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
-        * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
+        * ``weight``: operation-agnostic representation of the bulk size denoted in ``unit``.
+        * ``unit``: The unit in which to interpret ``weight``.
         * ``success``: A boolean indicating whether the bulk request has succeeded.
-        * ``success-count``: Number of successfully processed items for this request (denoted in ``unit``).
-        * ``error-count``: Number of failed items for this request (denoted in ``unit``).
+        * ``success-count``: Number of successfully processed bulk items for this request. This value will only be
+                             determined in case of errors or the bulk-size has been specified in docs.
+        * ``error-count``: Number of failed bulk items for this request.
         * ``took``` Value of the the ``took`` property in the bulk response.
 
         If ``detailed-results`` is ``True`` the following meta data are returned in addition:
@@ -384,7 +388,6 @@ class BulkIndex(Runner):
                 "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
-                "bulk-size": 5000,
                 "success": True,
                 "success-count": 5000,
                 "error-count": 0,
@@ -397,7 +400,6 @@ class BulkIndex(Runner):
                 "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
-                "bulk-size": 5000,
                 "success": False,
                 "success-count": 4000,
                 "error-count": 1000,
@@ -411,7 +413,6 @@ class BulkIndex(Runner):
                 "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
-                "bulk-size": 5000,
                 "bulk-request-size-bytes": 2250000,
                 "total-document-size-bytes": 2000000,
                 "success": True,
@@ -443,7 +444,6 @@ class BulkIndex(Runner):
                 "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
-                "bulk-size": 5000,
                 "bulk-request-size-bytes": 2250000,
                 "total-document-size-bytes": 2000000,
                 "success": False,
@@ -494,7 +494,14 @@ class BulkIndex(Runner):
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)
-
+        # TODO: Remove this bwc-layer and turn "unit" into a mandatory parameter
+        # unit = mandatory(params, "unit", self)
+        if self.first_request:
+            self.first_request = False
+            if "unit" not in params:
+                self.logger.warning("Specify the mandatory parameter [unit] in the bulk parameter source. "
+                                    "Otherwise this track will fail with the next Rally version.")
+        unit = params.get("unit", "docs")
         # parse responses lazily in the standard case - responses might be large thus parsing skews results and if no
         # errors have occurred we only need a small amount of information from the potentially large response.
         if not detailed_results:
@@ -507,23 +514,23 @@ class BulkIndex(Runner):
         else:
             response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
 
-        stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
+        stats = self.detailed_stats(params, response) if detailed_results else self.simple_stats(bulk_size, unit, response)
 
         meta_data = {
             "index": params.get("index"),
             "weight": bulk_size,
-            "unit": "docs",
-            "bulk-size": bulk_size
+            "unit": unit,
         }
         meta_data.update(stats)
         if not stats["success"]:
             meta_data["error-type"] = "bulk"
         return meta_data
 
-    def detailed_stats(self, params, bulk_size, response):
+    def detailed_stats(self, params, response):
         ops = {}
         shards_histogram = OrderedDict()
         bulk_error_count = 0
+        bulk_success_count = 0
         error_details = set()
         bulk_request_size_bytes = 0
         total_document_size_bytes = 0
@@ -567,10 +574,12 @@ class BulkIndex(Runner):
             if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                 bulk_error_count += 1
                 self.extract_error_details(error_details, data)
+            else:
+                bulk_success_count += 1
         stats = {
             "took": response.get("took"),
             "success": bulk_error_count == 0,
-            "success-count": bulk_size - bulk_error_count,
+            "success-count": bulk_success_count,
             "error-count": bulk_error_count,
             "ops": ops,
             "shards_histogram": list(shards_histogram.values()),
@@ -585,13 +594,16 @@ class BulkIndex(Runner):
 
         return stats
 
-    def simple_stats(self, bulk_size, response):
+    def simple_stats(self, bulk_size, unit, response):
+        bulk_success_count = bulk_size if unit == "docs" else None
         bulk_error_count = 0
         error_details = set()
         # parse lazily on the fast path
         props = parse(response, ["errors", "took"])
 
         if props.get("errors", False):
+            # determine success count regardless of unit because we need to iterate through all items anyway
+            bulk_success_count = 0
             # Reparse fully in case of errors - this will be slower
             parsed_response = json.loads(response.getvalue())
             for item in parsed_response["items"]:
@@ -599,10 +611,12 @@ class BulkIndex(Runner):
                 if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1
                     self.extract_error_details(error_details, data)
+                else:
+                    bulk_success_count += 1
         stats = {
             "took": props.get("took"),
             "success": bulk_error_count == 0,
-            "success-count": bulk_size - bulk_error_count,
+            "success-count": bulk_success_count,
             "error-count": bulk_error_count
         }
         if bulk_error_count > 0:

@@ -265,7 +265,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(8, result["took"])
         self.assertIsNone(result["index"])
         self.assertEqual(3, result["weight"])
-        self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(True, result["success"])
         self.assertEqual(0, result["error-count"])
@@ -301,7 +300,6 @@ class BulkIndexRunnerTests(TestCase):
 
         self.assertEqual(8, result["took"])
         self.assertEqual(3, result["weight"])
-        self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(True, result["success"])
         self.assertEqual(0, result["error-count"])
@@ -340,7 +338,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(8, result["took"])
         self.assertEqual("test-index", result["index"])
         self.assertEqual(3, result["weight"])
-        self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(True, result["success"])
         self.assertEqual(0, result["error-count"])
@@ -372,7 +369,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(8, result["took"])
         self.assertEqual("test-index", result["index"])
         self.assertEqual(3, result["weight"])
-        self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(True, result["success"])
         self.assertEqual(0, result["error-count"])
@@ -433,6 +429,7 @@ class BulkIndexRunnerTests(TestCase):
                     "index_line\n",
             "action-metadata-present": True,
             "bulk-size": 3,
+            "unit": "docs",
             "index": "test"
         }
 
@@ -441,7 +438,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual("test", result["index"])
         self.assertEqual(5, result["took"])
         self.assertEqual(3, result["weight"])
-        self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(False, result["success"])
         self.assertEqual(2, result["error-count"])
@@ -500,6 +496,7 @@ class BulkIndexRunnerTests(TestCase):
             "action-metadata-present": True,
             "detailed-results": False,
             "bulk-size": 3,
+            "unit": "docs",
             "index": "test"
         }
 
@@ -508,7 +505,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual("test", result["index"])
         self.assertEqual(20, result["took"])
         self.assertEqual(3, result["weight"])
-        self.assertEqual(3, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(False, result["success"])
         self.assertEqual(3, result["error-count"])
@@ -607,6 +603,7 @@ class BulkIndexRunnerTests(TestCase):
             "action-metadata-present": True,
             "detailed-results": False,
             "bulk-size": 4,
+            "unit": "docs",
             "index": "test"
         }
 
@@ -616,7 +613,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(30, result["took"])
         self.assertNotIn("ingest_took", result, "ingest_took is not extracted with simple stats")
         self.assertEqual(4, result["weight"])
-        self.assertEqual(4, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(False, result["success"])
         self.assertEqual(2, result["error-count"])
@@ -751,6 +747,7 @@ class BulkIndexRunnerTests(TestCase):
                     '{"location" : [-0.1533367, 51.5261779]}\n',
             "action-metadata-present": True,
             "bulk-size": 6,
+            "unit": "docs",
             "detailed-results": True,
             "index": "test"
         }
@@ -761,7 +758,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(30, result["took"])
         self.assertEqual(20, result["ingest_took"])
         self.assertEqual(6, result["weight"])
-        self.assertEqual(6, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(False, result["success"])
         self.assertEqual(3, result["error-count"])
@@ -850,6 +846,7 @@ class BulkIndexRunnerTests(TestCase):
                     '{"location" : [-0.1485188, 51.5250666]}\n',
             "action-metadata-present": True,
             "bulk-size": 1,
+            "unit": "docs",
             "detailed-results": True,
             "index": "test"
         }
@@ -860,7 +857,6 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(30, result["took"])
         self.assertEqual(20, result["ingest_took"])
         self.assertEqual(1, result["weight"])
-        self.assertEqual(1, result["bulk-size"])
         self.assertEqual("docs", result["unit"])
         self.assertEqual(True, result["success"])
         self.assertEqual(0, result["error-count"])
@@ -927,6 +923,7 @@ class BulkIndexRunnerTests(TestCase):
             },
             "action-metadata-present": True,
             "bulk-size": 1,
+            "unit": "docs",
             "detailed-results": True,
             "index": "test"
         }

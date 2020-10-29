@@ -1333,12 +1333,14 @@ class AsyncExecutor:
                         await asyncio.sleep(rest)
                 request_context = self.es["default"].init_request_context()
                 processing_start = time.perf_counter()
+                self.schedule_handle.before_request(processing_start)
                 total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                 processing_end = time.perf_counter()
                 processing_time = processing_end - processing_start
                 stop = request_context["request_end"]
                 service_time = request_context["request_end"] - request_context["request_start"]
                 time_period = stop - total_start
+                self.schedule_handle.after_request(processing_end, total_ops, total_ops_unit, request_meta_data)
                 # Allow runners to override the throughput calculation in very specific circumstances. Usually, Rally
                 # assumes that throughput is the "amount of work" (determined by the "weight") per unit of time
                 # (determined by the elapsed time period). However, in certain cases (e.g. shard recovery or other
@@ -1625,13 +1627,17 @@ def schedule_for(task, client_index, parameter_source):
     logger = logging.getLogger(__name__)
     op = task.operation
     num_clients = task.clients
-    sched = scheduler.scheduler_for(task.schedule, task.params)
+    sched = scheduler.scheduler_for(task)
     # guard all logging statements with the client index and only emit them for the first client. This information is
     # repetitive and may cause issues in thespian with many clients (an excessive number of actor messages is sent).
     if client_index == 0:
         logger.info("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)
     params_for_op = parameter_source.partition(client_index, num_clients)
+    if hasattr(sched, "parameter_source"):
+        if client_index == 0:
+            logger.debug("Setting parameter source [%s] for scheduler [%s]", params_for_op, sched)
+        sched.parameter_source = params_for_op
 
     if requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
@@ -1698,6 +1704,12 @@ class ScheduleHandle:
         #import asyncio
         #self.io_pool_exc = ThreadPoolExecutor(max_workers=1)
         #self.loop = asyncio.get_event_loop()
+
+    def before_request(self, now):
+        self.sched.before_request(now)
+
+    def after_request(self, now, weight, unit, meta_data):
+        self.sched.after_request(now, weight, unit, meta_data)
 
     async def __call__(self):
         next_scheduled = 0

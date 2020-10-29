@@ -1055,6 +1055,7 @@ For cases, where you want to provide a progress indication, you can implement th
 
     Rally will still treat such a runner like any other. If you want to poll status at certain intervals then limit the number of calls by specifying the ``target-throughput`` property on the corresponding task.
 
+.. _adding_tracks_custom_schedulers:
 
 Custom schedulers
 ^^^^^^^^^^^^^^^^^
@@ -1063,11 +1064,18 @@ Custom schedulers
 
     Your scheduler is on a performance-critical code-path. Double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
 
-If you want to rate-limit execution of tasks, you can specify a ``target-throughput`` (in operations per second). For example, Rally attempts to run this term query 20 times per second::
+If you want to rate-limit execution of tasks, you can specify a ``target-throughput`` either as a number to specify the operations per second or, if supported by the operation, as string denoting the target throughput with a different unit. For example, Rally attempts to run this term query 20 times per second::
 
   {
     "operation": "term",
     "target-throughput": 20
+  }
+
+This is identical to::
+
+  {
+    "operation": "term",
+    "target-throughput": "20 ops/s"
   }
 
 By default, Rally uses a `deterministic distribution <https://en.wikipedia.org/wiki/Degenerate_distribution>`_ to determine when to schedule the next operation. Hence it executes the term query at 0, 50ms, 100ms, 150ms and so on. The scheduler is also aware of the number of clients. Consider this example::
@@ -1080,52 +1088,32 @@ By default, Rally uses a `deterministic distribution <https://en.wikipedia.org/w
 
 If Rally would not take the number of clients into account and would still issue requests (from each of the four clients) at the same points in time (i.e. 0, 50ms, 100ms, 150ms, ...), it would run at a target throughput of 4 * 20 = 80 operations per second. Hence, Rally will automatically reduce the rate at which each client will execute requests. Each client will issue requests at 0, 200ms, 400ms, 600ms, 800ms, 1000ms and so on. Each client issues five requests per second but as there are four of them, we still have a target throughput of 20 operations per second. You should keep this in mind, when writing your own custom schedules.
 
-To create a custom scheduler, create a file ``track.py`` next to ``track.json`` and implement the following two functions::
+To create a custom scheduler, create a file ``track.py`` next to ``track.json`` and implement the scheduler class::
 
     import random
 
-    def random_schedule(current):
-        return current + random.randint(10, 900) / 1000.0
+    class RandomScheduler:
+        def __init__(self, task, target_throughput):
+            self.rate = 1 / target_throughput
+            # scale accordingly with the number of clients
+            self.variation = task.clients * params.get("variation-millis", 10)
 
+        def next(self, current):
+            # roughly matches the target throughput with some random variation
+            return current + self.rate + random.randint(-self.variation // 2, self.variation // 2) / 1000.0
+
+The scheduler class also needs to be registered::
 
     def register(registry):
-        registry.register_scheduler("my_random", random_schedule)
+        registry.register_scheduler("my-random", RandomScheduler)
 
 You can then use your custom scheduler as follows::
 
   {
     "operation": "term",
-    "schedule": "my_random"
+    "schedule": "my-random",
+    "clients": 10,
+    "target-throughput": 100,
+    "variation-millis": 1
   }
-
-The function ``random_schedule`` returns a floating point number which represents the next point in time when Rally should execute the given operation. This point in time is measured in seconds relative to the beginning of the execution of this task. The parameter ``current`` is the last return value of your function and is ``0.0`` for the first invocation. So, for example, this scheduler could return the following series: 0, 0.119, 0.622, 1.29, 1.343, 1.984, 2.233.
-
-This implementation is usually not sufficient as it does not take into account the number of clients. Therefore, you typically want to implement a full-blown scheduler which can also take parameters. Below is an example for our random scheduler::
-
-    import random
-
-    class RandomScheduler:
-        def __init__(self, params):
-            # assume one client by default
-            clients = params.get("clients", 1)
-            # scale accordingly with the number of clients!
-            self.lower_bound = clients * params.get("lower-bound-millis", 10)
-            self.upper_bound = clients * params.get("upper-bound-millis", 900)
-
-        def next(self, current):
-            return current + random.randint(self.lower_bound, self.upper_bound) / 1000.0
-
-
-    def register(registry):
-        registry.register_scheduler("my_random", RandomScheduler)
-
-This implementation achieves the same rate independent of the number of clients. Additionally, we can pass the lower and upper bound for the random function from the track::
-
-    {
-        "operation": "term",
-        "schedule": "my_random",
-        "clients": 4,
-        "lower-bound-millis": 50,
-        "upper-bound-millis": 250
-    }
 

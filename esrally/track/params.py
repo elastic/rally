@@ -864,7 +864,8 @@ def bulk_generator(readers, pipeline, original_params):
                 "action-metadata-present": True,
                 "body": bulk,
                 # This is not always equal to the bulk_size we get as parameter. The last bulk may be less than the bulk size.
-                "bulk-size": docs_in_bulk
+                "bulk-size": docs_in_bulk,
+                "unit": "docs"
             }
             if pipeline:
                 bulk_params["pipeline"] = pipeline

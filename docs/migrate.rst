@@ -1,6 +1,63 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.0.3
+------------------------
+
+Scheduler API has changed
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With Rally 2.0.3, the scheduler API has changed. The existing API still works but is deprecated and will be removed in Rally 2.1.0:
+
+* Scheduler functions should be replaced by scheduler classes
+* The constructor for scheduler classes changes. Instead of receiving ``params``, it receives the entire ``task`` and the precalculated target throughput.
+
+The following scheduler is implemented as a function. The target throughput is hardcoded to one operation per second::
+
+    def scheduler_function(current):
+        return current + 1
+
+This needs to be reimplemented as follows. We assume that the property ``target-throughput`` is now specified on the respective task instead of hard-coding it in the scheduler. Rally will calculate the correct target throughput and inject it into the scheduler class::
+
+    class SchedulerClass:
+        def __init__(self, task, target_throughput):
+            self.rate = 1 / target_throughput
+
+        def next(self, current):
+            return current + self.rate
+
+
+Also schedulers implemented as a class, need to be changed::
+
+    class MyScheduler:
+        def __init__(self, params):
+            # assume one client by default
+            self.clients = params.get("clients", 1)
+            target_throughput = params["target-throughput"] / self.clients
+            self.rate = 1 / target_throughput
+
+        def next(self, current):
+            return current + self.rate
+
+To stay compatible with Rally 2.0.3, this class needs to be changed as follows::
+
+    class MyScheduler:
+        # target throughput is already calculated by Rally and is injected here
+        # Additional parameters can be retrieved from the task if needed (task.params).
+        def __init__(self, task, target_throughput):
+            self.rate = 1 / target_throughput
+
+        def next(self, current):
+            return current + self.rate
+
+
+For more details, please see the :ref:`updated scheduler documentation <adding_tracks_custom_schedulers>`.
+
+bulk-size metrics property is dropped
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Metrics records for bulk request don't contain the ``bulk-size`` property anymore. Please use the ``weight`` property instead and consider the ``unit`` property to interpret the value.
+
 Migrating to Rally 2.0.1
 ------------------------
 

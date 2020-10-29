@@ -90,8 +90,15 @@
                       "description": "Defines the scheduling strategy that is used for throughput throttled operations. Out of the box, Rally supports 'deterministic' (default) and 'poisson' but you can implement your own schedules."
                     },
                     "target-throughput": {
-                      "type": "number",
-                      "minimum": 0,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
                       "description": "Defines the number of operations per second that Rally should attempt to run."
                     },
                     "target-interval": {
@@ -146,8 +153,15 @@
             "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
           },
           "target-throughput": {
-            "type": "number",
-            "minimum": 0,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "string"
+              }
+            ],
             "description": "Defines the number of operations per second that Rally should attempt to run."
           },
           "target-interval": {

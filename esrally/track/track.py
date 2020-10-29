@@ -15,6 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import collections
+import numbers
+import re
 from enum import Enum, unique
 
 from esrally import exceptions
@@ -710,7 +713,12 @@ class Parallel:
         return isinstance(other, type(self)) and self.tasks == other.tasks
 
 
+Throughput = collections.namedtuple("Throughput", ["value", "unit"])
+
+
 class Task:
+    THROUGHPUT_PATTERN = re.compile(r"(?P<value>(\d*\.)?\d+)\s(?P<unit>\w+/s)")
+
     def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None, time_period=None,
                  clients=1,
                  completes_parent=False, schedule="deterministic", params=None):
@@ -729,6 +737,49 @@ class Task:
 
     def matches(self, task_filter):
         return task_filter.matches(self)
+
+    @property
+    def target_throughput(self):
+        def numeric(v):
+            # While booleans can be converted to a number (False -> 0, True -> 1), we don't want to allow that here
+            return isinstance(v, numbers.Number) and not isinstance(v, bool)
+
+        target_throughput = self.params.get("target-throughput")
+        target_interval = self.params.get("target-interval")
+
+        if target_interval is not None and target_throughput is not None:
+            raise exceptions.InvalidSyntax(f"Task [{self}] specifies target-interval [{target_interval}] and "
+                                           f"target-throughput [{target_throughput}] but only one of them is allowed.")
+
+        value = None
+        unit = "ops/s"
+
+        if target_interval:
+            if not numeric(target_interval):
+                raise exceptions.InvalidSyntax(f"Target interval [{target_interval}] for task [{self}] must be numeric.")
+            value = 1 / float(target_interval)
+        elif target_throughput:
+            if isinstance(target_throughput, str):
+                matches = re.match(Task.THROUGHPUT_PATTERN, target_throughput)
+                if matches:
+                    value = float(matches.group("value"))
+                    unit = matches.group("unit")
+                else:
+                    raise exceptions.InvalidSyntax(f"Task [{self}] specifies invalid target throughput [{target_throughput}].")
+            elif numeric(target_throughput):
+                value = float(target_throughput)
+            else:
+                raise exceptions.InvalidSyntax(f"Target throughput [{target_throughput}] for task [{self}] "
+                                               f"must be string or numeric.")
+
+        if value:
+            return Throughput(value, unit)
+        else:
+            return None
+
+    @property
+    def throttled(self):
+        return self.target_throughput is not None
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)
