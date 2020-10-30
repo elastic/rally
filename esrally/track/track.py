@@ -144,7 +144,7 @@ class IndexTemplate:
         return self.name == other.name
 
 
-class ComponentTemplate(IndexTemplate):
+class ComponentTemplate:
     """
     Defines a component template in Elasticsearch.
     """
@@ -155,7 +155,23 @@ class ComponentTemplate(IndexTemplate):
         :param name: Name of the index template. Mandatory.
         :param content: The content of the corresponding template. Mandatory.
         """
-        super().__init__(name, None, content, delete_matching_indices=False)
+        self.name = name
+        self.content = content
+
+    def __str__(self, *args, **kwargs):
+        return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
 
 
 class Documents:
