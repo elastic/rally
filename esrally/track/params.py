@@ -16,6 +16,7 @@
 # under the License.
 
 import collections
+import inspect
 import logging
 import math
 import numbers
@@ -24,7 +25,6 @@ import random
 from abc import ABC
 
 import time
-import types
 from enum import Enum
 
 from esrally import exceptions
@@ -46,18 +46,24 @@ def param_source_for_operation(op_type, track, params, task_name):
 def param_source_for_name(name, track, params):
     param_source = __PARAM_SOURCES_BY_NAME[name]
 
-    # we'd rather use callable() but this will erroneously also classify a class as callable...
-    if isinstance(param_source, types.FunctionType):
+    if inspect.isfunction(param_source):
         return DelegatingParamSource(track, params, param_source)
     else:
         return param_source(track, params)
 
 
+def ensure_valid_param_source(param_source):
+    if not inspect.isfunction(param_source) and not inspect.isclass(param_source):
+        raise exceptions.RallyAssertionError(f"Parameter source [{param_source}] must be either a function or a class.")
+
+
 def register_param_source_for_operation(op_type, param_source_class):
+    ensure_valid_param_source(param_source_class)
     __PARAM_SOURCES_BY_OP[op_type.name] = param_source_class
 
 
 def register_param_source_for_name(name, param_source_class):
+    ensure_valid_param_source(param_source_class)
     __PARAM_SOURCES_BY_NAME[name] = param_source_class
 
 
@@ -129,6 +135,19 @@ class ParamSource:
         value: parameter value).
         """
         return self._params
+
+    def _client_params(self):
+        """
+        For use when a ParamSource does not propagate self._params but does use elasticsearch client under the hood
+
+        :param params: A hash containing the source parameters from the track definition JSON
+        :return: all applicable parameters that are global to Rally and apply to the elasticsearch-py client
+        """
+        defaults = {}
+        defaults["request-timeout"] = self._params.get("request-timeout")
+        defaults["headers"] = self._params.get("headers")
+        defaults["opaque-id"] = self._params.get("opaque-id")
+        return defaults
 
 
 class DelegatingParamSource(ParamSource):
@@ -566,6 +585,8 @@ class SearchParamSource(ParamSource):
 
     # pylint: disable=arguments-differ
     def params(self, choice=random.choice):
+        # Ensure we pass global parameters
+        self.query_params.update(self._client_params())
         if self.query_body_params:
             # needs to replace params first
             for path, data in self.query_body_params:
@@ -787,18 +808,18 @@ class ForceMergeParamSource(ParamSource):
             self._target_name = params.get("data-stream", default_target)
 
         self._max_num_segments = params.get("max-num-segments")
-        self._request_timeout = params.get("request-timeout")
         self._poll_period = params.get("poll-period", 10)
         self._mode = params.get("mode", "blocking")
 
     def params(self):
-        return {
+        parsed_params = {
             "index": self._target_name,
             "max-num-segments": self._max_num_segments,
-            "request-timeout": self._request_timeout,
             "mode": self._mode,
             "poll-period": self._poll_period
         }
+        parsed_params.update(self._client_params())
+        return parsed_params
 
 
 def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):
