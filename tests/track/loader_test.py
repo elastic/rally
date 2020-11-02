@@ -2499,6 +2499,140 @@ class TrackSpecificationReaderTests(TestCase):
             }, resulting_track.templates[0].content)
         self.assertEqual(0, len(resulting_track.challenges))
 
+    def test_parse_valid_track_specification_with_composable_template(self):
+        track_specification = {
+            "description": "description for unit test",
+            "composable-templates": [
+                {
+                    "name": "my-index-template",
+                    "index-pattern": "*",
+                    "template": "default-template.json"
+                }
+            ],
+            "component-templates": [
+                {
+                    "name": "my-component-template-1",
+                    "template": "component-template-1.json"
+                },
+                {
+                    "name": "my-component-template-2",
+                    "template": "component-template-2.json"
+                }
+            ],
+            "operations": [],
+            "challenges": []
+        }
+        complete_track_params = loader.CompleteTrackParams()
+        reader = loader.TrackSpecificationReader(
+            track_params={"index_pattern": "logs-*", "number_of_replicas": 1},
+            complete_track_params=complete_track_params,
+            source=io.DictStringFileSourceFactory({
+                "/mappings/default-template.json": ["""
+                        {
+                            "index_patterns": [ "{{index_pattern}}"],
+                            "template": {
+                                "settings": {
+                                    "number_of_shards": {{ number_of_shards | default(1) }}
+                                }
+                            },
+                            "composed_of": ["my-component-template-1", "my-component-template-2"]
+                        }
+                        """],
+                "/mappings/component-template-1.json": ["""
+                        {
+                            "template": {
+                                "settings": {
+                                  "index.number_of_shards": 2
+                                }
+                            }
+                        }
+                        """],
+                "/mappings/component-template-2.json": ["""
+                        {
+                            "template": {
+                                "settings": {
+                                  "index.number_of_replicas": {{ number_of_replicas }}
+                                },
+                                "mappings": {
+                                  "properties": {
+                                    "@timestamp": {
+                                      "type": "date"
+                                    }
+                                  }
+                                }
+                              }
+                        }
+                        """]
+            }))
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(
+            ["index_pattern", "number_of_replicas", "number_of_shards"],
+            complete_track_params.sorted_track_defined_params
+        )
+        self.assertEqual("unittest", resulting_track.name)
+        self.assertEqual("description for unit test", resulting_track.description)
+        self.assertEqual(0, len(resulting_track.indices))
+        self.assertEqual(1, len(resulting_track.composable_templates))
+        self.assertEqual(2, len(resulting_track.component_templates))
+        self.assertEqual("my-index-template", resulting_track.composable_templates[0].name)
+        self.assertEqual("*", resulting_track.composable_templates[0].pattern)
+        self.assertEqual("my-component-template-1", resulting_track.component_templates[0].name)
+        self.assertEqual("my-component-template-2", resulting_track.component_templates[1].name)
+        self.assertDictEqual(
+            {
+                "index_patterns": ["logs-*"],
+                "template": {
+                    "settings": {
+                        "number_of_shards": 1
+                    }
+                },
+                "composed_of": ["my-component-template-1", "my-component-template-2"]
+            }, resulting_track.composable_templates[0].content)
+        self.assertDictEqual(
+            {
+                "template": {
+                    "settings": {
+                        "index.number_of_shards": 2
+                    }
+                }
+            }, resulting_track.component_templates[0].content)
+        self.assertDictEqual(
+            {
+                "template": {
+                    "settings": {
+                        "index.number_of_replicas": 1
+                    },
+                    "mappings": {
+                        "properties": {
+                            "@timestamp": {
+                                "type": "date"
+                            }
+                        }
+                    }
+                }
+            }, resulting_track.component_templates[1].content)
+        self.assertEqual(0, len(resulting_track.challenges))
+
+    def test_parse_invalid_track_specification_with_composable_template(self):
+        track_specification = {
+            "description": "description for unit test",
+            "component-templates": [
+                {
+                    "name": "my-component-template-2"
+                }
+            ],
+            "operations": [],
+            "challenges": []
+        }
+        complete_track_params = loader.CompleteTrackParams()
+        reader = loader.TrackSpecificationReader(
+            track_params={"index_pattern": "logs-*", "number_of_replicas": 1},
+            complete_track_params=complete_track_params)
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'template' is missing.",
+                         ctx.exception.args[0])
+
     def test_unique_challenge_names(self):
         track_specification = {
             "description": "description for unit test",
