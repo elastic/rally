@@ -118,9 +118,9 @@ A track JSON file consists of the following sections:
 * schedule
 * challenges
 
-In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally. The index templates here represent the `legacy Elasticsearch index templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.9/indices-templates-v1.html>`_ which are now deprecated. Users should refer to the ``composable-templates`` and ``component-templates`` for new tracks.
+In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally. The index templates here represent the `legacy Elasticsearch index templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.9/indices-templates-v1.html>`_ which have been deprecated in Elasticsearch 7.9. Users should refer to the ``composable-templates`` and ``component-templates`` for new tracks.
 
-In the ``data-streams`` sections you define the relevant data streams. This section is optional but recommended if you want to create or delete data streams with the help of Rally. Data streams will often reference a composable template and require these to be inserted to Elasticsearch first.
+In the ``data-streams`` section you define the relevant data streams. This section is optional but recommended if you want to create or delete data streams with the help of Rally. Data streams will often reference a composable template and require these to be inserted to Elasticsearch first.
 
 In the ``composable-templates`` and ``component-templates`` sections you define the relevant composable and component templates. Although optional, these will likely be required if data streams are being used.
 
@@ -201,8 +201,8 @@ Example::
         }
     ]
 
-templates (deprecated)
-......................
+templates
+.........
 
 The ``templates`` section contains a list of all index templates that Rally should create.
 
@@ -225,7 +225,7 @@ Example::
 data-streams
 ............
 
-The ``data-streams`` section contains a list of all data streams that are used by this track.   Cannot be used if the ``indices`` section is specified.
+The ``data-streams`` section contains a list of all data streams that are used by this track. Cannot be used if the ``indices`` section is specified.
 
 Each data stream in this list consists of the following properties:
 
@@ -277,7 +277,7 @@ Example::
     "component-templates": [
         {
             "name": "my-default-component-template",
-            "index-pattern": "my-index-*"
+            "template": "one-shard-template.json"
         }
     ]
 
@@ -339,7 +339,7 @@ Here we define a single document corpus with one set of documents::
         }
       ]
 
-Here we define a single document corpora with one set of documents using data streams instead of indices::
+Here we define a single document corpus with one set of documents using data streams instead of indices::
 
       "corpora": [
         {
@@ -1103,14 +1103,14 @@ With the following snippet we will create a new component template that is not d
 
 
 .. note::
-    If your component template is used in composable templates ensure these are created after using the ``create-composable-template`` operation.
+    If your component template is used in composable templates, ensure these are created after specifying this operation using the ``create-composable-template`` operation.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
 This operation is :ref:`retryable <track_operations>`.
 
-create-index-template (deprecated)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+create-index-template
+~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``create-index-template`` you can execute the deprecated `create template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html>`_. It supports two modes: it creates either all index templates that are specified in the track's ``templates`` section or it creates one specific index template defined by this operation.
 
