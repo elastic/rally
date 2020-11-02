@@ -223,3 +223,48 @@ class DocumentCorpusTests(TestCase):
             a.union(b)
         self.assertEqual(ae.exception.message,
                          "Corpora meta-data differ: [{'with-metadata': False}] and [{'with-metadata': True}].")
+
+
+class TaskTests(TestCase):
+    def task(self, target_throughput=None, target_interval=None):
+        op = track.Operation("bulk-index", track.OperationType.Bulk.name)
+        params = {}
+        if target_throughput:
+            params["target-throughput"] = target_throughput
+        if target_interval:
+            params["target-interval"] = target_interval
+        return track.Task("test", op, params=params)
+
+    def test_unthrottled_task(self):
+        task = self.task()
+        self.assertIsNone(task.target_throughput)
+
+    def test_valid_throughput_with_unit(self):
+        task = self.task(target_throughput="5 MB/s")
+        self.assertEqual(track.Throughput(5.0, "MB/s"), task.target_throughput)
+
+    def test_valid_throughput_numeric(self):
+        task = self.task(target_throughput=3.2)
+        self.assertEqual(track.Throughput(3.2, "ops/s"), task.target_throughput)
+
+    def test_invalid_throughput_format_is_rejected(self):
+        task = self.task(target_throughput="3.2 docs")
+        with self.assertRaises(exceptions.InvalidSyntax) as e:
+            # pylint: disable=pointless-statement
+            task.target_throughput
+        self.assertEqual("Task [test] specifies invalid target throughput [3.2 docs].", e.exception.args[0])
+
+    def test_invalid_throughput_type_is_rejected(self):
+        task = self.task(target_throughput=True)
+        with self.assertRaises(exceptions.InvalidSyntax) as e:
+            # pylint: disable=pointless-statement
+            task.target_throughput
+        self.assertEqual("Target throughput [True] for task [test] must be string or numeric.", e.exception.args[0])
+
+    def test_interval_and_throughput_is_rejected(self):
+        task = self.task(target_throughput=1, target_interval=1)
+        with self.assertRaises(exceptions.InvalidSyntax) as e:
+            # pylint: disable=pointless-statement
+            task.target_throughput
+        self.assertEqual("Task [test] specifies target-interval [1] and target-throughput [1] but only one "
+                         "of them is allowed.", e.exception.args[0])
