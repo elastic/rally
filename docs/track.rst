@@ -302,15 +302,12 @@ Each entry in the ``documents`` list consists of the following properties:
 * ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
-<<<<<<< HEAD
 * ``target-index``: Defines the name of the index which should be targeted for bulk operations.  Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true`` or if a ``target-data-stream`` is specified. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``target-data-stream``: Defines the name of the data stream which should be targeted for bulk operations.  Rally will automatically derive this value if you have defined exactly one index in the ``data-streams`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
-=======
 * ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true``. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``meta`` (optional): A mapping of arbitrary key-value pairs with additional meta-data for a source file.
->>>>>>> ed7aaad49bec980612a7a1ec7f9c9c50e447b674
 
 To avoid repetition, you can specify default values on document corpus level for the following properties:
 
