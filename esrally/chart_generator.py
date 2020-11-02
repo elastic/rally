@@ -608,7 +608,7 @@ class BarCharts:
     @staticmethod
     def index(environment, race_configs, title):
         filters = []
-        for idx, race_config in enumerate(race_configs):
+        for race_config in race_configs:
             label = index_label(race_config)
             # the assumption is that we only have one bulk task
             for bulk_task in race_config.bulk_tasks:
@@ -1613,8 +1613,8 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
 
     def add_race_configs(license_configs, flavor_name, track_name):
         if chart_type == BarCharts:
-            # Only one license config, "oss", is present in bar charts
-            _lic_conf = [license_config["configurations"] for license_config in license_configs if license_config["name"] == "oss"]
+            # Only one license config, "basic", is present in bar charts
+            _lic_conf = [license_config["configurations"] for license_config in license_configs if license_config["name"] == "basic"]
             if _lic_conf:
                 race_configs_per_track.extend(add_configs(_lic_conf[0], track_name=track_name))
         else:

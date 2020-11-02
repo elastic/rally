@@ -4,9 +4,9 @@ Track Reference
 Definition
 ==========
 
-A track is a specification of one or more benchmarking scenarios with a specific document corpus. It defines for example the involved indices, data files and the operations that are invoked. Its most important attributes are:
+A track is a specification of one or more benchmarking scenarios with a specific document corpus. It defines for example the involved indices or data streams, data files and the operations that are invoked. Its most important attributes are:
 
-* One or more indices, each with one or more types
+* One or more indices or data streams, with the former potentially each having one or more types
 * The queries to issue
 * Source URL of the benchmark data
 * A list of steps to run, which we'll call "challenge", for example indexing data with a specific number of documents per bulk request or running searches for a defined number of iterations.
@@ -110,12 +110,19 @@ A track JSON file consists of the following sections:
 
 * indices
 * templates
+* data-streams
+* composable-templates
+* component-templates
 * corpora
 * operations
 * schedule
 * challenges
 
-In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally.
+In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally. The index templates here represent the `legacy Elasticsearch index templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.9/indices-templates-v1.html>`_ which have been deprecated in Elasticsearch 7.9. Users should refer to the ``composable-templates`` and ``component-templates`` for new tracks.
+
+In the ``data-streams`` section you define the relevant data streams. This section is optional but recommended if you want to create or delete data streams with the help of Rally. Data streams will often reference a composable template and require these to be inserted to Elasticsearch first.
+
+In the ``composable-templates`` and ``component-templates`` sections you define the relevant composable and component templates. Although optional, these will likely be required if data streams are being used.
 
 In the ``corpora`` section you define all document corpora (i.e. data files) that Rally should use for this track.
 
@@ -176,7 +183,7 @@ E.g. a key defined on a task, will override the same key defined on a challenge.
 indices
 .......
 
-The ``indices`` section contains a list of all indices that are used by this track.
+The ``indices`` section contains a list of all indices that are used by this track.  Cannot be used if the ``data-streams`` section is specified.
 
 Each index in this list consists of the following properties:
 
@@ -215,6 +222,65 @@ Example::
         }
     ]
 
+data-streams
+............
+
+The ``data-streams`` section contains a list of all data streams that are used by this track. Cannot be used if the ``indices`` section is specified.
+
+Each data stream in this list consists of the following properties:
+
+* ``name`` (mandatory): The name of the data-stream.
+
+Example::
+
+    "data-streams": [
+        {
+          "name": "my-logging-data-stream"
+        }
+    ]
+
+composable-templates
+....................
+
+The ``composable-templates`` section contains a list of all composable templates that Rally should create. These composable templates will often reference component templates which should also be declared first using the ``component-templates`` section.
+
+Each composable template in this list consists of the following properties:
+
+* ``name`` (mandatory): Composable template name
+* ``index-pattern`` (mandatory): Index pattern that matches the composable template. This must match the definition in the template file.
+* ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern if the template is deleted.
+* ``template`` (mandatory): Composable template file name
+
+Example::
+
+    "composable-templates": [
+        {
+            "name": "my-default-composable-template",
+            "index-pattern": "my-index-*",
+            "delete-matching-indices": true,
+            "template": "composable-template.json"
+        }
+    ]
+
+component-templates
+....................
+
+The ``component-templates`` section contains a list of all component templates that Rally should create. These component templates will often be referenced by composable templates which can be declared using the ``composable-templates`` section.
+
+Each component template in this list consists of the following properties:
+
+* ``name`` (mandatory): Component template name
+* ``template`` (mandatory): Component template file name
+
+Example::
+
+    "component-templates": [
+        {
+            "name": "my-default-component-template",
+            "template": "one-shard-template.json"
+        }
+    ]
+
 corpora
 .......
 
@@ -222,18 +288,26 @@ The ``corpora`` section contains all document corpora that are used by this trac
 
 * ``name`` (mandatory): Name of this document corpus. As this name is also used by Rally in directory names, it is recommended to only use lower-case names without whitespaces for maximum compatibility across file systems.
 * ``documents`` (mandatory): A list of documents files.
+* ``meta`` (optional): A mapping of arbitrary key-value pairs with additional meta-data for a corpus.
 
 Each entry in the ``documents`` list consists of the following properties:
 
-* ``base-url`` (optional): A http(s) or S3 URL that points to the root path where Rally can obtain the corresponding source file. Rally can also download data from private S3 buckets if access is properly `configured <https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration>`_.
+* ``base-url`` (optional): A http(s), S3 or Google Storage URL that points to the root path where Rally can obtain the corresponding source file. Rally can also download data from private S3 or Google Storage buckets if access is properly configured:
+
+  * S3 according to `docs <https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration>`_.
+  * Google Storage: Either using `client library authentication <https://cloud.google.com/storage/docs/reference/libraries#setting_up_authentication>`_ or by presenting an `oauth2 token <https://cloud.google.com/storage/docs/authentication>`_ via the ``GOOGLE_AUTH_TOKEN`` environment variable, typically done using: ``export GOOGLE_AUTH_TOKEN=$(gcloud auth print-access-token)``.
 * ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Currently, only ``bulk`` is supported.
 * ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
 * ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
 * ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
+* ``target-index``: Defines the name of the index which should be targeted for bulk operations.  Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
+* ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true`` or if a ``target-data-stream`` is specified. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
+* ``target-data-stream``: Defines the name of the data stream which should be targeted for bulk operations.  Rally will automatically derive this value if you have defined exactly one index in the ``data-streams`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true``. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
+* ``meta`` (optional): A mapping of arbitrary key-value pairs with additional meta-data for a source file.
 
 To avoid repetition, you can specify default values on document corpus level for the following properties:
 
@@ -242,6 +316,7 @@ To avoid repetition, you can specify default values on document corpus level for
 * ``includes-action-and-meta-data``
 * ``target-index``
 * ``target-type``
+* ``target-data-stream``
 
 Examples
 
@@ -259,6 +334,22 @@ Here we define a single document corpus with one set of documents::
               "uncompressed-bytes": 3547614383,
               "target-index": "geonames",
               "target-type": "docs"
+            }
+          ]
+        }
+      ]
+
+Here we define a single document corpus with one set of documents using data streams instead of indices::
+
+      "corpora": [
+        {
+          "name": "http_logs",
+          "documents": [
+            {
+              "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/http_logs",
+              "source-file": "documents-181998.json.bz2",
+              "document-count": 2708746,
+              "target-data-stream": "my-logging-data-stream"
             }
           ]
         }
@@ -472,6 +563,9 @@ Each operation consists of the following properties:
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
 * ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
 * ``include-in-reporting`` (optional, defaults to ``true`` for normal operations and to ``false`` for administrative operations): Whether or not this operation should be included in the command line report. For example you might want Rally to create an index for you but you are not interested in detailed metrics about it. Note that Rally will still record all metrics in the metrics store.
+* ``request-timeout`` (optional, defaults to ``None``): The client-side timeout for this operation.  Represented as a floating-point number in seconds, e.g. ``1.5``.
+* ``headers`` (optional, defaults to ``None``): A dictionary of key-value pairs to pass as headers in the operation.
+* ``opaque-id`` (optional, defaults to ``None`` [unused]): A special ID set as the value of ``x-opaque-id`` in the client headers of the operation.  Overrides existing ``x-opaque-id`` entries in ``headers`` (case-insensitive).
 
 Some of the operations below are also retryable (marked accordingly below). Retryable operations expose the following properties:
 
@@ -523,7 +617,7 @@ force-merge
 
 With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_. On older versions of Elasticsearch (prior to 2.1), Rally will use the ``optimize API`` instead. It supports the following parameters:
 
-* ``index`` (optional, defaults to the indices defined in the ``indices`` section or ``_all`` if no indices are defined there): The name of the index that should be force-merged.
+* ``index`` (optional, defaults to the indices defined in the ``indices`` section or the data streams defined in the ``data-streams`` section. If neither are defined defaults to ``_all``.): The name of the index or data stream that should be force-merged.
 * ``mode`` (optional, default to ``blocking``): In the default ``blocking`` mode the Elasticsearch client blocks until the operation returns or times out as dictated by the :ref:`client-options <clr_client_options>`. In mode `polling` the client timeout is ignored. Instead, the api call is given 1s to complete. If the operation has not finished, the operator will poll every ``poll-period`` until all force merges are complete.
 * ``poll-period`` (defaults to 10s): Only applicable if ``mode`` is set to ``polling``. Determines the internal at which a check is performed that all force merge operations are complete.
 * ``max-num-segments`` (optional)  The number of segments the index should be merged into. Defaults to simply checking if a merge needs to execute, and if so, executes it.
@@ -566,7 +660,7 @@ search
 
 With the operation type ``search`` you can execute `request body searches <http://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html>`_. It supports the following properties:
 
-* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this query. Only needed if the ``index`` section contains more than one index. Otherwise, Rally will automatically derive the index to use. If you have defined multiple indices and want to query all of them, just specify ``"index": "_all"``.
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
 * ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
@@ -718,7 +812,7 @@ refresh
 
 With the operation ``refresh`` you can execute the `refresh API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html>`_. It supports the following properties:
 
-* ``index`` (optional, defaults to ``_all``): The name of the index that should be refreshed.
+* ``index`` (optional, defaults to ``_all``): The name of the index or data stream that should be refreshed.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
@@ -827,22 +921,210 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+create-data-stream
+~~~~~~~~~~~~~~~~~~
+
+With the operation ``create-data-stream`` you can execute the `create data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-data-stream.html>`_. It supports two modes: it creates either all data streams that are specified in the track's ``data-streams`` section or it creates one specific data stream defined by this operation.
+
+If you want it to create all data streams that have been declared in the ``data-streams`` section you can specify the following properties:
+
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create data stream API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+If you want it to create one specific data stream instead, you can specify the following properties:
+
+* ``data-stream`` (mandatory): One or more names of the data streams that should be created. If only one data stream should be created, you can use a string otherwise this needs to be a list of strings.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+**Examples**
+
+The following snippet will create all data streams that have been defined in the ``data-streams`` section::
+
+    {
+      "name": "create-all-data-streams",
+      "operation-type": "create-data-stream",
+      "request-params": {
+        "wait_for_active_shards": "true"
+      }
+    }
+
+With the following snippet we will create a new data stream that is not defined in the ``data-streams`` section::
+
+    {
+      "name": "create-a-data-stream",
+      "operation-type": "create-data-stream",
+      "data-stream": "people"
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+delete-data-stream
+~~~~~~~~~~~~~~~~~~
+
+With the operation ``delete-data-stream`` you can execute the `delete data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-data-stream.html>`_. It supports two modes: it deletes either all data streams that are specified in the track's ``data-streams`` section or it deletes one specific data stream (pattern) defined by this operation.
+
+If you want it to delete all data streams that have been declared in the ``data-streams`` section, you can specify the following properties:
+
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether a data stream should only be deleted if it exists.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+If you want it to delete one specific data stream (pattern) instead, you can specify the following properties:
+
+* ``data-stream`` (mandatory): One or more names of the data streams that should be deleted. If only one data stream should be deleted, you can use a string otherwise this needs to be a list of strings.
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether a data stream should only be deleted if it exists.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete data stream API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+**Examples**
+
+With the following snippet we will delete all data streams that are declared in the ``data-streams`` section but only if they existed previously (implicit default)::
+
+    {
+      "name": "delete-all-data-streams",
+      "operation-type": "delete-data-stream"
+    }
+
+With the following snippet we will delete all ``ds-logs-*`` data streams::
+
+    {
+      "name": "delete-data-streams",
+      "operation-type": "delete-data-stream",
+      "data-stream": "ds-logs-*",
+      "only-if-exists": false
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+create-composable-template
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``create-composable-template`` you can execute the `create index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-template.html>`_. It supports two modes: it creates either all templates that are specified in the track's ``composable-templates`` section or it creates one specific template defined by this operation.
+
+If you want it to create templates that have been declared in the ``composable-templates`` section you can specify the following properties:
+
+* ``template`` (optional): If you specify a template name, only the template with this name will be created.
+* ``settings`` (optional): Allows to specify additional settings that will be merged with the settings specified in the body of the template in the ``composable-templates`` section.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+If you want it to create one specific template instead, you can specify the following properties:
+
+* ``template`` (mandatory): The name of the template that should be created.
+* ``body`` (mandatory): The body for the create template API call.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+**Examples**
+
+The following snippet will create all index templates that have been defined in the ``composable-templates`` section::
+
+    {
+      "name": "create-all-templates",
+      "operation-type": "create-composable-template",
+      "request-params": {
+        "create": "true"
+      }
+    }
+
+With the following snippet we will create a new index template that is not defined in the ``composable-templates`` section. Note that we specify the index template settings directly in the body::
+
+    {
+      "name": "create-a-template",
+      "operation-type": "create-composable-template",
+      "template": "logs",
+      "body": {
+        "index_patterns": ["*"],
+        "composed_of": ["component_template_with_2_shards", "component_template_with_3_shards"],
+        "template": {
+          "mappings": {
+            "_source": {
+              "enabled": false
+            }
+          }
+        }
+      }
+    }
+
+.. note::
+    If your composable template references component templates, such as in the example above, ensure these are created first using the ``create-component-template`` operation.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+create-component-template
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``create-component-template`` you can execute the `create component template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_. It supports two modes: it creates either all component templates that are specified in the track's ``component-templates`` section or it creates one specific component template defined by this operation.
+
+If you want it to create templates that have been declared in the ``component-templates`` section you can specify the following properties:
+
+* ``template`` (optional): If you specify a template name, only the component template with this name will be created.
+* ``settings`` (optional): Allows to specify additional settings that will be merged with the settings specified in the body of the component template in the ``component-templates`` section.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create component template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+If you want it to create one specific template instead, you can specify the following properties:
+
+* ``template`` (mandatory): The name of the template that should be created.
+* ``body`` (mandatory): The body for the create template API call.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create component template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+**Examples**
+
+The following snippet will create all component templates that have been defined in the ``component-templates`` section::
+
+    {
+      "name": "create-all-templates",
+      "operation-type": "create-component-template",
+      "request-params": {
+        "create": "true"
+      }
+    }
+
+With the following snippet we will create a new component template that is not defined in the ``component-templates`` section. Note that we specify the component template settings directly in the body::
+
+    {
+      "name": "create-a-template",
+      "operation-type": "create-composable-template",
+      "template": "component_template_with_2_shards",
+      "body": {
+        "template": {
+          "settings": {
+            "number_of_shards": 2
+          },
+          "mappings": {
+            "_source": {
+              "enabled": false
+            }
+          }
+        }
+      }
+    }
+
+
+.. note::
+    If your component template is used in composable templates, ensure these are created after specifying this operation using the ``create-composable-template`` operation.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
 create-index-template
 ~~~~~~~~~~~~~~~~~~~~~
 
-With the operation ``create-index-template`` you can execute the `create index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html>`_. It supports two modes: it creates either all index templates that are specified in the track's ``templates`` section or it creates one specific index template defined by this operation.
+With the operation ``create-index-template`` you can execute the deprecated `create template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html>`_. It supports two modes: it creates either all index templates that are specified in the track's ``templates`` section or it creates one specific index template defined by this operation.
 
 If you want it to create index templates that have been declared in the ``templates`` section you can specify the following properties:
 
 * ``template`` (optional): If you specify a template name, only the template with this name will be created.
 * ``settings`` (optional): Allows to specify additional settings that will be merged with the settings specified in the body of the index template in the ``templates`` section.
-* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
-If you want it to create one specific index instead, you can specify the following properties:
+If you want it to create one specific index template instead, you can specify the following properties:
 
 * ``template`` (mandatory): The name of the index template that should be created.
-* ``body`` (mandatory): The body for the create index template API call.
-* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+* ``body`` (mandatory): The body for the create template API call.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 **Examples**
 
@@ -884,15 +1166,101 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+delete-composable-template
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``delete-composable-template`` you can execute the `delete index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-template.html>`_. It supports two modes: it deletes either all index templates that are specified in the track's ``composable-templates`` section or it deletes one specific index template defined by this operation.
+
+If you want it to delete all index templates that have been declared in the ``composable-templates`` section, you can specify the following properties:
+
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index template should only be deleted if it exists.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
+
+If you want it to delete one specific index template instead, you can specify the following properties:
+
+* ``template`` (mandatory): The name of the composable template that should be deleted.
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
+* ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
+* ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
+
+**Examples**
+
+With the following snippet we will delete all index templates that are declared in the ``templates`` section but only if they existed previously (implicit default)::
+
+    {
+      "name": "delete-all-index-templates",
+      "operation-type": "delete-composable-template"
+    }
+
+With the following snippet we will delete the `logs`` index template::
+
+    {
+      "name": "delete-logs-template",
+      "operation-type": "delete-composable-template",
+      "template": "logs",
+      "only-if-exists": false,
+      "delete-matching-indices": true,
+      "index-pattern": "*"
+    }
+
+.. note::
+    If ``delete-matching-indices`` is set to ``true``, indices with the provided ``index-pattern`` are deleted regardless whether the index template has previously existed.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+delete-component-template
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``delete-component-template`` you can execute the `delete component template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-component-template.html>`_. It supports two modes: it deletes either all component templates that are specified in the track's ``component-templates`` section or it deletes one specific component template defined by this operation.
+
+If you want it to delete all component templates that have been declared in the ``component-templates`` section, you can specify the following properties:
+
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether a component template should only be deleted if it exists.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete component template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
+
+If you want it to delete one specific component template instead, you can specify the following properties:
+
+* ``template`` (mandatory): The name of the component template that should be deleted.
+* ``only-if-exists`` (optional, defaults to ``true``): Defines whether the component template should only be deleted if it exists.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete component template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
+
+**Examples**
+
+With the following snippet we will delete all component templates that are declared in the ``component-templates`` section but only if they existed previously (implicit default)::
+
+    {
+      "name": "delete-all-component-templates",
+      "operation-type": "delete-component-template"
+    }
+
+With the following snippet we will delete the `component_template_with_2_shards`` component template::
+
+    {
+      "name": "delete-2-shards-component-template",
+      "operation-type": "delete-component-template",
+      "template": "component_template_with_2_shards",
+      "only-if-exists": false
+    }
+
+.. note::
+    If the component templates you are attempting to delete are referenced by composable templates, these must be deleted first using the ``delete-composable-template`` operation.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
 delete-index-template
 ~~~~~~~~~~~~~~~~~~~~~
 
-With the operation ``delete-index-template`` you can execute the `delete index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_. It supports two modes: it deletes either all index templates that are specified in the track's ``templates`` section or it deletes one specific index template defined by this operation.
+With the operation ``delete-index-template`` you can execute the `delete template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_. It supports two modes: it deletes either all index templates that are specified in the track's ``templates`` section or it deletes one specific index template defined by this operation.
 
 If you want it to delete all index templates that have been declared in the ``templates`` section, you can specify the following properties:
 
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether an index template should only be deleted if it exists.
-* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 If you want it to delete one specific index template instead, you can specify the following properties:
 
@@ -900,7 +1268,7 @@ If you want it to delete one specific index template instead, you can specify th
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
 * ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
 * ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
-* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 **Examples**
 
@@ -1301,8 +1669,6 @@ If we want to run tasks in parallel, we can use the ``parallel`` element. In the
             ]
           }
         }
-      ]
-    }
 
 Rally will determine that three clients are needed to run each task in a dedicated client. You can also see that each task can have different settings.
 

@@ -404,7 +404,7 @@ class CcrStatsRecorder:
             filter_path = "follow_stats"
             stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false",
                                                                                                  "filter_path": filter_path})
-        except elasticsearch.TransportError as e:
+        except elasticsearch.TransportError:
             msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on " \
                   "cluster [{}]".format(ccr_stats_api_endpoint, filter_path, self.cluster_name)
             self.logger.exception(msg)
@@ -856,7 +856,7 @@ class TransformStatsRecorder:
         try:
             stats = self.client.transform.get_transform_stats("_all")
 
-        except elasticsearch.TransportError as e:
+        except elasticsearch.TransportError:
             msg = f"A transport error occurred while collecting transform stats on " \
                   f"cluster [{self.cluster_name}]"
             self.logger.exception(msg)
@@ -1300,12 +1300,12 @@ class IndexStats(InternalTelemetryDevice):
 
     def index_times(self, stats, per_shard_stats=True):
         times = []
-        self.index_time(times, stats, "merges_total_time", ["merges", "total_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "merges_total_throttled_time", ["merges", "total_throttled_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "indexing_total_time", ["indexing", "index_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "indexing_throttle_time", ["indexing", "throttle_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "refresh_total_time", ["refresh", "total_time_in_millis"], per_shard_stats),
-        self.index_time(times, stats, "flush_total_time", ["flush", "total_time_in_millis"], per_shard_stats),
+        self.index_time(times, stats, "merges_total_time", ["merges", "total_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "merges_total_throttled_time", ["merges", "total_throttled_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "indexing_total_time", ["indexing", "index_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "indexing_throttle_time", ["indexing", "throttle_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "refresh_total_time", ["refresh", "total_time_in_millis"], per_shard_stats)
+        self.index_time(times, stats, "flush_total_time", ["flush", "total_time_in_millis"], per_shard_stats)
         return times
 
     def index_time(self, values, stats, name, path, per_shard_stats):
@@ -1341,8 +1341,8 @@ class IndexStats(InternalTelemetryDevice):
     def primary_shard_stats(self, stats, path):
         shard_stats = []
         try:
-            for idx, shards in stats["indices"].items():
-                for shard_number, shard in shards["shards"].items():
+            for shards in stats["indices"].values():
+                for shard in shards["shards"].values():
                     for shard_metrics in shard:
                         if shard_metrics["routing"]["primary"]:
                             shard_stats.append(self.extract_value(shard_metrics, path, default_value=0))

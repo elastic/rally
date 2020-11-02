@@ -1,3 +1,31 @@
+### 2.0.2
+
+#### Enhancements
+
+* [#1097](https://github.com/elastic/rally/pull/1097): Upgrade google-auth to latest
+* [#1094](https://github.com/elastic/rally/pull/1094): Add support for Google Cloud Storage buckets
+* [#1092](https://github.com/elastic/rally/pull/1092): Add Support for Datastreams
+* [#1064](https://github.com/elastic/rally/pull/1064): Fail fast if leading `/` is missing from `path` in raw-request
+* [#1061](https://github.com/elastic/rally/pull/1061): Pass JAVA15_HOME in build
+* [#1055](https://github.com/elastic/rally/pull/1055): Check if total_transform_processing_times exist for compare reports
+* [#1051](https://github.com/elastic/rally/pull/1051): Force Merge Runner Improvements -  Polling
+* [#1047](https://github.com/elastic/rally/pull/1047): Add runner to wait until snapshot has been created
+* [#1045](https://github.com/elastic/rally/pull/1045): Show processing time also in comparison reports
+* [#1035](https://github.com/elastic/rally/pull/1035): Warn on request errors
+* [#1031](https://github.com/elastic/rally/pull/1031): Upgrade Elasticsearch client library to 7.8
+
+#### Bug Fixes
+
+* [#1088](https://github.com/elastic/rally/pull/1088): Use the new pip dependency resolver
+* [#1075](https://github.com/elastic/rally/pull/1075): Ensure that request error meta-data is string
+* [#1071](https://github.com/elastic/rally/pull/1071): Fix parallel completed-by task identification
+* [#1055](https://github.com/elastic/rally/pull/1055): Check if total_transform_processing_times exist for compare reports
+
+#### Doc Changes
+
+* [#1062](https://github.com/elastic/rally/pull/1062): Document how to benchmark an Elastic Cloud cluster
+* [#1049](https://github.com/elastic/rally/pull/1049): Docs - hints for handling errors and identifying queries and responses
+
 ### 2.0.1
 
 #### Enhancements

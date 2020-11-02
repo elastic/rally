@@ -42,7 +42,7 @@ def create_arg_parser():
     def non_empty_list(arg):
         lst = opts.csv_to_list(arg)
         if len(lst) < 1:
-            raise argparse.ArgumentError("At least one argument required!")
+            raise argparse.ArgumentError(argument=None, message="At least one argument required!")
         return lst
 
     def runtime_jdk(v):
@@ -613,13 +613,13 @@ def ensure_configuration_present(cfg, args, sub_command):
         config.ConfigFactory().create_config(cfg.config_file,
                                              advanced_config=args.advanced_config,
                                              assume_defaults=args.assume_defaults)
-        exit(0)
+        sys.exit(0)
     else:
         if cfg.config_present():
             cfg.load_config(auto_upgrade=True)
         else:
             console.error("No config present. Please run '%s configure' first." % PROGRAM_NAME)
-            exit(64)
+            sys.exit(64)
 
 
 def dispatch_list(cfg):
@@ -909,7 +909,7 @@ def main():
         if args.chart_spec_path and (args.track or args.challenge or args.car or args.node_count):
             console.println("You need to specify either --chart-spec-path or --track, --challenge, --car and "
                             "--node-count but not both.")
-            exit(1)
+            sys.exit(1)
         if args.chart_spec_path:
             cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
         else:
@@ -932,7 +932,7 @@ def main():
             console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
         if list(target_hosts.all_hosts) != list(client_options.all_client_options):
             console.println("--target-hosts and --client-options must define the same keys for multi cluster setups.")
-            exit(1)
+            sys.exit(1)
     # split by component?
     if sub_command == "download":
         cfg.add(config.Scope.applicationOverride, "mechanic", "target.os", args.target_os)

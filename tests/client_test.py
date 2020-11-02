@@ -178,7 +178,7 @@ class EsClientFactoryTests(TestCase):
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             with mock.patch.object(console, "println") as mocked_console_println:
-                f = client.EsClientFactory(hosts, client_options)
+                client.EsClientFactory(hosts, client_options)
         mocked_console_println.assert_called_once_with(
             "'{}' is missing from client-options but '{}' has been specified.\n"
             "If your Elasticsearch setup requires client certificate verification both need to be supplied.\n"

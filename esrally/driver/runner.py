@@ -23,7 +23,6 @@ import sys
 import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
-
 import ijson
 
 from esrally import exceptions, track
@@ -50,6 +49,12 @@ def register_default_runners():
     register_runner(track.OperationType.Refresh.name, Retry(Refresh()), async_runner=True)
     register_runner(track.OperationType.CreateIndex.name, Retry(CreateIndex()), async_runner=True)
     register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()), async_runner=True)
+    register_runner(track.OperationType.CreateComponentTemplate.name, Retry(CreateComponentTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteComponentTemplate.name, Retry(DeleteComponentTemplate()), async_runner=True)
+    register_runner(track.OperationType.CreateComposableTemplate.name, Retry(CreateComposableTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteComposableTemplate.name, Retry(DeleteComposableTemplate()), async_runner=True)
+    register_runner(track.OperationType.CreateDataStream.name, Retry(CreateDataStream()), async_runner=True)
+    register_runner(track.OperationType.DeleteDataStream.name, Retry(DeleteDataStream()), async_runner=True)
     register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()), async_runner=True)
     register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()), async_runner=True)
     register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()), async_runner=True)
@@ -121,13 +126,13 @@ class Runner:
     """
 
     def __init__(self, *args, **kwargs):
-        super(Runner, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
 
     async def __aenter__(self):
         return self
 
-    async def __call__(self, *args):
+    async def __call__(self, es, params):
         """
         Runs the actual method that should be benchmarked.
 
@@ -142,13 +147,38 @@ class Runner:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         return False
 
+    def _default_kw_params(self, params):
+        # map of API kwargs to Rally config parameters
+        kw_dict = {
+            "body": "body",
+            "headers": "headers",
+            "index": "index",
+            "opaque_id": "opaque-id",
+            "params": "request-params",
+            "request_timeout": "request-timeout",
+        }
+        full_result =  {k: params.get(v) for (k, v) in kw_dict.items()}
+        # filter Nones
+        return dict(filter(lambda kv: kv[1] is not None, full_result.items()))
+
+    def _transport_request_params(self, params):
+        request_params = params.get("request-params", {})
+        request_timeout = params.get("request-timeout")
+        if request_timeout is not None:
+            request_params["request_timeout"] = request_timeout
+        headers = params.get("headers") or {}
+        opaque_id = params.get("opaque-id")
+        if opaque_id is not None:
+            headers.update({"x-opaque-id": opaque_id})
+        return request_params, headers
+
 
 class Delegator:
     """
     Mixin to unify delegate handling
     """
     def __init__(self, delegate, *args, **kwargs):
-        super(Delegator, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.delegate = delegate
 
 
@@ -294,6 +324,11 @@ class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.first_request = True
+
     async def __call__(self, es, params):
         """
         Runs one bulk indexing operation.
@@ -305,7 +340,8 @@ class BulkIndex(Runner):
         It expects a parameter dict with the following mandatory keys:
 
         * ``body``: containing all documents for the current bulk request.
-        * ``bulk-size``: the number of documents in this bulk.
+        * ``bulk-size``: An indication of the bulk size denoted in ``unit``.
+        * ``unit``: The name of the unit in which the bulk size is provided.
         * ``action_metadata_present``: if ``True``, assume that an action and metadata line is present (meaning only half of the lines
         contain actual documents to index)
         * ``index``: The name of the affected index in case ``action_metadata_present`` is ``False``.
@@ -320,21 +356,20 @@ class BulkIndex(Runner):
          is in the single digit microsecond range when this feature is disabled and in the single digit millisecond range when this feature
          is enabled; numbers based on a bulk size of 500 elements and no errors). For details please refer to the respective benchmarks
          in ``benchmarks/driver``.
-
+        * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present, defaults to
+         ``None`` and potentially falls back to the global timeout setting.
 
         Returned meta data
-        `
+
         The following meta data are always returned:
 
         * ``index``: name of the affected index. May be `None` if it could not be derived.
-        * ``bulk-size``: bulk size, e.g. 5.000.
-        * ``bulk-request-size-bytes``: size of the full bulk request in bytes
-        * ``total-document-size-bytes``: size of all documents contained in the bulk request in bytes
-        * ``weight``: operation-agnostic representation of the bulk size (used internally by Rally for throughput calculation).
-        * ``unit``: The unit in which to interpret ``bulk-size`` and ``weight``. Always "docs".
+        * ``weight``: operation-agnostic representation of the bulk size denoted in ``unit``.
+        * ``unit``: The unit in which to interpret ``weight``.
         * ``success``: A boolean indicating whether the bulk request has succeeded.
-        * ``success-count``: Number of successfully processed items for this request (denoted in ``unit``).
-        * ``error-count``: Number of failed items for this request (denoted in ``unit``).
+        * ``success-count``: Number of successfully processed bulk items for this request. This value will only be
+                             determined in case of errors or the bulk-size has been specified in docs.
+        * ``error-count``: Number of failed bulk items for this request.
         * ``took``` Value of the the ``took`` property in the bulk response.
 
         If ``detailed-results`` is ``True`` the following meta data are returned in addition:
@@ -356,7 +391,6 @@ class BulkIndex(Runner):
                 "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
-                "bulk-size": 5000,
                 "success": True,
                 "success-count": 5000,
                 "error-count": 0,
@@ -369,7 +403,6 @@ class BulkIndex(Runner):
                 "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
-                "bulk-size": 5000,
                 "success": False,
                 "success-count": 4000,
                 "error-count": 1000,
@@ -383,7 +416,6 @@ class BulkIndex(Runner):
                 "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
-                "bulk-size": 5000,
                 "bulk-request-size-bytes": 2250000,
                 "total-document-size-bytes": 2000000,
                 "success": True,
@@ -415,7 +447,6 @@ class BulkIndex(Runner):
                 "index": "my_index",
                 "weight": 5000,
                 "unit": "docs",
-                "bulk-size": 5000,
                 "bulk-request-size-bytes": 2250000,
                 "total-document-size-bytes": 2000000,
                 "success": False,
@@ -458,7 +489,7 @@ class BulkIndex(Runner):
             }
         """
         detailed_results = params.get("detailed-results", False)
-        index = params.get("index")
+        api_kwargs = self._default_kw_params(params)
 
         bulk_params = {}
         if "pipeline" in params:
@@ -466,35 +497,43 @@ class BulkIndex(Runner):
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)
-
+        # TODO: Remove this bwc-layer and turn "unit" into a mandatory parameter
+        # unit = mandatory(params, "unit", self)
+        if self.first_request:
+            self.first_request = False
+            if "unit" not in params:
+                self.logger.warning("Specify the mandatory parameter [unit] in the bulk parameter source. "
+                                    "Otherwise this track will fail with the next Rally version.")
+        unit = params.get("unit", "docs")
         # parse responses lazily in the standard case - responses might be large thus parsing skews results and if no
         # errors have occurred we only need a small amount of information from the potentially large response.
         if not detailed_results:
             es.return_raw_response()
 
         if with_action_metadata:
+            api_kwargs.pop("index", None)
             # only half of the lines are documents
-            response = await es.bulk(body=params["body"], params=bulk_params)
+            response = await es.bulk(params=bulk_params, **api_kwargs)
         else:
-            response = await es.bulk(body=params["body"], index=index, doc_type=params.get("type"), params=bulk_params)
+            response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
 
-        stats = self.detailed_stats(params, bulk_size, response) if detailed_results else self.simple_stats(bulk_size, response)
+        stats = self.detailed_stats(params, response) if detailed_results else self.simple_stats(bulk_size, unit, response)
 
         meta_data = {
-            "index": str(index) if index else None,
+            "index": params.get("index"),
             "weight": bulk_size,
-            "unit": "docs",
-            "bulk-size": bulk_size
+            "unit": unit,
         }
         meta_data.update(stats)
         if not stats["success"]:
             meta_data["error-type"] = "bulk"
         return meta_data
 
-    def detailed_stats(self, params, bulk_size, response):
+    def detailed_stats(self, params, response):
         ops = {}
         shards_histogram = OrderedDict()
         bulk_error_count = 0
+        bulk_success_count = 0
         error_details = set()
         bulk_request_size_bytes = 0
         total_document_size_bytes = 0
@@ -517,7 +556,7 @@ class BulkIndex(Runner):
 
             bulk_request_size_bytes += line_size
 
-        for idx, item in enumerate(response["items"]):
+        for item in response["items"]:
             # there is only one (top-level) item
             op, data = next(iter(item.items()))
             if op not in ops:
@@ -538,10 +577,12 @@ class BulkIndex(Runner):
             if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                 bulk_error_count += 1
                 self.extract_error_details(error_details, data)
+            else:
+                bulk_success_count += 1
         stats = {
             "took": response.get("took"),
             "success": bulk_error_count == 0,
-            "success-count": bulk_size - bulk_error_count,
+            "success-count": bulk_success_count,
             "error-count": bulk_error_count,
             "ops": ops,
             "shards_histogram": list(shards_histogram.values()),
@@ -556,24 +597,29 @@ class BulkIndex(Runner):
 
         return stats
 
-    def simple_stats(self, bulk_size, response):
+    def simple_stats(self, bulk_size, unit, response):
+        bulk_success_count = bulk_size if unit == "docs" else None
         bulk_error_count = 0
         error_details = set()
         # parse lazily on the fast path
         props = parse(response, ["errors", "took"])
 
         if props.get("errors", False):
+            # determine success count regardless of unit because we need to iterate through all items anyway
+            bulk_success_count = 0
             # Reparse fully in case of errors - this will be slower
             parsed_response = json.loads(response.getvalue())
-            for idx, item in enumerate(parsed_response["items"]):
+            for item in parsed_response["items"]:
                 data = next(iter(item.values()))
                 if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1
                     self.extract_error_details(error_details, data)
+                else:
+                    bulk_success_count += 1
         stats = {
             "took": props.get("took"),
             "success": bulk_error_count == 0,
-            "success-count": bulk_size - bulk_error_count,
+            "success-count": bulk_success_count,
             "error-count": bulk_error_count
         }
         if bulk_error_count > 0:
@@ -610,21 +656,18 @@ class ForceMerge(Runner):
     async def __call__(self, es, params):
         import elasticsearch
         max_num_segments = params.get("max-num-segments")
-        # preliminary support for overriding the global request timeout (see #567). As force-merge falls back to
-        # the raw transport API (where the keyword argument is called `timeout`) in some cases we will always need
-        # a special handling for the force-merge API.
-        request_timeout = params.get("request-timeout")
         mode = params.get("mode")
-        merge_params = {"request_timeout": request_timeout}
+        merge_params = self._default_kw_params(params)
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         try:
             if mode == "polling":
                 # we ignore the request_timeout if we are in polling mode and deliberately timeout early
+                # no reason to wait as long as a whole {polling-period} (which has a minimum of 1 second)
                 merge_params["request_timeout"] = 1
                 complete = False
                 try:
-                    await es.indices.forcemerge(index=params.get("index"), **merge_params)
+                    await es.indices.forcemerge(**merge_params)
                     complete = True
                 except elasticsearch.ConnectionTimeout:
                     pass
@@ -635,15 +678,14 @@ class ForceMerge(Runner):
                         # empty nodes response indicates no tasks
                         complete = True
             else:
-                await es.indices.forcemerge(index=params.get("index"), **merge_params)
+                await es.indices.forcemerge(**merge_params)
         except elasticsearch.TransportError as e:
             # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
             if e.status_code == 400:
+                params, headers = self._transport_request_params(params)
                 if max_num_segments:
-                    await es.transport.perform_request("POST", f"/_optimize?max_num_segments={max_num_segments}",
-                                                       timeout=request_timeout)
-                else:
-                    await es.transport.perform_request("POST", "/_optimize", timeout=request_timeout)
+                    params["max_num_segments"] = max_num_segments
+                await es.transport.perform_request(method="POST", url="/_optimize", params=params, headers=headers)
             else:
                 raise e
 
@@ -668,10 +710,10 @@ class IndicesStats(Runner):
         return str(v) if v is not None else None
 
     async def __call__(self, es, params):
-        index = params.get("index", "_all")
+        api_kwargs = self._default_kw_params(params)
+        index = api_kwargs.pop("index", "_all")
         condition = params.get("condition")
-
-        response = await es.indices.stats(index=index, metric="_all")
+        response = await es.indices.stats(index=index, metric="_all", **api_kwargs)
         if condition:
             path = mandatory(condition, "path", repr(self))
             expected_value = mandatory(condition, "expected-value", repr(self))
@@ -705,7 +747,8 @@ class NodeStats(Runner):
     """
 
     async def __call__(self, es, params):
-        await es.nodes.stats(metric="_all")
+        request_timeout = params.get("request-timeout")
+        await es.nodes.stats(metric="_all", request_timeout=request_timeout)
 
     def __repr__(self, *args, **kwargs):
         return "node-stats"
@@ -767,7 +810,8 @@ class Query(Runner):
                                                corresponding response in more detail, this might incur additional
                                                overhead which can skew measurement results. This flag is ineffective
                                                for scroll queries (detailed meta-data are always returned).
-
+    * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present,
+                           defaults to ``None`` and potentially falls back to the global timeout setting.
     If the following parameters are present in addition, a scroll query will be issued:
 
     * `pages`: Number of pages to retrieve at most for this scroll. If a scroll query does yield less results than the specified number of
@@ -797,17 +841,25 @@ class Query(Runner):
             return await self.request_body_query(es, params)
 
     async def request_body_query(self, es, params):
-        request_params = self._default_request_params(params)
+        request_params, headers = self._transport_request_params(params)
         index = params.get("index", "_all")
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
         detailed_results = params.get("detailed-results", False)
-        headers = self._headers(params)
+        encoding_header = self._query_headers(params)
+        if encoding_header is not None:
+            headers.update(encoding_header)
 
+        cache = params.get("cache")
+        if cache is not None:
+            request_params["request_cache"] = str(cache).lower()
+        if not bool(headers):
+            # counter-intuitive but preserves prior behavior
+            headers = None
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
-        r = await self._raw_search(es, doc_type, index, body, request_params, headers)
+        r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
 
         if detailed_results:
             props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
@@ -833,7 +885,7 @@ class Query(Runner):
             }
 
     async def scroll_query(self, es, params):
-        request_params = self._default_request_params(params)
+        request_params, headers = self._transport_request_params(params)
         hits = 0
         hits_relation = None
         retrieved_pages = 0
@@ -842,9 +894,16 @@ class Query(Runner):
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
         size = params.get("results-per-page")
-        headers = self._headers(params)
+        encoding_header = self._query_headers(params)
+        if encoding_header is not None:
+            headers.update(encoding_header)
         scroll_id = None
-
+        cache = params.get("cache")
+        if cache is not None:
+            request_params["request_cache"] = str(cache).lower()
+        if not bool(headers):
+            # counter-intuitive but preserves prior behavior
+            headers = None
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
@@ -856,7 +915,7 @@ class Query(Runner):
                     sort = "_doc"
                     scroll = "10s"
                     doc_type = params.get("type")
-                    params = request_params
+                    params = request_params.copy()
                     params["sort"] = sort
                     params["scroll"] = scroll
                     params["size"] = size
@@ -874,6 +933,7 @@ class Query(Runner):
                 else:
                     r = await es.transport.perform_request("GET", "/_search/scroll",
                                                            body={"scroll_id": scroll_id, "scroll": "10s"},
+                                                           params=request_params,
                                                            headers=headers)
                     props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"])
                     timed_out = timed_out or props.get("timed_out", False)
@@ -912,14 +972,7 @@ class Query(Runner):
         path = "/".join(components)
         return await es.transport.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
 
-    def _default_request_params(self, params):
-        request_params = params.get("request-params", {})
-        cache = params.get("cache")
-        if cache is not None:
-            request_params["request_cache"] = str(cache).lower()
-        return request_params
-
-    def _headers(self, params):
+    def _query_headers(self, params):
         # reduces overhead due to decompression of very large responses
         if params.get("response-compression-enabled", True):
             return None
@@ -958,8 +1011,8 @@ class ClusterHealth(Runner):
             except (KeyError, AttributeError):
                 return ClusterHealthStatus.UNKNOWN
 
-        index = params.get("index")
         request_params = params.get("request-params", {})
+        api_kw_params = self._default_kw_params(params)
         # by default, Elasticsearch will not wait and thus we treat this as success
         expected_cluster_status = request_params.get("wait_for_status", str(ClusterHealthStatus.UNKNOWN))
         # newer ES versions >= 5.0
@@ -970,7 +1023,7 @@ class ClusterHealth(Runner):
             # either the user has defined something or we're good with any count of relocating shards.
             expected_relocating_shards = int(request_params.get("wait_for_relocating_shards", sys.maxsize))
 
-        result = await es.cluster.health(index=index, params=request_params)
+        result = await es.cluster.health(**api_kw_params)
         cluster_status = result["status"]
         relocating_shards = result["relocating_shards"]
 
@@ -1022,13 +1075,32 @@ class CreateIndex(Runner):
 
     async def __call__(self, es, params):
         indices = mandatory(params, "indices", self)
-        request_params = params.get("request-params", {})
+        api_params = self._default_kw_params(params)
+        ## ignore invalid entries rather than erroring
+        for term in ["index", "body"]:
+            api_params.pop(term, None)
         for index, body in indices:
-            await es.indices.create(index=index, body=body, params=request_params)
+            await es.indices.create(index=index, body=body, **api_params)
         return len(indices), "ops"
 
     def __repr__(self, *args, **kwargs):
         return "create-index"
+
+
+class CreateDataStream(Runner):
+    """
+    Execute the `create data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-data-stream.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        data_streams = mandatory(params, "data-streams", self)
+        request_params = mandatory(params, "request-params", self)
+        for data_stream in data_streams:
+            await es.indices.create_data_stream(data_stream, params=request_params)
+        return len(data_streams), "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "create-data-stream"
 
 
 class DeleteIndex(Runner):
@@ -1056,6 +1128,131 @@ class DeleteIndex(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-index"
+
+
+class DeleteDataStream(Runner):
+    """
+    Execute the `delete data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-data-stream.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        ops = 0
+
+        data_streams = mandatory(params, "data-streams", self)
+        only_if_exists = mandatory(params, "only-if-exists", self)
+        request_params = mandatory(params, "request-params", self)
+
+        for data_stream in data_streams:
+            if not only_if_exists:
+                await es.indices.delete_data_stream(data_stream, ignore=[404], params=request_params)
+                ops += 1
+            elif only_if_exists and await es.indices.exists(index=data_stream):
+                self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
+                await es.indices.delete_data_stream(data_stream, params=request_params)
+                ops += 1
+
+        return ops, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-data-stream"
+
+
+class CreateComponentTemplate(Runner):
+    """
+    Execute the `PUT component template API
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        templates = mandatory(params, "templates", self)
+        request_params = mandatory(params, "request-params", self)
+        for template, body in templates:
+            await es.cluster.put_component_template(name=template, body=body,
+                                                    params=request_params)
+        return len(templates), "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "create-component-template"
+
+
+class DeleteComponentTemplate(Runner):
+    """
+    Execute the `DELETE component template API
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-component-template.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        template_names = mandatory(params, "templates", self)
+        only_if_exists = mandatory(params, "only-if-exists", self)
+        request_params = mandatory(params, "request-params", self)
+
+        async def _exists(name):
+            from elasticsearch.client import _make_path
+            # currently not supported by client and hence custom request
+            return await es.transport.perform_request(
+                "HEAD", _make_path("_component_template", name)
+            )
+
+        ops_count = 0
+        for template_name in template_names:
+            if not only_if_exists:
+                await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
+                ops_count += 1
+            elif only_if_exists and await _exists(template_name):
+                self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
+                await es.cluster.delete_component_template(name=template_name, params=request_params)
+                ops_count += 1
+        return ops_count, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-component-template"
+
+
+class CreateComposableTemplate(Runner):
+    """
+    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-template.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        templates = mandatory(params, "templates", self)
+        request_params = mandatory(params, "request-params", self)
+        for template, body in templates:
+            await es.cluster.put_index_template(name=template, body=body,
+                                                    params=request_params)
+        return len(templates), "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "create-composable-template"
+
+
+class DeleteComposableTemplate(Runner):
+    """
+    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-template.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        templates = mandatory(params, "templates", self)
+        only_if_exists = mandatory(params, "only-if-exists", self)
+        request_params = mandatory(params, "request-params", self)
+        ops_count = 0
+
+        for template_name, delete_matching_indices, index_pattern in templates:
+            if not only_if_exists:
+                await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
+                ops_count += 1
+            elif only_if_exists and await es.indices.exists_template(template_name):
+                self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
+                await es.indices.delete_index_template(name=template_name, params=request_params)
+                ops_count += 1
+            # ensure that we do not provide an empty index pattern by accident
+            if delete_matching_indices and index_pattern:
+                await es.indices.delete(index=index_pattern)
+                ops_count += 1
+
+        return ops_count, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-composable-template"
 
 
 class CreateIndexTemplate(Runner):
@@ -1412,19 +1609,20 @@ class CloseMlJob(Runner):
 
 class RawRequest(Runner):
     async def __call__(self, es, params):
-        request_params = {}
+        request_params, headers = self._transport_request_params(params)
         if "ignore" in params:
             request_params["ignore"] = params["ignore"]
-        request_params.update(params.get("request-params", {}))
-
         path = mandatory(params, "path", self)
         if not path.startswith("/"):
             self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
             raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
+        if not bool(headers):
+            #counter-intuitive, but preserves prior behavior
+            headers = None
 
         await es.transport.perform_request(method=params.get("method", "GET"),
                                            url=path,
-                                           headers=params.get("headers"),
+                                           headers=headers,
                                            body=params.get("body"),
                                            params=request_params)
 
@@ -1474,16 +1672,16 @@ class CreateSnapshot(Runner):
     Creates a new snapshot repository
     """
     async def __call__(self, es, params):
-        request_params = params.get("request-params", {})
         wait_for_completion = params.get("wait-for-completion", False)
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
-        body = mandatory(params, "body", repr(self))
+        # just assert, gets set in _default_kw_params
+        mandatory(params, "body", repr(self))
+        api_kwargs = self._default_kw_params(params)
         await es.snapshot.create(repository=repository,
                                  snapshot=snapshot,
-                                 body=body,
-                                 params=request_params,
-                                 wait_for_completion=wait_for_completion)
+                                 wait_for_completion=wait_for_completion,
+                                 **api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "create-snapshot"
@@ -1542,12 +1740,11 @@ class RestoreSnapshot(Runner):
     Restores a snapshot from an already registered repository
     """
     async def __call__(self, es, params):
-        request_params = params.get("request-params", {})
+        api_kwargs = self._default_kw_params(params)
         await es.snapshot.restore(repository=mandatory(params, "repository", repr(self)),
                                   snapshot=mandatory(params, "snapshot", repr(self)),
-                                  body=params.get("body"),
                                   wait_for_completion=params.get("wait-for-completion", False),
-                                  params=request_params)
+                                  **api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "restore-snapshot"
