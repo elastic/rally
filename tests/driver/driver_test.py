@@ -790,7 +790,7 @@ class SchedulerTests(TestCase):
             if infinite_schedule and idx == len(expected_schedule):
                 break
             # simulate that the request is done - we only support throttling based on request count (ops).
-            schedule_handle.after_request(now=idx, weight=1, unit="ops", meta_data=None)
+            schedule_handle.after_request(now=idx, weight=1, unit="ops", request_meta_data=None)
         if not infinite_schedule:
             self.assertEqual(len(expected_schedule), idx, msg="Number of elements in the schedules do not match")
 

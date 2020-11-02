@@ -57,7 +57,7 @@ class MyScheduler:
     def before_request(self, now):
         ...
 
-    def after_request(self, now, weight, unit, meta_data):
+    def after_request(self, now, weight, unit, request_meta_data):
         ...
 
     def next(self, current):
@@ -67,9 +67,9 @@ class MyScheduler:
   on the task's properties.
 * ``before_request`` is invoked by Rally before a request is executed. ``now`` provides the current timestamp in seconds.
 * Similarly, ``after_request`` is invoked by Rally after a response has been received. ``now`` is the current timestamp,
-  ``weight``, ``unit`` and ``metadata`` are passed from the respective runner. For a bulk request, Rally passes e.g. `
-  ``weight=5000, unit="docs"`` or for a search request ``weight=1, unit="ops"``. Note that when a request has finished
-  with an error, the ``weight`` might be zero (depending on the type of error).
+  ``weight``, ``unit`` and ``request_meta_data`` are passed from the respective runner. For a bulk request, Rally
+  passes e.g. ``weight=5000, unit="docs"`` or for a search request ``weight=1, unit="ops"``. Note that when a request
+  has finished with an error, the ``weight`` might be zero (depending on the type of error).
 * ``next`` needs to behave identical to simple schedulers.
 
 ``before_request`` and ``after_request`` can be used to adjust the target throughput based on feedback from the runner.
@@ -163,7 +163,7 @@ class Scheduler(ABC):
     def before_request(self, now):
         pass
 
-    def after_request(self, now, weight, unit, meta_data):
+    def after_request(self, now, weight, unit, request_meta_data):
         pass
 
     @abstractmethod
@@ -259,7 +259,7 @@ class UnitAwareScheduler(Scheduler):
         # start unthrottled to avoid conditional logic on the hot code path
         self.scheduler = Unthrottled()
 
-    def after_request(self, now, weight, unit, meta_data):
+    def after_request(self, now, weight, unit, request_meta_data):
         if self.first_request or self.current_weight != weight:
             expected_unit = self.task.target_throughput.unit
             actual_unit = f"{unit}/s"

@@ -1708,8 +1708,8 @@ class ScheduleHandle:
     def before_request(self, now):
         self.sched.before_request(now)
 
-    def after_request(self, now, weight, unit, meta_data):
-        self.sched.after_request(now, weight, unit, meta_data)
+    def after_request(self, now, weight, unit, request_meta_data):
+        self.sched.after_request(now, weight, unit, request_meta_data)
 
     async def __call__(self):
         next_scheduled = 0
