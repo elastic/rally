@@ -114,7 +114,6 @@ class CarLoaderTests(TestCase):
         }, car.variables)
         self.assertEqual({}, car.env)
 
-
     def test_raises_error_on_unknown_car(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             team.load_car(self.team_dir, ["don_t-know-you"])

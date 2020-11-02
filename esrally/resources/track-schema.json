@@ -372,6 +372,10 @@
             "type": "string",
             "description": "The name of the associated document type (if any)."
           },
+          "meta": {
+            "type": "object",
+            "description": "Meta-information for a corpus."
+          },
           "documents": {
             "type": "array",
             "minItems": 1,
@@ -418,6 +422,10 @@
                 "target-type": {
                   "type": "string",
                   "description": "The name of the associated document type (if any)."
+                },
+                "meta": {
+                  "type": "object",
+                  "description": "Meta-information for a source file."
                 }
               },
               "required": [
@@ -452,6 +460,11 @@
           "operation-type": {
             "type": "string",
             "description": "Type of this operation."
+          },
+          "request-timeout": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Client-side per-request timeout in seconds for this operation."
           },
           "bulk-size": {
             "type": "integer",

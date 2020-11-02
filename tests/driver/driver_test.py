@@ -512,7 +512,6 @@ class WorkerAssignmentTests(TestCase):
         ], assignments)
 
 
-
 class AllocatorTests(TestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
@@ -1208,7 +1207,6 @@ class AsyncExecutorTests(TestCase):
         self.assertIsNotNone(sample.service_time_ms)
         self.assertIsNotNone(sample.time_period)
 
-
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_throughput_throttled(self, es):
@@ -1316,7 +1314,6 @@ class AsyncExecutorTests(TestCase):
 
             sample_size = len(samples)
             self.assertEqual(0, sample_size)
-
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1437,8 +1434,6 @@ class AsyncExecutorTests(TestCase):
             "error-type": "transport",
             "success": False
         }, request_meta_data)
-
-
 
     @run_async
     async def test_execute_single_with_http_400(self):

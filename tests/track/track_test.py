@@ -109,12 +109,15 @@ class DocumentCorpusTests(TestCase):
             track.Documents(source_format="other", number_of_documents=6, target_index="logs-02"),
             track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=7, target_index="logs-03"),
             track.Documents(source_format=None, number_of_documents=8, target_index=None)
-        ])
+        ], meta_data={
+            "average-document-size-in-bytes": 12
+        })
 
         filtered_corpus = corpus.filter()
 
         self.assertEqual(corpus.name, filtered_corpus.name)
         self.assertListEqual(corpus.documents, filtered_corpus.documents)
+        self.assertDictEqual(corpus.meta_data, filtered_corpus.meta_data)
 
     def test_filter_documents_by_format(self):
         corpus = track.DocumentCorpus("test", documents=[
@@ -194,12 +197,29 @@ class DocumentCorpusTests(TestCase):
         self.assertEqual(b.union(a), a.union(b))
         self.assertEqual(2, len(a.union(b).documents))
 
-    def test_cannot_union_mixed_document_corpora(self):
+    def test_cannot_union_mixed_document_corpora_by_name(self):
         a = track.DocumentCorpus("test", documents=[
             track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
         ])
         b = track.DocumentCorpus("other", documents=[
             track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-02"),
         ])
-        with self.assertRaisesRegex(exceptions.RallyAssertionError, "Both document corpora must have the same name"):
+        with self.assertRaises(exceptions.RallyAssertionError) as ae:
             a.union(b)
+        self.assertEqual(ae.exception.message, "Corpora names differ: [test] and [other].")
+
+    def test_cannot_union_mixed_document_corpora_by_meta_data(self):
+        a = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-01"),
+        ], meta_data={
+            "with-metadata": False
+        })
+        b = track.DocumentCorpus("test", documents=[
+            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=5, target_index="logs-02"),
+        ], meta_data={
+            "with-metadata": True
+        })
+        with self.assertRaises(exceptions.RallyAssertionError) as ae:
+            a.union(b)
+        self.assertEqual(ae.exception.message,
+                         "Corpora meta-data differ: [{'with-metadata': False}] and [{'with-metadata': True}].")

@@ -47,7 +47,6 @@ rst_prolog = '''
 '''.format(year)
 
 
-
 # General information about the project.
 project = "Rally"
 copyright = "%i, Elasticsearch B.V." % year
