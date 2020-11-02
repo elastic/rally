@@ -116,7 +116,7 @@ def kill_all(predicate):
         p.kill()
         # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
         # sockets that are still open.
-        for i in range(3):
+        for _ in range(3):
             try:
                 p.status()
                 time.sleep(1)

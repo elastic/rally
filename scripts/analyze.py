@@ -37,7 +37,7 @@ try:
     import matplotlib.pyplot as plt
 except ImportError:
     print("This script requires matplotlib. Please install with 'pip3 install matplotlib' and retry.", file=sys.stderr)
-    exit(1)
+    sys.exit(1)
 
 
 def create_plot():
@@ -90,7 +90,7 @@ def plot_service_time(raw_data, label_key):
             })
 
     for op, results in service_time_per_op.items():
-        fig, ax = create_plot()
+        _, ax = create_plot()
         legend_handles = []
         legend_labels = []
 
@@ -132,7 +132,7 @@ def plot_throughput(raw_data, label_key):
             })
 
     for op, results in throughput_per_op.items():
-        fig, ax = create_plot()
+        _, ax = create_plot()
         x_tick_labels = []
         throughput = []
         min_throughput = []
@@ -169,7 +169,7 @@ def plot_throughput(raw_data, label_key):
 
 
 def plot_gc_times(raw_data, label_key):
-    fig, ax = create_plot()
+    _, ax = create_plot()
 
     x_tick_labels = []
     old_gc_times = []

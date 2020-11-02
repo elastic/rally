@@ -528,7 +528,6 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
         raise ConfigError("The config file in {} is too old. Please delete it and reconfigure Rally from scratch with {} configure."
                           .format(config_file.location, PROGRAM_NAME))
 
-    prompter = Prompter(i=i, o=out, assume_defaults=False)
     logger.info("Upgrading configuration from version [%s] to [%s].", current_version, target_version)
     # Something is really fishy. We don't want to downgrade the configuration.
     if current_version >= target_version:

@@ -209,32 +209,32 @@ class DriverActor(actor.RallyActor):
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.info("Main driver received unknown message [%s] (ignoring).", str(msg))
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator = Driver(self, msg.config)
         self.coordinator.prepare_benchmark(msg.track)
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartBenchmark(self, msg, sender):
         self.start_sender = sender
         self.coordinator.start_benchmark()
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_TrackPrepared(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg,
                                                     expected_status=None, new_status=None, transition=self.after_track_prepared)
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_JoinPointReached(self, msg, sender):
         self.coordinator.joinpoint_reached(msg.worker_id, msg.worker_timestamp, msg.task)
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_UpdateSamples(self, msg, sender):
         self.coordinator.update_samples(msg.samples)
 
-    @actor.no_retry("driver")
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WakeupMessage(self, msg, sender):
         if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
             self.coordinator.reset_relative_time()
@@ -313,7 +313,7 @@ def load_local_config(coordinator_config):
 
 
 class TrackPreparationActor(actor.RallyActor):
-    @actor.no_retry("track preparator")
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
         # load node-specific config to have correct paths available
         cfg = load_local_config(msg.config)
@@ -746,7 +746,7 @@ def calculate_worker_assignments(host_configs, client_count):
             clients_per_worker[c % workers_on_this_host] += 1
 
         # assign client ids to workers
-        for worker_idx, client_count_for_worker in enumerate(clients_per_worker):
+        for client_count_for_worker in clients_per_worker:
             worker_assignment = []
             assignment["workers"].append(worker_assignment)
             for c in range(client_idx, client_idx + client_count_for_worker):
@@ -816,7 +816,7 @@ class Worker(actor.RallyActor):
         self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
         self.sample_queue_size = None
 
-    @actor.no_retry("worker")
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
         self.logger.info("Worker[%d] is about to start.", msg.worker_id)
         self.master = sender
@@ -837,7 +837,7 @@ class Worker(actor.RallyActor):
             track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
         self.drive()
 
-    @actor.no_retry("worker")
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Drive(self, msg, sender):
         sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
         self.logger.info("Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
@@ -845,7 +845,7 @@ class Worker(actor.RallyActor):
         self.start_driving = True
         self.wakeupAfter(sleep_time)
 
-    @actor.no_retry("worker")
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_CompleteCurrentTask(self, msg, sender):
         # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
         # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
@@ -857,7 +857,7 @@ class Worker(actor.RallyActor):
                              str(self.worker_id), self.current_task_index)
             self.complete.set()
 
-    @actor.no_retry("worker")
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WakeupMessage(self, msg, sender):
         # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
         if self.start_driving:
@@ -1333,12 +1333,14 @@ class AsyncExecutor:
                         await asyncio.sleep(rest)
                 request_context = self.es["default"].init_request_context()
                 processing_start = time.perf_counter()
+                self.schedule_handle.before_request(processing_start)
                 total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                 processing_end = time.perf_counter()
                 processing_time = processing_end - processing_start
                 stop = request_context["request_end"]
                 service_time = request_context["request_end"] - request_context["request_start"]
                 time_period = stop - total_start
+                self.schedule_handle.after_request(processing_end, total_ops, total_ops_unit, request_meta_data)
                 # Allow runners to override the throughput calculation in very specific circumstances. Usually, Rally
                 # assumes that throughput is the "amount of work" (determined by the "weight") per unit of time
                 # (determined by the elapsed time period). However, in certain cases (e.g. shard recovery or other
@@ -1625,13 +1627,17 @@ def schedule_for(task, client_index, parameter_source):
     logger = logging.getLogger(__name__)
     op = task.operation
     num_clients = task.clients
-    sched = scheduler.scheduler_for(task.schedule, task.params)
+    sched = scheduler.scheduler_for(task)
     # guard all logging statements with the client index and only emit them for the first client. This information is
     # repetitive and may cause issues in thespian with many clients (an excessive number of actor messages is sent).
     if client_index == 0:
         logger.info("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)
     params_for_op = parameter_source.partition(client_index, num_clients)
+    if hasattr(sched, "parameter_source"):
+        if client_index == 0:
+            logger.debug("Setting parameter source [%s] for scheduler [%s]", params_for_op, sched)
+        sched.parameter_source = params_for_op
 
     if requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
@@ -1698,6 +1704,12 @@ class ScheduleHandle:
         #import asyncio
         #self.io_pool_exc = ThreadPoolExecutor(max_workers=1)
         #self.loop = asyncio.get_event_loop()
+
+    def before_request(self, now):
+        self.sched.before_request(now)
+
+    def after_request(self, now, weight, unit, request_meta_data):
+        self.sched.after_request(now, weight, unit, request_meta_data)
 
     async def __call__(self):
         next_scheduled = 0
