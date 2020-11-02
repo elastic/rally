@@ -118,7 +118,7 @@ def is_legacy_scheduler(scheduler_class):
 
 def is_simple_scheduler(scheduler_class):
     """
-    Determines whether a scheduler is a "simple" scheduler, i.e. it doesn't consider feedback from the parameter source.
+    Determines whether a scheduler is a "simple" scheduler, i.e. it doesn't consider feedback from the runner.
     """
     methods = inspect.getmembers(scheduler_class, inspect.isfunction)
     method_names = [name for name, _ in methods]

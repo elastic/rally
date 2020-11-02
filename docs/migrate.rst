@@ -12,7 +12,7 @@ With Rally 2.0.3, the scheduler API has changed. The existing API still works bu
 * Scheduler functions should be replaced by scheduler classes
 * The constructor for scheduler classes changes. Instead of receiving ``params``, it receives the entire ``task`` and the precalculated target throughput.
 
-The following scheduler is implemented as a function. The target throughput is hardcoded to one operation per second::
+Consider the following scheduler implemented as a function using the deprecated API. The target throughput is hardcoded to one operation per second::
 
     def scheduler_function(current):
         return current + 1
@@ -27,7 +27,7 @@ This needs to be reimplemented as follows. We assume that the property ``target-
             return current + self.rate
 
 
-Also schedulers implemented as a class, need to be changed::
+Also schedulers that are implemented as a class using the deprecated API, need to be changed::
 
     class MyScheduler:
         def __init__(self, params):
@@ -39,7 +39,7 @@ Also schedulers implemented as a class, need to be changed::
         def next(self, current):
             return current + self.rate
 
-To stay compatible with Rally 2.0.3, this class needs to be changed as follows::
+To use the new API introduced with Rally 2.0.3, this class needs to be changed as follows::
 
     class MyScheduler:
         # target throughput is already calculated by Rally and is injected here
