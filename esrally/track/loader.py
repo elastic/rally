@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import sys
 import tempfile
 import urllib.error
 
@@ -794,8 +795,12 @@ def post_process_for_test_mode(t):
                     if logger.isEnabledFor(logging.DEBUG):
                         logger.debug("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
 
-                leaf_task.params.pop("target-throughput", None)
-                leaf_task.params.pop("target-interval", None)
+                # Keep throttled to expose any errors but increase the target throughput for short execution times.
+                if leaf_task.throttled:
+                    original_throughput = leaf_task.target_throughput
+                    leaf_task.params.pop("target-throughput", None)
+                    leaf_task.params.pop("target-interval", None)
+                    leaf_task.params["target-throughput"] = f"{sys.maxsize} {original_throughput.unit}"
 
     return t
 

@@ -100,6 +100,25 @@ class UnitAwareSchedulerTests(TestCase):
         s.after_request(now=None, weight=10000, unit="docs", request_meta_data=None)
         self.assertEqual(2 * task.clients, s.next(0))
 
+    def test_scheduler_accepts_differing_units_pages_and_ops(self):
+        task = track.Task(name="scroll-query",
+                          operation=track.Operation(
+                              name="scroll-query",
+                              operation_type=track.OperationType.Search.name),
+                          clients=1,
+                          params={
+                              # implicitly: ops/s
+                              "target-throughput": 10
+                          })
+
+        s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
+        # first request is unthrottled
+        self.assertEqual(0, s.next(0))
+        # no exception despite differing units ...
+        s.after_request(now=None, weight=20, unit="pages", request_meta_data=None)
+        # ... and it is still throttled in ops/s
+        self.assertEqual(0.1 * task.clients, s.next(0))
+
 
 class SchedulerCategorizationTests(TestCase):
     class LegacyScheduler:
