@@ -430,31 +430,28 @@ class CreateTemplateParamSource(ABC, ParamSource):
                 if not filter_template or template.name == filter_template:
                     body = template.content
                     if body and "template" in body:
-                        body = CreateComposableTemplateParamSource._create_or_merge(template.content,
-                                                                                    ["template", "settings"], settings)
+                        body = self.create_or_merge(template.content, ["template", "settings"], settings)
                         self.template_definitions.append((template.name, body))
         else:
             raise exceptions.InvalidSyntax("Please set the properties 'template' and 'body' for the "
                                            f"{params.get('operation-type')} operation or declare composable and/or component "
                                            "templates in the track")
 
-    @staticmethod
-    def _create_or_merge(content, path, new_content):
+    def create_or_merge(self, content, path, new_content):
         original_content = content
         if new_content:
             for sub_path in path:
                 if sub_path not in content:
                     content[sub_path] = {}
                 content = content[sub_path]
-            CreateComposableTemplateParamSource.__merge(content, new_content)
+            self.merge(content, new_content)
         return original_content
 
-    @staticmethod
-    def __merge(dct, merge_dct):
+    def merge(self, dct, merge_dct):
         for k in merge_dct.keys():
             if (k in dct and isinstance(dct[k], dict)
                     and isinstance(merge_dct[k], collections.Mapping)):
-                CreateComposableTemplateParamSource.__merge(dct[k], merge_dct[k])
+                self.merge(dct[k], merge_dct[k])
             else:
                 dct[k] = merge_dct[k]
 
