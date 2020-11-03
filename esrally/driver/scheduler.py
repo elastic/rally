@@ -267,15 +267,15 @@ class UnitAwareScheduler(Scheduler):
             expected_unit = self.task.target_throughput.unit
             actual_unit = f"{unit}/s"
             if actual_unit != expected_unit:
-                # *temporary* workaround to convert pages/s (scrolls) to ops/s to stay backwards-compatible.
+                # *temporary* workaround to convert mismatching units to ops/s to stay backwards-compatible.
                 #
-                # This ensures that we throttle based on ops/s but report based on pages/s (as before).
-                if actual_unit == "pages/s" and expected_unit == "ops/s":
+                # This ensures that we throttle based on ops/s but report based on the original unit (as before).
+                if expected_unit == "ops/s":
                     weight = 1
                     if self.first_request:
-                        logging.getLogger(__name__).warning("Task [%s] throttles based on ops/s but reports pages/s. "
-                                                            "Please specify the target throughput in pages/s instead.",
-                                                            self.task)
+                        logging.getLogger(__name__).warning("Task [%s] throttles based on [%s] but reports [%s]. "
+                                                            "Please specify the target throughput in [%s] instead.",
+                                                            self.task, expected_unit, actual_unit, actual_unit)
                 else:
                     raise exceptions.RallyAssertionError(f"Target throughput for [{self.task}] is specified in "
                                                          f"[{expected_unit}] but the task throughput is measured "
