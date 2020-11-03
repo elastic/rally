@@ -1092,44 +1092,6 @@ class ForceMergeRunnerTests(TestCase):
                                       "request-timeout": 50000, "poll-period": 0})
         es.indices.forcemerge.assert_called_once_with(index="_all", max_num_segments=1, request_timeout=1)
 
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
-    async def test_optimize_with_defaults(self, es):
-        es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request.return_value = as_future()
-
-        force_merge = runner.ForceMerge()
-        await force_merge(es, params={})
-
-        es.transport.perform_request.assert_called_once_with(method="POST", url="/_optimize", params={}, headers={})
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
-    async def test_optimize_with_timeout_and_headers(self, es):
-        es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request.return_value = as_future()
-
-        force_merge = runner.ForceMerge()
-        await force_merge(es, params={"request-timeout": 3.0, "opaque-id": "test-id", "headers": {"header1": "value1"}})
-
-        es.transport.perform_request.assert_called_once_with(method="POST",
-                                                             url="/_optimize",
-                                                             params={"request_timeout": 3.0},
-                                                             headers={"header1": "value1", "x-opaque-id": "test-id"})
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
-    async def test_optimize_with_params(self, es):
-        es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request.return_value = as_future()
-        force_merge = runner.ForceMerge()
-        await force_merge(es, params={"max-num-segments": 3, "request-timeout": 17000})
-
-        es.transport.perform_request.assert_called_once_with(method="POST",
-                                                             url="/_optimize",
-                                                             params={"request_timeout": 17000, "max_num_segments": 3},
-                                                             headers={})
-
 
 class IndicesStatsRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")

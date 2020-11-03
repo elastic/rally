@@ -1,10 +1,7 @@
 Using Elasticsearch Plugins
 ===========================
 
-You can have Rally setup an Elasticsearch cluster with plugins for you. However, there are a couple of restrictions:
-
-* This feature is only supported from Elasticsearch 5.0.0 onwards
-* Whereas Rally caches downloaded Elasticsearch distributions, plugins will always be installed via the Internet and thus each machine where an Elasticsearch node will be installed, requires an active Internet connection.
+You can have Rally setup an Elasticsearch cluster with plugins for you. Whereas Rally caches downloaded Elasticsearch distributions, plugins will always be installed via the Internet and thus each machine where an Elasticsearch node will be installed, requires an active Internet connection.
 
 Listing plugins
 ---------------
@@ -39,13 +36,7 @@ To see which plugins are available, run ``esrally list elasticsearch-plugins``::
     repository-s3
     store-smb
 
-Rally supports plugins only for Elasticsearch 5.0 or better. As the availability of plugins may change from release to release we recommend that you include the ``--distribution-version`` parameter when listing plugins. By default Rally assumes that you want to benchmark the latest master version of Elasticsearch.
-
-Let's see what happens if we run ``esrally list elasticsearch-plugins --distribution-version=2.4.0``::
-
-    No Elasticsearch plugins are available.
-
-As mentioned before, this is expected as only Elasticsearch 5.0 or better is supported.
+As the availability of plugins may change from release to release we recommend that you include the ``--distribution-version`` parameter when listing plugins. By default Rally assumes that you want to benchmark the latest master version of Elasticsearch.
 
 Running a benchmark with plugins
 --------------------------------
