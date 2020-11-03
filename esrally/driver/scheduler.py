@@ -205,6 +205,9 @@ class Unthrottled(Scheduler):
     def next(self, current):
         return 0
 
+    def __str__(self):
+        return "unthrottled"
+
 
 class DeterministicScheduler(SimpleScheduler):
     """
@@ -264,9 +267,19 @@ class UnitAwareScheduler(Scheduler):
             expected_unit = self.task.target_throughput.unit
             actual_unit = f"{unit}/s"
             if actual_unit != expected_unit:
-                raise exceptions.RallyAssertionError(f"Target throughput for [{self.task}] is specified in "
-                                                     f"[{expected_unit}] but the task throughput is measured "
-                                                     f"in [{actual_unit}].")
+                # *temporary* workaround to convert pages/s (scrolls) to ops/s to stay backwards-compatible.
+                #
+                # This ensures that we throttle based on ops/s but report based on pages/s (as before).
+                if actual_unit == "pages/s" and expected_unit == "ops/s":
+                    weight = 1
+                    if self.first_request:
+                        logging.getLogger(__name__).warning("Task [%s] throttles based on ops/s but reports pages/s. "
+                                                            "Please specify the target throughput in pages/s instead.",
+                                                            self.task)
+                else:
+                    raise exceptions.RallyAssertionError(f"Target throughput for [{self.task}] is specified in "
+                                                         f"[{expected_unit}] but the task throughput is measured "
+                                                         f"in [{actual_unit}].")
 
             self.first_request = False
             self.current_weight = weight
