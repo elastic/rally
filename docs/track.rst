@@ -78,7 +78,7 @@ You can now verify that everything works by listing all tracks in this track rep
 
 This shows all tracks that are available on the ``master`` branch of this repository. Suppose you only created tracks on the branch ``2`` because you're interested in the performance of Elasticsearch 2.x, then you can specify also the distribution version::
 
-    esrally list tracks --track-repository=private --distribution-version=2.0.0
+    esrally list tracks --track-repository=private --distribution-version=7.0.0
 
 
 Rally will follow the same branch fallback logic as described above.

@@ -54,10 +54,9 @@ def docker(cfg, car, cluster_settings, ip, http_port, target_root, node_name):
 
 
 class NodeConfiguration:
-    def __init__(self, build_type, car_env, car_runtime_jdks, car_provides_bundled_jdk, ip, node_name, node_root_path,
+    def __init__(self, build_type, car_runtime_jdks, car_provides_bundled_jdk, ip, node_name, node_root_path,
                  binary_path, data_paths):
         self.build_type = build_type
-        self.car_env = car_env
         self.car_runtime_jdks = car_runtime_jdks
         self.car_provides_bundled_jdk = car_provides_bundled_jdk
         self.ip = ip
@@ -69,7 +68,6 @@ class NodeConfiguration:
     def as_dict(self):
         return {
             "build-type": self.build_type,
-            "car-env": self.car_env,
             "car-runtime-jdks": self.car_runtime_jdks,
             "car-provides-bundled-jdk": self.car_provides_bundled_jdk,
             "ip": self.ip,
@@ -81,7 +79,7 @@ class NodeConfiguration:
 
     @staticmethod
     def from_dict(d):
-        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["car-provides-bundled-jdk"], d["ip"],
+        return NodeConfiguration(d["build-type"], d["car-runtime-jdks"], d["car-provides-bundled-jdk"], d["ip"],
                                  d["node-name"], d["node-root-path"], d["binary-path"], d["data-paths"])
 
 
@@ -196,7 +194,7 @@ class BareProvisioner:
         for installer in self.plugin_installers:
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
-        return NodeConfiguration("tar", self.es_installer.car.env, self.es_installer.car.mandatory_var("runtime.jdk"),
+        return NodeConfiguration("tar", self.es_installer.car.mandatory_var("runtime.jdk"),
                                  convert.to_bool(self.es_installer.car.mandatory_var("runtime.jdk.bundled")),
                                  self.es_installer.node_ip, self.es_installer.node_name,
                                  self.es_installer.node_root_dir, self.es_installer.es_home_path,
@@ -463,7 +461,7 @@ class DockerProvisioner:
         with open(os.path.join(self.binary_path, "docker-compose.yml"), mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"),
+        return NodeConfiguration("docker", self.car.mandatory_var("runtime.jdk"),
                                  convert.to_bool(self.car.mandatory_var("runtime.jdk.bundled")), self.node_ip,
                                  self.node_name, self.node_root_dir, self.binary_path, self.data_paths)
 

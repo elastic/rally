@@ -164,7 +164,7 @@ You can now verify that everything works by listing all teams in this team repos
 
 This shows all teams that are available on the ``master`` branch of this repository. Suppose you only created tracks on the branch ``2`` because you're interested in the performance of Elasticsearch 2.x, then you can specify also the distribution version::
 
-    esrally list teams --team-repository=private --distribution-version=2.0.0
+    esrally list teams --team-repository=private --distribution-version=7.0.0
 
 
 Rally will follow the same branch fallback logic as described above.

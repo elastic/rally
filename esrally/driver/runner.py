@@ -660,34 +660,24 @@ class ForceMerge(Runner):
         merge_params = self._default_kw_params(params)
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
-        try:
-            if mode == "polling":
-                # we ignore the request_timeout if we are in polling mode and deliberately timeout early
-                # no reason to wait as long as a whole {polling-period} (which has a minimum of 1 second)
-                merge_params["request_timeout"] = 1
-                complete = False
-                try:
-                    await es.indices.forcemerge(**merge_params)
-                    complete = True
-                except elasticsearch.ConnectionTimeout:
-                    pass
-                while not complete:
-                    await asyncio.sleep(params.get("poll-period"))
-                    tasks = await es.tasks.list(params={"actions":"indices:admin/forcemerge"})
-                    if len(tasks["nodes"]) == 0:
-                        # empty nodes response indicates no tasks
-                        complete = True
-            else:
+        if mode == "polling":
+            # we ignore the request_timeout if we are in polling mode and deliberately timeout early
+            # no reason to wait as long as a whole {polling-period} (which has a minimum of 1 second)
+            merge_params["request_timeout"] = 1
+            complete = False
+            try:
                 await es.indices.forcemerge(**merge_params)
-        except elasticsearch.TransportError as e:
-            # this is caused by older versions of Elasticsearch (< 2.1), fall back to optimize
-            if e.status_code == 400:
-                params, headers = self._transport_request_params(params)
-                if max_num_segments:
-                    params["max_num_segments"] = max_num_segments
-                await es.transport.perform_request(method="POST", url="/_optimize", params=params, headers=headers)
-            else:
-                raise e
+                complete = True
+            except elasticsearch.ConnectionTimeout:
+                pass
+            while not complete:
+                await asyncio.sleep(params.get("poll-period"))
+                tasks = await es.tasks.list(params={"actions":"indices:admin/forcemerge"})
+                if len(tasks["nodes"]) == 0:
+                    # empty nodes response indicates no tasks
+                    complete = True
+        else:
+            await es.indices.forcemerge(**merge_params)
 
     def __repr__(self, *args, **kwargs):
         return "force-merge"
