@@ -79,8 +79,8 @@ class NodeConfiguration:
 
     @staticmethod
     def from_dict(d):
-        return NodeConfiguration(d["build-type"], d["car-env"], d["car-runtime-jdks"], d["car-provides-bundled-jdk"], d["ip"],
-                                 d["node-name"], d["node-root-path"], d["binary-path"])
+        return NodeConfiguration(d["build-type"], d["car-runtime-jdks"], d["car-provides-bundled-jdk"], d["ip"],
+                                 d["node-name"], d["node-root-path"], d["binary-path"], d["data-paths"])
 
 
 def save_node_configuration(path, n):
@@ -461,7 +461,7 @@ class DockerProvisioner:
         with open(os.path.join(self.binary_path, "docker-compose.yml"), mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration("docker", self.car.env, self.car.mandatory_var("runtime.jdk"),
+        return NodeConfiguration("docker", self.car.mandatory_var("runtime.jdk"),
                                  convert.to_bool(self.car.mandatory_var("runtime.jdk.bundled")), self.node_ip,
                                  self.node_name, self.node_root_dir, self.binary_path, self.data_paths)
 
