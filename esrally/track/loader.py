@@ -1321,7 +1321,7 @@ class TrackSpecificationReader:
             # may as well an inline operation
             op = self.parse_operation(op_spec, error_ctx="inline operation in challenge %s" % challenge_name)
 
-        schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False, default_value="deterministic")
+        schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False)
         task_name = self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name)
         task = track.Task(name=task_name,
                           operation=op,

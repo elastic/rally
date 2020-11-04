@@ -90,10 +90,11 @@ def scheduler_for(task: esrally.track.Task):
     if not task.throttled:
         return Unthrottled()
 
+    schedule = task.schedule or "deterministic"
     try:
-        scheduler_class = __SCHEDULERS[task.schedule]
+        scheduler_class = __SCHEDULERS[schedule]
     except KeyError:
-        raise exceptions.RallyError(f"No scheduler available for name [{task.schedule}]")
+        raise exceptions.RallyError(f"No scheduler available for name [{schedule}]")
 
     # for backwards-compatibility - treat existing schedulers as top-level schedulers
     if is_legacy_scheduler(scheduler_class):
