@@ -230,7 +230,7 @@ def ensure_dir(directory, mode=0o777):
 
 
 def _zipdir(source_directory, archive):
-    for root, dirs, files in os.walk(source_directory):
+    for root, _, files in os.walk(source_directory):
         for file in files:
             archive.write(
                 filename=os.path.join(root, file),
@@ -284,7 +284,7 @@ def decompress(zip_name, target_directory):
     :param target_directory: The directory to which files should be decompressed. May or may not exist prior to calling
     this function.
     """
-    path_without_extension, extension = splitext(zip_name)
+    _, extension = splitext(zip_name)
     if extension == ".zip":
         _do_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
@@ -479,7 +479,7 @@ def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
 
 def get_size(start_path="."):
     total_size = 0
-    for dirpath, dirnames, filenames in os.walk(start_path):
+    for dirpath, _, filenames in os.walk(start_path):
         for f in filenames:
             fp = os.path.join(dirpath, f)
             total_size += os.path.getsize(fp)

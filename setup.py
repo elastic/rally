@@ -79,7 +79,13 @@ install_requires = [
     # License: Apache 2.0
     "yappi==1.2.3",
     # License: BSD
-    "ijson==2.6.1"
+    "ijson==2.6.1",
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   google-crc32c: Apache 2.0
+    "google-resumable-media==1.1.0",
+    # License: Apache 2.0
+    "google-auth==1.22.1"
 ]
 
 tests_require = [

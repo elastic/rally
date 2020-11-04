@@ -161,7 +161,7 @@ class EsClientTests(TestCase):
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
-        f = metrics.EsClientFactory(cfg)
+        metrics.EsClientFactory(cfg)
         expected_client_options = {
             "use_ssl": True,
             "timeout": 120,
@@ -264,7 +264,7 @@ class EsClientTests(TestCase):
                           all_err_codes[rnd_err_code], rnd_err_code,
                           rnd_err_idx + 1, max_retry + 1, sleep_slots[rnd_err_idx])
             )
-
+        # pylint: disable=no-value-for-parameter
         test_transport_error_retries(rnd_side_effects,
                                      rnd_mocked_logger_calls,
                                      mocked_sleep_calls)

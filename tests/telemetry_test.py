@@ -2643,8 +2643,8 @@ class IndexStatsTests(TestCase):
 
         # we cannot rely on stable iteration order so we need to extract the values at runtime from the dict
         primary_shards = []
-        for idx, shards in response["indices"].items():
-            for shard_number, shard in shards["shards"].items():
+        for shards in response["indices"].values():
+            for shard in shards["shards"].values():
                 for shard_metrics in shard:
                     if shard_metrics["routing"]["primary"]:
                         primary_shards.append(shard_metrics)
