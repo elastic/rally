@@ -1904,38 +1904,28 @@ class CreateComposableTemplateParamSourceTests(TestCase):
             }, body)
 
     def test_create_or_merge(self):
-        source = params.CreateComposableTemplateParamSource(track=track.Track(name="unit-test"), params={
-            "template": "test",
-            "body": {
-                "index_patterns": ["my*"],
-                "template": {
-                    "settings" : {
-                        "index.number_of_shards" : 3
-                    }
-                },
-                "composed_of": ["ct1", "ct2"]
-            }
-        })
-
-        content = source.create_or_merge({"parent": {}}, ["parent", "child", "grandchild"], {"name": "Mike"})
+        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {}}, ["parent", "child", "grandchild"],
+                                                       {"name": "Mike"})
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
-        content = source.create_or_merge({"parent": {"child": {}}}, ["parent", "child", "grandchild"], {"name": "Mike"})
+        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {"child": {}}}, ["parent", "child", "grandchild"],
+                                                       {"name": "Mike"})
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
-        content = source.create_or_merge({"parent": {"child": {"grandchild": {}}}}, ["parent", "child", "grandchild"], {"name": "Mike"})
+        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {"child": {"grandchild": {}}}},
+                                                       ["parent", "child", "grandchild"], {"name": "Mike"})
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
-        content = source.create_or_merge(
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
             {"parent": {"child": {"name": "Mary", "grandchild": {"name": "Dale", "age": 38}}}},
             ["parent", "child", "grandchild"], {"name": "Mike"})
         assert content["parent"]["child"]["name"] == "Mary"
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
         assert content["parent"]["child"]["grandchild"]["age"] == 38
-        content = source.create_or_merge(
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
             {"parent": {
                 "child": {"name": "Mary", "grandchild": {"name": {"first": "Dale", "last": "Smith"}, "age": 38}}}},
             ["parent", "child", "grandchild"], {"name": "Mike"})
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
         assert content["parent"]["child"]["grandchild"]["age"] == 38
-        content = source.create_or_merge(
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
             {"parent": {
                 "child": {"name": "Mary", "grandchild": {"name": {"first": "Dale", "last": "Smith"}, "age": 38}}}},
             ["parent", "child", "grandchild"], {"name": {"first": "Mike"}})

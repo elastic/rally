@@ -56,7 +56,6 @@ class TestNetUtils:
         bucket_path = random.choice(["path/to/object", "/path/to/object",
                                      "/path/to/object/", "path/to/object/"])
 
-        # pylint: disable=protected-access
         assert net._build_gcs_object_url(bucket_name, bucket_path) == \
                "https://storage.googleapis.com/storage/v1/b/unittest-bucket.test.me/o/path%2Fto%2Fobject?alt=media"
 
