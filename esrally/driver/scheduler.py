@@ -196,7 +196,7 @@ class LegacyWrappingScheduler(Scheduler):
         self.legacy_scheduler = legacy_scheduler_class(task.params)
 
     def next(self, current):
-        return self.legacy_scheduler(current)
+        return self.legacy_scheduler.next(current)
 
 
 class Unthrottled(Scheduler):
