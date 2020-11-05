@@ -58,7 +58,6 @@ def load_car(repo, name, car_params=None):
     all_config_paths = []
     all_config_base_vars = {}
     all_car_vars = {}
-    all_env = {}
 
     for n in name:
         descriptor = CarLoader(repo).load_car(n, car_params)
@@ -75,15 +74,6 @@ def load_car(repo, name, car_params=None):
                     raise exceptions.SystemSetupError("Invalid car: {}. Multiple bootstrap hooks are forbidden.".format(name))
         all_config_base_vars.update(descriptor.config_base_variables)
         all_car_vars.update(descriptor.variables)
-        # env needs to be merged individually, consider ES_JAVA_OPTS="-Xms1G" and ES_JAVA_OPTS="-ea".
-        # We want it to be ES_JAVA_OPTS="-Xms1G -ea" in the end.
-        for k, v in descriptor.env.items():
-            # merge
-            if k not in all_env:
-                all_env[k] = v
-            else:  # merge
-                # assume we need to separate with a space
-                all_env[k] = all_env[k] + " " + v
 
     if len(all_config_paths) == 0:
         raise exceptions.SystemSetupError("At least one config base is required for car {}".format(name))
@@ -92,7 +82,7 @@ def load_car(repo, name, car_params=None):
     variables.update(all_config_base_vars)
     variables.update(all_car_vars)
 
-    return Car(name, root_path, all_config_paths, variables, all_env)
+    return Car(name, root_path, all_config_paths, variables)
 
 
 def list_plugins(cfg):
@@ -195,8 +185,7 @@ class CarLoader:
         if car_params:
             variables.update(car_params)
 
-        env = self._copy_section(config, "env", {})
-        return CarDescriptor(name, description, car_type, root_paths, config_paths, config_base_vars, variables, env)
+        return CarDescriptor(name, description, car_type, root_paths, config_paths, config_base_vars, variables)
 
     def _config_loader(self, file_name):
         config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
@@ -223,7 +212,7 @@ class CarLoader:
 
 
 class CarDescriptor:
-    def __init__(self, name, description, type, root_paths, config_paths, config_base_variables, variables, env):
+    def __init__(self, name, description, type, root_paths, config_paths, config_base_variables, variables):
         self.name = name
         self.description = description
         self.type = type
@@ -231,7 +220,6 @@ class CarDescriptor:
         self.config_paths = config_paths
         self.config_base_variables = config_base_variables
         self.variables = variables
-        self.env = env
 
     def __hash__(self):
         return hash(self.name)
@@ -244,7 +232,7 @@ class Car:
     # name of the initial Python file to load for cars.
     entry_point = "config"
 
-    def __init__(self, names, root_path, config_paths, variables=None, env=None):
+    def __init__(self, names, root_path, config_paths, variables=None):
         """
         Creates new settings for a benchmark candidate.
 
@@ -252,10 +240,7 @@ class Car:
         :param root_path: The root path from which bootstrap hooks should be loaded if any. May be ``None``.
         :param config_paths: A non-empty list of paths where the raw config can be found.
         :param variables: A dict containing variable definitions that need to be replaced.
-        :param env: Environment variables that should be set when launching the benchmark candidate.
         """
-        if env is None:
-            env = {}
         if variables is None:
             variables = {}
         if isinstance(names, str):
@@ -265,7 +250,6 @@ class Car:
         self.root_path = root_path
         self.config_paths = config_paths
         self.variables = variables
-        self.env = env
 
     def mandatory_var(self, name):
         try:

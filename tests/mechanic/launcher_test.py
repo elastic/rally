@@ -180,7 +180,7 @@ class ProcessLauncherTests(TestCase):
 
         node_configs = []
         for node in range(2):
-            node_configs.append(NodeConfiguration(build_type="tar", car_env={}, car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
+            node_configs.append(NodeConfiguration(build_type="tar", car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
                                                   ip="127.0.0.1", node_name="testnode-{}".format(node),
                                                   node_root_path="/tmp", binary_path="/tmp", data_paths="/tmp"))
 
@@ -229,7 +229,7 @@ class ProcessLauncherTests(TestCase):
             telemetry.FlightRecorder(telemetry_params={}, log_root="/tmp/telemetry", java_major_version=8)
         ]
         t = telemetry.Telemetry(["jfr"], devices=node_telemetry)
-        env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home="/java_home", t=t)
+        env = proc_launcher._prepare_env(node_name="node0", java_home="/java_home", t=t)
 
         self.assertEqual("/java_home/bin" + os.pathsep + os.environ["PATH"], env["PATH"])
         self.assertEqual("-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
@@ -247,7 +247,7 @@ class ProcessLauncherTests(TestCase):
 
         t = telemetry.Telemetry()
         # no JAVA_HOME -> use the bundled JDK
-        env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home=None, t=t)
+        env = proc_launcher._prepare_env(node_name="node0", java_home=None, t=t)
 
         # unmodified
         self.assertEqual(os.environ["PATH"], env["PATH"])
@@ -265,7 +265,7 @@ class ProcessLauncherTests(TestCase):
 
         t = telemetry.Telemetry()
         # no JAVA_HOME -> use the bundled JDK
-        env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home=None, t=t)
+        env = proc_launcher._prepare_env(node_name="node0", java_home=None, t=t)
 
         # unmodified
         self.assertEqual(os.environ["JAVA_HOME"], env["JAVA_HOME"])
@@ -283,7 +283,7 @@ class ProcessLauncherTests(TestCase):
 
         t = telemetry.Telemetry()
         # no JAVA_HOME -> use the bundled JDK
-        env = proc_launcher._prepare_env(car_env={}, node_name="node0", java_home=None, t=t)
+        env = proc_launcher._prepare_env(node_name="node0", java_home=None, t=t)
 
         # unmodified
         self.assertEqual(os.environ["ES_JAVA_OPTS"], env["ES_JAVA_OPTS"])
@@ -366,7 +366,7 @@ class DockerLauncherTests(TestCase):
         cfg = config.Config()
         docker = launcher.DockerLauncher(cfg)
 
-        node_config = NodeConfiguration(build_type="docker", car_env={}, car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
+        node_config = NodeConfiguration(build_type="docker", car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
                                         ip="127.0.0.1", node_name="testnode", node_root_path="/tmp", binary_path="/bin",
                                         data_paths="/tmp")
 
@@ -398,7 +398,7 @@ class DockerLauncherTests(TestCase):
         stop_watch = IterationBasedStopWatch(max_iterations=2)
         docker = launcher.DockerLauncher(cfg, clock=TestClock(stop_watch=stop_watch))
 
-        node_config = NodeConfiguration(build_type="docker", car_env={}, car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
+        node_config = NodeConfiguration(build_type="docker", car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
                                         ip="127.0.0.1", node_name="testnode", node_root_path="/tmp", binary_path="/bin",
                                         data_paths="/tmp")
 

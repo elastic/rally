@@ -51,7 +51,6 @@ class CarLoaderTests(TestCase):
             "clean_command": "./gradlew clean",
             "data_paths": ["/mnt/disk0", "/mnt/disk1"]
         }, car.variables)
-        self.assertEqual({}, car.env)
         self.assertIsNone(car.root_path)
 
     def test_load_car_with_mixin_single_config_base(self):
@@ -64,7 +63,6 @@ class CarLoaderTests(TestCase):
             "clean_command": "./gradlew clean",
             "assertions": "true"
         }, car.variables)
-        self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F"}, car.env)
         self.assertIsNone(car.root_path)
 
     def test_load_car_with_mixin_multiple_config_bases(self):
@@ -81,7 +79,6 @@ class CarLoaderTests(TestCase):
             "verbose_logging": "true",
             "assertions": "true"
         }, car.variables)
-        self.assertEqual({"JAVA_TOOL_OPTS": "A B C D E F G H I"}, car.env)
 
     def test_load_car_with_install_hook(self):
         car = team.load_car(self.team_dir, ["default", "with_hook"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
@@ -96,7 +93,6 @@ class CarLoaderTests(TestCase):
             "clean_command": "./gradlew clean",
             "data_paths": ["/mnt/disk0", "/mnt/disk1"]
         }, car.variables)
-        self.assertEqual({}, car.env)
 
     def test_load_car_with_multiple_bases_referring_same_install_hook(self):
         car = team.load_car(self.team_dir, ["with_hook", "another_with_hook"])
@@ -112,7 +108,6 @@ class CarLoaderTests(TestCase):
             "clean_command": "./gradlew clean",
             "verbose_logging": "true"
         }, car.variables)
-        self.assertEqual({}, car.env)
 
     def test_raises_error_on_unknown_car(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
