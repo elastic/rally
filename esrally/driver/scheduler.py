@@ -114,7 +114,7 @@ def is_legacy_scheduler(scheduler_class):
     target throughput.
     """
     constructor_params = inspect.signature(scheduler_class.__init__).parameters
-    return len(constructor_params) == 2 and "params" in constructor_params
+    return len(constructor_params) >= 2 and "params" in constructor_params
 
 
 def is_simple_scheduler(scheduler_class):
