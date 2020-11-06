@@ -1625,8 +1625,6 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
                                                           track_name))
 
     if chart_spec_path:
-        import json
-
         race_configs = {"oss": [], "default": []}
         if chart_type == BarCharts:
             race_configs = []

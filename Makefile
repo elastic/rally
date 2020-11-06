@@ -22,6 +22,7 @@ PY_BIN = python3
 # https://github.com/pypa/pip/issues/5599
 PIP_WRAPPER = $(PY_BIN) -m pip
 PY38 = $(shell jq '.python_versions.PY38' .ci/variables.json)
+PY39 = $(shell jq '.python_versions.PY39' .ci/variables.json)
 VENV_NAME ?= .venv
 VENV_ACTIVATE_FILE = $(VENV_NAME)/bin/activate
 VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
@@ -34,6 +35,7 @@ VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VENV_NAME)
 
 prereq:
 	pyenv install --skip-existing $(PY38)
+	pyenv install --skip-existing $(PY39)
 	pyenv local $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
@@ -108,6 +110,9 @@ it: check-venv python-caches-clean tox-env-clean
 
 it38: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38
+
+it39: check-venv python-caches-clean tox-env-clean
+	. $(VENV_ACTIVATE_FILE); tox -e py39
 
 benchmark: check-venv
 	. $(VENV_ACTIVATE_FILE); pytest benchmarks/

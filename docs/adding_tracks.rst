@@ -266,7 +266,7 @@ You can also show details about your track with ``esrally info --track-path=~/ra
     5. force-merge
     6. query-match-all (8 clients)
 
-Congratulations, you have created your first track! You can test it with ``esrally --distribution-version=6.0.0 --track-path=~/rally-tracks/tutorial``.
+Congratulations, you have created your first track! You can test it with ``esrally --distribution-version=7.0.0 --track-path=~/rally-tracks/tutorial``.
 
 .. _add_track_test_mode:
 

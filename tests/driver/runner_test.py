@@ -1092,44 +1092,6 @@ class ForceMergeRunnerTests(TestCase):
                                       "request-timeout": 50000, "poll-period": 0})
         es.indices.forcemerge.assert_called_once_with(index="_all", max_num_segments=1, request_timeout=1)
 
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
-    async def test_optimize_with_defaults(self, es):
-        es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request.return_value = as_future()
-
-        force_merge = runner.ForceMerge()
-        await force_merge(es, params={})
-
-        es.transport.perform_request.assert_called_once_with(method="POST", url="/_optimize", params={}, headers={})
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
-    async def test_optimize_with_timeout_and_headers(self, es):
-        es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request.return_value = as_future()
-
-        force_merge = runner.ForceMerge()
-        await force_merge(es, params={"request-timeout": 3.0, "opaque-id": "test-id", "headers": {"header1": "value1"}})
-
-        es.transport.perform_request.assert_called_once_with(method="POST",
-                                                             url="/_optimize",
-                                                             params={"request_timeout": 3.0},
-                                                             headers={"header1": "value1", "x-opaque-id": "test-id"})
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
-    async def test_optimize_with_params(self, es):
-        es.indices.forcemerge.side_effect = as_future(exception=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request.return_value = as_future()
-        force_merge = runner.ForceMerge()
-        await force_merge(es, params={"max-num-segments": 3, "request-timeout": 17000})
-
-        es.transport.perform_request.assert_called_once_with(method="POST",
-                                                             url="/_optimize",
-                                                             params={"request_timeout": 17000, "max_num_segments": 3},
-                                                             headers={})
-
 
 class IndicesStatsRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1918,7 +1880,6 @@ class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_scroll_query_cannot_clear_scroll(self, es):
-        import elasticsearch
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -4396,8 +4357,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_is_transparent_on_exception_when_no_retries(self):
-        import elasticsearch
-
         delegate = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")))
         es = None
         params = {
@@ -4444,8 +4403,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_retries_on_timeout_if_wanted_and_raises_if_no_recovery(self):
-        import elasticsearch
-
         delegate = mock.Mock(side_effect=[
             as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
             as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
@@ -4472,7 +4429,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_retries_on_timeout_if_wanted_and_returns_first_call(self):
-        import elasticsearch
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
 
         delegate = mock.Mock(side_effect=[
@@ -4500,7 +4456,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_retries_mixed_timeout_and_application_errors(self):
-        import elasticsearch
         connection_error = elasticsearch.ConnectionError("N/A", "no route to host")
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": False}
@@ -4543,8 +4498,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_does_not_retry_on_timeout_if_not_wanted(self):
-        import elasticsearch
-
         delegate = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionTimeout(408, "timed out")))
         es = None
         params = {
