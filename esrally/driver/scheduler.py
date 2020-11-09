@@ -90,10 +90,11 @@ def scheduler_for(task: esrally.track.Task):
     if not task.throttled:
         return Unthrottled()
 
+    schedule = task.schedule or "deterministic"
     try:
-        scheduler_class = __SCHEDULERS[task.schedule]
+        scheduler_class = __SCHEDULERS[schedule]
     except KeyError:
-        raise exceptions.RallyError(f"No scheduler available for name [{task.schedule}]")
+        raise exceptions.RallyError(f"No scheduler available for name [{schedule}]")
 
     # for backwards-compatibility - treat existing schedulers as top-level schedulers
     if is_legacy_scheduler(scheduler_class):
@@ -113,7 +114,7 @@ def is_legacy_scheduler(scheduler_class):
     target throughput.
     """
     constructor_params = inspect.signature(scheduler_class.__init__).parameters
-    return len(constructor_params) == 2 and "params" in constructor_params
+    return len(constructor_params) >= 2 and "params" in constructor_params
 
 
 def is_simple_scheduler(scheduler_class):
@@ -195,7 +196,7 @@ class LegacyWrappingScheduler(Scheduler):
         self.legacy_scheduler = legacy_scheduler_class(task.params)
 
     def next(self, current):
-        return self.legacy_scheduler(current)
+        return self.legacy_scheduler.next(current)
 
 
 class Unthrottled(Scheduler):
