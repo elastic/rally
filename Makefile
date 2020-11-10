@@ -60,9 +60,11 @@ check-venv:
 	printf $(VE_MISSING_HELP); \
 	fi
 
-install: venv-create
+install-user: venv-create
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip setuptools wheel
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e . --use-feature=2020-resolver
+
+install: install-user
 	# Also install development dependencies
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop] --use-feature=2020-resolver
 
