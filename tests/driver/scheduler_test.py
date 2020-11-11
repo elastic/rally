@@ -127,8 +127,14 @@ class SchedulerCategorizationTests(TestCase):
         def __init__(self, params):
             pass
 
+    class LegacySchedulerWithAdditionalArgs:
+        # pylint: disable=unused-variable
+        def __init__(self, params, my_default_param=True):
+            pass
+
     def test_detects_legacy_scheduler(self):
         self.assertTrue(scheduler.is_legacy_scheduler(SchedulerCategorizationTests.LegacyScheduler))
+        self.assertTrue(scheduler.is_legacy_scheduler(SchedulerCategorizationTests.LegacySchedulerWithAdditionalArgs))
 
     def test_a_regular_scheduler_is_not_a_legacy_scheduler(self):
         self.assertFalse(scheduler.is_legacy_scheduler(scheduler.DeterministicScheduler))
@@ -139,3 +145,32 @@ class SchedulerCategorizationTests(TestCase):
 
     def test_is_not_simple_scheduler(self):
         self.assertFalse(scheduler.is_simple_scheduler(scheduler.UnitAwareScheduler))
+
+
+class LegacyWrappingSchedulerTests(TestCase):
+    class SimpleLegacyScheduler:
+        # pylint: disable=unused-variable
+        def __init__(self, params):
+            pass
+
+        def next(self, current):
+            return current
+
+    def setUp(self):
+        scheduler.register_scheduler("simple", LegacyWrappingSchedulerTests.SimpleLegacyScheduler)
+
+    def tearDown(self):
+        scheduler.remove_scheduler("simple")
+
+    def test_legacy_scheduler(self):
+        task = track.Task(name="raw-request",
+                          operation=track.Operation(
+                              name="raw",
+                              operation_type=track.OperationType.RawRequest.name),
+                          clients=1,
+                          schedule="simple")
+
+        s = scheduler.scheduler_for(task)
+
+        self.assertEqual(0, s.next(0))
+        self.assertEqual(0, s.next(0))

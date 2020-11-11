@@ -1880,7 +1880,6 @@ class QueryRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_scroll_query_cannot_clear_scroll(self, es):
-        import elasticsearch
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -4358,8 +4357,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_is_transparent_on_exception_when_no_retries(self):
-        import elasticsearch
-
         delegate = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")))
         es = None
         params = {
@@ -4406,8 +4403,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_retries_on_timeout_if_wanted_and_raises_if_no_recovery(self):
-        import elasticsearch
-
         delegate = mock.Mock(side_effect=[
             as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
             as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
@@ -4434,7 +4429,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_retries_on_timeout_if_wanted_and_returns_first_call(self):
-        import elasticsearch
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
 
         delegate = mock.Mock(side_effect=[
@@ -4462,7 +4456,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_retries_mixed_timeout_and_application_errors(self):
-        import elasticsearch
         connection_error = elasticsearch.ConnectionError("N/A", "no route to host")
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": False}
@@ -4505,8 +4498,6 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_does_not_retry_on_timeout_if_not_wanted(self):
-        import elasticsearch
-
         delegate = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionTimeout(408, "timed out")))
         es = None
         params = {

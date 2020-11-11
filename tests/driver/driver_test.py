@@ -24,6 +24,8 @@ import unittest.mock as mock
 from datetime import datetime
 from unittest import TestCase
 
+import elasticsearch
+
 from esrally import metrics, track, exceptions, config
 from esrally.driver import driver, runner, scheduler
 from esrally.track import params
@@ -1452,7 +1454,6 @@ class AsyncExecutorTests(TestCase):
 
     @run_async
     async def test_execute_single_with_connection_error_aborts_as_fatal(self):
-        import elasticsearch
         es = None
         params = None
         # ES client uses pseudo-status "N/A" in this case...
@@ -1466,7 +1467,6 @@ class AsyncExecutorTests(TestCase):
 
     @run_async
     async def test_execute_single_with_connection_error_continues(self):
-        import elasticsearch
         es = None
         params = None
         # ES client uses pseudo-status "N/A" in this case...
@@ -1486,7 +1486,6 @@ class AsyncExecutorTests(TestCase):
 
     @run_async
     async def test_execute_single_with_http_400(self):
-        import elasticsearch
         es = None
         params = None
         runner = mock.Mock(side_effect=
@@ -1506,7 +1505,6 @@ class AsyncExecutorTests(TestCase):
 
     @run_async
     async def test_execute_single_with_http_413(self):
-        import elasticsearch
         es = None
         params = None
         runner = mock.Mock(side_effect=
@@ -1550,8 +1548,6 @@ class AsyncExecutorTests(TestCase):
 class AsyncProfilerTests(TestCase):
     @run_async
     async def test_profiler_is_a_transparent_wrapper(self):
-        import time
-
         async def f(x):
             await asyncio.sleep(x)
             return x * 2

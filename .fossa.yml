@@ -1,0 +1,13 @@
+version: 2
+cli:
+  server: https://app.fossa.com
+  fetcher: custom
+  project: Rally
+analyze:
+  modules:
+  - name: .
+    type: pip
+    target: .
+    path: .
+    options:
+      strategy: pip
