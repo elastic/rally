@@ -398,7 +398,7 @@ class DocumentSetPreparator:
         if self.offline:
             raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
 
-        data_url = "%s/%s" % (base_url, file_name)
+        data_url = f"{urllib.parse.urljoin(base_url + '/', file_name)}"
         try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
