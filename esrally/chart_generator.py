@@ -1593,7 +1593,14 @@ class RaceConfig:
         for task in self.track.find_challenge_or_default(self.challenge).schedule:
             for sub_task in task:
                 # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
-                if "target-throughput" in sub_task.params or "target-interval" in sub_task.params:
+                #
+                # As a temporary workaround we're also treating operations of type "eql" as throttled tasks (requiring a latency
+                # or service time chart) although they are (at the moment) not throttled. These tasks originate from the EQL track
+                # available at https://github.com/elastic/rally-tracks/tree/master/eql.
+                #
+                # We should refactor the chart generator to make this classification logic more flexible so the user can specify
+                # which tasks / or types of operations should be used for which chart types.
+                if "target-throughput" in sub_task.params or "target-interval" in sub_task.params or sub_task.operation.type == "eql":
                     if sub_task.name not in self.excluded_tasks:
                         task_names.append(sub_task.name)
         return task_names
