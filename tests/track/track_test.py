@@ -232,26 +232,34 @@ class OperationTypeTests(TestCase):
 
 
 class TaskTests(TestCase):
-    def task(self, target_throughput=None, target_interval=None):
+    def task(self, schedule=None, target_throughput=None, target_interval=None):
         op = track.Operation("bulk-index", track.OperationType.Bulk.name)
         params = {}
         if target_throughput:
             params["target-throughput"] = target_throughput
         if target_interval:
             params["target-interval"] = target_interval
-        return track.Task("test", op, params=params)
+        return track.Task("test", op, schedule=schedule, params=params)
 
     def test_unthrottled_task(self):
         task = self.task()
         self.assertIsNone(task.target_throughput)
+        self.assertFalse(task.throttled)
+
+    def test_task_with_scheduler_is_throttled(self):
+        task = self.task(schedule="daily-traffic-pattern")
+        self.assertIsNone(task.target_throughput)
+        self.assertTrue(task.throttled)
 
     def test_valid_throughput_with_unit(self):
         task = self.task(target_throughput="5 MB/s")
         self.assertEqual(track.Throughput(5.0, "MB/s"), task.target_throughput)
+        self.assertTrue(task.throttled)
 
     def test_valid_throughput_numeric(self):
         task = self.task(target_throughput=3.2)
         self.assertEqual(track.Throughput(3.2, "ops/s"), task.target_throughput)
+        self.assertTrue(task.throttled)
 
     def test_invalid_throughput_format_is_rejected(self):
         task = self.task(target_throughput="3.2 docs")

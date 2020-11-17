@@ -768,9 +768,8 @@ Throughput = collections.namedtuple("Throughput", ["value", "unit"])
 class Task:
     THROUGHPUT_PATTERN = re.compile(r"(?P<value>(\d*\.)?\d+)\s(?P<unit>\w+/s)")
 
-    def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None, time_period=None,
-                 clients=1,
-                 completes_parent=False, schedule="deterministic", params=None):
+    def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None,
+                 time_period=None, clients=1, completes_parent=False, schedule=None, params=None):
         self.name = name
         self.operation = operation
         self.meta_data = meta_data if meta_data else {}
@@ -828,7 +827,7 @@ class Task:
 
     @property
     def throttled(self):
-        return self.target_throughput is not None
+        return self.schedule is not None or self.target_throughput is not None
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)

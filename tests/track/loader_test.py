@@ -272,6 +272,41 @@ class TrackPreparationTests(TestCase):
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("esrally.utils.net.download")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
+    def test_download_document_with_trailing_baseurl_slash(self, is_file, get_size, ensure_dir, download, decompress,
+                                                           prepare_file_offset_table):
+        # uncompressed file does not exist
+        # file check for uncompressed file before download attempt (for potential error message)
+        # after download uncompressed file exists
+        # after download uncompressed file exists (main loop)
+        is_file.side_effect = [False, False, True, True]
+        # uncompressed file size is 2000
+        get_size.return_value = 2000
+
+        prepare_file_offset_table.return_value = 5
+
+        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+
+        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
+                                                            base_url="http://benchmarks.elasticsearch.org/corpora/unit-test/",
+                                                            document_file="docs.json",
+                                                            # --> We don't provide a document archive here <--
+                                                            document_archive=None,
+                                                            number_of_documents=5,
+                                                            compressed_size_in_bytes=200,
+                                                            uncompressed_size_in_bytes=2000),
+                               data_root="/tmp")
+
+        ensure_dir.assert_called_with("/tmp")
+        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
+                                    "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.getsize")
