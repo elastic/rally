@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import io
 import json
 import random
@@ -4339,6 +4340,162 @@ class DeleteTransformTests(TestCase):
 
         es.transform.delete_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
                                                               ignore=[404])
+
+
+class CompositeTests(TestCase):
+    class CounterRunner:
+        def __init__(self):
+            self.max_value = 0
+            self.current = 0
+
+        async def __aenter__(self):
+            self.current += 1
+            return self
+
+        async def __call__(self, es, params):
+            self.max_value = max(self.max_value, self.current)
+            # wait for a short moment to ensure overlap
+            await asyncio.sleep(0.2)
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            self.current -= 1
+            return False
+
+    def setUp(self):
+        runner.register_default_runners()
+        self.counter_runner = CompositeTests.CounterRunner()
+        runner.register_runner("counter", self.counter_runner, async_runner=True)
+
+    def tearDown(self):
+        runner.remove_runner("counter")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_execute_multiple_streams(self, es):
+        es.transport.perform_request.return_value = as_future()
+
+        params = {
+            "max-connections": 4,
+            "requests": [
+                {
+                    "stream": [
+                        {
+                            "operation-type": "raw-request",
+                            "path": "/",
+                            "body": {}
+                        }
+                    ]
+                },
+                {
+                    "stream": [
+                        {
+                            "operation-type": "sleep",
+                            "duration": 0.1
+                        }
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        await r(es, params)
+
+        es.transport.perform_request.assert_called_once_with(method="GET",
+                                                             url="/",
+                                                             headers=None,
+                                                             body={},
+                                                             params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_limits_connections(self, es):
+        params = {
+            "max-connections": 2,
+            "requests": [
+                {
+                    "stream": [
+                        {
+                            "operation-type": "counter"
+                        }
+                    ]
+                },
+                {
+                    "stream": [
+                        {
+                            "operation-type": "counter"
+                        }
+
+                    ]
+                },
+                {
+                    "stream": [
+                        {
+                            "operation-type": "counter"
+                        }
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        r.supported_op_types = ["counter"]
+        await r(es, params)
+
+        # composite runner should limit to two concurrent connections
+        self.assertEqual(2, self.counter_runner.max_value)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_rejects_invalid_stream(self, es):
+        # params contains a "streams" property (plural) but it should be "stream" (singular)
+        params = {
+            "max-connections": 2,
+            "requests": [
+                {
+                    "stream": [
+                        {
+                            "operation-type": "counter"
+                        }
+                    ]
+                },
+                {
+                    "streams": [
+                        {
+                            "operation-type": "counter"
+                        }
+
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            await r(es, params)
+
+        self.assertEqual("Requests structure must contain [stream] or [operation-type].", ctx.exception.args[0])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_rejects_unsupported_operations(self, es):
+        params = {
+            "requests": [
+                {
+                    "stream": [
+                        {
+                            "operation-type": "bulk"
+                        }
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            await r(es, params)
+
+        self.assertEqual("Unsupported operation-type [bulk]. Use one of [raw-request, sleep].", ctx.exception.args[0])
+
 
 
 class RetryTests(TestCase):

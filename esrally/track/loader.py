@@ -1382,13 +1382,11 @@ class TrackSpecificationReader:
             op = track.OperationType.from_hyphenated_string(op_type_name)
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
-            op_type = op.name
-            self.logger.debug("Using built-in operation type [%s] for operation [%s].", op_type, op_name)
+            self.logger.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)
         except KeyError:
             self.logger.info("Using user-provided operation type [%s] for operation [%s].", op_type_name, op_name)
-            op_type = op_type_name
 
         try:
-            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=params, param_source=param_source)
+            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type_name, params=params, param_source=param_source)
         except exceptions.InvalidSyntax as e:
             raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))

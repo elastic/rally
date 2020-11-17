@@ -225,6 +225,12 @@ class DocumentCorpusTests(TestCase):
                          "Corpora meta-data differ: [{'with-metadata': False}] and [{'with-metadata': True}].")
 
 
+class OperationTypeTests(TestCase):
+    def test_string_hyphenation_is_symmetric(self):
+        for op_type in track.OperationType:
+            self.assertEqual(op_type, track.OperationType.from_hyphenated_string(op_type.to_hyphenated_string()))
+
+
 class TaskTests(TestCase):
     def task(self, target_throughput=None, target_interval=None):
         op = track.Operation("bulk-index", track.OperationType.Bulk.name)

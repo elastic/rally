@@ -32,49 +32,50 @@ __RUNNERS = {}
 
 
 def register_default_runners():
-    register_runner(track.OperationType.Bulk.name, BulkIndex(), async_runner=True)
-    register_runner(track.OperationType.ForceMerge.name, ForceMerge(), async_runner=True)
-    register_runner(track.OperationType.IndicesStats.name, Retry(IndicesStats()), async_runner=True)
-    register_runner(track.OperationType.NodesStats.name, NodeStats(), async_runner=True)
-    register_runner(track.OperationType.Search.name, Query(), async_runner=True)
-    register_runner(track.OperationType.RawRequest.name, RawRequest(), async_runner=True)
+    register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
+    register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
+    register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
+    register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
+    register_runner(track.OperationType.Search, Query(), async_runner=True)
+    register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
+    register_runner(track.OperationType.Composite, Composite(), async_runner=True)
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
-    register_runner(track.OperationType.Sleep.name, Sleep(), async_runner=True)
+    register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
     # these requests should not be retried as they are not idempotent
-    register_runner(track.OperationType.CreateSnapshot.name, CreateSnapshot(), async_runner=True)
-    register_runner(track.OperationType.RestoreSnapshot.name, RestoreSnapshot(), async_runner=True)
+    register_runner(track.OperationType.CreateSnapshot, CreateSnapshot(), async_runner=True)
+    register_runner(track.OperationType.RestoreSnapshot, RestoreSnapshot(), async_runner=True)
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
-    register_runner(track.OperationType.ClusterHealth.name, Retry(ClusterHealth()), async_runner=True)
-    register_runner(track.OperationType.PutPipeline.name, Retry(PutPipeline()), async_runner=True)
-    register_runner(track.OperationType.Refresh.name, Retry(Refresh()), async_runner=True)
-    register_runner(track.OperationType.CreateIndex.name, Retry(CreateIndex()), async_runner=True)
-    register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()), async_runner=True)
-    register_runner(track.OperationType.CreateComponentTemplate.name, Retry(CreateComponentTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteComponentTemplate.name, Retry(DeleteComponentTemplate()), async_runner=True)
-    register_runner(track.OperationType.CreateComposableTemplate.name, Retry(CreateComposableTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteComposableTemplate.name, Retry(DeleteComposableTemplate()), async_runner=True)
-    register_runner(track.OperationType.CreateDataStream.name, Retry(CreateDataStream()), async_runner=True)
-    register_runner(track.OperationType.DeleteDataStream.name, Retry(DeleteDataStream()), async_runner=True)
-    register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()), async_runner=True)
-    register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()), async_runner=True)
-    register_runner(track.OperationType.CreateMlDatafeed.name, Retry(CreateMlDatafeed()), async_runner=True)
-    register_runner(track.OperationType.DeleteMlDatafeed.name, Retry(DeleteMlDatafeed()), async_runner=True)
-    register_runner(track.OperationType.StartMlDatafeed.name, Retry(StartMlDatafeed()), async_runner=True)
-    register_runner(track.OperationType.StopMlDatafeed.name, Retry(StopMlDatafeed()), async_runner=True)
-    register_runner(track.OperationType.CreateMlJob.name, Retry(CreateMlJob()), async_runner=True)
-    register_runner(track.OperationType.DeleteMlJob.name, Retry(DeleteMlJob()), async_runner=True)
-    register_runner(track.OperationType.OpenMlJob.name, Retry(OpenMlJob()), async_runner=True)
-    register_runner(track.OperationType.CloseMlJob.name, Retry(CloseMlJob()), async_runner=True)
-    register_runner(track.OperationType.DeleteSnapshotRepository.name, Retry(DeleteSnapshotRepository()), async_runner=True)
-    register_runner(track.OperationType.CreateSnapshotRepository.name, Retry(CreateSnapshotRepository()), async_runner=True)
-    register_runner(track.OperationType.WaitForSnapshotCreate.name, Retry(WaitForSnapshotCreate()), async_runner=True)
-    register_runner(track.OperationType.WaitForRecovery.name, Retry(IndicesRecovery()), async_runner=True)
-    register_runner(track.OperationType.PutSettings.name, Retry(PutSettings()), async_runner=True)
-    register_runner(track.OperationType.CreateTransform.name, Retry(CreateTransform()), async_runner=True)
-    register_runner(track.OperationType.StartTransform.name, Retry(StartTransform()), async_runner=True)
-    register_runner(track.OperationType.WaitForTransform.name, Retry(WaitForTransform()), async_runner=True)
-    register_runner(track.OperationType.DeleteTransform.name, Retry(DeleteTransform()), async_runner=True)
+    register_runner(track.OperationType.ClusterHealth, Retry(ClusterHealth()), async_runner=True)
+    register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
+    register_runner(track.OperationType.Refresh, Retry(Refresh()), async_runner=True)
+    register_runner(track.OperationType.CreateIndex, Retry(CreateIndex()), async_runner=True)
+    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex()), async_runner=True)
+    register_runner(track.OperationType.CreateComponentTemplate, Retry(CreateComponentTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteComponentTemplate, Retry(DeleteComponentTemplate()), async_runner=True)
+    register_runner(track.OperationType.CreateComposableTemplate, Retry(CreateComposableTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate()), async_runner=True)
+    register_runner(track.OperationType.CreateDataStream, Retry(CreateDataStream()), async_runner=True)
+    register_runner(track.OperationType.DeleteDataStream, Retry(DeleteDataStream()), async_runner=True)
+    register_runner(track.OperationType.CreateIndexTemplate, Retry(CreateIndexTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteIndexTemplate, Retry(DeleteIndexTemplate()), async_runner=True)
+    register_runner(track.OperationType.ShrinkIndex, Retry(ShrinkIndex()), async_runner=True)
+    register_runner(track.OperationType.CreateMlDatafeed, Retry(CreateMlDatafeed()), async_runner=True)
+    register_runner(track.OperationType.DeleteMlDatafeed, Retry(DeleteMlDatafeed()), async_runner=True)
+    register_runner(track.OperationType.StartMlDatafeed, Retry(StartMlDatafeed()), async_runner=True)
+    register_runner(track.OperationType.StopMlDatafeed, Retry(StopMlDatafeed()), async_runner=True)
+    register_runner(track.OperationType.CreateMlJob, Retry(CreateMlJob()), async_runner=True)
+    register_runner(track.OperationType.DeleteMlJob, Retry(DeleteMlJob()), async_runner=True)
+    register_runner(track.OperationType.OpenMlJob, Retry(OpenMlJob()), async_runner=True)
+    register_runner(track.OperationType.CloseMlJob, Retry(CloseMlJob()), async_runner=True)
+    register_runner(track.OperationType.DeleteSnapshotRepository, Retry(DeleteSnapshotRepository()), async_runner=True)
+    register_runner(track.OperationType.CreateSnapshotRepository, Retry(CreateSnapshotRepository()), async_runner=True)
+    register_runner(track.OperationType.WaitForSnapshotCreate, Retry(WaitForSnapshotCreate()), async_runner=True)
+    register_runner(track.OperationType.WaitForRecovery, Retry(IndicesRecovery()), async_runner=True)
+    register_runner(track.OperationType.PutSettings, Retry(PutSettings()), async_runner=True)
+    register_runner(track.OperationType.CreateTransform, Retry(CreateTransform()), async_runner=True)
+    register_runner(track.OperationType.StartTransform, Retry(StartTransform()), async_runner=True)
+    register_runner(track.OperationType.WaitForTransform, Retry(WaitForTransform()), async_runner=True)
+    register_runner(track.OperationType.DeleteTransform, Retry(DeleteTransform()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -87,6 +88,9 @@ def runner_for(operation_type):
 def register_runner(operation_type, runner, **kwargs):
     logger = logging.getLogger(__name__)
     async_runner = kwargs.get("async_runner", False)
+    if isinstance(operation_type, track.OperationType):
+        operation_type = operation_type.to_hyphenated_string()
+
     if not async_runner:
         raise exceptions.RallyAssertionError(
             "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner)))
@@ -1969,6 +1973,50 @@ class DeleteTransform(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-transform"
+
+
+class Composite(Runner):
+    """
+    Executes a complex request structure which is measured by Rally as one composite operation.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.supported_op_types = ["raw-request", "sleep"]
+
+    async def run_stream(self, es, stream, connection_limit):
+        streams = []
+        try:
+            for item in stream:
+                if "stream" in item:
+                    streams.append(asyncio.create_task(self.run_stream(es, item["stream"], connection_limit)))
+                elif "operation-type" in item:
+                    op_type = item["operation-type"]
+                    if op_type not in self.supported_op_types:
+                        raise exceptions.RallyAssertionError(
+                            f"Unsupported operation-type [{op_type}]. Use one of [{', '.join(self.supported_op_types)}].")
+                    runner = runner_for(op_type)
+                    async with connection_limit:
+                        async with runner:
+                            await runner({"default": es}, item)
+                else:
+                    raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
+        except BaseException:
+            # stop all already created tasks in case of exceptions
+            for s in streams:
+                if not s.done():
+                    s.cancel()
+            raise
+
+        if streams:
+            await asyncio.gather(*streams)
+
+    async def __call__(self, es, params):
+        requests = mandatory(params, "requests", self)
+        max_connections = params.get("max-connections", sys.maxsize)
+        await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+
+    def __repr__(self, *args, **kwargs):
+        return "composite"
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
