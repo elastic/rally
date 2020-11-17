@@ -328,6 +328,10 @@ Each challenge consists of one or more tasks but sometimes you are only interest
 
 You can use ``--include-tasks`` to specify a comma-separated list of tasks that you want to run. Each item in the list defines either the name of a task or the operation type of a task. Only the tasks that match will be executed. Currently there is also no command that lists the tasks of a challenge so you need to look at the track source.
 
+.. note::
+
+    Tasks will be executed in the order that are defined in the challenge, not in the order they are defined in the command.
+
 **Examples**:
 
 * Execute only the tasks with the name ``index`` and ``term``: ``--include-tasks="index,term"``
@@ -519,16 +523,16 @@ and reference it when running Rally::
 ``runtime-jdk``
 ~~~~~~~~~~~~~~~
 
-By default, Rally will derive the appropriate runtime JDK versions automatically per version of Elasticsearch. For example, it will choose JDK 8 or 7 for Elasticsearch 2.x but only JDK 8 for Elasticsearch 5.0.0. It will choose the highest available version.
+By default, Rally will derive the appropriate runtime JDK versions automatically per version of Elasticsearch. For example, it will choose JDK 8 for Elasticsearch 5.0.0 but JDK 12, 11 or 8 for Elasticsearch 7.0.0. It will choose the highest available version.
 
-This command line parameter sets the major version of the JDK that Rally should use to run Elasticsearch. It is required that either ``JAVA_HOME`` or ``JAVAx_HOME`` (where ``x`` is the major version, e.g. ``JAVA8_HOME`` for a JDK 8) points to the appropriate JDK.
+This command line parameter sets the major version of the JDK that Rally should use to run Elasticsearch. It is required that either ``JAVA_HOME`` or ``JAVAx_HOME`` (where ``x`` is the major version, e.g. ``JAVA11_HOME`` for a JDK 11) points to the appropriate JDK.
 
 Example::
 
    # Run a benchmark with defaults (i.e. JDK 8)
-   esrally --distribution-version=2.4.0
-   # Force to run with JDK 7
-   esrally --distribution-version=2.4.0 --runtime-jdk=7
+   esrally --distribution-version=5.0.0
+   # Force to run with JDK 11
+   esrally --distribution-version=7.0.0 --runtime-jdk=11
 
 It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/current/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
 
@@ -570,10 +574,10 @@ If you want Rally to launch and benchmark a cluster using a binary distribution,
 
  ::
 
-   esrally --distribution-version=2.3.3
+   esrally --distribution-version=7.0.0
 
 
-Rally will then benchmark the official Elasticsearch 2.3.3 distribution. Please check our :doc:`version support page </versions>` to see which Elasticsearch versions are currently supported by Rally.
+Rally will then benchmark the official Elasticsearch 7.0.0 distribution. Please check our :doc:`version support page </versions>` to see which Elasticsearch versions are currently supported by Rally.
 
 ``distribution-repository``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

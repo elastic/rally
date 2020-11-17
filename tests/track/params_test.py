@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=protected-access
 
 import random
 from unittest import TestCase
@@ -1173,6 +1174,7 @@ class BulkDataGeneratorTests(TestCase):
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-size": 5,
+            "unit": "docs",
             "index": "test-idx",
             "type": "test-type",
             "my-custom-parameter": "foo",
@@ -1183,6 +1185,7 @@ class BulkDataGeneratorTests(TestCase):
             "action-metadata-present": True,
             "body": ["6", "7", "8"],
             "bulk-size": 3,
+            "unit": "docs",
             "index": "test-idx",
             "type": "test-type",
             "my-custom-parameter": "foo",
@@ -1229,6 +1232,7 @@ class BulkDataGeneratorTests(TestCase):
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-size": 5,
+            "unit": "docs",
             "index": "logs-2018-01",
             "type": "docs",
             "my-custom-parameter": "foo",
@@ -1239,6 +1243,7 @@ class BulkDataGeneratorTests(TestCase):
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-size": 5,
+            "unit": "docs",
             "index": "logs-2018-02",
             "type": "docs",
             "my-custom-parameter": "foo",
@@ -1249,6 +1254,7 @@ class BulkDataGeneratorTests(TestCase):
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-size": 5,
+            "unit": "docs",
             "index": "logs-2017-01",
             "type": "docs",
             "my-custom-parameter": "foo",
@@ -1280,6 +1286,7 @@ class BulkDataGeneratorTests(TestCase):
             "action-metadata-present": True,
             "body": ["1", "2", "3"],
             "bulk-size": 3,
+            "unit": "docs",
             "index": "test-idx",
             "type": "test-type",
             "custom-param": "bar"
@@ -1331,6 +1338,9 @@ class ParamsRegistrationTests(TestCase):
                 "class-key": self._params["parameter"]
             }
 
+        def __str__(self):
+            return "test param source"
+
     def test_can_register_legacy_function_as_param_source(self):
         source_name = "legacy-params-test-function-param-source"
 
@@ -1366,6 +1376,13 @@ class ParamsRegistrationTests(TestCase):
         self.assertEqual({"class-key": 42}, source.params())
 
         params._unregister_param_source_for_name(source_name)
+
+    def test_cannot_register_an_instance_as_param_source(self):
+        source_name = "params-test-class-param-source"
+        # we create an instance, instead of passing the class
+        with self.assertRaisesRegex(exceptions.RallyAssertionError,
+                                    "Parameter source \\[test param source\\] must be either a function or a class\\."):
+            params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceClass())
 
 
 class SleepParamSourceTests(TestCase):
@@ -1821,6 +1838,211 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
         self.assertDictEqual({"master_timeout": 20}, p["request-params"])
 
 
+class CreateComposableTemplateParamSourceTests(TestCase):
+    def test_create_index_template_inline(self):
+        source = params.CreateComposableTemplateParamSource(track=track.Track(name="unit-test"), params={
+            "template": "test",
+            "body": {
+              "index_patterns": ["my*"],
+              "template": {
+                "settings" : {
+                    "index.number_of_shards" : 3
+                }
+              },
+              "composed_of": ["ct1", "ct2"]
+            }
+        })
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertDictEqual({}, p["request-params"])
+        template, body = p["templates"][0]
+        self.assertEqual("test", template)
+        self.assertDictEqual({
+              "index_patterns": ["my*"],
+              "template": {
+                "settings" : {
+                    "index.number_of_shards" : 3
+                }
+              },
+              "composed_of": ["ct1", "ct2"]
+            }, body)
+
+    def test_create_composable_index_template_from_track(self):
+        tpl = track.IndexTemplate(name="default", pattern="*", content={
+              "index_patterns": ["my*"],
+              "template": {
+                "settings" : {
+                    "index.number_of_shards" : 3
+                }
+              },
+              "composed_of": ["ct1", "ct2"]
+            })
+
+        source = params.CreateComposableTemplateParamSource(track=track.Track(name="unit-test", composable_templates=[tpl]), params={
+            "settings": {
+                "index.number_of_replicas": 1
+            }
+        })
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertDictEqual({}, p["request-params"])
+        template, body = p["templates"][0]
+        self.assertEqual("default", template)
+        self.assertDictEqual({
+              "index_patterns": ["my*"],
+              "template": {
+                "settings" : {
+                    "index.number_of_shards" : 3,
+                    "index.number_of_replicas": 1
+                }
+              },
+              "composed_of": ["ct1", "ct2"]
+            }, body)
+
+    def test_create_or_merge(self):
+        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {}}, ["parent", "child", "grandchild"],
+                                                       {"name": "Mike"})
+        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
+        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {"child": {}}}, ["parent", "child", "grandchild"],
+                                                       {"name": "Mike"})
+        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
+        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {"child": {"grandchild": {}}}},
+                                                       ["parent", "child", "grandchild"], {"name": "Mike"})
+        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
+            {"parent": {"child": {"name": "Mary", "grandchild": {"name": "Dale", "age": 38}}}},
+            ["parent", "child", "grandchild"], {"name": "Mike"})
+        assert content["parent"]["child"]["name"] == "Mary"
+        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
+        assert content["parent"]["child"]["grandchild"]["age"] == 38
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
+            {"parent": {
+                "child": {"name": "Mary", "grandchild": {"name": {"first": "Dale", "last": "Smith"}, "age": 38}}}},
+            ["parent", "child", "grandchild"], {"name": "Mike"})
+        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
+        assert content["parent"]["child"]["grandchild"]["age"] == 38
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
+            {"parent": {
+                "child": {"name": "Mary", "grandchild": {"name": {"first": "Dale", "last": "Smith"}, "age": 38}}}},
+            ["parent", "child", "grandchild"], {"name": {"first": "Mike"}})
+        assert content["parent"]["child"]["grandchild"]["name"]["first"] == "Mike"
+        assert content["parent"]["child"]["grandchild"]["name"]["last"] == "Smith"
+
+    def test_no_templates_specified(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.CreateComposableTemplateParamSource(
+                track=track.Track(name="unit-test"), params={
+                    "settings": {
+                        "index.number_of_shards": 1,
+                        "index.number_of_replicas": 1
+                    },
+                    "operation-type": "create-composable-template"
+                })
+        self.assertEqual("Please set the properties 'template' and 'body' for the create-composable-template operation "
+                         "or declare composable and/or component templates in the track", ctx.exception.args[0])
+
+
+class CreateComponentTemplateParamSourceTests(TestCase):
+    def test_create_component_index_template_from_track(self):
+        tpl = track.ComponentTemplate(name="default", content={
+          "template": {
+            "mappings": {
+              "properties": {
+                "@timestamp": {
+                  "type": "date"
+                }
+              }
+            }
+          }
+        })
+
+        source = params.CreateComponentTemplateParamSource(
+            track=track.Track(name="unit-test", component_templates=[tpl]), params={
+                "settings": {
+                    "index.number_of_shards": 1,
+                    "index.number_of_replicas": 1
+                }
+            })
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertDictEqual({}, p["request-params"])
+        template, body = p["templates"][0]
+        self.assertEqual("default", template)
+        self.assertDictEqual({
+          "template": {
+            "settings": {
+              "index.number_of_shards": 1,
+              "index.number_of_replicas": 1
+            },
+            "mappings": {
+              "properties": {
+                "@timestamp": {
+                  "type": "date"
+                }
+              }
+            }
+          }
+        }, body)
+
+
+class DeleteComponentTemplateParamSource(TestCase):
+    def test_delete_index_template_by_name(self):
+        source = params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
+        p = source.params()
+        self.assertEqual(1, len(p["templates"]))
+        self.assertEqual("default", p["templates"][0])
+        self.assertTrue(p["only-if-exists"])
+        self.assertDictEqual({}, p["request-params"])
+
+    def test_delete_index_template_no_name(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"),
+                                                  params={"operation-type": "delete-component-template"})
+        self.assertEqual("Please set the property 'template' for the delete-component-template operation.",
+                         ctx.exception.args[0])
+
+    def test_delete_index_template_from_track(self):
+        tpl1 = track.ComponentTemplate(name="logs", content={
+          "template": {
+            "mappings": {
+              "properties": {
+                "@timestamp": {
+                  "type": "date"
+                }
+              }
+            }
+          }
+        })
+        tpl2 = track.ComponentTemplate(name="metrics", content={
+          "template": {
+            "settings": {
+              "index.number_of_shards": 1,
+              "index.number_of_replicas": 1
+            }
+          }
+        })
+        source = params.DeleteComponentTemplateParamSource(track.Track(name="unit-test", templates=[tpl1, tpl2]), params={
+            "request-params": {
+                "master_timeout": 20
+            },
+            "only-if-exists": False
+        })
+
+        p = source.params()
+
+        self.assertEqual(2, len(p["templates"]))
+        self.assertEqual("logs", p["templates"][0])
+        self.assertEqual("metrics", p["templates"][1])
+        self.assertFalse(p["only-if-exists"])
+        self.assertDictEqual({"master_timeout": 20}, p["request-params"])
+
+
 class SearchParamSourceTests(TestCase):
     def test_passes_cache(self):
         index1 = track.Index(name="index1", types=["type1"])
@@ -1831,13 +2053,19 @@ class SearchParamSourceTests(TestCase):
                     "match_all": {}
                 }
             },
+            "headers": {
+                "header1": "value1"
+            },
             "cache": True
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
+        self.assertIsNone(p["request-timeout"])
+        self.assertIsNone(p["opaque-id"])
+        self.assertDictEqual({"header1": "value1"}, p["headers"])
         self.assertEqual({}, p["request-params"])
         self.assertEqual(True, p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
@@ -1856,13 +2084,25 @@ class SearchParamSourceTests(TestCase):
                     "match_all": {}
                 }
             },
+            "request-timeout": 1.0,
+            "headers": {
+                "header1": "value1",
+                "header2": "value2"
+            },
+            "opaque-id": "12345abcde",
             "cache": True
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("data-stream-1", p["index"])
         self.assertIsNone(p["type"])
+        self.assertEqual(1.0, p["request-timeout"])
+        self.assertDictEqual({
+            "header1": "value1",
+            "header2": "value2"
+        }, p["headers"])
+        self.assertEqual("12345abcde", p["opaque-id"])
         self.assertEqual({}, p["request-params"])
         self.assertEqual(True, p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
@@ -1900,9 +2140,12 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
+        self.assertIsNone(p["request-timeout"])
+        self.assertIsNone(p["headers"])
+        self.assertIsNone(p["opaque-id"])
         self.assertEqual({
             "_source_include": "some_field"
         }, p["request-params"])
@@ -1922,6 +2165,7 @@ class SearchParamSourceTests(TestCase):
             "type": "type1",
             "cache": False,
             "response-compression-enabled": False,
+            "opaque-id": "12345abcde",
             "body": {
                 "query": {
                     "match_all": {}
@@ -1930,10 +2174,13 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("_all", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
+        self.assertIsNone(p["request-timeout"])
+        self.assertIsNone(p["headers"])
+        self.assertEqual("12345abcde", p["opaque-id"])
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
         self.assertEqual(False, p["cache"])
         self.assertEqual(False, p["response-compression-enabled"])
@@ -1950,6 +2197,7 @@ class SearchParamSourceTests(TestCase):
             "data-stream": "data-stream-2",
             "cache": False,
             "response-compression-enabled": False,
+            "request-timeout": 1.0,
             "body": {
                 "query": {
                     "match_all": {}
@@ -1958,9 +2206,12 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(6, len(p))
+        self.assertEqual(9, len(p))
         self.assertEqual("data-stream-2", p["index"])
         self.assertIsNone(p["type"])
+        self.assertEqual(1.0, p["request-timeout"])
+        self.assertIsNone(p["headers"])
+        self.assertIsNone(p["opaque-id"])
         self.assertDictEqual({}, p["request-params"])
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
         self.assertEqual(False, p["cache"])

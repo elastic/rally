@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=protected-access
 
 import os
 import tempfile
@@ -57,7 +58,6 @@ class BareProvisionerTests(TestCase):
                                         apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
-        self.assertEqual({}, node_config.car_env)
         self.assertEqual("8", node_config.car_runtime_jdks)
         self.assertEqual("/opt/elasticsearch-5.0.0", node_config.binary_path)
         self.assertEqual(["/opt/elasticsearch-5.0.0/data"], node_config.data_paths)
@@ -171,7 +171,6 @@ class BareProvisionerTests(TestCase):
                                         apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
-        self.assertEqual({}, node_config.car_env)
         self.assertEqual("8", node_config.car_runtime_jdks)
         self.assertEqual("/opt/elasticsearch-5.0.0", node_config.binary_path)
         self.assertEqual(["/opt/elasticsearch-5.0.0/data"], node_config.data_paths)
@@ -252,7 +251,6 @@ class BareProvisionerTests(TestCase):
                                         apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-6.3.0.tar.gz"})
-        self.assertEqual({}, node_config.car_env)
         self.assertEqual("8", node_config.car_runtime_jdks)
         self.assertEqual("/opt/elasticsearch-6.3.0", node_config.binary_path)
         self.assertEqual(["/opt/elasticsearch-6.3.0/data"], node_config.data_paths)

@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import sys
 import tempfile
 import urllib.error
 
@@ -397,7 +398,7 @@ class DocumentSetPreparator:
         if self.offline:
             raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
 
-        data_url = "%s/%s" % (base_url, file_name)
+        data_url = f"{urllib.parse.urljoin(base_url + '/', file_name)}"
         try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
@@ -794,8 +795,12 @@ def post_process_for_test_mode(t):
                     if logger.isEnabledFor(logging.DEBUG):
                         logger.debug("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
 
-                leaf_task.params.pop("target-throughput", None)
-                leaf_task.params.pop("target-interval", None)
+                # Keep throttled to expose any errors but increase the target throughput for short execution times.
+                if leaf_task.throttled and leaf_task.target_throughput:
+                    original_throughput = leaf_task.target_throughput
+                    leaf_task.params.pop("target-throughput", None)
+                    leaf_task.params.pop("target-interval", None)
+                    leaf_task.params["target-throughput"] = f"{sys.maxsize} {original_throughput.unit}"
 
     return t
 
@@ -995,12 +1000,17 @@ class TrackSpecificationReader:
             raise TrackSyntaxError("indices and data-streams cannot both be specified")
         templates = [self._create_index_template(tpl, mapping_dir)
                      for tpl in self._r(track_specification, "templates", mandatory=False, default_value=[])]
+        composable_templates = [self._create_index_template(tpl, mapping_dir)
+                     for tpl in self._r(track_specification, "composable-templates", mandatory=False, default_value=[])]
+        component_templates = [self._create_component_template(tpl, mapping_dir)
+                     for tpl in self._r(track_specification, "component-templates", mandatory=False, default_value=[])]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]),
                                        indices, data_streams)
         challenges = self._create_challenges(track_specification)
         # at this point, *all* track params must have been referenced in the templates
-        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges,
-                           indices=indices, data_streams=data_streams, templates=templates, corpora=corpora)
+        return track.Track(name=self.name, meta_data=meta_data, description=description, challenges=challenges, indices=indices,
+                           data_streams=data_streams, templates=templates, composable_templates=composable_templates,
+                           component_templates=component_templates, corpora=corpora)
 
     def _error(self, msg):
         raise TrackSyntaxError("Track '%s' is invalid. %s" % (self.name, msg))
@@ -1040,6 +1050,18 @@ class TrackSpecificationReader:
 
     def _create_data_stream(self, data_stream_spec):
         return track.DataStream(name=self._r(data_stream_spec, "name"))
+
+    def _create_component_template(self, tpl_spec, mapping_dir):
+        name = self._r(tpl_spec, "name")
+        template_file = self._r(tpl_spec, "template")
+        template_file = os.path.join(mapping_dir, template_file)
+        idx_tmpl_src = TemplateSource(mapping_dir, template_file, self.source)
+        with self.source(template_file, "rt") as f:
+            idx_tmpl_src.load_template_from_string(f.read())
+            template_content = self._load_template(
+                idx_tmpl_src.assembled_source,
+                f"definition for component template {name} in {template_file}")
+        return track.ComponentTemplate(name, template_content)
 
     def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
@@ -1299,7 +1321,7 @@ class TrackSpecificationReader:
             # may as well an inline operation
             op = self.parse_operation(op_spec, error_ctx="inline operation in challenge %s" % challenge_name)
 
-        schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False, default_value="deterministic")
+        schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False)
         task_name = self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name)
         task = track.Task(name=task_name,
                           operation=op,

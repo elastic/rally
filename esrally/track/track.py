@@ -15,6 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import collections
+import numbers
+import re
 from enum import Enum, unique
 
 from esrally import exceptions
@@ -127,6 +130,36 @@ class IndexTemplate:
         self.pattern = pattern
         self.content = content
         self.delete_matching_indices = delete_matching_indices
+
+    def __str__(self, *args, **kwargs):
+        return self.name
+
+    def __repr__(self):
+        r = []
+        for prop, value in vars(self).items():
+            r.append("%s = [%s]" % (prop, repr(value)))
+        return ", ".join(r)
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+
+class ComponentTemplate:
+    """
+    Defines a component template in Elasticsearch.
+    """
+
+    def __init__(self, name, content):
+        """
+        Creates a new index template.
+        :param name: Name of the index template. Mandatory.
+        :param content: The content of the corresponding template. Mandatory.
+        """
+        self.name = name
+        self.content = content
 
     def __str__(self, *args, **kwargs):
         return self.name
@@ -326,7 +359,7 @@ class Track:
     """
 
     def __init__(self, name, description=None, meta_data=None, challenges=None, indices=None, data_streams=None,
-                 templates=None, corpora=None, has_plugins=False):
+                 templates=None, composable_templates=None, component_templates=None, corpora=None, has_plugins=False):
         """
 
         Creates a new track.
@@ -350,6 +383,8 @@ class Track:
         self.data_streams = data_streams if data_streams else []
         self.corpora = corpora if corpora else []
         self.templates = templates if templates else []
+        self.composable_templates = composable_templates if composable_templates else []
+        self.component_templates = component_templates if component_templates else []
         self.has_plugins = has_plugins
 
     @property
@@ -419,14 +454,15 @@ class Track:
 
     def __hash__(self):
         return hash(self.name) ^ hash(self.meta_data) ^ hash(self.description) ^ hash(self.challenges) ^ \
-               hash(self.indices) ^ hash(self.data_streams) ^ hash(self.templates) ^ hash(self.corpora)
+               hash(self.indices) ^ hash(self.templates) ^ hash(self.composable_templates) ^ hash(self.component_templates) \
+               ^ hash(self.corpora)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
                 (self.name, self.meta_data, self.description, self.challenges, self.indices, self.data_streams,
-                 self.templates, self.corpora) ==
+                 self.templates, self.composable_templates, self.component_templates, self.corpora) ==
                 (othr.name, othr.meta_data, othr.description, othr.challenges, othr.indices, othr.data_streams,
-                 othr.templates, othr.corpora))
+                 othr.templates, othr.composable_templates, othr.component_templates, othr.corpora))
 
 
 class Challenge:
@@ -518,6 +554,10 @@ class OperationType(Enum):
     DeleteTransform = 1027
     CreateDataStream = 1028
     DeleteDataStream = 1029
+    CreateComposableTemplate = 1030
+    DeleteComposableTemplate = 1031
+    CreateComponentTemplate = 1032
+    DeleteComponentTemplate = 1033
 
     @property
     def admin_op(self):
@@ -553,6 +593,14 @@ class OperationType(Enum):
             return OperationType.CreateIndexTemplate
         elif v == "delete-index-template":
             return OperationType.DeleteIndexTemplate
+        elif v == "create-composable-template":
+            return OperationType.CreateComposableTemplate
+        elif v == "delete-composable-template":
+            return OperationType.DeleteComposableTemplate
+        elif v == "create-component-template":
+            return OperationType.CreateComponentTemplate
+        elif v == "delete-component-template":
+            return OperationType.DeleteComponentTemplate
         elif v == "shrink-index":
             return OperationType.ShrinkIndex
         elif v == "create-ml-datafeed":
@@ -710,10 +758,14 @@ class Parallel:
         return isinstance(other, type(self)) and self.tasks == other.tasks
 
 
+Throughput = collections.namedtuple("Throughput", ["value", "unit"])
+
+
 class Task:
-    def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None, time_period=None,
-                 clients=1,
-                 completes_parent=False, schedule="deterministic", params=None):
+    THROUGHPUT_PATTERN = re.compile(r"(?P<value>(\d*\.)?\d+)\s(?P<unit>\w+/s)")
+
+    def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None,
+                 time_period=None, clients=1, completes_parent=False, schedule=None, params=None):
         self.name = name
         self.operation = operation
         self.meta_data = meta_data if meta_data else {}
@@ -729,6 +781,49 @@ class Task:
 
     def matches(self, task_filter):
         return task_filter.matches(self)
+
+    @property
+    def target_throughput(self):
+        def numeric(v):
+            # While booleans can be converted to a number (False -> 0, True -> 1), we don't want to allow that here
+            return isinstance(v, numbers.Number) and not isinstance(v, bool)
+
+        target_throughput = self.params.get("target-throughput")
+        target_interval = self.params.get("target-interval")
+
+        if target_interval is not None and target_throughput is not None:
+            raise exceptions.InvalidSyntax(f"Task [{self}] specifies target-interval [{target_interval}] and "
+                                           f"target-throughput [{target_throughput}] but only one of them is allowed.")
+
+        value = None
+        unit = "ops/s"
+
+        if target_interval:
+            if not numeric(target_interval):
+                raise exceptions.InvalidSyntax(f"Target interval [{target_interval}] for task [{self}] must be numeric.")
+            value = 1 / float(target_interval)
+        elif target_throughput:
+            if isinstance(target_throughput, str):
+                matches = re.match(Task.THROUGHPUT_PATTERN, target_throughput)
+                if matches:
+                    value = float(matches.group("value"))
+                    unit = matches.group("unit")
+                else:
+                    raise exceptions.InvalidSyntax(f"Task [{self}] specifies invalid target throughput [{target_throughput}].")
+            elif numeric(target_throughput):
+                value = float(target_throughput)
+            else:
+                raise exceptions.InvalidSyntax(f"Target throughput [{target_throughput}] for task [{self}] "
+                                               f"must be string or numeric.")
+
+        if value:
+            return Throughput(value, unit)
+        else:
+            return None
+
+    @property
+    def throttled(self):
+        return self.schedule is not None or self.target_throughput is not None
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)

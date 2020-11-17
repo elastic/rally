@@ -155,6 +155,7 @@ class Config:
         :param source: The source config object.
         :param section: A section in the source config object. Ignored if it does not exist.
         """
+        # pylint: disable=protected-access
         for k, v in source._opts.items():
             scope, source_section, key = k
             if source_section == section:

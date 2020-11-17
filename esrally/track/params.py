@@ -15,13 +15,16 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import collections
+import inspect
 import logging
 import math
 import numbers
 import operator
 import random
+from abc import ABC
+
 import time
-import types
 from enum import Enum
 
 from esrally import exceptions
@@ -43,18 +46,24 @@ def param_source_for_operation(op_type, track, params, task_name):
 def param_source_for_name(name, track, params):
     param_source = __PARAM_SOURCES_BY_NAME[name]
 
-    # we'd rather use callable() but this will erroneously also classify a class as callable...
-    if isinstance(param_source, types.FunctionType):
+    if inspect.isfunction(param_source):
         return DelegatingParamSource(track, params, param_source)
     else:
         return param_source(track, params)
 
 
+def ensure_valid_param_source(param_source):
+    if not inspect.isfunction(param_source) and not inspect.isclass(param_source):
+        raise exceptions.RallyAssertionError(f"Parameter source [{param_source}] must be either a function or a class.")
+
+
 def register_param_source_for_operation(op_type, param_source_class):
+    ensure_valid_param_source(param_source_class)
     __PARAM_SOURCES_BY_OP[op_type.name] = param_source_class
 
 
 def register_param_source_for_name(name, param_source_class):
+    ensure_valid_param_source(param_source_class)
     __PARAM_SOURCES_BY_NAME[name] = param_source_class
 
 
@@ -126,6 +135,19 @@ class ParamSource:
         value: parameter value).
         """
         return self._params
+
+    def _client_params(self):
+        """
+        For use when a ParamSource does not propagate self._params but does use elasticsearch client under the hood
+
+        :param params: A hash containing the source parameters from the track definition JSON
+        :return: all applicable parameters that are global to Rally and apply to the elasticsearch-py client
+        """
+        defaults = {}
+        defaults["request-timeout"] = self._params.get("request-timeout")
+        defaults["headers"] = self._params.get("headers")
+        defaults["opaque-id"] = self._params.get("opaque-id")
+        return defaults
 
 
 class DelegatingParamSource(ParamSource):
@@ -346,7 +368,7 @@ class DeleteIndexTemplateParamSource(ParamSource):
             try:
                 template = params["template"]
             except KeyError:
-                raise exceptions.InvalidSyntax("Please set the property 'template' for the delete-index-template operation")
+                raise exceptions.InvalidSyntax(f"Please set the property 'template' for the {params.get('operation-type')} operation")
 
             delete_matching = params.get("delete-matching-indices", False)
             try:
@@ -367,6 +389,90 @@ class DeleteIndexTemplateParamSource(ParamSource):
         })
         return p
 
+
+class DeleteComponentTemplateParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.only_if_exists = params.get("only-if-exists", True)
+        self.request_params = params.get("request-params", {})
+        self.template_definitions = []
+        if track.templates:
+            filter_template = params.get("template")
+            for template in track.templates:
+                if not filter_template or template.name == filter_template:
+                    self.template_definitions.append(template.name)
+        else:
+            try:
+                template = params["template"]
+                self.template_definitions.append(template)
+            except KeyError:
+                raise exceptions.InvalidSyntax(f"Please set the property 'template' for the {params.get('operation-type')} operation.")
+
+    def params(self):
+        return {
+            "templates": self.template_definitions,
+            "only-if-exists": self.only_if_exists,
+            "request-params": self.request_params
+        }
+
+
+class CreateTemplateParamSource(ABC, ParamSource):
+    def __init__(self, track, params, templates, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self.request_params = params.get("request-params", {})
+        self.template_definitions = []
+        if "template" in params and "body" in params:
+            self.template_definitions.append((params["template"], params["body"]))
+        elif templates:
+            filter_template = params.get("template")
+            settings = params.get("settings")
+            for template in templates:
+                if not filter_template or template.name == filter_template:
+                    body = template.content
+                    if body and "template" in body:
+                        body = CreateComposableTemplateParamSource._create_or_merge(template.content,
+                                                                                    ["template", "settings"], settings)
+                        self.template_definitions.append((template.name, body))
+        else:
+            raise exceptions.InvalidSyntax("Please set the properties 'template' and 'body' for the "
+                                           f"{params.get('operation-type')} operation or declare composable and/or component "
+                                           "templates in the track")
+
+    @staticmethod
+    def _create_or_merge(content, path, new_content):
+        original_content = content
+        if new_content:
+            for sub_path in path:
+                if sub_path not in content:
+                    content[sub_path] = {}
+                content = content[sub_path]
+            CreateTemplateParamSource.__merge(content, new_content)
+        return original_content
+
+    @staticmethod
+    def __merge(dct, merge_dct):
+        for k in merge_dct.keys():
+            if (k in dct and isinstance(dct[k], dict)
+                    and isinstance(merge_dct[k], collections.abc.Mapping)):
+                CreateTemplateParamSource.__merge(dct[k], merge_dct[k])
+            else:
+                dct[k] = merge_dct[k]
+
+    def params(self):
+        return {
+            "templates": self.template_definitions,
+            "request-params": self.request_params
+        }
+
+
+class CreateComposableTemplateParamSource(CreateTemplateParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, track.composable_templates, **kwargs)
+
+
+class CreateComponentTemplateParamSource(CreateTemplateParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, track.component_templates, **kwargs)
 
 # TODO #365: This contains "body-params" as an undocumented feature. Get more experience and expand it to make it actually usable.
 #
@@ -479,6 +585,8 @@ class SearchParamSource(ParamSource):
 
     # pylint: disable=arguments-differ
     def params(self, choice=random.choice):
+        # Ensure we pass global parameters
+        self.query_params.update(self._client_params())
         if self.query_body_params:
             # needs to replace params first
             for path, data in self.query_body_params:
@@ -700,18 +808,18 @@ class ForceMergeParamSource(ParamSource):
             self._target_name = params.get("data-stream", default_target)
 
         self._max_num_segments = params.get("max-num-segments")
-        self._request_timeout = params.get("request-timeout")
         self._poll_period = params.get("poll-period", 10)
         self._mode = params.get("mode", "blocking")
 
     def params(self):
-        return {
+        parsed_params = {
             "index": self._target_name,
             "max-num-segments": self._max_num_segments,
-            "request-timeout": self._request_timeout,
             "mode": self._mode,
             "poll-period": self._poll_period
         }
+        parsed_params.update(self._client_params())
+        return parsed_params
 
 
 def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):
@@ -843,7 +951,8 @@ def bulk_generator(readers, pipeline, original_params):
                 "action-metadata-present": True,
                 "body": bulk,
                 # This is not always equal to the bulk_size we get as parameter. The last bulk may be less than the bulk size.
-                "bulk-size": docs_in_bulk
+                "bulk-size": docs_in_bulk,
+                "unit": "docs"
             }
             if pipeline:
                 bulk_params["pipeline"] = pipeline
@@ -1122,6 +1231,10 @@ register_param_source_for_operation(track.OperationType.CreateDataStream, Create
 register_param_source_for_operation(track.OperationType.DeleteDataStream, DeleteDataStreamParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndexTemplate, CreateIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndexTemplate, DeleteIndexTemplateParamSource)
+register_param_source_for_operation(track.OperationType.CreateComponentTemplate, CreateComponentTemplateParamSource)
+register_param_source_for_operation(track.OperationType.DeleteComponentTemplate, DeleteComponentTemplateParamSource)
+register_param_source_for_operation(track.OperationType.CreateComposableTemplate, CreateComposableTemplateParamSource)
+register_param_source_for_operation(track.OperationType.DeleteComposableTemplate, DeleteIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
 register_param_source_for_operation(track.OperationType.ForceMerge, ForceMergeParamSource)
 

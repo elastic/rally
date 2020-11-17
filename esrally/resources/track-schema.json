@@ -90,8 +90,15 @@
                       "description": "Defines the scheduling strategy that is used for throughput throttled operations. Out of the box, Rally supports 'deterministic' (default) and 'poisson' but you can implement your own schedules."
                     },
                     "target-throughput": {
-                      "type": "number",
-                      "minimum": 0,
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
                       "description": "Defines the number of operations per second that Rally should attempt to run."
                     },
                     "target-interval": {
@@ -146,8 +153,15 @@
             "description": "Defines the time period in seconds to run the operation. Note that the parameter source may be exhausted before the specified time period has elapsed."
           },
           "target-throughput": {
-            "type": "number",
-            "minimum": 0,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "string"
+              }
+            ],
             "description": "Defines the number of operations per second that Rally should attempt to run."
           },
           "target-interval": {
@@ -206,6 +220,61 @@
     "meta": {
       "type": "object",
       "description": "Meta-information which will be added to each metrics-record of this track."
+    },
+    "component-templates": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Component Template",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Component template name."
+          },
+          "template": {
+            "type": "string",
+            "description": "Component template file name."
+          }
+        },
+        "required": [
+          "name",
+          "template"
+        ]
+      }
+    },
+    "composable-templates": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "title": "Composable Template",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Composable template name."
+          },
+          "index-pattern": {
+            "type": "string",
+            "description": "Index pattern that matches the composable template. This must match the definition in the composable index template file."
+          },
+          "delete-matching-indices": {
+            "type": "boolean",
+            "description": "Delete all indices that match the provided index pattern before start of the benchmark (optional, defaults to true)."
+          },
+          "template": {
+            "type": "string",
+            "description": "Composable template file name."
+          }
+        },
+        "required": [
+          "name",
+          "index-pattern",
+          "template"
+        ]
+      }
     },
     "templates": {
       "type": "array",
@@ -405,6 +474,11 @@
           "operation-type": {
             "type": "string",
             "description": "Type of this operation."
+          },
+          "request-timeout": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Client-side per-request timeout in seconds for this operation."
           },
           "bulk-size": {
             "type": "integer",
