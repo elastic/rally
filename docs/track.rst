@@ -1602,7 +1602,7 @@ With the operation ``composite`` you can specify complex operations consisting o
 
 **Examples**
 
-Here we execute two requests concurrently in two streams. The ``composite`` operation will return when both requests have finished::
+Here we execute two requests concurrently in two streams. The ``composite`` operation will return when both concurrent requests have finished::
 
     {
       "schedule": [
@@ -1651,7 +1651,7 @@ Here we execute two requests concurrently in two streams. The ``composite`` oper
       ]
     }
 
-This executes both search requests concurrently. If both should be executed in sequence, put them in one stream. In the following example we also simulate 500ms think time in between requests::
+If multiple requests should be executed in sequence, put them in one stream. In the following example we issue two requests sequentially with a 500ms think time in between::
 
     {
       "schedule": [
