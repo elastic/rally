@@ -2888,9 +2888,10 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
 
-        self.assertEqual(2, len(resulting_track.challenges[0].schedule))
-        self.assertEqual(track.OperationType.Bulk.name, resulting_track.challenges[0].schedule[0].operation.type)
-        self.assertEqual(track.OperationType.ForceMerge.name, resulting_track.challenges[0].schedule[1].operation.type)
+        challenge = resulting_track.challenges[0]
+        self.assertEqual(2, len(challenge.schedule))
+        self.assertEqual(track.OperationType.Bulk.to_hyphenated_string(), challenge.schedule[0].operation.type)
+        self.assertEqual(track.OperationType.ForceMerge.to_hyphenated_string(), challenge.schedule[1].operation.type)
 
     def test_supports_target_throughput(self):
         track_specification = {

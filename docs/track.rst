@@ -1592,6 +1592,175 @@ This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an admin
 
 This operation is :ref:`retryable <track_operations>`.
 
+composite
+~~~~~~~~~
+
+With the operation ``composite`` you can specify complex operations consisting of multiple requests to Elasticsearch. This can be used to simulate more complex application behavior, like populating a search page with custom filters. It supports the following parameters:
+
+* ``requests`` (mandatory): A list that specifies the request streams to execute. Each stream consists of operations of either type ``raw-request`` to send requests to Elasticsearch or ``sleep`` to simulate client processing time. Streams execute concurrently, operations within a stream sequentially. It is possible to nest streams. See below for specific examples.
+* ``max-connections`` (optional: defaults to unbounded): The maximum number of concurrent connections per client executing this composite operation. By default, the operation itself does not restrict the number of connections but is bound to Rally's network connection limit. Therefore raise the number of available network connections appropriately (see :ref:`command line reference <clr_client_options>`).
+
+**Examples**
+
+Here we execute two requests concurrently in two streams. The ``composite`` operation will return when both concurrent requests have finished::
+
+    {
+      "schedule": [
+        {
+          "name": "load-posts-search-page",
+          "operation": {
+            "operation-type": "composite",
+            "requests": [
+              {
+                "stream": [
+                  {
+                    "operation-type": "raw-request",
+                    "path": "/posts/_search",
+                    "body": {
+                      "query": {
+                        "bool": {
+                          "must": {
+                            "query_string": {
+                              "query": "Java Performance"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "stream": [
+                  {
+                    "operation-type": "raw-request",
+                    "path": "/users/_search",
+                    "body": {
+                      "query": {
+                        "term": {
+                          "user.id": "876591234"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+If multiple requests should be executed in sequence, put them in one stream. In the following example we issue two requests sequentially with a 500ms think time in between::
+
+    {
+      "schedule": [
+        {
+          "name": "load-search-page-and-user",
+          "operation": {
+            "operation-type": "composite",
+            "requests": [
+              {
+                "stream": [
+                  {
+                    "operation-type": "raw-request",
+                    "path": "/posts/_search",
+                    "body": {
+                      "query": {
+                        "bool" : {
+                          "must" : {
+                            "query_string" : {
+                              "query" : "Java Performance"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "operation-type": "sleep",
+                    "duration": 0.5
+                  },
+                  {
+                    "operation-type": "raw-request",
+                    "path": "/users/_search",
+                    "body": {
+                      "query": {
+                        "term": {
+                          "user.id": "876591234"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+.. note::
+    To keep the following example brief, only the ``operation-type`` and ``name`` properties are shown.
+
+We can also nest streams::
+
+    {
+      "schedule": [
+        {
+          "name": "load-posts-search-page",
+          "operation": {
+            "operation-type": "composite",
+            "requests": [
+              {
+                "stream": [
+                  {
+                    "name": "find-matching-posts",
+                    "operation-type": "raw-request"
+                  },
+                  {
+                    "name": "client-processing",
+                    "operation-type": "sleep",
+                    "duration": 0.04
+                  },
+                  {
+                    "stream": [
+                      {
+                        "name": "find-related-posts",
+                        "operation-type": "raw-request"
+                      }
+                    ]
+                  },
+                  {
+                    "stream": [
+                      {
+                        "name": "find-top-posts",
+                        "operation-type": "raw-request"
+                      }
+                    ]
+                  }
+
+                ]
+              },
+              {
+                "stream": [
+                  {
+                    "name": "load-user",
+                    "operation-type": "raw-request"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+The following diagram depicts in which order requests are executed; the specific timings just serve as an illustration.
+
+.. image:: nested-streams.png
+   :alt: Timing view of nested streams
+
 Examples
 ========
 

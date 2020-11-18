@@ -574,7 +574,7 @@ class AllocatorTests(TestCase):
 
     def test_allocates_mixed_tasks(self):
         index = track.Task("index", op("index", track.OperationType.Bulk))
-        stats = track.Task("stats", op("stats", track.OperationType.IndicesStats))
+        stats = track.Task("stats", op("stats", track.OperationType.IndexStats))
         search = track.Task("search", op("search", track.OperationType.Search))
 
         allocator = driver.Allocator([index,
@@ -813,7 +813,7 @@ class SchedulerTests(TestCase):
                           schedule="custom-complex-scheduler",
                           operation=track.Operation(
                               name="search",
-                              operation_type=track.OperationType.Search.name,
+                              operation_type=track.OperationType.Search.to_hyphenated_string(),
                               param_source="driver-test-param-source"
                           ),
                           clients=4,
@@ -829,7 +829,8 @@ class SchedulerTests(TestCase):
 
     @run_async
     async def test_search_task_one_client(self):
-        task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
+        task = track.Task("search", track.Operation("search", track.OperationType.Search.to_hyphenated_string(),
+                                                    param_source="driver-test-param-source"),
                           warmup_iterations=3, iterations=5, clients=1, params={"target-throughput": 10, "clients": 1})
         param_source = track.operation_parameters(self.test_track, task)
         schedule = driver.schedule_for(task, 0, param_source)
@@ -848,7 +849,8 @@ class SchedulerTests(TestCase):
 
     @run_async
     async def test_search_task_two_clients(self):
-        task = track.Task("search", track.Operation("search", track.OperationType.Search.name, param_source="driver-test-param-source"),
+        task = track.Task("search", track.Operation("search", track.OperationType.Search.to_hyphenated_string(),
+                                                    param_source="driver-test-param-source"),
                           warmup_iterations=1, iterations=5, clients=2, params={"target-throughput": 10, "clients": 2})
         param_source = track.operation_parameters(self.test_track, task)
         schedule = driver.schedule_for(task, 0, param_source)
@@ -866,7 +868,8 @@ class SchedulerTests(TestCase):
     @run_async
     async def test_schedule_param_source_determines_iterations_no_warmup(self):
         # we neither define any time-period nor any iteration count on the task.
-        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"], "size": 3},
+        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={"body": ["a"], "size": 3},
                                                         param_source="driver-test-param-source"),
                           clients=4, params={"target-throughput": 4})
 
@@ -881,7 +884,8 @@ class SchedulerTests(TestCase):
 
     @run_async
     async def test_schedule_param_source_determines_iterations_including_warmup(self):
-        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"], "size": 5},
+        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={"body": ["a"], "size": 5},
                                                         param_source="driver-test-param-source"),
                           warmup_iterations=2, clients=4, params={"target-throughput": 4})
 
@@ -899,7 +903,8 @@ class SchedulerTests(TestCase):
     @run_async
     async def test_schedule_defaults_to_iteration_based(self):
         # no time-period and no iterations specified on the task. Also, the parameter source does not define a size.
-        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.name, params={"body": ["a"]},
+        task = track.Task("bulk-index", track.Operation("bulk-index", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={"body": ["a"]},
                                                         param_source="driver-test-param-source"),
                           clients=1, params={"target-throughput": 4, "clients": 4})
 
@@ -912,7 +917,8 @@ class SchedulerTests(TestCase):
 
     @run_async
     async def test_schedule_for_warmup_time_based(self):
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={"body": ["a"], "size": 11},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
@@ -935,7 +941,8 @@ class SchedulerTests(TestCase):
 
     @run_async
     async def test_infinite_schedule_without_progress_indication(self):
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"]},
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={"body": ["a"]},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
@@ -952,7 +959,8 @@ class SchedulerTests(TestCase):
 
     @run_async
     async def test_finite_schedule_with_progress_indication(self):
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 5},
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={"body": ["a"], "size": 5},
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
@@ -988,8 +996,11 @@ class SchedulerTests(TestCase):
 
     @run_async
     async def test_schedule_for_time_based(self):
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={"body": ["a"], "size": 11},
-                                                        param_source="driver-test-param-source"), warmup_time_period=0.1, time_period=0.1,
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={"body": ["a"], "size": 11},
+                                                        param_source="driver-test-param-source"),
+                          warmup_time_period=0.1,
+                          time_period=0.1,
                           clients=1)
 
         param_source = track.operation_parameters(self.test_track, task)
@@ -1083,13 +1094,16 @@ class AsyncExecutorTests(TestCase):
                                  indices=None,
                                  challenges=None)
 
-        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
-            "body": ["action_metadata_line", "index_line"],
-            "action-metadata-present": True,
-            "bulk-size": 1,
-            # we need this because DriverTestParamSource does not know that we only have one bulk and hence size() returns incorrect results
-            "size": 1
-        },
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={
+                                                            "body": ["action_metadata_line", "index_line"],
+                                                            "action-metadata-present": True,
+                                                            "bulk-size": 1,
+                                                            # we need this because DriverTestParamSource does not know
+                                                            # that we only have one bulk and hence size() returns
+                                                            # incorrect results
+                                                            "size": 1
+                                                        },
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4)
         param_source = track.operation_parameters(test_track, task)
@@ -1269,14 +1283,16 @@ class AsyncExecutorTests(TestCase):
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
         for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [235, 255]}.items():
-            task = track.Task("time-based", track.Operation("time-based", track.OperationType.Search.name, params={
-                "index": "_all",
-                "type": None,
-                "body": {"query": {"match_all": {}}},
-                "request-params": {},
-                "cache": False,
-                "response-compression-enabled": True
-            },
+            task = track.Task("time-based", track.Operation("time-based",
+                                                            track.OperationType.Search.to_hyphenated_string(),
+                                                            params={
+                                                                "index": "_all",
+                                                                "type": None,
+                                                                "body": {"query": {"match_all": {}}},
+                                                                "request-params": {},
+                                                                "cache": False,
+                                                                "response-compression-enabled": True
+                                                            },
                                                             param_source="driver-test-param-source"),
                               warmup_time_period=0.5, time_period=0.5, clients=4,
                               params={"target-throughput": target_throughput, "clients": 4},
@@ -1325,11 +1341,13 @@ class AsyncExecutorTests(TestCase):
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
         for target_throughput in [10, 100, 1000]:
-            task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.name, params={
-                "body": ["action_metadata_line", "index_line"],
-                "action-metadata-present": True,
-                "bulk-size": 1
-            },
+            task = track.Task("time-based", track.Operation("time-based",
+                                                            track.OperationType.Bulk.to_hyphenated_string(),
+                                                            params={
+                                                                "body": ["action_metadata_line", "index_line"],
+                                                                "action-metadata-present": True,
+                                                                "bulk-size": 1
+                                                            },
                                                             param_source="driver-test-param-source"),
                               warmup_time_period=0.5, time_period=0.5, clients=4,
                               params={"target-throughput": target_throughput, "clients": 4})
@@ -1380,7 +1398,8 @@ class AsyncExecutorTests(TestCase):
                 for invocation in invocations:
                     yield invocation
 
-        task = track.Task("no-op", track.Operation("no-op", track.OperationType.Bulk.name, params={},
+        task = track.Task("no-op", track.Operation("no-op", track.OperationType.Bulk.to_hyphenated_string(),
+                                                   params={},
                                                    param_source="driver-test-param-source"),
                           warmup_time_period=0.5, time_period=0.5, clients=4,
                           params={"clients": 4})
