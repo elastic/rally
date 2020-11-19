@@ -264,7 +264,7 @@ class UnitAwareScheduler(Scheduler):
         self.scheduler = Unthrottled()
 
     def after_request(self, now, weight, unit, request_meta_data):
-        if self.first_request or self.current_weight != weight:
+        if weight > 0 and (self.first_request or self.current_weight != weight):
             expected_unit = self.task.target_throughput.unit
             actual_unit = f"{unit}/s"
             if actual_unit != expected_unit:
