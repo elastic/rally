@@ -693,27 +693,31 @@ def filter_tasks(t, filters, exclude=False):
 
     logger = logging.getLogger(__name__)
 
-    def filter_out_match(task, filters, exclude):
-        for f in filters:
+    def filter_out_match(task, user_defined_filters, force_include_filters, exclude):
+        for f in force_include_filters:
             if task.matches(f):
-                if hasattr(task, 'tasks') and exclude:
+                return False
+
+        for f in user_defined_filters:
+            if task.matches(f):
+                if hasattr(task, "tasks") and exclude:
                     return False
                 return exclude
         return not exclude
 
     # always include administrative tasks
-    complete_filters = [track.AdminTaskFilter()] + filters
+    force_include_filters = [track.AdminTaskFilter()]
 
     for challenge in t.challenges:
         # don't modify the schedule while iterating over it
         tasks_to_remove = []
         for task in challenge.schedule:
-            if filter_out_match(task, complete_filters, exclude):
+            if filter_out_match(task, filters, force_include_filters, exclude):
                 tasks_to_remove.append(task)
             else:
                 leafs_to_remove = []
                 for leaf_task in task:
-                    if filter_out_match(leaf_task, complete_filters, exclude):
+                    if filter_out_match(leaf_task, filters, force_include_filters, exclude):
                         leafs_to_remove.append(leaf_task)
                 for leaf_task in leafs_to_remove:
                     logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
