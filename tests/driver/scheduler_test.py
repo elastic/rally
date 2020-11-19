@@ -68,7 +68,7 @@ class UnitAwareSchedulerTests(TestCase):
         task = track.Task(name="bulk-index",
                           operation=track.Operation(
                               name="bulk-index",
-                              operation_type=track.OperationType.Bulk.name),
+                              operation_type=track.OperationType.Bulk.to_hyphenated_string()),
                           clients=4,
                           params={
                               "target-throughput": "5000 MB/s"
@@ -84,7 +84,7 @@ class UnitAwareSchedulerTests(TestCase):
         task = track.Task(name="bulk-index",
                           operation=track.Operation(
                               name="bulk-index",
-                              operation_type=track.OperationType.Bulk.name),
+                              operation_type=track.OperationType.Bulk.to_hyphenated_string()),
                           clients=4,
                           params={
                               "target-throughput": "5000 docs/s"
@@ -105,7 +105,7 @@ class UnitAwareSchedulerTests(TestCase):
         task = track.Task(name="scroll-query",
                           operation=track.Operation(
                               name="scroll-query",
-                              operation_type=track.OperationType.Search.name),
+                              operation_type=track.OperationType.Search.to_hyphenated_string()),
                           clients=1,
                           params={
                               # implicitly: ops/s
@@ -118,6 +118,31 @@ class UnitAwareSchedulerTests(TestCase):
         # no exception despite differing units ...
         s.after_request(now=None, weight=20, unit="pages", request_meta_data=None)
         # ... and it is still throttled in ops/s
+        self.assertEqual(0.1 * task.clients, s.next(0))
+
+    def test_scheduler_does_not_change_throughput_for_empty_requests(self):
+        task = track.Task(name="match-all-query",
+                          operation=track.Operation(
+                              name="query",
+                              operation_type=track.OperationType.Search.to_hyphenated_string()),
+                          clients=1,
+                          params={
+                              # implicitly: ops/s
+                              "target-throughput": 10
+                          })
+
+        s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
+        # first request is unthrottled...
+        s.before_request(now=0)
+        self.assertEqual(0, s.next(0))
+        # ... but it also produced an error (zero ops)
+        s.after_request(now=1, weight=0, unit="ops", request_meta_data=None)
+        # next request is still unthrottled
+        s.before_request(now=1)
+        self.assertEqual(0, s.next(0))
+        s.after_request(now=2, weight=1, unit="ops", request_meta_data=None)
+        # now we throttle
+        s.before_request(now=2)
         self.assertEqual(0.1 * task.clients, s.next(0))
 
 
@@ -166,7 +191,7 @@ class LegacyWrappingSchedulerTests(TestCase):
         task = track.Task(name="raw-request",
                           operation=track.Operation(
                               name="raw",
-                              operation_type=track.OperationType.RawRequest.name),
+                              operation_type=track.OperationType.RawRequest.to_hyphenated_string()),
                           clients=1,
                           schedule="simple")
 
