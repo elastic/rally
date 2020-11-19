@@ -103,8 +103,9 @@ then
       #else
       # offline - skipping update
       fi
-    # else
-      # Uncommitted changes - don't upgrade, just run
+    else
+      >&2 echo "There are uncommitted changes. Please cleanup your working copy or specify --skip-update."
+      exit 1
     fi
 #else -> No self update
 fi
