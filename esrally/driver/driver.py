@@ -517,6 +517,8 @@ class Driver:
             if self.finished():
                 self.telemetry.on_benchmark_stop()
                 self.logger.info("All steps completed.")
+                # Some metrics store implementations return None because no external representation is required.
+                # pylint: disable=assignment-from-none
                 m = self.metrics_store.to_externalizable(clear=True)
                 self.logger.debug("Closing metrics store...")
                 self.metrics_store.close()
@@ -539,6 +541,8 @@ class Driver:
             # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
             #             (it doesn't matter too much if we're a few ms off).
             waiting_period = 1.0
+        # Some metrics store implementations return None because no external representation is required.
+        # pylint: disable=assignment-from-none
         m = self.metrics_store.to_externalizable(clear=True)
         self.target.on_task_finished(m, waiting_period)
         # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
