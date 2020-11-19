@@ -231,6 +231,33 @@ class OperationTypeTests(TestCase):
             self.assertEqual(op_type, track.OperationType.from_hyphenated_string(op_type.to_hyphenated_string()))
 
 
+class TaskFilterTests(TestCase):
+    def create_index_task(self):
+        return track.Task("create-index-task",
+                          track.Operation("create-index-op",
+                                          operation_type=track.OperationType.CreateIndex.to_hyphenated_string()))
+
+    def search_task(self):
+        return track.Task("search-task",
+                          track.Operation("search-op",
+                                          operation_type=track.OperationType.Search.to_hyphenated_string()))
+
+    def test_admin_task_filter(self):
+        f = track.AdminTaskFilter()
+        self.assertTrue(f.matches(self.create_index_task()))
+        self.assertFalse(f.matches(self.search_task()))
+
+    def test_task_name_filter(self):
+        f = track.TaskNameFilter("create-index-task")
+        self.assertTrue(f.matches(self.create_index_task()))
+        self.assertFalse(f.matches(self.search_task()))
+
+    def test_task_op_type_filter(self):
+        f = track.TaskOpTypeFilter(track.OperationType.CreateIndex.to_hyphenated_string())
+        self.assertTrue(f.matches(self.create_index_task()))
+        self.assertFalse(f.matches(self.search_task()))
+
+
 class TaskTests(TestCase):
     def task(self, schedule=None, target_throughput=None, target_interval=None):
         op = track.Operation("bulk-index", track.OperationType.Bulk.name)
