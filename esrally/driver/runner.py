@@ -308,6 +308,8 @@ def mandatory(params, key, op):
             f"Add it to your parameter source and try again.")
 
 
+# TODO: remove and use https://docs.python.org/3/library/stdtypes.html#str.removeprefix
+#  once Python 3.9 becomes the minimum version
 def remove_prefix(string, prefix):
     if string.startswith(prefix):
         return string[len(prefix):]
@@ -1339,15 +1341,17 @@ class ShrinkIndex(Runner):
         target_body = deepcopy(mandatory(params, "target-body", self))
         shrink_node = params.get("shrink-node")
         # Choose a random data node if none is specified
-        node_names = [shrink_node] if shrink_node else []
-        if not shrink_node:
+        if shrink_node:
+            node_names = [shrink_node]
+        else:
+            node_names = []
             # choose a random data node
             node_info = await es.nodes.info()
             for node in node_info["nodes"].values():
                 if "data" in node["roles"]:
                     node_names.append(node["name"])
             if not node_names:
-                raise exceptions.RallyAssertionError("Could not choose a suitable shrink-node automatically. Please specify it explicitly.")
+                raise exceptions.RallyAssertionError("Could not choose a suitable shrink-node automatically. Specify it explicitly.")
 
         for source_index in source_indices:
             shrink_node = random.choice(node_names)
@@ -1377,10 +1381,10 @@ class ShrinkIndex(Runner):
             await es.indices.shrink(index=source_index, target=final_target_index, body=target_body)
 
             self.logger.info("Waiting for shrink to finish for index [%s] ...", source_index)
-            await self._wait_for(es, final_target_index, "shrink for index [{}]".format(final_target_index))
+            await self._wait_for(es, final_target_index, f"shrink for index [{final_target_index}]")
             self.logger.info("Shrinking [%s] to [%s] has finished.", source_index, final_target_index)
         # ops_count is not really important for this operation...
-        return 1, "ops"
+        return len(source_indices), "ops"
 
     def __repr__(self, *args, **kwargs):
         return "shrink-index"
