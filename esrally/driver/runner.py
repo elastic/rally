@@ -23,6 +23,8 @@ import sys
 import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
+from os.path import commonprefix
+
 import ijson
 
 from esrally import exceptions, track
@@ -305,8 +307,17 @@ def mandatory(params, key, op):
     try:
         return params[key]
     except KeyError:
-        raise exceptions.DataError("Parameter source for operation '%s' did not provide the mandatory parameter '%s'. Please add it to your"
-                                   " parameter source." % (str(op), key))
+        raise exceptions.DataError(
+            f"Parameter source for operation '{str(op)}' did not provide the mandatory parameter '{key}'. "
+            f"Add it to your parameter source and try again.")
+
+
+# TODO: remove and use https://docs.python.org/3/library/stdtypes.html#str.removeprefix
+#  once Python 3.9 becomes the minimum version
+def remove_prefix(string, prefix):
+    if string.startswith(prefix):
+        return string[len(prefix):]
+    return string
 
 
 def escape(v):
@@ -1324,12 +1335,19 @@ class ShrinkIndex(Runner):
 
     async def __call__(self, es, params):
         source_index = mandatory(params, "source-index", self)
+        source_indices_get = await es.indices.get(source_index)
+        source_indices = list(source_indices_get.keys())
+        source_indices_stem = commonprefix(source_indices)
+
         target_index = mandatory(params, "target-index", self)
+
         # we need to inject additional settings so we better copy the body
         target_body = deepcopy(mandatory(params, "target-body", self))
         shrink_node = params.get("shrink-node")
         # Choose a random data node if none is specified
-        if not shrink_node:
+        if shrink_node:
+            node_names = [shrink_node]
+        else:
             node_names = []
             # choose a random data node
             node_info = await es.nodes.info()
@@ -1337,35 +1355,40 @@ class ShrinkIndex(Runner):
                 if "data" in node["roles"]:
                     node_names.append(node["name"])
             if not node_names:
-                raise exceptions.RallyAssertionError("Could not choose a suitable shrink-node automatically. Please specify it explicitly.")
+                raise exceptions.RallyAssertionError("Could not choose a suitable shrink-node automatically. Specify it explicitly.")
+
+        for source_index in source_indices:
             shrink_node = random.choice(node_names)
-        self.logger.info("Using [%s] as shrink node.", shrink_node)
-        self.logger.info("Preparing [%s] for shrinking.", source_index)
-        # prepare index for shrinking
-        await es.indices.put_settings(index=source_index,
-                                      body={
-                                          "settings": {
-                                              "index.routing.allocation.require._name": shrink_node,
-                                              "index.blocks.write": "true"
-                                          }
-                                      },
-                                      preserve_existing=True)
+            self.logger.info("Using [%s] as shrink node.", shrink_node)
+            self.logger.info("Preparing [%s] for shrinking.", source_index)
 
-        self.logger.info("Waiting for relocation to finish for index [%s]...", source_index)
-        await self._wait_for(es, source_index, "shard relocation for index [{}]".format(source_index))
-        self.logger.info("Shrinking [%s] to [%s].", source_index, target_index)
-        if "settings" not in target_body:
-            target_body["settings"] = {}
-        target_body["settings"]["index.routing.allocation.require._name"] = None
-        target_body["settings"]["index.blocks.write"] = None
-        # kick off the shrink operation
-        await es.indices.shrink(index=source_index, target=target_index, body=target_body)
+            # prepare index for shrinking
+            await es.indices.put_settings(index=source_index,
+                                          body={
+                                              "settings": {
+                                                  "index.routing.allocation.require._name": shrink_node,
+                                                  "index.blocks.write": "true"
+                                              }
+                                          },
+                                          preserve_existing=True)
 
-        self.logger.info("Waiting for shrink to finish for index [%s]...", source_index)
-        await self._wait_for(es, target_index, "shrink for index [{}]".format(target_index))
-        self.logger.info("Shrinking [%s] to [%s] has finished.", source_index, target_index)
+            self.logger.info("Waiting for relocation to finish for index [%s] ...", source_index)
+            await self._wait_for(es, source_index, f"shard relocation for index [{source_index}]")
+            self.logger.info("Shrinking [%s] to [%s].", source_index, target_index)
+            if "settings" not in target_body:
+                target_body["settings"] = {}
+            target_body["settings"]["index.routing.allocation.require._name"] = None
+            target_body["settings"]["index.blocks.write"] = None
+            # kick off the shrink operation
+            index_suffix = remove_prefix(source_index, source_indices_stem)
+            final_target_index = target_index if len(index_suffix) == 0 else target_index+index_suffix
+            await es.indices.shrink(index=source_index, target=final_target_index, body=target_body)
+
+            self.logger.info("Waiting for shrink to finish for index [%s] ...", source_index)
+            await self._wait_for(es, final_target_index, f"shrink for index [{final_target_index}]")
+            self.logger.info("Shrinking [%s] to [%s] has finished.", source_index, final_target_index)
         # ops_count is not really important for this operation...
-        return 1, "ops"
+        return len(source_indices), "ops"
 
     def __repr__(self, *args, **kwargs):
         return "shrink-index"

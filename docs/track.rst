@@ -1302,8 +1302,8 @@ shrink-index
 
 With the operation ``shrink-index`` you can execute the `shrink index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-shrink-index.html>`_. Note that this does not correspond directly to the shrink index API call in Elasticsearch but it is a high-level operation that executes all the necessary low-level operations under the hood to shrink an index. It supports the following parameters:
 
-* ``source-index`` (mandatory): The name of the index that should be shrinked.
-* ``target-index`` (mandatory): The name of the index that contains the shrinked shards.
+* ``source-index`` (mandatory): The name of the index that should be shrinked. Multiple indices can be defined using the `Multi-target syntax <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_.
+* ``target-index`` (mandatory): The name of the index that contains the shrinked shards. If multiple indices match ``source-index``, one shrink operation will execute for every matching index. Each shrink operation will use a modified ``target-index``: the unique suffix of the source index (derived by removing the common prefix of all matching source indices) will be appended to ``target-index``. See also the example below.
 * ``target-body`` (mandatory): The body containing settings and aliases for ``target-index``.
 * ``shrink-node`` (optional, defaults to a random data node): As a first step, the source index needs to be fully relocated to a single node. Rally will automatically choose a random data node in the cluster but you can choose one explicitly if needed.
 
@@ -1324,6 +1324,24 @@ Example::
     }
 
 This will shrink the index ``src`` to ``target``. The target index will consist of one shard and have one replica. With ``shrink-node`` we also explicitly specify the name of the node where we want the source index to be relocated to.
+
+The following example ``src*`` matches a list of indices ``src-a,src-b``::
+
+    {
+      "operation-type": "shrink-index",
+      "shrink-node": "rally-node-0",
+      "source-index": "src*",
+      "target-index": "target",
+      "target-body": {
+        "settings": {
+          "index.number_of_replicas": 1,
+          "index.number_of_shards": 1,
+          "index.codec": "best_compression"
+        }
+      }
+    }
+
+and will reindex ``src-a`` as ``target-a`` and ``src-b`` as ``target-b``.
 
 This operation is :ref:`retryable <track_operations>`.
 

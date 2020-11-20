@@ -236,8 +236,9 @@ class BulkIndexRunnerTests(TestCase):
 
         with self.assertRaises(exceptions.DataError) as ctx:
             await bulk(es, bulk_params)
-        self.assertEqual("Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'action-metadata-present'. "
-                         "Please add it to your parameter source.", ctx.exception.args[0])
+        self.assertEqual(
+            "Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'action-metadata-present'. "
+            "Add it to your parameter source and try again.", ctx.exception.args[0])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2043,7 +2044,7 @@ class PutPipelineRunnerTests(TestCase):
         }
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'body'. "
-                                    "Please add it to your parameter source."):
+                                    "Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.ingest.put_pipeline.call_count)
@@ -2060,7 +2061,7 @@ class PutPipelineRunnerTests(TestCase):
         }
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
-                                    "Please add it to your parameter source."):
+                                    "Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.ingest.put_pipeline.call_count)
@@ -2311,7 +2312,7 @@ class CreateIndexRunnerTests(TestCase):
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'create-index' did not provide the mandatory parameter 'indices'. "
-                                    "Please add it to your parameter source."):
+                                    "Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.indices.create.call_count)
@@ -2356,7 +2357,7 @@ class CreateDataStreamRunnerTests(TestCase):
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'create-data-stream' did not provide the "
-                                    "mandatory parameter 'data-streams'. Please add it to your parameter source."):
+                                    "mandatory parameter 'data-streams'. Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.indices.create_data_stream.call_count)
@@ -2495,7 +2496,7 @@ class CreateIndexTemplateRunnerTests(TestCase):
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'create-index-template' did not provide the mandatory parameter "
-                                    "'templates'. Please add it to your parameter source."):
+                                    "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.indices.put_template.call_count)
@@ -2566,7 +2567,7 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'delete-index-template' did not provide the mandatory parameter "
-                                    "'templates'. Please add it to your parameter source."):
+                                    "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.indices.delete_template.call_count)
@@ -2608,7 +2609,7 @@ class CreateComponentTemplateRunnerTests(TestCase):
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'create-component-template' did not provide the mandatory parameter "
-                                    "'templates'. Please add it to your parameter source."):
+                                    "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.cluster.put_component_template.call_count)
@@ -2680,7 +2681,7 @@ class DeleteComponentTemplateRunnerTests(TestCase):
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'delete-component-template' did not provide the mandatory parameter "
-                                    "'templates'. Please add it to your parameter source."):
+                                    "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.indices.delete_template.call_count)
@@ -2723,7 +2724,7 @@ class CreateComposableTemplateRunnerTests(TestCase):
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'create-composable-template' did not provide the mandatory parameter "
-                                    "'templates'. Please add it to your parameter source."):
+                                    "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.cluster.put_index_template.call_count)
@@ -2795,7 +2796,7 @@ class DeleteComposableTemplateRunnerTests(TestCase):
         params = {}
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'delete-composable-template' did not provide the mandatory parameter "
-                                    "'templates'. Please add it to your parameter source."):
+                                    "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
         self.assertEqual(0, es.indices.delete_index_template.call_count)
@@ -3324,7 +3325,7 @@ class SleepTests(TestCase):
         r = runner.Sleep()
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'sleep' did not provide the mandatory parameter "
-                                    "'duration'. Please add it to your parameter source."):
+                                    "'duration'. Add it to your parameter source and try again."):
             await r(es, params={})
 
         self.assertEqual(0, es.call_count)
@@ -3863,6 +3864,9 @@ class ShrinkIndexTests(TestCase):
     @mock.patch("asyncio.sleep", return_value=as_future())
     @run_async
     async def test_shrink_index_with_shrink_node(self, sleep, es):
+        es.indices.get.return_value = as_future({
+            "src": {}
+        })
         # cluster health API
         es.cluster.health.return_value = as_future({
             "status": "green",
@@ -3914,6 +3918,9 @@ class ShrinkIndexTests(TestCase):
     @mock.patch("asyncio.sleep", return_value=as_future())
     @run_async
     async def test_shrink_index_derives_shrink_node(self, sleep, es):
+        es.indices.get.return_value = as_future({
+            "src": {}
+        })
         # cluster health API
         es.cluster.health.return_value = as_future({
             "status": "green",
@@ -3989,6 +3996,101 @@ class ShrinkIndexTests(TestCase):
                 "index.blocks.write": None
             }
         })
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    # To avoid real sleeps in unit tests
+    @mock.patch("asyncio.sleep", return_value=as_future())
+    @run_async
+    async def test_shrink_index_pattern_with_shrink_node(self, sleep, es):
+        es.indices.get.return_value = as_future({
+            "src1": {}, "src2": {}, "src-2020": {}
+        })
+        # cluster health API
+        es.cluster.health.return_value = as_future({
+            "status": "green",
+            "relocating_shards": 0
+        })
+        es.indices.put_settings.return_value = as_future()
+        es.indices.shrink.return_value = as_future()
+
+        r = runner.ShrinkIndex()
+        params = {
+            "source-index": "src*",
+            "target-index": "target",
+            "target-body": {
+                "settings": {
+                    "index.number_of_replicas": 2,
+                    "index.number_of_shards": 0
+                }
+            },
+            "shrink-node": "rally-node-0"
+        }
+
+        await r(es, params)
+
+        es.indices.put_settings.assert_has_calls([
+            mock.call(index="src1",
+                      body={
+                          "settings": {
+                              "index.routing.allocation.require._name": "rally-node-0",
+                              "index.blocks.write": "true"
+                          }
+                      },
+                      preserve_existing=True),
+            mock.call(index="src2",
+                      body={
+                          "settings": {
+                              "index.routing.allocation.require._name": "rally-node-0",
+                              "index.blocks.write": "true"
+                          }
+                      },
+                      preserve_existing=True),
+            mock.call(index="src-2020",
+                      body={
+                          "settings": {
+                              "index.routing.allocation.require._name": "rally-node-0",
+                              "index.blocks.write": "true"
+                          }
+                      },
+                      preserve_existing=True)])
+
+        es.cluster.health.assert_has_calls([
+            mock.call(index="src1", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call(index="target1", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call(index="src2", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call(index="target2", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call(index="src-2020", params={"wait_for_no_relocating_shards": "true"}),
+            mock.call(index="target-2020", params={"wait_for_no_relocating_shards": "true"}),
+        ])
+
+        es.indices.shrink.assert_has_calls([
+            mock.call(
+                index="src1", target="target1", body={
+                    "settings": {
+                        "index.number_of_replicas": 2,
+                        "index.number_of_shards": 0,
+                        "index.routing.allocation.require._name": None,
+                        "index.blocks.write": None
+                    }
+                }),
+            mock.call(
+                index="src2", target="target2", body={
+                    "settings": {
+                        "index.number_of_replicas": 2,
+                        "index.number_of_shards": 0,
+                        "index.routing.allocation.require._name": None,
+                        "index.blocks.write": None
+                    }
+                }),
+            mock.call(
+                index="src-2020", target="target-2020", body={
+                    "settings": {
+                        "index.number_of_replicas": 2,
+                        "index.number_of_shards": 0,
+                        "index.routing.allocation.require._name": None,
+                        "index.blocks.write": None
+                    }
+                })])
 
 
 class PutSettingsTests(TestCase):
@@ -4760,3 +4862,16 @@ class RetryTests(TestCase):
         self.assertEqual(success_return_value, result)
 
         delegate.assert_has_calls([mock.call(es, params) for _ in range(failure_count + 1)])
+
+
+class RemovePrefixTests(TestCase):
+    def test_remove_matching_prefix(self):
+        suffix = runner.remove_prefix("index-20201117", "index")
+
+        self.assertEqual(suffix, "-20201117")
+
+    def test_prefix_doesnt_exit(self):
+        index_name = "index-20201117"
+        suffix = runner.remove_prefix(index_name, "unrelatedprefix")
+
+        self.assertEqual(suffix, index_name)
