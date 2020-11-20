@@ -1369,7 +1369,7 @@ class ShrinkIndex(Runner):
                                           preserve_existing=True)
 
             self.logger.info("Waiting for relocation to finish for index [%s] ...", source_index)
-            await self._wait_for(es, source_index, "shard relocation for index [{}]".format(source_index))
+            await self._wait_for(es, source_index, f"shard relocation for index [{source_index}]")
             self.logger.info("Shrinking [%s] to [%s].", source_index, target_index)
             if "settings" not in target_body:
                 target_body["settings"] = {}
