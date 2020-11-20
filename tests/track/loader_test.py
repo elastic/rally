@@ -16,6 +16,7 @@
 # under the License.
 
 import os
+import random
 import re
 import textwrap
 import unittest.mock as mock
@@ -286,13 +287,14 @@ class TrackPreparationTests(TestCase):
         is_file.side_effect = [False, False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
+        scheme = random.choice(["http", "https", "s3", "gs"])
 
         prepare_file_offset_table.return_value = 5
 
         p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
 
         p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                            base_url="http://benchmarks.elasticsearch.org/corpora/unit-test/",
+                                                            base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
                                                             document_file="docs.json",
                                                             # --> We don't provide a document archive here <--
                                                             document_archive=None,
@@ -302,7 +304,7 @@ class TrackPreparationTests(TestCase):
                                data_root="/tmp")
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
+        download.assert_called_with(f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
                                     "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 

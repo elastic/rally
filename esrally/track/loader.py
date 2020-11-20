@@ -398,7 +398,12 @@ class DocumentSetPreparator:
         if self.offline:
             raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
 
-        data_url = f"{urllib.parse.urljoin(base_url + '/', file_name)}"
+        if base_url.endswith("/"):
+            separator = ""
+        else:
+            separator = "/"
+        # join manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
+        data_url = f"{base_url}{separator}{file_name}"
         try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
