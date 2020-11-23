@@ -988,7 +988,7 @@ class ForceMergeRunnerTests(TestCase):
 
         force_merge = runner.ForceMerge()
         await force_merge(es, params={"index" : "_all", "mode": "polling", 'poll-period': 0})
-        es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=1)
+        es.indices.forcemerge.assert_called_once_with(index="_all")
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1038,8 +1038,8 @@ class ForceMergeRunnerTests(TestCase):
             })
         ]
         force_merge = runner.ForceMerge()
-        await force_merge(es, params={"index" : "_all", "mode": "polling", "poll-period": 0})
-        es.indices.forcemerge.assert_called_once_with(index="_all", request_timeout=1)
+        await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
+        es.indices.forcemerge.assert_called_once_with(index="_all")
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1092,7 +1092,7 @@ class ForceMergeRunnerTests(TestCase):
         # request-timeout should be ignored as mode:polling
         await force_merge(es, params={"index" : "_all", "mode": "polling", "max-num-segments": 1,
                                       "request-timeout": 50000, "poll-period": 0})
-        es.indices.forcemerge.assert_called_once_with(index="_all", max_num_segments=1, request_timeout=1)
+        es.indices.forcemerge.assert_called_once_with(index="_all", max_num_segments=1, request_timeout=50000)
 
 
 class IndicesStatsRunnerTests(TestCase):

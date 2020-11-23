@@ -676,9 +676,6 @@ class ForceMerge(Runner):
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         if mode == "polling":
-            # we ignore the request_timeout if we are in polling mode and deliberately timeout early
-            # no reason to wait as long as a whole {polling-period} (which has a minimum of 1 second)
-            merge_params["request_timeout"] = 1
             complete = False
             try:
                 await es.indices.forcemerge(**merge_params)
@@ -687,7 +684,7 @@ class ForceMerge(Runner):
                 pass
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
-                tasks = await es.tasks.list(params={"actions":"indices:admin/forcemerge"})
+                tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
                 if len(tasks["nodes"]) == 0:
                     # empty nodes response indicates no tasks
                     complete = True
