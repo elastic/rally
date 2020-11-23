@@ -1650,7 +1650,11 @@ class Sleep(Runner):
     """
 
     async def __call__(self, es, params):
-        await asyncio.sleep(mandatory(params, "duration", "sleep"))
+        es.on_request_start()
+        try:
+            await asyncio.sleep(mandatory(params, "duration", "sleep"))
+        finally:
+            es.on_request_end()
 
     def __repr__(self, *args, **kwargs):
         return "sleep"

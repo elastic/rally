@@ -3329,6 +3329,8 @@ class SleepTests(TestCase):
             await r(es, params={})
 
         self.assertEqual(0, es.call_count)
+        self.assertEqual(1, es.on_request_start.call_count)
+        self.assertEqual(1, es.on_request_end.call_count)
         self.assertEqual(0, sleep.call_count)
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -3340,6 +3342,8 @@ class SleepTests(TestCase):
         await r(es, params={"duration": 4.3})
 
         self.assertEqual(0, es.call_count)
+        self.assertEqual(1, es.on_request_start.call_count)
+        self.assertEqual(1, es.on_request_end.call_count)
         sleep.assert_called_once_with(4.3)
 
 
