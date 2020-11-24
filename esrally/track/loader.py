@@ -805,7 +805,7 @@ def post_process_for_test_mode(t):
                         logger.debug("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
 
                 # Keep throttled to expose any errors but increase the target throughput for short execution times.
-                if leaf_task.throttled and leaf_task.target_throughput:
+                if leaf_task.target_throughput:
                     original_throughput = leaf_task.target_throughput
                     leaf_task.params.pop("target-throughput", None)
                     leaf_task.params.pop("target-interval", None)
