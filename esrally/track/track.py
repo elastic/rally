@@ -828,10 +828,6 @@ class Task:
         else:
             return None
 
-    @property
-    def throttled(self):
-        return self.schedule is not None or self.target_throughput is not None
-
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)
         return hash(self.name) ^ hash(self.operation) ^ hash(self.warmup_iterations) ^ hash(self.iterations) ^ \

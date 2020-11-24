@@ -172,6 +172,32 @@ class SchedulerCategorizationTests(TestCase):
         self.assertFalse(scheduler.is_simple_scheduler(scheduler.UnitAwareScheduler))
 
 
+class SchedulerThrottlingTests(TestCase):
+    def task(self, schedule=None, target_throughput=None, target_interval=None):
+        op = track.Operation("bulk-index", track.OperationType.Bulk.to_hyphenated_string())
+        params = {}
+        if target_throughput is not None:
+            params["target-throughput"] = target_throughput
+        if target_interval is not None:
+            params["target-interval"] = target_interval
+        return track.Task("test", op, schedule=schedule, params=params)
+
+    def test_throttled_by_target_throughput(self):
+        self.assertFalse(scheduler.run_unthrottled(self.task(target_throughput=4, schedule="deterministic")))
+
+    def test_throttled_by_target_interval(self):
+        self.assertFalse(scheduler.run_unthrottled(self.task(target_interval=2)))
+
+    def test_throttled_by_custom_schedule(self):
+        self.assertFalse(scheduler.run_unthrottled(self.task(schedule="my-custom-schedule")))
+
+    def test_unthrottled_by_target_throughput(self):
+        self.assertTrue(scheduler.run_unthrottled(self.task(target_throughput=None)))
+
+    def test_unthrottled_by_target_interval(self):
+        self.assertTrue(scheduler.run_unthrottled(self.task(target_interval=0, schedule="poisson")))
+
+
 class LegacyWrappingSchedulerTests(TestCase):
     class SimpleLegacyScheduler:
         # pylint: disable=unused-variable
