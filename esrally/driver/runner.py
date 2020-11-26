@@ -2014,6 +2014,10 @@ class Composite(Runner):
                 if "stream" in item:
                     streams.append(asyncio.create_task(self.run_stream(es, item["stream"], connection_limit)))
                 elif "operation-type" in item:
+                    # consume all prior streams first
+                    if streams:
+                        await asyncio.gather(*streams)
+                        streams = []
                     op_type = item["operation-type"]
                     if op_type not in self.supported_op_types:
                         raise exceptions.RallyAssertionError(
@@ -2031,6 +2035,7 @@ class Composite(Runner):
                     s.cancel()
             raise
 
+        # complete any outstanding streams
         if streams:
             await asyncio.gather(*streams)
 
