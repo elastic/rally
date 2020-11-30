@@ -4461,19 +4461,31 @@ class CompositeTests(TestCase):
         async def __call__(self, es, params):
             self.max_value = max(self.max_value, self.current)
             # wait for a short moment to ensure overlap
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.1)
 
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             self.current -= 1
             return False
 
+    class CallRecorderRunner:
+        def __init__(self):
+            self.calls = []
+
+        async def __call__(self, es, params):
+            self.calls.append(params["name"])
+            # wait for a short moment to ensure overlap
+            await asyncio.sleep(0.1)
+
     def setUp(self):
         runner.register_default_runners()
         self.counter_runner = CompositeTests.CounterRunner()
+        self.call_recorder_runner = CompositeTests.CallRecorderRunner()
         runner.register_runner("counter", self.counter_runner, async_runner=True)
+        runner.register_runner("call-recorder", self.call_recorder_runner, async_runner=True)
 
     def tearDown(self):
         runner.remove_runner("counter")
+        runner.remove_runner("call-recorder")
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -4511,6 +4523,75 @@ class CompositeTests(TestCase):
                                                              headers=None,
                                                              body={},
                                                              params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_executes_tasks_in_specified_order(self, es):
+        es.transport.perform_request.return_value = as_future()
+
+        params = {
+            "requests": [
+                {
+                    "name": "initial-call",
+                    "operation-type": "call-recorder",
+                },
+                {
+                    "stream": [
+                        {
+                            "name": "stream-a",
+                            "operation-type": "call-recorder",
+                        }
+                    ]
+                },
+                {
+                    "stream": [
+                        {
+                            "name": "stream-b",
+                            "operation-type": "call-recorder",
+                        }
+                    ]
+                },
+                {
+                    "name": "call-after-stream-ab",
+                    "operation-type": "call-recorder",
+                },
+                {
+                    "stream": [
+                        {
+                            "name": "stream-c",
+                            "operation-type": "call-recorder",
+                        }
+                    ]
+                },
+                {
+                    "stream": [
+                        {
+                            "name": "stream-d",
+                            "operation-type": "call-recorder",
+                        }
+                    ]
+                },
+                {
+                    "name": "call-after-stream-cd",
+                    "operation-type": "call-recorder",
+                },
+
+            ]
+        }
+
+        r = runner.Composite()
+        r.supported_op_types = ["call-recorder"]
+        await r(es, params)
+
+        self.assertEqual([
+            "initial-call",
+            # concurrent
+            "stream-a", "stream-b",
+            "call-after-stream-ab",
+            # concurrent
+            "stream-c", "stream-d",
+            "call-after-stream-cd"
+        ], self.call_recorder_runner.calls)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -4601,7 +4682,6 @@ class CompositeTests(TestCase):
             await r(es, params)
 
         self.assertEqual("Unsupported operation-type [bulk]. Use one of [raw-request, sleep].", ctx.exception.args[0])
-
 
 
 class RetryTests(TestCase):
