@@ -414,7 +414,7 @@ class MetricsStore:
         """
         self.logger.info("Closing metrics store.")
         self.flush()
-        self.clear_meta_info()
+        self._clear_meta_info()
         self.opened = False
 
     def add_meta_info(self, scope, scope_key, key, value):
@@ -437,7 +437,7 @@ class MetricsStore:
         else:
             raise exceptions.SystemSetupError("Unknown meta info scope [%s]" % scope)
 
-    def clear_meta_info(self):
+    def _clear_meta_info(self):
         """
         Clears all internally stored meta-info. This is considered Rally internal API and not intended for normal client consumption.
         """
@@ -445,28 +445,6 @@ class MetricsStore:
             MetaInfoScope.cluster: {},
             MetaInfoScope.node: {}
         }
-
-    def merge_meta_info(self, to_merge):
-        """
-        Merges the current meta info with another one.
-
-        :param to_merge: A meta info representation that should be merged with the current one.
-        """
-        if MetaInfoScope.cluster in to_merge:
-            self._meta_info[MetaInfoScope.cluster].update(to_merge[MetaInfoScope.cluster])
-        if MetaInfoScope.node in to_merge:
-            self._meta_info[MetaInfoScope.node].update(to_merge[MetaInfoScope.node])
-
-    @property
-    def meta_info(self):
-        """
-        :return: All currently stored meta-info. This is considered Rally internal API and not intended for normal client consumption.
-        """
-        return self._meta_info
-
-    @meta_info.setter
-    def meta_info(self, meta_info):
-        self._meta_info = meta_info
 
     @property
     def open_context(self):
@@ -478,58 +456,14 @@ class MetricsStore:
             "car": self._car
         }
 
-    def put_count_cluster_level(self, name, count, unit=None, task=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
-                                absolute_time=None, relative_time=None, meta_data=None):
-        """
-        Adds a new cluster level counter metric.
-
-        :param name: The name of the metric.
-        :param count: The metric value. It is expected to be of type int (otherwise use put_value_*).
-        :param unit: A count may or may not have unit.
-        :param task: The task name to which this value applies. Optional. Defaults to None.
-        :param operation: The operation name to which this value applies. Optional. Defaults to None.
-        :param operation_type: The operation type to which this value applies. Optional. Defaults to None.
-        :param sample_type: Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
-        :param absolute_time: The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
-               store will derive the timestamp automatically.
-        :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
-               Defaults to None. The metrics store will derive the timestamp automatically.
-        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
-        """
-        self._put_metric(MetaInfoScope.cluster, None, name, count, unit, task, operation, operation_type, sample_type, absolute_time,
-                         relative_time, meta_data)
-
-    def put_count_node_level(self, node_name, name, count, unit=None, task=None, operation=None, operation_type=None,
-                             sample_type=SampleType.Normal, absolute_time=None, relative_time=None, meta_data=None):
-        """
-        Adds a new node level counter metric.
-
-        :param name: The name of the metric.
-        :param node_name: The name of the cluster node for which this metric has been determined.
-        :param count: The metric value. It is expected to be of type int (otherwise use put_value_*).
-        :param unit: A count may or may not have unit.
-        :param task: The task name to which this value applies. Optional. Defaults to None.
-        :param operation: The operation name to which this value applies. Optional. Defaults to None.
-        :param operation_type: The operation type to which this value applies. Optional. Defaults to None.
-        :param sample_type Whether this is a warmup or a normal measurement sample. Defaults to SampleType.Normal.
-        :param absolute_time: The absolute timestamp in seconds since epoch when this metric record is stored. Defaults to None. The metrics
-               store will derive the timestamp automatically.
-        :param relative_time: The relative timestamp in seconds since the start of the benchmark when this metric record is stored.
-               Defaults to None. The metrics store will derive the timestamp automatically.
-        :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
-        """
-        self._put_metric(MetaInfoScope.node, node_name, name, count, unit, task, operation, operation_type, sample_type, absolute_time,
-                         relative_time, meta_data)
-
-    # should be a float
-    def put_value_cluster_level(self, name, value, unit, task=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
+    def put_value_cluster_level(self, name, value, unit=None, task=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
                                 absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new cluster level value metric.
 
         :param name: The name of the metric.
-        :param value: The metric value. It is expected to be of type float (otherwise use put_count_*).
-        :param unit: The unit of this metric value (e.g. ms, docs/s).
+        :param value: The metric value. It is expected to be numeric.
+        :param unit: The unit of this metric value (e.g. ms, docs/s). Optional. Defaults to None.
         :param task: The task name to which this value applies. Optional. Defaults to None.
         :param operation: The operation name to which this value applies. Optional. Defaults to None.
         :param operation_type: The operation type to which this value applies. Optional. Defaults to None.
@@ -543,15 +477,15 @@ class MetricsStore:
         self._put_metric(MetaInfoScope.cluster, None, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
                          relative_time, meta_data)
 
-    def put_value_node_level(self, node_name, name, value, unit, task=None, operation=None, operation_type=None,
+    def put_value_node_level(self, node_name, name, value, unit=None, task=None, operation=None, operation_type=None,
                              sample_type=SampleType.Normal, absolute_time=None, relative_time=None, meta_data=None):
         """
         Adds a new node level value metric.
 
         :param name: The name of the metric.
         :param node_name: The name of the cluster node for which this metric has been determined.
-        :param value: The metric value. It is expected to be of type float (otherwise use put_count_*).
-        :param unit: The unit of this metric value (e.g. ms, docs/s)
+        :param value: The metric value. It is expected to be numeric.
+        :param unit: The unit of this metric value (e.g. ms, docs/s). Optional. Defaults to None.
         :param task: The task name to which this value applies. Optional. Defaults to None.
         :param operation: The operation name to which this value applies. Optional. Defaults to None.
         :param operation_type: The operation type to which this value applies. Optional. Defaults to None.
@@ -737,21 +671,6 @@ class MetricsStore:
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         raise NotImplementedError("abstract method")
-
-    def get_count(self, name, task=None, operation_type=None, sample_type=None):
-        """
-
-        :param name: The metric name to query.
-        :param task The task name to query. Optional.
-        :param operation_type The operation type to query. Optional.
-        :param sample_type The sample type to query. Optional. By default, all samples are considered.
-        :return: The number of samples for this metric.
-        """
-        stats = self.get_stats(name, task, operation_type, sample_type)
-        if stats:
-            return stats["count"]
-        else:
-            return 0
 
     def get_error_rate(self, task, operation_type=None, sample_type=None):
         """
@@ -1767,7 +1686,8 @@ class GlobalStatsCalculator:
 
     def single_latency(self, task, metric_name="latency"):
         sample_type = SampleType.Normal
-        sample_size = self.store.get_count(metric_name, task=task, sample_type=sample_type)
+        stats = self.store.get_stats(metric_name, task=task, sample_type=sample_type)
+        sample_size = stats["count"] if stats else 0
         if sample_size > 0:
             percentiles = self.store.get_percentiles(metric_name,
                                                      task=task,

@@ -114,10 +114,8 @@ class DriverTests(TestCase):
         DriverTests.StaticClientFactory.close()
 
     def create_test_driver_target(self):
-        track_preparator = "track_preparator_marker"
         client = "client_marker"
         attrs = {
-            "create_track_preparator.return_value": track_preparator,
             "create_client.return_value": client
         }
         return mock.Mock(**attrs)
@@ -132,12 +130,7 @@ class DriverTests(TestCase):
         d = driver.Driver(target, self.cfg, es_client_factory_class=DriverTests.StaticClientFactory)
         d.prepare_benchmark(t=self.track)
 
-        target.create_track_preparator.assert_has_calls(calls=[
-            mock.call("10.5.5.1"),
-            mock.call("10.5.5.2"),
-        ])
-
-        target.on_prepare_track.assert_called_once_with(["track_preparator_marker", "track_preparator_marker"], self.cfg, self.track)
+        target.prepare_track.assert_called_once_with(["10.5.5.1", "10.5.5.2"], self.cfg, self.track)
         d.start_benchmark()
 
         target.create_client.assert_has_calls(calls=[
@@ -156,8 +149,7 @@ class DriverTests(TestCase):
 
         d.prepare_benchmark(t=self.track)
 
-        target.create_track_preparator.assert_called_once_with("localhost")
-        target.on_prepare_track.assert_called_once_with(["track_preparator_marker"], self.cfg, self.track)
+        target.prepare_track.assert_called_once_with(["localhost"], self.cfg, self.track)
 
         d.start_benchmark()
 

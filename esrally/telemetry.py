@@ -887,25 +887,25 @@ class TransformStatsRecorder:
             "transform_id": transform_id
         }
 
-        self.metrics_store.put_count_cluster_level(prefix + "transform_pages_processed",
+        self.metrics_store.put_value_cluster_level(prefix + "transform_pages_processed",
                                                    stats.get("pages_processed", 0),
                                                    meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level(prefix + "transform_documents_processed",
+        self.metrics_store.put_value_cluster_level(prefix + "transform_documents_processed",
                                                    stats.get("documents_processed", 0),
                                                    meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level(prefix + "transform_documents_indexed",
+        self.metrics_store.put_value_cluster_level(prefix + "transform_documents_indexed",
                                                    stats.get("documents_indexed", 0),
                                                    meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level(prefix + "transform_index_total", stats.get("index_total", 0),
+        self.metrics_store.put_value_cluster_level(prefix + "transform_index_total", stats.get("index_total", 0),
                                                    meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level(prefix + "transform_index_failures", stats.get("index_failures", 0),
+        self.metrics_store.put_value_cluster_level(prefix + "transform_index_failures", stats.get("index_failures", 0),
                                                    meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level(prefix + "transform_search_total", stats.get("search_total", 0),
+        self.metrics_store.put_value_cluster_level(prefix + "transform_search_total", stats.get("search_total", 0),
                                                    meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level(prefix + "transform_search_failures",
+        self.metrics_store.put_value_cluster_level(prefix + "transform_search_failures",
                                                    stats.get("search_failures", 0),
                                                    meta_data=meta_data)
-        self.metrics_store.put_count_cluster_level(prefix + "transform_processing_total",
+        self.metrics_store.put_value_cluster_level(prefix + "transform_processing_total",
                                                    stats.get("processing_total", 0),
                                                    meta_data=meta_data)
 
@@ -1003,9 +1003,9 @@ class DiskIo(InternalTelemetryDevice):
 
     def store_system_metrics(self, node, metrics_store):
         if self.write_bytes is not None:
-            metrics_store.put_count_node_level(node.node_name, "disk_io_write_bytes", self.write_bytes, "byte")
+            metrics_store.put_value_node_level(node.node_name, "disk_io_write_bytes", self.write_bytes, "byte")
         if self.read_bytes is not None:
-            metrics_store.put_count_node_level(node.node_name, "disk_io_read_bytes", self.read_bytes, "byte")
+            metrics_store.put_value_node_level(node.node_name, "disk_io_read_bytes", self.read_bytes, "byte")
 
 
 def store_node_attribute_metadata(metrics_store, nodes_info):
@@ -1184,9 +1184,9 @@ class JvmStatsSummary(InternalTelemetryDevice):
                 total_old_gen_collection_count += old_gc_count
 
                 self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
-                self.metrics_store.put_count_node_level(node_name, "node_young_gen_gc_count", young_gc_count)
+                self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_count", young_gc_count)
                 self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
-                self.metrics_store.put_count_node_level(node_name, "node_old_gen_gc_count", old_gc_count)
+                self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_count", old_gc_count)
 
                 all_pool_stats = {
                     "name": "jvm_memory_pool_stats"
@@ -1202,9 +1202,9 @@ class JvmStatsSummary(InternalTelemetryDevice):
                 self.logger.warning("Cannot determine JVM stats for [%s] (not in the cluster at the start of the benchmark).", node_name)
 
         self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
-        self.metrics_store.put_count_cluster_level("node_total_young_gen_gc_count", total_young_gen_collection_count)
+        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_count", total_young_gen_collection_count)
         self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
-        self.metrics_store.put_count_cluster_level("node_total_old_gen_gc_count", total_old_gen_collection_count)
+        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_count", total_old_gen_collection_count)
 
         self.jvm_stats_per_node = None
 
@@ -1355,7 +1355,7 @@ class IndexStats(InternalTelemetryDevice):
             if unit:
                 self.metrics_store.put_value_cluster_level(metric_key, value, unit)
             else:
-                self.metrics_store.put_count_cluster_level(metric_key, value)
+                self.metrics_store.put_value_cluster_level(metric_key, value)
 
     def extract_value(self, primaries, path, default_value=None):
         value = primaries
@@ -1451,4 +1451,4 @@ class IndexSize(InternalTelemetryDevice):
 
     def store_system_metrics(self, node, metrics_store):
         if self.index_size_bytes:
-            metrics_store.put_count_node_level(node.node_name, "final_index_size_bytes", self.index_size_bytes, "byte")
+            metrics_store.put_value_node_level(node.node_name, "final_index_size_bytes", self.index_size_bytes, "byte")

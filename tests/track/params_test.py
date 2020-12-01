@@ -707,6 +707,7 @@ class InvocationGeneratorTests(TestCase):
         self.assertEqual(3, len(params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0)))
 
 
+# pylint: disable=too-many-public-methods
 class BulkIndexParamSourceTests(TestCase):
     def test_create_without_params(self):
         corpus = track.DocumentCorpus(name="default", documents=[
