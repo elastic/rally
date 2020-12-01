@@ -800,7 +800,8 @@ Example::
       "request-params": {
         "wait_for_status": "green",
         "wait_for_no_relocating_shards": "true"
-      }
+      },
+      "retry-until-success": true
     }
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
