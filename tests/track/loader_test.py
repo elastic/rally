@@ -1488,6 +1488,7 @@ class TrackFilterTests(TestCase):
         self.assertEqual("cluster-stats", schedule[3].name)
 
 
+# pylint: disable=too-many-public-methods
 class TrackSpecificationReaderTests(TestCase):
     def test_description_is_optional(self):
         track_specification = {

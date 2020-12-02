@@ -173,7 +173,8 @@ Finally, store the track as ``track.json`` in the tutorial directory::
             "operation-type": "cluster-health",
             "request-params": {
               "wait_for_status": "green"
-            }
+            },
+            "retry-until-success": true
           }
         },
         {
@@ -327,7 +328,8 @@ To specify different workloads in the same track you can use so-called challenge
                 "operation-type": "cluster-health",
                 "request-params": {
                   "wait_for_status": "green"
-                }
+                },
+                "retry-until-success": true
               }
             },
             {
@@ -396,7 +398,8 @@ Structuring your track
             "operation-type": "cluster-health",
             "request-params": {
               "wait_for_status": "green"
-            }
+            },
+            "retry-until-success": true
           }
         },
         {
@@ -499,7 +502,8 @@ To reuse operation definitions across challenges, you can define them in a separ
           "operation-type": "cluster-health",
           "request-params": {
             "wait_for_status": "green"
-          }
+          },
+          "retry-until-success": true
         },
         {
           "name": "bulk-index",
@@ -601,7 +605,8 @@ You can also use Rally's collect helper to simplify including multiple challenge
           "operation-type": "cluster-health",
           "request-params": {
             "wait_for_status": "green"
-          }
+          },
+          "retry-until-success": true
         },
         {
           "name": "bulk-index",
