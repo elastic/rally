@@ -2021,11 +2021,7 @@ class SubmitAsyncSearch(Runner):
 
 
 def async_search_ids(op_names):
-    if isinstance(op_names, str):
-        subjects = [op_names]
-    else:
-        subjects = op_names
-
+    subjects = [op_names] if isinstance(op_names, str) else op_names
     for subject in subjects:
         subject_id = CompositeContext.get(subject)
         # skip empty ids, searches have already completed
