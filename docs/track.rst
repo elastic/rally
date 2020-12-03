@@ -1835,10 +1835,10 @@ In the example below we issue two async searches, named ``search-1`` and ``searc
                     "body": {
                       "query": {
                         "match_all": {}
-                      },
-                      "request-params": {
-                        "wait_for_completion_timeout": "100ms"
                       }
+                    },
+                    "request-params": {
+                      "wait_for_completion_timeout": "100ms"
                     }
                   }
                 ]
