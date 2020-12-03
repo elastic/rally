@@ -224,7 +224,7 @@ class DriverActor(actor.RallyActor):
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_TrackPrepared(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg,
-                                                    expected_status=None, new_status=None, transition=self.after_track_prepared)
+                                                    expected_status=None, new_status=None, transition=self._after_track_prepared)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_JoinPointReached(self, msg, sender):
@@ -265,9 +265,6 @@ class DriverActor(actor.RallyActor):
             self.coordinator.reset_relative_time()
         self.send(self.start_sender, TaskFinished(metrics, next_task_scheduled_in))
 
-    def create_track_preparator(self, host):
-        return self.createActor(TrackPreparationActor, targetActorRequirements=self._requirements(host))
-
     def _requirements(self, host):
         if host == "localhost":
             return {"coordinator": True}
@@ -277,13 +274,16 @@ class DriverActor(actor.RallyActor):
     def on_cluster_details_retrieved(self, cluster_details):
         self.cluster_details = cluster_details
 
-    def on_prepare_track(self, preparators, cfg, track):
-        self.children = preparators
+    def prepare_track(self, hosts, cfg, track):
+        self.children = [self._create_track_preparator(h) for h in hosts]
         msg = PrepareTrack(cfg, track)
         for child in self.children:
             self.send(child, msg)
 
-    def after_track_prepared(self):
+    def _create_track_preparator(self, host):
+        return self.createActor(TrackPreparationActor, targetActorRequirements=self._requirements(host))
+
+    def _after_track_prepared(self):
         cluster_version = self.cluster_details["version"] if self.cluster_details else {}
         for child in self.children:
             self.send(child, thespian.actors.ActorExitRequest())
@@ -452,8 +452,7 @@ class Driver:
 
             self.load_driver_hosts.append(host_config)
 
-        preps = [self.target.create_track_preparator(h["host"]) for h in self.load_driver_hosts]
-        self.target.on_prepare_track(preps, self.config, self.track)
+        self.target.prepare_track([h["host"] for h in self.load_driver_hosts], self.config, self.track)
 
     def start_benchmark(self):
         self.logger.info("Benchmark is about to start.")
@@ -517,6 +516,8 @@ class Driver:
             if self.finished():
                 self.telemetry.on_benchmark_stop()
                 self.logger.info("All steps completed.")
+                # Some metrics store implementations return None because no external representation is required.
+                # pylint: disable=assignment-from-none
                 m = self.metrics_store.to_externalizable(clear=True)
                 self.logger.debug("Closing metrics store...")
                 self.metrics_store.close()
@@ -539,6 +540,8 @@ class Driver:
             # Assumption: We don't have a lot of clock skew between reaching the join point and sending the next task
             #             (it doesn't matter too much if we're a few ms off).
             waiting_period = 1.0
+        # Some metrics store implementations return None because no external representation is required.
+        # pylint: disable=assignment-from-none
         m = self.metrics_store.to_externalizable(clear=True)
         self.target.on_task_finished(m, waiting_period)
         # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it

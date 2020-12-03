@@ -16,6 +16,7 @@
 # under the License.
 
 import os
+import random
 import re
 import textwrap
 import unittest.mock as mock
@@ -286,13 +287,14 @@ class TrackPreparationTests(TestCase):
         is_file.side_effect = [False, False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
+        scheme = random.choice(["http", "https", "s3", "gs"])
 
         prepare_file_offset_table.return_value = 5
 
         p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
 
         p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                            base_url="http://benchmarks.elasticsearch.org/corpora/unit-test/",
+                                                            base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
                                                             document_file="docs.json",
                                                             # --> We don't provide a document archive here <--
                                                             document_archive=None,
@@ -302,7 +304,7 @@ class TrackPreparationTests(TestCase):
                                data_root="/tmp")
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
+        download.assert_called_with(f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
                                     "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -1313,6 +1315,10 @@ class TrackFilterTests(TestCase):
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
                 {
+                    "name": "create-index",
+                    "operation-type": "create-index"
+                },
+                {
                     "name": "bulk-index",
                     "operation-type": "bulk"
                 },
@@ -1338,6 +1344,9 @@ class TrackFilterTests(TestCase):
                 {
                     "name": "default-challenge",
                     "schedule": [
+                        {
+                            "operation": "create-index"
+                        },
                         {
                             "parallel": {
                                 "tasks": [
@@ -1376,7 +1385,7 @@ class TrackFilterTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", track_specification, "/mappings")
-        self.assertEqual(4, len(full_track.challenges[0].schedule))
+        self.assertEqual(5, len(full_track.challenges[0].schedule))
 
         filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("index-3"),
                                                              track.TaskOpTypeFilter("search"),
@@ -1385,16 +1394,21 @@ class TrackFilterTests(TestCase):
                                                              ])
 
         schedule = filtered.challenges[0].schedule
-        self.assertEqual(3, len(schedule))
-        self.assertEqual(["index-3", "match-all-parallel"], [t.name for t in schedule[0].tasks])
-        self.assertEqual("match-all-serial", schedule[1].name)
-        self.assertEqual("cluster-stats", schedule[2].name)
+        self.assertEqual(4, len(schedule))
+        self.assertEqual("create-index", schedule[0].name)
+        self.assertEqual(["index-3", "match-all-parallel"], [t.name for t in schedule[1].tasks])
+        self.assertEqual("match-all-serial", schedule[2].name)
+        self.assertEqual("cluster-stats", schedule[3].name)
 
     def test_filters_exclude_tasks(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [{"name": "test-index", "auto-managed": False}],
             "operations": [
+                {
+                    "name": "create-index",
+                    "operation-type": "create-index"
+                },
                 {
                     "name": "bulk-index",
                     "operation-type": "bulk"
@@ -1421,6 +1435,9 @@ class TrackFilterTests(TestCase):
                 {
                     "name": "default-challenge",
                     "schedule": [
+                        {
+                            "operation": "create-index"
+                        },
                         {
                             "parallel": {
                                 "tasks": [
@@ -1459,17 +1476,19 @@ class TrackFilterTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", track_specification, "/mappings")
-        self.assertEqual(4, len(full_track.challenges[0].schedule))
+        self.assertEqual(5, len(full_track.challenges[0].schedule))
 
         filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("index-3"), track.TaskOpTypeFilter("search")], exclude=True)
 
         schedule = filtered.challenges[0].schedule
-        self.assertEqual(3, len(schedule))
-        self.assertEqual(["index-1",'index-2'], [t.name for t in schedule[0].tasks])
-        self.assertEqual("node-stats", schedule[1].name)
-        self.assertEqual("cluster-stats", schedule[2].name)
+        self.assertEqual(4, len(schedule))
+        self.assertEqual("create-index", schedule[0].name)
+        self.assertEqual(["index-1", "index-2"], [t.name for t in schedule[1].tasks])
+        self.assertEqual("node-stats", schedule[2].name)
+        self.assertEqual("cluster-stats", schedule[3].name)
 
 
+# pylint: disable=too-many-public-methods
 class TrackSpecificationReaderTests(TestCase):
     def test_description_is_optional(self):
         track_specification = {
@@ -2888,9 +2907,10 @@ class TrackSpecificationReaderTests(TestCase):
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
 
-        self.assertEqual(2, len(resulting_track.challenges[0].schedule))
-        self.assertEqual(track.OperationType.Bulk.name, resulting_track.challenges[0].schedule[0].operation.type)
-        self.assertEqual(track.OperationType.ForceMerge.name, resulting_track.challenges[0].schedule[1].operation.type)
+        challenge = resulting_track.challenges[0]
+        self.assertEqual(2, len(challenge.schedule))
+        self.assertEqual(track.OperationType.Bulk.to_hyphenated_string(), challenge.schedule[0].operation.type)
+        self.assertEqual(track.OperationType.ForceMerge.to_hyphenated_string(), challenge.schedule[1].operation.type)
 
     def test_supports_target_throughput(self):
         track_specification = {

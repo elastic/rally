@@ -307,7 +307,7 @@ class EsMetricsTests(TestCase):
         throughput = 5000
         self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
-        self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
+        self.metrics_store.put_value_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": EsMetricsTests.RACE_ID,
@@ -335,7 +335,7 @@ class EsMetricsTests(TestCase):
         throughput = 5000
         self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
-        self.metrics_store.put_count_cluster_level(name="indexing_throughput", count=throughput, unit="docs/s",
+        self.metrics_store.put_value_cluster_level(name="indexing_throughput", value=throughput, unit="docs/s",
                                                    absolute_time=0, relative_time=10)
         expected_doc = {
             "@timestamp": 0,
@@ -1280,9 +1280,9 @@ class InMemoryMetricsStoreTests(TestCase):
         throughput = 5000
         self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.put_count_cluster_level("indexing_throughput", 1, "docs/s", sample_type=metrics.SampleType.Warmup)
-        self.metrics_store.put_count_cluster_level("indexing_throughput", throughput, "docs/s")
-        self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
+        self.metrics_store.put_value_cluster_level("indexing_throughput", 1, "docs/s", sample_type=metrics.SampleType.Warmup)
+        self.metrics_store.put_value_cluster_level("indexing_throughput", throughput, "docs/s")
+        self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB")
 
         self.metrics_store.close()
 
@@ -1346,7 +1346,7 @@ class InMemoryMetricsStoreTests(TestCase):
     def test_externalize_and_bulk_add(self):
         self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults", create=True)
-        self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB")
+        self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB")
 
         self.assertEqual(1, len(self.metrics_store.docs))
         memento = self.metrics_store.to_externalizable()
@@ -1366,10 +1366,10 @@ class InMemoryMetricsStoreTests(TestCase):
                                 "test", "append-no-conflicts", "defaults", create=True)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "cluster-name", "test")
 
-        self.metrics_store.put_count_cluster_level("final_index_size", 1000, "GB", meta_data={
+        self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB", meta_data={
             "fs-block-size-bytes": 512
         })
-        self.metrics_store.put_count_cluster_level("final_bytes_written", 1, "TB", meta_data={
+        self.metrics_store.put_value_cluster_level("final_bytes_written", 1, "TB", meta_data={
             "io-batch-size-kb": 4
         })
 
@@ -1592,9 +1592,9 @@ class StatsCalculatorTests(TestCase):
         store = metrics.metrics_store(cfg, read_only=False, track=t, challenge=challenge)
         store.add_meta_info(metrics.MetaInfoScope.node, "rally-node-0", "node_name", "rally-node-0")
 
-        store.put_count_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
+        store.put_value_node_level("rally-node-0", "final_index_size_bytes", 2048, unit="bytes")
         # ensure this value will be filtered as it does not belong to our node
-        store.put_count_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
+        store.put_value_node_level("rally-node-1", "final_index_size_bytes", 4096, unit="bytes")
 
         stats = metrics.calculate_system_results(store, "rally-node-0")
 

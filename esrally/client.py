@@ -148,14 +148,10 @@ class EsClientFactory:
                     return super().loads(s)
 
         async def on_request_start(session, trace_config_ctx, params):
-            meta = RallyAsyncElasticsearch.request_context.get()
-            # this can happen if multiple requests are sent on the wire for one logical request (e.g. scrolls)
-            if "request_start" not in meta:
-                meta["request_start"] = time.perf_counter()
+            RallyAsyncElasticsearch.on_request_start()
 
         async def on_request_end(session, trace_config_ctx, params):
-            meta = RallyAsyncElasticsearch.request_context.get()
-            meta["request_end"] = time.perf_counter()
+            RallyAsyncElasticsearch.on_request_end()
 
         trace_config = aiohttp.TraceConfig()
         trace_config.on_request_start.append(on_request_start)
@@ -174,6 +170,18 @@ class EsClientFactory:
                 ctx = {}
                 RallyAsyncElasticsearch.request_context.set(ctx)
                 return ctx
+
+            @classmethod
+            def on_request_start(cls):
+                meta = RallyAsyncElasticsearch.request_context.get()
+                # this can happen if multiple requests are sent on the wire for one logical request (e.g. scrolls)
+                if "request_start" not in meta:
+                    meta["request_start"] = time.perf_counter()
+
+            @classmethod
+            def on_request_end(cls):
+                meta = RallyAsyncElasticsearch.request_context.get()
+                meta["request_end"] = time.perf_counter()
 
             def return_raw_response(self):
                 ctx = RallyAsyncElasticsearch.request_context.get()

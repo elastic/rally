@@ -1,0 +1,32 @@
+@startuml
+' Render this diagram with e.g. http://plantuml.com/plantuml
+concise "Stream 0" as s0
+concise "Stream 0.0" as s00
+concise "Stream 0.1" as s01
+concise "Stream 1" as s1
+
+@0
+s0 is "find-matching-posts"
+s00 is {hidden}
+s01 is {hidden}
+s1 is "load-user"
+
+@+30
+s1 is {-}
+
+@+20
+s0 is "client-processing"
+
+
+@+40
+s0 is {-}
+s00 is "find-related-posts"
+s01 is "find-top-posts"
+
+
+@+40
+s01 is {-}
+
+@+20
+s00 is {-}
+@enduml

@@ -1938,9 +1938,8 @@ class TransformStatsRecorderTests(TestCase):
             "transforms": transforms
         }
 
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_stores_default_stats(self, metrics_store_put_value, metrics_store_put_count):
+    def test_stores_default_stats(self, metrics_store_put_value):
         client = Client(transform=SubClient(transform_stats=TransformStatsRecorderTests.transform_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -1953,7 +1952,7 @@ class TransformStatsRecorderTests(TestCase):
             "transform_id": "transform_job_0"
         }
 
-        metrics_store_put_count.assert_has_calls([
+        metrics_store_put_value.assert_has_calls([
             mock.call("transform_pages_processed", 1, meta_data=meta_data),
             mock.call("transform_documents_processed", 240, meta_data=meta_data),
             mock.call("transform_documents_indexed", 3, meta_data=meta_data),
@@ -1962,9 +1961,6 @@ class TransformStatsRecorderTests(TestCase):
             mock.call("transform_search_total", 9, meta_data=meta_data),
             mock.call("transform_search_failures", 10, meta_data=meta_data),
             mock.call("transform_processing_total", 12, meta_data=meta_data),
-        ])
-
-        metrics_store_put_value.assert_has_calls([
             mock.call("transform_search_time", 8, "ms", meta_data=meta_data),
             mock.call("transform_index_time", 5, "ms", meta_data=meta_data),
             mock.call("transform_processing_time", 11, "ms", meta_data=meta_data),
@@ -2243,7 +2239,7 @@ class ExternalEnvironmentInfoTests(TestCase):
 class DiskIoTests(TestCase):
 
     @mock.patch("esrally.utils.sysstats.process_io_counters")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
     def test_diskio_process_io_counters(self, metrics_store_node_count, process_io_counters):
         Diskio = namedtuple("Diskio", "read_bytes write_bytes")
         process_start = Diskio(10, 10)
@@ -2272,7 +2268,7 @@ class DiskIoTests(TestCase):
 
     @mock.patch("esrally.utils.sysstats.disk_io_counters")
     @mock.patch("esrally.utils.sysstats.process_io_counters")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
     def test_diskio_disk_io_counters(self, metrics_store_node_count, process_io_counters, disk_io_counters):
         Diskio = namedtuple("Diskio", "read_bytes write_bytes")
         process_start = Diskio(10, 10)
@@ -2303,7 +2299,7 @@ class DiskIoTests(TestCase):
 
     @mock.patch("esrally.utils.sysstats.disk_io_counters")
     @mock.patch("esrally.utils.sysstats.process_io_counters")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
     def test_diskio_writes_metrics_if_available(self, metrics_store_node_count, process_io_counters, disk_io_counters):
         Diskio = namedtuple("Diskio", "read_bytes write_bytes")
         process_start = Diskio(10, 10)
@@ -2335,11 +2331,7 @@ class JvmStatsSummaryTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
     def test_stores_only_diff_of_gc_times(self,
-                                          metrics_store_count_node_level,
-                                          metrics_store_count_cluster_level,
                                           metrics_store_node_level,
                                           metrics_store_cluster_level,
                                           metrics_store_put_doc):
@@ -2427,20 +2419,15 @@ class JvmStatsSummaryTests(TestCase):
 
         metrics_store_node_level.assert_has_calls([
             mock.call("rally0", "node_young_gen_gc_time", 700, "ms"),
-            mock.call("rally0", "node_old_gen_gc_time", 1500, "ms"),
-        ])
-
-        metrics_store_count_node_level.assert_has_calls([
             mock.call("rally0", "node_young_gen_gc_count", 3980),
+            mock.call("rally0", "node_old_gen_gc_time", 1500, "ms"),
             mock.call("rally0", "node_old_gen_gc_count", 1),
         ])
 
         metrics_store_cluster_level.assert_has_calls([
             mock.call("node_total_young_gen_gc_time", 700, "ms"),
-            mock.call("node_total_old_gen_gc_time", 1500, "ms")
-        ])
-        metrics_store_count_cluster_level.assert_has_calls([
             mock.call("node_total_young_gen_gc_count", 3980),
+            mock.call("node_total_old_gen_gc_time", 1500, "ms"),
             mock.call("node_total_old_gen_gc_count", 1),
         ])
 
@@ -2466,8 +2453,7 @@ class JvmStatsSummaryTests(TestCase):
 class IndexStatsTests(TestCase):
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
-    def test_stores_available_index_stats(self, metrics_store_cluster_count, metrics_store_cluster_value, metrics_store_put_doc):
+    def test_stores_available_index_stats(self, metrics_store_cluster_value, metrics_store_put_doc):
         client = Client(indices=SubClient({
             "_all": {
                 "primaries": {
@@ -2699,10 +2685,8 @@ class IndexStatsTests(TestCase):
             }, level=metrics.MetaInfoScope.cluster),
         ])
 
-        metrics_store_cluster_count.assert_has_calls([
-            mock.call("segments_count", 5)
-        ])
         metrics_store_cluster_value.assert_has_calls([
+            mock.call("segments_count", 5),
             mock.call("segments_memory_in_bytes", 2048, "byte"),
             mock.call("segments_doc_values_memory_in_bytes", 128, "byte"),
             mock.call("segments_stored_fields_memory_in_bytes", 1024, "byte"),
@@ -2822,8 +2806,8 @@ class MlBucketProcessingTimeTests(TestCase):
 
 class IndexSizeTests(TestCase):
     @mock.patch("esrally.utils.io.get_size")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_node_level")
-    def test_stores_index_size_for_data_paths(self, metrics_store_node_count, get_size):
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    def test_stores_index_size_for_data_paths(self, metrics_store_node_value, get_size):
         get_size.side_effect = [2048, 16384]
 
         cfg = create_config()
@@ -2838,14 +2822,14 @@ class IndexSizeTests(TestCase):
         t.detach_from_node(node, running=False)
         t.store_system_metrics(node, metrics_store)
 
-        metrics_store_node_count.assert_has_calls([
+        metrics_store_node_value.assert_has_calls([
             mock.call("rally-node-0", "final_index_size_bytes", 18432, "byte")
         ])
 
     @mock.patch("esrally.utils.io.get_size")
-    @mock.patch("esrally.metrics.EsMetricsStore.put_count_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_stores_nothing_if_no_data_path(self, run_subprocess, metrics_store_cluster_count, get_size):
+    def test_stores_nothing_if_no_data_path(self, run_subprocess, metrics_store_cluster_value, get_size):
         get_size.return_value = 2048
 
         cfg = create_config()
@@ -2862,5 +2846,5 @@ class IndexSizeTests(TestCase):
         t.store_system_metrics(node, metrics_store)
 
         self.assertEqual(0, run_subprocess.call_count)
-        self.assertEqual(0, metrics_store_cluster_count.call_count)
+        self.assertEqual(0, metrics_store_cluster_value.call_count)
         self.assertEqual(0, get_size.call_count)

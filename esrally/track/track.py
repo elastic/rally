@@ -516,13 +516,14 @@ class Challenge:
 @unique
 class OperationType(Enum):
     # for the time being we are not considering this action as administrative
-    IndicesStats = 1
-    NodesStats = 2
+    IndexStats = 1
+    NodeStats = 2
     Search = 3
     Bulk = 4
     RawRequest = 5
     WaitForRecovery = 6
     WaitForSnapshotCreate = 7
+    Composite = 8
 
     # administrative actions
     ForceMerge = 1001
@@ -564,15 +565,23 @@ class OperationType(Enum):
         # pylint: disable=comparison-with-callable
         return self.value > 1000
 
+    def to_hyphenated_string(self):
+        """
+        Turns enum constants into hyphenated names, e.g. ``WaitForTransform`` becomes ``wait-for-transform``.
+        """
+        # Pylint complains that self.name is not iterable
+        # pylint: disable=not-an-iterable
+        return "".join(["-" + c.lower() if c.isupper() else c for c in self.name]).lstrip("-")
+
     # pylint: disable=too-many-return-statements
     @classmethod
     def from_hyphenated_string(cls, v):
         if v == "force-merge":
             return OperationType.ForceMerge
         elif v == "index-stats":
-            return OperationType.IndicesStats
+            return OperationType.IndexStats
         elif v == "node-stats":
-            return OperationType.NodesStats
+            return OperationType.NodeStats
         elif v == "search":
             return OperationType.Search
         elif v == "cluster-health":
@@ -647,8 +656,10 @@ class OperationType(Enum):
             return OperationType.CreateDataStream
         elif v == "delete-data-stream":
             return OperationType.DeleteDataStream
+        elif v == "composite":
+            return OperationType.Composite
         else:
-            raise KeyError("No enum value for [%s]" % v)
+            raise KeyError(f"No enum value for [{v}]")
 
 
 class TaskNameFilter:
@@ -670,11 +681,7 @@ class TaskNameFilter:
 
 class TaskOpTypeFilter:
     def __init__(self, op_type_name):
-        # we need to use the string representation because users may define their own operation types via a custom runners.
-        try:
-            self.op_type = OperationType.from_hyphenated_string(op_type_name).name
-        except KeyError:
-            self.op_type = op_type_name
+        self.op_type = op_type_name
 
     def matches(self, task):
         return self.op_type == task.operation.type
@@ -820,10 +827,6 @@ class Task:
             return Throughput(value, unit)
         else:
             return None
-
-    @property
-    def throttled(self):
-        return self.schedule is not None or self.target_throughput is not None
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)

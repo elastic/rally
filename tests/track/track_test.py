@@ -225,35 +225,64 @@ class DocumentCorpusTests(TestCase):
                          "Corpora meta-data differ: [{'with-metadata': False}] and [{'with-metadata': True}].")
 
 
+class OperationTypeTests(TestCase):
+    def test_string_hyphenation_is_symmetric(self):
+        for op_type in track.OperationType:
+            self.assertEqual(op_type, track.OperationType.from_hyphenated_string(op_type.to_hyphenated_string()))
+
+
+class TaskFilterTests(TestCase):
+    def create_index_task(self):
+        return track.Task("create-index-task",
+                          track.Operation("create-index-op",
+                                          operation_type=track.OperationType.CreateIndex.to_hyphenated_string()))
+
+    def search_task(self):
+        return track.Task("search-task",
+                          track.Operation("search-op",
+                                          operation_type=track.OperationType.Search.to_hyphenated_string()))
+
+    def test_admin_task_filter(self):
+        f = track.AdminTaskFilter()
+        self.assertTrue(f.matches(self.create_index_task()))
+        self.assertFalse(f.matches(self.search_task()))
+
+    def test_task_name_filter(self):
+        f = track.TaskNameFilter("create-index-task")
+        self.assertTrue(f.matches(self.create_index_task()))
+        self.assertFalse(f.matches(self.search_task()))
+
+    def test_task_op_type_filter(self):
+        f = track.TaskOpTypeFilter(track.OperationType.CreateIndex.to_hyphenated_string())
+        self.assertTrue(f.matches(self.create_index_task()))
+        self.assertFalse(f.matches(self.search_task()))
+
+
 class TaskTests(TestCase):
     def task(self, schedule=None, target_throughput=None, target_interval=None):
-        op = track.Operation("bulk-index", track.OperationType.Bulk.name)
+        op = track.Operation("bulk-index", track.OperationType.Bulk.to_hyphenated_string())
         params = {}
-        if target_throughput:
+        if target_throughput is not None:
             params["target-throughput"] = target_throughput
-        if target_interval:
+        if target_interval is not None:
             params["target-interval"] = target_interval
         return track.Task("test", op, schedule=schedule, params=params)
 
     def test_unthrottled_task(self):
         task = self.task()
         self.assertIsNone(task.target_throughput)
-        self.assertFalse(task.throttled)
 
-    def test_task_with_scheduler_is_throttled(self):
-        task = self.task(schedule="daily-traffic-pattern")
+    def test_target_interval_zero_treated_as_unthrottled(self):
+        task = self.task(target_interval=0)
         self.assertIsNone(task.target_throughput)
-        self.assertTrue(task.throttled)
 
     def test_valid_throughput_with_unit(self):
         task = self.task(target_throughput="5 MB/s")
         self.assertEqual(track.Throughput(5.0, "MB/s"), task.target_throughput)
-        self.assertTrue(task.throttled)
 
     def test_valid_throughput_numeric(self):
         task = self.task(target_throughput=3.2)
         self.assertEqual(track.Throughput(3.2, "ops/s"), task.target_throughput)
-        self.assertTrue(task.throttled)
 
     def test_invalid_throughput_format_is_rejected(self):
         task = self.task(target_throughput="3.2 docs")

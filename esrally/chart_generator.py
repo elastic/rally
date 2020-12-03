@@ -1582,7 +1582,7 @@ class RaceConfig:
         task_names = []
         for task in self.track.find_challenge_or_default(self.challenge).schedule:
             for sub_task in task:
-                if sub_task.operation.type == track.OperationType.Bulk.name:
+                if sub_task.operation.type == track.OperationType.Bulk.to_hyphenated_string():
                     if sub_task.name not in self.excluded_tasks:
                         task_names.append(sub_task.name)
         return task_names

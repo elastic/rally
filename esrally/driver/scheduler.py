@@ -87,10 +87,10 @@ def scheduler_for(task: esrally.track.Task):
     :return: An initialized scheduler instance.
     """
     logger = logging.getLogger(__name__)
-    if not task.throttled:
+    if run_unthrottled(task):
         return Unthrottled()
 
-    schedule = task.schedule or "deterministic"
+    schedule = task.schedule or DeterministicScheduler.name
     try:
         scheduler_class = __SCHEDULERS[schedule]
     except KeyError:
@@ -106,6 +106,16 @@ def scheduler_for(task: esrally.track.Task):
     else:
         logger.debug("Treating [%s] for [%s] as non-simple scheduler.", scheduler_class, task)
         return scheduler_class(task)
+
+
+def run_unthrottled(task):
+    """
+    Determines whether a task needs to run unthrottled. Tasks that don't specify a target throughput are only considered
+    as unthrottled if no explicit schedule or one of the built-in schedules is specified. Custom schedules might need
+    more flexible approaches (e.g. because they simulate a throughput that changes according to a daily or weekly
+    pattern) and thus specifying a target throughput might not always be appropriate.
+    """
+    return task.target_throughput is None and task.schedule in [None, PoissonScheduler.name, DeterministicScheduler.name]
 
 
 def is_legacy_scheduler(scheduler_class):
@@ -215,6 +225,8 @@ class DeterministicScheduler(SimpleScheduler):
     Schedules the next execution according to a
     `deterministic distribution <https://en.wikipedia.org/wiki/Degenerate_distribution>`_.
     """
+    name = "deterministic"
+
     # pylint: disable=unused-variable
     def __init__(self, task, target_throughput):
         super().__init__()
@@ -236,6 +248,8 @@ class PoissonScheduler(SimpleScheduler):
 
     See also http://preshing.com/20111007/how-to-generate-random-timings-for-a-poisson-process/
     """
+    name = "poisson"
+
     # pylint: disable=unused-variable
     def __init__(self, task, target_throughput):
         super().__init__()
@@ -264,7 +278,7 @@ class UnitAwareScheduler(Scheduler):
         self.scheduler = Unthrottled()
 
     def after_request(self, now, weight, unit, request_meta_data):
-        if self.first_request or self.current_weight != weight:
+        if weight > 0 and (self.first_request or self.current_weight != weight):
             expected_unit = self.task.target_throughput.unit
             actual_unit = f"{unit}/s"
             if actual_unit != expected_unit:
@@ -295,5 +309,5 @@ class UnitAwareScheduler(Scheduler):
         return f"Unit-aware scheduler delegating to [{self.scheduler_class}]"
 
 
-register_scheduler("deterministic", DeterministicScheduler)
-register_scheduler("poisson", PoissonScheduler)
+register_scheduler(DeterministicScheduler.name, DeterministicScheduler)
+register_scheduler(PoissonScheduler.name, PoissonScheduler)

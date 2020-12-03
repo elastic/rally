@@ -398,7 +398,12 @@ class DocumentSetPreparator:
         if self.offline:
             raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
 
-        data_url = f"{urllib.parse.urljoin(base_url + '/', file_name)}"
+        if base_url.endswith("/"):
+            separator = ""
+        else:
+            separator = "/"
+        # join manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
+        data_url = f"{base_url}{separator}{file_name}"
         try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
@@ -693,27 +698,31 @@ def filter_tasks(t, filters, exclude=False):
 
     logger = logging.getLogger(__name__)
 
-    def filter_out_match(task, filters, exclude):
-        for f in filters:
+    def filter_out_match(task, user_defined_filters, force_include_filters, exclude):
+        for f in force_include_filters:
             if task.matches(f):
-                if hasattr(task, 'tasks') and exclude:
+                return False
+
+        for f in user_defined_filters:
+            if task.matches(f):
+                if hasattr(task, "tasks") and exclude:
                     return False
                 return exclude
         return not exclude
 
     # always include administrative tasks
-    complete_filters = [track.AdminTaskFilter()] + filters
+    force_include_filters = [track.AdminTaskFilter()]
 
     for challenge in t.challenges:
         # don't modify the schedule while iterating over it
         tasks_to_remove = []
         for task in challenge.schedule:
-            if filter_out_match(task, complete_filters, exclude):
+            if filter_out_match(task, filters, force_include_filters, exclude):
                 tasks_to_remove.append(task)
             else:
                 leafs_to_remove = []
                 for leaf_task in task:
-                    if filter_out_match(leaf_task, complete_filters, exclude):
+                    if filter_out_match(leaf_task, filters, force_include_filters, exclude):
                         leafs_to_remove.append(leaf_task)
                 for leaf_task in leafs_to_remove:
                     logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
@@ -796,7 +805,7 @@ def post_process_for_test_mode(t):
                         logger.debug("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
 
                 # Keep throttled to expose any errors but increase the target throughput for short execution times.
-                if leaf_task.throttled and leaf_task.target_throughput:
+                if leaf_task.target_throughput:
                     original_throughput = leaf_task.target_throughput
                     leaf_task.params.pop("target-throughput", None)
                     leaf_task.params.pop("target-interval", None)
@@ -1382,13 +1391,11 @@ class TrackSpecificationReader:
             op = track.OperationType.from_hyphenated_string(op_type_name)
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
-            op_type = op.name
-            self.logger.debug("Using built-in operation type [%s] for operation [%s].", op_type, op_name)
+            self.logger.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)
         except KeyError:
             self.logger.info("Using user-provided operation type [%s] for operation [%s].", op_type_name, op_name)
-            op_type = op_type_name
 
         try:
-            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type, params=params, param_source=param_source)
+            return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type_name, params=params, param_source=param_source)
         except exceptions.InvalidSyntax as e:
             raise TrackSyntaxError("Invalid operation [%s]: %s" % (op_name, str(e)))
