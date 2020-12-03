@@ -20,6 +20,7 @@ import random
 import re
 import textwrap
 import unittest.mock as mock
+import urllib.error
 from unittest import TestCase
 
 from esrally import exceptions, config
@@ -416,8 +417,6 @@ class TrackPreparationTests(TestCase):
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.isfile")
     def test_raise_download_error_no_test_mode_file(self, is_file, ensure_dir, download):
-        import urllib.error
-
         # uncompressed file does not exist
         is_file.return_value = False
 
@@ -445,8 +444,6 @@ class TrackPreparationTests(TestCase):
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.isfile")
     def test_raise_download_error_on_connection_problems(self, is_file, ensure_dir, download):
-        import urllib.error
-
         # uncompressed file does not exist
         is_file.return_value = False
 

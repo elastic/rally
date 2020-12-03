@@ -16,6 +16,7 @@
 # under the License.
 
 import logging
+import socket
 
 import thespian.actors
 import thespian.system.messages.status
@@ -185,7 +186,6 @@ def actor_system_already_running(ip="127.0.0.1"):
 
     Note: It may be possible that another system is running on the same port.
     """
-    import socket
     s = socket.socket()
     try:
         s.connect((ip, 1900))
