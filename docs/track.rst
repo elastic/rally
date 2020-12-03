@@ -1780,6 +1780,112 @@ The following diagram depicts in which order requests are executed; the specific
 .. image:: nested-streams.png
    :alt: Timing view of nested streams
 
+submit-async-search
+~~~~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to pass the async search id to following API calls.
+
+With the operation ``submit-async-search`` you can `submit an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#submit-async-search>`_. It supports the following parameters:
+
+* ``name`` (mandatory): The unique name of this operation. Use this name in ``get-async-search`` and ``delete-async-search`` calls later on to wait for search results and delete them in Elasticsearch.
+* ``body`` (mandatory): The query body.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `submit async search docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#submit-async-search>`_.
+
+get-async-search
+~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to read the async search id from earlier API calls.
+
+With the operation ``get-async-search`` you can `get the results of an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#get-async-search>`_. It supports the following parameters:
+
+* ``retrieve-results-for`` (mandatory): A list of names of ``submit-async-search`` requests to wait for. Async searches that have already completed within ``wait_for_completion_timeout`` are skipped automatically.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `get async search docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#get-async-search>`_.
+
+.. note::
+    This operation is :ref:`retryable <track_operations>`. It will wait by default until all async searches specified by ``retrieve-results-for`` have finished. To disable this behavior, specify set ``retry-until-success`` to ``false``.
+
+
+delete-async-search
+~~~~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to read the async search id from earlier API calls.
+
+With the operation ``get-async-search`` you can `delete an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#delete-async-search>`_. It supports the following parameters:
+
+* ``delete-results-for`` (mandatory): A list of names of ``submit-async-search`` requests for which results should be deleted. Async searches that have already completed within ``wait_for_completion_timeout`` are skipped automatically.
+
+**Example**
+
+In the example below we issue two async searches, named ``search-1`` and ``search-2`` concurrently, wait for the results, simulate processing them with a ``sleep`` operation and finally delete the async search results::
+
+    {
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "composite",
+            "requests": [
+              {
+                "stream": [
+                  {
+                    "operation-type": "submit-async-search",
+                    "name": "search-1",
+                    "body": {
+                      "query": {
+                        "match_all": {}
+                      }
+                    },
+                    "request-params": {
+                      "wait_for_completion_timeout": "100ms"
+                    }
+                  }
+                ]
+              },
+              {
+                "stream": [
+                  {
+                    "operation-type": "submit-async-search",
+                    "name": "search-2",
+                    "body": {
+                      "query": {
+                        "match_all": {}
+                      }
+                    },
+                    "request-params": {
+                      "wait_for_completion_timeout": "200ms"
+                    }
+                  }
+                ]
+              },
+              {
+                "operation-type": "get-async-search",
+                "retrieve-results-for": [
+                  "search-1",
+                  "search-2"
+                ]
+              },
+              {
+                "name": "simulate-client-side-result-processing",
+                "operation-type": "sleep",
+                "duration": 0.2
+              },
+              {
+                "operation-type": "delete-async-search",
+                "delete-results-for": [
+                  "search-1",
+                  "search-2"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+
+
 Examples
 ========
 

@@ -524,6 +524,9 @@ class OperationType(Enum):
     WaitForRecovery = 6
     WaitForSnapshotCreate = 7
     Composite = 8
+    SubmitAsyncSearch = 9
+    GetAsyncSearch = 10
+    DeleteAsyncSearch = 11
 
     # administrative actions
     ForceMerge = 1001
@@ -658,6 +661,12 @@ class OperationType(Enum):
             return OperationType.DeleteDataStream
         elif v == "composite":
             return OperationType.Composite
+        elif v == "submit-async-search":
+            return OperationType.SubmitAsyncSearch
+        elif v == "get-async-search":
+            return OperationType.GetAsyncSearch
+        elif v == "delete-async-search":
+            return OperationType.DeleteAsyncSearch
         else:
             raise KeyError(f"No enum value for [{v}]")
 
