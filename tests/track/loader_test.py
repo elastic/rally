@@ -1394,11 +1394,10 @@ class TrackFilterTests(TestCase):
                                                              ])
 
         schedule = filtered.challenges[0].schedule
-        self.assertEqual(4, len(schedule))
-        self.assertEqual("create-index", schedule[0].name)
-        self.assertEqual(["index-3", "match-all-parallel"], [t.name for t in schedule[1].tasks])
-        self.assertEqual("match-all-serial", schedule[2].name)
-        self.assertEqual("cluster-stats", schedule[3].name)
+        self.assertEqual(3, len(schedule))
+        self.assertEqual(["index-3", "match-all-parallel"], [t.name for t in schedule[0].tasks])
+        self.assertEqual("match-all-serial", schedule[1].name)
+        self.assertEqual("cluster-stats", schedule[2].name)
 
     def test_filters_exclude_tasks(self):
         track_specification = {
@@ -1478,15 +1477,146 @@ class TrackFilterTests(TestCase):
         full_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(5, len(full_track.challenges[0].schedule))
 
-        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("index-3"), track.TaskOpTypeFilter("search")], exclude=True)
+        filters = [track.TaskNameFilter("index-3"), track.TaskOpTypeFilter("search"), track.TaskNameFilter("create-index")]
+        filtered = loader.filter_tasks(full_track, filters, exclude=True)
 
         schedule = filtered.challenges[0].schedule
-        self.assertEqual(4, len(schedule))
-        self.assertEqual("create-index", schedule[0].name)
-        self.assertEqual(["index-1", "index-2"], [t.name for t in schedule[1].tasks])
-        self.assertEqual("node-stats", schedule[2].name)
-        self.assertEqual("cluster-stats", schedule[3].name)
+        self.assertEqual(3, len(schedule))
+        self.assertEqual(["index-1", "index-2"], [t.name for t in schedule[0].tasks])
+        self.assertEqual("node-stats", schedule[1].name)
+        self.assertEqual("cluster-stats", schedule[2].name)
 
+    def test_unmatched_exclude_runs_everything(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "create-index",
+                    "operation-type": "create-index"
+                },
+                {
+                    "name": "bulk-index",
+                    "operation-type": "bulk"
+                },
+                {
+                    "name": "node-stats",
+                    "operation-type": "node-stats"
+                },
+                {
+                    "name": "cluster-stats",
+                    "operation-type": "custom-operation-type"
+                },
+                {
+                    "name": "match-all",
+                    "operation-type": "search",
+                    "body": {
+                        "query": {
+                            "match_all": {}
+                        }
+                    }
+                },
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {
+                            "operation": "create-index"
+                        },
+                        {
+                            "operation": "bulk-index"
+                        },
+                        {
+                            "operation": "node-stats"
+                        },
+                        {
+                            "name": "match-all-serial",
+                            "operation": "match-all"
+                        },
+                        {
+                            "operation": "cluster-stats"
+                        }
+                    ]
+                }
+            ]
+        }
+
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(5, len(full_track.challenges[0].schedule))
+
+        expected_schedule = full_track.challenges[0].schedule.copy()
+        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("nothing")], exclude=True)
+
+        schedule = filtered.challenges[0].schedule
+        self.assertEqual(expected_schedule, schedule)
+
+    def test_unmatched_include_runs_nothing(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index", "auto-managed": False}],
+            "operations": [
+                {
+                    "name": "create-index",
+                    "operation-type": "create-index"
+                },
+                {
+                    "name": "bulk-index",
+                    "operation-type": "bulk"
+                },
+                {
+                    "name": "node-stats",
+                    "operation-type": "node-stats"
+                },
+                {
+                    "name": "cluster-stats",
+                    "operation-type": "custom-operation-type"
+                },
+                {
+                    "name": "match-all",
+                    "operation-type": "search",
+                    "body": {
+                        "query": {
+                            "match_all": {}
+                        }
+                    }
+                },
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {
+                            "operation": "create-index"
+                        },
+                        {
+                            "operation": "bulk-index"
+                        },
+                        {
+                            "operation": "node-stats"
+                        },
+                        {
+                            "name": "match-all-serial",
+                            "operation": "match-all"
+                        },
+                        {
+                            "operation": "cluster-stats"
+                        }
+                    ]
+                }
+            ]
+        }
+
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(5, len(full_track.challenges[0].schedule))
+
+        expected_schedule = []
+        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("nothing")], exclude=False)
+
+        schedule = filtered.challenges[0].schedule
+        self.assertEqual(expected_schedule, schedule)
 
 # pylint: disable=too-many-public-methods
 class TrackSpecificationReaderTests(TestCase):

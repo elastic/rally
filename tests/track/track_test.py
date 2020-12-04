@@ -242,11 +242,6 @@ class TaskFilterTests(TestCase):
                           track.Operation("search-op",
                                           operation_type=track.OperationType.Search.to_hyphenated_string()))
 
-    def test_admin_task_filter(self):
-        f = track.AdminTaskFilter()
-        self.assertTrue(f.matches(self.create_index_task()))
-        self.assertFalse(f.matches(self.search_task()))
-
     def test_task_name_filter(self):
         f = track.TaskNameFilter("create-index-task")
         self.assertTrue(f.matches(self.create_index_task()))
