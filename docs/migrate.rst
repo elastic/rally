@@ -61,7 +61,7 @@ Metrics records for bulk request don't contain the ``bulk-size`` property anymor
 --include-filters and --exclude-filters affect all operations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Prior to 2.0.3, administrative tasks/operations (see :ref:`operations documentation<track_operations>`) were exempt from filtering and would run regardless of filtering.  ``--include-filters`` and ``--exclude-filters`` flags now can affect all operations in a track.  If you make use of include filters, it is advised to check that all desired operations are listed.
+Prior to 2.0.3, administrative tasks (see :ref:`operations documentation<track_operations>`) were exempt from filtering and would run regardless of filtering.  ``--include-tasks`` and ``--exclude-tasks`` flags now can affect all operations in a track.  If you make use of include filters, it is advised to check that all desired operations are listed.
 
 Migrating to Rally 2.0.1
 ------------------------
