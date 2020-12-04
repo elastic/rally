@@ -58,7 +58,7 @@ bulk-size metrics property is dropped
 
 Metrics records for bulk request don't contain the ``bulk-size`` property anymore. Please use the ``weight`` property instead and consider the ``unit`` property to interpret the value.
 
---include-filters and --exclude-filters affect all operations
+--include-tasks and --exclude-tasks affect all operations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Prior to 2.0.3, administrative tasks (see :ref:`operations documentation<track_operations>`) were exempt from filtering and would run regardless of filtering.  ``--include-tasks`` and ``--exclude-tasks`` flags now can affect all operations in a track.  If you make use of include filters, it is advised to check that all desired operations are listed.
