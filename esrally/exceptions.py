@@ -48,6 +48,10 @@ class RallyAssertionError(RallyError):
     """
 
 
+class ConfigError(RallyError):
+    pass
+
+
 class DataError(RallyError):
     """
     Thrown when something is wrong with the benchmark data

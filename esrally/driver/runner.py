@@ -21,9 +21,12 @@ import json
 import logging
 import random
 import sys
+import time
 import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
+from enum import Enum
+from functools import total_ordering
 from os.path import commonprefix
 
 import ijson
@@ -674,6 +677,7 @@ class ForceMerge(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         max_num_segments = params.get("max-num-segments")
         mode = params.get("mode")
@@ -996,9 +1000,6 @@ class ClusterHealth(Runner):
     """
 
     async def __call__(self, es, params):
-        from enum import Enum
-        from functools import total_ordering
-
         @total_ordering
         class ClusterHealthStatus(Enum):
             UNKNOWN = 0
@@ -1194,6 +1195,7 @@ class DeleteComponentTemplate(Runner):
         request_params = mandatory(params, "request-params", self)
 
         async def _exists(name):
+            # pylint: disable=import-outside-toplevel
             from elasticsearch.client import _make_path
             # currently not supported by client and hence custom request
             return await es.transport.perform_request(
@@ -1402,6 +1404,7 @@ class CreateMlDatafeed(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
@@ -1428,6 +1431,7 @@ class DeleteMlDatafeed(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
@@ -1458,6 +1462,7 @@ class StartMlDatafeed(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = params.get("body")
@@ -1487,6 +1492,7 @@ class StopMlDatafeed(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
@@ -1519,6 +1525,7 @@ class CreateMlJob(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         job_id = mandatory(params, "job-id", self)
         body = mandatory(params, "body", self)
@@ -1545,6 +1552,7 @@ class DeleteMlJob(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
@@ -1575,6 +1583,7 @@ class OpenMlJob(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         job_id = mandatory(params, "job-id", self)
         try:
@@ -1599,6 +1608,7 @@ class CloseMlJob(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
@@ -1913,8 +1923,6 @@ class WaitForTransform(Runner):
         * ``transform-timeout``: overall runtime timeout of the transform in seconds, default 3600 (1h)
         * ``poll-interval``: how often transform stats are polled, used to set progress and check the state, default 0.5.
         """
-        import time
-
         transform_id = mandatory(params, "transform-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
@@ -2184,6 +2192,7 @@ class Retry(Runner, Delegator):
         return self
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         import socket
 

@@ -21,6 +21,7 @@ import logging
 import os
 import pickle
 import sys
+import traceback
 from collections import defaultdict
 
 import thespian.actors
@@ -568,7 +569,6 @@ class NodeMechanicActor(actor.RallyActor):
         except Exception:
             self.logger.exception("Cannot process message [%s]", msg)
             # avoid "can't pickle traceback objects"
-            import traceback
             _, ex_value, _ = sys.exc_info()
             self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure(ex_value, traceback.format_exc()))
 

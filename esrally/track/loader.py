@@ -30,7 +30,7 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import exceptions, time, PROGRAM_NAME, config
+from esrally import exceptions, time, PROGRAM_NAME, config, version
 from esrally.track import params, track
 from esrally.utils import io, convert, net, console, modules, opts, repo
 
@@ -975,8 +975,6 @@ class TrackPluginReader:
 
     @property
     def meta_data(self):
-        from esrally import version
-
         return {
             "rally_version": version.release_version(),
             "async_runner": True

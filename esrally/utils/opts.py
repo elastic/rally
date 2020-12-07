@@ -151,7 +151,7 @@ class TargetHosts(ConnectOptions):
             This is needed to support backwards compatible --target-hosts for single clusters that are not
             defined as a json string or file.
             """
-
+            # pylint: disable=import-outside-toplevel
             from elasticsearch.client import _normalize_hosts
             return {TargetHosts.DEFAULT: _normalize_hosts(arg)}
 

@@ -24,6 +24,7 @@ from datetime import datetime
 from unittest import TestCase, mock
 from unittest.mock import mock_open
 
+import elasticsearch
 import psutil
 
 from esrally import config, exceptions, telemetry
@@ -79,7 +80,6 @@ class MockClient:
 
     def info(self):
         if self.client_options.get("raise-error-on-info", False):
-            import elasticsearch
             raise elasticsearch.TransportError(401, "Unauthorized")
         return self._info
 

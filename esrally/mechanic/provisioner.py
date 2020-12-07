@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import shutil
+import uuid
 
 import jinja2
 
@@ -395,7 +396,6 @@ class DockerProvisioner:
         self.rally_root = rally_root
         self.binary_path = os.path.join(node_root_dir, "install")
         # use a random subdirectory to isolate multiple runs because an external (non-root) user cannot clean it up.
-        import uuid
         self.data_paths = [os.path.join(node_root_dir, "data", str(uuid.uuid4()))]
         self.logger = logging.getLogger(__name__)
 

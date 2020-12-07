@@ -20,7 +20,7 @@ import os
 import unittest.mock as mock
 from unittest import TestCase
 
-from esrally import config
+from esrally import config, exceptions
 from esrally.utils import io
 
 
@@ -389,7 +389,8 @@ class ConfigMigrationTests(TestCase):
         }
 
         config_file.store(sample_config)
-        with self.assertRaisesRegex(config.ConfigError, "The config file.*is too old. Please delete it and reconfigure Rally from scratch"):
+        with self.assertRaisesRegex(exceptions.ConfigError,
+                                    "The config file.*is too old. Please delete it and reconfigure Rally from scratch"):
             config.migrate(config_file, config.Config.EARLIEST_SUPPORTED_VERSION - 1, config.Config.CURRENT_CONFIG_VERSION, out=null_output)
 
     # catch all test, migrations are checked in more detail in the other tests

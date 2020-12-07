@@ -201,10 +201,9 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
 
 def _src_dir(cfg, mandatory=True):
     # Don't let this spread across the whole module
-    from esrally import config
     try:
         return cfg.opts("node", "src.root.dir", mandatory=mandatory)
-    except config.ConfigError:
+    except exceptions.ConfigError:
         raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Did you install Gradle? Please install"
                                           " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
 

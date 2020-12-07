@@ -24,6 +24,8 @@ import sys
 import time
 import uuid
 
+import thespian.actors
+
 from esrally import PROGRAM_NAME, BANNER, FORUM_LINK, SKULL, check_python_version, doc_link, telemetry
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, \
     log
@@ -681,7 +683,6 @@ def race(cfg):
 
 
 def with_actor_system(runnable, cfg):
-    import thespian.actors
     logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
     logger.info("Actor system already running locally? [%s]", str(already_running))

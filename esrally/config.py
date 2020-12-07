@@ -27,10 +27,6 @@ from esrally import FORUM_LINK, PROGRAM_NAME, doc_link, exceptions, paths
 from esrally.utils import io, git, console, convert
 
 
-class ConfigError(exceptions.RallyError):
-    pass
-
-
 class Scope(Enum):
     # Valid for all benchmarks, typically read from the configuration file
     application = 1
@@ -179,7 +175,7 @@ class Config:
             if not mandatory:
                 return default_value
             else:
-                raise ConfigError("No value for mandatory configuration: section='%s', key='%s'" % (section, key))
+                raise exceptions.ConfigError(f"No value for mandatory configuration: section='{section}', key='{key}'")
 
     def all_opts(self, section):
         """
@@ -525,14 +521,14 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
         logger.info("Config file is already at version [%s]. Skipping migration.", target_version)
         return
     if current_version < Config.EARLIEST_SUPPORTED_VERSION:
-        raise ConfigError("The config file in {} is too old. Please delete it and reconfigure Rally from scratch with {} configure."
-                          .format(config_file.location, PROGRAM_NAME))
+        raise exceptions.ConfigError(f"The config file in {config_file.location} is too old. Please delete it "
+                                     f"and reconfigure Rally from scratch with {PROGRAM_NAME} configure.")
 
     logger.info("Upgrading configuration from version [%s] to [%s].", current_version, target_version)
     # Something is really fishy. We don't want to downgrade the configuration.
     if current_version >= target_version:
-        raise ConfigError("The existing config file is available in a later version already. Expected version <= [%s] but found [%s]"
-                          % (target_version, current_version))
+        raise exceptions.ConfigError(f"The existing config file is available in a later version already. "
+                                     f"Expected version <= [{target_version}] but found [{current_version}]")
     # but first a backup...
     config_file.backup()
     config = config_file.load()

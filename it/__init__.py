@@ -15,10 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import errno
 import functools
 import json
 import os
 import random
+import socket
+import time
 from string import Template
 
 import pytest
@@ -89,10 +92,6 @@ def race(cfg, command_line):
 
 
 def wait_until_port_is_free(port_number=39200, timeout=120):
-    import errno
-    import time
-    import socket
-
     start = time.perf_counter()
     end = start + timeout
     while time.perf_counter() < end:

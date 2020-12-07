@@ -45,6 +45,7 @@ class EsClientFactory:
 
         # we're using an SSL context now and it is not allowed to have use_ssl present in client options anymore
         if self.client_options.pop("use_ssl", False):
+            # pylint: disable=import-outside-toplevel
             import ssl
             self.logger.info("SSL support: on")
             self.client_options["scheme"] = "https"
@@ -128,10 +129,12 @@ class EsClientFactory:
             return False
 
     def create(self):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
     def create_async(self):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         import esrally.async_connection
         import io
@@ -208,6 +211,7 @@ def wait_for_rest_layer(es, max_attempts=40):
     logger = logging.getLogger(__name__)
     for attempt in range(max_attempts):
         logger.debug("REST API is available after %s attempts", attempt)
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         try:
             # see also WaitForHttpResource in Elasticsearch tests. Contrary to the ES tests we consider the API also
