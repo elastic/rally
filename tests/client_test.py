@@ -22,6 +22,9 @@ import ssl
 from copy import deepcopy
 from unittest import TestCase, mock
 
+import elasticsearch
+import urllib3.exceptions
+
 from esrally import client, exceptions, doc_link
 from esrally.utils import console
 
@@ -294,8 +297,6 @@ class RestLayerTests(TestCase):
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
     def test_retries_on_transport_errors(self, es, sleep):
-        import elasticsearch
-
         es.cluster.health.side_effect = [
             elasticsearch.TransportError(503, "Service Unavailable"),
             elasticsearch.TransportError(401, "Unauthorized"),
@@ -314,16 +315,11 @@ class RestLayerTests(TestCase):
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
     def test_dont_retry_eternally_on_transport_errors(self, es, sleep):
-        import elasticsearch
-
         es.cluster.health.side_effect = elasticsearch.TransportError(401, "Unauthorized")
         self.assertFalse(client.wait_for_rest_layer(es, max_attempts=3))
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_ssl_error(self, es):
-        import elasticsearch
-        import urllib3.exceptions
-
         es.cluster.health.side_effect = elasticsearch.ConnectionError("N/A",
                                                             "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)",
                                                             urllib3.exceptions.SSLError(

@@ -397,6 +397,7 @@ class CcrStatsRecorder:
 
         # ES returns all stats values in bytes or ms via "human: false"
 
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
 
         try:
@@ -541,6 +542,7 @@ class RecoveryStatsRecorder:
         """
         Collect recovery stats for indexes (optionally) specified in telemetry parameters and push to metrics store.
         """
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
 
         try:
@@ -740,6 +742,7 @@ class NodeStatsRecorder:
         return self.flatten_stats_fields(prefix="indexing_pressure", stats=node_stats["indexing_pressure"])
 
     def sample(self):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         try:
             stats = self.client.nodes.stats(metric="_all")
@@ -851,6 +854,7 @@ class TransformStatsRecorder:
     def _record(self, prefix=""):
         # ES returns all stats values in bytes or ms via "human: false"
 
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
 
         try:
@@ -1211,6 +1215,7 @@ class JvmStatsSummary(InternalTelemetryDevice):
     def jvm_stats(self):
         self.logger.debug("Gathering JVM stats")
         jvm_stats = {}
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         try:
             stats = self.client.nodes.stats(metric="_all")
@@ -1375,6 +1380,7 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
         self.metrics_store = metrics_store
 
     def on_benchmark_stop(self):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         try:
             results = self.client.search(index=".ml-anomalies-*", body={

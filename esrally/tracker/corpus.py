@@ -68,6 +68,7 @@ def extract(client, output_path, index):
 
 
 def dump_documents(client, index, out_path, total_docs, progress_message_suffix=""):
+    # pylint: disable=import-outside-toplevel
     from elasticsearch import helpers
 
     logger = logging.getLogger(__name__)

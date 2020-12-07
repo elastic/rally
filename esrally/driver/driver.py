@@ -19,6 +19,7 @@ import asyncio
 import collections
 import concurrent.futures
 import datetime
+import itertools
 import logging
 import math
 import multiprocessing
@@ -1085,7 +1086,6 @@ class ThroughputCalculator:
         :return: A global view of throughput samples.
         """
 
-        import itertools
         samples_per_task = {}
         # first we group all samples by task (operation).
         for sample in samples:
@@ -1269,6 +1269,8 @@ class AsyncProfiler:
         self.profile_logger = logging.getLogger("rally.profile")
 
     async def __call__(self, *args, **kwargs):
+        # initialize lazily, we don't need it in the majority of cases
+        # pylint: disable=import-outside-toplevel
         import yappi
         import io as python_io
         yappi.start()
@@ -1398,6 +1400,7 @@ async def execute_single(runner, es, params, on_error):
 
     :return: a triple of: total number of operations, unit of operations, a dict of request meta data (may be None).
     """
+    # pylint: disable=import-outside-toplevel
     import elasticsearch
     fatal_error = False
     try:

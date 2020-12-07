@@ -19,6 +19,8 @@ import os
 import unittest.mock as mock
 from unittest import TestCase
 
+import psutil
+
 from esrally.utils import process
 
 
@@ -41,7 +43,6 @@ class ProcessTests(TestCase):
 
         def status(self):
             if self.killed:
-                import psutil
                 raise psutil.NoSuchProcess(self.pid)
             else:
                 return "running"

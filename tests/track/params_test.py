@@ -16,6 +16,7 @@
 # under the License.
 # pylint: disable=protected-access
 
+import copy
 import random
 from unittest import TestCase
 
@@ -2224,8 +2225,6 @@ class SearchParamSourceTests(TestCase):
         }, p["body"])
 
     def test_replaces_body_params(self):
-        import copy
-
         search = params.SearchParamSource(track=track.Track(name="unit-test"), params={
             "index": "_all",
             "body": {
