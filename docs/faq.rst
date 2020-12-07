@@ -45,17 +45,16 @@ The explanation of ``latency`` depends on your choice of benchmarking mode:
   generate and send the next request. In this mode ``latency`` and
   ``service_time`` are identical.
 
-* **Throughput-throttled mode**: You may prefer to run benchmarks with a target
-  throughput (in requests per second) based on the traffic that you experience
-  in your production environment. If you define a target throughput then Rally
-  runs in throughput-throttled mode and generates requests according to this
-  target regardless of how fast Elasticsearch can respond. In this mode the
-  generated requests are first placed in a queue within Rally and may stay
-  there for some time. ``latency`` includes the time spent in this queue
-  whereas ``service_time`` does not: ``latency`` measures the time from
-  generating the request until the response is received whereas
-  ``service_time`` measures the time from sending the request to Elasticsearch
-  until a response is received.
+* **Throughput-throttled mode**: You may prefer to run benchmarks that better
+  simulate the traffic patterns you experience in your production environment.
+  If you define a schedule (e.g. a target throughput) then Rally runs in
+  throughput-throttled mode and generates requests according to this schedule
+  regardless of how fast Elasticsearch can respond. In this mode the generated
+  requests are first placed in a queue within Rally and may stay there for some
+  time. ``latency`` includes the time spent in this queue whereas
+  ``service_time`` does not: ``latency`` measures the time from generating the
+  request until the response is received whereas ``service_time`` measures the
+  time from sending the request to Elasticsearch until a response is received.
 
 If you are interested in latency measurement, we recommend you watch the following talks:
 
