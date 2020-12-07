@@ -714,20 +714,6 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-class AdminTaskFilter(metaclass=Singleton):
-    """
-    Matches all tasks that execute administrative actions.
-    """
-    def matches(self, task):
-        try:
-            return OperationType.from_hyphenated_string(task.operation.type).admin_op
-        except KeyError:
-            return False
-
-    def __str__(self, *args, **kwargs):
-        return "filter for admin tasks"
-
-
 # Schedule elements
 class Parallel:
     def __init__(self, tasks, clients=None):
