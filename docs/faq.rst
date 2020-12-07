@@ -25,15 +25,37 @@ First of all: Please (please, please) do NOT run Rally against your production c
 
 Depending on the track, Rally will delete and create one or more indices. For example, the `geonames track <https://github.com/elastic/rally-tracks/blob/master/geonames/track.json#L9>`_ specifies that Rally should create an index named "geonames" and Rally will assume it can do to this index whatever it wants. Specifically, Rally will check at the beginning of a race if the index "geonames" exists and delete it. After that it creates a new empty "geonames" index and runs the benchmark. So if you benchmark against your own cluster (by specifying the ``benchmark-only`` :doc:`pipeline </pipelines>`) and this cluster contains an index that is called "geonames" you will lose (all) data if you run Rally against it. Rally will neither read nor write (or delete) any other index. So if you apply the usual care nothing bad can happen.
 
-What does `latency` and `service_time` mean and how do they related to the `took` field that Elasticsearch returns?
--------------------------------------------------------------------------------------------------------------------
+What do `latency` and `service_time` mean and how do they relate to the `took` field that Elasticsearch returns?
+----------------------------------------------------------------------------------------------------------------
 
-Let's start with the `took` field of Elasticsearch. `took` is the time needed by Elasticsearch to process a request. As it is determined on the server, it can neither include the time it took the client to send the data to Elasticsearch nor the time it took Elasticsearch to send it to the client. This time is captured by `service_time`, i.e. it is the time period from the start of a request (on the client) until it has received the response.
+The ``took`` field is included by Elasticsearch in responses to searches and
+bulk indexing and reports the time that Elasticsearch spent processing the
+request. This value is measured on the server so it includes neither the time
+it took for the request to get from the client to Elasticsearch nor the time it
+took for the response to arrive back at the client. In contrast,
+``service_time`` is measured by Rally as the length of time from when it
+started to send the request to Elasticsearch until it finishing receiving the
+response. Therefore ``service_time`` does include the time spent sending the
+request and receiving the response.
 
-The explanation of `latency` is a bit more involved. First of all, Rally defines two benchmarking modes:
+The explanation of ``latency`` depends on your choice of benchmarking mode:
 
-* Throughput benchmarking mode: In this mode, Rally will issue requests as fast as it can, i.e. as soon as it receives a response, it will issue the next request. This is ideal for benchmarking indexing. In this mode ``latency`` == ``service_time``.
-* Throughput-throttled mode: If you define a specific target throughput rate in a track, for example 100 requests per second (you should choose this number based on the traffic pattern that you experience in your production environment), then Rally will define a schedule internally and will issue requests according to this schedule regardless how fast Elasticsearch can respond. To put it differently: Imagine you want to grab a coffee on your way to work. You make this decision independently of all the other people going to the coffee shop so it is possible that you need to wait before you can tell the barista which coffee you want. The time it takes the barista to make your coffee is the service time. The service time is independent of the number of customers in the coffee shop. However, you as a customer also care about the length of the waiting line which depends on the number of customers in the coffee shop. The time it takes between you entering the coffee shop and taking your first sip of coffee is latency.
+* **Throughput benchmarking mode**: In this mode, Rally will issue requests as
+  fast as it can: as soon as it receives a response to one request it will
+  generate and send the next request. In this mode ``latency`` and
+  ``service_time`` are identical.
+
+* **Throughput-throttled mode**: You may prefer to run benchmarks that better
+  simulate the traffic patterns you experience in your production environment.
+  If you define a :ref:`schedule <track_choose_schedule>` (e.g. a target
+  throughput) then Rally runs in throughput-throttled mode and generates
+  requests according to this schedule regardless of how fast Elasticsearch can
+  respond. In this mode the generated requests are first placed in a queue
+  within Rally and may stay there for some time. ``latency`` includes the time
+  spent in this queue whereas ``service_time`` does not: ``latency`` measures
+  the time from generating the request until the response is received whereas
+  ``service_time`` measures the time from sending the request to Elasticsearch
+  until a response is received.
 
 If you are interested in latency measurement, we recommend you watch the following talks:
 
