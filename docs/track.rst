@@ -511,6 +511,8 @@ Contrary to the ``query``, the ``force-merge`` operation does not take any param
       ]
     }
 
+.. _track_choose_schedule:
+
 Choosing a schedule
 ~~~~~~~~~~~~~~~~~~~
 
