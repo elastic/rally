@@ -827,7 +827,7 @@ class Worker(actor.RallyActor):
         self.worker_id = msg.worker_id
         self.config = load_local_config(msg.config)
         self.on_error = self.config.opts("driver", "on.error")
-        self.sample_queue_size = int(self.config.opts("system", "sample.queue.size", mandatory=False, default_value=1 << 20))
+        self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
         self.client_allocations = msg.client_allocations
