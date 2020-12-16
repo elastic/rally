@@ -1371,14 +1371,19 @@ class TimeSeriesCharts:
 
 
 class RaceConfigTrack:
-    def __init__(self, cfg, name=None):
-        self.cached_track = self.load_track(cfg, name)
+    def __init__(self, cfg, repository, name=None):
+        self.repository = repository
+        self.cached_track = self.load_track(cfg, name=name)
 
     def load_track(self, cfg, name=None, params=None):
         if not params:
             params = {}
+        # required in case a previous track using a different repository has specified the revision
+        if cfg.opts("track", "repository.name") != self.repository:
+            cfg.add(config.Scope.applicationOverride, "track", "repository.revision", None)
         # hack to make this work with multiple tracks (Rally core is usually not meant to be used this way)
         if name:
+            cfg.add(config.Scope.applicationOverride, "track", "repository.name", self.repository)
             cfg.add(config.Scope.applicationOverride, "track", "track.name", name)
         # another hack to ensure any track-params in the race config are used by Rally's track loader
         cfg.add(config.Scope.applicationOverride, "track", "params", params)
@@ -1611,7 +1616,8 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
             configs_per_lic.append(
-                RaceConfig(track=race_config_track.get_track(cfg, track_name, race_config.get("track-params", {})),
+                RaceConfig(track=race_config_track.get_track(cfg, name=track_name,
+                                                             params=race_config.get("track-params", {})),
                            cfg=race_config,
                            flavor=flavor_name,
                            es_license=lic)
@@ -1639,7 +1645,8 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
         for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
             with open(_track_file, mode="rt", encoding="utf-8") as f:
                 for item in json.load(f):
-                    race_config_track = RaceConfigTrack(cfg, item["track"])
+                    _track_repository = item.get("track-repository", "default")
+                    race_config_track = RaceConfigTrack(cfg, _track_repository, name=item["track"])
                     for flavor in item["flavors"]:
                         race_configs_per_track = []
                         _flavor_name = flavor["name"]
