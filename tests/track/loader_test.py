@@ -147,7 +147,9 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 2000
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                                             document_file="docs.json",
@@ -167,7 +169,9 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 2000
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                                             document_file="docs.json",
@@ -191,7 +195,9 @@ class TrackPreparationTests(TestCase):
         # uncompressed is corrupt, only 1 byte available
         get_size.side_effect = [200, 1]
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.DataError) as ctx:
             p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -216,7 +222,9 @@ class TrackPreparationTests(TestCase):
         # compressed file size is 200
         get_size.return_value = 200
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.DataError) as ctx:
             p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -242,12 +250,11 @@ class TrackPreparationTests(TestCase):
                                                             prepare_file_offset_table):
         # uncompressed file does not exist
         # compressed file does not exist
-        # file check for compressed file before download attempt (for potential error message)
         # after download compressed file exists
         # after download uncompressed file still does not exist (in main loop)
         # after download compressed file exists (in main loop)
         # after decompression, uncompressed file exists
-        is_file.side_effect = [False, False, False, True, False, True, True, True]
+        is_file.side_effect = [False, False, True, False, True, True, True]
         # compressed file size is 200 after download
         # compressed file size is 200 after download (in main loop)
         # uncompressed file size is 2000 after decompression
@@ -256,7 +263,9 @@ class TrackPreparationTests(TestCase):
 
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                                             base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
@@ -282,17 +291,18 @@ class TrackPreparationTests(TestCase):
     def test_download_document_with_trailing_baseurl_slash(self, is_file, get_size, ensure_dir, download, decompress,
                                                            prepare_file_offset_table):
         # uncompressed file does not exist
-        # file check for uncompressed file before download attempt (for potential error message)
         # after download uncompressed file exists
         # after download uncompressed file exists (main loop)
-        is_file.side_effect = [False, False, True, True]
+        is_file.side_effect = [False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
         scheme = random.choice(["http", "https", "s3", "gs"])
 
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                                             base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
@@ -316,16 +326,17 @@ class TrackPreparationTests(TestCase):
     @mock.patch("os.path.isfile")
     def test_download_document_file_if_no_file_available(self, is_file, get_size, ensure_dir, download, prepare_file_offset_table):
         # uncompressed file does not exist
-        # file check for uncompressed file before download attempt (for potential error message)
         # after download uncompressed file exists
         # after download uncompressed file exists (main loop)
-        is_file.side_effect = [False, False, True, True]
+        is_file.side_effect = [False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
 
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                                             base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
@@ -349,7 +360,9 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=True, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=True, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -359,7 +372,7 @@ class TrackPreparationTests(TestCase):
                                                                 uncompressed_size_in_bytes=2000),
                                    data_root="/tmp")
 
-        self.assertEqual("Cannot find /tmp/docs.json. Please disable offline mode and retry again.", ctx.exception.args[0])
+        self.assertEqual("Cannot find [/tmp/docs.json]. Please disable offline mode and retry.", ctx.exception.args[0])
 
         self.assertEqual(0, ensure_dir.call_count)
         self.assertEqual(0, download.call_count)
@@ -371,7 +384,9 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.DataError) as ctx:
             p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -382,8 +397,7 @@ class TrackPreparationTests(TestCase):
                                                                 uncompressed_size_in_bytes=2000),
                                    data_root="/tmp")
 
-        self.assertEqual("/tmp/docs.json is missing and it cannot be downloaded because no base URL is provided.",
-                         ctx.exception.args[0])
+        self.assertEqual("Cannot download data because no base URL is provided.", ctx.exception.args[0])
 
         self.assertEqual(0, ensure_dir.call_count)
         self.assertEqual(0, download.call_count)
@@ -398,7 +412,9 @@ class TrackPreparationTests(TestCase):
         # but it's size is wrong
         get_size.return_value = 100
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.DataError) as ctx:
             p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -407,8 +423,8 @@ class TrackPreparationTests(TestCase):
                                                                 uncompressed_size_in_bytes=2000),
                                    data_root="/tmp")
 
-        self.assertEqual("/tmp/docs.json is present but does not have the expected size of 2000 bytes and it cannot be downloaded because "
-                         "no base URL is provided.", ctx.exception.args[0])
+        self.assertEqual("[/tmp/docs.json] is present but does not have the expected size of [2000] bytes and it "
+                         "cannot be downloaded because no base URL is provided.", ctx.exception.args[0])
 
         self.assertEqual(0, ensure_dir.call_count)
         self.assertEqual(0, download.call_count)
@@ -423,7 +439,9 @@ class TrackPreparationTests(TestCase):
         download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
                                                       404, "", None, None)
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=True)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=True),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.DataError) as ctx:
             p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -433,8 +451,8 @@ class TrackPreparationTests(TestCase):
                                                                 uncompressed_size_in_bytes=None),
                                    data_root="/tmp")
 
-        self.assertEqual("Track [unit-test] does not support test mode. Please ask the track author to add it or disable test mode "
-                         "and retry.", ctx.exception.args[0])
+        self.assertEqual("This track does not support test mode. Please ask the track author to add it or disable "
+                         "test mode and retry.", ctx.exception.args[0])
 
         ensure_dir.assert_called_with("/tmp")
         download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs-1k.json",
@@ -450,7 +468,9 @@ class TrackPreparationTests(TestCase):
         download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
                                                       500, "Internal Server Error", None, None)
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.DataError) as ctx:
             p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -477,7 +497,9 @@ class TrackPreparationTests(TestCase):
         get_size.side_effect = [2000]
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         self.assertTrue(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                                                                     document_file="docs.json",
@@ -497,7 +519,9 @@ class TrackPreparationTests(TestCase):
         # no files present
         is_file.return_value = False
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         self.assertFalse(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                                                                      document_file="docs.json",
@@ -511,8 +535,6 @@ class TrackPreparationTests(TestCase):
         self.assertEqual(0, prepare_file_offset_table.call_count)
 
     def test_used_corpora(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "track", "challenge.name", "default-challenge")
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -632,9 +654,9 @@ class TrackPreparationTests(TestCase):
                 }
             ]
         }
-        reader = loader.TrackSpecificationReader()
+        reader = loader.TrackSpecificationReader(selected_challenge="default-challenge")
         full_track = reader("unittest", track_specification, "/mappings")
-        used_corpora = sorted(loader.used_corpora(full_track, cfg), key=lambda c: c.name)
+        used_corpora = sorted(loader.used_corpora(full_track), key=lambda c: c.name)
         self.assertEqual(2, len(used_corpora))
         self.assertEqual("http_logs", used_corpora[0].name)
         # each bulk operation requires a different data file but they should have been merged properly.
@@ -660,7 +682,9 @@ class TrackPreparationTests(TestCase):
         get_size.side_effect = [200, 2000, 2000]
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         self.assertTrue(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
                                                                                     document_file="docs.json",
@@ -681,7 +705,9 @@ class TrackPreparationTests(TestCase):
         # compressed has wrong size
         get_size.side_effect = [150]
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.DataError) as ctx:
             p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -692,7 +718,8 @@ class TrackPreparationTests(TestCase):
                                                                         uncompressed_size_in_bytes=2000),
                                            data_root=".")
 
-        self.assertEqual("./docs.json.bz2 is present but does not have the expected size of 200 bytes.", ctx.exception.args[0])
+        self.assertEqual("[./docs.json.bz2] is present but does not have the expected size of [200] bytes.",
+                         ctx.exception.args[0])
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -704,7 +731,9 @@ class TrackPreparationTests(TestCase):
         # uncompressed
         get_size.side_effect = [1500]
 
-        p = loader.DocumentSetPreparator(track_name="unit-test", offline=False, test_mode=False)
+        p = loader.DocumentSetPreparator(track_name="unit-test",
+                                         downloader=loader.Downloader(offline=False, test_mode=False),
+                                         decompressor=loader.Decompressor())
 
         with self.assertRaises(exceptions.DataError) as ctx:
             p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
@@ -714,7 +743,8 @@ class TrackPreparationTests(TestCase):
                                                                         compressed_size_in_bytes=200,
                                                                         uncompressed_size_in_bytes=2000),
                                            data_root=".")
-        self.assertEqual("./docs.json is present but does not have the expected size of 2000 bytes.", ctx.exception.args[0])
+        self.assertEqual("[./docs.json] is present but does not have the expected size of [2000] bytes.",
+                         ctx.exception.args[0])
 
         self.assertEqual(0, prepare_file_offset_table.call_count)
 
@@ -1236,9 +1266,12 @@ class TrackPostProcessingTests(TestCase):
         index_body = '{"settings": {"index.number_of_shards": {{ number_of_shards | default(5) }}, '\
                      '"index.number_of_replicas": {{ number_of_replicas | default(0)}} }}'
 
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
+
         self.assertEqual(
             self.as_track(expected_post_processed, complete_track_params=complete_track_params, index_body=index_body),
-            loader.post_process_for_test_mode(
+            loader.TestModeTrackProcessor(cfg).on_after_load_track(
                 self.as_track(track_specification, complete_track_params=complete_track_params, index_body=index_body)
             )
         )
@@ -1288,23 +1321,24 @@ class TrackPathTests(TestCase):
 
 
 class TrackFilterTests(TestCase):
-    def test_create_filters_from_empty_filtered_tasks(self):
-        self.assertEqual(0, len(loader.filters_from_filtered_tasks(None)))
-        self.assertEqual(0, len(loader.filters_from_filtered_tasks([])))
+    def filter(self, track_specification, include_tasks=None, exclude_tasks=None):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "include.tasks", include_tasks)
+        cfg.add(config.Scope.application, "track", "exclude.tasks", exclude_tasks)
 
-    def test_create_filters_from_mixed_filtered_tasks(self):
-        filters = loader.filters_from_filtered_tasks(["force-merge", "type:search"])
-        self.assertListEqual([track.TaskNameFilter("force-merge"), track.TaskOpTypeFilter("search")], filters)
+        processor = loader.TaskFilterTrackProcessor(cfg)
+        return processor.on_after_load_track(track_specification)
 
     def test_rejects_invalid_syntax(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            loader.filters_from_filtered_tasks(["valid", "a:b:c"])
+            self.filter(track_specification=None, include_tasks=["valid", "a:b:c"])
         self.assertEqual("Invalid format for filtered tasks: [a:b:c]", ctx.exception.args[0])
 
     def test_rejects_unknown_filter_type(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            loader.filters_from_filtered_tasks(["valid", "op-type:index"])
-        self.assertEqual("Invalid format for filtered tasks: [op-type:index]. Expected [type] but got [op-type].", ctx.exception.args[0])
+            self.filter(track_specification=None, include_tasks=["valid", "op-type:index"])
+        self.assertEqual("Invalid format for filtered tasks: [op-type:index]. Expected [type] but got [op-type].",
+                         ctx.exception.args[0])
 
     def test_filters_tasks(self):
         track_specification = {
@@ -1384,11 +1418,10 @@ class TrackFilterTests(TestCase):
         full_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(5, len(full_track.challenges[0].schedule))
 
-        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("index-3"),
-                                                             track.TaskOpTypeFilter("search"),
-                                                             # Filtering should also work for non-core operation types.
-                                                             track.TaskOpTypeFilter("custom-operation-type")
-                                                             ])
+        filtered = self.filter(full_track, include_tasks=["index-3",
+                                                          "type:search",
+                                                          # Filtering should also work for non-core operation types.
+                                                          "type:custom-operation-type"])
 
         schedule = filtered.challenges[0].schedule
         self.assertEqual(3, len(schedule))
@@ -1474,8 +1507,7 @@ class TrackFilterTests(TestCase):
         full_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(5, len(full_track.challenges[0].schedule))
 
-        filters = [track.TaskNameFilter("index-3"), track.TaskOpTypeFilter("search"), track.TaskNameFilter("create-index")]
-        filtered = loader.filter_tasks(full_track, filters, exclude=True)
+        filtered = self.filter(full_track, exclude_tasks=["index-3", "type:search", "create-index"])
 
         schedule = filtered.challenges[0].schedule
         self.assertEqual(3, len(schedule))
@@ -1544,7 +1576,7 @@ class TrackFilterTests(TestCase):
         self.assertEqual(5, len(full_track.challenges[0].schedule))
 
         expected_schedule = full_track.challenges[0].schedule.copy()
-        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("nothing")], exclude=True)
+        filtered = self.filter(full_track, exclude_tasks=["nothing"])
 
         schedule = filtered.challenges[0].schedule
         self.assertEqual(expected_schedule, schedule)
@@ -1610,10 +1642,11 @@ class TrackFilterTests(TestCase):
         self.assertEqual(5, len(full_track.challenges[0].schedule))
 
         expected_schedule = []
-        filtered = loader.filter_tasks(full_track, [track.TaskNameFilter("nothing")], exclude=False)
+        filtered = self.filter(full_track, include_tasks=["nothing"])
 
         schedule = filtered.challenges[0].schedule
         self.assertEqual(expected_schedule, schedule)
+
 
 # pylint: disable=too-many-public-methods
 class TrackSpecificationReaderTests(TestCase):
@@ -1985,10 +2018,12 @@ class TrackSpecificationReaderTests(TestCase):
                 ]
             }
         }
-        reader = loader.TrackSpecificationReader()
+        reader = loader.TrackSpecificationReader(selected_challenge="default-challenge")
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
-        schedule = resulting_track.challenges[0].schedule
+        challenge = resulting_track.challenges[0]
+        self.assertTrue(challenge.selected)
+        schedule = challenge.schedule
         self.assertEqual(2, len(schedule))
         self.assertEqual("search-one-client", schedule[0].name)
         self.assertEqual("search", schedule[0].operation.name)
@@ -2956,12 +2991,13 @@ class TrackSpecificationReaderTests(TestCase):
 
             ]
         }
-        reader = loader.TrackSpecificationReader()
+        reader = loader.TrackSpecificationReader(selected_challenge="another-challenge")
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(2, len(resulting_track.challenges))
         self.assertEqual("challenge", resulting_track.challenges[0].name)
         self.assertTrue(resulting_track.challenges[0].default)
         self.assertFalse(resulting_track.challenges[1].default)
+        self.assertTrue(resulting_track.challenges[1].selected)
 
     def test_selects_sole_challenge_implicitly_as_default(self):
         track_specification = {
@@ -2987,6 +3023,7 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertEqual("challenge", resulting_track.challenges[0].name)
         self.assertTrue(resulting_track.challenges[0].default)
+        self.assertTrue(resulting_track.challenges[0].selected)
 
     def test_auto_generates_challenge_from_schedule(self):
         track_specification = {
@@ -3009,6 +3046,7 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(1, len(resulting_track.challenges))
         self.assertTrue(resulting_track.challenges[0].auto_generated)
         self.assertTrue(resulting_track.challenges[0].default)
+        self.assertTrue(resulting_track.challenges[0].selected)
 
     def test_inline_operations(self):
         track_specification = {
@@ -3404,3 +3442,60 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' contains multiple tasks with "
                          "the name 'index-1' which are marked with 'completed-by' but only task is allowed to match.",
                          ctx.exception.args[0])
+
+    def test_propagate_parameters_to_challenge_level(self):
+        track_specification = {
+            "description": "description for unit test",
+            "parameters": {
+                "level": "track",
+                "value": 7
+            },
+            "indices": [{"name": "test-index"}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "challenge",
+                    "default": True,
+                    "parameters": {
+                        "level": "challenge",
+                        "another-value": 17
+                    },
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                },
+                {
+                    "name": "another-challenge",
+                    "schedule": [
+                        {
+                            "operation": "index-append"
+                        }
+                    ]
+                }
+
+            ]
+        }
+        reader = loader.TrackSpecificationReader(selected_challenge="another-challenge")
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(2, len(resulting_track.challenges))
+        self.assertEqual("challenge", resulting_track.challenges[0].name)
+        self.assertTrue(resulting_track.challenges[0].default)
+        self.assertDictEqual({
+            "level": "challenge",
+            "value": 7,
+            "another-value": 17
+        }, resulting_track.challenges[0].parameters)
+
+        self.assertFalse(resulting_track.challenges[1].default)
+        self.assertTrue(resulting_track.challenges[1].selected)
+        self.assertDictEqual({
+            "level": "track",
+            "value": 7
+        }, resulting_track.challenges[1].parameters)

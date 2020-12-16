@@ -318,16 +318,8 @@ class TrackPreparationActor(actor.RallyActor):
     def receiveMsg_PrepareTrack(self, msg, sender):
         # load node-specific config to have correct paths available
         cfg = load_local_config(msg.config)
-        self.logger.info("Preparing track [%s]", msg.track.name)
-        # for "proper" track repositories this will ensure that all state is identical to the coordinator node. For simple tracks
-        # the track is usually self-contained but in some cases (plugins are defined) we still need to ensure that the track
-        # is present on all machines.
-        if msg.track.has_plugins:
-            track.track_repo(cfg, fetch=True, update=True)
-            # we also need to load track plugins eagerly as the respective parameter sources could require
-            track.load_track_plugins(cfg, runner.register_runner, scheduler.register_scheduler)
-        # Beware: This is a potentially long-running operation and we're completely blocking our actor here. We should do this
-        # maybe in a background thread.
+        # Beware: This is a potentially long-running operation and we're completely blocking our actor here.
+        # We should do this maybe in a background thread.
         track.prepare_track(msg.track, cfg)
         self.send(sender, TrackPrepared())
 
