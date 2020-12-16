@@ -49,7 +49,6 @@ class TrackProcessor:
 
         :param track: The current track.
         """
-        ...
 
     def on_prepare_track(self, track, data_root_dir):
         """
@@ -63,8 +62,6 @@ class TrackProcessor:
         :param data_root_dir: The data root directory on the current machine as configured by the user.
         :return: `True` if the next track processor should be executed, `False` to prohibit further processing.
         """
-
-        ...
 
 
 class CompositeTrackProcessor(TrackProcessor):
@@ -504,8 +501,8 @@ class Downloader:
             self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
         except urllib.error.HTTPError as e:
             if e.code == 404 and self.test_mode:
-                raise exceptions.DataError("This track does not support test mode. Please ask the track author "
-                                           "to add it or disable test mode and retry.") from None
+                raise exceptions.DataError("This track does not support test mode. Ask the track author to add it or"
+                                           " disable test mode and retry.") from None
             else:
                 msg = f"Could not download [{data_url}] to [{target_path}]"
                 if e.reason:
@@ -517,7 +514,7 @@ class Downloader:
             raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
 
         if not os.path.isfile(target_path):
-            raise exceptions.SystemSetupError(f"Could not download [{data_url}] to [{target_path}]. Please verify data "
+            raise exceptions.SystemSetupError(f"Could not download [{data_url}] to [{target_path}]. Verify data "
                                               f"are available at [{data_url}] and check your Internet connection.")
 
         actual_size = os.path.getsize(target_path)
@@ -875,11 +872,11 @@ class TestModeTrackProcessor(TrackProcessor):
                         path, ext = io.splitext(document_set.document_archive)
                         path_2, ext_2 = io.splitext(path)
 
-                        document_set.document_archive = "%s-1k%s%s" % (path_2, ext_2, ext)
-                        document_set.document_file = "%s-1k%s" % (path_2, ext_2)
+                        document_set.document_archive = f"{path_2}-1k{ext_2}{ext}"
+                        document_set.document_file = f"{path_2}-1k{ext_2}"
                     elif document_set.has_uncompressed_corpus():
                         path, ext = io.splitext(document_set.document_file)
-                        document_set.document_file = "%s-1k%s" % (path, ext)
+                        document_set.document_file = f"{path}-1k{ext}"
                     else:
                         raise exceptions.RallyAssertionError(f"Document corpus [{corpus.name}] has neither compressed "
                                                              f"nor uncompressed corpus.")

@@ -451,7 +451,7 @@ class TrackPreparationTests(TestCase):
                                                                 uncompressed_size_in_bytes=None),
                                    data_root="/tmp")
 
-        self.assertEqual("This track does not support test mode. Please ask the track author to add it or disable "
+        self.assertEqual("This track does not support test mode. Ask the track author to add it or disable "
                          "test mode and retry.", ctx.exception.args[0])
 
         ensure_dir.assert_called_with("/tmp")
