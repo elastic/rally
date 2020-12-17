@@ -63,6 +63,11 @@ Metrics records for bulk request don't contain the ``bulk-size`` property anymor
 
 Prior to 2.0.3, administrative tasks (see :ref:`operations documentation<track_operations>`) were exempt from filtering and would run regardless of filtering. ``--include-tasks`` and ``--exclude-tasks`` flags now can affect all operations in a track. If you make use of include filters, it is advised to check that all desired operations are listed.
 
+configure subcommand is dropped
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Prior to Rally 2.0.3, Rally had to be configured initially using ``esrally configure``. With Rally 2.0.3, Rally creates a default configuration automatically and users are encouraged to edit Rally's configuration file themselves. Refer to the new :doc:`configuration reference </configuration>` for the configurable properties.
+
 Migrating to Rally 2.0.1
 ------------------------
 

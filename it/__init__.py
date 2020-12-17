@@ -22,12 +22,11 @@ import os
 import random
 import socket
 import time
-from string import Template
 
 import pytest
 
-from esrally import client, version
-from esrally.utils import process, io
+from esrally import client, config, version
+from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["5.6.16", "6.8.0", "7.6.0"]
@@ -131,7 +130,7 @@ class ConfigFile:
 
 
 class TestCluster:
-    def __init__(self,cfg):
+    def __init__(self, cfg):
         self.cfg = cfg
         self.installation_id = None
         self.http_port = None
@@ -188,22 +187,17 @@ class EsMetricsStore:
 
 def install_integration_test_config():
     def copy_config(name):
-        f = ConfigFile(name)
-        io.ensure_dir(f.rally_home)
-        with open(f.target_path, "w", encoding="UTF-8") as target:
-            with open(f.source_path, "r", encoding="UTF-8") as src:
-                contents = src.read()
-                # Rally allows for a RALLY_HOME homedir override. This honors the change for it tests
-                user_home = os.getenv("RALLY_HOME", f.user_home)
-                target.write(Template(contents).substitute(USER_HOME=user_home))
+        source_path = os.path.join(os.path.dirname(__file__), "resources", f"rally-{name}.ini")
+        f = config.ConfigFile(name)
+        f.store_default_config(template_path=source_path)
 
     for n in CONFIG_NAMES:
         copy_config(n)
 
 
-def remove_integration_test_config(config_names=None):
-    for n in config_names or CONFIG_NAMES:
-        os.remove(ConfigFile(n).target_path)
+def remove_integration_test_config():
+    for config_name in CONFIG_NAMES:
+        os.remove(config.ConfigFile(config_name).location)
 
 
 ES_METRICS_STORE = EsMetricsStore()

@@ -78,11 +78,6 @@ It is also possible to use task filters (e.g. ``--include-tasks``) or to refer t
 
 This subcommand is needed for :doc:`tournament mode </tournament>` and its usage is described there.
 
-``configure``
-~~~~~~~~~~~~~
-
-This subcommand is needed to :doc:`configure </configuration>` Rally. It is implicitly chosen if you start Rally for the first time but you can rerun this command at any time.
-
 ``create-track``
 ~~~~~~~~~~~~~~~~
 
@@ -753,29 +748,6 @@ Rally usually installs and launches an Elasticsearch cluster internally and wipe
 
 .. note::
    This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
-
-``advanced-config``
-~~~~~~~~~~~~~~~~~~~
-
-This flag determines whether Rally should present additional (advanced) configuration options. The default value is ``false``.
-
-**Example**
-
- ::
-
-   esrally configure --advanced-config
-
-
-``assume-defaults``
-~~~~~~~~~~~~~~~~~~~
-
-This flag determines whether Rally should automatically accept all values for configuration options that provide a default. This is mainly intended to configure Rally automatically in CI runs. The default value is ``false``.
-
-**Example**
-
- ::
-
-   esrally configure --assume-defaults=true
 
 ``user-tag``
 ~~~~~~~~~~~~

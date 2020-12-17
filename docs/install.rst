@@ -157,4 +157,4 @@ If you are in a corporate environment using Linux servers that do not have any a
 Next Steps
 ----------
 
-After you have installed Rally, you need to configure it. Just run ``esrally configure`` or follow the :doc:`configuration help page </configuration>` for more guidance.
+On the first invocation Rally creates a default configuration file which you can customize. Follow the :doc:`configuration help page </configuration>` for more guidance.
