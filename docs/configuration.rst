@@ -148,6 +148,40 @@ The following settings are applicable only if ``datastore.type`` is set to "elas
 * ``datastore.password``: Sets the password of the Elasticsearch user for the metrics store.
 * ``datastore.probe.cluster_version`` (default: true): Enables automatic detection of the metric store's version.
 
+**Examples**
+
+Define an unprotected metrics store in the local network::
+
+    [reporting]
+    datastore.type = elasticsearch
+    datastore.host = 192.168.10.17
+    datastore.port = 9200
+    datastore.secure = false
+    datastore.user =
+    datastore.password =
+
+Define a secure connection to a metrics store in the local network with a self-signed certificate::
+
+    [reporting]
+    datastore.type = elasticsearch
+    datastore.host = 192.168.10.22
+    datastore.port = 9200
+    datastore.secure = true
+    datastore.ssl.verification_mode = none
+    datastore.user = rally
+    datastore.password = the-password-to-your-cluster
+
+Define a secure connection to an Elastic Cloud cluster::
+
+    [reporting]
+    datastore.type = elasticsearch
+    datastore.host = 123456789abcdef123456789abcdef1.europe-west4.gcp.elastic-cloud.com
+    datastore.port = 9243
+    datastore.secure = true
+    datastore.user = rally
+    datastore.password = the-password-to-your-cluster
+
+
 tracks
 ~~~~~~
 
