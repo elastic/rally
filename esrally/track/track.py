@@ -395,6 +395,18 @@ class Track:
         # This should only happen if we don't have any challenges
         return None
 
+    @property
+    def selected_challenge(self):
+        for challenge in self.challenges:
+            if challenge.selected:
+                return challenge
+        return None
+
+    @property
+    def selected_challenge_or_default(self):
+        selected = self.selected_challenge
+        return selected if selected else self.default_challenge
+
     def find_challenge_or_default(self, name):
         """
         :param name: The name of the challenge to find.
@@ -476,15 +488,19 @@ class Challenge:
                  user_info=None,
                  cluster_settings=None,
                  default=False,
+                 selected=False,
                  auto_generated=False,
+                 parameters=None,
                  meta_data=None,
                  schedule=None):
         self.name = name
+        self.parameters = parameters if parameters else {}
         self.meta_data = meta_data if meta_data else {}
         self.description = description
         self.user_info = user_info
         self.cluster_settings = cluster_settings if cluster_settings else {}
         self.default = default
+        self.selected = selected
         self.auto_generated = auto_generated
         self.schedule = schedule if schedule else []
 
@@ -505,12 +521,15 @@ class Challenge:
 
     def __hash__(self):
         return hash(self.name) ^ hash(self.description) ^ hash(self.cluster_settings) ^ hash(self.default) ^ \
-               hash(self.auto_generated) ^ hash(self.meta_data) ^ hash(self.schedule)
+               hash(self.selected) ^ hash(self.auto_generated) ^ hash(self.parameters) ^ hash(self.meta_data) ^ \
+               hash(self.schedule)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.description, self.cluster_settings, self.default, self.auto_generated, self.meta_data, self.schedule) ==
-                (othr.name, othr.description, othr.cluster_settings, othr.default, othr.auto_generated, othr.meta_data, othr.schedule))
+                (self.name, self.description, self.cluster_settings, self.default, self.selected, self.auto_generated,
+                 self.parameters, self.meta_data, self.schedule) ==
+                (othr.name, othr.description, othr.cluster_settings, othr.default, othr.selected, othr.auto_generated,
+                 othr.parameters, othr.meta_data, othr.schedule))
 
 
 @unique
