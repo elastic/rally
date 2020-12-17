@@ -16,7 +16,6 @@
 # under the License.
 # pylint: disable=protected-access
 
-import copy
 import random
 from unittest import TestCase
 
@@ -2223,32 +2222,6 @@ class SearchParamSourceTests(TestCase):
                 "match_all": {}
             }
         }, p["body"])
-
-    def test_replaces_body_params(self):
-        search = params.SearchParamSource(track=track.Track(name="unit-test"), params={
-            "index": "_all",
-            "body": {
-                "suggest": {
-                    "song-suggest": {
-                        "prefix": "nor",
-                        "completion": {
-                            "field": "suggest",
-                            "fuzzy": {
-                                "fuzziness": "AUTO"
-                            }
-                        }
-                    }
-                }
-            },
-            "body-params": {
-                "suggest.song-suggest.prefix": ["a", "b"]
-            }
-        })
-
-        # the implementation modifies the internal dict in-place (safe because we only have one client per process) hence we need to copy.
-        first = copy.deepcopy(search.params(choice=lambda d: d[0]))
-        second = copy.deepcopy(search.params(choice=lambda d: d[1]))
-        self.assertNotEqual(first, second)
 
     def test_invalid_data_stream_with_type(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
