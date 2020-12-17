@@ -82,7 +82,7 @@ Rally will ask you a few more things in the advanced setup:
 Configuration File Reference
 ----------------------------
 
-Rally stores its configuration in the file ``~/.rally/rally.ini``. It contains of the following sections.
+Rally stores its configuration in the file ``~/.rally/rally.ini``. It comprises the following sections.
 
 meta
 ~~~~
@@ -117,7 +117,7 @@ This section contains more details about the source tree.
 
 * ``remote.repo.url`` (default: "https://github.com/elastic/elasticsearch.git"): The URL from which to checkout Elasticsearch.
 * ``elasticsearch.src.subdir`` (default: "elasticsearch"): The local path, relative to ``src.root.dir``, of the Elasticsearch source tree.
-* ``cache`` (default: true): Enables Rally's internal source artifact cache. Artifacts are cached based on their git revision.
+* ``cache`` (default: true): Enables Rally's internal :ref:`source artifact <pipelines_from-sources>` cache (``elasticsearch*.tar.gz`` and optionally ``*.zip`` files for plugins). Artifacts are cached based on their git revision.
 * ``cache.days`` (default: 7): The number of days for which an artifact should be kept in the source artifact cache.
 
 benchmarks
