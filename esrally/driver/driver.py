@@ -314,14 +314,39 @@ def load_local_config(coordinator_config):
 
 
 class TrackPreparationActor(actor.RallyActor):
+    def __init__(self):
+        super().__init__()
+        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.executor_future = None
+        self.original_sender = None
+        self.wakeup_interval = 5
+
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
+        self.original_sender = sender
         # load node-specific config to have correct paths available
         cfg = load_local_config(msg.config)
-        # Beware: This is a potentially long-running operation and we're completely blocking our actor here.
-        # We should do this maybe in a background thread.
-        track.prepare_track(msg.track, cfg)
-        self.send(sender, TrackPrepared())
+        if cfg.opts("track", "test.mode.enabled"):
+            self.wakeup_interval = 0.5
+        # this is a potentially long-running operation so we offload it a background thread so we don't block
+        # the actor (e.g. logging works properly as log messages are forwarded timely).
+        self.executor_future = self.pool.submit(track.prepare_track, msg.track, cfg)
+        self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_WakeupMessage(self, msg, sender):
+        if self.executor_future is not None and self.executor_future.done():
+            e = self.executor_future.exception(timeout=0)
+            if e:
+                self.logger.info("Track preparator has detected a benchmark failure. Notifying master...")
+                # the exception might be user-defined and not be on the load path of the original sender. Hence, it
+                # cannot be deserialized on the receiver so we convert it here to a plain string.
+                self.send(self.original_sender, actor.BenchmarkFailure("Error in track preparator", str(e)))
+            else:
+                self.executor_future = None
+                self.send(self.original_sender, TrackPrepared())
+        else:
+            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
 
 class Driver:
