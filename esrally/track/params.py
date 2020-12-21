@@ -140,14 +140,13 @@ class ParamSource:
         """
         For use when a ParamSource does not propagate self._params but does use elasticsearch client under the hood
 
-        :param params: A hash containing the source parameters from the track definition JSON
         :return: all applicable parameters that are global to Rally and apply to the elasticsearch-py client
         """
-        defaults = {}
-        defaults["request-timeout"] = self._params.get("request-timeout")
-        defaults["headers"] = self._params.get("headers")
-        defaults["opaque-id"] = self._params.get("opaque-id")
-        return defaults
+        return {
+            "request-timeout": self._params.get("request-timeout"),
+            "headers": self._params.get("headers"),
+            "opaque-id": self._params.get("opaque-id")
+        }
 
 
 class DelegatingParamSource(ParamSource):
@@ -474,39 +473,7 @@ class CreateComponentTemplateParamSource(CreateTemplateParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, track.component_templates, **kwargs)
 
-# TODO #365: This contains "body-params" as an undocumented feature. Get more experience and expand it to make it actually usable.
-#
-# Usage example:
-#
-#
-# {
-#     "name": "term",
-#     "operation": {
-#         "operation-type": "search",
-#         "cache": false,
-#         "body-params": {
-#             "query.term.useragent": [
-#                 "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/525.19 (KHTML, like Gecko) Chrome/1.0.154.53 Safari/525.19",
-#                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; Trident/7.0; .NET4.0E; .NET4.0C; rv:11.0) like Gecko",
-#                 "Mozilla/5.0 (IE 11.0; Windows NT 6.3; WOW64; Trident/7.0; Touch; rv:11.0) like Gecko"
-#             ]
-#         },
-#         "index": "logs-*",
-#         "body": {
-#             "query": {
-#                 "term": {
-#                     "useragent": "Opera/5.11 (Windows 98; U) [en]"
-#                 }
-#             }
-#         }
-#     },
-#     "clients": 1,
-#     "target-throughput": 100,
-#     "warmup-iterations": 100,
-#     "iterations": 100
-# }
-#
-#
+
 class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
@@ -526,7 +493,6 @@ class SearchParamSource(ParamSource):
                     f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         request_cache = params.get("cache", None)
         query_body = params.get("body", None)
-        query_body_params = params.get("body-params", None)
         pages = params.get("pages", None)
         results_per_page = params.get("results-per-page", None)
         request_params = params.get("request-params", {})
@@ -550,24 +516,8 @@ class SearchParamSource(ParamSource):
         if results_per_page:
             self.query_params["results-per-page"] = results_per_page
 
-        self.query_body_params = []
-        if query_body_params:
-            for param, data in query_body_params.items():
-                # TODO #365: Strictly check for allowed syntax. Be lenient in the pre-release and only interpret what's safely possible.
-                # build path based on param
-                # if not isinstance(data, list):
-                #    raise exceptions.RallyError("%s in body-params defines %s but only lists are allowed. This may be a new syntax "
-                #                                "that is not recognized by this version. Please upgrade Rally." % (param, data))
-                if isinstance(data, list):
-                    query_body_path = param.split(".")
-                    b = self.query_params["body"]
-                    # check early to ensure this path is actually contained in the body
-                    try:
-                        self.get_from_dict(b, query_body_path)
-                    except KeyError:
-                        raise exceptions.RallyError("The path %s could not be found within the query body %s." % (param, b))
-
-                    self.query_body_params.append((query_body_path, data))
+        # Ensure we pass global parameters
+        self.query_params.update(self._client_params())
 
     def get_from_dict(self, d, path):
         v = d
@@ -583,14 +533,7 @@ class SearchParamSource(ParamSource):
         # the value is now the inner-most dictionary and the last path element is its key
         v[path[-1]] = val
 
-    # pylint: disable=arguments-differ
-    def params(self, choice=random.choice):
-        # Ensure we pass global parameters
-        self.query_params.update(self._client_params())
-        if self.query_body_params:
-            # needs to replace params first
-            for path, data in self.query_body_params:
-                self.set_in_dict(self.query_params["body"], path, choice(data))
+    def params(self):
         return self.query_params
 
 
