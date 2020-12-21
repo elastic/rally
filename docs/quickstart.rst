@@ -13,13 +13,6 @@ Install Python 3.8+ including ``pip3``, git 1.9+ and an `appropriate JDK to run 
 
 If you have any trouble or need more detailed instructions, look in the :doc:`detailed installation guide </install>`.
 
-Configure
----------
-
-Just invoke ``esrally configure``.
-
-For more detailed instructions and a detailed walkthrough see the :doc:`configuration guide </configuration>`.
-
 Run your first race
 -------------------
 
@@ -121,6 +114,6 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
 Next steps
 ----------
 
-Now you can check :doc:`how to run benchmarks </race>`, get a better understanding how to interpret the numbers in the :doc:`summary report </summary_report>` or start to :doc:`create your own tracks </adding_tracks>`. Be sure to check also some :doc:`tips and tricks </recipes>` to help you understand how to solve specific problems in Rally.
+Now you can check :doc:`how to run benchmarks </race>`, get a better understanding how to interpret the numbers in the :doc:`summary report </summary_report>`, :doc:`configure </configuration>` Rally to better suit your needs or start to :doc:`create your own tracks </adding_tracks>`. Be sure to check also some :doc:`tips and tricks </recipes>` to help you understand how to solve specific problems in Rally.
 
 Also run ``esrally --help`` to see what options are available and keep the :doc:`command line reference </command_line_reference>` handy for more detailed explanations of each option.

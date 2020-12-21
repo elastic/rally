@@ -35,13 +35,6 @@ Install Python 3.8+ including ``pip3``, git 1.9+ and an `appropriate JDK to run 
 
 If you have any trouble or need more detailed instructions, please look in the `detailed installation guide <https://esrally.readthedocs.io/en/latest/install.html>`_.
 
-Configure
----------
-
-Just invoke ``esrally configure``.
-
-For more detailed instructions and a detailed walkthrough see the `configuration guide <https://esrally.readthedocs.io/en/latest/configuration.html>`_.
-
 Run your first race
 -------------------
 

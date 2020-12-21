@@ -16,12 +16,9 @@
 # under the License.
 
 import configparser
-import os
-import unittest.mock as mock
 from unittest import TestCase
 
 from esrally import config, exceptions
-from esrally.utils import io
 
 
 class MockInput:
@@ -56,6 +53,23 @@ class InMemoryConfigStore:
 
     def backup(self):
         self.backup_created = True
+
+    def store_default_config(self):
+        self.store({
+            "distributions": {
+                "release.url": "https://acme.com/releases",
+                "release.cache": "true",
+            },
+            "system": {
+                "env.name": "existing-unit-test-config"
+            },
+            "meta": {
+                "config.version": config.Config.CURRENT_CONFIG_VERSION
+            },
+            "benchmarks": {
+                "local.dataset.cache": "/tmp/rally/data"
+            }
+        })
 
     def store(self, c):
         self.present = True
@@ -246,121 +260,6 @@ class AutoLoadConfigTests(TestCase):
 
     def assert_equals_base_config(self, base_config, local_config, section, key):
         self.assertEqual(base_config.opts(section, key), local_config.opts(section, key))
-
-
-class ConfigFactoryTests(TestCase):
-    @mock.patch("esrally.utils.git.is_working_copy")
-    @mock.patch("esrally.utils.io.guess_install_location")
-    def test_create_simple_config(self, guess_install_location, working_copy):
-        guess_install_location.side_effect = ["/tests/usr/bin/git"]
-        # Rally checks in the parent and sibling directories whether there is an ES working copy. We don't want this detection logic
-        # to succeed spuriously (e.g. on developer machines).
-        working_copy.return_value = False
-        mock_input = MockInput([""])
-
-        f = config.ConfigFactory(i=mock_input, sec_i=mock_input, o=null_output)
-
-        config_store = InMemoryConfigStore("test")
-        f.create_config(config_store)
-        self.assertIsNotNone(config_store.config)
-
-        for section, _ in config_store.config.items():
-            for k, v in config_store.config[section].items():
-                print("%s::%s: %s" % (section, k, v))
-
-        root_dir = io.normalize_path(os.path.abspath("./in-memory/benchmarks"))
-        self.assertTrue("meta" in config_store.config)
-        self.assertEqual(str(config.Config.CURRENT_CONFIG_VERSION), config_store.config["meta"]["config.version"])
-
-        self.assertTrue("system" in config_store.config)
-        self.assertEqual("local", config_store.config["system"]["env.name"])
-
-        self.assertTrue("node" in config_store.config)
-
-        self.assertEqual(root_dir, config_store.config["node"]["root.dir"])
-        self.assertEqual(os.path.join(root_dir, "src"), config_store.config["node"]["src.root.dir"])
-
-        self.assertTrue("source" in config_store.config)
-        self.assertEqual("https://github.com/elastic/elasticsearch.git", config_store.config["source"]["remote.repo.url"])
-        self.assertEqual("elasticsearch", config_store.config["source"]["elasticsearch.src.subdir"])
-
-        self.assertTrue("benchmarks" in config_store.config)
-        self.assertEqual(os.path.join(root_dir, "data"), config_store.config["benchmarks"]["local.dataset.cache"])
-
-        self.assertTrue("reporting" in config_store.config)
-        self.assertEqual("in-memory", config_store.config["reporting"]["datastore.type"])
-        self.assertEqual("", config_store.config["reporting"]["datastore.host"])
-        self.assertEqual("", config_store.config["reporting"]["datastore.port"])
-        self.assertEqual("False", config_store.config["reporting"]["datastore.secure"])
-        self.assertEqual("", config_store.config["reporting"]["datastore.user"])
-        self.assertEqual("", config_store.config["reporting"]["datastore.password"])
-
-        self.assertTrue("tracks" in config_store.config)
-        self.assertEqual("https://github.com/elastic/rally-tracks", config_store.config["tracks"]["default.url"])
-
-        self.assertTrue("teams" in config_store.config)
-        self.assertEqual("https://github.com/elastic/rally-teams", config_store.config["teams"]["default.url"])
-
-        self.assertTrue("defaults" in config_store.config)
-        self.assertEqual("False", config_store.config["defaults"]["preserve_benchmark_candidate"])
-
-        self.assertTrue("distributions" in config_store.config)
-        self.assertEqual("true", config_store.config["distributions"]["release.cache"])
-
-    def test_create_advanced_config(self):
-        f = config.ConfigFactory(i=MockInput([
-            # benchmark root directory
-            "/var/data/rally",
-            # src dir
-            "/Projects/elasticsearch/src",
-            # metrics store type (Elasticsearch)
-            "2",
-            # data_store_host
-            "localhost",
-            # data_store_port
-            "9200",
-            # data_store_secure
-            "Yes",
-            # data_store_user
-            "user",
-            # env
-            "unittest-env",
-            # preserve benchmark candidate
-            "y"
-        ]), sec_i=MockInput(["pw"]), o=null_output)
-
-        config_store = InMemoryConfigStore("test")
-        f.create_config(config_store, advanced_config=True)
-
-        self.assertIsNotNone(config_store.config)
-        self.assertTrue("meta" in config_store.config)
-        self.assertEqual(str(config.Config.CURRENT_CONFIG_VERSION), config_store.config["meta"]["config.version"])
-        self.assertTrue("system" in config_store.config)
-        self.assertEqual("unittest-env", config_store.config["system"]["env.name"])
-        self.assertTrue("node" in config_store.config)
-        self.assertEqual("/var/data/rally", config_store.config["node"]["root.dir"])
-        self.assertTrue("source" in config_store.config)
-        self.assertTrue("benchmarks" in config_store.config)
-
-        self.assertTrue("reporting" in config_store.config)
-        self.assertEqual("elasticsearch", config_store.config["reporting"]["datastore.type"])
-        self.assertEqual("localhost", config_store.config["reporting"]["datastore.host"])
-        self.assertEqual("9200", config_store.config["reporting"]["datastore.port"])
-        self.assertEqual("True", config_store.config["reporting"]["datastore.secure"])
-        self.assertEqual("user", config_store.config["reporting"]["datastore.user"])
-        self.assertEqual("pw", config_store.config["reporting"]["datastore.password"])
-
-        self.assertTrue("tracks" in config_store.config)
-        self.assertEqual("https://github.com/elastic/rally-tracks", config_store.config["tracks"]["default.url"])
-
-        self.assertTrue("teams" in config_store.config)
-        self.assertEqual("https://github.com/elastic/rally-teams", config_store.config["teams"]["default.url"])
-
-        self.assertTrue("defaults" in config_store.config)
-        self.assertEqual("True", config_store.config["defaults"]["preserve_benchmark_candidate"])
-
-        self.assertTrue("distributions" in config_store.config)
-        self.assertEqual("true", config_store.config["distributions"]["release.cache"])
 
 
 class ConfigMigrationTests(TestCase):

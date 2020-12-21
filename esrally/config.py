@@ -16,15 +16,14 @@
 # under the License.
 
 import configparser
-import getpass
 import logging
 import os.path
-import re
 import shutil
 from enum import Enum
+from string import Template
 
-from esrally import FORUM_LINK, PROGRAM_NAME, doc_link, exceptions, paths
-from esrally.utils import io, git, console, convert
+from esrally import PROGRAM_NAME, exceptions, paths
+from esrally.utils import io
 
 
 class Scope(Enum):
@@ -55,6 +54,17 @@ class ConfigFile:
         config = configparser.ConfigParser()
         config.read(self.location, encoding="utf-8")
         return config
+
+    def store_default_config(self, template_path=None):
+        io.ensure_dir(self.config_dir)
+        if template_path:
+            source_path = template_path
+        else:
+            source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "rally.ini"))
+        with open(self.location, "wt", encoding="utf-8") as target:
+            with open(source_path, "rt", encoding="utf-8") as src:
+                contents = src.read()
+                target.write(Template(contents).substitute(CONFIG_DIR=self.config_dir))
 
     def store(self, config):
         io.ensure_dir(self.config_dir)
@@ -91,15 +101,10 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
     :return: A fully-configured node local config.
     """
     cfg = Config(config_name=base_config.name, config_file_class=config_file_class, **kwargs)
-    if cfg.config_present():
-        cfg.load_config(auto_upgrade=True)
-    else:
-        # force unattended configuration - we don't need to raise errors if some bits are missing. Depending on the node role and the
-        # configuration it may be fine that e.g. Java is missing (no need for that on a load driver node).
-        ConfigFactory(o=logging.getLogger(__name__).info).create_config(cfg.config_file, advanced_config=False, assume_defaults=True)
-        # reload and continue
-        if cfg.config_present():
-            cfg.load_config()
+    if not cfg.config_present():
+        cfg.install_default_config()
+
+    cfg.load_config(auto_upgrade=True)
     # we override our some configuration with the one from the coordinator because it may contain more entries and we should be
     # consistent across all nodes here.
     cfg.add_all(base_config, "reporting")
@@ -209,6 +214,9 @@ class Config:
         """
         return self.config_file.present
 
+    def install_default_config(self):
+        self.config_file.store_default_config()
+
     def load_config(self, auto_upgrade=False):
         """
         Loads an existing config file.
@@ -268,251 +276,6 @@ class Config:
             return Scope.application, section, key
         else:
             return scope, section, key
-
-
-class ConfigFactory:
-    ENV_NAME_PATTERN = re.compile("^[a-zA-Z_-]+$")
-
-    PORT_RANGE_PATTERN = re.compile("^([0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$")
-
-    BOOLEAN_PATTERN = re.compile("^(True|true|Yes|yes|t|y|False|false|f|No|no|n)$")
-
-    def __init__(self, i=input, sec_i=getpass.getpass, o=console.println):
-        self.i = i
-        self.sec_i = sec_i
-        self.o = o
-        self.prompter = None
-        self.logger = logging.getLogger(__name__)
-
-    def create_config(self, config_file, advanced_config=False, assume_defaults=False):
-        """
-        Either creates a new configuration file or overwrites an existing one. Will ask the user for input on configurable properties
-        and writes them to the configuration file in ${RALLY_HOME}/.rally/rally.ini, where ${RALLY_HOME} is defaulted to ~.
-
-        :param config_file:
-        :param advanced_config: Whether to ask for properties that are not necessary for everyday use (on a dev machine). Default: False.
-        :param assume_defaults: If True, assume the user accepted all values for which defaults are provided. Mainly intended for automatic
-        configuration in CI run. Default: False.
-        """
-        self.prompter = Prompter(self.i, self.sec_i, self.o, assume_defaults)
-
-        if advanced_config:
-            self.o("Running advanced configuration. You can get additional help at:")
-            self.o("")
-            self.o("  %s" % console.format.link(doc_link("configuration.html")))
-            self.o("")
-        else:
-            self.o("Running simple configuration. Run the advanced configuration with:")
-            self.o("")
-            self.o("  %s configure --advanced-config" % PROGRAM_NAME)
-            self.o("")
-
-        if config_file.present:
-            self.o("\nWARNING: Will overwrite existing config file at [%s]\n" % config_file.location)
-            self.logger.debug("Detected an existing configuration file at [%s]", config_file.location)
-        else:
-            self.logger.debug("Did not detect a configuration file at [%s]. Running initial configuration routine.", config_file.location)
-
-        root_dir = io.normalize_path(os.path.abspath(os.path.join(config_file.config_dir, "benchmarks")))
-        if advanced_config:
-            root_dir = io.normalize_path(self._ask_property("Enter the benchmark root directory", default_value=root_dir))
-        else:
-            self.o("* Setting up benchmark root directory in %s" % root_dir)
-
-        # We try to autodetect an existing ES source directory
-        guess = self._guess_es_src_dir()
-        if guess:
-            source_dir = guess
-            self.logger.debug("Autodetected Elasticsearch project directory at [%s].", source_dir)
-        else:
-            default_src_dir = os.path.join(root_dir, "src", "elasticsearch")
-            self.logger.debug("Could not autodetect Elasticsearch project directory. Providing [%s] as default.", default_src_dir)
-            source_dir = default_src_dir
-
-        if advanced_config:
-            source_dir = io.normalize_path(self._ask_property("Enter your Elasticsearch project directory:",
-                                                              default_value=source_dir))
-        if not advanced_config:
-            self.o("* Setting up benchmark source directory in %s" % source_dir)
-            self.o("")
-
-        # Not everybody might have SSH access. Play safe with the default. It may be slower but this will work for everybody.
-        repo_url = "https://github.com/elastic/elasticsearch.git"
-
-        if advanced_config:
-            data_store_choice = self._ask_property("Where should metrics be kept?"
-                                                   "\n\n"
-                                                   "(1) In memory (simpler but less options for analysis)\n"
-                                                   "(2) Elasticsearch (requires a separate ES instance, keeps all raw samples for analysis)"
-                                                   "\n\n", default_value="1", choices=["1", "2"])
-            if data_store_choice == "1":
-                env_name = "local"
-                data_store_type = "in-memory"
-                data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "False", "", ""
-            else:
-                data_store_type = "elasticsearch"
-                data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = self._ask_data_store()
-
-                env_name = self._ask_env_name()
-
-            preserve_install = convert.to_bool(self._ask_property("Do you want Rally to keep the Elasticsearch benchmark candidate "
-                                                                  "installation including the index (will use several GB per race)?",
-                                                                  default_value=False))
-        else:
-            # Does not matter for an in-memory store
-            env_name = "local"
-            data_store_type = "in-memory"
-            data_store_host, data_store_port, data_store_secure, data_store_user, data_store_password = "", "", "False", "", ""
-            preserve_install = False
-
-        config = configparser.ConfigParser()
-        config["meta"] = {}
-        config["meta"]["config.version"] = str(Config.CURRENT_CONFIG_VERSION)
-
-        config["system"] = {}
-        config["system"]["env.name"] = env_name
-
-        config["node"] = {}
-        config["node"]["root.dir"] = root_dir
-
-        final_source_dir = io.normalize_path(os.path.abspath(os.path.join(source_dir, os.pardir)))
-        config["node"]["src.root.dir"] = final_source_dir
-
-        config["source"] = {}
-        config["source"]["remote.repo.url"] = repo_url
-        # the Elasticsearch directory is just the last path component (relative to the source root directory)
-        config["source"]["elasticsearch.src.subdir"] = io.basename(source_dir)
-
-        config["benchmarks"] = {}
-        config["benchmarks"]["local.dataset.cache"] = os.path.join(root_dir, "data")
-
-        config["reporting"] = {}
-        config["reporting"]["datastore.type"] = data_store_type
-        config["reporting"]["datastore.host"] = data_store_host
-        config["reporting"]["datastore.port"] = data_store_port
-        config["reporting"]["datastore.secure"] = data_store_secure
-        config["reporting"]["datastore.user"] = data_store_user
-        config["reporting"]["datastore.password"] = data_store_password
-
-        config["tracks"] = {}
-        config["tracks"]["default.url"] = "https://github.com/elastic/rally-tracks"
-
-        config["teams"] = {}
-        config["teams"]["default.url"] = "https://github.com/elastic/rally-teams"
-
-        config["defaults"] = {}
-        config["defaults"]["preserve_benchmark_candidate"] = str(preserve_install)
-
-        config["distributions"] = {}
-        config["distributions"]["release.cache"] = "true"
-
-        config_file.store(config)
-
-        self.o(f"Configuration successfully written to {config_file.location}. Happy benchmarking!")
-        self.o("")
-        self.o("More info about Rally:")
-        self.o("")
-        self.o(f"* Type {PROGRAM_NAME} --help")
-        self.o(f"* Read the documentation at {console.format.link(doc_link())}")
-        self.o(f"* Ask a question on the forum at {console.format.link(FORUM_LINK)}")
-
-    def print_detection_result(self, what, result, warn_if_missing=False, additional_message=None):
-        self.logger.debug("Autodetected %s at [%s]", what, result)
-        if additional_message:
-            message = " (%s)" % additional_message
-        else:
-            message = ""
-
-        if result:
-            self.o("  %s: [%s]" % (what, console.format.green("OK")))
-        elif warn_if_missing:
-            self.o("  %s: [%s]%s" % (what, console.format.yellow("MISSING"), message))
-        else:
-            self.o("  %s: [%s]%s" % (what, console.format.red("MISSING"), message))
-
-    def _guess_es_src_dir(self):
-        current_dir = os.getcwd()
-        # try sibling elasticsearch directory (assuming that Rally is checked out alongside Elasticsearch)
-        #
-        # Note that if the current directory is the elasticsearch project directory, it will also be detected. We just cannot check
-        # the current directory directly, otherwise any directory that is a git working copy will be detected as Elasticsearch project
-        # directory.
-        sibling_es_dir = os.path.abspath(os.path.join(current_dir, os.pardir, "elasticsearch"))
-        child_es_dir = os.path.abspath(os.path.join(current_dir, "elasticsearch"))
-
-        for candidate in [sibling_es_dir, child_es_dir]:
-            if git.is_working_copy(candidate):
-                return candidate
-        return None
-
-    def _ask_data_store(self):
-        data_store_host = self._ask_property("Enter the host name of the ES metrics store", default_value="localhost")
-        data_store_port = self._ask_property("Enter the port of the ES metrics store", check_pattern=ConfigFactory.PORT_RANGE_PATTERN)
-        data_store_secure = self._ask_property("Use secure connection (True, False)", default_value=False,
-                                               check_pattern=ConfigFactory.BOOLEAN_PATTERN)
-        data_store_user = self._ask_property("Username for basic authentication (empty if not needed)", mandatory=False, default_value="")
-        data_store_password = self._ask_property("Password for basic authentication (empty if not needed)", mandatory=False,
-                                                 default_value="", sensitive=True)
-        # do an intermediate conversion to bool in order to normalize input
-        return data_store_host, data_store_port, str(convert.to_bool(data_store_secure)), data_store_user, data_store_password
-
-    def _ask_env_name(self):
-        return self._ask_property("Enter a descriptive name for this benchmark environment (ASCII, no spaces)",
-                                  check_pattern=ConfigFactory.ENV_NAME_PATTERN, default_value="local")
-
-    def _ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, choices=None, sensitive=False,
-                      default_value=None):
-        return self.prompter.ask_property(prompt, mandatory, check_path_exists, check_pattern, choices, sensitive, default_value)
-
-
-class Prompter:
-    def __init__(self, i=input, sec_i=getpass.getpass, o=console.println, assume_defaults=False):
-        self.i = i
-        self.sec_i = sec_i
-        self.o = o
-        self.assume_defaults = assume_defaults
-
-    def ask_property(self, prompt, mandatory=True, check_path_exists=False, check_pattern=None, choices=None, sensitive=False,
-                     default_value=None):
-        if default_value is not None:
-            final_prompt = "%s (default: %s): " % (prompt, default_value)
-        elif not mandatory:
-            final_prompt = "%s (Press Enter to skip): " % prompt
-        else:
-            final_prompt = "%s: " % prompt
-        while True:
-            if self.assume_defaults and (default_value is not None or not mandatory):
-                self.o(final_prompt)
-                value = None
-            elif sensitive:
-                value = self.sec_i(final_prompt)
-            else:
-                value = self.i(final_prompt)
-
-            if not value or value.strip() == "":
-                if mandatory and default_value is None:
-                    self.o("  Value is required. Please retry.")
-                    continue
-                else:
-                    # suppress output when the default is empty
-                    if default_value:
-                        self.o("  Using default value '%s'" % default_value)
-                    # this way, we can still check the path...
-                    value = default_value
-
-            if mandatory or value is not None:
-                if check_path_exists and not io.exists(value):
-                    self.o("'%s' does not exist. Please check and retry." % value)
-                    continue
-                if check_pattern is not None and not check_pattern.match(str(value)):
-                    self.o("Input does not match pattern [%s]. Please check and retry." % check_pattern.pattern)
-                    continue
-                if choices is not None and str(value) not in choices:
-                    self.o("Input is not one of the valid choices %s. Please check and retry." % choices)
-                    continue
-                self.o("")
-            # user entered a valid value
-            return value
 
 
 def migrate(config_file, current_version, target_version, out=print, i=input):

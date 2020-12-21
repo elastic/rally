@@ -59,11 +59,12 @@ RUN chgrp 0 /entrypoint.sh && \
     chmod g=u /etc/passwd && \
     chmod 0775 /entrypoint.sh
 
+RUN mkdir -p /rally/.rally && \
+    chown -R 1000:0 /rally/.rally
+
 USER 1000
 
 ENV PATH=/rally/venv/bin:$PATH
-
-RUN esrally configure
 
 LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vendor="Elastic" \

@@ -83,32 +83,7 @@ Example::
     mkdir myrally
     sudo chgrp 0 myrally
 
-    # First run will generate the rally.ini
-    docker run --rm -v $PWD/myrally:/rally/.rally elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
-
-        ____        ____
-       / __ \____ _/ / /_  __
-      / /_/ / __ `/ / / / / /
-     / _, _/ /_/ / / / /_/ /
-    /_/ |_|\__,_/_/_/\__, /
-                    /____/
-
-    Running simple configuration. Run the advanced configuration with:
-
-      esrally configure --advanced-config
-
-    * Setting up benchmark root directory in /rally/.rally/benchmarks
-    * Setting up benchmark source directory in /rally/.rally/benchmarks/src/elasticsearch
-
-    Configuration successfully written to /rally/.rally/rally.ini. Happy benchmarking!
-
-    More info about Rally:
-
-    * Type esrally --help
-    * Read the documentation at https://esrally.readthedocs.io/en/latest/
-    * Ask a question on the forum at https://discuss.elastic.co/tags/c/elastic-stack/elasticsearch/rally
-
-    # now run our benchmark
+    # First run will also generate the rally.ini
     docker run --rm -v $PWD/myrally:/rally/.rally elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
 
     ...
