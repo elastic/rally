@@ -4519,6 +4519,186 @@ class DeleteAsyncSearchTests(TestCase):
         ])
 
 
+class OpenPointInTimeTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_creates_point_in_time(self, es):
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "open-pit-test",
+            "index": "test-index"
+        }
+
+        es.open_point_in_time.return_value = {"id": pit_id}
+
+        r = runner.OpenPointInTime()
+        async with runner.CompositeContext():
+            self.assertIsNone(runner.CompositeContext.get("open-pit-test"))
+            await r(es, params)
+            self.assertEqual(pit_id, runner.CompositeContext.get("open-pit-test"))
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_can_only_be_run_in_composite(self, es):
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "open-pit-test",
+            "index": "test-index"
+        }
+
+        es.open_point_in_time.return_value = {"id": pit_id}
+
+        r = runner.OpenPointInTime()
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            await r(es, params)
+
+
+class QueryWithSearchAfterScrollTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_search_after_with_pit(self, es):
+        pit_op = "open-point-in-time1"
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "search-with-pit",
+            "with-point-in-time-from": pit_op,
+            "results-per-page": 2,
+            "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
+            "query": {"match-all": {}}
+        }
+
+        page_1 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": 2,
+                "hits": [
+                    {
+                        "_id": "1",
+                         "timestamp": 1609780186,
+                         "sort": [1609780186, "1"]
+                    },
+                    {
+                        "_id": "2",
+                         "timestamp": 1609780186,
+                         "sort": [1609780186, "2"]
+                    }
+                ]
+            }
+        }
+
+        page_2 = {"pit_id": "fedcba9876543211",
+                 "took": 10,
+                 "timed_out": False,
+                 "hits": {
+                     "total": 1,
+                     "hits": [
+                         {"_id": "3",
+                          "timestamp": 1609780187,
+                          "sort": [1609780187, "3"]
+                          }
+                     ]
+                 }}
+
+        es.transport.perform_request.side_effect = [as_future(page_1),
+                                                    as_future(page_2)]
+
+        r = runner.QueryWithSearchAfterScrolling()
+
+        async with runner.CompositeContext():
+            runner.CompositeContext.put(pit_op, pit_id)
+            await r(es, params)
+            # make sure pit_id is updated afterward
+            self.assertEqual("fedcba9876543211", runner.CompositeContext.get(pit_op))
+
+        es.transport.perform_request.assert_has_calls([mock.call('GET', '/_search', params={},
+                                                                 body={'query': {'match-all': {}},
+                                                                       'sort': [
+                                                                           {'timestamp': 'asc',
+                                                                            'tie_breaker_id': 'asc'}],
+                                                                       'size': 2,
+                                                                       'pit': {'id': '0123456789abcdef',
+                                                                               'keep_alive': '1m'}},
+                                                                 headers={}),
+                                                       mock.call('GET', '/_search', params={},
+                                                                 body={'query': {'match-all': {}},
+                                                                       'sort': [
+                                                                           {'timestamp': 'asc',
+                                                                            'tie_breaker_id': 'asc'}],
+                                                                       'size': 2,
+                                                                       'pit': {'id': 'fedcba9876543210',
+                                                                               'keep_alive': '1m'},
+                                                                       'search_after': [1609780186, '2']},
+                                                                 headers={})])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_search_after_without_pit(self, es):
+        params = {
+            "name": "search-with-pit",
+            "index": "test-index-1",
+            "results-per-page": 2,
+            "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
+            "query": {"match-all": {}}
+        }
+        page_1 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": 2,
+                "hits": [
+                    {
+                        "_id": "1",
+                        "timestamp": 1609780186,
+                        "sort": [1609780186, "1"]
+                    },
+                    {
+                        "_id": "2",
+                        "timestamp": 1609780186,
+                        "sort": [1609780186, "2"]
+                    }
+                ]
+            }
+        }
+
+        page_2 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+              "total": 1,
+              "hits": [
+                  {"_id": "3",
+                   "timestamp": 1609780187,
+                   "sort": [1609780187, "3"]
+                   }
+              ]
+            }
+        }
+
+        es.transport.perform_request.side_effect = [as_future(page_1),
+                                                    as_future(page_2)]
+        r = runner.QueryWithSearchAfterScrolling()
+        await r(es, params)
+
+        es.transport.perform_request.assert_has_calls([mock.call('GET', '/_search', params={},
+                                                                 body={'query': {'match-all': {}},
+                                                                       'sort': [
+                                                                           {'timestamp': 'asc',
+                                                                            'tie_breaker_id': 'asc'}],
+                                                                       'size': 2},
+                                                                 headers={}),
+                                                       mock.call('GET', '/_search', params={},
+                                                                 body={'query': {'match-all': {}},
+                                                                       'sort': [
+                                                                           {'timestamp': 'asc',
+                                                                            'tie_breaker_id': 'asc'}],
+                                                                       'size': 2,
+                                                                       'search_after': [1609780186, '2']},
+                                                                 headers={})]
+                                                      )
+
+
 class CompositeContextTests(TestCase):
     def test_cannot_be_used_outside_of_composite(self):
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:

@@ -2068,6 +2068,62 @@ class DeleteAsyncSearch(Runner):
         return "delete-async-search"
 
 
+class OpenPointInTime(Runner):
+    async def __call__(self, es, params):
+        index = mandatory(params, "index", self)
+        response = es.open_point_in_time(index=index,
+                                         params=params)
+        id = response.get("id")
+        op_name = mandatory(params, "name", self)
+        # is name uniqueness enforced somewhere? this may collide with async searches
+        CompositeContext.put(op_name, id)
+
+    def __repr__(self, *args, **kwargs):
+        return "open-point-in-time"
+
+
+class QueryWithSearchAfterScrolling(Query):
+    async def __call__(self, es, params):
+        body = {"query": mandatory(params, "query", self),
+                "sort": mandatory(params, "sort", self)}
+        size = params.get("results-per-page", 10)
+        body["size"] = size
+        pit_op = params.get("with-point-in-time-from")
+        request_params, headers = self._transport_request_params(params)
+
+        while True:
+            if pit_op:
+                pit_id = CompositeContext.get(pit_op)
+                body["pit"] = {"id": pit_id,
+                               "keep_alive": "1m" }
+            props = await self._raw_search(es, doc_type=None, index=None, body=body.copy(), params=request_params, headers=headers)
+            if pit_op and props.get("pit_id") is not None:
+                # per the documentation the response pit id may be most up-to-date
+                CompositeContext.put(pit_op, props.get("pit_id"))
+            # prefer less forgiving accessors here, to raise exception on an unexpected response
+            hits = props["hits"]
+            if hits["total"] < size:
+                break
+            # ... else set up next search
+            docs = hits.get("hits")
+            last_sort = docs[-1].get("sort")
+            body["search_after"] = last_sort
+
+    def __repr__(self, *args, **kwargs):
+        return "query-with-search-after-scrolling"
+
+
+class ClosePointInTime(Runner):
+    async def __call__(self, es, params):
+        pit_op = params.get("with-point-in-time-from")
+        pit_id = CompositeContext.get(pit_op)
+        params = {"id": pit_id}
+        es.close_point_in_time(body=None, params=params, headers=None)
+
+    def __repr__(self, *args, **kwargs):
+        return "close-point-in-time"
+
+
 class CompositeContext:
     ctx = contextvars.ContextVar("composite_context")
 
