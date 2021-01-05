@@ -546,6 +546,9 @@ class OperationType(Enum):
     SubmitAsyncSearch = 9
     GetAsyncSearch = 10
     DeleteAsyncSearch = 11
+    QueryWithSearchAfterScroll = 12
+    OpenPointInTime = 13
+    ClosePointInTime = 14
 
     # administrative actions
     ForceMerge = 1001
@@ -686,6 +689,12 @@ class OperationType(Enum):
             return OperationType.GetAsyncSearch
         elif v == "delete-async-search":
             return OperationType.DeleteAsyncSearch
+        elif v == "open-point-in-time":
+            return OperationType.OpenPointInTime
+        elif v == "close-point-in-time":
+            return OperationType.ClosePointInTime
+        elif v == "query-with-search-after":
+            return OperationType.QueryWithSearchAfterScroll
         else:
             raise KeyError(f"No enum value for [{v}]")
 

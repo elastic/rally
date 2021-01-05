@@ -48,6 +48,9 @@ def register_default_runners():
     register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
     register_runner(track.OperationType.GetAsyncSearch, Retry(GetAsyncSearch(), retry_until_success=True), async_runner=True)
     register_runner(track.OperationType.DeleteAsyncSearch, DeleteAsyncSearch(), async_runner=True)
+    register_runner(track.OperationType.QueryWithSearchAfterScroll, QueryWithSearchAfterScrolling, async_runner=True)
+    register_runner(track.OperationType.OpenPointInTime, OpenPointInTime(), async_runner=True)
+    register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)

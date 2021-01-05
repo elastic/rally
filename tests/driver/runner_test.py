@@ -4552,6 +4552,24 @@ class OpenPointInTimeTests(TestCase):
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             await r(es, params)
 
+        self.assertEqual("This operation is only allowed inside a composite operation.", ctx.exception.args[0])
+
+class ClosePointInTimeTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_closes_point_in_time(self, es):
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "close-pit-test",
+            "with-point-in-time-from": "open-pit-task1",
+        }
+
+        r = runner.ClosePointInTime()
+        async with runner.CompositeContext():
+            runner.CompositeContext.put("open-pit-task1", pit_id)
+            await r(es, params)
+
+        es.close_point_in_time.assert_called_once_with(body=None, params={"id": pit_id}, headers=None)
 
 class QueryWithSearchAfterScrollTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
