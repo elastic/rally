@@ -6,9 +6,9 @@ Definition
 
 A track is a specification of one or more benchmarking scenarios with a specific document corpus. It defines for example the involved indices or data streams, data files and the operations that are invoked. Its most important attributes are:
 
-* One or more indices or data streams, with the former potentially each having one or more types
-* The queries to issue
-* Source URL of the benchmark data
+* One or more indices or data streams, with the former potentially each having one or more types.
+* The queries to issue.
+* Source URL of the benchmark data.
 * A list of steps to run, which we'll call "challenge", for example indexing data with a specific number of documents per bulk request or running searches for a defined number of iterations.
 
 Track File Format and Storage
@@ -19,7 +19,7 @@ A track is specified in a JSON file.
 Ad-hoc use
 ..........
 
-For ad-hoc use you can store a track definition anywhere on the file system and reference it with ``--track-path``, e.g::
+For ad-hoc use you can store a track definition anywhere on the file system and reference it with ``--track-path``, e.g.:
 
    # provide a directory - Rally searches for a track.json file in this directory
    # Track name is "app-logs"
@@ -126,7 +126,7 @@ In the ``composable-templates`` and ``component-templates`` sections you define 
 
 In the ``corpora`` section you define all document corpora (i.e. data files) that Rally should use for this track.
 
-In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it, if you want to share operation definitions between challenges.
+In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it if you want to share operation definitions between challenges.
 
 In the ``schedule`` section you describe the workload for the benchmark, for example index with two clients at maximum throughput while searching with another two clients with ten operations per second. The schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline.
 
@@ -206,10 +206,10 @@ templates
 
 The ``templates`` section contains a list of all index templates that Rally should create.
 
-* ``name`` (mandatory): Index template name
+* ``name`` (mandatory): Index template name.
 * ``index-pattern`` (mandatory): Index pattern that matches the index template. This must match the definition in the index template file.
 * ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern before start of the benchmark.
-* ``template`` (mandatory): Index template file name
+* ``template`` (mandatory): Index template file name.
 
 Example::
 
@@ -246,10 +246,10 @@ The ``composable-templates`` section contains a list of all composable templates
 
 Each composable template in this list consists of the following properties:
 
-* ``name`` (mandatory): Composable template name
+* ``name`` (mandatory): Composable template name.
 * ``index-pattern`` (mandatory): Index pattern that matches the composable template. This must match the definition in the template file.
 * ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern if the template is deleted.
-* ``template`` (mandatory): Composable template file name
+* ``template`` (mandatory): Composable template file name.
 
 Example::
 
@@ -269,8 +269,8 @@ The ``component-templates`` section contains a list of all component templates t
 
 Each component template in this list consists of the following properties:
 
-* ``name`` (mandatory): Component template name
-* ``template`` (mandatory): Component template file name
+* ``name`` (mandatory): Component template name.
+* ``template`` (mandatory): Component template file name.
 
 Example::
 
@@ -485,7 +485,7 @@ If we do not want to reuse these operations, we can also define them inline. Not
       ]
     }
 
-Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. It's name will be the same as the operation's type::
+Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. Its name will be the same as the operation's type::
 
     {
       "schedule": [
@@ -711,8 +711,8 @@ put-pipeline
 
 With the operation-type ``put-pipeline`` you can execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_. Note that this API is only available from Elasticsearch 5.0 onwards. It supports the following properties:
 
-* `id` (mandatory): Pipeline id
-* `body` (mandatory): Pipeline definition
+* `id` (mandatory): Pipeline id.
+* `body` (mandatory): Pipeline definition.
 
 In this example we setup a pipeline that adds location information to a ingested document as well as a pipeline failure block to change the index in which the document was supposed to be written. Note that we need to use the ``raw`` and ``endraw`` blocks to ensure that Rally does not attempt to resolve the Mustache template. See :ref:`template language <template_language>` for more information.
 
@@ -1455,7 +1455,7 @@ raw-request
 
 With the operation ``raw-request`` you can execute arbitrary HTTP requests against Elasticsearch. This is a low-level operation that should only be used if no high-level operation is available. Note that it is always possible to write a :ref:`custom runner <adding_tracks_custom_runners>`. The ``raw-request`` operation supports the following parameters:
 
-* ``method`` (optional, defaults to ``GET``): The HTTP request method to use
+* ``method`` (optional, defaults to ``GET``): The HTTP request method to use.
 * ``path`` (mandatory): Path for the API call (excluding host and port). The path must begin with a ``/``. Example: ``/myindex/_flush``.
 * ``header`` (optional): A structure containing any request headers as key-value pairs.
 * ``body`` (optional): The document body.
