@@ -19,7 +19,7 @@ A track is specified in a JSON file.
 Ad-hoc use
 ..........
 
-For ad-hoc use you can store a track definition anywhere on the file system and reference it with ``--track-path``, e.g.:
+For ad-hoc use you can store a track definition anywhere on the file system and reference it with ``--track-path``, e.g.::
 
    # provide a directory - Rally searches for a track.json file in this directory
    # Track name is "app-logs"
