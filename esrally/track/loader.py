@@ -1086,9 +1086,9 @@ class TrackPluginReader:
         if self.scheduler_registry:
             self.scheduler_registry(name, scheduler)
 
-    def register_track_processor(self, name, track_processor):
+    def register_track_processor(self, track_processor):
         if self.track_processor_registry:
-            self.track_processor_registry(name, track_processor)
+            self.track_processor_registry(track_processor)
 
     @property
     def meta_data(self):
