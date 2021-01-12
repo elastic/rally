@@ -172,7 +172,7 @@ Testing Rally features (such as the ``ccr-stats`` telemetry device) requiring El
 
 Running the ``start.sh`` script requires Docker locally installed and performs the following actions:
 
-1. Starts a single node (512MB heap) Elasticsearch cluster locally, to serve as a :ref:`metrics store <configuration_options>`. It also starts Kibana attached to the Elasticsearch metric store cluster.
+1. Starts a single node (512MB heap) Elasticsearch cluster locally, to serve as a :doc:`metrics store </configuration>`. It also starts Kibana attached to the Elasticsearch metric store cluster.
 2. Creates a new configuration file for Rally under ``~/.rally/rally-metricstore.ini`` referencing Elasticsearch from step 1.
 3. Starts two additional local Elasticsearch clusters with 1 node each, (version ``7.3.2`` by default) called ``leader`` and ``follower`` listening at ports 32901 and 32902 respectively. Each node uses 1GB heap.
 4. Accepts the trial license.
