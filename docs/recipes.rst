@@ -215,7 +215,7 @@ This behavior can also be changed, by invoking Rally with the :ref:`--on-error <
 
 	esrally --track=geonames --on-error=abort
 	
-Errors can also be investigated if you have configured a :ref:`dedicated Elasticsearch metrics store <advanced_configuration>`.
+Errors can also be investigated if you have configured a :doc:`dedicated Elasticsearch metrics store </configuration>`.
 
 Checking Queries and Responses
 --------------------------------------------------------------
@@ -265,7 +265,7 @@ This will in turn ensure logs include the Elasticsearch query and accompanying r
 
 Users should discard any performance metrics collected from a benchmark with ``DEBUG`` logging. This will likely cause a client-side bottleneck so once the correctness of the queries has been established, disable this setting and re-run any benchmarks.
 
-The number of hits from queries can also be investigated if you have configured a :ref:`dedicated Elasticsearch metrics store <advanced_configuration>`. Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with a summary of individual responses e.g.::
+The number of hits from queries can also be investigated if you have configured a :doc:`dedicated Elasticsearch metrics store </configuration>`. Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with a summary of individual responses e.g.::
 
 	{
 	  "@timestamp" : 1597681313435,
