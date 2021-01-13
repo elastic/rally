@@ -1,3 +1,47 @@
+### 2.0.3
+
+#### Highlights
+
+* [#1112](https://github.com/elastic/rally/pull/1112): Execute complex request hierarchies
+* [#1100](https://github.com/elastic/rally/pull/1100): Improve throughput throttling for bulks
+
+#### Enhancements
+
+* [#1140](https://github.com/elastic/rally/pull/1140): Improve responsiveness of track preparation
+* [#1136](https://github.com/elastic/rally/pull/1136): Support non default repositories in chart generator
+* [#1135](https://github.com/elastic/rally/pull/1135): Allow to customize track preparation
+* [#1129](https://github.com/elastic/rally/pull/1129): Support async search API
+* [#1118](https://github.com/elastic/rally/pull/1118): Allow index pattern for source-index in shrink-index operation
+* [#1115](https://github.com/elastic/rally/pull/1115): Error wrapper script on unclean local state
+* [#1109](https://github.com/elastic/rally/pull/1109): Throttle tasks based on presence of a scheduler
+* [#1108](https://github.com/elastic/rally/pull/1108): Add support for FOSSA
+* [#1099](https://github.com/elastic/rally/pull/1099): Composable + Component template support
+* [#1096](https://github.com/elastic/rally/pull/1096): Add CI for Python 3.9.0
+* [#1091](https://github.com/elastic/rally/pull/1091): Check registered parameter sources more strictly
+* [#1070](https://github.com/elastic/rally/pull/1070): Add support for custom headers and request-timeout
+* [#1065](https://github.com/elastic/rally/pull/1065): Allow to specify corpus meta-data
+
+#### Bug Fixes
+
+* [#1132](https://github.com/elastic/rally/pull/1132): Allow for filtering of administrative tasks
+* [#1126](https://github.com/elastic/rally/pull/1126): Respect specified order in composite task
+* [#1125](https://github.com/elastic/rally/pull/1125): Wait until cluster health is green
+* [#1124](https://github.com/elastic/rally/pull/1124): Treat some zero target-intervals as unthrottled
+* [#1122](https://github.com/elastic/rally/pull/1122): Remove implicit request timeout from force merge operation in polling
+* [#1121](https://github.com/elastic/rally/pull/1121): Ensure that sleep tasks are timed
+* [#1119](https://github.com/elastic/rally/pull/1119): Support trailing slashes for all URL schemes
+* [#1117](https://github.com/elastic/rally/pull/1117): Don't change scheduler on failed requests
+* [#1116](https://github.com/elastic/rally/pull/1116): Ensure admin tasks are always executed
+* [#1111](https://github.com/elastic/rally/pull/1111): Allow trailing / in base-url
+* [#1103](https://github.com/elastic/rally/pull/1103): Accept some differing units for throttling
+
+#### Doc Changes
+
+* [#1145](https://github.com/elastic/rally/pull/1145): Fix punctuation
+* [#1137](https://github.com/elastic/rally/pull/1137): Add a configuration file reference
+* [#1133](https://github.com/elastic/rally/pull/1133): Clarify latency-vs-service-time FAQ
+* [#1102](https://github.com/elastic/rally/pull/1102): Clarify task execution order in docs with respect to --include-tasks
+
 ### 2.0.2
 
 #### Enhancements
