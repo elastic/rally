@@ -4533,7 +4533,6 @@ class OpenPointInTimeTests(TestCase):
 
         r = runner.OpenPointInTime()
         async with runner.CompositeContext():
-            self.assertIsNone(runner.CompositeContext.get("open-pit-test"))
             await r(es, params)
             self.assertEqual(pit_id, runner.CompositeContext.get("open-pit-test"))
 

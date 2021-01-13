@@ -693,7 +693,7 @@ class OperationType(Enum):
             return OperationType.OpenPointInTime
         elif v == "close-point-in-time":
             return OperationType.ClosePointInTime
-        elif v == "query-with-search-after":
+        elif v == "query-with-search-after-scroll":
             return OperationType.QueryWithSearchAfterScroll
         else:
             raise KeyError(f"No enum value for [{v}]")
