@@ -172,7 +172,7 @@ Testing Rally features (such as the ``ccr-stats`` telemetry device) requiring El
 
 Running the ``start.sh`` script requires Docker locally installed and performs the following actions:
 
-1. Starts a single node (512MB heap) Elasticsearch cluster locally, to serve as a :ref:`metrics store <configuration_options>`. It also starts Kibana attached to the Elasticsearch metric store cluster.
+1. Starts a single node (512MB heap) Elasticsearch cluster locally, to serve as a :doc:`metrics store </configuration>`. It also starts Kibana attached to the Elasticsearch metric store cluster.
 2. Creates a new configuration file for Rally under ``~/.rally/rally-metricstore.ini`` referencing Elasticsearch from step 1.
 3. Starts two additional local Elasticsearch clusters with 1 node each, (version ``7.3.2`` by default) called ``leader`` and ``follower`` listening at ports 32901 and 32902 respectively. Each node uses 1GB heap.
 4. Accepts the trial license.
@@ -215,7 +215,7 @@ This behavior can also be changed, by invoking Rally with the :ref:`--on-error <
 
 	esrally --track=geonames --on-error=abort
 	
-Errors can also be investigated if you have configured a :ref:`dedicated Elasticsearch metrics store <advanced_configuration>`.
+Errors can also be investigated if you have configured a :doc:`dedicated Elasticsearch metrics store </configuration>`.
 
 Checking Queries and Responses
 --------------------------------------------------------------
@@ -265,7 +265,7 @@ This will in turn ensure logs include the Elasticsearch query and accompanying r
 
 Users should discard any performance metrics collected from a benchmark with ``DEBUG`` logging. This will likely cause a client-side bottleneck so once the correctness of the queries has been established, disable this setting and re-run any benchmarks.
 
-The number of hits from queries can also be investigated if you have configured a :ref:`dedicated Elasticsearch metrics store <advanced_configuration>`. Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with a summary of individual responses e.g.::
+The number of hits from queries can also be investigated if you have configured a :doc:`dedicated Elasticsearch metrics store </configuration>`. Specifically, documents within the index pattern ``rally-metrics-*`` contain a ``meta`` field with a summary of individual responses e.g.::
 
 	{
 	  "@timestamp" : 1597681313435,

@@ -53,7 +53,7 @@ install_requires = [
     #   aiohttp: Apache 2.0
     "elasticsearch[async]==7.10.1",
     # License: BSD
-    "psutil==5.7.0",
+    "psutil==5.8.0",
     # License: MIT
     "py-cpuinfo==7.0.0",
     # License: MIT
