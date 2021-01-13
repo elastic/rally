@@ -30,8 +30,6 @@ Installation Instructions for Development
 Known Issues
 ~~~~~~~~~~~~
 
-If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Check the `installation instructions of psutil <https://github.com/giampaolo/psutil/blob/master/INSTALL.rst>`_ in this case. Keep in mind that Rally is based on Python 3 and you need to install the Python 3 header files instead of the Python 2 header files on Linux.
-
 On MacOS Mojave the step ``make prereq`` might fail with the following message::
 
     zipimport.ZipImportError: can't decompress data; zlib not available

@@ -115,8 +115,6 @@ Installing Rally
 1. Ensure ``~/.local/bin`` is in your ``$PATH``.
 2. Install Rally: ``python3 -m pip install --user esrally``.
 
-If you get errors during installation, it is probably due to the installation of ``psutil`` which we use to gather system metrics like CPU utilization. Ensure that you have installed the Python development package as documented in the prerequisites section above.
-
 VirtualEnv Install
 ------------------
 
