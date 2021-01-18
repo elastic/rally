@@ -810,6 +810,8 @@ class TaskFilterTrackProcessor(TrackProcessor):
                 elif len(spec) == 2:
                     if spec[0] == "type":
                         filters.append(track.TaskOpTypeFilter(spec[1]))
+                    elif spec[0] == "tag":
+                        filters.append(track.TaskTagFilter(spec[1]))
                     else:
                         raise exceptions.SystemSetupError(f"Invalid format for filtered tasks: [{t}]. "
                                                           f"Expected [type] but got [{spec[0]}].")
@@ -1458,6 +1460,7 @@ class TrackSpecificationReader:
         task_name = self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name)
         task = track.Task(name=task_name,
                           operation=op,
+                          tags=self._r(task_spec, "tags", error_ctx=op.name, mandatory=False),
                           meta_data=self._r(task_spec, "meta", error_ctx=op.name, mandatory=False),
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op.name, mandatory=False,
                                                     default_value=default_warmup_iterations),

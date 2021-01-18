@@ -704,7 +704,7 @@ class TaskNameFilter:
         return isinstance(other, type(self)) and self.name == other.name
 
     def __str__(self, *args, **kwargs):
-        return "filter for task name [%s]" % self.name
+        return f"filter for task name [{self.name}]"
 
 
 class TaskOpTypeFilter:
@@ -721,7 +721,24 @@ class TaskOpTypeFilter:
         return isinstance(other, type(self)) and self.op_type == other.op_type
 
     def __str__(self, *args, **kwargs):
-        return "filter for operation type [%s]" % self.op_type
+        return f"filter for operation type [{self.op_type}]"
+
+
+class TaskTagFilter:
+    def __init__(self, tag_name):
+        self.tag_name = tag_name
+
+    def matches(self, task):
+        return self.tag_name in task.tags
+
+    def __hash__(self):
+        return hash(self.tag_name)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.tag_name == other.tag_name
+
+    def __str__(self, *args, **kwargs):
+        return f"filter for tasks tagged [{self.tag_name}]"
 
 
 class Singleton(type):
@@ -785,10 +802,16 @@ Throughput = collections.namedtuple("Throughput", ["value", "unit"])
 class Task:
     THROUGHPUT_PATTERN = re.compile(r"(?P<value>(\d*\.)?\d+)\s(?P<unit>\w+/s)")
 
-    def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None,
-                 time_period=None, clients=1, completes_parent=False, schedule=None, params=None):
+    def __init__(self, name, operation, tags=None, meta_data=None, warmup_iterations=None, iterations=None,
+                 warmup_time_period=None, time_period=None, clients=1, completes_parent=False, schedule=None, params=None):
         self.name = name
         self.operation = operation
+        if isinstance(tags, str):
+            self.tags = [tags]
+        elif tags:
+            self.tags = tags
+        else:
+            self.tags = []
         self.meta_data = meta_data if meta_data else {}
         self.warmup_iterations = warmup_iterations
         self.iterations = iterations
