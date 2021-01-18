@@ -1424,21 +1424,16 @@ class EsRaceStore(RaceStore):
             return []
 
     def find_by_race_id(self, race_id):
-        filters = [{
-                "term": {
-                    "environment": self.environment_name
-                }
-            },
-            {
-                "term": {
-                    "race-id": race_id
-                }
-            }]
-
         query = {
             "query": {
                 "bool": {
-                    "filter": filters
+                    "filter": [
+                        {
+                            "term": {
+                                "race-id": race_id
+                            }
+                        }
+                    ]
                 }
             }
         }
