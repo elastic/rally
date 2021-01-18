@@ -327,6 +327,10 @@ You can use ``--include-tasks`` to specify a comma-separated list of tasks that 
 
     Tasks will be executed in the order that are defined in the challenge, not in the order they are defined in the command.
 
+.. note::
+
+    Task filters are case-sensitive.
+
 **Examples**:
 
 * Execute only the tasks with the name ``index`` and ``term``: ``--include-tasks="index,term"``
