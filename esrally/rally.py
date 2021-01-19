@@ -587,8 +587,12 @@ def create_arg_parser():
 
 def derive_sub_command(args):
     sub_command = args.subcommand
-    # TODO: Can we select a subcommand by default?
-    return sub_command if sub_command is not None else "race"
+    if sub_command is None:
+        logger = logging.getLogger(__name__)
+        console.warn("Invoking Rally without a subcommand is deprecated. Specify the 'race' subcommand explicitly.", logger=logger)
+        return "race"
+    else:
+        return sub_command
 
 
 def dispatch_list(cfg):
