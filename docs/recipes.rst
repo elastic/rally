@@ -12,7 +12,7 @@ Benchmarking an Elastic Cloud cluster
 
 Benchmarking an `Elastic Cloud <https://www.elastic.co/cloud/>`_ cluster with Rally is similar to :ref:`benchmarking any other existing cluster <recipe_benchmark_existing_cluster>`. In the following example we will run a benchmark against a cluster reachable via the endpoint ``https://abcdef123456.europe-west1.gcp.cloud.es.io:9243`` by the user ``elastic`` with the password ``changeme``::
 
-    esrally --track=pmc --target-hosts=abcdef123456.europe-west1.gcp.cloud.es.io:9243 --pipeline=benchmark-only --client-options="timeout:60,use_ssl:true,verify_certs:true,basic_auth_user:'elastic',basic_auth_password:'changeme'"
+    esrally race --track=pmc --target-hosts=abcdef123456.europe-west1.gcp.cloud.es.io:9243 --pipeline=benchmark-only --client-options="timeout:60,use_ssl:true,verify_certs:true,basic_auth_user:'elastic',basic_auth_password:'changeme'"
 
 .. _recipe_benchmark_existing_cluster:
 
@@ -53,11 +53,11 @@ Finally we need to check which :doc:`pipeline </pipelines>` to use. For this cas
 
 Now we can invoke Rally::
 
-    esrally --track=pmc --target-hosts=10.5.5.10:9200,10.5.5.11:9200,10.5.5.12:9200 --pipeline=benchmark-only
+    esrally race --track=pmc --target-hosts=10.5.5.10:9200,10.5.5.11:9200,10.5.5.12:9200 --pipeline=benchmark-only
 
 If you have `X-Pack Security <https://www.elastic.co/products/x-pack/security>`_  enabled, then you'll also need to specify another parameter to use https and to pass credentials::
 
-    esrally --track=pmc --target-hosts=10.5.5.10:9243,10.5.5.11:9243,10.5.5.12:9243 --pipeline=benchmark-only --client-options="use_ssl:true,verify_certs:true,basic_auth_user:'elastic',basic_auth_password:'changeme'"
+    esrally race --track=pmc --target-hosts=10.5.5.10:9243,10.5.5.11:9243,10.5.5.12:9243 --pipeline=benchmark-only --client-options="use_ssl:true,verify_certs:true,basic_auth_user:'elastic',basic_auth_password:'changeme'"
 
 .. _recipe_benchmark_remote_cluster:
 
@@ -84,7 +84,7 @@ To run a benchmark for this scenario follow these steps:
 
 1. :doc:`Install </install>` and :doc:`configure </configuration>` Rally on all machines. Be sure that the same version is installed on all of them and fully :doc:`configured </configuration>`.
 2. Start the :doc:`Rally daemon </rally_daemon>` on each machine. The Rally daemon allows Rally to communicate with all remote machines. On the benchmark coordinator run ``esrallyd start --node-ip=10.5.5.5 --coordinator-ip=10.5.5.5`` and on the benchmark candidate machines run ``esrallyd start --node-ip=10.5.5.10 --coordinator-ip=10.5.5.5`` and ``esrallyd start --node-ip=10.5.5.11 --coordinator-ip=10.5.5.5`` respectively. The ``--node-ip`` parameter tells Rally the IP of the machine on which it is running. As some machines have more than one network interface, Rally will not attempt to auto-detect the machine IP. The ``--coordinator-ip`` parameter tells Rally the IP of the benchmark coordinator node.
-3. Start the benchmark by invoking Rally as usual on the benchmark coordinator, for example: ``esrally --distribution-version=5.0.0 --target-hosts=10.5.5.10:39200,10.5.5.11:39200``. Rally will derive from the ``--target-hosts``  parameter that it should provision the nodes ``10.5.5.10`` and ``10.5.5.11``.
+3. Start the benchmark by invoking Rally as usual on the benchmark coordinator, for example: ``esrally race --distribution-version=5.0.0 --target-hosts=10.5.5.10:39200,10.5.5.11:39200``. Rally will derive from the ``--target-hosts``  parameter that it should provision the nodes ``10.5.5.10`` and ``10.5.5.11``.
 4. After the benchmark has finished you can stop the Rally daemon again. On the benchmark coordinator and on the benchmark candidates run ``esrallyd stop``.
 
 .. note::
@@ -124,7 +124,7 @@ By default, Rally will generate load on the same machine where you start a bench
 
 1. :doc:`Install </install>` and :doc:`configure </configuration>` Rally on all machines. Be sure that the same version is installed on all of them and fully :doc:`configured </configuration>`.
 2. Start the :doc:`Rally daemon </rally_daemon>` on each machine. The Rally daemon allows Rally to communicate with all remote machines. On the benchmark coordinator run ``esrallyd start --node-ip=10.5.5.5 --coordinator-ip=10.5.5.5`` and on the load driver machines run ``esrallyd start --node-ip=10.5.5.6 --coordinator-ip=10.5.5.5`` and ``esrallyd start --node-ip=10.5.5.7 --coordinator-ip=10.5.5.5`` respectively. The ``--node-ip`` parameter tells Rally the IP of the machine on which it is running. As some machines have more than one network interface, Rally will not attempt to auto-detect the machine IP. The ``--coordinator-ip`` parameter tells Rally the IP of the benchmark coordinator node.
-3. Start the benchmark by invoking Rally on the benchmark coordinator, for example: ``esrally --pipeline=benchmark-only --load-driver-hosts=10.5.5.6,10.5.5.7 --target-hosts=10.5.5.11:9200,10.5.5.12:9200,10.5.5.13:9200``.
+3. Start the benchmark by invoking Rally on the benchmark coordinator, for example: ``esrally race --pipeline=benchmark-only --load-driver-hosts=10.5.5.6,10.5.5.7 --target-hosts=10.5.5.11:9200,10.5.5.12:9200,10.5.5.13:9200``.
 4. After the benchmark has finished you can stop the Rally daemon again. On the benchmark coordinator and on the load driver machines run ``esrallyd stop``.
 
 .. note::
@@ -213,7 +213,7 @@ Rally will not exit on errors (unless fatal e.g. `ECONNREFUSED <http://man7.org/
 
 This behavior can also be changed, by invoking Rally with the :ref:`--on-error <command_line_reference_on_error>` switch e.g.::
 
-	esrally --track=geonames --on-error=abort
+	esrally race --track=geonames --on-error=abort
 	
 Errors can also be investigated if you have configured a :doc:`dedicated Elasticsearch metrics store </configuration>`.
 

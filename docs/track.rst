@@ -23,10 +23,10 @@ For ad-hoc use you can store a track definition anywhere on the file system and 
 
    # provide a directory - Rally searches for a track.json file in this directory
    # Track name is "app-logs"
-   esrally --track-path=~/Projects/tracks/app-logs
+   esrally race --track-path=~/Projects/tracks/app-logs
    # provide a file name - Rally uses this file directly
    # Track name is "syslog"
-   esrally --track-path=~/Projects/tracks/syslog.json
+   esrally race --track-path=~/Projects/tracks/syslog.json
 
 Rally will also search for additional files like mappings or data files in the provided directory. If you use advanced features like :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>` we recommend that you create a separate directory per track.
 

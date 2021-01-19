@@ -50,7 +50,7 @@ After installation, we can start the node. To tie all metrics of a benchmark tog
 
 After the Elasticsearch node has started, we can run a benchmark. Be sure to pass the same race id so you can match results later in your metrics store::
 
-    esrally --pipeline=benchmark-only --target-host=127.0.0.1:39200 --track=geonames --challenge=append-no-conflicts-index-only --on-error=abort --race-id=${RACE_ID}
+    esrally race --pipeline=benchmark-only --target-host=127.0.0.1:39200 --track=geonames --challenge=append-no-conflicts-index-only --on-error=abort --race-id=${RACE_ID}
 
 When the benchmark has finished, we can stop the node again::
 
@@ -90,7 +90,7 @@ We should see that our cluster consisting of three nodes is up and running::
 
 Now we can start the benchmark on the load generator machine (remember to set the race id there)::
 
-    esrally --pipeline=benchmark-only --target-host=192.168.14.77:39200,192.168.14.78:39200,192.168.14.79:39200 --track=geonames --challenge=append-no-conflicts-index-only --on-error=abort --race-id=${RACE_ID}
+    esrally race --pipeline=benchmark-only --target-host=192.168.14.77:39200,192.168.14.78:39200,192.168.14.79:39200 --track=geonames --challenge=append-no-conflicts-index-only --on-error=abort --race-id=${RACE_ID}
 
 Similarly to the single-node benchmark, we can now shutdown the cluster again by issuing the following command on each node::
 

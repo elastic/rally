@@ -84,7 +84,7 @@ def esrally(cfg, command_line):
 
 def race(cfg, command_line):
     """
-    This method should be used for rally invocations of the default race command.
+    This method should be used for rally invocations of the race command.
     It sets up some defaults for how the integration tests expect to run races.
     """
     return esrally(cfg, f"race {command_line} --on-error='abort'")
