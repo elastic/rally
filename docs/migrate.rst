@@ -17,9 +17,7 @@ Invoke Rally with the ``race`` subcommand instead::
 
 When Rally is invoked without a subcommand it will issue the following warning on the command line and in the log file::
 
-    [WARNING] Invoking Rally without a subcommand is deprecated. Specify the 'race' subcommand explicitly.
-
-A subcommand will be required starting with the next minor release 2.1.0.
+    [WARNING] Invoking Rally without a subcommand is deprecated and will be required with Rally 2.1.0. Specify the 'race' subcommand explicitly.
 
 Migrating to Rally 2.0.3
 ------------------------

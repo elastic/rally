@@ -589,7 +589,8 @@ def derive_sub_command(args):
     sub_command = args.subcommand
     if sub_command is None:
         logger = logging.getLogger(__name__)
-        console.warn("Invoking Rally without a subcommand is deprecated. Specify the 'race' subcommand explicitly.", logger=logger)
+        console.warn("Invoking Rally without a subcommand is deprecated and will be required with Rally 2.1.0. Specify "
+                     "the 'race' subcommand explicitly.", logger=logger)
         return "race"
     else:
         return sub_command
