@@ -1206,6 +1206,7 @@ class AsyncIoAdapter:
         self.complete = complete
         self.abort_on_error = abort_on_error
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
+        self.assertions_enabled = self.cfg.opts("driver", "assertions")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
         self.logger = logging.getLogger(__name__)
 
@@ -1240,6 +1241,9 @@ class AsyncIoAdapter:
         client_count = len(self.task_allocations)
         es = es_clients(self.cfg.opts("client", "hosts").all_hosts,
                         self.cfg.opts("client", "options").with_max_connections(client_count))
+
+        self.logger.info("Task assertions enabled: %s", str(self.assertions_enabled))
+        runner.enable_assertions(self.assertions_enabled)
 
         aws = []
         # A parameter source should only be created once per task - it is partitioned later on per client.

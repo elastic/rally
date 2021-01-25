@@ -95,6 +95,15 @@ def runner_for(operation_type):
         raise exceptions.RallyError("No runner available for operation type [%s]" % operation_type)
 
 
+def enable_assertions(enabled):
+    """
+    Changes whether assertions are enabled. The status changes for all tasks that are executed after this call.
+
+    :param enabled: ``True`` to enable assertions, ``False`` to disable them.
+    """
+    AssertingRunner.assertions_enabled = enabled
+
+
 def register_runner(operation_type, runner, **kwargs):
     logger = logging.getLogger(__name__)
     async_runner = kwargs.get("async_runner", False)
@@ -316,6 +325,8 @@ class MultiClientRunner(Runner, Delegator):
 
 
 class AssertingRunner(Runner, Delegator):
+    assertions_enabled = False
+
     def __init__(self, delegate):
         super().__init__(delegate=delegate)
         self.predicates = {
@@ -351,13 +362,13 @@ class AssertingRunner(Runner, Delegator):
         predicate = self.predicates[predicate_name]
         success = predicate(expected_value, actual_value)
         if not success:
-            raise exceptions.RallyAssertionError(
+            raise exceptions.RallyTaskAssertionError(
                 f"Expected [{path}] to be {predicate_name} [{expected_value}] but was [{actual_value}].")
 
     async def __call__(self, *args):
         params = args[1]
         return_value = await self.delegate(*args)
-        if "assertions" in params:
+        if AssertingRunner.assertions_enabled and "assertions" in params:
             if isinstance(return_value, dict):
                 for assertion in params["assertions"]:
                     self.check_assertion(assertion, return_value)

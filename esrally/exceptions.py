@@ -51,6 +51,12 @@ class RallyAssertionError(RallyError):
     """
 
 
+class RallyTaskAssertionError(RallyAssertionError):
+    """
+    Thrown when an assertion on a task has been violated.
+    """
+
+
 class ConfigError(RallyError):
     pass
 

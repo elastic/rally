@@ -536,6 +536,11 @@ def create_arg_parser():
             help="Enables a profiler for analyzing the performance of calls in Rally's driver (default: false).",
             default=False,
             action="store_true")
+        p.add_argument(
+            "--enable-assertions",
+            help="Enables assertion checks for tasks (default: false).",
+            default=False,
+            action="store_true")
 
     ###############################################################################
     #
@@ -896,6 +901,7 @@ def main():
         cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
 
     cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
+    cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
     cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
     cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
     if sub_command not in ("list", "install", "download"):

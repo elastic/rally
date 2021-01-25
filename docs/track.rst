@@ -579,7 +579,7 @@ Use assertions for sanity checks, e.g. to ensure a query returns results. Assert
 * ``condition``: The following conditions are supported: ``<``, ``<=``, ``==``, ``>=``, ``>=``.
 * ``value``: The expected value.
 
-While assertions are always evaluated and raise an error when they are violated, Rally's default behavior is to only record errors and continue executing the benchmark. To abort on assertion errors, run Rally with ``--on-error=abort``.
+Assertions are disabled by default and can be enabled with the command line flag ``--enable-assertions``. A failing assertion aborts the benchmark.
 
 Example::
 
@@ -607,7 +607,7 @@ Example::
 
     This requires to set ``detailed-results`` to ``true`` so the search operation gathers additional meta-data, such as the number of hits.
 
-If this assertion fails, and Rally is executed with ``--on-error=abort`` it exits with the following error message::
+If assertions are enabled with ``--enable-assertions`` and this assertion fails, it exits with the following error message::
 
     [ERROR] Cannot race. Error in load generator [0]
         Cannot run task [term]: Expected [hits] to be > [0] but was [0].

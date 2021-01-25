@@ -140,6 +140,12 @@ class RegisterRunnerTests(TestCase):
 
 
 class AssertingRunnerTests(TestCase):
+    def setUp(self):
+        runner.enable_assertions(True)
+
+    def tearDown(self):
+        runner.enable_assertions(False)
+
     @run_async
     async def test_asserts_equal_succeeds(self):
         es = None
@@ -186,7 +192,7 @@ class AssertingRunnerTests(TestCase):
         delegate = mock.MagicMock()
         delegate.return_value = as_future(response)
         r = runner.AssertingRunner(delegate)
-        with self.assertRaisesRegex(exceptions.RallyAssertionError,
+        with self.assertRaisesRegex(exceptions.RallyTaskAssertionError,
                                     r"Expected \[hits.hits.relation\] to be == \[eq\] but was \[gte\]."):
             async with r:
                 await r(es, {
@@ -4742,8 +4748,10 @@ class CompositeTests(TestCase):
         self.call_recorder_runner = CompositeTests.CallRecorderRunner()
         runner.register_runner("counter", self.counter_runner, async_runner=True)
         runner.register_runner("call-recorder", self.call_recorder_runner, async_runner=True)
+        runner.enable_assertions(True)
 
     def tearDown(self):
+        runner.enable_assertions(False)
         runner.remove_runner("counter")
         runner.remove_runner("call-recorder")
 
@@ -4867,7 +4875,8 @@ class CompositeTests(TestCase):
         }
 
         r = runner.Composite()
-        with self.assertRaisesRegex(exceptions.RallyAssertionError, r"Expected \[hits\] to be > \[0\] but was \[0\]."):
+        with self.assertRaisesRegex(exceptions.RallyTaskAssertionError,
+                                    r"Expected \[hits\] to be > \[0\] but was \[0\]."):
             await r(es, params)
 
         es.transport.perform_request.assert_has_calls([

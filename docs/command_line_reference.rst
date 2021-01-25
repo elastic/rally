@@ -444,6 +444,11 @@ Selects the :doc:`pipeline </pipelines>` that Rally should run.
 
 Rally can autodetect the pipeline in most cases. If you specify ``--distribution-version`` it will auto-select the pipeline ``from-distribution`` otherwise it will use ``from-sources``.
 
+``enable-assertions``
+~~~~~~~~~~~~~~~~~~~~~
+
+This option enables assertions on tasks. If an assertion fails, the race is aborted with a message indicating which assertion has failed.
+
 .. _clr_enable_driver_profiling:
 
 ``enable-driver-profiling``
