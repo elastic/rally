@@ -1400,9 +1400,9 @@ class AsyncExecutor:
                 if completed:
                     self.logger.info("Task [%s] is considered completed due to external event.", self.task)
                     break
-        except BaseException:
+        except BaseException as e:
             self.logger.exception("Could not execute schedule")
-            raise
+            raise exceptions.RallyError(f"Cannot run task [{self.task}]: {e}") from None
         finally:
             # Actively set it if this task completes its parent
             if task_completes_parent:

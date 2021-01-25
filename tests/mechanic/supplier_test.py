@@ -490,7 +490,7 @@ class ElasticsearchSourceSupplierTests(TestCase):
                                                   builder=builder,
                                                   template_renderer=renderer)
         with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "Car \"default\" requires config key \"system.build_command\"."):
+                                    "Car \"default\" requires config key \"system.build_command\""):
             es.prepare()
 
         self.assertEqual(0, builder.build.call_count)

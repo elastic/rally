@@ -566,9 +566,53 @@ Each operation consists of the following properties:
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
 * ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
 * ``include-in-reporting`` (optional, defaults to ``true`` for normal operations and to ``false`` for administrative operations): Whether or not this operation should be included in the command line report. For example you might want Rally to create an index for you but you are not interested in detailed metrics about it. Note that Rally will still record all metrics in the metrics store.
+* ``assertions`` (optional, defaults to ``None``): A list of assertions that should be checked. See below for more details.
 * ``request-timeout`` (optional, defaults to ``None``): The client-side timeout for this operation.  Represented as a floating-point number in seconds, e.g. ``1.5``.
 * ``headers`` (optional, defaults to ``None``): A dictionary of key-value pairs to pass as headers in the operation.
 * ``opaque-id`` (optional, defaults to ``None`` [unused]): A special ID set as the value of ``x-opaque-id`` in the client headers of the operation.  Overrides existing ``x-opaque-id`` entries in ``headers`` (case-insensitive).
+
+**Assertions**
+
+Use assertions for sanity checks, e.g. to ensure a query returns results. Assertions need to be defined with the following properties. All of them are mandatory:
+
+* ``property``: A dot-delimited path to the meta-data field to be checked. Only meta-data fields that are returned by an operation are supported.
+* ``condition``: The following conditions are supported: ``<``, ``<=``, ``==``, ``>=``, ``>=``.
+* ``value``: The expected value.
+
+While assertions are always evaluated and raise an error when they are violated, Rally's default behavior is to only record errors and continue executing the benchmark. To abort on assertion errors, run Rally with ``--on-error=abort``.
+
+Example::
+
+    {
+      "name": "term",
+      "operation-type": "search",
+      "detailed-results": true,
+      "assertions": [
+        {
+          "property": "hits",
+          "condition": ">",
+          "value": 0
+        }
+      ],
+      "body": {
+        "query": {
+          "term": {
+            "country_code.raw": "AT"
+          }
+        }
+      }
+    }
+
+.. note::
+
+    This requires to set ``detailed-results`` to ``true`` so the search operation gathers additional meta-data, such as the number of hits.
+
+If this assertion fails, and Rally is executed with ``--on-error=abort`` it exits with the following error message::
+
+    [ERROR] Cannot race. Error in load generator [0]
+        Cannot run task [term]: Expected [hits] to be > [0] but was [0].
+
+**Retries**
 
 Some of the operations below are also retryable (marked accordingly below). Retryable operations expose the following properties:
 
@@ -1619,8 +1663,17 @@ composite
 
 With the operation ``composite`` you can specify complex operations consisting of multiple requests to Elasticsearch. This can be used to simulate more complex application behavior, like populating a search page with custom filters. It supports the following parameters:
 
-* ``requests`` (mandatory): A list that specifies the request streams to execute. Each stream consists of operations of either type ``raw-request`` to send requests to Elasticsearch or ``sleep`` to simulate client processing time. Streams execute concurrently, operations within a stream sequentially. It is possible to nest streams. See below for specific examples.
+* ``requests`` (mandatory): A list that specifies the request streams to execute. Streams execute concurrently, operations within a stream sequentially. It is possible to nest streams. See below for specific examples.
 * ``max-connections`` (optional: defaults to unbounded): The maximum number of concurrent connections per client executing this composite operation. By default, the operation itself does not restrict the number of connections but is bound to Rally's network connection limit. Therefore raise the number of available network connections appropriately (see :ref:`command line reference <clr_client_options>`).
+
+The ``composite`` operation only supports the following operation-types:
+
+* ``raw-request``
+* ``sleep``
+* ``search``
+* ``submit-async-search``
+* ``get-async-search``
+* ``delete-async-search``
 
 **Examples**
 

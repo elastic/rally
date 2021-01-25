@@ -492,6 +492,7 @@ class SearchParamSource(ParamSource):
                 raise exceptions.InvalidSyntax(
                     f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         request_cache = params.get("cache", None)
+        detailed_results = params.get("detailed-results", False)
         query_body = params.get("body", None)
         pages = params.get("pages", None)
         results_per_page = params.get("results-per-page", None)
@@ -502,6 +503,7 @@ class SearchParamSource(ParamSource):
             "index": target_name,
             "type": type_name,
             "cache": request_cache,
+            "detailed-results": detailed_results,
             "request-params": request_params,
             "response-compression-enabled": response_compression_enabled,
             "body": query_body
@@ -515,23 +517,11 @@ class SearchParamSource(ParamSource):
             self.query_params["pages"] = pages
         if results_per_page:
             self.query_params["results-per-page"] = results_per_page
+        if "assertions" in params:
+            self.query_params["assertions"] = params["assertions"]
 
         # Ensure we pass global parameters
         self.query_params.update(self._client_params())
-
-    def get_from_dict(self, d, path):
-        v = d
-        for k in path:
-            v = v[k]
-        return v
-
-    def set_in_dict(self, d, path, val):
-        v = d
-        # navigate to the next to last path
-        for k in path[:-1]:
-            v = v[k]
-        # the value is now the inner-most dictionary and the last path element is its key
-        v[path[-1]] = val
 
     def params(self):
         return self.query_params
