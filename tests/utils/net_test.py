@@ -65,12 +65,12 @@ class TestNetUtils:
         assert net.add_url_param_elastic_no_kpi(url) == \
                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz?x-elastic-no-kpi=true"
 
-    def test_add_url_param_encoding(self):
+    def test_add_url_param_encoding_and_update(self):
         url = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz?flag1=true"
-        params = {"flag2": "test me"}
+        params = {"flag1": "test me", "flag2": "test@me"}
         # pylint: disable=protected-access
         assert net._add_url_param(url, params) == \
-               "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz?flag1=true&flag2=test+me"
+               "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz?flag1=test+me&flag2=test%40me"
 
     def test_progress(self):
         progress = net.Progress("test")
