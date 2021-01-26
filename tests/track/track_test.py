@@ -235,17 +235,14 @@ class TaskFilterTests(TestCase):
     def create_index_task(self):
         return track.Task("create-index-task",
                           track.Operation("create-index-op",
-                                          operation_type=track.OperationType.CreateIndex.to_hyphenated_string()))
+                                          operation_type=track.OperationType.CreateIndex.to_hyphenated_string()),
+                          tags=["write-op", "admin-op"])
 
     def search_task(self):
         return track.Task("search-task",
                           track.Operation("search-op",
-                                          operation_type=track.OperationType.Search.to_hyphenated_string()))
-
-    def test_admin_task_filter(self):
-        f = track.AdminTaskFilter()
-        self.assertTrue(f.matches(self.create_index_task()))
-        self.assertFalse(f.matches(self.search_task()))
+                                          operation_type=track.OperationType.Search.to_hyphenated_string()),
+                          tags="read-op")
 
     def test_task_name_filter(self):
         f = track.TaskNameFilter("create-index-task")
@@ -254,6 +251,11 @@ class TaskFilterTests(TestCase):
 
     def test_task_op_type_filter(self):
         f = track.TaskOpTypeFilter(track.OperationType.CreateIndex.to_hyphenated_string())
+        self.assertTrue(f.matches(self.create_index_task()))
+        self.assertFalse(f.matches(self.search_task()))
+
+    def test_task_tag_filter(self):
+        f = track.TaskTagFilter(tag_name="write-op")
         self.assertTrue(f.matches(self.create_index_task()))
         self.assertFalse(f.matches(self.search_task()))
 

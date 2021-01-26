@@ -13,7 +13,7 @@ RUN groupadd --gid 1000 rally && \
     useradd -d /rally -m -k /dev/null -g 1000 -N -u 1000 -l -s /bin/bash rally
 
 RUN pip3 install --upgrade pip setuptools wheel
-RUN pip3 install esrally==$RALLY_VERSION --use-feature=2020-resolver
+RUN pip3 install esrally==$RALLY_VERSION
 
 WORKDIR /rally
 COPY --chown=1000:0 docker/bin/entrypoint.sh /entrypoint.sh
@@ -24,11 +24,12 @@ RUN chgrp 0 /entrypoint.sh && \
     chmod g=u /etc/passwd && \
     chmod 0775 /entrypoint.sh
 
+RUN mkdir -p /rally/.rally && \
+    chown -R 1000:0 /rally/.rally
+
 USER 1000
 
 ENV PATH=/rally/venv/bin:$PATH
-
-RUN esrally configure
 
 LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vendor="Elastic" \

@@ -13,19 +13,12 @@ Install Python 3.8+ including ``pip3``, git 1.9+ and an `appropriate JDK to run 
 
 If you have any trouble or need more detailed instructions, look in the :doc:`detailed installation guide </install>`.
 
-Configure
----------
-
-Just invoke ``esrally configure``.
-
-For more detailed instructions and a detailed walkthrough see the :doc:`configuration guide </configuration>`.
-
 Run your first race
 -------------------
 
 Now we're ready to run our first :doc:`race </glossary>`::
 
-    esrally --distribution-version=6.5.3
+    esrally race --distribution-version=6.5.3
 
 This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glossary>` - the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ - against it. After the race, a :doc:`summary report </summary_report>` is written to the command line:::
 
@@ -84,6 +77,7 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
     |   All |                                     Heap used for stored fields |                        |  0.788307 |      MB |
     |   All |                                                   Segment count |                        |        94 |         |
     |   All |                                                  Min Throughput |           index-append |   38089.5 |  docs/s |
+    |   All |                                                 Mean Throughput |           index-append |   38325.2 |  docs/s |
     |   All |                                               Median Throughput |           index-append |   38613.9 |  docs/s |
     |   All |                                                  Max Throughput |           index-append |   40693.3 |  docs/s |
     |   All |                                         50th percentile latency |           index-append |   803.417 |      ms |
@@ -100,6 +94,7 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
     |   All |                                                            ...  |                    ... |       ... |     ... |
     |   All |                                                            ...  |                    ... |       ... |     ... |
     |   All |                                                  Min Throughput | large_prohibited_terms |         2 |   ops/s |
+    |   All |                                                 Mean Throughput | large_prohibited_terms |         2 |   ops/s |
     |   All |                                               Median Throughput | large_prohibited_terms |         2 |   ops/s |
     |   All |                                                  Max Throughput | large_prohibited_terms |         2 |   ops/s |
     |   All |                                         50th percentile latency | large_prohibited_terms |   344.429 |      ms |
@@ -121,6 +116,6 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
 Next steps
 ----------
 
-Now you can check :doc:`how to run benchmarks </race>`, get a better understanding how to interpret the numbers in the :doc:`summary report </summary_report>` or start to :doc:`create your own tracks </adding_tracks>`. Be sure to check also some :doc:`tips and tricks </recipes>` to help you understand how to solve specific problems in Rally.
+Now you can check :doc:`how to run benchmarks </race>`, get a better understanding how to interpret the numbers in the :doc:`summary report </summary_report>`, :doc:`configure </configuration>` Rally to better suit your needs or start to :doc:`create your own tracks </adding_tracks>`. Be sure to check also some :doc:`tips and tricks </recipes>` to help you understand how to solve specific problems in Rally.
 
 Also run ``esrally --help`` to see what options are available and keep the :doc:`command line reference </command_line_reference>` handy for more detailed explanations of each option.

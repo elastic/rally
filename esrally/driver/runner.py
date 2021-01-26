@@ -16,13 +16,17 @@
 # under the License.
 
 import asyncio
+import contextvars
 import json
 import logging
 import random
 import sys
+import time
 import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
+from enum import Enum
+from functools import total_ordering
 from os.path import commonprefix
 
 import ijson
@@ -41,6 +45,10 @@ def register_default_runners():
     register_runner(track.OperationType.Search, Query(), async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
+    register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
+    register_runner(track.OperationType.GetAsyncSearch, Retry(GetAsyncSearch(), retry_until_success=True), async_runner=True)
+    register_runner(track.OperationType.DeleteAsyncSearch, DeleteAsyncSearch(), async_runner=True)
+
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
     # these requests should not be retried as they are not idempotent
@@ -669,6 +677,7 @@ class ForceMerge(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         max_num_segments = params.get("max-num-segments")
         mode = params.get("mode")
@@ -991,9 +1000,6 @@ class ClusterHealth(Runner):
     """
 
     async def __call__(self, es, params):
-        from enum import Enum
-        from functools import total_ordering
-
         @total_ordering
         class ClusterHealthStatus(Enum):
             UNKNOWN = 0
@@ -1189,6 +1195,7 @@ class DeleteComponentTemplate(Runner):
         request_params = mandatory(params, "request-params", self)
 
         async def _exists(name):
+            # pylint: disable=import-outside-toplevel
             from elasticsearch.client import _make_path
             # currently not supported by client and hence custom request
             return await es.transport.perform_request(
@@ -1397,6 +1404,7 @@ class CreateMlDatafeed(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
@@ -1423,6 +1431,7 @@ class DeleteMlDatafeed(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
@@ -1453,6 +1462,7 @@ class StartMlDatafeed(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = params.get("body")
@@ -1482,6 +1492,7 @@ class StopMlDatafeed(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
@@ -1514,6 +1525,7 @@ class CreateMlJob(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         job_id = mandatory(params, "job-id", self)
         body = mandatory(params, "body", self)
@@ -1540,6 +1552,7 @@ class DeleteMlJob(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
@@ -1570,6 +1583,7 @@ class OpenMlJob(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         job_id = mandatory(params, "job-id", self)
         try:
@@ -1594,6 +1608,7 @@ class CloseMlJob(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
@@ -1908,8 +1923,6 @@ class WaitForTransform(Runner):
         * ``transform-timeout``: overall runtime timeout of the transform in seconds, default 3600 (1h)
         * ``poll-interval``: how often transform stats are polled, used to set progress and check the state, default 0.5.
         """
-        import time
-
         transform_id = mandatory(params, "transform-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
@@ -1999,13 +2012,117 @@ class DeleteTransform(Runner):
         return "delete-transform"
 
 
+class SubmitAsyncSearch(Runner):
+    async def __call__(self, es, params):
+        request_params = params.get("request-params", {})
+        response = await es.async_search.submit(body=mandatory(params, "body", self),
+                                                index=params.get("index"),
+                                                params=request_params)
+
+        op_name = mandatory(params, "name", self)
+        # id may be None if the operation has already returned
+        search_id = response.get("id")
+        CompositeContext.put(op_name, search_id)
+
+    def __repr__(self, *args, **kwargs):
+        return "submit-async-search"
+
+
+def async_search_ids(op_names):
+    subjects = [op_names] if isinstance(op_names, str) else op_names
+    for subject in subjects:
+        subject_id = CompositeContext.get(subject)
+        # skip empty ids, searches have already completed
+        if subject_id:
+            yield subject_id, subject
+
+
+class GetAsyncSearch(Runner):
+    async def __call__(self, es, params):
+        success = True
+        searches = mandatory(params, "retrieve-results-for", self)
+        request_params = params.get("request-params", {})
+        for search_id, _ in async_search_ids(searches):
+            response = await es.async_search.get(id=search_id,
+                                                 params=request_params)
+            success = success and not response["is_running"]
+
+        return {
+            "weight": len(searches),
+            "unit": "ops",
+            "success": success
+        }
+
+    def __repr__(self, *args, **kwargs):
+        return "get-async-search"
+
+
+class DeleteAsyncSearch(Runner):
+    async def __call__(self, es, params):
+        searches = mandatory(params, "delete-results-for", self)
+        for search_id, search in async_search_ids(searches):
+            await es.async_search.delete(id=search_id)
+            CompositeContext.remove(search)
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-async-search"
+
+
+class CompositeContext:
+    ctx = contextvars.ContextVar("composite_context")
+
+    def __init__(self):
+        self.token = None
+
+    async def __aenter__(self):
+        self.token = CompositeContext.ctx.set({})
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        CompositeContext.ctx.reset(self.token)
+        return False
+
+    @staticmethod
+    def put(key, value):
+        CompositeContext._ctx()[key] = value
+
+    @staticmethod
+    def get(key):
+        try:
+            return CompositeContext._ctx()[key]
+        except KeyError:
+            raise KeyError(f"Unknown property [{key}]. Currently recognized "
+                           f"properties are [{', '.join(CompositeContext._ctx().keys())}].") from None
+
+    @staticmethod
+    def remove(key):
+        try:
+            CompositeContext._ctx().pop(key)
+        except KeyError:
+            raise KeyError(f"Unknown property [{key}]. Currently recognized "
+                           f"properties are [{', '.join(CompositeContext._ctx().keys())}].") from None
+
+    @staticmethod
+    def _ctx():
+        try:
+            return CompositeContext.ctx.get()
+        except LookupError:
+            raise exceptions.RallyAssertionError("This operation is only allowed inside a composite operation.") from None
+
+
 class Composite(Runner):
     """
     Executes a complex request structure which is measured by Rally as one composite operation.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.supported_op_types = ["raw-request", "sleep"]
+        self.supported_op_types = [
+            "raw-request",
+            "sleep",
+            "submit-async-search",
+            "get-async-search",
+            "delete-async-search"
+        ]
 
     async def run_stream(self, es, stream, connection_limit):
         streams = []
@@ -2042,7 +2159,8 @@ class Composite(Runner):
     async def __call__(self, es, params):
         requests = mandatory(params, "requests", self)
         max_connections = params.get("max-connections", sys.maxsize)
-        await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+        async with CompositeContext():
+            await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
 
     def __repr__(self, *args, **kwargs):
         return "composite"
@@ -2065,18 +2183,20 @@ class Retry(Runner, Delegator):
                          returns ``success == False``)
     """
 
-    def __init__(self, delegate):
+    def __init__(self, delegate, retry_until_success=False):
         super().__init__(delegate=delegate)
+        self.retry_until_success = retry_until_success
 
     async def __aenter__(self):
         await self.delegate.__aenter__()
         return self
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         import socket
 
-        retry_until_success = params.get("retry-until-success", False)
+        retry_until_success = params.get("retry-until-success", self.retry_until_success)
         if retry_until_success:
             max_attempts = sys.maxsize
             retry_on_error = True

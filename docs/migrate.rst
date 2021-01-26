@@ -1,6 +1,24 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.0.4
+------------------------
+
+Running without a subcommand is deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 2.0.4 will warn when invoked without subcommand. So instead of invoking::
+
+    esrally --distribution-version=7.10.0
+
+Invoke Rally with the ``race`` subcommand instead::
+
+    esrally race --distribution-version=7.10.0
+
+When Rally is invoked without a subcommand it will issue the following warning on the command line and in the log file::
+
+    [WARNING] Invoking Rally without a subcommand is deprecated and will be required with Rally 2.1.0. Specify the 'race' subcommand explicitly.
+
 Migrating to Rally 2.0.3
 ------------------------
 
@@ -57,6 +75,16 @@ bulk-size metrics property is dropped
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Metrics records for bulk request don't contain the ``bulk-size`` property anymore. Please use the ``weight`` property instead and consider the ``unit`` property to interpret the value.
+
+--include-tasks and --exclude-tasks affect all operations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Prior to 2.0.3, administrative tasks (see :ref:`operations documentation<track_operations>`) were exempt from filtering and would run regardless of filtering. ``--include-tasks`` and ``--exclude-tasks`` flags now can affect all operations in a track. If you make use of include filters, it is advised to check that all desired operations are listed.
+
+configure subcommand is dropped
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Prior to Rally 2.0.3, Rally had to be configured initially using ``esrally configure``. With Rally 2.0.3, Rally creates a default configuration automatically and users are encouraged to edit Rally's configuration file themselves. Refer to the new :doc:`configuration reference </configuration>` for the configurable properties.
 
 Migrating to Rally 2.0.1
 ------------------------

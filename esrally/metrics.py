@@ -16,6 +16,8 @@
 # under the License.
 
 import collections
+import glob
+import json
 import logging
 import math
 import os
@@ -30,7 +32,7 @@ from http.client import responses
 
 import tabulate
 
-from esrally import time, exceptions, config, version, paths
+from esrally import client, time, exceptions, config, version, paths
 from esrally.utils import convert, console, io, versions
 
 
@@ -85,6 +87,7 @@ class EsClient:
 
     def bulk_index(self, index, doc_type, items):
         # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
+        # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
         if self._cluster_version[0] > 6:
             self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
@@ -103,6 +106,7 @@ class EsClient:
         return self.guarded(self._client.search, index=index, body=body)
 
     def guarded(self, target, *args, **kwargs):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
         max_execution_count = 11
         execution_count = 0
@@ -182,8 +186,6 @@ class EsClientFactory:
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
         self.probe_version = self._config.opts("reporting", "datastore.probe.cluster_version", default_value=True, mandatory=False)
-
-        from esrally import client
 
         # Instead of duplicating code, we're just adapting the metrics store specific properties to match the regular client options.
         client_options = {
@@ -1333,7 +1335,6 @@ class FileRaceStore(RaceStore):
         self.race_path = paths.race_root(self.cfg)
 
     def _store(self, doc):
-        import json
         io.ensure_dir(self.race_path)
         with open(self._race_file(), mode="wt", encoding="utf-8") as f:
             f.write(json.dumps(doc, indent=True, ensure_ascii=False))
@@ -1342,7 +1343,6 @@ class FileRaceStore(RaceStore):
         return os.path.join(paths.race_root(cfg=self.cfg, race_id=race_id), "race.json")
 
     def list(self):
-        import glob
         results = glob.glob(self._race_file(race_id="*"))
         all_races = self._to_races(results)
         return all_races[:self._max_results()]
@@ -1356,7 +1356,6 @@ class FileRaceStore(RaceStore):
         raise exceptions.NotFound("No race with race id [{}]".format(race_id))
 
     def _to_races(self, results):
-        import json
         races = []
         for result in results:
             # noinspection PyBroadException
@@ -1425,21 +1424,16 @@ class EsRaceStore(RaceStore):
             return []
 
     def find_by_race_id(self, race_id):
-        filters = [{
-                "term": {
-                    "environment": self.environment_name
-                }
-            },
-            {
-                "term": {
-                    "race-id": race_id
-                }
-            }]
-
         query = {
             "query": {
                 "bool": {
-                    "filter": filters
+                    "filter": [
+                        {
+                            "term": {
+                                "race-id": race_id
+                            }
+                        }
+                    ]
                 }
             }
         }

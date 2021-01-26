@@ -4448,6 +4448,118 @@ class DeleteTransformTests(TestCase):
                                                               ignore=[404])
 
 
+class SubmitAsyncSearchTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_submit_async_search(self, es):
+        es.async_search.submit.return_value = as_future({"id": "12345"})
+        r = runner.SubmitAsyncSearch()
+        params = {
+            "name": "search-1",
+            "body": {
+                "query": {
+                    "match_all": {}
+                }
+            },
+            "index": "_all"
+        }
+
+        async with runner.CompositeContext():
+            await r(es, params)
+            # search id is registered in context
+            self.assertEqual("12345", runner.CompositeContext.get("search-1"))
+
+        es.async_search.submit.assert_called_once_with(body={
+            "query": {
+                "match_all": {}
+            }
+        }, index="_all", params={})
+
+
+class GetAsyncSearchTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_get_async_search(self, es):
+        es.async_search.get.return_value = as_future({"is_running": False})
+        r = runner.GetAsyncSearch()
+        params = {
+            "retrieve-results-for": "search-1"
+        }
+
+        async with runner.CompositeContext():
+            runner.CompositeContext.put("search-1", "12345")
+            response = await r(es, params)
+            self.assertTrue(response["success"])
+
+        es.async_search.get.assert_called_once_with(id="12345", params={})
+
+
+class DeleteAsyncSearchTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_delete_async_search(self, es):
+        es.async_search.delete.side_effect = [
+            as_future({}),
+            as_future({})
+        ]
+        r = runner.DeleteAsyncSearch()
+        params = {
+            "delete-results-for": ["search-1", "search-2", "search-3"]
+        }
+
+        async with runner.CompositeContext():
+            runner.CompositeContext.put("search-1", "12345")
+            runner.CompositeContext.put("search-2", None)
+            runner.CompositeContext.put("search-3", "6789")
+            await r(es, params)
+
+        es.async_search.delete.assert_has_calls([
+            mock.call(id="12345"),
+            mock.call(id="6789"),
+        ])
+
+
+class CompositeContextTests(TestCase):
+    def test_cannot_be_used_outside_of_composite(self):
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            runner.CompositeContext.put("test", 1)
+
+        self.assertEqual("This operation is only allowed inside a composite operation.", ctx.exception.args[0])
+
+    @run_async
+    async def test_put_get_and_remove(self):
+        async with runner.CompositeContext():
+            runner.CompositeContext.put("test", 1)
+            runner.CompositeContext.put("don't clear this key", 1)
+            self.assertEqual(runner.CompositeContext.get("test"), 1)
+            runner.CompositeContext.remove("test")
+
+        # context is cleared properly
+        async with runner.CompositeContext():
+            with self.assertRaises(KeyError) as ctx:
+                runner.CompositeContext.get("don't clear this key")
+            self.assertEqual("Unknown property [don't clear this key]. Currently recognized properties are [].",
+                             ctx.exception.args[0])
+
+    @run_async
+    async def test_fails_to_read_unknown_key(self):
+        async with runner.CompositeContext():
+            with self.assertRaises(KeyError) as ctx:
+                runner.CompositeContext.put("test", 1)
+                runner.CompositeContext.get("unknown")
+            self.assertEqual("Unknown property [unknown]. Currently recognized properties are [test].",
+                             ctx.exception.args[0])
+
+    @run_async
+    async def test_fails_to_remove_unknown_key(self):
+        async with runner.CompositeContext():
+            with self.assertRaises(KeyError) as ctx:
+                runner.CompositeContext.put("test", 1)
+                runner.CompositeContext.remove("unknown")
+            self.assertEqual("Unknown property [unknown]. Currently recognized properties are [test].",
+                             ctx.exception.args[0])
+
+
 class CompositeTests(TestCase):
     class CounterRunner:
         def __init__(self):
@@ -4681,7 +4793,8 @@ class CompositeTests(TestCase):
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             await r(es, params)
 
-        self.assertEqual("Unsupported operation-type [bulk]. Use one of [raw-request, sleep].", ctx.exception.args[0])
+        self.assertEqual("Unsupported operation-type [bulk]. Use one of [raw-request, sleep, "
+                         "submit-async-search, get-async-search, delete-async-search].", ctx.exception.args[0])
 
 
 class RetryTests(TestCase):

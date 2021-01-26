@@ -35,19 +35,12 @@ Install Python 3.8+ including ``pip3``, git 1.9+ and an `appropriate JDK to run 
 
 If you have any trouble or need more detailed instructions, please look in the `detailed installation guide <https://esrally.readthedocs.io/en/latest/install.html>`_.
 
-Configure
----------
-
-Just invoke ``esrally configure``.
-
-For more detailed instructions and a detailed walkthrough see the `configuration guide <https://esrally.readthedocs.io/en/latest/configuration.html>`_.
-
 Run your first race
 -------------------
 
 Now we're ready to run our first race::
 
-    esrally --distribution-version=6.0.0
+    esrally race --distribution-version=6.0.0
 
 This will download Elasticsearch 6.0.0 and run Rally's default track - the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ - against it. After the race, a summary report is written to the command line:::
 
@@ -128,7 +121,7 @@ License
  
 This software is licensed under the Apache License, version 2 ("ALv2"), quoted below.
 
-Copyright 2015-2019 Elasticsearch <https://www.elastic.co>
+Copyright 2015-2021 Elasticsearch <https://www.elastic.co>
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not
 use this file except in compliance with the License. You may obtain a copy of

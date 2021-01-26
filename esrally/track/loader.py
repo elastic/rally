@@ -30,15 +30,65 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import exceptions, time, PROGRAM_NAME, config
+from esrally import exceptions, time, PROGRAM_NAME, config, version
 from esrally.track import params, track
-from esrally.utils import io, convert, net, console, modules, opts, repo
+from esrally.utils import io, collections, convert, net, console, modules, opts, repo
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
     """
     Raised whenever a syntax problem is encountered when loading the track specification.
     """
+
+
+class TrackProcessor:
+    def on_after_load_track(self, track):
+        """
+        This method is called by Rally after a track has been loaded. Implementations are expected to modify the
+        provided track object in place.
+
+        :param track: The current track.
+        """
+
+    def on_prepare_track(self, track, data_root_dir):
+        """
+        This method is called by Rally after the "after_load_track" phase. Here, any data that is necessary for
+        benchmark execution should be prepared, e.g. by downloading data or generating it. Implementations should
+        be aware that this method might be called on a different machine than "on_after_load_track" and they cannot
+        share any state in between phases.
+
+        :param track: The current track. This parameter should be treated as effectively immutable. Any modifications
+                      will not be reflected in subsequent phases of the benchmark.
+        :param data_root_dir: The data root directory on the current machine as configured by the user.
+        :return: `True` if the next track processor should be executed, `False` to prohibit further processing.
+        """
+
+
+class CompositeTrackProcessor(TrackProcessor):
+    def __init__(self, cfg):
+        self.track_processors = []
+        self.offline = cfg.opts("system", "offline.mode")
+        self.test_mode = cfg.opts("track", "test.mode.enabled")
+
+    def register_track_processor(self, processor):
+        if hasattr(processor, "downloader"):
+            processor.downloader = Downloader(self.offline, self.test_mode)
+        if hasattr(processor, "decompressor"):
+            processor.decompressor = Decompressor()
+        self.track_processors.append(processor)
+
+    def on_after_load_track(self, track):
+        current_track = track
+        for t in self.track_processors:
+            t.on_after_load_track(current_track)
+        return current_track
+
+    def on_prepare_track(self, track, data_root_dir):
+        for t in self.track_processors:
+            if not t.on_prepare_track(track, data_root_dir):
+                break
+
+        return False
 
 
 def tracks(cfg):
@@ -51,11 +101,7 @@ def tracks(cfg):
     :return: A list of tracks that are available for the provided distribution version or else for the master version.
     """
     repo = track_repo(cfg)
-    reader = TrackFileReader(cfg)
-    return [reader.read(track_name,
-                        repo.track_file(track_name),
-                        repo.track_dir(track_name))
-            for track_name in repo.track_names]
+    return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]
 
 
 def list_tracks(cfg):
@@ -117,10 +163,8 @@ def track_info(cfg):
         console.println("* Uncompressed Size: {}".format(convert.bytes_to_human_string(t.uncompressed_size_in_bytes)))
     console.println("")
 
-    challenge_name = cfg.opts("track", "challenge.name", mandatory=False)
-    if challenge_name:
-        challenge = t.find_challenge(challenge_name)
-        challenge_info(challenge)
+    if t.selected_challenge:
+        challenge_info(t.selected_challenge)
     else:
         for challenge in t.challenges:
             challenge_info(challenge)
@@ -135,47 +179,61 @@ def load_track(cfg):
     :param cfg: The config object. It contains the name of the track to load.
     :return: The loaded track.
     """
-    track_name = None
+    repo = track_repo(cfg)
+    return _load_single_track(cfg, repo, repo.track_name)
+
+
+def _load_single_track(cfg, track_repository, track_name):
     try:
-        repo = track_repo(cfg)
-        track_name = repo.track_name
-        track_dir = repo.track_dir(track_name)
+        track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
-        filtered_tasks = []
-        exclude = False
-        if cfg.opts("track", "include.tasks"):
-            filtered_tasks = cfg.opts("track", "include.tasks")
-        else:
-            filtered_tasks = cfg.opts("track", "exclude.tasks")
-            exclude = True
 
-        current_track = reader.read(track_name, repo.track_file(track_name), track_dir)
-        current_track = filter_tasks(current_track, filters_from_filtered_tasks(filtered_tasks), exclude)
-        plugin_reader = TrackPluginReader(track_dir)
-        current_track.has_plugins = plugin_reader.can_load()
+        current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
 
-        if cfg.opts("track", "test.mode.enabled"):
-            return post_process_for_test_mode(current_track)
-        else:
-            return current_track
-    except FileNotFoundError:
+        track_processor = CompositeTrackProcessor(cfg)
+        track_processor.register_track_processor(TaskFilterTrackProcessor(cfg))
+        track_processor.register_track_processor(TestModeTrackProcessor(cfg))
+
+        has_plugins = load_track_plugins(cfg, register_track_processor=track_processor.register_track_processor)
+        current_track.has_plugins = has_plugins
+
+        return track_processor.on_after_load_track(current_track)
+    except FileNotFoundError as e:
         logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
-        raise exceptions.SystemSetupError("Cannot load track %s. List the available tracks with %s list tracks." %
-                                          (track_name, PROGRAM_NAME))
+        raise exceptions.SystemSetupError(f"Cannot load track [{track_name}]. "
+                                          f"List the available tracks with [{PROGRAM_NAME} list tracks].") from e
     except BaseException:
         logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
         raise
 
 
-def load_track_plugins(cfg, register_runner, register_scheduler):
-    repo = track_repo(cfg, fetch=False, update=False)
+def load_track_plugins(cfg,
+                       register_runner=None,
+                       register_scheduler=None,
+                       register_track_processor=None,
+                       force_update=False):
+    """
+    Loads plugins that are defined for the current track (as specified by the configuration).
+
+    :param cfg: The config object.
+    :param register_runner: An optional function where runners can be registered.
+    :param register_scheduler: An optional function where custom schedulers can be registered.
+    :param register_track_processor: An optional function where track processors can be registered.
+    :param force_update: If set to ``True`` this ensures that the track is first updated from the remote repository.
+                         Defaults to ``False``.
+    :return: True iff this track defines plugins and they have been loaded.
+    """
+    repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_name = repo.track_name
     track_plugin_path = repo.track_dir(track_name)
 
-    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler)
+    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
 
     if plugin_reader.can_load():
         plugin_reader.load()
+        return True
+    else:
+        return False
 
 
 def set_absolute_data_path(cfg, t):
@@ -318,10 +376,10 @@ def operation_parameters(t, task):
         return params.param_source_for_operation(op.type, t, op.params, task.name)
 
 
-def used_corpora(t, cfg):
+def used_corpora(t):
     corpora = {}
     if t.corpora:
-        challenge = t.find_challenge_or_default(cfg.opts("track", "challenge.name"))
+        challenge = t.selected_challenge_or_default
         for task in challenge.schedule:
             for sub_task in task:
                 param_source = operation_parameters(t, sub_task)
@@ -339,64 +397,88 @@ def prepare_track(t, cfg):
     :param t: A track that is about to be run.
     :param cfg: The config object.
     """
+    data_root_dir = cfg.opts("benchmarks", "local.dataset.cache")
+    tp = CompositeTrackProcessor(cfg)
     logger = logging.getLogger(__name__)
-    offline = cfg.opts("system", "offline.mode")
-    test_mode = cfg.opts("track", "test.mode.enabled")
-    for corpus in used_corpora(t, cfg):
-        data_root = data_dir(cfg, t.name, corpus.name)
-        logger.info("Resolved data root directory for document corpus [%s] in track [%s] to %s.", corpus.name, t.name, data_root)
-        prep = DocumentSetPreparator(t.name, offline, test_mode)
 
-        for document_set in corpus.documents:
-            if document_set.is_bulk:
-                if len(data_root) == 1:
-                    prep.prepare_document_set(document_set, data_root[0])
-                # attempt to prepare everything in the current directory and fallback to the corpus directory
-                elif not prep.prepare_bundled_document_set(document_set, data_root[0]):
-                    prep.prepare_document_set(document_set, data_root[1])
+    logger.info("Preparing track [%s]", t.name)
+    if t.has_plugins:
+        logger.info("Reloading track [%s] to ensure plugins are up-to-date.", t.name)
+        # the track might have been loaded on a different machine (the coordinator machine) so we force a track update
+        # to ensure we use the latest version of plugins.
+        load_track_plugins(cfg, register_track_processor=tp.register_track_processor, force_update=True)
+
+    # register last so user-defined track processors can override the default behavior
+    tp.register_track_processor(DefaultTrackPreparator(cfg))
+
+    tp.on_prepare_track(t, data_root_dir)
 
 
-class DocumentSetPreparator:
-    def __init__(self, track_name, offline, test_mode):
-        self.track_name = track_name
+class DefaultTrackPreparator(TrackProcessor):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.logger = logging.getLogger(__name__)
+        # just declare here, will be injected later
+        self.downloader = None
+        self.decompressor = None
+
+    def on_prepare_track(self, track, data_root_dir):
+        for corpus in used_corpora(track):
+            data_root = data_dir(self.cfg, track.name, corpus.name)
+            self.logger.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s].",
+                             corpus.name, track.name, data_root)
+            prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
+
+            for document_set in corpus.documents:
+                if document_set.is_bulk:
+                    if len(data_root) == 1:
+                        prep.prepare_document_set(document_set, data_root[0])
+                    # attempt to prepare everything in the current directory and fallback to the corpus directory
+                    elif not prep.prepare_bundled_document_set(document_set, data_root[0]):
+                        prep.prepare_document_set(document_set, data_root[1])
+        # don't run any other track processors
+        return False
+
+
+class Decompressor:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def decompress(self, archive_path, documents_path, uncompressed_size):
+        if uncompressed_size:
+            msg = f"Decompressing track data from [{archive_path}] to [{documents_path}] (resulting size: " \
+                  f"[{convert.bytes_to_gb(uncompressed_size):.2f}] GB) ... "
+        else:
+            msg = f"Decompressing track data from [{archive_path}] to [{documents_path}] ... "
+
+        console.info(msg, end="", flush=True, logger=self.logger)
+        io.decompress(archive_path, io.dirname(archive_path))
+        console.println("[OK]")
+        if not os.path.isfile(documents_path):
+            raise exceptions.DataError(
+                f"Decompressing [{archive_path}] did not create [{documents_path}]. Please check with the track "
+                f"author if the compressed archive has been created correctly.")
+
+        extracted_bytes = os.path.getsize(documents_path)
+        if uncompressed_size is not None and extracted_bytes != uncompressed_size:
+            raise exceptions.DataError(f"[{documents_path}] is corrupt. Extracted [{extracted_bytes}] bytes "
+                                       f"but [{uncompressed_size}] bytes are expected.")
+
+
+class Downloader:
+    def __init__(self, offline, test_mode):
         self.offline = offline
         self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)
 
-    def is_locally_available(self, file_name):
-        return os.path.isfile(file_name)
-
-    def has_expected_size(self, file_name, expected_size):
-        return expected_size is None or os.path.getsize(file_name) == expected_size
-
-    def decompress(self, archive_path, documents_path, uncompressed_size):
-        if uncompressed_size:
-            console.info("Decompressing track data from [%s] to [%s] (resulting size: %.2f GB) ... " %
-                         (archive_path, documents_path, convert.bytes_to_gb(uncompressed_size)),
-                         end='', flush=True, logger=self.logger)
-        else:
-            console.info("Decompressing track data from [%s] to [%s] ... " % (archive_path, documents_path), end='',
-                         flush=True, logger=self.logger)
-
-        io.decompress(archive_path, io.dirname(archive_path))
-        console.println("[OK]")
-        if not os.path.isfile(documents_path):
-            raise exceptions.DataError("Decompressing [%s] did not create [%s]. Please check with the track author if the compressed "
-                                       "archive has been created correctly." % (archive_path, documents_path))
-
-        extracted_bytes = os.path.getsize(documents_path)
-        if uncompressed_size is not None and extracted_bytes != uncompressed_size:
-            raise exceptions.DataError("[%s] is corrupt. Extracted [%d] bytes but [%d] bytes are expected." %
-                                       (documents_path, extracted_bytes, uncompressed_size))
-
-    def download(self, base_url, target_path, size_in_bytes, detail_on_missing_root_url):
+    def download(self, base_url, target_path, size_in_bytes):
         file_name = os.path.basename(target_path)
 
         if not base_url:
-            raise exceptions.DataError("%s and it cannot be downloaded because no base URL is provided."
-                                       % detail_on_missing_root_url)
+            raise exceptions.DataError("Cannot download data because no base URL is provided.")
         if self.offline:
-            raise exceptions.SystemSetupError("Cannot find %s. Please disable offline mode and retry again." % target_path)
+            raise exceptions.SystemSetupError(f"Cannot find [{target_path}]. Please disable offline mode and retry.")
 
         if base_url.endswith("/"):
             separator = ""
@@ -413,42 +495,53 @@ class DocumentSetPreparator:
                 self.logger.info("Downloading data from [%s] to [%s].", data_url, target_path)
 
             # we want to have a bit more accurate download progress as these files are typically very large
-            progress = net.Progress("[INFO] Downloading data for track %s" % self.track_name, accuracy=1)
+            progress = net.Progress("[INFO] Downloading track data", accuracy=1)
             net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
             progress.finish()
             self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
         except urllib.error.HTTPError as e:
             if e.code == 404 and self.test_mode:
-                raise exceptions.DataError("Track [%s] does not support test mode. Please ask the track author to add it or "
-                                           "disable test mode and retry." % self.track_name)
+                raise exceptions.DataError("This track does not support test mode. Ask the track author to add it or"
+                                           " disable test mode and retry.") from None
             else:
-                msg = "Could not download [%s] to [%s]" % (data_url, target_path)
+                msg = f"Could not download [{data_url}] to [{target_path}]"
                 if e.reason:
-                    msg += " (HTTP status: %s, reason: %s)" % (str(e.code), e.reason)
+                    msg += f" (HTTP status: {e.code}, reason: {e.reason})"
                 else:
-                    msg += " (HTTP status: %s)" % str(e.code)
-                raise exceptions.DataError(msg)
-        except urllib.error.URLError:
-            self.logger.exception("Could not download [%s] to [%s].", data_url, target_path)
-            raise exceptions.DataError("Could not download [%s] to [%s]." % (data_url, target_path))
+                    msg += f" (HTTP status: {e.code})"
+                raise exceptions.DataError(msg) from e
+        except urllib.error.URLError as e:
+            raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
 
         if not os.path.isfile(target_path):
-            raise exceptions.SystemSetupError(
-                "Cannot download from %s to %s. Please verify that data are available at %s and "
-                "check your Internet connection." % (data_url, target_path, data_url))
+            raise exceptions.SystemSetupError(f"Could not download [{data_url}] to [{target_path}]. Verify data "
+                                              f"are available at [{data_url}] and check your Internet connection.")
 
         actual_size = os.path.getsize(target_path)
         if size_in_bytes is not None and actual_size != size_in_bytes:
-            raise exceptions.DataError("[%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected." %
-                                       (target_path, actual_size, size_in_bytes))
+            raise exceptions.DataError(f"[{target_path}] is corrupt. Downloaded [{actual_size}] bytes "
+                                       f"but [{size_in_bytes}] bytes are expected.")
+
+
+class DocumentSetPreparator:
+    def __init__(self, track_name, downloader, decompressor):
+        self.track_name = track_name
+        self.downloader = downloader
+        self.decompressor = decompressor
+
+    def is_locally_available(self, file_name):
+        return os.path.isfile(file_name)
+
+    def has_expected_size(self, file_name, expected_size):
+        return expected_size is None or os.path.getsize(file_name) == expected_size
 
     def create_file_offset_table(self, document_file_path, expected_number_of_lines):
         # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
         lines_read = io.prepare_file_offset_table(document_file_path)
         if lines_read and lines_read != expected_number_of_lines:
             io.remove_file_offset_table(document_file_path)
-            raise exceptions.DataError("Data in [%s] for track [%s] are invalid. Expected [%d] lines but got [%d]."
-                                       % (document_file_path, track, expected_number_of_lines, lines_read))
+            raise exceptions.DataError(f"Data in [{document_file_path}] for track [{self.track_name}] are invalid. "
+                                       f"Expected [{expected_number_of_lines}] lines but got [{lines_read}].")
 
     def prepare_document_set(self, document_set, data_root):
         """
@@ -475,7 +568,7 @@ class DocumentSetPreparator:
             if document_set.has_compressed_corpus() and \
                     self.is_locally_available(archive_path) and \
                     self.has_expected_size(archive_path, document_set.compressed_size_in_bytes):
-                self.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
+                self.decompressor.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
             else:
                 if document_set.has_compressed_corpus():
                     target_path = archive_path
@@ -485,15 +578,18 @@ class DocumentSetPreparator:
                     expected_size = document_set.uncompressed_size_in_bytes
                 else:
                     # this should not happen in practice as the JSON schema should take care of this
-                    raise exceptions.RallyAssertionError("Track %s specifies documents but no corpus" % self.track_name)
-                # provide a specific error message in case there is no download URL
-                if self.is_locally_available(target_path):
-                    # convert expected_size eagerly to a string as it might be None (but in that case we'll never see that error message)
-                    msg = "%s is present but does not have the expected size of %s bytes" % (target_path, str(expected_size))
-                else:
-                    msg = "%s is missing" % target_path
+                    raise exceptions.RallyAssertionError(f"Track {self.track_name} specifies documents but no corpus")
 
-                self.download(document_set.base_url, target_path, expected_size, msg)
+                try:
+                    self.downloader.download(document_set.base_url, target_path, expected_size)
+                except exceptions.DataError as e:
+                    if e.message == "Cannot download data because no base URL is provided." and \
+                       self.is_locally_available(target_path):
+                        raise exceptions.DataError(f"[{target_path}] is present but does not have the expected "
+                                                   f"size of [{expected_size}] bytes and it cannot be downloaded "
+                                                   f"because no base URL is provided.") from None
+                    else:
+                        raise
 
         self.create_file_offset_table(doc_path, document_set.number_of_lines)
 
@@ -525,17 +621,18 @@ class DocumentSetPreparator:
                     self.create_file_offset_table(doc_path, document_set.number_of_lines)
                     return True
                 else:
-                    raise exceptions.DataError("%s is present but does not have the expected size of %s bytes." %
-                                               (doc_path, str(document_set.uncompressed_size_in_bytes)))
+                    raise exceptions.DataError(f"[{doc_path}] is present but does not have the expected size "
+                                               f"of [{document_set.uncompressed_size_in_bytes}] bytes.")
 
             if document_set.has_compressed_corpus() and self.is_locally_available(archive_path):
                 if self.has_expected_size(archive_path, document_set.compressed_size_in_bytes):
-                    self.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
+                    self.decompressor.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
                 else:
-                    # treat this is an error because if the file is present but the size does not match, something is really fishy.
-                    # It is likely that the user is currently creating a new track and did not specify the file size correctly.
-                    raise exceptions.DataError("%s is present but does not have the expected size of %s bytes." %
-                                               (archive_path, str(document_set.compressed_size_in_bytes)))
+                    # treat this is an error because if the file is present but the size does not match, something is
+                    # really fishy. It is likely that the user is currently creating a new track and did not specify
+                    # the file size correctly.
+                    raise exceptions.DataError(f"[{archive_path}] is present but does not have "
+                                               f"the expected size of [{document_set.compressed_size_in_bytes}] bytes.")
             else:
                 return False
 
@@ -692,126 +789,139 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
                            template_internal_vars=default_internal_template_vars(glob_helper=lambda f: relative_glob(base_path, f)))
 
 
-def filter_tasks(t, filters, exclude=False):
-    if not filters:
-        return t
+class TaskFilterTrackProcessor(TrackProcessor):
+    def __init__(self, cfg):
+        self.logger = logging.getLogger(__name__)
+        if cfg.opts("track", "include.tasks"):
+            filtered_tasks = cfg.opts("track", "include.tasks")
+            self.exclude = False
+        else:
+            filtered_tasks = cfg.opts("track", "exclude.tasks")
+            self.exclude = True
+        self.filters = self._filters_from_filtered_tasks(filtered_tasks)
 
-    logger = logging.getLogger(__name__)
+    def _filters_from_filtered_tasks(self, filtered_tasks):
+        filters = []
+        if filtered_tasks:
+            for t in filtered_tasks:
+                spec = t.split(":")
+                if len(spec) == 1:
+                    filters.append(track.TaskNameFilter(spec[0]))
+                elif len(spec) == 2:
+                    if spec[0] == "type":
+                        filters.append(track.TaskOpTypeFilter(spec[1]))
+                    elif spec[0] == "tag":
+                        filters.append(track.TaskTagFilter(spec[1]))
+                    else:
+                        raise exceptions.SystemSetupError(f"Invalid format for filtered tasks: [{t}]. "
+                                                          f"Expected [type] but got [{spec[0]}].")
+                else:
+                    raise exceptions.SystemSetupError(f"Invalid format for filtered tasks: [{t}]")
+        return filters
 
-    def filter_out_match(task, user_defined_filters, force_include_filters, exclude):
-        for f in force_include_filters:
+    def _filter_out_match(self, task):
+        for f in self.filters:
             if task.matches(f):
-                return False
-
-        for f in user_defined_filters:
-            if task.matches(f):
-                if hasattr(task, "tasks") and exclude:
+                if hasattr(task, "tasks") and self.exclude:
                     return False
-                return exclude
-        return not exclude
+                return self.exclude
+        return not self.exclude
 
-    # always include administrative tasks
-    force_include_filters = [track.AdminTaskFilter()]
+    def on_after_load_track(self, track):
+        if not self.filters:
+            return track
 
-    for challenge in t.challenges:
-        # don't modify the schedule while iterating over it
-        tasks_to_remove = []
-        for task in challenge.schedule:
-            if filter_out_match(task, filters, force_include_filters, exclude):
-                tasks_to_remove.append(task)
-            else:
-                leafs_to_remove = []
+        for challenge in track.challenges:
+            # don't modify the schedule while iterating over it
+            tasks_to_remove = []
+            for task in challenge.schedule:
+                if self._filter_out_match(task):
+                    tasks_to_remove.append(task)
+                else:
+                    leafs_to_remove = []
+                    for leaf_task in task:
+                        if self._filter_out_match(leaf_task):
+                            leafs_to_remove.append(leaf_task)
+                    for leaf_task in leafs_to_remove:
+                        self.logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.",
+                                         leaf_task, challenge)
+                        task.remove_task(leaf_task)
+            for task in tasks_to_remove:
+                self.logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
+                challenge.remove_task(task)
+
+        return track
+
+
+class TestModeTrackProcessor(TrackProcessor):
+    def __init__(self, cfg):
+        self.test_mode_enabled = cfg.opts("track", "test.mode.enabled")
+        self.logger = logging.getLogger(__name__)
+
+    def on_after_load_track(self, track):
+        if not self.test_mode_enabled:
+            return track
+        self.logger.info("Preparing track [%s] for test mode.", str(track))
+        for corpus in track.corpora:
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug("Reducing corpus size to 1000 documents for [%s]", corpus.name)
+            for document_set in corpus.documents:
+                # TODO #341: Should we allow this for snapshots too?
+                if document_set.is_bulk:
+                    document_set.number_of_documents = 1000
+
+                    if document_set.has_compressed_corpus():
+                        path, ext = io.splitext(document_set.document_archive)
+                        path_2, ext_2 = io.splitext(path)
+
+                        document_set.document_archive = f"{path_2}-1k{ext_2}{ext}"
+                        document_set.document_file = f"{path_2}-1k{ext_2}"
+                    elif document_set.has_uncompressed_corpus():
+                        path, ext = io.splitext(document_set.document_file)
+                        document_set.document_file = f"{path}-1k{ext}"
+                    else:
+                        raise exceptions.RallyAssertionError(f"Document corpus [{corpus.name}] has neither compressed "
+                                                             f"nor uncompressed corpus.")
+
+                    # we don't want to check sizes
+                    document_set.compressed_size_in_bytes = None
+                    document_set.uncompressed_size_in_bytes = None
+
+        for challenge in track.challenges:
+            for task in challenge.schedule:
+                # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
                 for leaf_task in task:
-                    if filter_out_match(leaf_task, filters, force_include_filters, exclude):
-                        leafs_to_remove.append(leaf_task)
-                for leaf_task in leafs_to_remove:
-                    logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
-                    task.remove_task(leaf_task)
-        for task in tasks_to_remove:
-            logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
-            challenge.remove_task(task)
+                    # iteration-based schedules are divided among all clients and we should provide
+                    # at least one iteration for each client.
+                    if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
+                        count = leaf_task.clients
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug("Resetting warmup iterations to %d for [%s]", count, str(leaf_task))
+                        leaf_task.warmup_iterations = count
+                    if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
+                        count = leaf_task.clients
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug("Resetting measurement iterations to %d for [%s]", count, str(leaf_task))
+                        leaf_task.iterations = count
+                    if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
+                        leaf_task.warmup_time_period = 0
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug("Resetting warmup time period for [%s] to [%d] seconds.",
+                                              str(leaf_task), leaf_task.warmup_time_period)
+                    if leaf_task.time_period is not None and leaf_task.time_period > 10:
+                        leaf_task.time_period = 10
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug("Resetting measurement time period for [%s] to [%d] seconds.",
+                                              str(leaf_task), leaf_task.time_period)
 
-    return t
+                    # Keep throttled to expose any errors but increase the target throughput for short execution times.
+                    if leaf_task.target_throughput:
+                        original_throughput = leaf_task.target_throughput
+                        leaf_task.params.pop("target-throughput", None)
+                        leaf_task.params.pop("target-interval", None)
+                        leaf_task.params["target-throughput"] = f"{sys.maxsize} {original_throughput.unit}"
 
-
-def filters_from_filtered_tasks(filtered_tasks):
-    filters = []
-    if filtered_tasks:
-        for t in filtered_tasks:
-            spec = t.split(":")
-            if len(spec) == 1:
-                filters.append(track.TaskNameFilter(spec[0]))
-            elif len(spec) == 2:
-                if spec[0] == "type":
-                    filters.append(track.TaskOpTypeFilter(spec[1]))
-                else:
-                    raise exceptions.SystemSetupError(
-                        "Invalid format for filtered tasks: [%s]. Expected [type] but got [%s]." % (t, spec[0]))
-            else:
-                raise exceptions.SystemSetupError("Invalid format for filtered tasks: [%s]" % t)
-    return filters
-
-
-def post_process_for_test_mode(t):
-    logger = logging.getLogger(__name__)
-    logger.info("Preparing track [%s] for test mode.", str(t))
-    for corpus in t.corpora:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("Reducing corpus size to 1000 documents for [%s]", corpus.name)
-        for document_set in corpus.documents:
-            # TODO #341: Should we allow this for snapshots too?
-            if document_set.is_bulk:
-                document_set.number_of_documents = 1000
-
-                if document_set.has_compressed_corpus():
-                    path, ext = io.splitext(document_set.document_archive)
-                    path_2, ext_2 = io.splitext(path)
-
-                    document_set.document_archive = "%s-1k%s%s" % (path_2, ext_2, ext)
-                    document_set.document_file = "%s-1k%s" % (path_2, ext_2)
-                elif document_set.has_uncompressed_corpus():
-                    path, ext = io.splitext(document_set.document_file)
-                    document_set.document_file = "%s-1k%s" % (path, ext)
-                else:
-                    raise exceptions.RallyAssertionError("Document corpus [%s] has neither compressed nor uncompressed corpus." %
-                                                         corpus.name)
-
-                # we don't want to check sizes
-                document_set.compressed_size_in_bytes = None
-                document_set.uncompressed_size_in_bytes = None
-
-    for challenge in t.challenges:
-        for task in challenge.schedule:
-            # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
-            for leaf_task in task:
-                # iteration-based schedules are divided among all clients and we should provide at least one iteration for each client.
-                if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
-                    count = leaf_task.clients
-                    if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug("Resetting warmup iterations to %d for [%s]", count, str(leaf_task))
-                    leaf_task.warmup_iterations = count
-                if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
-                    count = leaf_task.clients
-                    if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug("Resetting measurement iterations to %d for [%s]", count, str(leaf_task))
-                    leaf_task.iterations = count
-                if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
-                    leaf_task.warmup_time_period = 0
-                    if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug("Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.warmup_time_period)
-                if leaf_task.time_period is not None and leaf_task.time_period > 10:
-                    leaf_task.time_period = 10
-                    if logger.isEnabledFor(logging.DEBUG):
-                        logger.debug("Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period)
-
-                # Keep throttled to expose any errors but increase the target throughput for short execution times.
-                if leaf_task.target_throughput:
-                    original_throughput = leaf_task.target_throughput
-                    leaf_task.params.pop("target-throughput", None)
-                    leaf_task.params.pop("target-interval", None)
-                    leaf_task.params["target-throughput"] = f"{sys.maxsize} {original_throughput.unit}"
-
-    return t
+        return track
 
 
 class CompleteTrackParams:
@@ -848,7 +958,9 @@ class TrackFileReader:
         self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
         self.read_track = TrackSpecificationReader(
             track_params=self.track_params,
-            complete_track_params=self.complete_track_params)
+            complete_track_params=self.complete_track_params,
+            selected_challenge=cfg.opts("track", "challenge.name", mandatory=False)
+        )
         self.logger = logging.getLogger(__name__)
 
     def read(self, track_name, track_spec_file, mapping_dir):
@@ -946,9 +1058,10 @@ class TrackPluginReader:
     Loads track plugins
     """
 
-    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None):
+    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
+        self.track_processor_registry = track_processor_registry
         self.loader = modules.ComponentLoader(root_path=track_plugin_path, component_entry_point="track")
 
     def can_load(self):
@@ -968,15 +1081,19 @@ class TrackPluginReader:
         params.register_param_source_for_name(name, param_source)
 
     def register_runner(self, name, runner, **kwargs):
-        self.runner_registry(name, runner, **kwargs)
+        if self.runner_registry:
+            self.runner_registry(name, runner, **kwargs)
 
     def register_scheduler(self, name, scheduler):
-        self.scheduler_registry(name, scheduler)
+        if self.scheduler_registry:
+            self.scheduler_registry(name, scheduler)
+
+    def register_track_processor(self, track_processor):
+        if self.track_processor_registry:
+            self.track_processor_registry(track_processor)
 
     @property
     def meta_data(self):
-        from esrally import version
-
         return {
             "rally_version": version.release_version(),
             "async_runner": True
@@ -988,10 +1105,11 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self, track_params=None, complete_track_params=None, source=io.FileSource):
+    def __init__(self, track_params=None, complete_track_params=None, selected_challenge=None, source=io.FileSource):
         self.name = None
         self.track_params = track_params if track_params else {}
         self.complete_track_params = complete_track_params
+        self.selected_challenge = selected_challenge
         self.source = source
         self.logger = logging.getLogger(__name__)
 
@@ -1209,6 +1327,7 @@ class TrackSpecificationReader:
 
     def _create_challenges(self, track_spec):
         ops = self.parse_operations(self._r(track_spec, "operations", mandatory=False, default_value=[]))
+        track_params = self._r(track_spec, "parameters", mandatory=False, default_value={})
         challenges = []
         known_challenge_names = set()
         default_challenge = None
@@ -1218,9 +1337,11 @@ class TrackSpecificationReader:
             name = self._r(challenge_spec, "name", error_ctx="challenges")
             description = self._r(challenge_spec, "description", error_ctx=name, mandatory=False)
             user_info = self._r(challenge_spec, "user-info", error_ctx=name, mandatory=False)
+            challenge_params = self._r(challenge_spec, "parameters", error_ctx=name, mandatory=False, default_value={})
             meta_data = self._r(challenge_spec, "meta", error_ctx=name, mandatory=False)
             # if we only have one challenge it is treated as default challenge, no matter what the user has specified
             default = number_of_challenges == 1 or self._r(challenge_spec, "default", error_ctx=name, mandatory=False)
+            selected = number_of_challenges == 1 or self.selected_challenge == name
             cluster_settings = self._r(challenge_spec, "cluster-settings", error_ctx=name, mandatory=False)
             if cluster_settings:
                 console.warn("Track [{}] uses the deprecated property [cluster-settings]. Please replace it with an "
@@ -1252,12 +1373,17 @@ class TrackSpecificationReader:
                     else:
                         known_task_names.add(sub_task.name)
 
+            # merge params
+            final_challenge_params = dict(collections.merge_dicts(track_params, challenge_params))
+
             challenge = track.Challenge(name=name,
+                                        parameters=final_challenge_params,
                                         meta_data=meta_data,
                                         description=description,
                                         user_info=user_info,
                                         cluster_settings=cluster_settings,
                                         default=default,
+                                        selected=selected,
                                         auto_generated=auto_generated,
                                         schedule=schedule)
             if default:
@@ -1334,6 +1460,7 @@ class TrackSpecificationReader:
         task_name = self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name)
         task = track.Task(name=task_name,
                           operation=op,
+                          tags=self._r(task_spec, "tags", error_ctx=op.name, mandatory=False),
                           meta_data=self._r(task_spec, "meta", error_ctx=op.name, mandatory=False),
                           warmup_iterations=self._r(task_spec, "warmup-iterations", error_ctx=op.name, mandatory=False,
                                                     default_value=default_warmup_iterations),

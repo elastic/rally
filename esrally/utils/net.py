@@ -17,14 +17,15 @@
 import functools
 import logging
 import os
+import socket
 import urllib.error
-
 from urllib.parse import quote
 
 import certifi
 import urllib3
 
 from esrally import exceptions
+from esrally.utils import console, convert
 
 __HTTP = None
 
@@ -49,7 +50,6 @@ def init():
 
 class Progress:
     def __init__(self, msg, accuracy=0):
-        from esrally.utils import console
         self.p = console.progress()
         # if we don't show a decimal sign, the maximum width is 3 (max value is 100 (%)). Else its 3 + 1 (for the decimal point)
         # the accuracy that the user requested.
@@ -59,7 +59,6 @@ class Progress:
         self.msg = msg
 
     def __call__(self, bytes_read, bytes_total):
-        from esrally.utils import convert
         if bytes_total:
             completed = bytes_read / bytes_total
             total_as_mb = convert.bytes_to_human_string(bytes_total)
@@ -72,6 +71,7 @@ class Progress:
 
 
 def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    # pylint: disable=import-outside-toplevel
     # lazily initialize S3 support - we might not need it
     import boto3.s3.transfer
 
@@ -109,6 +109,7 @@ def _build_gcs_object_url(bucket_name, bucket_path):
 
 
 def _download_from_gcs_bucket(bucket_name, bucket_path, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    # pylint: disable=import-outside-toplevel
     # lazily initialize Google Cloud Storage support - we might not need it
     import google.oauth2.credentials
     import google.auth.transport.requests as tr_requests
@@ -244,7 +245,6 @@ def resolve(hostname_or_ip):
     if hostname_or_ip and hostname_or_ip.startswith("127"):
         return hostname_or_ip
 
-    import socket
     addrinfo = socket.getaddrinfo(hostname_or_ip, 22, 0, 0, socket.IPPROTO_TCP)
     for family, _, _, _, sockaddr in addrinfo:
         # we're interested in the IPv4 address

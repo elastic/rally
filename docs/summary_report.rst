@@ -166,7 +166,7 @@ Segment count
 Throughput
 ----------
 
-Rally reports the minimum, median and maximum throughput for each task.
+Rally reports the minimum, mean, median and maximum throughput for each task.
 
 * **Definition**: Number of operations that Elasticsearch can perform within a certain time period, usually per second.
 * **Corresponding metrics key**: ``throughput``

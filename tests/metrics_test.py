@@ -22,7 +22,9 @@ import logging
 import os
 import random
 import string
+import tempfile
 import unittest.mock as mock
+import uuid
 from unittest import TestCase
 
 import elasticsearch.exceptions
@@ -1445,8 +1447,6 @@ class FileRaceStoreTests(TestCase):
             return self.d
 
     def setUp(self):
-        import tempfile
-        import uuid
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")

@@ -23,7 +23,7 @@ from esrally import version
 
 
 def test_docker_geonames():
-    test_command = "--pipeline=benchmark-only --test-mode --track=geonames " \
+    test_command = "race --pipeline=benchmark-only --test-mode --track=geonames " \
                    "--challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
     run_docker_compose_test(test_command)
 
@@ -39,7 +39,7 @@ def test_docker_help():
 
 
 def test_docker_override_cmd():
-    test_command = "esrally --pipeline=benchmark-only --test-mode --track=geonames " \
+    test_command = "esrally race --pipeline=benchmark-only --test-mode --track=geonames " \
                    "--challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
     run_docker_compose_test(test_command)
 

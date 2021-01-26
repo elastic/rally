@@ -19,6 +19,7 @@ import asyncio
 import collections
 import concurrent.futures
 import datetime
+import itertools
 import logging
 import math
 import multiprocessing
@@ -313,22 +314,39 @@ def load_local_config(coordinator_config):
 
 
 class TrackPreparationActor(actor.RallyActor):
+    def __init__(self):
+        super().__init__()
+        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.executor_future = None
+        self.original_sender = None
+        self.wakeup_interval = 5
+
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
+        self.original_sender = sender
         # load node-specific config to have correct paths available
         cfg = load_local_config(msg.config)
-        self.logger.info("Preparing track [%s]", msg.track.name)
-        # for "proper" track repositories this will ensure that all state is identical to the coordinator node. For simple tracks
-        # the track is usually self-contained but in some cases (plugins are defined) we still need to ensure that the track
-        # is present on all machines.
-        if msg.track.has_plugins:
-            track.track_repo(cfg, fetch=True, update=True)
-            # we also need to load track plugins eagerly as the respective parameter sources could require
-            track.load_track_plugins(cfg, runner.register_runner, scheduler.register_scheduler)
-        # Beware: This is a potentially long-running operation and we're completely blocking our actor here. We should do this
-        # maybe in a background thread.
-        track.prepare_track(msg.track, cfg)
-        self.send(sender, TrackPrepared())
+        if cfg.opts("track", "test.mode.enabled"):
+            self.wakeup_interval = 0.5
+        # this is a potentially long-running operation so we offload it a background thread so we don't block
+        # the actor (e.g. logging works properly as log messages are forwarded timely).
+        self.executor_future = self.pool.submit(track.prepare_track, msg.track, cfg)
+        self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_WakeupMessage(self, msg, sender):
+        if self.executor_future is not None and self.executor_future.done():
+            e = self.executor_future.exception(timeout=0)
+            if e:
+                self.logger.info("Track preparator has detected a benchmark failure. Notifying master...")
+                # the exception might be user-defined and not be on the load path of the original sender. Hence, it
+                # cannot be deserialized on the receiver so we convert it here to a plain string.
+                self.send(self.original_sender, actor.BenchmarkFailure("Error in track preparator", str(e)))
+            else:
+                self.executor_future = None
+                self.send(self.original_sender, TrackPrepared())
+        else:
+            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
 
 class Driver:
@@ -826,7 +844,7 @@ class Worker(actor.RallyActor):
         self.worker_id = msg.worker_id
         self.config = load_local_config(msg.config)
         self.on_error = self.config.opts("driver", "on.error")
-        self.sample_queue_size = int(self.config.opts("system", "sample.queue.size", mandatory=False, default_value=1 << 20))
+        self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
         self.client_allocations = msg.client_allocations
@@ -1085,7 +1103,6 @@ class ThroughputCalculator:
         :return: A global view of throughput samples.
         """
 
-        import itertools
         samples_per_task = {}
         # first we group all samples by task (operation).
         for sample in samples:
@@ -1269,6 +1286,8 @@ class AsyncProfiler:
         self.profile_logger = logging.getLogger("rally.profile")
 
     async def __call__(self, *args, **kwargs):
+        # initialize lazily, we don't need it in the majority of cases
+        # pylint: disable=import-outside-toplevel
         import yappi
         import io as python_io
         yappi.start()
@@ -1398,6 +1417,7 @@ async def execute_single(runner, es, params, on_error):
 
     :return: a triple of: total number of operations, unit of operations, a dict of request meta data (may be None).
     """
+    # pylint: disable=import-outside-toplevel
     import elasticsearch
     fatal_error = False
     try:

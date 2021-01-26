@@ -37,7 +37,6 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    quickstart
    install
    docker
-   configuration
    race
    tournament
    cluster_management
@@ -56,6 +55,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
 
    versions
    command_line_reference
+   configuration
    offline
    track
    car

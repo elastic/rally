@@ -24,6 +24,8 @@ import sys
 import time
 import uuid
 
+import thespian.actors
+
 from esrally import PROGRAM_NAME, BANNER, FORUM_LINK, SKULL, check_python_version, doc_link, telemetry
 from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, \
     log
@@ -203,19 +205,6 @@ def create_arg_parser():
         "--report-file",
         help="Write the command line report also to the provided file.",
         default="")
-
-    config_parser = subparsers.add_parser("configure", help="Write the configuration file or reconfigure Rally")
-    for p in [parser, config_parser]:
-        p.add_argument(
-            "--advanced-config",
-            help="Show additional configuration options (default: false).",
-            default=False,
-            action="store_true")
-        p.add_argument(
-            "--assume-defaults",
-            help="Automatically accept all options with default values (default: false).",
-            default=False,
-            action="store_true")
 
     download_parser = subparsers.add_parser("download", help="Downloads an artifact")
     download_parser.add_argument(
@@ -574,7 +563,7 @@ def create_arg_parser():
             action="store_true",
             default=False)
 
-    for p in [parser, config_parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
+    for p in [parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
               start_parser, stop_parser, info_parser, generate_parser, create_track_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
@@ -596,30 +585,15 @@ def create_arg_parser():
     return parser
 
 
-def derive_sub_command(args, cfg):
+def derive_sub_command(args):
     sub_command = args.subcommand
-    # first, trust the user...
-    if sub_command is not None:
-        return sub_command
-    # we apply some smarts in case the user did not specify a sub-command
-    if cfg.config_present():
+    if sub_command is None:
+        logger = logging.getLogger(__name__)
+        console.warn("Invoking Rally without a subcommand is deprecated and will be required with Rally 2.1.0. Specify "
+                     "the 'race' subcommand explicitly.", logger=logger)
         return "race"
     else:
-        return "configure"
-
-
-def ensure_configuration_present(cfg, args, sub_command):
-    if sub_command == "configure":
-        config.ConfigFactory().create_config(cfg.config_file,
-                                             advanced_config=args.advanced_config,
-                                             assume_defaults=args.assume_defaults)
-        sys.exit(0)
-    else:
-        if cfg.config_present():
-            cfg.load_config(auto_upgrade=True)
-        else:
-            console.error("No config present. Please run '%s configure' first." % PROGRAM_NAME)
-            sys.exit(64)
+        return sub_command
 
 
 def dispatch_list(cfg):
@@ -681,7 +655,6 @@ def race(cfg):
 
 
 def with_actor_system(runnable, cfg):
-    import thespian.actors
     logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
     logger.info("Actor system already running locally? [%s]", str(already_running))
@@ -818,8 +791,11 @@ def main():
     console.println(BANNER)
 
     cfg = config.Config(config_name=args.configuration_name)
-    sub_command = derive_sub_command(args, cfg)
-    ensure_configuration_present(cfg, args, sub_command)
+    if not cfg.config_present():
+        cfg.install_default_config()
+    cfg.load_config(auto_upgrade=True)
+
+    sub_command = derive_sub_command(args)
 
     if args.effective_start_date:
         cfg.add(config.Scope.application, "system", "time.start", args.effective_start_date)

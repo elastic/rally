@@ -6,9 +6,9 @@ Definition
 
 A track is a specification of one or more benchmarking scenarios with a specific document corpus. It defines for example the involved indices or data streams, data files and the operations that are invoked. Its most important attributes are:
 
-* One or more indices or data streams, with the former potentially each having one or more types
-* The queries to issue
-* Source URL of the benchmark data
+* One or more indices or data streams, with the former potentially each having one or more types.
+* The queries to issue.
+* Source URL of the benchmark data.
 * A list of steps to run, which we'll call "challenge", for example indexing data with a specific number of documents per bulk request or running searches for a defined number of iterations.
 
 Track File Format and Storage
@@ -19,14 +19,14 @@ A track is specified in a JSON file.
 Ad-hoc use
 ..........
 
-For ad-hoc use you can store a track definition anywhere on the file system and reference it with ``--track-path``, e.g::
+For ad-hoc use you can store a track definition anywhere on the file system and reference it with ``--track-path``, e.g.::
 
    # provide a directory - Rally searches for a track.json file in this directory
    # Track name is "app-logs"
-   esrally --track-path=~/Projects/tracks/app-logs
+   esrally race --track-path=~/Projects/tracks/app-logs
    # provide a file name - Rally uses this file directly
    # Track name is "syslog"
-   esrally --track-path=~/Projects/tracks/syslog.json
+   esrally race --track-path=~/Projects/tracks/syslog.json
 
 Rally will also search for additional files like mappings or data files in the provided directory. If you use advanced features like :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>` we recommend that you create a separate directory per track.
 
@@ -126,7 +126,7 @@ In the ``composable-templates`` and ``component-templates`` sections you define 
 
 In the ``corpora`` section you define all document corpora (i.e. data files) that Rally should use for this track.
 
-In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it, if you want to share operation definitions between challenges.
+In the ``operations`` section you describe which operations are available for this track and how they are parametrized. This section is optional and you can also define any operations directly per challenge. You can use it if you want to share operation definitions between challenges.
 
 In the ``schedule`` section you describe the workload for the benchmark, for example index with two clients at maximum throughput while searching with another two clients with ten operations per second. The schedule either uses the operations defined in the ``operations`` block or defines the operations to execute inline.
 
@@ -206,10 +206,10 @@ templates
 
 The ``templates`` section contains a list of all index templates that Rally should create.
 
-* ``name`` (mandatory): Index template name
+* ``name`` (mandatory): Index template name.
 * ``index-pattern`` (mandatory): Index pattern that matches the index template. This must match the definition in the index template file.
 * ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern before start of the benchmark.
-* ``template`` (mandatory): Index template file name
+* ``template`` (mandatory): Index template file name.
 
 Example::
 
@@ -246,10 +246,10 @@ The ``composable-templates`` section contains a list of all composable templates
 
 Each composable template in this list consists of the following properties:
 
-* ``name`` (mandatory): Composable template name
+* ``name`` (mandatory): Composable template name.
 * ``index-pattern`` (mandatory): Index pattern that matches the composable template. This must match the definition in the template file.
 * ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern if the template is deleted.
-* ``template`` (mandatory): Composable template file name
+* ``template`` (mandatory): Composable template file name.
 
 Example::
 
@@ -269,8 +269,8 @@ The ``component-templates`` section contains a list of all component templates t
 
 Each component template in this list consists of the following properties:
 
-* ``name`` (mandatory): Component template name
-* ``template`` (mandatory): Component template file name
+* ``name`` (mandatory): Component template name.
+* ``template`` (mandatory): Component template file name.
 
 Example::
 
@@ -410,6 +410,7 @@ schedule
 The ``schedule`` element contains a list of tasks that are executed by Rally, i.e. it describes the workload. Each task consists of the following properties:
 
 * ``name`` (optional): This property defines an explicit name for the given task. By default the operation's name is implicitly used as the task name but if the same operation is run multiple times, a unique task name must be specified using this property.
+* ``tags`` (optional): This property defines one or more tags for the given task. This can be used for :ref:`task filtering <clr_include_tasks>`, e.g. with ``--exclude-tasks="tag:setup"`` all tasks except the ones that contain the tag ``setup`` are executed.
 * ``operation`` (mandatory): This property refers either to the name of an operation that has been defined in the ``operations`` section or directly defines an operation inline.
 * ``clients`` (optional, defaults to 1): The number of clients that should execute a task concurrently.
 * ``warmup-iterations`` (optional, defaults to 0): Number of iterations that each client should execute to warmup the benchmark candidate. Warmup iterations will not show up in the measurement results.
@@ -485,7 +486,7 @@ If we do not want to reuse these operations, we can also define them inline. Not
       ]
     }
 
-Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. It's name will be the same as the operation's type::
+Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. Its name will be the same as the operation's type::
 
     {
       "schedule": [
@@ -510,6 +511,8 @@ Contrary to the ``query``, the ``force-merge`` operation does not take any param
         }
       ]
     }
+
+.. _track_choose_schedule:
 
 Choosing a schedule
 ~~~~~~~~~~~~~~~~~~~
@@ -709,8 +712,8 @@ put-pipeline
 
 With the operation-type ``put-pipeline`` you can execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_. Note that this API is only available from Elasticsearch 5.0 onwards. It supports the following properties:
 
-* `id` (mandatory): Pipeline id
-* `body` (mandatory): Pipeline definition
+* `id` (mandatory): Pipeline id.
+* `body` (mandatory): Pipeline definition.
 
 In this example we setup a pipeline that adds location information to a ingested document as well as a pipeline failure block to change the index in which the document was supposed to be written. Note that we need to use the ``raw`` and ``endraw`` blocks to ensure that Rally does not attempt to resolve the Mustache template. See :ref:`template language <template_language>` for more information.
 
@@ -1453,7 +1456,7 @@ raw-request
 
 With the operation ``raw-request`` you can execute arbitrary HTTP requests against Elasticsearch. This is a low-level operation that should only be used if no high-level operation is available. Note that it is always possible to write a :ref:`custom runner <adding_tracks_custom_runners>`. The ``raw-request`` operation supports the following parameters:
 
-* ``method`` (optional, defaults to ``GET``): The HTTP request method to use
+* ``method`` (optional, defaults to ``GET``): The HTTP request method to use.
 * ``path`` (mandatory): Path for the API call (excluding host and port). The path must begin with a ``/``. Example: ``/myindex/_flush``.
 * ``header`` (optional): A structure containing any request headers as key-value pairs.
 * ``body`` (optional): The document body.
@@ -1779,6 +1782,112 @@ The following diagram depicts in which order requests are executed; the specific
 
 .. image:: nested-streams.png
    :alt: Timing view of nested streams
+
+submit-async-search
+~~~~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to pass the async search id to following API calls.
+
+With the operation ``submit-async-search`` you can `submit an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#submit-async-search>`_. It supports the following parameters:
+
+* ``name`` (mandatory): The unique name of this operation. Use this name in ``get-async-search`` and ``delete-async-search`` calls later on to wait for search results and delete them in Elasticsearch.
+* ``body`` (mandatory): The query body.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `submit async search docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#submit-async-search>`_.
+
+get-async-search
+~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to read the async search id from earlier API calls.
+
+With the operation ``get-async-search`` you can `get the results of an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#get-async-search>`_. It supports the following parameters:
+
+* ``retrieve-results-for`` (mandatory): A list of names of ``submit-async-search`` requests to wait for. Async searches that have already completed within ``wait_for_completion_timeout`` are skipped automatically.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `get async search docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#get-async-search>`_.
+
+.. note::
+    This operation is :ref:`retryable <track_operations>`. It will wait by default until all async searches specified by ``retrieve-results-for`` have finished. To disable this behavior, specify set ``retry-until-success`` to ``false``.
+
+
+delete-async-search
+~~~~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to read the async search id from earlier API calls.
+
+With the operation ``get-async-search`` you can `delete an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#delete-async-search>`_. It supports the following parameters:
+
+* ``delete-results-for`` (mandatory): A list of names of ``submit-async-search`` requests for which results should be deleted. Async searches that have already completed within ``wait_for_completion_timeout`` are skipped automatically.
+
+**Example**
+
+In the example below we issue two async searches, named ``search-1`` and ``search-2`` concurrently, wait for the results, simulate processing them with a ``sleep`` operation and finally delete the async search results::
+
+    {
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "composite",
+            "requests": [
+              {
+                "stream": [
+                  {
+                    "operation-type": "submit-async-search",
+                    "name": "search-1",
+                    "body": {
+                      "query": {
+                        "match_all": {}
+                      }
+                    },
+                    "request-params": {
+                      "wait_for_completion_timeout": "100ms"
+                    }
+                  }
+                ]
+              },
+              {
+                "stream": [
+                  {
+                    "operation-type": "submit-async-search",
+                    "name": "search-2",
+                    "body": {
+                      "query": {
+                        "match_all": {}
+                      }
+                    },
+                    "request-params": {
+                      "wait_for_completion_timeout": "200ms"
+                    }
+                  }
+                ]
+              },
+              {
+                "operation-type": "get-async-search",
+                "retrieve-results-for": [
+                  "search-1",
+                  "search-2"
+                ]
+              },
+              {
+                "name": "simulate-client-side-result-processing",
+                "operation-type": "sleep",
+                "duration": 0.2
+              },
+              {
+                "operation-type": "delete-async-search",
+                "delete-results-for": [
+                  "search-1",
+                  "search-2"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+
 
 Examples
 ========

@@ -36,7 +36,7 @@ jfr
 
 The ``jfr`` telemetry device enables the `Java Flight Recorder <http://docs.oracle.com/javacomponents/jmc-5-5/jfr-runtime-guide/index.html>`_ on the benchmark candidate. Up to JDK 11, Java flight recorder ships only with Oracle JDK, so Rally assumes that Oracle JDK is used for benchmarking. If you run benchmarks on JDK 11 or later, Java flight recorder is also available on OpenJDK.
 
-To enable ``jfr``, invoke Rally with ``esrally --telemetry jfr``. ``jfr`` will then write a flight recording file which can be opened in `Java Mission Control <https://jdk.java.net/jmc/>`_. Rally prints the location of the flight recording file on the command line.
+To enable ``jfr``, invoke Rally with ``esrally race --telemetry jfr``. ``jfr`` will then write a flight recording file which can be opened in `Java Mission Control <https://jdk.java.net/jmc/>`_. Rally prints the location of the flight recording file on the command line.
 
 .. image:: jfr-es.png
    :alt: Sample Java Flight Recording

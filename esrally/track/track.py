@@ -395,6 +395,18 @@ class Track:
         # This should only happen if we don't have any challenges
         return None
 
+    @property
+    def selected_challenge(self):
+        for challenge in self.challenges:
+            if challenge.selected:
+                return challenge
+        return None
+
+    @property
+    def selected_challenge_or_default(self):
+        selected = self.selected_challenge
+        return selected if selected else self.default_challenge
+
     def find_challenge_or_default(self, name):
         """
         :param name: The name of the challenge to find.
@@ -476,15 +488,19 @@ class Challenge:
                  user_info=None,
                  cluster_settings=None,
                  default=False,
+                 selected=False,
                  auto_generated=False,
+                 parameters=None,
                  meta_data=None,
                  schedule=None):
         self.name = name
+        self.parameters = parameters if parameters else {}
         self.meta_data = meta_data if meta_data else {}
         self.description = description
         self.user_info = user_info
         self.cluster_settings = cluster_settings if cluster_settings else {}
         self.default = default
+        self.selected = selected
         self.auto_generated = auto_generated
         self.schedule = schedule if schedule else []
 
@@ -505,12 +521,15 @@ class Challenge:
 
     def __hash__(self):
         return hash(self.name) ^ hash(self.description) ^ hash(self.cluster_settings) ^ hash(self.default) ^ \
-               hash(self.auto_generated) ^ hash(self.meta_data) ^ hash(self.schedule)
+               hash(self.selected) ^ hash(self.auto_generated) ^ hash(self.parameters) ^ hash(self.meta_data) ^ \
+               hash(self.schedule)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.description, self.cluster_settings, self.default, self.auto_generated, self.meta_data, self.schedule) ==
-                (othr.name, othr.description, othr.cluster_settings, othr.default, othr.auto_generated, othr.meta_data, othr.schedule))
+                (self.name, self.description, self.cluster_settings, self.default, self.selected, self.auto_generated,
+                 self.parameters, self.meta_data, self.schedule) ==
+                (othr.name, othr.description, othr.cluster_settings, othr.default, othr.selected, othr.auto_generated,
+                 othr.parameters, othr.meta_data, othr.schedule))
 
 
 @unique
@@ -524,6 +543,9 @@ class OperationType(Enum):
     WaitForRecovery = 6
     WaitForSnapshotCreate = 7
     Composite = 8
+    SubmitAsyncSearch = 9
+    GetAsyncSearch = 10
+    DeleteAsyncSearch = 11
 
     # administrative actions
     ForceMerge = 1001
@@ -658,6 +680,12 @@ class OperationType(Enum):
             return OperationType.DeleteDataStream
         elif v == "composite":
             return OperationType.Composite
+        elif v == "submit-async-search":
+            return OperationType.SubmitAsyncSearch
+        elif v == "get-async-search":
+            return OperationType.GetAsyncSearch
+        elif v == "delete-async-search":
+            return OperationType.DeleteAsyncSearch
         else:
             raise KeyError(f"No enum value for [{v}]")
 
@@ -676,7 +704,7 @@ class TaskNameFilter:
         return isinstance(other, type(self)) and self.name == other.name
 
     def __str__(self, *args, **kwargs):
-        return "filter for task name [%s]" % self.name
+        return f"filter for task name [{self.name}]"
 
 
 class TaskOpTypeFilter:
@@ -693,7 +721,24 @@ class TaskOpTypeFilter:
         return isinstance(other, type(self)) and self.op_type == other.op_type
 
     def __str__(self, *args, **kwargs):
-        return "filter for operation type [%s]" % self.op_type
+        return f"filter for operation type [{self.op_type}]"
+
+
+class TaskTagFilter:
+    def __init__(self, tag_name):
+        self.tag_name = tag_name
+
+    def matches(self, task):
+        return self.tag_name in task.tags
+
+    def __hash__(self):
+        return hash(self.tag_name)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.tag_name == other.tag_name
+
+    def __str__(self, *args, **kwargs):
+        return f"filter for tasks tagged [{self.tag_name}]"
 
 
 class Singleton(type):
@@ -703,20 +748,6 @@ class Singleton(type):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
-
-
-class AdminTaskFilter(metaclass=Singleton):
-    """
-    Matches all tasks that execute administrative actions.
-    """
-    def matches(self, task):
-        try:
-            return OperationType.from_hyphenated_string(task.operation.type).admin_op
-        except KeyError:
-            return False
-
-    def __str__(self, *args, **kwargs):
-        return "filter for admin tasks"
 
 
 # Schedule elements
@@ -771,10 +802,16 @@ Throughput = collections.namedtuple("Throughput", ["value", "unit"])
 class Task:
     THROUGHPUT_PATTERN = re.compile(r"(?P<value>(\d*\.)?\d+)\s(?P<unit>\w+/s)")
 
-    def __init__(self, name, operation, meta_data=None, warmup_iterations=None, iterations=None, warmup_time_period=None,
-                 time_period=None, clients=1, completes_parent=False, schedule=None, params=None):
+    def __init__(self, name, operation, tags=None, meta_data=None, warmup_iterations=None, iterations=None,
+                 warmup_time_period=None, time_period=None, clients=1, completes_parent=False, schedule=None, params=None):
         self.name = name
         self.operation = operation
+        if isinstance(tags, str):
+            self.tags = [tags]
+        elif tags:
+            self.tags = tags
+        else:
+            self.tags = []
         self.meta_data = meta_data if meta_data else {}
         self.warmup_iterations = warmup_iterations
         self.iterations = iterations
