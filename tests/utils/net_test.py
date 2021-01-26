@@ -60,6 +60,12 @@ class TestNetUtils:
         assert net._build_gcs_object_url(bucket_name, bucket_path) == \
                "https://storage.googleapis.com/storage/v1/b/unittest-bucket.test.me/o/path%2Fto%2Fobject?alt=media"
 
+    def test_add_url_param(self):
+        url = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz?flag1=true"
+        params = {"flag2": "false"}
+        assert net.add_url_param(url, params) == \
+               "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz?flag1=true&flag2=false"
+
     def test_progress(self):
         progress = net.Progress("test")
         mock_progress = mock.Mock()

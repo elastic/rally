@@ -509,7 +509,7 @@ class ElasticsearchDistributionSupplier:
 
     def fetch(self):
         io.ensure_dir(self.distributions_root)
-        download_url = self.repo.download_url
+        download_url = net.add_url_param(self.repo.download_url, {"x-elastic-no-kpi": "true"})
         distribution_path = os.path.join(self.distributions_root, self.repo.file_name)
         self.logger.info("Resolved download URL [%s] for version [%s]", download_url, self.version)
         if not os.path.isfile(distribution_path) or not self.repo.cache:
