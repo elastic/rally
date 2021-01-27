@@ -2249,6 +2249,26 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual("'type' not supported with 'data-stream' for operation 'test_operation'",
                          ctx.exception.args[0])
 
+    def test_assertions_without_detailed_results_are_invalid(self):
+        index1 = track.Index(name="index1", types=["type1"])
+        with self.assertRaisesRegex(exceptions.InvalidSyntax,
+                                    r"The property \[detailed-results\] must be \[true\] if assertions are defined"):
+            params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
+                "index": "_all",
+                # unset!
+                #"detailed-results": True,
+                "assertions": [{
+                    "property": "hits",
+                    "condition": ">",
+                    "value": 0
+                }],
+                "body": {
+                    "query": {
+                        "match_all": {}
+                    }
+                }
+            })
+
 
 class ForceMergeParamSourceTests(TestCase):
     def test_force_merge_index_from_track(self):

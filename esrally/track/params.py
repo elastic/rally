@@ -518,6 +518,11 @@ class SearchParamSource(ParamSource):
         if results_per_page:
             self.query_params["results-per-page"] = results_per_page
         if "assertions" in params:
+            if not detailed_results:
+                # for scroll queries the value does not matter because detailed results are always retrieved.
+                is_scroll_query = pages and results_per_page
+                if not is_scroll_query:
+                    raise exceptions.InvalidSyntax("The property [detailed-results] must be [true] if assertions are defined")
             self.query_params["assertions"] = params["assertions"]
 
         # Ensure we pass global parameters
