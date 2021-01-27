@@ -338,7 +338,7 @@ class TrackPreparationActor(actor.RallyActor):
         if self.executor_future is not None and self.executor_future.done():
             e = self.executor_future.exception(timeout=0)
             if e:
-                self.logger.info("Track preparator has detected a benchmark failure. Notifying master...")
+                self.logger.exception("Track preparator has detected a benchmark failure. Notifying master...", exc_info=e)
                 # the exception might be user-defined and not be on the load path of the original sender. Hence, it
                 # cannot be deserialized on the receiver so we convert it here to a plain string.
                 self.send(self.original_sender, actor.BenchmarkFailure("Error in track preparator", str(e)))
@@ -893,7 +893,8 @@ class Worker(actor.RallyActor):
             elif self.executor_future is not None and self.executor_future.done():
                 e = self.executor_future.exception(timeout=0)
                 if e:
-                    self.logger.info("Worker[%s] has detected a benchmark failure. Notifying master...", str(self.worker_id))
+                    self.logger.exception("Worker[%s] has detected a benchmark failure. Notifying master...",
+                                          str(self.worker_id), exc_info=e)
                     # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
                     # deserialized on the receiver so we convert it here to a plain string.
                     self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.worker_id), str(e)))
