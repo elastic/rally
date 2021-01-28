@@ -19,7 +19,7 @@ import logging
 import os
 import socket
 import urllib.error
-from urllib.parse import quote
+from urllib.parse import quote, parse_qs, urlencode, urlparse, urlunparse
 
 import certifi
 import urllib3
@@ -180,6 +180,17 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
             if progress_indicator and size_from_content_header:
                 progress_indicator(bytes_read, size_from_content_header)
         return expected_size_in_bytes
+
+def add_url_param_elastic_no_kpi(url):
+    return _add_url_param(url, {"x-elastic-no-kpi": "true"})
+
+
+def _add_url_param(url, params):
+    url_parsed = urlparse(url)
+    query = parse_qs(url_parsed.query)
+    query.update(params)
+    return urlunparse((url_parsed.scheme, url_parsed.netloc, url_parsed.path, url_parsed.params,
+                       urlencode(query, doseq=True), url_parsed.fragment))
 
 
 def download(url, local_path, expected_size_in_bytes=None, progress_indicator=None):

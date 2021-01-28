@@ -87,7 +87,7 @@ def race(cfg, command_line):
     This method should be used for rally invocations of the race command.
     It sets up some defaults for how the integration tests expect to run races.
     """
-    return esrally(cfg, f"race {command_line} --on-error='abort'")
+    return esrally(cfg, f"race {command_line} --on-error='abort' --enable-assertions")
 
 
 def wait_until_port_is_free(port_number=39200, timeout=120):

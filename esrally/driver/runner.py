@@ -95,6 +95,15 @@ def runner_for(operation_type):
         raise exceptions.RallyError("No runner available for operation type [%s]" % operation_type)
 
 
+def enable_assertions(enabled):
+    """
+    Changes whether assertions are enabled. The status changes for all tasks that are executed after this call.
+
+    :param enabled: ``True`` to enable assertions, ``False`` to disable them.
+    """
+    AssertingRunner.assertions_enabled = enabled
+
+
 def register_runner(operation_type, runner, **kwargs):
     logger = logging.getLogger(__name__)
     async_runner = kwargs.get("async_runner", False)
@@ -109,24 +118,26 @@ def register_runner(operation_type, runner, **kwargs):
         if "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
-            __RUNNERS[operation_type] = _multi_cluster_runner(runner, str(runner), context_manager_enabled=True)
+            cluster_aware_runner = _multi_cluster_runner(runner, str(runner), context_manager_enabled=True)
         else:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
-            __RUNNERS[operation_type] = _multi_cluster_runner(runner, str(runner))
+            cluster_aware_runner = _multi_cluster_runner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     elif isinstance(runner, types.FunctionType):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = _single_cluster_runner(runner, runner.__name__)
+        cluster_aware_runner = _single_cluster_runner(runner, runner.__name__)
     elif "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = _single_cluster_runner(runner, str(runner), context_manager_enabled=True)
+        cluster_aware_runner = _single_cluster_runner(runner, str(runner), context_manager_enabled=True)
     else:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = _single_cluster_runner(runner, str(runner))
+        cluster_aware_runner = _single_cluster_runner(runner, str(runner))
+
+    __RUNNERS[operation_type] = _with_completion(_with_assertions(cluster_aware_runner))
 
 
 # Only intended for unit-testing!
@@ -212,14 +223,16 @@ def unwrap(runner):
 
 def _single_cluster_runner(runnable, name, context_manager_enabled=False):
     # only pass the default ES client
-    delegate = MultiClientRunner(runnable, name, lambda es: es["default"], context_manager_enabled)
-    return _with_completion(delegate)
+    return MultiClientRunner(runnable, name, lambda es: es["default"], context_manager_enabled)
 
 
 def _multi_cluster_runner(runnable, name, context_manager_enabled=False):
     # pass all ES clients
-    delegate = MultiClientRunner(runnable, name, lambda es: es, context_manager_enabled)
-    return _with_completion(delegate)
+    return MultiClientRunner(runnable, name, lambda es: es, context_manager_enabled)
+
+
+def _with_assertions(delegate):
+    return AssertingRunner(delegate)
 
 
 def _with_completion(delegate):
@@ -309,6 +322,69 @@ class MultiClientRunner(Runner, Delegator):
             return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
         else:
             return False
+
+
+class AssertingRunner(Runner, Delegator):
+    assertions_enabled = False
+
+    def __init__(self, delegate):
+        super().__init__(delegate=delegate)
+        self.predicates = {
+            ">": self.greater_than,
+            ">=": self.greater_than_or_equal,
+            "<": self.smaller_than,
+            "<=": self.smaller_than_or_equal,
+            "==": self.equal,
+        }
+
+    def greater_than(self, expected, actual):
+        return actual > expected
+
+    def greater_than_or_equal(self, expected, actual):
+        return actual >= expected
+
+    def smaller_than(self, expected, actual):
+        return actual < expected
+
+    def smaller_than_or_equal(self, expected, actual):
+        return actual <= expected
+
+    def equal(self, expected, actual):
+        return actual == expected
+
+    def check_assertion(self, assertion, properties):
+        path = assertion["property"]
+        predicate_name = assertion["condition"]
+        expected_value = assertion["value"]
+        actual_value = properties
+        for k in path.split("."):
+            actual_value = actual_value[k]
+        predicate = self.predicates[predicate_name]
+        success = predicate(expected_value, actual_value)
+        if not success:
+            raise exceptions.RallyTaskAssertionError(
+                f"Expected [{path}] to be {predicate_name} [{expected_value}] but was [{actual_value}].")
+
+    async def __call__(self, *args):
+        params = args[1]
+        return_value = await self.delegate(*args)
+        if AssertingRunner.assertions_enabled and "assertions" in params:
+            if isinstance(return_value, dict):
+                for assertion in params["assertions"]:
+                    self.check_assertion(assertion, return_value)
+            else:
+                self.logger.debug("Skipping assertion check as [%s] does not return a dict.", repr(self.delegate))
+        return return_value
+
+    def __repr__(self, *args, **kwargs):
+        return repr(self.delegate)
+
+    async def __aenter__(self):
+        await self.delegate.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
 
 
 def mandatory(params, key, op):
@@ -853,7 +929,10 @@ class Query(Runner):
 
     async def request_body_query(self, es, params):
         request_params, headers = self._transport_request_params(params)
-        index = params.get("index", "_all")
+        # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
+        # composite context where there is no actual parameter source and the entire request structure must be provided
+        # by the composite's parameter source.
+        index = mandatory(params, "index", self)
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
         detailed_results = params.get("detailed-results", False)
@@ -921,7 +1000,10 @@ class Query(Runner):
         try:
             for page in range(total_pages):
                 if page == 0:
-                    index = params.get("index", "_all")
+                    # Mandatory to ensure it is always provided. This is especially important when this runner is used
+                    # in a composite context where there is no actual parameter source and the entire request structure
+                    # must be provided by the composite's parameter source.
+                    index = mandatory(params, "index", self)
                     body = mandatory(params, "body", self)
                     sort = "_doc"
                     scroll = "10s"
@@ -2042,15 +2124,26 @@ class GetAsyncSearch(Runner):
         success = True
         searches = mandatory(params, "retrieve-results-for", self)
         request_params = params.get("request-params", {})
-        for search_id, _ in async_search_ids(searches):
+        stats = {}
+        for search_id, search in async_search_ids(searches):
             response = await es.async_search.get(id=search_id,
                                                  params=request_params)
-            success = success and not response["is_running"]
+            is_running = response["is_running"]
+            success = success and not is_running
+            if not is_running:
+                stats[search] = {
+                    "hits": response["response"]["hits"]["total"]["value"],
+                    "hits_relation": response["response"]["hits"]["total"]["relation"],
+                    "timed_out": response["response"]["timed_out"],
+                    "took": response["response"]["took"]
+                }
 
         return {
-            "weight": len(searches),
+            # only count completed searches - there is one key per search id in `stats`
+            "weight": len(stats),
             "unit": "ops",
-            "success": success
+            "success": success,
+            "stats": stats
         }
 
     def __repr__(self, *args, **kwargs):
@@ -2119,6 +2212,7 @@ class Composite(Runner):
         self.supported_op_types = [
             "raw-request",
             "sleep",
+            "search",
             "submit-async-search",
             "get-async-search",
             "delete-async-search"

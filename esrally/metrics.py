@@ -1613,7 +1613,7 @@ class GlobalStatsCalculator:
         median = self.store.get_median(metric_name, task=task_name, sample_type=SampleType.Normal)
         unit = self.store.get_unit(metric_name, task=task_name)
         stats = self.store.get_stats(metric_name, task=task_name, sample_type=SampleType.Normal)
-        if median and stats:
+        if mean and median and stats:
             return {
                 "min": stats["min"],
                 "mean": mean,
@@ -1624,6 +1624,7 @@ class GlobalStatsCalculator:
         else:
             return {
                 "min": None,
+                "mean": None,
                 "median": None,
                 "max": None,
                 "unit": unit
