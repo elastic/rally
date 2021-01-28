@@ -213,9 +213,9 @@ class Documents:
         self.document_archive = document_archive
         self.base_url = base_url
         self.includes_action_and_meta_data = includes_action_and_meta_data
-        self.number_of_documents = number_of_documents
-        self.compressed_size_in_bytes = compressed_size_in_bytes
-        self.uncompressed_size_in_bytes = uncompressed_size_in_bytes
+        self._number_of_documents = number_of_documents
+        self._compressed_size_in_bytes = compressed_size_in_bytes
+        self._uncompressed_size_in_bytes = uncompressed_size_in_bytes
         self.target_index = target_index
         self.target_data_stream = target_data_stream
         self.target_type = target_type
@@ -226,6 +226,30 @@ class Documents:
 
     def has_uncompressed_corpus(self):
         return self.document_file is not None
+
+    @property
+    def number_of_documents(self):
+        return self._number_of_documents
+
+    @number_of_documents.setter
+    def number_of_documents(self, value):
+        self._number_of_documents = value
+
+    @property
+    def uncompressed_size_in_bytes(self):
+        return self._uncompressed_size_in_bytes
+
+    @uncompressed_size_in_bytes.setter
+    def uncompressed_size_in_bytes(self, value):
+        self._uncompressed_size_in_bytes = value
+
+    @property
+    def compressed_size_in_bytes(self):
+        return self._compressed_size_in_bytes
+
+    @compressed_size_in_bytes.setter
+    def compressed_size_in_bytes(self, value):
+        self._compressed_size_in_bytes = value
 
     @property
     def number_of_lines(self):
