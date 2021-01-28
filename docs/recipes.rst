@@ -218,7 +218,7 @@ This behavior can also be changed, by invoking Rally with the :ref:`--on-error <
 Errors can also be investigated if you have configured a :doc:`dedicated Elasticsearch metrics store </configuration>`.
 
 Checking Queries and Responses
---------------------------------------------------------------
+------------------------------
 
 As described above, errors can lead to misleading benchmarking results. Some issues, however, are more subtle and the result of queries not behaving and matching as intended.
 
@@ -227,6 +227,7 @@ Consider the following simple Rally operation::
     {
       "name": "geo_distance",
       "operation-type": "search",
+      "detailed-results": true,
       "index": "logs-*",
       "body": {
         "query": {
@@ -295,4 +296,34 @@ The number of hits from queries can also be investigated if you have configured 
 	  "operation" : "scroll",
 	  "operation-type" : "Search"
 	}
+
+Finally, it is also possible to add assertions to an operation::
+
+    {
+      "name": "geo_distance",
+      "operation-type": "search",
+      "detailed-results": true,
+      "index": "logs-*",
+      "assertions": [
+        {
+          "property": "hits",
+          "condition": ">",
+          "value": 0
+        }
+      ],
+      "body": {
+        "query": {
+          "term": {
+            "http.request.method": {
+              "value": "GET"
+            }
+          }
+        }
+      }
+    }
+
+When a benchmark is executed with ``--enable-assertions`` and this query returns no hits, the benchmark is aborted with a message::
+
+    [ERROR] Cannot race. Error in load generator [0]
+        Cannot run task [geo_distance]: Expected [hits] to be > [0] but was [0].
 

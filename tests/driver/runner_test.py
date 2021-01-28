@@ -139,6 +139,130 @@ class RegisterRunnerTests(TestCase):
         self.assertEqual((all_clients, "some_param"), await returned_runner(all_clients, "some_param"))
 
 
+class AssertingRunnerTests(TestCase):
+    def setUp(self):
+        runner.enable_assertions(True)
+
+    def tearDown(self):
+        runner.enable_assertions(False)
+
+    @run_async
+    async def test_asserts_equal_succeeds(self):
+        es = None
+        response = {
+            "hits": {
+                "hits": {
+                    "value": 5,
+                    "relation": "eq"
+                }
+            }
+        }
+        delegate = mock.MagicMock()
+        delegate.return_value = as_future(response)
+        r = runner.AssertingRunner(delegate)
+        async with r:
+            final_response = await r(es, {
+                "assertions": [
+                    {
+                        "property": "hits.hits.value",
+                        "condition": "==",
+                        "value": 5
+                    },
+                    {
+                        "property": "hits.hits.relation",
+                        "condition": "==",
+                        "value": "eq"
+                    }
+                ]
+            })
+
+        self.assertEqual(response, final_response)
+
+    @run_async
+    async def test_asserts_equal_fails(self):
+        es = None
+        response = {
+            "hits": {
+                "hits": {
+                    "value": 10000,
+                    "relation": "gte"
+                }
+            }
+        }
+        delegate = mock.MagicMock()
+        delegate.return_value = as_future(response)
+        r = runner.AssertingRunner(delegate)
+        with self.assertRaisesRegex(exceptions.RallyTaskAssertionError,
+                                    r"Expected \[hits.hits.relation\] to be == \[eq\] but was \[gte\]."):
+            async with r:
+                await r(es, {
+                    "assertions": [
+                        {
+                            "property": "hits.hits.value",
+                            "condition": "==",
+                            "value": 10000
+                        },
+                        {
+                            "property": "hits.hits.relation",
+                            "condition": "==",
+                            "value": "eq"
+                        }
+                    ]
+                })
+
+    @run_async
+    async def test_skips_asserts_for_non_dicts(self):
+        es = None
+        response = (1, "ops")
+        delegate = mock.MagicMock()
+        delegate.return_value = as_future(response)
+        r = runner.AssertingRunner(delegate)
+        async with r:
+            final_response = await r(es, {
+                "assertions": [
+                    {
+                        "property": "hits.hits.value",
+                        "condition": "==",
+                        "value": 5
+                    }
+                ]
+            })
+        # still passes response as is
+        self.assertEqual(response, final_response)
+
+    def test_predicates(self):
+        r = runner.AssertingRunner(delegate=None)
+        self.assertEqual(5, len(r.predicates))
+
+        predicate_success = {
+            # predicate: (expected, actual)
+            ">": (5, 10),
+            ">=": (5, 5),
+            "<": (5, 4),
+            "<=": (5, 5),
+            "==": (5, 5),
+        }
+
+        for predicate, vals in predicate_success.items():
+            expected, actual = vals
+            self.assertTrue(r.predicates[predicate](expected, actual),
+                            f"Expected [{expected} {predicate} {actual}] to succeed.")
+
+        predicate_fail = {
+            # predicate: (expected, actual)
+            ">": (5, 5),
+            ">=": (5, 4),
+            "<": (5, 5),
+            "<=": (5, 6),
+            "==": (5, 6),
+        }
+
+        for predicate, vals in predicate_fail.items():
+            expected, actual = vals
+            self.assertFalse(r.predicates[predicate](expected, actual),
+                             f"Expected [{expected} {predicate} {actual}] to fail.")
+
+
 class SelectiveJsonParserTests(TestCase):
     def doc_as_text(self, doc):
         return io.StringIO(json.dumps(doc))
@@ -1256,6 +1380,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "index": "_all",
             "detailed-results": True,
             "cache": True,
             "body": {
@@ -1311,6 +1436,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "index": "_all",
             "detailed-results": True,
             "cache": True,
             "request-timeout": 3.0,
@@ -1369,6 +1495,7 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
+            "index": "_all",
             "cache": False,
             "detailed-results": True,
             "body": None,
@@ -1426,6 +1553,7 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
+            "index": "_all",
             "body": None,
             "request-params": {
                 "q": "user:kimchy"
@@ -1476,6 +1604,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "index": "_all",
             "cache": True,
             "detailed-results": True,
             "body": {
@@ -1774,6 +1903,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "index": "_all",
             "pages": 1,
             "results-per-page": 100,
             "body": {
@@ -4480,7 +4610,19 @@ class GetAsyncSearchTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_get_async_search(self, es):
-        es.async_search.get.return_value = as_future({"is_running": False})
+        es.async_search.get.return_value = as_future({
+            "is_running": False,
+            "response": {
+                "took": 1122,
+                "timed_out": False,
+                "hits": {
+                    "total": {
+                        "value": 1520,
+                        "relation": "eq"
+                    }
+                }
+            }
+        })
         r = runner.GetAsyncSearch()
         params = {
             "retrieve-results-for": "search-1"
@@ -4489,7 +4631,19 @@ class GetAsyncSearchTests(TestCase):
         async with runner.CompositeContext():
             runner.CompositeContext.put("search-1", "12345")
             response = await r(es, params)
-            self.assertTrue(response["success"])
+            self.assertDictEqual(response, {
+                "weight": 1,
+                "unit": "ops",
+                "success": True,
+                "stats": {
+                    "search-1": {
+                        "hits": 1520,
+                        "hits_relation": "eq",
+                        "timed_out": False,
+                        "took": 1122
+                    }
+                }
+            })
 
         es.async_search.get.assert_called_once_with(id="12345", params={})
 
@@ -4594,15 +4748,29 @@ class CompositeTests(TestCase):
         self.call_recorder_runner = CompositeTests.CallRecorderRunner()
         runner.register_runner("counter", self.counter_runner, async_runner=True)
         runner.register_runner("call-recorder", self.call_recorder_runner, async_runner=True)
+        runner.enable_assertions(True)
 
     def tearDown(self):
+        runner.enable_assertions(False)
         runner.remove_runner("counter")
         runner.remove_runner("call-recorder")
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_multiple_streams(self, es):
-        es.transport.perform_request.return_value = as_future()
+        es.transport.perform_request.side_effect = [
+            # raw-request
+            as_future(),
+            # search
+            as_future(io.StringIO(json.dumps({
+                "hits": {
+                    "total": {
+                        "value": 10,
+                        "relation": "eq"
+                    }
+                }
+            })))
+        ]
 
         params = {
             "max-connections": 4,
@@ -4613,6 +4781,23 @@ class CompositeTests(TestCase):
                             "operation-type": "raw-request",
                             "path": "/",
                             "body": {}
+                        },
+                        {
+                            "operation-type": "search",
+                            "index": "test",
+                            "detailed-results": True,
+                            "assertions": [
+                                {
+                                    "property": "hits",
+                                    "condition": ">",
+                                    "value": 0
+                                }
+                            ],
+                            "body": {
+                                "query": {
+                                    "match_all": {}
+                                }
+                            }
                         }
                     ]
                 },
@@ -4630,11 +4815,81 @@ class CompositeTests(TestCase):
         r = runner.Composite()
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with(method="GET",
-                                                             url="/",
-                                                             headers=None,
-                                                             body={},
-                                                             params={})
+        es.transport.perform_request.assert_has_calls([
+            mock.call(method="GET",
+                      url="/",
+                      headers=None,
+                      body={},
+                      params={}),
+            mock.call("GET",
+                      "/test/_search",
+                      params={},
+                      body={
+                          "query": {
+                              "match_all": {}
+                          }
+                      },
+                      headers=None)
+        ])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_propagates_violated_assertions(self, es):
+        es.transport.perform_request.side_effect = [
+            # search
+            as_future(io.StringIO(json.dumps({
+                "hits": {
+                    "total": {
+                        "value": 0,
+                        "relation": "eq"
+                    }
+                }
+            })))
+        ]
+
+        params = {
+            "max-connections": 4,
+            "requests": [
+                {
+                    "stream": [
+                        {
+                            "operation-type": "search",
+                            "index": "test",
+                            "detailed-results": True,
+                            "assertions": [
+                                {
+                                    "property": "hits",
+                                    "condition": ">",
+                                    "value": 0
+                                }
+                            ],
+                            "body": {
+                                "query": {
+                                    "match_all": {}
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        with self.assertRaisesRegex(exceptions.RallyTaskAssertionError,
+                                    r"Expected \[hits\] to be > \[0\] but was \[0\]."):
+            await r(es, params)
+
+        es.transport.perform_request.assert_has_calls([
+            mock.call("GET",
+                      "/test/_search",
+                      params={},
+                      body={
+                          "query": {
+                              "match_all": {}
+                          }
+                      },
+                      headers=None)
+        ])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -4793,7 +5048,7 @@ class CompositeTests(TestCase):
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             await r(es, params)
 
-        self.assertEqual("Unsupported operation-type [bulk]. Use one of [raw-request, sleep, "
+        self.assertEqual("Unsupported operation-type [bulk]. Use one of [raw-request, sleep, search, "
                          "submit-async-search, get-async-search, delete-async-search].", ctx.exception.args[0])
 
 

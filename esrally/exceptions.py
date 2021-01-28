@@ -29,6 +29,9 @@ class RallyError(Exception):
     def __repr__(self):
         return self.message
 
+    def __str__(self):
+        return self.message
+
 
 class LaunchError(RallyError):
     """
@@ -45,6 +48,12 @@ class SystemSetupError(RallyError):
 class RallyAssertionError(RallyError):
     """
     Thrown when a (precondition) check has been violated.
+    """
+
+
+class RallyTaskAssertionError(RallyAssertionError):
+    """
+    Thrown when an assertion on a task has been violated.
     """
 
 

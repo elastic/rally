@@ -2061,15 +2061,17 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(9, len(p))
+        self.assertEqual(10, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertIsNone(p["request-timeout"])
         self.assertIsNone(p["opaque-id"])
         self.assertDictEqual({"header1": "value1"}, p["headers"])
         self.assertEqual({}, p["request-params"])
+        # Explicitly check in these tests for equality - assertFalse would also succeed if it is `None`.
         self.assertEqual(True, p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
+        self.assertEqual(False, p["detailed-results"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -2095,7 +2097,7 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(9, len(p))
+        self.assertEqual(10, len(p))
         self.assertEqual("data-stream-1", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual(1.0, p["request-timeout"])
@@ -2107,6 +2109,7 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual({}, p["request-params"])
         self.assertEqual(True, p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
+        self.assertEqual(False, p["detailed-results"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -2141,7 +2144,7 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(9, len(p))
+        self.assertEqual(10, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertIsNone(p["request-timeout"])
@@ -2152,6 +2155,7 @@ class SearchParamSourceTests(TestCase):
         }, p["request-params"])
         self.assertIsNone(p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
+        self.assertEqual(False, p["detailed-results"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -2166,6 +2170,7 @@ class SearchParamSourceTests(TestCase):
             "type": "type1",
             "cache": False,
             "response-compression-enabled": False,
+            "detailed-results": True,
             "opaque-id": "12345abcde",
             "body": {
                 "query": {
@@ -2175,7 +2180,7 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(9, len(p))
+        self.assertEqual(10, len(p))
         self.assertEqual("_all", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
@@ -2185,6 +2190,7 @@ class SearchParamSourceTests(TestCase):
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
         self.assertEqual(False, p["cache"])
         self.assertEqual(False, p["response-compression-enabled"])
+        self.assertEqual(True, p["detailed-results"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -2207,7 +2213,7 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(9, len(p))
+        self.assertEqual(10, len(p))
         self.assertEqual("data-stream-2", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual(1.0, p["request-timeout"])
@@ -2217,6 +2223,7 @@ class SearchParamSourceTests(TestCase):
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
         self.assertEqual(False, p["cache"])
         self.assertEqual(False, p["response-compression-enabled"])
+        self.assertEqual(False, p["detailed-results"])
         self.assertEqual({
             "query": {
                 "match_all": {}
@@ -2241,6 +2248,26 @@ class SearchParamSourceTests(TestCase):
 
         self.assertEqual("'type' not supported with 'data-stream' for operation 'test_operation'",
                          ctx.exception.args[0])
+
+    def test_assertions_without_detailed_results_are_invalid(self):
+        index1 = track.Index(name="index1", types=["type1"])
+        with self.assertRaisesRegex(exceptions.InvalidSyntax,
+                                    r"The property \[detailed-results\] must be \[true\] if assertions are defined"):
+            params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
+                "index": "_all",
+                # unset!
+                #"detailed-results": True,
+                "assertions": [{
+                    "property": "hits",
+                    "condition": ">",
+                    "value": 0
+                }],
+                "body": {
+                    "query": {
+                        "match_all": {}
+                    }
+                }
+            })
 
 
 class ForceMergeParamSourceTests(TestCase):

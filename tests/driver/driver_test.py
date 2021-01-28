@@ -1373,7 +1373,9 @@ class AsyncExecutorTests(TestCase):
     @run_async
     async def test_execute_schedule_aborts_on_error(self, es):
         class ExpectedUnitTestException(Exception):
-            pass
+
+            def __str__(self):
+                return "expected unit test exception"
 
         def run(*args, **kwargs):
             raise ExpectedUnitTestException()
@@ -1410,7 +1412,7 @@ class AsyncExecutorTests(TestCase):
                                                 complete=complete,
                                                 on_error="continue")
 
-        with self.assertRaises(ExpectedUnitTestException):
+        with self.assertRaisesRegex(exceptions.RallyError, r"Cannot run task \[no-op\]: expected unit test exception"):
             await execute_schedule()
 
         self.assertEqual(0, es.call_count)
