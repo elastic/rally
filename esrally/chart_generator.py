@@ -667,8 +667,7 @@ class BarCharts:
                     "enabled": True,
                     "id": "4",
                     "params": {
-                        "filters": filters,
-                        "row": True
+                        "filters": filters
                     },
                     "schema": "split",
                     "type": "filters"
@@ -749,7 +748,8 @@ class BarCharts:
                         },
                         "type": "value"
                     }
-                ]
+                ],
+                "row": True
             },
             "title": title,
             "type": "histogram"
