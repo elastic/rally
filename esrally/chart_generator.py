@@ -1487,7 +1487,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
                 "i": "{}".format(panelIndex)
             },
             "type": "visualization",
-            "version": "7.8.0"
+            "version": "7.10.2"
         }
         panels.append(panel)
         col = next_col
