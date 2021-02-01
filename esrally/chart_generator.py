@@ -866,8 +866,7 @@ class TimeSeriesCharts:
                         ],
                         "label": "GC Times",
                         "value_template": "{{value}} ms",
-                        "steps": 0,
-                        "axis_min": "0"
+                        "steps": 0
                     }
                 ],
                 "show_legend": 1,
@@ -889,7 +888,8 @@ class TimeSeriesCharts:
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
-                ]
+                ],
+                "axis_min": "0"
             },
             "aggs": [],
             "listeners": {}
@@ -958,8 +958,7 @@ class TimeSeriesCharts:
                         ],
                         "label": "Disk IO",
                         "value_template": "{{value}}",
-                        "steps": 0,
-                        "axis_min": "0"
+                        "steps": 0
                     }
                 ],
                 "show_legend": 1,
@@ -981,7 +980,8 @@ class TimeSeriesCharts:
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
-                ]
+                ],
+                "axis_min": "0"
             },
             "aggs": [],
             "listeners": {}
@@ -1074,8 +1074,7 @@ class TimeSeriesCharts:
                         ],
                         "label": "Segment Memory",
                         "value_template": "{{value}}",
-                        "steps": 0,
-                        "axis_min": "0"
+                        "steps": 0
                     }
                 ],
                 "show_legend": 1,
@@ -1097,7 +1096,8 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_grid": 1,
-                "drop_last_bucket": 0
+                "drop_last_bucket": 0,
+                "axis_min": "0"
             },
             "aggs": []
         }
@@ -1326,8 +1326,7 @@ class TimeSeriesCharts:
                         "split_filters": filters,
                         "label": "Indexing Throughput",
                         "value_template": "{{value}} docs/s",
-                        "steps": 0,
-                        "axis_min": "0"
+                        "steps": 0
                     }
                 ],
                 "show_legend": 1,
@@ -1349,7 +1348,8 @@ class TimeSeriesCharts:
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
-                ]
+                ],
+                "axis_min": "0"
             },
             "aggs": [],
             "listeners": {}
@@ -1587,7 +1587,7 @@ class RaceConfig:
         task_names = []
         for task in self.track.find_challenge_or_default(self.challenge).schedule:
             for sub_task in task:
-                if sub_task.operation.type == track.OperationType.Bulk.to_hyphenated_string():
+                if (track.OperationType.Bulk.to_hyphenated_string() in sub_task.operation.type):
                     if sub_task.name not in self.excluded_tasks:
                         task_names.append(sub_task.name)
         return task_names
