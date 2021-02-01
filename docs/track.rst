@@ -38,12 +38,18 @@ Alternatively, you can store Rally tracks also in a dedicated git repository whi
 * The `master` branch needs to work with the latest `master` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
-Rally implements a fallback logic so you don't need to define a branch for each patch release of Elasticsearch. For example:
+.. _track-repositories-fall-back-logic:
 
-* The branch `6.0.0-alpha1` will be chosen for the version ``6.0.0-alpha1`` of Elasticsearch.
-* The branch `5` will be chosen for all versions for Elasticsearch with the major version 5, e.g. ``5.0.0``, ``5.1.3`` (provided there is no specific branch).
+Rally implements a fallback logic in order of specificity up to the minor version level, so you don't need to define a branch for each patch release of Elasticsearch.
 
-Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
+Assuming the track repository has several branches, the order is:
+
+1. Exact branch matches; e.g. if the repo contains branches `7`, `7.1` and `7.10.2` and Elasticsearch version is `7.10.2`, `7.10.2` will be chosen as the track repo.
+2. Nearest minor matches;  e.g. if the repo contains branches `7`, `7.1` and `7.10` and Elasticsearch version is `7.10.2`, `7.10` will be chosen as the track repo. Alternatively if version is `7.9`, `7.1` will be chosen.
+3. Major branch matches; e.g. if the repo contains branches `7` and `7.10` and Elasticsearch version is `7.1`, `7` will be chosen as the track repo.
+4. Failing everything, `master` will be elected, e.g. if the repo contains branches `6`, `7` and `master` and Elasticsearch version is `8.1.0`, `master` will be chosen as the track repo.
+
+In general, Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
 
 Rally will also search for related files like mappings or custom runners or parameter sources in the track repository. However, Rally will use a separate directory to look for data files (``~/.rally/benchmarks/data/$TRACK_NAME/``). The reason is simply that we do not want to check multi-GB data files into git.
 

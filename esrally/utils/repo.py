@@ -103,7 +103,7 @@ class RallyRepository:
 
     def _find_matching_tag(self, distribution_version):
         tags = git.tags(self.repo_dir)
-        for version in versions.versions(distribution_version):
+        for version, _ in versions.VersionVariants(distribution_version).all_versions:
             # tags have a "v" prefix by convention.
             tag_candidate = "v{}".format(version)
             if tag_candidate in tags:

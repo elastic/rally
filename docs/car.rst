@@ -121,12 +121,7 @@ Rally provides a default team repository that is hosted on `Github <https://gith
 * The `master` branch needs to work with the latest `master` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
-Rally implements a fallback logic so you don't need to define a branch for each patch release of Elasticsearch. For example:
-
-* The branch `6.0.0-alpha1` will be chosen for the version ``6.0.0-alpha1`` of Elasticsearch.
-* The branch `5` will be chosen for all versions for Elasticsearch with the major version 5, e.g. ``5.0.0``, ``5.1.3`` (provided there is no specific branch).
-
-Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
+Rally implements a fallback logic similar to the one used for :ref:`track-repositories <track-repositories-fall-back-logic>`.
 
 Creating a new team repository
 """"""""""""""""""""""""""""""
