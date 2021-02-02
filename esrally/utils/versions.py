@@ -117,7 +117,7 @@ def best_match(available_alternatives, distribution_version):
     and the provided alternatives reflect this pattern.
     Best matches for distribution_version from available_alternatives may be:
      1. exact matches of major.minor
-     2. nearest minor within the same major
+     2. nearest prior minor within the same major
      3. major version
      4. as a last resort, `master`.
 
@@ -132,7 +132,7 @@ def best_match(available_alternatives, distribution_version):
         for version, version_type in versions.all_versions:
             if version in available_alternatives:
                 return version
-            # match nearest minor
+            # match nearest prior minor
             if version_type == "with_minor" and (latest_minor := latest_bounded_minor(available_alternatives, versions)):
                 if latest_minor:
                     return f"{versions.major}.{latest_minor}"

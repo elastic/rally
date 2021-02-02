@@ -45,7 +45,7 @@ Rally implements a fallback logic in order of specificity up to the minor versio
 Assuming the track repository has several branches, the order is:
 
 1. Exact branch matches; e.g. if the repo contains branches `7`, `7.1` and `7.10.2` and Elasticsearch version is `7.10.2`, `7.10.2` will be checked out.
-2. Nearest minor matches;  e.g. if the repo contains branches `7`, `7.1` and `7.10` and Elasticsearch version is `7.10.2`, `7.10` will be checked out. Alternatively if version is `7.9`, `7.1` will be checked out.
+2. Nearest prior minor matches;  e.g. if the repo contains branches `7`, `7.1` and `7.10` and Elasticsearch version is `7.10.2`, `7.10` will be checked out. Alternatively if version is `7.9`, `7.1` will be checked out.
 3. Major branch matches; e.g. if the repo contains branches `7` and `7.10` and Elasticsearch version is `7.1`, `7` will be checked out.
 4. Failing everything, `master` will be elected, e.g. if the repo contains branches `6`, `7` and `master` and Elasticsearch version is `8.1.0`, `master` will be checked out.
 

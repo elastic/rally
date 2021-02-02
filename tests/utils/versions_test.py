@@ -65,7 +65,7 @@ class TestsVersions:
 
         assert versions.latest_bounded_minor(alternatives, versions.VersionVariants("7.6.3")) == 2
         assert versions.latest_bounded_minor(alternatives, versions.VersionVariants("7.12.3")) == 10,\
-            "Closest alternative with major.minor, skip alternatives with major.minor.patch"
+            "Nearest alternative with major.minor, skip alternatives with major.minor.patch"
         assert versions.latest_bounded_minor(alternatives, versions.VersionVariants("7.11.2")) == 10,\
             "Skips all alternatives with major.minor.patch, even if exact match"
         assert versions.latest_bounded_minor(alternatives, versions.VersionVariants("7.1.0")) is None,\
@@ -125,16 +125,16 @@ class TestsVersions:
             "Best match for specific minor version"
 
         assert versions.best_match(["7", "7.11", "7.2", "5", "6", "master"], "7.12.0") == "7.11",\
-            "If no exact match, best match is the closest minor"
+            "If no exact match, best match is the nearest prior minor"
 
         assert versions.best_match(["7", "7.11", "7.2", "5", "6", "master"], "7.3.0") == "7.2",\
-            "If no exact match, best match is the closest minor"
+            "If no exact match, best match is the nearest prior minor"
 
         assert versions.best_match(["7", "7.11", "7.2", "5", "6", "master"], "7.10.0") == "7.2", \
-            "If no exact match, best match is the closest minor"
+            "If no exact match, best match is the nearest prior minor"
 
         assert versions.best_match(["7", "7.1", "7.11.1", "7.11.0", "7.2", "5", "6", "master"], "7.12.0") == "7.2",\
-            "Patch or patch-suffix branches are not supported and ignored, best match is closest minor"
+            "Patch or patch-suffix branches are not supported and ignored, best match is nearest prior minor"
 
         assert versions.best_match(["7", "7.11", "7.2", "5", "6", "master"], "7.1.0") == "7",\
             "If no exact match and no minor match, next best match is major version"
