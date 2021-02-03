@@ -424,10 +424,6 @@ class BulkIndex(Runner):
     Bulk indexes the given documents.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.first_request = True
-
     async def __call__(self, es, params):
         """
         Runs one bulk indexing operation.
@@ -596,14 +592,7 @@ class BulkIndex(Runner):
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)
-        # TODO: Remove this bwc-layer and turn "unit" into a mandatory parameter
-        # unit = mandatory(params, "unit", self)
-        if self.first_request:
-            self.first_request = False
-            if "unit" not in params:
-                self.logger.warning("Specify the mandatory parameter [unit] in the bulk parameter source. "
-                                    "Otherwise this track will fail with the next Rally version.")
-        unit = params.get("unit", "docs")
+        unit = mandatory(params, "unit", self)
         # parse responses lazily in the standard case - responses might be large thus parsing skews results and if no
         # errors have occurred we only need a small amount of information from the potentially large response.
         if not detailed_results:

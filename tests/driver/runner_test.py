@@ -383,7 +383,8 @@ class BulkIndexRunnerTests(TestCase):
                     "action_meta_data\n" +
                     "index_line\n",
             "action-metadata-present": True,
-            "bulk-size": 3
+            "bulk-size": 3,
+            "unit": "docs"
         }
 
         result = await bulk(es, bulk_params)
@@ -419,7 +420,8 @@ class BulkIndexRunnerTests(TestCase):
             "request-timeout": 3.0,
             "headers": { "x-test-id": "1234"},
             "opaque-id": "DESIRED-OPAQUE-ID",
-            "bulk-size": 3
+            "bulk-size": 3,
+            "unit": "docs"
         }
 
         result = await bulk(es, bulk_params)
@@ -455,6 +457,7 @@ class BulkIndexRunnerTests(TestCase):
                     "index_line\n",
             "action-metadata-present": False,
             "bulk-size": 3,
+            "unit": "docs",
             "index": "test-index",
             "type": "_doc"
         }
@@ -487,6 +490,7 @@ class BulkIndexRunnerTests(TestCase):
                     "index_line\n",
             "action-metadata-present": False,
             "bulk-size": 3,
+            "unit": "docs",
             "index": "test-index"
         }
 
