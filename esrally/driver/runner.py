@@ -457,135 +457,6 @@ class BulkIndex(Runner):
          in ``benchmarks/driver``.
         * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present, defaults to
          ``None`` and potentially falls back to the global timeout setting.
-
-        Returned meta data
-
-        The following meta data are always returned:
-
-        * ``index``: name of the affected index. May be `None` if it could not be derived.
-        * ``weight``: operation-agnostic representation of the bulk size denoted in ``unit``.
-        * ``unit``: The unit in which to interpret ``weight``.
-        * ``success``: A boolean indicating whether the bulk request has succeeded.
-        * ``success-count``: Number of successfully processed bulk items for this request. This value will only be
-                             determined in case of errors or the bulk-size has been specified in docs.
-        * ``error-count``: Number of failed bulk items for this request.
-        * ``took``` Value of the the ``took`` property in the bulk response.
-
-        If ``detailed-results`` is ``True`` the following meta data are returned in addition:
-
-        * ``ops``: A hash with the operation name as key (e.g. index, update, delete) and various counts as values. ``item-count`` contains
-          the total number of items for this key. Additionally, we return a separate counter each result (indicating e.g. the number of
-          created items, the number of deleted items etc.).
-        * ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a
-          shard distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and
-          ``failed`` shards (see examples below).
-        * ``bulk-request-size-bytes``: Total size of the bulk request body in bytes.
-        * ``total-document-size-bytes``: Total size of all documents within the bulk request body in bytes.
-
-        Here are a few examples:
-
-        If ``detailed-results`` is ``False`` a typical return value is::
-
-            {
-                "index": "my_index",
-                "weight": 5000,
-                "unit": "docs",
-                "success": True,
-                "success-count": 5000,
-                "error-count": 0,
-                "took": 20
-            }
-
-        Whereas the response will look as follow if there are bulk errors::
-
-            {
-                "index": "my_index",
-                "weight": 5000,
-                "unit": "docs",
-                "success": False,
-                "success-count": 4000,
-                "error-count": 1000,
-                "took": 20
-            }
-
-        If ``detailed-results`` is ``True`` a typical return value is::
-
-
-            {
-                "index": "my_index",
-                "weight": 5000,
-                "unit": "docs",
-                "bulk-request-size-bytes": 2250000,
-                "total-document-size-bytes": 2000000,
-                "success": True,
-                "success-count": 5000,
-                "error-count": 0,
-                "took": 20,
-                "ops": {
-                    "index": {
-                        "item-count": 5000,
-                        "created": 5000
-                    }
-                },
-                "shards_histogram": [
-                    {
-                        "item-count": 5000,
-                        "shards": {
-                            "total": 2,
-                            "successful": 2,
-                            "failed": 0
-                        }
-                    }
-                ]
-            }
-
-        An example error response may look like this::
-
-
-            {
-                "index": "my_index",
-                "weight": 5000,
-                "unit": "docs",
-                "bulk-request-size-bytes": 2250000,
-                "total-document-size-bytes": 2000000,
-                "success": False,
-                "success-count": 4000,
-                "error-count": 1000,
-                "took": 20,
-                "ops": {
-                    "index": {
-                        "item-count": 5000,
-                        "created": 4000,
-                        "noop": 1000
-                    }
-                },
-                "shards_histogram": [
-                    {
-                        "item-count": 4000,
-                        "shards": {
-                            "total": 2,
-                            "successful": 2,
-                            "failed": 0
-                        }
-                    },
-                    {
-                        "item-count": 500,
-                        "shards": {
-                            "total": 2,
-                            "successful": 1,
-                            "failed": 1
-                        }
-                    },
-                    {
-                        "item-count": 500,
-                        "shards": {
-                            "total": 2,
-                            "successful": 0,
-                            "failed": 2
-                        }
-                    }
-                ]
-            }
         """
         detailed_results = params.get("detailed-results", False)
         api_kwargs = self._default_kw_params(params)
@@ -904,22 +775,6 @@ class Query(Runner):
     * `pages`: Number of pages to retrieve at most for this scroll. If a scroll query does yield less results than the specified number of
                pages we will terminate earlier.
     * `results-per-page`: Number of results to retrieve per page.
-
-    Returned meta data
-
-    The following meta data are always returned:
-
-    * ``weight``: operation-agnostic representation of the "weight" of an operation (used internally by Rally for throughput calculation).
-                  Always 1 for normal queries and the number of retrieved pages for scroll queries.
-    * ``unit``: The unit in which to interpret ``weight``. Always "ops".
-    * ``hits``: Total number of hits for this operation.
-    * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
-    * ``timed_out``: Whether the search has timed out. For scroll queries, this flag is ``True`` if the flag was ``True`` for any of the
-                     queries issued.
-
-    For scroll queries we also return:
-
-    * ``pages``: Total number of pages that have been retrieved.
     """
     async def __call__(self, es, params):
         if "pages" in params and "results-per-page" in params:
@@ -1171,7 +1026,11 @@ class CreateIndex(Runner):
             api_params.pop(term, None)
         for index, body in indices:
             await es.indices.create(index=index, body=body, **api_params)
-        return len(indices), "ops"
+        return {
+            "weight": len(indices),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-index"
@@ -1187,7 +1046,11 @@ class CreateDataStream(Runner):
         request_params = mandatory(params, "request-params", self)
         for data_stream in data_streams:
             await es.indices.create_data_stream(data_stream, params=request_params)
-        return len(data_streams), "ops"
+        return {
+            "weight": len(data_streams),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-data-stream"
@@ -1214,7 +1077,11 @@ class DeleteIndex(Runner):
                 await es.indices.delete(index=index_name, params=request_params)
                 ops += 1
 
-        return ops, "ops"
+        return {
+            "weight": ops,
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "delete-index"
@@ -1241,7 +1108,11 @@ class DeleteDataStream(Runner):
                 await es.indices.delete_data_stream(data_stream, params=request_params)
                 ops += 1
 
-        return ops, "ops"
+        return {
+            "weight": ops,
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "delete-data-stream"
@@ -1259,7 +1130,11 @@ class CreateComponentTemplate(Runner):
         for template, body in templates:
             await es.cluster.put_component_template(name=template, body=body,
                                                     params=request_params)
-        return len(templates), "ops"
+        return {
+            "weight": len(templates),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-component-template"
@@ -1293,7 +1168,12 @@ class DeleteComponentTemplate(Runner):
                 self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
                 await es.cluster.delete_component_template(name=template_name, params=request_params)
                 ops_count += 1
-        return ops_count, "ops"
+        return {
+            "weight": ops_count,
+            "unit": "ops",
+            "success": True
+        }
+
 
     def __repr__(self, *args, **kwargs):
         return "delete-component-template"
@@ -1308,9 +1188,13 @@ class CreateComposableTemplate(Runner):
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
         for template, body in templates:
-            await es.cluster.put_index_template(name=template, body=body,
-                                                    params=request_params)
-        return len(templates), "ops"
+            await es.cluster.put_index_template(name=template, body=body, params=request_params)
+
+        return {
+            "weight": len(templates),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-composable-template"
@@ -1340,7 +1224,11 @@ class DeleteComposableTemplate(Runner):
                 await es.indices.delete(index=index_pattern)
                 ops_count += 1
 
-        return ops_count, "ops"
+        return {
+            "weight": ops_count,
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "delete-composable-template"
@@ -1358,7 +1246,11 @@ class CreateIndexTemplate(Runner):
             await es.indices.put_template(name=template,
                                           body=body,
                                           params=request_params)
-        return len(templates), "ops"
+        return {
+            "weight": len(templates),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-index-template"
@@ -1389,7 +1281,11 @@ class DeleteIndexTemplate(Runner):
                 await es.indices.delete(index=index_pattern)
                 ops_count += 1
 
-        return ops_count, "ops"
+        return {
+            "weight": ops_count,
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "delete-index-template"
@@ -1474,7 +1370,11 @@ class ShrinkIndex(Runner):
             await self._wait_for(es, final_target_index, f"shrink for index [{final_target_index}]")
             self.logger.info("Shrinking [%s] to [%s] has finished.", source_index, final_target_index)
         # ops_count is not really important for this operation...
-        return len(source_indices), "ops"
+        return {
+            "weight": len(source_indices),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "shrink-index"
@@ -2055,6 +1955,7 @@ class WaitForTransform(Runner):
                     "transform-id": transform_id,
                     "weight": transform_stats.get("documents_processed", 0),
                     "unit": "docs",
+                    "success": True
                 }
 
                 throughput = 0

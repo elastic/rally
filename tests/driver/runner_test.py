@@ -2365,7 +2365,11 @@ class CreateIndexRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertEqual((2, "ops"), result)
+        self.assertDictEqual({
+            "weight": 2,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.create.assert_has_calls([
             mock.call(index="indexA", body={"settings": {}}, params=request_params),
@@ -2395,7 +2399,12 @@ class CreateIndexRunnerTests(TestCase):
 
         result = await create_index_runner(es, params)
 
-        self.assertEqual((1, "ops"), result)
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True
+        }, result)
+
 
         es.indices.create.assert_called_once_with(index="indexA",
                                                   body={"settings": {}},
@@ -2426,7 +2435,11 @@ class CreateIndexRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertEqual((1, "ops"), result)
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.create.assert_called_once_with(index="indexA",
                                                   body={"settings": {}},
@@ -2470,7 +2483,11 @@ class CreateDataStreamRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertEqual((2, "ops"), result)
+        self.assertDictEqual({
+            "weight": 2,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.create_data_stream.assert_has_calls([
             mock.call("data-stream-A", params=request_params),
@@ -2509,7 +2526,11 @@ class DeleteIndexRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertEqual((1, "ops"), result)
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.delete.assert_called_once_with(index="indexB", params={})
 
@@ -2531,7 +2552,11 @@ class DeleteIndexRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertEqual((2, "ops"), result)
+        self.assertDictEqual({
+            "weight": 2,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.delete.assert_has_calls([
             mock.call(index="indexA", params=params["request-params"]),
@@ -2557,7 +2582,11 @@ class DeleteDataStreamRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertEqual((1, "ops"), result)
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.delete_data_stream.assert_called_once_with("data-stream-B", params={})
 
@@ -2579,7 +2608,11 @@ class DeleteDataStreamRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertEqual((2, "ops"), result)
+        self.assertDictEqual({
+            "weight": 2,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.delete_data_stream.assert_has_calls([
             mock.call("data-stream-A", ignore=[404], params=params["request-params"]),
@@ -2609,7 +2642,11 @@ class CreateIndexTemplateRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertEqual((2, "ops"), result)
+        self.assertDictEqual({
+            "weight": 2,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.put_template.assert_has_calls([
             mock.call(name="templateA", body={"settings": {}}, params=params["request-params"]),
@@ -2653,7 +2690,11 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
-        self.assertEqual((3, "ops"), result)
+        self.assertDictEqual({
+            "weight": 3,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.delete_template.assert_has_calls([
             mock.call(name="templateA", params=params["request-params"]),
@@ -2683,7 +2724,11 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
-        self.assertEqual((1, "ops"), result)
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.delete_template.assert_called_once_with(name="templateB", params=params["request-params"])
         # not called because the matching index is empty.
@@ -2721,7 +2766,11 @@ class CreateComponentTemplateRunnerTests(TestCase):
         }
 
         result = await r(es, params)
-        self.assertEqual((2, "ops"), result)
+        self.assertDictEqual({
+            "weight": 2,
+            "unit": "ops",
+            "success": True
+        }, result)
         es.cluster.put_component_template.assert_has_calls([
             mock.call(name="templateA", body={"template":{"mappings":{"properties":{"@timestamp":{"type": "date"}}}}},
                       params=params["request-params"]),
@@ -2765,7 +2814,11 @@ class DeleteComponentTemplateRunnerTests(TestCase):
             "only-if-exists": False
         }
         result = await r(es, params)
-        self.assertEqual((2, "ops"), result)
+        self.assertDictEqual({
+            "weight": 2,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.cluster.delete_component_template.assert_has_calls([
             mock.call(name="templateA", params=params["request-params"], ignore=[404]),
@@ -2798,10 +2851,13 @@ class DeleteComponentTemplateRunnerTests(TestCase):
         }
         result = await r(es, params)
 
-        self.assertEqual((1, "ops"), result)
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.cluster.delete_component_template.assert_called_once_with(name="templateB", params=params["request-params"])
-
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2836,7 +2892,11 @@ class CreateComposableTemplateRunnerTests(TestCase):
         }
 
         result = await r(es, params)
-        self.assertEqual((2, "ops"), result)
+        self.assertDictEqual({
+            "weight": 2,
+            "unit": "ops",
+            "success": True
+        }, result)
         es.cluster.put_index_template.assert_has_calls([
             mock.call(name="templateA", body={"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},
                                               "composed_of":["ct1","ct2"]}, params=params["request-params"]),
@@ -2882,7 +2942,11 @@ class DeleteComposableTemplateRunnerTests(TestCase):
         result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
-        self.assertEqual((3, "ops"), result)
+        self.assertDictEqual({
+            "weight": 3,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.delete_index_template.assert_has_calls([
             mock.call(name="templateA", params=params["request-params"], ignore=[404]),
@@ -2912,7 +2976,11 @@ class DeleteComposableTemplateRunnerTests(TestCase):
         result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
-        self.assertEqual((1, "ops"), result)
+        self.assertDictEqual({
+            "weight": 1,
+            "unit": "ops",
+            "success": True
+        }, result)
 
         es.indices.delete_index_template.assert_called_once_with(name="templateB", params=params["request-params"])
         # not called because the matching index is empty.
