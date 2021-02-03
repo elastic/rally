@@ -904,6 +904,8 @@ class Query(Runner):
     * `pages`: Number of pages to retrieve at most for this scroll. If a scroll query does yield less results than the specified number of
                pages we will terminate earlier.
     * `results-per-page`: Number of results to retrieve per page.
+    * `request-id`: a user specified string identifying the query. This will be included in rally metrics to allow query
+                execution to be tracked.
 
     Returned meta data
 
@@ -920,7 +922,13 @@ class Query(Runner):
     For scroll queries we also return:
 
     * ``pages``: Total number of pages that have been retrieved.
+
+    If specified, we also return:
+
+    * `request_id``: The user specified id identifying the query.
+
     """
+
     async def __call__(self, es, params):
         if "pages" in params and "results-per-page" in params:
             return await self.scroll_query(es, params)
@@ -936,6 +944,7 @@ class Query(Runner):
         body = mandatory(params, "body", self)
         doc_type = params.get("type")
         detailed_results = params.get("detailed-results", False)
+        request_id = params.get("request-id", None)
         encoding_header = self._query_headers(params)
         if encoding_header is not None:
             headers.update(encoding_header)
@@ -951,28 +960,22 @@ class Query(Runner):
 
         r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
 
-        if detailed_results:
-            props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
-            hits_total = props.get("hits.total.value", props.get("hits.total", 0))
-            hits_relation = props.get("hits.total.relation", "eq")
-            timed_out = props.get("timed_out", False)
-            took = props.get("took", 0)
-
-            return {
+        stats = {
                 "weight": 1,
                 "unit": "ops",
                 "success": True,
-                "hits": hits_total,
-                "hits_relation": hits_relation,
-                "timed_out": timed_out,
-                "took": took
-            }
-        else:
-            return {
-                "weight": 1,
-                "unit": "ops",
-                "success": True
-            }
+                "request_id": request_id
+        }
+        if request_id:
+            stats["request_id"] = request_id
+
+        if detailed_results:
+            props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+            stats["hits"] = props.get("hits.total.value", props.get("hits.total", 0))
+            stats["hits_relation"] = props.get("hits.total.relation", "eq")
+            stats["timed_out"] = props.get("timed_out", False)
+            stats["took"] = props.get("took", 0)
+        return stats
 
     async def scroll_query(self, es, params):
         request_params, headers = self._transport_request_params(params)
@@ -984,6 +987,7 @@ class Query(Runner):
         # explicitly convert to int to provoke an error otherwise
         total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
         size = params.get("results-per-page")
+        request_id = params.get("request-id", None)
         encoding_header = self._query_headers(params)
         if encoding_header is not None:
             headers.update(encoding_header)
@@ -1044,8 +1048,7 @@ class Query(Runner):
                 except BaseException:
                     self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in "
                                           "Elasticsearch and will skew your benchmark results.", scroll_id)
-
-        return {
+        stats = {
             "weight": retrieved_pages,
             "pages": retrieved_pages,
             "hits": hits,
@@ -1054,6 +1057,9 @@ class Query(Runner):
             "timed_out": timed_out,
             "took": took
         }
+        if request_id:
+            stats["request_id"] = request_id
+        return stats
 
     async def _raw_search(self, es, doc_type, index, body, params, headers=None):
         components = []

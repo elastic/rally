@@ -2133,6 +2133,7 @@ class SearchParamSourceTests(TestCase):
         index1 = track.Index(name="index1", types=["type1"])
 
         source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
+            "request-id": "user-specified-id",
             "request-params": {
                 "_source_include": "some_field"
             },
@@ -2144,7 +2145,7 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(10, len(p))
+        self.assertEqual(11, len(p))
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertIsNone(p["request-timeout"])
@@ -2161,6 +2162,7 @@ class SearchParamSourceTests(TestCase):
                 "match_all": {}
             }
         }, p["body"])
+        self.assertEqual("user-specified-id", p["request-id"])
 
     def test_user_specified_overrides_defaults(self):
         index1 = track.Index(name="index1", types=["type1"])

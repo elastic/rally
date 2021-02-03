@@ -1498,6 +1498,7 @@ class QueryRunnerTests(TestCase):
             "index": "_all",
             "cache": False,
             "detailed-results": True,
+            "request-id": "user-specified-id",
             "body": None,
             "request-params": {
                 "q": "user:kimchy"
@@ -1514,6 +1515,7 @@ class QueryRunnerTests(TestCase):
         self.assertFalse(result["timed_out"])
         self.assertEqual(62, result["took"])
         self.assertFalse("error-type" in result)
+        self.assertEqual("user-specified-id", result["request_id"])
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1558,7 +1560,8 @@ class QueryRunnerTests(TestCase):
             "request-params": {
                 "q": "user:kimchy"
             },
-            "detailed-results": False
+            "detailed-results": False,
+            "request-id": "user-specified-id"
         }
 
         async with query_runner:
@@ -1571,6 +1574,7 @@ class QueryRunnerTests(TestCase):
         self.assertNotIn("timed_out", result)
         self.assertNotIn("took", result)
         self.assertNotIn("error-type", result)
+        self.assertEqual("user-specified-id", result["request_id"])
 
         es.transport.perform_request.assert_called_once_with(
             "GET",

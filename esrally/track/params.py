@@ -493,6 +493,7 @@ class SearchParamSource(ParamSource):
                     f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         request_cache = params.get("cache", None)
         detailed_results = params.get("detailed-results", False)
+        request_id = params.get("request-id", None)
         query_body = params.get("body", None)
         pages = params.get("pages", None)
         results_per_page = params.get("results-per-page", None)
@@ -512,7 +513,8 @@ class SearchParamSource(ParamSource):
         if not target_name:
             raise exceptions.InvalidSyntax(
                 f"'index' or 'data-stream' is mandatory and is missing for operation '{kwargs.get('operation_name')}'")
-
+        if request_id:
+            self.query_params["request-id"] = request_id
         if pages:
             self.query_params["pages"] = pages
         if results_per_page:
