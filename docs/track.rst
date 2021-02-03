@@ -298,7 +298,12 @@ Each entry in the ``documents`` list consists of the following properties:
   * Google Storage: Either using `client library authentication <https://cloud.google.com/storage/docs/reference/libraries#setting_up_authentication>`_ or by presenting an `oauth2 token <https://cloud.google.com/storage/docs/authentication>`_ via the ``GOOGLE_AUTH_TOKEN`` environment variable, typically done using: ``export GOOGLE_AUTH_TOKEN=$(gcloud auth print-access-token)``.
 * ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Currently, only ``bulk`` is supported.
 * ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
-* ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
+* ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an `action and meta-data <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-desc>`_ line (``true``) or only documents (``false``).
+
+    .. note::
+
+        In this case the ``documents`` property should only reflect the number of documents and not additionally include the number of action and metadata lines.
+
 * ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
