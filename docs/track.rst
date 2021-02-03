@@ -302,7 +302,7 @@ Each entry in the ``documents`` list consists of the following properties:
 
     .. note::
 
-        In this case the ``documents`` property should only reflect the number of documents and not additionally include the number of action and metadata lines.
+        When this is ``true``, the ``documents`` property should only reflect the number of documents and not additionally include the number of action and metadata lines.
 
 * ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
