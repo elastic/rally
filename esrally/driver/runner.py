@@ -904,7 +904,8 @@ class Query(Runner):
     * `pages`: Number of pages to retrieve at most for this scroll. If a scroll query does yield less results than the specified number of
                pages we will terminate earlier.
     * `results-per-page`: Number of results to retrieve per page.
-    * `request-id`: a user specified string identifying the query. This will be included in rally metrics to allow query execution to be tracked.
+    * `request-id`: a user specified string identifying the query. This will be included in rally metrics to allow query
+                execution to be tracked.
 
     Returned meta data
 
@@ -962,8 +963,7 @@ class Query(Runner):
         stats = {
                 "weight": 1,
                 "unit": "ops",
-                "success": True,
-                "request_id": request_id
+                "success": True
         }
         if request_id:
             stats["request_id"] = request_id
