@@ -68,8 +68,8 @@ def components(version, strict=True):
 
 
 def variants_of(version):
-    for version, _ in versions.VersionVariants(distribution_version).all_versions:
-        yield version
+    for v, _ in VersionVariants(version).all_versions:
+        yield v
 
 class VersionVariants:
     """
