@@ -67,6 +67,10 @@ def components(version, strict=True):
     raise exceptions.InvalidSyntax("version string '%s' does not conform to pattern '%s'" % (version, versions_pattern.pattern))
 
 
+def variants_of(version):
+    for version, _ in versions.VersionVariants(distribution_version).all_versions:
+        yield version
+
 class VersionVariants:
     """
     Build all possible variations of a version.
