@@ -65,26 +65,20 @@ class BarCharts:
     @staticmethod
     # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
     def format_title(environment, track_name, flavor=None, es_license=None, suffix=None):
-        title = "{}-{}".format(environment, track_name)
+        title = f"{environment}-{track_name}"
 
         if suffix:
-            title += "-{}".format(suffix)
+            title += f"-{suffix}"
 
         return title
 
     @staticmethod
     def filter_string(environment, race_config):
         if race_config.name:
-            return 'environment:"{}" AND active:true AND user-tags.name:"{}"'.format(
-                environment,
-                race_config.name)
+            return f"environment:\"{environment}\" AND active:true AND user-tags.name:\"{race_config.name}\""
         else:
-            return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
-                environment,
-                race_config.track,
-                race_config.challenge,
-                race_config.car,
-                race_config.node_count)
+            return f"environment:\"{environment}\" AND active:true AND track:\"{race_config.track}\""\
+                   f" AND challenge:\"{race_config.challenge}\" AND car:\"{race_config.car}\" AND node-count:{race_config.node_count}"
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -791,7 +785,7 @@ class TimeSeriesCharts:
             title = [environment, es_license, str(track_name)]
         elif flavor and es_license:
             raise exceptions.RallyAssertionError(
-                "Specify either flavor [{}] or license [{}] but not both".format(flavor, es_license))
+                f"Specify either flavor [{flavor}] or license [{es_license}] but not both")
         else:
             title = [environment, str(track_name)]
         if suffix:
@@ -804,19 +798,12 @@ class TimeSeriesCharts:
         nightly_extra_filter = ""
         if race_config.es_license:
             # Time series charts need to support different licenses and produce customized titles.
-            nightly_extra_filter = ' AND user-tags.license:"{}"'.format(race_config.es_license)
+            nightly_extra_filter = f" AND user-tags.license:\"{race_config.es_license}\""
         if race_config.name:
-            return 'environment:"{}" AND active:true AND user-tags.name:"{}"{}'.format(
-                environment,
-                race_config.name,
-                nightly_extra_filter)
+            return f"environment:\"{environment}\" AND active:true AND user-tags.name:\"{race_config.name}\"{nightly_extra_filter}"
         else:
-            return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
-                environment,
-                race_config.track,
-                race_config.challenge,
-                race_config.car,
-                race_config.node_count)
+            return f"environment:\"{environment}\" AND active:true AND track:\"{race_config.track}\""\
+                   f" AND challenge:\"{race_config.challenge}\" AND car:\"{race_config.car}\" AND node-count:{race_config.node_count}"
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -1033,7 +1020,7 @@ class TimeSeriesCharts:
                         "seperate_axis": 1,
                         "split_mode": "filters",
                         "stacked": "none",
-                        "filter": "environment:{} AND track:\"{}\"".format(environment, race_config.track),
+                        "filter": f"environment:{environment} AND track:\"{race_config.track}\"",
                         "split_filters": [
                             {
                                 "filter": "memory_segments",
@@ -1484,7 +1471,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
                 "y": (row * height),
                 "w": chart_width,
                 "h": height,
-                "i": "{}".format(panelIndex)
+                "i": f"{panelIndex}"
             },
             "type": "visualization",
             "version": "7.10.2"
