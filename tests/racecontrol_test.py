@@ -52,10 +52,6 @@ def unittest_pipeline():
 def test_finds_available_pipelines():
     expected = [
         ["from-sources", "Builds and provisions Elasticsearch, runs a benchmark and reports results."],
-        ["from-sources-complete",
-         "Builds and provisions Elasticsearch, runs a benchmark and reports results [deprecated]."],
-        ["from-sources-skip-build",
-         "Provisions Elasticsearch (skips the build), runs a benchmark and reports results [deprecated]."],
         ["from-distribution",
          "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results."],
         ["benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results"],

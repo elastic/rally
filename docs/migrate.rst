@@ -11,6 +11,11 @@ Previously, Rally has implicitly used the unit ``docs`` for bulk operations. Wit
 
     esrally.exceptions.DataError: Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'unit'. Add it to your parameter source and try again.
 
+Pipelines from-sources-complete and from-sources-skip-build are removed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The previously deprecated pipelines ``from-sources-complete`` and ``from-sources-skip-build`` have been removed. Specify ``--pipeline=from-sources`` instead.
+
 Migrating to Rally 2.0.4
 ------------------------
 
