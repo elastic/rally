@@ -849,10 +849,44 @@ class Query(Runner):
     * ``pages``: Total number of pages that have been retrieved.
     """
     async def __call__(self, es, params):
+        if params.get("use-search-after"):
+            return await self.search_after_query(es, params)
         if "pages" in params and "results-per-page" in params:
             return await self.scroll_query(es, params)
         else:
             return await self.request_body_query(es, params)
+
+    async def search_after_query(self, es, params):
+        request_params, headers = self._transport_request_params(params)
+        body = mandatory(params, "body", self)
+        # explicitly convert to int to provoke an error otherwise
+        total_pages = sys.maxsize if params["pages"] == "all" else int(params["pages"])
+        size = params.get("results-per-page", 10)
+        body["size"] = size
+        pit_op = params.get("with-point-in-time-from")
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
+
+        for _ in range(total_pages):
+            if pit_op:
+                pit_id = CompositeContext.get(pit_op)
+                body["pit"] = {"id": pit_id,
+                               "keep_alive": "1m" } # todo parameterize second keep_alive
+                # these are disallowed as they are encoded in the pit_id
+                for item in ["index", "routing", "preference"]:
+                    body.pop()
+            props = await self._raw_search(es, doc_type=None, index=None, body=body.copy(), params=request_params, headers=headers)
+            if pit_op and props.get("pit_id") is not None:
+                # per the documentation the response pit id is most up-to-date
+                CompositeContext.put(pit_op, props.get("pit_id"))
+            # prefer less forgiving accessors here, to raise exception on an unexpected response
+            hits = props["hits"]
+            if not hits["hits"]:
+                break
+            # ... else set up next search
+            docs = hits.get("hits")
+            last_sort = docs[-1].get("sort")
+            body["search_after"] = last_sort
 
     async def request_body_query(self, es, params):
         request_params, headers = self._transport_request_params(params)
@@ -2074,46 +2108,16 @@ class DeleteAsyncSearch(Runner):
 class OpenPointInTime(Runner):
     async def __call__(self, es, params):
         index = mandatory(params, "index", self)
+        keep_alive = params.pop("keep-alive", None)
         response = es.open_point_in_time(index=index,
-                                         params=params)
+                                         params=params,
+                                         keep_alive=keep_alive)
         id = response.get("id")
         op_name = mandatory(params, "name", self)
-        # is name uniqueness enforced somewhere? this may collide with async searches
         CompositeContext.put(op_name, id)
 
     def __repr__(self, *args, **kwargs):
         return "open-point-in-time"
-
-
-class QueryWithSearchAfterScrolling(Query):
-    async def __call__(self, es, params):
-        body = {"query": mandatory(params, "query", self),
-                "sort": mandatory(params, "sort", self)}
-        size = params.get("results-per-page", 10)
-        body["size"] = size
-        pit_op = params.get("with-point-in-time-from")
-        request_params, headers = self._transport_request_params(params)
-
-        while True:
-            if pit_op:
-                pit_id = CompositeContext.get(pit_op)
-                body["pit"] = {"id": pit_id,
-                               "keep_alive": "1m" }
-            props = await self._raw_search(es, doc_type=None, index=None, body=body.copy(), params=request_params, headers=headers)
-            if pit_op and props.get("pit_id") is not None:
-                # per the documentation the response pit id may be most up-to-date
-                CompositeContext.put(pit_op, props.get("pit_id"))
-            # prefer less forgiving accessors here, to raise exception on an unexpected response
-            hits = props["hits"]
-            if hits["total"] < size:
-                break
-            # ... else set up next search
-            docs = hits.get("hits")
-            last_sort = docs[-1].get("sort")
-            body["search_after"] = last_sort
-
-    def __repr__(self, *args, **kwargs):
-        return "query-with-search-after-scrolling"
 
 
 class ClosePointInTime(Runner):

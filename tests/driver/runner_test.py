@@ -4578,10 +4578,13 @@ class QueryWithSearchAfterScrollTests(TestCase):
         pit_id = "0123456789abcdef"
         params = {
             "name": "search-with-pit",
+            "use-search-after": True,
             "with-point-in-time-from": pit_op,
             "results-per-page": 2,
-            "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
-            "query": {"match-all": {}}
+            "body": {
+                "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
+                "query": {"match-all": {}}
+            }
         }
 
         page_1 = {
@@ -4621,7 +4624,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
         es.transport.perform_request.side_effect = [as_future(page_1),
                                                     as_future(page_2)]
 
-        r = runner.QueryWithSearchAfterScrolling()
+        r = runner.Query()
 
         async with runner.CompositeContext():
             runner.CompositeContext.put(pit_op, pit_id)
@@ -4654,10 +4657,13 @@ class QueryWithSearchAfterScrollTests(TestCase):
     async def test_search_after_without_pit(self, es):
         params = {
             "name": "search-with-pit",
+            "use-search-after": True,
             "index": "test-index-1",
             "results-per-page": 2,
-            "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
-            "query": {"match-all": {}}
+            "body": {
+                "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
+                "query": {"match-all": {}}
+            }
         }
         page_1 = {
             "took": 10,
@@ -4695,7 +4701,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
 
         es.transport.perform_request.side_effect = [as_future(page_1),
                                                     as_future(page_2)]
-        r = runner.QueryWithSearchAfterScrolling()
+        r = runner.Query()
         await r(es, params)
 
         es.transport.perform_request.assert_has_calls([mock.call('GET', '/_search', params={},
