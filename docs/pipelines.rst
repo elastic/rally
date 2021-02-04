@@ -12,8 +12,6 @@ You can get a list of all pipelines with ``esrally list pipelines``::
     Name                     Description
     -----------------------  ---------------------------------------------------------------------------------------------
     from-sources             Builds and provisions Elasticsearch, runs a benchmark and reports results.
-    from-sources-complete    Builds and provisions Elasticsearch, runs a benchmark and reports results [deprecated].
-    from-sources-skip-build  Provisions Elasticsearch (skips the build), runs a benchmark and reports results [deprecated].
     from-distribution        Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.
     benchmark-only           Assumes an already running Elasticsearch instance, runs a benchmark and reports results
 
@@ -67,13 +65,3 @@ Artifacts are cached for seven days by default in ``~/.rally/benchmarks/distribu
 
 * ``cache`` (default: ``True``): Set to ``False`` to disable artifact caching.
 * ``cache.days`` (default: ``7``): The maximum age in days of an artifact before it gets evicted from the artifact cache.
-
-from-sources-complete
-~~~~~~~~~~~~~~~~~~~~~
-
-This deprecated pipeline is an alias for ``from-sources`` and is only provided for backwards-compatibility. Use ``from-sources`` instead.
-
-from-sources-skip-build
-~~~~~~~~~~~~~~~~~~~~~~~
-
-This deprecated pipeline is similar to ``from-sources-complete`` except that it assumes you have built the binary once. Use ``from-sources`` instead which caches built artifacts automatically.

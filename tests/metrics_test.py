@@ -1513,7 +1513,7 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.params", {})
         cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
         cfg.add(config.Scope.application, "race", "user.tag", "")
-        cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
+        cfg.add(config.Scope.application, "race", "pipeline", "from-sources")
         cfg.add(config.Scope.application, "track", "params", {})
 
         index1 = track.Task(name="index #1", operation=track.Operation(name="index", operation_type=track.OperationType.Bulk, params=None))
@@ -1596,7 +1596,7 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.params", {})
         cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
         cfg.add(config.Scope.application, "race", "user.tag", "")
-        cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
+        cfg.add(config.Scope.application, "race", "pipeline", "from-sources")
         cfg.add(config.Scope.application, "track", "params", {})
 
         index = track.Task(name="index #1", operation=track.Operation(name="index", operation_type=track.OperationType.Bulk, params=None))

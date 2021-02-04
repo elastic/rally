@@ -25,5 +25,5 @@ def test_sources(cfg):
                         "--challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu") == 0
 
     it.wait_until_port_is_free()
-    assert it.race(cfg, "--pipeline=from-sources-skip-build --track=geonames --test-mode "
+    assert it.race(cfg, "--pipeline=from-sources --track=geonames --test-mode "
                         "--challenge=append-no-conflicts-index-only --car=\"4gheap,ea\"") == 0
