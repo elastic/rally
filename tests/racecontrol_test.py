@@ -69,11 +69,10 @@ def test_prevents_running_an_unknown_pipeline():
     cfg.add(config.Scope.benchmark, "race", "pipeline", "invalid")
     cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "5.0.0")
 
-    with pytest.raises(exceptions.SystemSetupError) as ex:
+    with pytest.raises(
+            exceptions.SystemSetupError,
+            match=r"Unknown pipeline \[invalid]. List the available pipelines with [\S]+? list pipelines."):
         racecontrol.run(cfg)
-
-    assert re.match(r"Unknown pipeline \[invalid]. List the available pipelines with [\S]+? list pipelines.",
-                    ex.value.message)
 
 
 def test_passes_benchmark_only_pipeline_in_docker(running_in_docker, benchmark_only_pipeline):
@@ -89,13 +88,15 @@ def test_fails_without_benchmark_only_pipeline_in_docker(running_in_docker, unit
     cfg = config.Config()
     cfg.add(config.Scope.benchmark, "race", "pipeline", "unit-test-pipeline")
 
-    with pytest.raises(exceptions.SystemSetupError) as ex:
+    with pytest.raises(
+            exceptions.SystemSetupError,
+            match=re.escape(
+                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
+                "For more details read the docs for the benchmark-only pipeline in "
+                "https://esrally.readthedocs.io/en/latest/pipelines.html#benchmark-only\n"
+            )):
         racecontrol.run(cfg)
-
-    assert ex.value.message == "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n" \
-                               "Add --pipeline=benchmark-only in your Rally arguments and try again.\n" \
-                               "For more details read the docs for the benchmark-only pipeline in " \
-                               "https://esrally.readthedocs.io/en/latest/pipelines.html#benchmark-only\n"
 
 
 def test_runs_a_known_pipeline(unittest_pipeline):
