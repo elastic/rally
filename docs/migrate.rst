@@ -11,6 +11,18 @@ Previously, Rally has implicitly used the unit ``docs`` for bulk operations. Wit
 
     esrally.exceptions.DataError: Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'unit'. Add it to your parameter source and try again.
 
+Rally requires a subcommand
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously a subcommand was optional when running a benchmark. With Rally 2.1.0 a subcommand is always required. So instead of invoking::
+
+    esrally --distribution-version=7.10.0
+
+Invoke Rally with the ``race`` subcommand instead::
+
+    esrally race --distribution-version=7.10.0
+
+
 Migrating to Rally 2.0.4
 ------------------------
 
