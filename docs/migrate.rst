@@ -1,6 +1,16 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.1.0
+------------------------
+
+Custom bulk parameter sources need to provide a unit
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously, Rally has implicitly used the unit ``docs`` for bulk operations. With this release, custom parameter sources for bulk operations need to provide also a ``unit`` property or benchmarks will fail with::
+
+    esrally.exceptions.DataError: Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'unit'. Add it to your parameter source and try again.
+
 Migrating to Rally 2.0.4
 ------------------------
 
