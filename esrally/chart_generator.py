@@ -1579,7 +1579,8 @@ class RaceConfig:
                 # Doing a lenient match to allow for that.
                 if track.OperationType.Bulk.to_hyphenated_string() in sub_task.operation.type:
                     if track.OperationType.Bulk.to_hyphenated_string() != sub_task.operation.type:
-                        console.info(f"Found [{sub_task.name}] of type [{sub_task.operation.type}] in [{self.challenge}], adding it to indexing dashboard.\n", flush=True)
+                        console.info(f"Found [{sub_task.name}] of type [{sub_task.operation.type}] in "\
+                                     f"[{self.challenge}], adding it to indexing dashboard.\n", flush=True)
                     if sub_task.name not in self.excluded_tasks:
                         task_names.append(sub_task.name)
         return task_names
