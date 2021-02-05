@@ -1,3 +1,28 @@
+### 2.0.4
+
+#### Enhancements
+
+* [#1163](https://github.com/elastic/rally/pull/1163): Make some document properties extensible
+* [#1162](https://github.com/elastic/rally/pull/1162): Log trace of uncaught exception in load generator
+* [#1159](https://github.com/elastic/rally/pull/1159): Rally improve artifact download headers
+* [#1157](https://github.com/elastic/rally/pull/1157): Add support for assertions
+* [#1155](https://github.com/elastic/rally/pull/1155): Deprecate invoking Rally without a subcommand
+* [#1154](https://github.com/elastic/rally/pull/1154): Allow to filter tasks by tag
+* [#1153](https://github.com/elastic/rally/pull/1153): Only consider race id when loading a race
+* [#1146](https://github.com/elastic/rally/pull/1146): Show mean throughput in command line report
+* [#1143](https://github.com/elastic/rally/pull/1143): Upgrade psutil dependency
+
+#### Bug Fixes
+
+* [#1160](https://github.com/elastic/rally/pull/1160): Include empty mean value in summary stats
+* [#1147](https://github.com/elastic/rally/pull/1147): Don't require a name to register a track processor
+
+#### Doc Changes
+
+* [#1169](https://github.com/elastic/rally/pull/1169): Document meta-data returned by operations
+* [#1167](https://github.com/elastic/rally/pull/1167): Clarify num of docs in corpora when action and metadata is used
+* [#1148](https://github.com/elastic/rally/pull/1148): Make docs build stricter
+
 ### 2.0.3
 
 #### Highlights

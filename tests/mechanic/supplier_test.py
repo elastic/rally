@@ -622,7 +622,7 @@ class CreateSupplierTests(TestCase):
         self.assertDictEqual({"elasticsearch": ("source", "abc", True)}, requirements)
 
     def test_derive_supply_requirements_es_source_skip(self):
-        # corresponds to --pipeline=from-sources-skip-build
+        # corresponds to --pipeline=from-sources
         requirements = supplier._supply_requirements(
             sources=True, distribution=False, build=False, plugins=[], revisions={"elasticsearch": "current"}, distribution_version=None)
         self.assertDictEqual({"elasticsearch": ("source", "current", False)}, requirements)
@@ -665,7 +665,7 @@ class CreateSupplierTests(TestCase):
         }, requirements)
 
     def test_derive_supply_requirements_es_distribution_and_plugin_source_skip(self):
-        # corresponds to --from-sources-skip-build --revision="community-plugin:current" --distribution-version="6.0.0"
+        # corresponds to --from-sources --revision="community-plugin:current" --distribution-version="6.0.0"
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
@@ -713,7 +713,7 @@ class CreateSupplierTests(TestCase):
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False, variables={"enabled": True})
 
-        # --pipeline=from-sources-skip-build
+        # --pipeline=from-sources
         composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=False, car=car, plugins=[
             core_plugin,
             external_plugin
@@ -744,7 +744,7 @@ class CreateSupplierTests(TestCase):
 
         car = team.Car("default", root_path=None, config_paths=[])
 
-        # --from-sources-skip-build --revision="community-plugin:current" (distribution version is missing!)
+        # --from-sources --revision="community-plugin:current" (distribution version is missing!)
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             supplier.create(cfg, sources=True, distribution=False, build=False, car=car, plugins=[
                 core_plugin,

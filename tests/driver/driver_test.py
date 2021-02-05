@@ -1091,6 +1091,7 @@ class AsyncExecutorTests(TestCase):
                                                             "body": ["action_metadata_line", "index_line"],
                                                             "action-metadata-present": True,
                                                             "bulk-size": 1,
+                                                            "unit": "docs",
                                                             # we need this because DriverTestParamSource does not know
                                                             # that we only have one bulk and hence size() returns
                                                             # incorrect results
