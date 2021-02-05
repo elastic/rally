@@ -1574,7 +1574,12 @@ class RaceConfig:
         task_names = []
         for task in self.track.find_challenge_or_default(self.challenge).schedule:
             for sub_task in task:
+                # We are looking for type bulk operations to add to indexing throughput chart.
+                # For the observability track, the index operation is of type raw-bulk, instead of type bulk.
+                # Doing a lenient match to allow for that.
                 if track.OperationType.Bulk.to_hyphenated_string() in sub_task.operation.type:
+                    if track.OperationType.Bulk.to_hyphenated_string() != sub_task.operation.type:
+                        console.info(f"Found [{sub_task.name}] of type [{sub_task.operation.type}] in [{self.challenge}], adding it to indexing dashboard.\n", flush=True)
                     if sub_task.name not in self.excluded_tasks:
                         task_names.append(sub_task.name)
         return task_names
