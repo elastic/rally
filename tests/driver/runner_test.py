@@ -1371,7 +1371,7 @@ class QueryRunnerTests(TestCase):
         params = {
             "cache": False,
             "detailed-results": True,
-            "body": None,
+            "body": {},
             "request-params": {
                 "q": "user:kimchy"
             }
@@ -1426,7 +1426,7 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
-            "body": None,
+            "body": {},
             "request-params": {
                 "q": "user:kimchy"
             },
@@ -4580,6 +4580,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
             "name": "search-with-pit",
             "use-search-after": True,
             "with-point-in-time-from": pit_op,
+            "pages": "all",
             "results-per-page": 2,
             "body": {
                 "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
@@ -4640,7 +4641,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
                                                                        'size': 2,
                                                                        'pit': {'id': '0123456789abcdef',
                                                                                'keep_alive': '1m'}},
-                                                                 headers={}),
+                                                                 headers=None),
                                                        mock.call('GET', '/_search', params={},
                                                                  body={'query': {'match-all': {}},
                                                                        'sort': [
@@ -4650,7 +4651,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
                                                                        'pit': {'id': 'fedcba9876543210',
                                                                                'keep_alive': '1m'},
                                                                        'search_after': [1609780186, '2']},
-                                                                 headers={})])
+                                                                 headers=None)])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -4659,6 +4660,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
             "name": "search-with-pit",
             "use-search-after": True,
             "index": "test-index-1",
+            "pages": "all",
             "results-per-page": 2,
             "body": {
                 "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
@@ -4704,21 +4706,21 @@ class QueryWithSearchAfterScrollTests(TestCase):
         r = runner.Query()
         await r(es, params)
 
-        es.transport.perform_request.assert_has_calls([mock.call('GET', '/_search', params={},
+        es.transport.perform_request.assert_has_calls([mock.call('GET', '/test-index-1/_search', params={},
                                                                  body={'query': {'match-all': {}},
                                                                        'sort': [
                                                                            {'timestamp': 'asc',
                                                                             'tie_breaker_id': 'asc'}],
                                                                        'size': 2},
-                                                                 headers={}),
-                                                       mock.call('GET', '/_search', params={},
+                                                                 headers=None),
+                                                       mock.call('GET', '/test-index-1/_search', params={},
                                                                  body={'query': {'match-all': {}},
                                                                        'sort': [
                                                                            {'timestamp': 'asc',
                                                                             'tie_breaker_id': 'asc'}],
                                                                        'size': 2,
                                                                        'search_after': [1609780186, '2']},
-                                                                 headers={})]
+                                                                 headers=None)]
                                                       )
 
 
