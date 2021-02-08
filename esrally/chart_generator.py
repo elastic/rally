@@ -65,26 +65,20 @@ class BarCharts:
     @staticmethod
     # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
     def format_title(environment, track_name, flavor=None, es_license=None, suffix=None):
-        title = "{}-{}".format(environment, track_name)
+        title = f"{environment}-{track_name}"
 
         if suffix:
-            title += "-{}".format(suffix)
+            title += f"-{suffix}"
 
         return title
 
     @staticmethod
     def filter_string(environment, race_config):
         if race_config.name:
-            return 'environment:"{}" AND active:true AND user-tags.name:"{}"'.format(
-                environment,
-                race_config.name)
+            return f"environment:\"{environment}\" AND active:true AND user-tags.name:\"{race_config.name}\""
         else:
-            return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
-                environment,
-                race_config.track,
-                race_config.challenge,
-                race_config.car,
-                race_config.node_count)
+            return f"environment:\"{environment}\" AND active:true AND track:\"{race_config.track}\""\
+                   f" AND challenge:\"{race_config.challenge}\" AND car:\"{race_config.car}\" AND node-count:{race_config.node_count}"
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -254,9 +248,9 @@ class BarCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
@@ -433,9 +427,9 @@ class BarCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
@@ -591,9 +585,9 @@ class BarCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
@@ -667,8 +661,7 @@ class BarCharts:
                     "enabled": True,
                     "id": "4",
                     "params": {
-                        "filters": filters,
-                        "row": True
+                        "filters": filters
                     },
                     "schema": "split",
                     "type": "filters"
@@ -749,7 +742,8 @@ class BarCharts:
                         },
                         "type": "value"
                     }
-                ]
+                ],
+                "row": True
             },
             "title": title,
             "type": "histogram"
@@ -767,9 +761,9 @@ class BarCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
@@ -791,7 +785,7 @@ class TimeSeriesCharts:
             title = [environment, es_license, str(track_name)]
         elif flavor and es_license:
             raise exceptions.RallyAssertionError(
-                "Specify either flavor [{}] or license [{}] but not both".format(flavor, es_license))
+                f"Specify either flavor [{flavor}] or license [{es_license}] but not both")
         else:
             title = [environment, str(track_name)]
         if suffix:
@@ -804,19 +798,12 @@ class TimeSeriesCharts:
         nightly_extra_filter = ""
         if race_config.es_license:
             # Time series charts need to support different licenses and produce customized titles.
-            nightly_extra_filter = ' AND user-tags.license:"{}"'.format(race_config.es_license)
+            nightly_extra_filter = f" AND user-tags.license:\"{race_config.es_license}\""
         if race_config.name:
-            return 'environment:"{}" AND active:true AND user-tags.name:"{}"{}'.format(
-                environment,
-                race_config.name,
-                nightly_extra_filter)
+            return f"environment:\"{environment}\" AND active:true AND user-tags.name:\"{race_config.name}\"{nightly_extra_filter}"
         else:
-            return 'environment:"{}" AND active:true AND track:"{}" AND challenge:"{}" AND car:"{}" AND node-count:{}'.format(
-                environment,
-                race_config.track,
-                race_config.challenge,
-                race_config.car,
-                race_config.node_count)
+            return f"environment:\"{environment}\" AND active:true AND track:\"{race_config.track}\""\
+                   f" AND challenge:\"{race_config.challenge}\" AND car:\"{race_config.car}\" AND node-count:{race_config.node_count}"
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -866,8 +853,7 @@ class TimeSeriesCharts:
                         ],
                         "label": "GC Times",
                         "value_template": "{{value}} ms",
-                        "steps": 0,
-                        "axis_min": "0"
+                        "steps": 0
                     }
                 ],
                 "show_legend": 1,
@@ -889,23 +875,24 @@ class TimeSeriesCharts:
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
-                ]
+                ],
+                "axis_min": "0"
             },
             "aggs": [],
             "listeners": {}
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "gc",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
                 }
             }
         }
@@ -958,8 +945,7 @@ class TimeSeriesCharts:
                         ],
                         "label": "Disk IO",
                         "value_template": "{{value}}",
-                        "steps": 0,
-                        "axis_min": "0"
+                        "steps": 0
                     }
                 ],
                 "show_legend": 1,
@@ -981,23 +967,24 @@ class TimeSeriesCharts:
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
-                ]
+                ],
+                "axis_min": "0"
             },
             "aggs": [],
             "listeners": {}
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "io",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
                 }
             }
         }
@@ -1033,7 +1020,7 @@ class TimeSeriesCharts:
                         "seperate_axis": 1,
                         "split_mode": "filters",
                         "stacked": "none",
-                        "filter": "environment:{} AND track:{}".format(environment, race_config.track),
+                        "filter": f"environment:{environment} AND track:\"{race_config.track}\"",
                         "split_filters": [
                             {
                                 "filter": "memory_segments",
@@ -1074,8 +1061,7 @@ class TimeSeriesCharts:
                         ],
                         "label": "Segment Memory",
                         "value_template": "{{value}}",
-                        "steps": 0,
-                        "axis_min": "0"
+                        "steps": 0
                     }
                 ],
                 "show_legend": 1,
@@ -1097,22 +1083,23 @@ class TimeSeriesCharts:
                     }
                 ],
                 "show_grid": 1,
-                "drop_last_bucket": 0
+                "drop_last_bucket": 0,
+                "axis_min": "0"
             },
             "aggs": []
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "segment_memory",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query\":{\"query_string\":{\"query\":\"*\"}},\"language\":\"lucene\"},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":{\"query\":\"*\",\"language\":\"lucene\"},\"filter\":[]}"
                 }
             }
         }
@@ -1262,16 +1249,16 @@ class TimeSeriesCharts:
         }
 
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "query",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
                 }
             }
         }
@@ -1326,8 +1313,7 @@ class TimeSeriesCharts:
                         "split_filters": filters,
                         "label": "Indexing Throughput",
                         "value_template": "{{value}} docs/s",
-                        "steps": 0,
-                        "axis_min": "0"
+                        "steps": 0
                     }
                 ],
                 "show_legend": 1,
@@ -1349,22 +1335,23 @@ class TimeSeriesCharts:
                         "icon": "fa-tag",
                         "ignore_panel_filters": 1
                     }
-                ]
+                ],
+                "axis_min": "0"
             },
             "aggs": [],
             "listeners": {}
         }
         return {
-            "_id": str(uuid.uuid4()),
-            "_type": "visualization",
-            "_source": {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "index",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":{\"query_string\":{\"query\":\"*\"}},\"filter\":[]}"
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
                 }
             }
         }
@@ -1467,7 +1454,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
     for idx, chart in enumerate(charts):
         panelIndex = idx + 1
         # make index charts wider
-        if chart["_source"]["description"] == "index":
+        if chart["attributes"]["description"] == "index":
             chart_width = 2 * width
             # force one panel per row
             next_col = 0
@@ -1477,17 +1464,17 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
             next_col = (col + 1) % 2
 
         panel = {
-            "id": chart["_id"],
+            "id": chart["id"],
             "panelIndex": panelIndex,
             "gridData": {
                 "x": (col * chart_width),
                 "y": (row * height),
                 "w": chart_width,
                 "h": height,
-                "i": "{}".format(panelIndex)
+                "i": str(panelIndex)
             },
             "type": "visualization",
-            "version": "6.3.2"
+            "version": "7.10.2"
         }
         panels.append(panel)
         col = next_col
@@ -1495,9 +1482,9 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
             row += 1
 
     return {
-        "_id": str(uuid.uuid4()),
-        "_type": "dashboard",
-        "_source": {
+        "id": str(uuid.uuid4()),
+        "type": "dashboard",
+        "attributes": {
             "title": chart_type.format_title(environment, track.name, flavor=flavor),
             "hits": 0,
             "description": "",
@@ -1587,7 +1574,13 @@ class RaceConfig:
         task_names = []
         for task in self.track.find_challenge_or_default(self.challenge).schedule:
             for sub_task in task:
-                if sub_task.operation.type == track.OperationType.Bulk.to_hyphenated_string():
+                # We are looking for type bulk operations to add to indexing throughput chart.
+                # For the observability track, the index operation is of type raw-bulk, instead of type bulk.
+                # Doing a lenient match to allow for that.
+                if track.OperationType.Bulk.to_hyphenated_string() in sub_task.operation.type:
+                    if track.OperationType.Bulk.to_hyphenated_string() != sub_task.operation.type:
+                        console.info(f"Found [{sub_task.name}] of type [{sub_task.operation.type}] in "\
+                                     f"[{self.challenge}], adding it to indexing dashboard.\n", flush=True)
                     if sub_task.name not in self.excluded_tasks:
                         task_names.append(sub_task.name)
         return task_names
@@ -1741,6 +1734,8 @@ def generate(cfg):
     output_path = cfg.opts("generator", "output.path")
     if output_path:
         with open(io.normalize_path(output_path), mode="wt", encoding="utf-8") as f:
-            print(json.dumps(structures, indent=4), file=f)
+            for record in structures:
+                print(json.dumps(record), file=f)
     else:
-        print(json.dumps(structures, indent=4))
+        for record in structures:
+            print(json.dumps(record))
