@@ -315,10 +315,7 @@ class MultiClientRunner(Runner, Delegator):
 
 def mandatory(params, key, op):
     try:
-        value = params[key]
-        if value is None:
-            raise KeyError
-        return value
+        return params[key]
     except KeyError:
         raise exceptions.DataError(
             f"Parameter source for operation '{str(op)}' did not provide the mandatory parameter '{key}'. "

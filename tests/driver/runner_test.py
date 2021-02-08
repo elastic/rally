@@ -1371,7 +1371,7 @@ class QueryRunnerTests(TestCase):
         params = {
             "cache": False,
             "detailed-results": True,
-            "body": {},
+            "body": None,
             "request-params": {
                 "q": "user:kimchy"
             }
@@ -1426,7 +1426,7 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
-            "body": {},
+            "body": None,
             "request-params": {
                 "q": "user:kimchy"
             },
@@ -2057,7 +2057,7 @@ class PutPipelineRunnerTests(TestCase):
         r = runner.PutPipeline()
 
         params = {
-            "body": {}
+            "body": None
         }
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
@@ -4817,7 +4817,7 @@ class CompositeTests(TestCase):
                         {
                             "operation-type": "raw-request",
                             "path": "/",
-                            "body": {}
+                            "body": None
                         }
                     ]
                 },
