@@ -497,6 +497,8 @@ class SearchParamSource(ParamSource):
         results_per_page = params.get("results-per-page", None)
         request_params = params.get("request-params", {})
         response_compression_enabled = params.get("response-compression-enabled", True)
+        use_search_after = params.get("use-search-after", None)
+        with_point_in_time_from = params.get("with-point-in-time-from", None)
 
         self.query_params = {
             "index": target_name,
@@ -515,6 +517,10 @@ class SearchParamSource(ParamSource):
             self.query_params["pages"] = pages
         if results_per_page:
             self.query_params["results-per-page"] = results_per_page
+        if use_search_after:
+            self.query_params["use-search-after"] = use_search_after
+        if with_point_in_time_from:
+            self.query_params["with-point-in-time-from"] = with_point_in_time_from
 
         # Ensure we pass global parameters
         self.query_params.update(self._client_params())
@@ -735,6 +741,34 @@ class PartitionBulkIndexParamSource:
     @property
     def percent_completed(self):
         return self.current_bulk / self.total_bulks
+
+
+class OpenPointInTimeParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self._index_name = params.get("index")
+        self._keep_alive = params.get("keep-alive")
+
+    def params(self):
+        parsed_params = {
+            "index": self._index_name,
+            "keep-alive": self._keep_alive
+        }
+        parsed_params.update(self._client_params())
+        return parsed_params
+
+
+class ClosePointInTimeParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self._pit_task_name = params.get("with-point-in-time-from")
+
+    def params(self):
+        parsed_params = {
+            "with-point-in-time-from": self._pit_task_name
+        }
+        parsed_params.update(self._client_params())
+        return parsed_params
 
 
 class ForceMergeParamSource(ParamSource):
