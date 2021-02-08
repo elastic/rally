@@ -855,7 +855,7 @@ class Worker(actor.RallyActor):
             self.wakeup_interval = 0.5
         runner.register_default_runners()
         if self.track.has_plugins:
-            track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
+            track.load_track_plugins(self.config, self.track.name, runner.register_runner, scheduler.register_scheduler)
         self.drive()
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter

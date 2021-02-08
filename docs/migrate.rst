@@ -28,6 +28,18 @@ Invoke Rally with the ``race`` subcommand instead::
     esrally race --distribution-version=7.10.0
 
 
+Running without a track is deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously Rally has implicitly chosen the geonames track as default when ``--track`` was not provided. To ensure the workload is chosen deliberately, it is now deprecated to not specify a track. So instead of invoking::
+
+    esrally race --distribution-version=7.10.0
+
+Invoke Rally with ``--track=geonames`` instead::
+
+    esrally race --distribution-version=7.10.0 --track=geonames
+
+
 Migrating to Rally 2.0.4
 ------------------------
 

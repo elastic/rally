@@ -169,7 +169,6 @@ class ProcessLauncherTests(TestCase):
     def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
-        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "mechanic", "runtime.jdk", None)
         cfg.add(config.Scope.application, "telemetry", "devices", [])
         cfg.add(config.Scope.application, "telemetry", "params", None)
@@ -196,7 +195,6 @@ class ProcessLauncherTests(TestCase):
     def test_daemon_stop_with_already_terminated_process(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
-        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "telemetry", "devices", [])
         cfg.add(config.Scope.application, "telemetry", "params", None)
         cfg.add(config.Scope.application, "system", "env.name", "test")
@@ -220,7 +218,6 @@ class ProcessLauncherTests(TestCase):
     @mock.patch("esrally.time.sleep")
     def test_env_options_order(self, sleep):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "system", "env.name", "test")
 
         proc_launcher = launcher.ProcessLauncher(cfg)
@@ -239,7 +236,6 @@ class ProcessLauncherTests(TestCase):
 
     def test_bundled_jdk_not_in_path(self):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "system", "env.name", "test")
         os.environ["JAVA_HOME"] = "/path/to/java"
 
@@ -255,7 +251,6 @@ class ProcessLauncherTests(TestCase):
 
     def test_pass_env_vars(self):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "system", "env.name", "test")
         cfg.add(config.Scope.application, "system", "passenv", "JAVA_HOME,FOO1")
         os.environ["JAVA_HOME"] = "/path/to/java"
@@ -274,7 +269,6 @@ class ProcessLauncherTests(TestCase):
 
     def test_pass_java_opts(self):
         cfg = config.Config()
-        cfg.add(config.Scope.application, "mechanic", "keep.running", False)
         cfg.add(config.Scope.application, "system", "env.name", "test")
         cfg.add(config.Scope.application, "system", "passenv", "ES_JAVA_OPTS")
         os.environ["ES_JAVA_OPTS"] = "-XX:-someJunk"

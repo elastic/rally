@@ -68,7 +68,7 @@ class CompositeTrackProcessor(TrackProcessor):
     def __init__(self, cfg):
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
-        self.test_mode = cfg.opts("track", "test.mode.enabled")
+        self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
 
     def register_track_processor(self, processor):
         if hasattr(processor, "downloader"):
@@ -194,7 +194,7 @@ def _load_single_track(cfg, track_repository, track_name):
         track_processor.register_track_processor(TaskFilterTrackProcessor(cfg))
         track_processor.register_track_processor(TestModeTrackProcessor(cfg))
 
-        has_plugins = load_track_plugins(cfg, register_track_processor=track_processor.register_track_processor)
+        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=track_processor.register_track_processor)
         current_track.has_plugins = has_plugins
 
         return track_processor.on_after_load_track(current_track)
@@ -208,6 +208,7 @@ def _load_single_track(cfg, track_repository, track_name):
 
 
 def load_track_plugins(cfg,
+                       track_name,
                        register_runner=None,
                        register_scheduler=None,
                        register_track_processor=None,
@@ -216,6 +217,7 @@ def load_track_plugins(cfg,
     Loads plugins that are defined for the current track (as specified by the configuration).
 
     :param cfg: The config object.
+    :param track_name: Name of the track for which plugins should be loaded.
     :param register_runner: An optional function where runners can be registered.
     :param register_scheduler: An optional function where custom schedulers can be registered.
     :param register_track_processor: An optional function where track processors can be registered.
@@ -224,7 +226,6 @@ def load_track_plugins(cfg,
     :return: True iff this track defines plugins and they have been loaded.
     """
     repo = track_repo(cfg, fetch=force_update, update=force_update)
-    track_name = repo.track_name
     track_plugin_path = repo.track_dir(track_name)
 
     plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
@@ -406,7 +407,7 @@ def prepare_track(t, cfg):
         logger.info("Reloading track [%s] to ensure plugins are up-to-date.", t.name)
         # the track might have been loaded on a different machine (the coordinator machine) so we force a track update
         # to ensure we use the latest version of plugins.
-        load_track_plugins(cfg, register_track_processor=tp.register_track_processor, force_update=True)
+        load_track_plugins(cfg, t.name, register_track_processor=tp.register_track_processor, force_update=True)
 
     # register last so user-defined track processors can override the default behavior
     tp.register_track_processor(DefaultTrackPreparator(cfg))
@@ -792,11 +793,14 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
 class TaskFilterTrackProcessor(TrackProcessor):
     def __init__(self, cfg):
         self.logger = logging.getLogger(__name__)
-        if cfg.opts("track", "include.tasks"):
-            filtered_tasks = cfg.opts("track", "include.tasks")
+        include_tasks = cfg.opts("track", "include.tasks", mandatory=False)
+        exclude_tasks = cfg.opts("track", "exclude.tasks", mandatory=False)
+
+        if include_tasks:
+            filtered_tasks = include_tasks
             self.exclude = False
         else:
-            filtered_tasks = cfg.opts("track", "exclude.tasks")
+            filtered_tasks = exclude_tasks
             self.exclude = True
         self.filters = self._filters_from_filtered_tasks(filtered_tasks)
 
@@ -855,7 +859,7 @@ class TaskFilterTrackProcessor(TrackProcessor):
 
 class TestModeTrackProcessor(TrackProcessor):
     def __init__(self, cfg):
-        self.test_mode_enabled = cfg.opts("track", "test.mode.enabled")
+        self.test_mode_enabled = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
         self.logger = logging.getLogger(__name__)
 
     def on_after_load_track(self, track):
@@ -954,7 +958,7 @@ class TrackFileReader:
         track_schema_file = os.path.join(cfg.opts("node", "rally.root"), "resources", "track-schema.json")
         with open(track_schema_file, mode="rt", encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
-        self.track_params = cfg.opts("track", "params")
+        self.track_params = cfg.opts("track", "params", mandatory=False)
         self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
         self.read_track = TrackSpecificationReader(
             track_params=self.track_params,

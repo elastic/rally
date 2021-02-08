@@ -615,7 +615,9 @@ def load_team(cfg, external):
     else:
         team_path = team.team_path(cfg)
         car = team.load_car(team_path, cfg.opts("mechanic", "car.names"), cfg.opts("mechanic", "car.params"))
-        plugins = team.load_plugins(team_path, cfg.opts("mechanic", "car.plugins"), cfg.opts("mechanic", "plugin.params"))
+        plugins = team.load_plugins(team_path,
+                                    cfg.opts("mechanic", "car.plugins", mandatory=False),
+                                    cfg.opts("mechanic", "plugin.params", mandatory=False))
     return car, plugins
 
 
