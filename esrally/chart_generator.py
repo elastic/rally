@@ -1471,7 +1471,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
                 "y": (row * height),
                 "w": chart_width,
                 "h": height,
-                "i": f"{panelIndex}"
+                "i": str(panelIndex)
             },
             "type": "visualization",
             "version": "7.10.2"
