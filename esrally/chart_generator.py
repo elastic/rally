@@ -1379,7 +1379,7 @@ class RaceConfigTrack:
         if not params:
             params = {}
         # required in case a previous track using a different repository has specified the revision
-        if cfg.opts("track", "repository.name") != self.repository:
+        if cfg.opts("track", "repository.name", mandatory=False) != self.repository:
             cfg.add(config.Scope.applicationOverride, "track", "repository.revision", None)
         # hack to make this work with multiple tracks (Rally core is usually not meant to be used this way)
         if name:
@@ -1637,42 +1637,26 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
                                                           lic_config["name"],
                                                           track_name))
 
-    if chart_spec_path:
-        race_configs = {"oss": [], "default": []}
-        if chart_type == BarCharts:
-            race_configs = []
+    race_configs = {"oss": [], "default": []}
+    if chart_type == BarCharts:
+        race_configs = []
 
-        for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
-            with open(_track_file, mode="rt", encoding="utf-8") as f:
-                for item in json.load(f):
-                    _track_repository = item.get("track-repository", "default")
-                    race_config_track = RaceConfigTrack(cfg, _track_repository, name=item["track"])
-                    for flavor in item["flavors"]:
-                        race_configs_per_track = []
-                        _flavor_name = flavor["name"]
-                        _track_name = item["track"]
-                        add_race_configs(flavor["licenses"], _flavor_name, _track_name)
+    for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
+        with open(_track_file, mode="rt", encoding="utf-8") as f:
+            for item in json.load(f):
+                _track_repository = item.get("track-repository", "default")
+                race_config_track = RaceConfigTrack(cfg, _track_repository, name=item["track"])
+                for flavor in item["flavors"]:
+                    race_configs_per_track = []
+                    _flavor_name = flavor["name"]
+                    _track_name = item["track"]
+                    add_race_configs(flavor["licenses"], _flavor_name, _track_name)
 
-                        if race_configs_per_track:
-                            if chart_type == BarCharts:
-                                race_configs.append(race_configs_per_track)
-                            else:
-                                race_configs[_flavor_name].append(race_configs_per_track)
-    else:
-        car_names = cfg.opts("mechanic", "car.names")
-        if len(car_names) > 1:
-            raise exceptions.SystemSetupError("Chart generator supports only a single car but got %s" % car_names)
-        else:
-            car_name = car_names[0]
-        race_configs = [
-            [
-                RaceConfig(track=track.load_track(cfg),
-                           challenge=cfg.opts("track", "challenge.name"),
-                           car=car_name,
-                           node_count=cfg.opts("generator", "node.count"),
-                           charts=["indexing", "query", "gc", "io"])
-             ]
-        ]
+                    if race_configs_per_track:
+                        if chart_type == BarCharts:
+                            race_configs.append(race_configs_per_track)
+                        else:
+                            race_configs[_flavor_name].append(race_configs_per_track)
     return race_configs
 
 
@@ -1715,7 +1699,7 @@ def gen_charts_from_track_combinations(race_configs, chart_type, env, logger):
 def generate(cfg):
     logger = logging.getLogger(__name__)
 
-    chart_spec_path = cfg.opts("generator", "chart.spec.path", mandatory=False)
+    chart_spec_path = cfg.opts("generator", "chart.spec.path")
     if cfg.opts("generator", "chart.type") == "time-series":
         chart_type = TimeSeriesCharts
     else:
@@ -1728,15 +1712,11 @@ def generate(cfg):
     structures = []
     console.info("Generating charts...", flush=True)
 
-    if chart_spec_path:
-        if chart_type == BarCharts:
-            # bar charts are flavor agnostic and split results based on a separate `user.setup` field
-            structures = gen_charts_per_track(race_configs, chart_type, env, logger=logger)
-        elif chart_type == TimeSeriesCharts:
-            structures = gen_charts_from_track_combinations(race_configs, chart_type, env, logger)
-    else:
-        # Process a normal track
+    if chart_type == BarCharts:
+        # bar charts are flavor agnostic and split results based on a separate `user.setup` field
         structures = gen_charts_per_track(race_configs, chart_type, env, logger=logger)
+    elif chart_type == TimeSeriesCharts:
+        structures = gen_charts_from_track_combinations(race_configs, chart_type, env, logger)
 
     output_path = cfg.opts("generator", "output.path")
     if output_path:

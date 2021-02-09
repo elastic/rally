@@ -167,23 +167,9 @@ def create_arg_parser():
     # argparse to validate that everything is correct *might* be doable but it is simpler to just do this manually.
     generate_parser.add_argument(
         "--chart-spec-path",
+        required=True,
         help="Path to a JSON file(s) containing all combinations of charts to generate. Wildcard patterns can be used to specify "
              "multiple files.")
-    add_track_source(generate_parser)
-    generate_parser.add_argument(
-        "--track",
-        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`."
-    )
-    generate_parser.add_argument(
-        "--challenge",
-        help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.")
-    generate_parser.add_argument(
-        "--car",
-        help=f"Define the car to use. List possible cars with `{PROGRAM_NAME} list cars` (default: defaults).")
-    generate_parser.add_argument(
-        "--node-count",
-        type=positive_number,
-        help="The number of Elasticsearch nodes to use in charts.")
     generate_parser.add_argument(
         "--chart-type",
         help="Chart type to generate (default: time-series).",
@@ -856,18 +842,9 @@ def dispatch_sub_command(arg_parser, args, cfg):
 
             race(cfg, args.kill_running_processes)
         elif sub_command == "generate":
+            cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
             cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-            configure_track_params(arg_parser, args, cfg)
-
-            if args.chart_spec_path and (args.track or args.challenge or args.car or args.node_count):
-                arg_parser.error("argument --chart-spec-path not allowed with --track, --challenge, --car or --node-count")
-            if args.chart_spec_path:
-                cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
-            else:
-                # other options are stored elsewhere already
-                cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
-
             generate(cfg)
         elif sub_command == "create-track":
             cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
