@@ -124,7 +124,6 @@ class ProcessLauncher:
     def __init__(self, cfg, clock=time.Clock):
         self.cfg = cfg
         self._clock = clock
-        self.keep_running = self.cfg.opts("mechanic", "keep.running")
         self.logger = logging.getLogger(__name__)
         self.pass_env_vars = opts.csv_to_list(self.cfg.opts("system", "passenv", mandatory=False, default_value="PATH"))
 
@@ -223,10 +222,7 @@ class ProcessLauncher:
         return wait_for_pidfile(io.escape_path(os.path.join(".", "pid")))
 
     def stop(self, nodes, metrics_store):
-        if self.keep_running:
-            self.logger.info("Keeping [%d] nodes on this host running.", len(nodes))
-        else:
-            self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
+        self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
         stopped_nodes = []
         for node in nodes:
             node_name = node.node_name
@@ -239,25 +235,24 @@ class ProcessLauncher:
                 self.logger.warning("No process found with PID [%s] for node [%s].", node.pid, node_name)
                 es = None
 
-            if not self.keep_running:
-                if es:
-                    stop_watch = self._clock.stop_watch()
-                    stop_watch.start()
+            if es:
+                stop_watch = self._clock.stop_watch()
+                stop_watch.start()
+                try:
+                    es.terminate()
+                    es.wait(10.0)
+                    stopped_nodes.append(node)
+                except psutil.NoSuchProcess:
+                    self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
+                except psutil.TimeoutExpired:
+                    self.logger.info("kill -KILL node [%s]", node_name)
                     try:
-                        es.terminate()
-                        es.wait(10.0)
+                        # kill -9
+                        es.kill()
                         stopped_nodes.append(node)
                     except psutil.NoSuchProcess:
                         self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
-                    except psutil.TimeoutExpired:
-                        self.logger.info("kill -KILL node [%s]", node_name)
-                        try:
-                            # kill -9
-                            es.kill()
-                            stopped_nodes.append(node)
-                        except psutil.NoSuchProcess:
-                            self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
-                    self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
+                self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
 
                 node.telemetry.detach_from_node(node, running=False)
             # store system metrics in any case (telemetry devices may derive system metrics while the node is running)

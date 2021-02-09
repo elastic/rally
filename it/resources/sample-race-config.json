@@ -1,0 +1,30 @@
+[
+  {
+    "track": "geonames",
+    "flavors": [
+      {
+        "name": "default",
+        "licenses": [
+          {
+            "name": "basic",
+            "configurations": [
+              {
+                "name": "geonames-append-4g-3nodes",
+                "label": "add-4g-3nodes",
+                "charts": [
+                  "indexing"
+                ],
+                "challenge": "append-no-conflicts-index-only",
+                "track-params": {
+                  "number_of_replicas": 1
+                },
+                "car": "4gheap",
+                "node-count": 3
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -109,9 +109,10 @@ def load_plugins(repo, plugin_names, plugin_params=None):
             raise ValueError("Unrecognized plugin specification [%s]. Use either 'PLUGIN_NAME' or 'PLUGIN_NAME:PLUGIN_CONFIG'." % p)
 
     plugins = []
-    for plugin in plugin_names:
-        plugin_name, plugin_config = name_and_config(plugin)
-        plugins.append(load_plugin(repo, plugin_name, plugin_config, plugin_params))
+    if plugin_names:
+        for plugin in plugin_names:
+            plugin_name, plugin_config = name_and_config(plugin)
+            plugins.append(load_plugin(repo, plugin_name, plugin_config, plugin_params))
     return plugins
 
 

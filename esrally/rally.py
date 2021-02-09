@@ -38,7 +38,7 @@ def create_arg_parser():
     def positive_number(v):
         value = int(v)
         if value <= 0:
-            raise argparse.ArgumentTypeError("must be positive but was {}".format(value))
+            raise argparse.ArgumentTypeError(f"must be positive but was {value}")
         return value
 
     def non_empty_list(arg):
@@ -54,7 +54,23 @@ def create_arg_parser():
             try:
                 return positive_number(v)
             except argparse.ArgumentTypeError:
-                raise argparse.ArgumentTypeError("must be a positive number or 'bundled' but was {}".format(v))
+                raise argparse.ArgumentTypeError(f"must be a positive number or 'bundled' but was {v}")
+
+    def add_track_source(subparser):
+        track_source_group = subparser.add_mutually_exclusive_group()
+        track_source_group.add_argument(
+            "--track-repository",
+            help="Define the repository from where Rally will load tracks (default: default).",
+            # argparse is smart enough to use this default only if the user did not use --track-path and also did not specify anything
+            default="default"
+        )
+        track_source_group.add_argument(
+            "--track-path",
+            help="Define the path to a track.")
+        subparser.add_argument(
+            "--track-revision",
+            help="Define a specific revision in the track repository that Rally should use.",
+            default=None)
 
     # try to preload configurable defaults, but this does not work together with `--configuration-name` (which is undocumented anyway)
     cfg = config.Config()
@@ -75,7 +91,7 @@ def create_arg_parser():
         dest="subcommand",
         help="")
 
-    race_parser = subparsers.add_parser("race", help="Run the benchmarking pipeline. This sub-command should typically be used.")
+    race_parser = subparsers.add_parser("race", help="Run a benchmark")
     # change in favor of "list telemetry", "list tracks", "list pipelines"
     list_parser = subparsers.add_parser("list", help="List configuration options")
     list_parser.add_argument(
@@ -89,25 +105,17 @@ def create_arg_parser():
         help="Limit the number of search results for recent races (default: 10).",
         default=10,
     )
+    add_track_source(list_parser)
 
     info_parser = subparsers.add_parser("info", help="Show info about a track")
-    info_track_source_group = info_parser.add_mutually_exclusive_group()
-    info_track_source_group.add_argument(
-        "--track-repository",
-        help="Define the repository from where Rally will load tracks (default: default).",
-        # argparse is smart enough to use this default only if the user did not use --track-path and also did not specify anything
-        default="default"
-    )
-    info_track_source_group.add_argument(
-        "--track-path",
-        help="Define the path to a track.")
-
+    add_track_source(info_parser)
     info_parser.add_argument(
         "--track",
-        help="Define the track to use. List possible tracks with `{} list tracks` (default: geonames).".format(PROGRAM_NAME)
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`."
         # we set the default value later on because we need to determine whether the user has provided this value.
         # default="geonames"
     )
+
     info_parser.add_argument(
         "--track-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
@@ -115,7 +123,7 @@ def create_arg_parser():
     )
     info_parser.add_argument(
         "--challenge",
-        help="Define the challenge to use. List possible challenges for tracks with `{} list tracks`.".format(PROGRAM_NAME)
+        help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`."
     )
     info_task_filter_group = info_parser.add_mutually_exclusive_group()
     info_task_filter_group.add_argument(
@@ -159,24 +167,9 @@ def create_arg_parser():
     # argparse to validate that everything is correct *might* be doable but it is simpler to just do this manually.
     generate_parser.add_argument(
         "--chart-spec-path",
+        required=True,
         help="Path to a JSON file(s) containing all combinations of charts to generate. Wildcard patterns can be used to specify "
              "multiple files.")
-    generate_parser.add_argument(
-        "--track",
-        help="Define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME
-        # we set the default value later on because we need to determine whether the user has provided this value.
-        # default="geonames"
-    )
-    generate_parser.add_argument(
-        "--challenge",
-        help="Define the challenge to use. List possible challenges for tracks with `%s list tracks`." % PROGRAM_NAME)
-    generate_parser.add_argument(
-        "--car",
-        help="Define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME)
-    generate_parser.add_argument(
-        "--node-count",
-        type=positive_number,
-        help="The number of Elasticsearch nodes to use in charts.")
     generate_parser.add_argument(
         "--chart-type",
         help="Chart type to generate (default: time-series).",
@@ -191,11 +184,11 @@ def create_arg_parser():
     compare_parser.add_argument(
         "--baseline",
         required=True,
-        help="Race ID of the baseline (see %s list races)." % PROGRAM_NAME)
+        help=f"Race ID of the baseline (see {PROGRAM_NAME} list races).")
     compare_parser.add_argument(
         "--contender",
         required=True,
-        help="Race ID of the contender (see %s list races)." % PROGRAM_NAME)
+        help=f"Race ID of the contender (see {PROGRAM_NAME} list races).")
     compare_parser.add_argument(
         "--report-format",
         help="Define the output format for the command line report (default: markdown).",
@@ -212,6 +205,10 @@ def create_arg_parser():
         help="Define the repository from where Rally will load teams and cars (default: default).",
         default="default")
     download_parser.add_argument(
+        "--team-revision",
+        help="Define a specific revision in the team repository that Rally should use.",
+        default=None)
+    download_parser.add_argument(
         "--team-path",
         help="Define the path to the car and plugin configurations to use.")
     download_parser.add_argument(
@@ -225,7 +222,7 @@ def create_arg_parser():
         default="release")
     download_parser.add_argument(
         "--car",
-        help="Define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
+        help=f"Define the car to use. List possible cars with `{PROGRAM_NAME} list cars` (default: defaults).",
         default="defaults")  # optimized for local usage
     download_parser.add_argument(
         "--car-params",
@@ -287,7 +284,7 @@ def create_arg_parser():
         default="")
     install_parser.add_argument(
         "--car",
-        help="Define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
+        help=f"Define the car to use. List possible cars with `{PROGRAM_NAME} list cars` (default: defaults).",
         default="defaults")  # optimized for local usage
     install_parser.add_argument(
         "--car-params",
@@ -348,8 +345,8 @@ def create_arg_parser():
         default=None)
     start_parser.add_argument(
         "--telemetry",
-        help="Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
-             "with `%s list telemetry`." % PROGRAM_NAME,
+        help=f"Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry "
+             f"devices with `{PROGRAM_NAME} list telemetry`.",
         default="")
     start_parser.add_argument(
         "--telemetry-params",
@@ -366,36 +363,19 @@ def create_arg_parser():
         default="")
     stop_parser.add_argument(
         "--preserve-install",
-        help="Keep the benchmark candidate and its index. (default: %s)." % str(preserve_install).lower(),
+        help=f"Keep the benchmark candidate and its index. (default: {str(preserve_install).lower()}).",
         default=preserve_install,
         action="store_true")
 
-    for p in [parser, list_parser, race_parser, generate_parser]:
+    for p in [list_parser, race_parser]:
         p.add_argument(
             "--distribution-version",
             help="Define the version of the Elasticsearch distribution to download. "
                  "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
             default="")
         p.add_argument(
-            "--runtime-jdk",
-            type=runtime_jdk,
-            help="The major version of the runtime JDK to use.",
-            default=None)
-
-        track_source_group = p.add_mutually_exclusive_group()
-        track_source_group.add_argument(
-            "--track-repository",
-            help="Define the repository from where Rally will load tracks (default: default).",
-            # argparse is smart enough to use this default only if the user did not use --track-path and also did not specify anything
-            default="default"
-        )
-        track_source_group.add_argument(
-            "--track-path",
-            help="Define the path to a track.")
-        p.add_argument(
-            "--track-revision",
-            help="Define a specific revision in the track repository that Rally should use.",
-            default=None)
+            "--team-path",
+            help="Define the path to the car and plugin configurations to use.")
         p.add_argument(
             "--team-repository",
             help="Define the repository from where Rally will load teams and cars (default: default).",
@@ -404,171 +384,165 @@ def create_arg_parser():
             "--team-revision",
             help="Define a specific revision in the team repository that Rally should use.",
             default=None)
-        p.add_argument(
-            "--offline",
-            help="Assume that Rally has no connection to the Internet (default: false).",
-            default=False,
-            action="store_true")
 
-    for p in [parser, race_parser]:
-        p.add_argument(
-            "--race-id",
-            help="Define a unique id for this race.",
-            default=str(uuid.uuid4()))
-        p.add_argument(
-            "--pipeline",
-            help="Select the pipeline to run.",
-            # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
-            default="")
-        p.add_argument(
-            "--revision",
-            help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
-                 " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
-                 " The timestamp must be specified as: \"@ts\" where \"ts\" must be a valid ISO 8601 timestamp, "
-                 "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
-            default="current")  # optimized for local usage, don't fetch sources
-        p.add_argument(
-            "--track",
-            help="Define the track to use. List possible tracks with `%s list tracks` (default: geonames)." % PROGRAM_NAME
-            # we set the default value later on because we need to determine whether the user has provided this value.
-            # default="geonames"
-        )
-        p.add_argument(
-            "--track-params",
-            help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
-            default=""
-        )
-        p.add_argument(
-            "--challenge",
-            help="Define the challenge to use. List possible challenges for tracks with `%s list tracks`." % PROGRAM_NAME)
-        p.add_argument(
-            "--team-path",
-            help="Define the path to the car and plugin configurations to use.")
-        p.add_argument(
-            "--car",
-            help="Define the car to use. List possible cars with `%s list cars` (default: defaults)." % PROGRAM_NAME,
-            default="defaults")  # optimized for local usage
-        p.add_argument(
-            "--car-params",
-            help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
-            default=""
-        )
-        p.add_argument(
-            "--elasticsearch-plugins",
-            help="Define the Elasticsearch plugins to install. (default: install no plugins).",
-            default="")
-        p.add_argument(
-            "--plugin-params",
-            help="Define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables.",
-            default=""
-        )
-        p.add_argument(
-            "--target-hosts",
-            help="Define a comma-separated list of host:port pairs which should be targeted if using the pipeline 'benchmark-only' "
-                 "(default: localhost:9200).",
-            default="")  # actually the default is pipeline specific and it is set later
-        p.add_argument(
-            "--load-driver-hosts",
-            help="Define a comma-separated list of hosts which should generate load (default: localhost).",
-            default="localhost")
-        p.add_argument(
-            "--client-options",
-            help="Define a comma-separated list of client options to use. The options will be passed to the Elasticsearch Python client "
-                 "(default: {}).".format(opts.ClientOptions.DEFAULT_CLIENT_OPTIONS),
-            default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
-        p.add_argument("--on-error",
-                       choices=["continue", "continue-on-non-fatal", "abort"],
-                       help="Controls how Rally behaves on response errors (default: continue-on-non-fatal).",
-                       default="continue-on-non-fatal")
-        p.add_argument(
-            "--telemetry",
-            help="Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry devices "
-                 "with `%s list telemetry`." % PROGRAM_NAME,
-            default="")
-        p.add_argument(
-            "--telemetry-params",
-            help="Define a comma-separated list of key:value pairs that are injected verbatim to the telemetry devices as parameters.",
-            default=""
-        )
-        p.add_argument(
-            "--distribution-repository",
-            help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
-            default="release")
+    race_parser.add_argument(
+        "--race-id",
+        help="Define a unique id for this race.",
+        default=str(uuid.uuid4()))
+    race_parser.add_argument(
+        "--pipeline",
+        help="Select the pipeline to run.",
+        # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
+        default="")
+    race_parser.add_argument(
+        "--revision",
+        help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
+             " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
+             " The timestamp must be specified as: \"@ts\" where \"ts\" must be a valid ISO 8601 timestamp, "
+             "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
+        default="current")  # optimized for local usage, don't fetch sources
+    add_track_source(race_parser)
+    race_parser.add_argument(
+        "--track",
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`."
+    )
+    race_parser.add_argument(
+        "--track-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
+        default=""
+    )
+    race_parser.add_argument(
+        "--challenge",
+        help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.")
+    race_parser.add_argument(
+        "--car",
+        help=f"Define the car to use. List possible cars with `{PROGRAM_NAME} list cars` (default: defaults).",
+        default="defaults")  # optimized for local usage
+    race_parser.add_argument(
+        "--car-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
+        default=""
+    )
+    race_parser.add_argument(
+        "--runtime-jdk",
+        type=runtime_jdk,
+        help="The major version of the runtime JDK to use.",
+        default=None)
+    race_parser.add_argument(
+        "--elasticsearch-plugins",
+        help="Define the Elasticsearch plugins to install. (default: install no plugins).",
+        default="")
+    race_parser.add_argument(
+        "--plugin-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables.",
+        default=""
+    )
+    race_parser.add_argument(
+        "--target-hosts",
+        help="Define a comma-separated list of host:port pairs which should be targeted if using the pipeline 'benchmark-only' "
+             "(default: localhost:9200).",
+        default="")  # actually the default is pipeline specific and it is set later
+    race_parser.add_argument(
+        "--load-driver-hosts",
+        help="Define a comma-separated list of hosts which should generate load (default: localhost).",
+        default="localhost")
+    race_parser.add_argument(
+        "--client-options",
+        help=f"Define a comma-separated list of client options to use. The options will be passed to the Elasticsearch "
+             f"Python client (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS}).",
+        default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
+    race_parser.add_argument("--on-error",
+                             choices=["continue", "continue-on-non-fatal", "abort"],
+                             help="Controls how Rally behaves on response errors (default: continue-on-non-fatal).",
+                             default="continue-on-non-fatal")
+    race_parser.add_argument(
+        "--telemetry",
+        help=f"Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry "
+             f"devices with `{PROGRAM_NAME} list telemetry`.",
+        default="")
+    race_parser.add_argument(
+        "--telemetry-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to the telemetry devices as parameters.",
+        default=""
+    )
+    race_parser.add_argument(
+        "--distribution-repository",
+        help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
+        default="release")
 
-        task_filter_group = p.add_mutually_exclusive_group()
-        task_filter_group.add_argument(
-            "--include-tasks",
-            help="Defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
-        task_filter_group.add_argument(
-            "--exclude-tasks",
-            help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.")
-        p.add_argument(
-            "--user-tag",
-            help="Define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
-                 "Example: intention:baseline-ticket-12345",
-            default="")
-        p.add_argument(
-            "--report-format",
-            help="Define the output format for the command line report (default: markdown).",
-            choices=["markdown", "csv"],
-            default="markdown")
-        p.add_argument(
-            "--show-in-report",
-            help="Define which values are shown in the summary report (default: available).",
-            choices=["available", "all-percentiles", "all"],
-            default="available")
-        p.add_argument(
-            "--report-file",
-            help="Write the command line report also to the provided file.",
-            default="")
-        p.add_argument(
-            "--preserve-install",
-            help="Keep the benchmark candidate and its index. (default: %s)." % str(preserve_install).lower(),
-            default=preserve_install,
-            action="store_true")
-        p.add_argument(
-            "--test-mode",
-            help="Runs the given track in 'test mode'. Meant to check a track for errors but not for real benchmarks (default: false).",
-            default=False,
-            action="store_true")
-        p.add_argument(
-            "--enable-driver-profiling",
-            help="Enables a profiler for analyzing the performance of calls in Rally's driver (default: false).",
-            default=False,
-            action="store_true")
-        p.add_argument(
-            "--enable-assertions",
-            help="Enables assertion checks for tasks (default: false).",
-            default=False,
-            action="store_true")
+    task_filter_group = race_parser.add_mutually_exclusive_group()
+    task_filter_group.add_argument(
+        "--include-tasks",
+        help="Defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
+    task_filter_group.add_argument(
+        "--exclude-tasks",
+        help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.")
+    race_parser.add_argument(
+        "--user-tag",
+        help="Define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
+             "Example: intention:baseline-ticket-12345",
+        default="")
+    race_parser.add_argument(
+        "--report-format",
+        help="Define the output format for the command line report (default: markdown).",
+        choices=["markdown", "csv"],
+        default="markdown")
+    race_parser.add_argument(
+        "--show-in-report",
+        help="Define which values are shown in the summary report (default: available).",
+        choices=["available", "all-percentiles", "all"],
+        default="available")
+    race_parser.add_argument(
+        "--report-file",
+        help="Write the command line report also to the provided file.",
+        default="")
+    race_parser.add_argument(
+        "--preserve-install",
+        help=f"Keep the benchmark candidate and its index. (default: {str(preserve_install).lower()}).",
+        default=preserve_install,
+        action="store_true")
+    race_parser.add_argument(
+        "--test-mode",
+        help="Runs the given track in 'test mode'. Meant to check a track for errors but not for real benchmarks (default: false).",
+        default=False,
+        action="store_true")
+    race_parser.add_argument(
+        "--enable-driver-profiling",
+        help="Enables a profiler for analyzing the performance of calls in Rally's driver (default: false).",
+        default=False,
+        action="store_true")
+    race_parser.add_argument(
+        "--enable-assertions",
+        help="Enables assertion checks for tasks (default: false).",
+        default=False,
+        action="store_true")
+    race_parser.add_argument(
+        "--kill-running-processes",
+        action="store_true",
+        default=False,
+        help="If any processes is running, it is going to kill them and allow Rally to continue to run."
+    )
 
     ###############################################################################
     #
     # The options below are undocumented and can be removed or changed at any time.
     #
     ###############################################################################
-    for p in [parser, race_parser]:
-        # This option is intended to tell Rally to assume a different start date than 'now'. This is effectively just useful for things like
-        # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
-        p.add_argument(
-            "--effective-start-date",
-            help=argparse.SUPPRESS,
-            type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
-            default=None)
-        # keeps the cluster running after the benchmark, only relevant if Rally provisions the cluster
-        p.add_argument(
-            "--keep-cluster-running",
-            help=argparse.SUPPRESS,
-            action="store_true",
-            default=False)
-        # skips checking that the REST API is available before proceeding with the benchmark
-        p.add_argument(
-            "--skip-rest-api-check",
-            help=argparse.SUPPRESS,
-            action="store_true",
-            default=False)
+    # This option is intended to tell Rally to assume a different start date than 'now'. This is effectively just useful for things like
+    # backtesting or a benchmark run across environments (think: comparison of EC2 and bare metal) but never for the typical user.
+    race_parser.add_argument(
+        "--effective-start-date",
+        help=argparse.SUPPRESS,
+        type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
+        default=None)
+    # skips checking that the REST API is available before proceeding with the benchmark
+    race_parser.add_argument(
+        "--skip-rest-api-check",
+        help=argparse.SUPPRESS,
+        action="store_true",
+        default=False)
 
-    for p in [parser, list_parser, race_parser, compare_parser, download_parser, install_parser,
+    for p in [list_parser, race_parser, compare_parser, download_parser, install_parser,
               start_parser, stop_parser, info_parser, generate_parser, create_track_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
@@ -581,24 +555,12 @@ def create_arg_parser():
             default=False,
             action="store_true")
         p.add_argument(
-            "--kill-running-processes",
-            action="store_true",
+            "--offline",
+            help="Assume that Rally has no connection to the Internet (default: false).",
             default=False,
-            help="If any processes is running, it is going to kill them and allow Rally to continue to run."
-        )
+            action="store_true")
 
     return parser
-
-
-def derive_sub_command(args):
-    sub_command = args.subcommand
-    if sub_command is None:
-        logger = logging.getLogger(__name__)
-        console.warn("Invoking Rally without a subcommand is deprecated and will be required with Rally 2.1.0. Specify "
-                     "the 'race' subcommand explicitly.", logger=logger)
-        return "race"
-    else:
-        return sub_command
 
 
 def dispatch_list(cfg):
@@ -630,10 +592,8 @@ def print_help_on_errors():
                     f"and include the log files in {paths.logs()}.")
 
 
-def race(cfg):
+def race(cfg, kill_running_processes=False):
     logger = logging.getLogger(__name__)
-
-    kill_running_processes = cfg.opts("system", "kill.running.processes")
 
     if kill_running_processes:
         logger.info("Killing running Rally processes")
@@ -730,30 +690,174 @@ def generate(cfg):
     chart_generator.generate(cfg)
 
 
-def dispatch_sub_command(cfg, sub_command):
+def configure_telemetry_params(args, cfg):
+    cfg.add(config.Scope.applicationOverride, "telemetry", "devices", opts.csv_to_list(args.telemetry))
+    cfg.add(config.Scope.applicationOverride, "telemetry", "params", opts.to_dict(args.telemetry_params))
+
+
+def configure_track_params(arg_parser, args, cfg, command_requires_track=True):
+    cfg.add(config.Scope.applicationOverride, "track", "repository.revision", args.track_revision)
+    # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
+    # its default value)
+    if args.track_path:
+        cfg.add(config.Scope.applicationOverride, "track", "track.path", os.path.abspath(io.normalize_path(args.track_path)))
+        cfg.add(config.Scope.applicationOverride, "track", "repository.name", None)
+        if args.track_revision:
+            # stay as close as possible to argparse errors although we have a custom validation.
+            arg_parser.error("argument --track-revision not allowed with argument --track-path")
+        if command_requires_track and args.track:
+            # stay as close as possible to argparse errors although we have a custom validation.
+            arg_parser.error("argument --track not allowed with argument --track-path")
+    else:
+        cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
+        if command_requires_track:
+            # TODO #1176: We should not choose a track implicitly.
+            # set the default programmatically because we need to determine whether the user has provided a value
+            if args.track:
+                chosen_track = args.track
+            else:
+                chosen_track = "geonames"
+                console.warn(f"Starting Rally without --track is deprecated. Add --track={chosen_track} to your parameters.")
+
+            cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
+
+    if command_requires_track:
+        cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
+        cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
+        cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
+        cfg.add(config.Scope.applicationOverride, "track", "exclude.tasks", opts.csv_to_list(args.exclude_tasks))
+
+
+def configure_mechanic_params(args, cfg, command_requires_car=True):
+    if args.team_path:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", None)
+    else:
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", args.team_revision)
+
+    if command_requires_car:
+        if args.distribution_version:
+            cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
+        cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", opts.csv_to_list(args.car))
+        cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
+
+
+def configure_connection_params(arg_parser, args, cfg):
+    # Also needed by mechanic (-> telemetry) - duplicate by module?
+    target_hosts = opts.TargetHosts(args.target_hosts)
+    cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
+    client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
+    cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
+    if "timeout" not in client_options.default:
+        console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
+    if list(target_hosts.all_hosts) != list(client_options.all_client_options):
+        arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
+
+
+def configure_reporting_params(args, cfg):
+    cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
+    cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
+    cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
+
+
+def dispatch_sub_command(arg_parser, args, cfg):
+    sub_command = args.subcommand
+
+    cfg.add(config.Scope.application, "system", "quiet.mode", args.quiet)
+    cfg.add(config.Scope.application, "system", "offline.mode", args.offline)
+
     try:
         if sub_command == "compare":
-            reporter.compare(cfg)
+            configure_reporting_params(args, cfg)
+            reporter.compare(cfg, args.baseline, args.contender)
         elif sub_command == "list":
+            cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
+            configure_mechanic_params(args, cfg, command_requires_car=False)
+            configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
         elif sub_command == "download":
+            cfg.add(config.Scope.applicationOverride, "mechanic", "target.os", args.target_os)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "target.arch", args.target_arch)
+            configure_mechanic_params(args, cfg)
             mechanic.download(cfg)
         elif sub_command == "install":
+            cfg.add(config.Scope.applicationOverride, "system", "install.id", str(uuid.uuid4()))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
+            # TODO: Remove this special treatment and rely on artifact caching (follow-up PR)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "skip.build", args.skip_build)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "master.nodes", opts.csv_to_list(args.master_nodes))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "seed.hosts", opts.csv_to_list(args.seed_hosts))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
+            configure_mechanic_params(args, cfg)
             mechanic.install(cfg)
         elif sub_command == "start":
+            cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
+            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
+            configure_telemetry_params(args, cfg)
             mechanic.start(cfg)
         elif sub_command == "stop":
+            cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
             mechanic.stop(cfg)
         elif sub_command == "race":
-            race(cfg)
+            # As the race command is doing more work than necessary at the moment, we duplicate several parameters
+            # in this section that actually belong to dedicated subcommands (like install, start or stop). Over time
+            # these duplicated parameters will vanish as we move towards dedicated subcommands and use "race" only
+            # to run the actual benchmark (i.e. generating load).
+            if args.effective_start_date:
+                cfg.add(config.Scope.applicationOverride, "system", "time.start", args.effective_start_date)
+            cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
+            # use the race id implicitly also as the install id.
+            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
+            cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
+            cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
+            cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
+            cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
+            cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
+            cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
+            cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
+            configure_track_params(arg_parser, args, cfg)
+            configure_connection_params(arg_parser, args, cfg)
+            configure_telemetry_params(args, cfg)
+            configure_mechanic_params(args, cfg)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", convert.to_bool(args.skip_rest_api_check))
+
+            configure_reporting_params(args, cfg)
+
+            race(cfg, args.kill_running_processes)
         elif sub_command == "generate":
+            cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
+            cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
+            cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             generate(cfg)
         elif sub_command == "create-track":
+            cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
+            cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+            cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            configure_connection_params(arg_parser, args, cfg)
+
             tracker.create_track(cfg)
         elif sub_command == "info":
+            configure_track_params(arg_parser, args, cfg)
             track.track_info(cfg)
         else:
-            raise exceptions.SystemSetupError("Unknown subcommand [%s]" % sub_command)
+            raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return True
     except exceptions.RallyError as e:
         logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
@@ -799,141 +903,11 @@ def main():
     if not cfg.config_present():
         cfg.install_default_config()
     cfg.load_config(auto_upgrade=True)
-
-    sub_command = derive_sub_command(args)
-
-    if args.effective_start_date:
-        cfg.add(config.Scope.application, "system", "time.start", args.effective_start_date)
-        cfg.add(config.Scope.application, "system", "time.start.user_provided", True)
-    else:
-        cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.utcnow())
-        cfg.add(config.Scope.application, "system", "time.start.user_provided", False)
-
-    # The installation id is overridden later on if nodes are managed via Rally subcommands (install / start / stop)
-    cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
-    cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
-    cfg.add(config.Scope.applicationOverride, "system", "quiet.mode", args.quiet)
-    cfg.add(config.Scope.applicationOverride, "system", "offline.mode", args.offline)
-    cfg.add(config.Scope.applicationOverride, "system", "kill.running.processes", args.kill_running_processes)
-
+    cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.utcnow())
     # Local config per node
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
     cfg.add(config.Scope.application, "node", "rally.cwd", os.getcwd())
 
-    cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
-    if args.distribution_version:
-        cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", opts.csv_to_list(args.car))
-    if args.team_path:
-        cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
-        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", None)
-    else:
-        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", args.team_repository)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", args.team_revision)
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
-    if args.keep_cluster_running:
-        cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", True)
-        # force-preserve the cluster nodes.
-        cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", True)
-    else:
-        cfg.add(config.Scope.applicationOverride, "mechanic", "keep.running", False)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", convert.to_bool(args.skip_rest_api_check))
-    cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
-    cfg.add(config.Scope.applicationOverride, "telemetry", "devices", opts.csv_to_list(args.telemetry))
-    cfg.add(config.Scope.applicationOverride, "telemetry", "params", opts.to_dict(args.telemetry_params))
-
-    cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
-    cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
-
-    cfg.add(config.Scope.applicationOverride, "track", "repository.revision", args.track_revision)
-
-    # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
-    # its default value)
-    if args.track_path:
-        cfg.add(config.Scope.applicationOverride, "track", "track.path", os.path.abspath(io.normalize_path(args.track_path)))
-        cfg.add(config.Scope.applicationOverride, "track", "repository.name", None)
-        if args.track_revision:
-            # stay as close as possible to argparse errors although we have a custom validation.
-            arg_parser.error("argument --track-revision not allowed with argument --track-path")
-        if args.track:
-            # stay as close as possible to argparse errors although we have a custom validation.
-            arg_parser.error("argument --track not allowed with argument --track-path")
-        # cfg.add(config.Scope.applicationOverride, "track", "track.name", None)
-    else:
-        # cfg.add(config.Scope.applicationOverride, "track", "track.path", None)
-        cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
-        # set the default programmatically because we need to determine whether the user has provided a value
-        chosen_track = args.track if args.track else "geonames"
-        cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
-
-    cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
-    cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
-    cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
-    cfg.add(config.Scope.applicationOverride, "track", "exclude.tasks", opts.csv_to_list(args.exclude_tasks))
-    cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
-
-    cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
-    cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
-    cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
-    if sub_command == "compare":
-        cfg.add(config.Scope.applicationOverride, "reporting", "baseline.id", args.baseline)
-        cfg.add(config.Scope.applicationOverride, "reporting", "contender.id", args.contender)
-    if sub_command == "generate":
-        cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
-        cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-
-        if args.chart_spec_path and (args.track or args.challenge or args.car or args.node_count):
-            console.println("You need to specify either --chart-spec-path or --track, --challenge, --car and "
-                            "--node-count but not both.")
-            sys.exit(1)
-        if args.chart_spec_path:
-            cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
-        else:
-            # other options are stored elsewhere already
-            cfg.add(config.Scope.applicationOverride, "generator", "node.count", args.node_count)
-    if sub_command == "create-track":
-        cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
-        cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-
-    cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
-    cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
-    cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
-    cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
-    if sub_command not in ("list", "install", "download"):
-        # Also needed by mechanic (-> telemetry) - duplicate by module?
-        target_hosts = opts.TargetHosts(args.target_hosts)
-        cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
-        client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
-        cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
-        if "timeout" not in client_options.default:
-            console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
-        if list(target_hosts.all_hosts) != list(client_options.all_client_options):
-            console.println("--target-hosts and --client-options must define the same keys for multi cluster setups.")
-            sys.exit(1)
-    # split by component?
-    if sub_command == "download":
-        cfg.add(config.Scope.applicationOverride, "mechanic", "target.os", args.target_os)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "target.arch", args.target_arch)
-    if sub_command == "list":
-        cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
-        cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
-    if sub_command == "install":
-        cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "skip.build", args.skip_build)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "master.nodes", opts.csv_to_list(args.master_nodes))
-        cfg.add(config.Scope.applicationOverride, "mechanic", "seed.hosts", opts.csv_to_list(args.seed_hosts))
-    if sub_command in ["start", "stop"]:
-        cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
-
-    logger.info("Race id [%s]", args.race_id)
     logger.info("OS [%s]", str(platform.uname()))
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
@@ -949,7 +923,7 @@ def main():
         else:
             logger.info("Detected a working Internet connection.")
 
-    success = dispatch_sub_command(cfg, sub_command)
+    success = dispatch_sub_command(arg_parser, args, cfg)
 
     end = time.time()
     if success:

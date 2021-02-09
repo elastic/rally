@@ -323,7 +323,8 @@ def list_pipelines():
 def run(cfg):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
-
+    race_id = cfg.opts("system", "race.id")
+    logger.info("Race id [%s]", race_id)
     if len(name) == 0:
         # assume from-distribution pipeline if distribution.version has been specified and --pipeline cli arg not set
         if cfg.exists("mechanic", "distribution.version"):

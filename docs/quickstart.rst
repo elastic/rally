@@ -18,9 +18,9 @@ Run your first race
 
 Now we're ready to run our first :doc:`race </glossary>`::
 
-    esrally race --distribution-version=6.5.3
+    esrally race --distribution-version=6.5.3 --track=geonames
 
-This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glossary>` - the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ - against it. After the race, a :doc:`summary report </summary_report>` is written to the command line:::
+This will download Elasticsearch 6.5.3 and run the `geonames <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ :doc:`track </glossary>` against it. After the race, a :doc:`summary report </summary_report>` is written to the command line:::
 
 
     ------------------------------------------------------

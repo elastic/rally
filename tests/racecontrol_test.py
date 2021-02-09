@@ -62,6 +62,7 @@ def test_finds_available_pipelines():
 
 def test_prevents_running_an_unknown_pipeline():
     cfg = config.Config()
+    cfg.add(config.Scope.benchmark, "system", "race.id", "28a032d1-0b03-4579-ad2a-c65316f126e9")
     cfg.add(config.Scope.benchmark, "race", "pipeline", "invalid")
     cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "5.0.0")
 
@@ -73,6 +74,7 @@ def test_prevents_running_an_unknown_pipeline():
 
 def test_passes_benchmark_only_pipeline_in_docker(running_in_docker, benchmark_only_pipeline):
     cfg = config.Config()
+    cfg.add(config.Scope.benchmark, "system", "race.id", "28a032d1-0b03-4579-ad2a-c65316f126e9")
     cfg.add(config.Scope.benchmark, "race", "pipeline", "benchmark-only")
 
     racecontrol.run(cfg)
@@ -82,6 +84,7 @@ def test_passes_benchmark_only_pipeline_in_docker(running_in_docker, benchmark_o
 
 def test_fails_without_benchmark_only_pipeline_in_docker(running_in_docker, unittest_pipeline):
     cfg = config.Config()
+    cfg.add(config.Scope.benchmark, "system", "race.id", "28a032d1-0b03-4579-ad2a-c65316f126e9")
     cfg.add(config.Scope.benchmark, "race", "pipeline", "unit-test-pipeline")
 
     with pytest.raises(
@@ -97,6 +100,7 @@ def test_fails_without_benchmark_only_pipeline_in_docker(running_in_docker, unit
 
 def test_runs_a_known_pipeline(unittest_pipeline):
     cfg = config.Config()
+    cfg.add(config.Scope.benchmark, "system", "race.id", "28a032d1-0b03-4579-ad2a-c65316f126e9")
     cfg.add(config.Scope.benchmark, "race", "pipeline", "unit-test-pipeline")
     cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "")
 

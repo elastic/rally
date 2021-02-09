@@ -40,7 +40,7 @@ Run your first race
 
 Now we're ready to run our first race::
 
-    esrally race --distribution-version=6.0.0
+    esrally race --distribution-version=6.0.0 --track=geonames
 
 This will download Elasticsearch 6.0.0 and run Rally's default track - the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ - against it. After the race, a summary report is written to the command line:::
 

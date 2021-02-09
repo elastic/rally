@@ -36,7 +36,7 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     if plugins is None:
         plugins = []
     caching_enabled = cfg.opts("source", "cache", mandatory=False, default_value=True)
-    revisions = _extract_revisions(cfg.opts("mechanic", "source.revision"))
+    revisions = _extract_revisions(cfg.opts("mechanic", "source.revision", mandatory=sources))
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
     build_needed = any([build for _, _, build in supply_requirements.values()])
@@ -563,7 +563,7 @@ def _config_value(src_config, key):
 
 
 def _extract_revisions(revision):
-    revisions = revision.split(",")
+    revisions = revision.split(",") if revision else []
     if len(revisions) == 1:
         r = revisions[0]
         if r.startswith("elasticsearch:"):

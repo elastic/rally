@@ -40,10 +40,7 @@ def summarize(results, cfg):
     SummaryReporter(results, cfg).report()
 
 
-def compare(cfg):
-    baseline_id = cfg.opts("reporting", "baseline.id")
-    contender_id = cfg.opts("reporting", "contender.id")
-
+def compare(cfg, baseline_id, contender_id):
     if not baseline_id or not contender_id:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
