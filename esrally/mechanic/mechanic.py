@@ -36,7 +36,7 @@ METRIC_FLUSH_INTERVAL_SECONDS = 30
 def download(cfg):
     car, plugins = load_team(cfg, external=False)
 
-    s = supplier.create(cfg, sources=False, distribution=True, build=False, car=car, plugins=plugins)
+    s = supplier.create(cfg, sources=False, distribution=True, car=car, plugins=plugins)
     binaries = s()
     console.println(json.dumps(binaries, indent=2), force=True)
 
@@ -48,7 +48,6 @@ def install(cfg):
     # A non-empty distribution-version is provided
     distribution = bool(cfg.opts("mechanic", "distribution.version", mandatory=False))
     sources = not distribution
-    build = not cfg.opts("mechanic", "skip.build")
     build_type = cfg.opts("mechanic", "build.type")
     ip = cfg.opts("mechanic", "network.host")
     http_port = int(cfg.opts("mechanic", "network.http.port"))
@@ -57,7 +56,7 @@ def install(cfg):
     seed_hosts = cfg.opts("mechanic", "seed.hosts")
 
     if build_type == "tar":
-        binary_supplier = supplier.create(cfg, sources, distribution, build, car, plugins)
+        binary_supplier = supplier.create(cfg, sources, distribution, car, plugins)
         p = provisioner.local(cfg=cfg, car=car, plugins=plugins, cluster_settings={}, ip=ip, http_port=http_port,
                               all_node_ips=seed_hosts, all_node_names=master_nodes, target_root=root_path,
                               node_name=node_name)
@@ -166,13 +165,12 @@ def _delete_node_file(root_path):
 ##############################
 
 class StartEngine:
-    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker, ip=None, port=None,
+    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, distribution, external, docker, ip=None, port=None,
                  node_id=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.cluster_settings = cluster_settings
         self.sources = sources
-        self.build = build
         self.distribution = distribution
         self.external = external
         self.docker = docker
@@ -192,7 +190,7 @@ class StartEngine:
         :param node_ids: A list of node id to set.
         :return: A corresponding ``StartNodes`` message with the specified IP, port number and node ids.
         """
-        return StartNodes(self.cfg, self.open_metrics_context, self.cluster_settings, self.sources, self.build, self.distribution,
+        return StartNodes(self.cfg, self.open_metrics_context, self.cluster_settings, self.sources, self.distribution,
                           self.external, self.docker, all_node_ips, all_node_ids, ip, port, node_ids)
 
 
@@ -219,13 +217,12 @@ class ResetRelativeTime:
 ##############################
 
 class StartNodes:
-    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, build, distribution, external, docker,
+    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, distribution, external, docker,
                  all_node_ips, all_node_ids, ip, port, node_ids):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.cluster_settings = cluster_settings
         self.sources = sources
-        self.build = build
         self.distribution = distribution
         self.external = external
         self.docker = docker
@@ -561,7 +558,7 @@ class NodeMechanicActor(actor.RallyActor):
             # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
 
             self.mechanic = create(cfg, metrics_store, msg.ip, msg.port, msg.all_node_ips, msg.all_node_ids,
-                                   msg.cluster_settings, msg.sources, msg.build, msg.distribution,
+                                   msg.cluster_settings, msg.sources, msg.distribution,
                                    msg.external, msg.docker)
             self.mechanic.start_engine()
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
@@ -622,14 +619,14 @@ def load_team(cfg, external):
 
 
 def create(cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_ids, cluster_settings=None,
-           sources=False, build=False, distribution=False, external=False, docker=False):
+           sources=False, distribution=False, external=False, docker=False):
     race_root_path = paths.race_root(cfg)
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
     car, plugins = load_team(cfg, external)
 
     if sources or distribution:
-        s = supplier.create(cfg, sources, distribution, build, car, plugins)
+        s = supplier.create(cfg, sources, distribution, car, plugins)
         p = []
         all_node_names = ["%s-%s" % (node_name_prefix, n) for n in all_node_ids]
         for node_id in node_ids:
