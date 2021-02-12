@@ -76,6 +76,7 @@ install_requires = [
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
     "boto3==1.10.32",
+    "urllib3<1.26,>=1.20",
     # License: Apache 2.0
     "yappi==1.2.3",
     # License: BSD
