@@ -23,6 +23,7 @@ PY_BIN = python3
 PIP_WRAPPER = $(PY_BIN) -m pip
 PY38 = $(shell jq '.python_versions.PY38' .ci/variables.json)
 PY39 = $(shell jq '.python_versions.PY39' .ci/variables.json)
+export PYVER4DOCS = $(shell jq '.python_versions.DOCS' .ci/variables.json)
 VENV_NAME ?= .venv
 VENV_ACTIVATE_FILE = $(VENV_NAME)/bin/activate
 VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
