@@ -29,8 +29,7 @@ from enum import Enum
 from functools import total_ordering
 from os.path import commonprefix
 
-import ijson
-
+from benchmarks.driver.parsing import parse, extract_search_after_properties
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
@@ -767,45 +766,6 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text, props, lists=None):
-    """
-    Selectively parsed the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
-    specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
-    contain elements (respective key will be ``False``).
-
-    :param text: A text to parse.
-    :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
-    :param lists: An optional list of property paths to JSON lists in the provided text.
-    :return: A dict containing all properties and lists that have been found in the provided text.
-    """
-    text.seek(0)
-    parser = ijson.parse(text)
-    parsed = {}
-    parsed_lists = {}
-    current_list = None
-    expect_end_array = False
-    try:
-        for prefix, event, value in parser:
-            if expect_end_array:
-                # True if the list is empty, False otherwise
-                parsed_lists[current_list] = event == "end_array"
-                expect_end_array = False
-            if prefix in props:
-                parsed[prefix] = value
-            elif lists is not None and prefix in lists and event == "start_array":
-                current_list = prefix
-                expect_end_array = True
-            # found all necessary properties
-            if len(parsed) == len(props) and (lists is None or len(parsed_lists) == len(lists)):
-                break
-    except ijson.IncompleteJSONError:
-        # did not find all properties
-        pass
-
-    parsed.update(parsed_lists)
-    return parsed
-
-
 class Query(Runner):
     """
     Runs a request body search against Elasticsearch.
@@ -856,8 +816,9 @@ class Query(Runner):
         request_params, headers = self._transport_request_params(params)
         body = mandatory(params, "body", self)
         index = params.get("index", "_all")
-        size = params.get("results-per-page", 10)
-        body["size"] = size
+        size = params.get("results-per-page")
+        if size:
+            body["size"] = size
         detailed_results = params.get("detailed-results", False)
         encoding_header = self._query_headers(params)
         if encoding_header is not None:
@@ -874,6 +835,7 @@ class Query(Runner):
         async def search_after_query(es, params):
             index = params.get("index", "_all")
             pit_op = params.get("with-point-in-time-from")
+            hits_total = None
             if pit_op:
                 # these are disallowed as they are encoded in the pit_id
                 for item in ["index", "routing", "preference"]:
@@ -881,23 +843,20 @@ class Query(Runner):
                 index = None
             # explicitly convert to int to provoke an error otherwise
             total_pages = sys.maxsize if params.get("pages") == "all" else int(params.get("pages"))
-            for _ in range(total_pages):
+            for page in range(1, total_pages):
                 if pit_op:
                     pit_id = CompositeContext.get(pit_op)
                     body["pit"] = {"id": pit_id,
                                    "keep_alive": "1m" } # todo parameterize second keep_alive
 
-                props = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                if pit_op and props.get("pit_id") is not None:
+                response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
+                pit_id, last_sort, hits_total = extract_search_after_properties(response, bool(pit_op), hits_total)
+                if pit_op and pit_id:
                     # per the documentation the response pit id is most up-to-date
-                    CompositeContext.put(pit_op, props.get("pit_id"))
-                # prefer less forgiving accessors here, to raise exception on an unexpected response
-                hits = props["hits"]
-                if not hits["hits"] or len(hits["hits"]) < size:
+                    CompositeContext.put(pit_op, pit_id)
+                if hits_total / size <= page:
                     break
                 # ... else set up next search
-                docs = hits.get("hits")
-                last_sort = docs[-1].get("sort")
                 body["search_after"] = last_sort
 
         async def request_body_query(es, params):

@@ -4593,7 +4593,10 @@ class QueryWithSearchAfterScrollTests(TestCase):
             "took": 10,
             "timed_out": False,
             "hits": {
-                "total": 2,
+                "total": {
+                    "value": 3,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
                         "_id": "1",
@@ -4613,7 +4616,10 @@ class QueryWithSearchAfterScrollTests(TestCase):
                  "took": 10,
                  "timed_out": False,
                  "hits": {
-                     "total": 1,
+                     "total": {
+                         "value": "3",
+                         "relation": "eq"
+                     },
                      "hits": [
                          {"_id": "3",
                           "timestamp": 1609780187,
@@ -4622,8 +4628,8 @@ class QueryWithSearchAfterScrollTests(TestCase):
                      ]
                  }}
 
-        es.transport.perform_request.side_effect = [as_future(page_1),
-                                                    as_future(page_2)]
+        es.transport.perform_request.side_effect = [as_future(io.BytesIO(json.dumps(page_1).encode())),
+                                                    as_future(io.BytesIO(json.dumps(page_2).encode()))]
 
         r = runner.Query()
 
@@ -4671,7 +4677,10 @@ class QueryWithSearchAfterScrollTests(TestCase):
             "took": 10,
             "timed_out": False,
             "hits": {
-                "total": 2,
+                "total": {
+                    "value": 3,
+                    "relation": "eq"
+                },
                 "hits": [
                     {
                         "_id": "1",
@@ -4691,7 +4700,10 @@ class QueryWithSearchAfterScrollTests(TestCase):
             "took": 10,
             "timed_out": False,
             "hits": {
-              "total": 1,
+              "total": {
+                  "value": 3,
+                  "relation": "eq"
+              },
               "hits": [
                   {"_id": "3",
                    "timestamp": 1609780187,
@@ -4701,8 +4713,8 @@ class QueryWithSearchAfterScrollTests(TestCase):
             }
         }
 
-        es.transport.perform_request.side_effect = [as_future(page_1),
-                                                    as_future(page_2)]
+        es.transport.perform_request.side_effect = [as_future(io.BytesIO(json.dumps(page_1).encode())),
+                                                    as_future(io.BytesIO(json.dumps(page_2).encode()))]
         r = runner.Query()
         await r(es, params)
 
@@ -4838,7 +4850,7 @@ class CompositeTests(TestCase):
         es.transport.perform_request.assert_called_once_with(method="GET",
                                                              url="/",
                                                              headers=None,
-                                                             body={},
+                                                             body=None,
                                                              params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
