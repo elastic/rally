@@ -1,6 +1,63 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.1.0
+------------------------
+
+Custom bulk parameter sources need to provide a unit
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously, Rally has implicitly used the unit ``docs`` for bulk operations. With this release, custom parameter sources for bulk operations need to provide also a ``unit`` property or benchmarks will fail with::
+
+    esrally.exceptions.DataError: Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'unit'. Add it to your parameter source and try again.
+
+Pipelines from-sources-complete and from-sources-skip-build are removed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The previously deprecated pipelines ``from-sources-complete`` and ``from-sources-skip-build`` have been removed. Specify ``--pipeline=from-sources`` instead.
+
+Rally requires a subcommand
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously a subcommand was optional when running a benchmark. With Rally 2.1.0 a subcommand is always required. So instead of invoking::
+
+    esrally --distribution-version=7.10.0
+
+Invoke Rally with the ``race`` subcommand instead::
+
+    esrally race --distribution-version=7.10.0
+
+
+Running without a track is deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously Rally has implicitly chosen the geonames track as default when ``--track`` was not provided. We want users to make a conscious choice of the workload and not specifying the track explicitly is deprecated (to be removed in Rally 2.2.0). So instead of invoking::
+
+    esrally race --distribution-version=7.10.0
+
+Invoke Rally with ``--track=geonames`` instead::
+
+    esrally race --distribution-version=7.10.0 --track=geonames
+
+
+Migrating to Rally 2.0.4
+------------------------
+
+Running without a subcommand is deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 2.0.4 will warn when invoked without subcommand. So instead of invoking::
+
+    esrally --distribution-version=7.10.0
+
+Invoke Rally with the ``race`` subcommand instead::
+
+    esrally race --distribution-version=7.10.0
+
+When Rally is invoked without a subcommand it will issue the following warning on the command line and in the log file::
+
+    [WARNING] Invoking Rally without a subcommand is deprecated and will be required with Rally 2.1.0. Specify the 'race' subcommand explicitly.
+
 Migrating to Rally 2.0.3
 ------------------------
 

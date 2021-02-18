@@ -44,7 +44,7 @@ In order to tell Rally to install a plugin, use the ``--elasticsearch-plugins`` 
 
 Example::
 
-    esrally --distribution-version=5.5.0 --elasticsearch-plugins="analysis-icu,analysis-phonetic"
+    esrally race --track=geonames --distribution-version=5.5.0 --elasticsearch-plugins="analysis-icu,analysis-phonetic"
 
 This will install the plugins ``analysis-icu`` and ``analysis-phonetic`` (in that order). In order to use the features that these plugins provide, you need to write a :doc:`custom track </adding_tracks>`.
 
@@ -97,7 +97,7 @@ Let's discuss these properties one by one:
 .. warning::
     ``plugin.my-plugin.build.command`` has replaced ``plugin.my-plugin.build.task`` in earlier Rally versions. It now requires the **full** build command.
 
-In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally --revision="elasticsearch:some-elasticsearch-revision,my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``some-elasticsearch-revision`` and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
+In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally race --track=geonames --revision="elasticsearch:some-elasticsearch-revision,my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``some-elasticsearch-revision`` and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
 
 * All prerequisites for source builds are installed.
 * The Elasticsearch source revision is compatible with the chosen plugin revision. Note that you do not need to know the revision hash to build against an already released version and can use git tags instead. E.g. if you want to benchmark against Elasticsearch 5.6.1, you can specify ``--revision="elasticsearch:v5.6.1,my-plugin:some-plugin-revision"`` (see e.g. the `Elasticsearch tags on Github <https://github.com/elastic/elasticsearch/tags>`_ or use ``git tag`` in the Elasticsearch source directory on the console).
@@ -126,7 +126,7 @@ Let's discuss these properties one by one:
 .. warning::
     ``plugin.my-plugin.build.command`` has replaced ``plugin.my-plugin.build.task`` in earlier Rally versions. It now requires the **full** build command.
 
-In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally --distribution-version="elasticsearch-version" --revision="my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``elasticsearch-version`` with the correct release (e.g. 6.0.0) and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
+In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: ``esrally race --track=geonames --distribution-version="elasticsearch-version" --revision="my-plugin:some-plugin-revision" --elasticsearch-plugins="my-plugin"`` where you need to replace ``elasticsearch-version`` with the correct release (e.g. 6.0.0) and ``some-plugin-revision`` with the appropriate :ref:`git revisions <clr_revision>`. Adjust other command line parameters (like track or car) accordingly. In order for this to work, you need to ensure that:
 
 * All prerequisites for source builds are installed.
 * The Elasticsearch release is compatible with the chosen plugin revision.
@@ -223,7 +223,7 @@ As ``myplugin`` is not a core plugin, the Elasticsearch plugin manager does not 
     [distributions]
     plugin.myplugin.release.url=https://example.org/myplugin/releases/{{VERSION}}/myplugin-{{VERSION}}.zip
 
-Now you can run benchmarks with the custom Elasticsearch plugin, e.g. with ``esrally --distribution-version=5.5.0 --elasticsearch-plugins="myplugin:simple"``.
+Now you can run benchmarks with the custom Elasticsearch plugin, e.g. with ``esrally race --track=geonames --distribution-version=5.5.0 --elasticsearch-plugins="myplugin:simple"``.
 
 For this to work you need ensure two things:
 

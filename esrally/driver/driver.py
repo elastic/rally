@@ -338,7 +338,7 @@ class TrackPreparationActor(actor.RallyActor):
         if self.executor_future is not None and self.executor_future.done():
             e = self.executor_future.exception(timeout=0)
             if e:
-                self.logger.info("Track preparator has detected a benchmark failure. Notifying master...")
+                self.logger.exception("Track preparator has detected a benchmark failure. Notifying master...", exc_info=e)
                 # the exception might be user-defined and not be on the load path of the original sender. Hence, it
                 # cannot be deserialized on the receiver so we convert it here to a plain string.
                 self.send(self.original_sender, actor.BenchmarkFailure("Error in track preparator", str(e)))
@@ -855,7 +855,7 @@ class Worker(actor.RallyActor):
             self.wakeup_interval = 0.5
         runner.register_default_runners()
         if self.track.has_plugins:
-            track.load_track_plugins(self.config, runner.register_runner, scheduler.register_scheduler)
+            track.load_track_plugins(self.config, self.track.name, runner.register_runner, scheduler.register_scheduler)
         self.drive()
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
@@ -893,7 +893,8 @@ class Worker(actor.RallyActor):
             elif self.executor_future is not None and self.executor_future.done():
                 e = self.executor_future.exception(timeout=0)
                 if e:
-                    self.logger.info("Worker[%s] has detected a benchmark failure. Notifying master...", str(self.worker_id))
+                    self.logger.exception("Worker[%s] has detected a benchmark failure. Notifying master...",
+                                          str(self.worker_id), exc_info=e)
                     # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
                     # deserialized on the receiver so we convert it here to a plain string.
                     self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.worker_id), str(e)))
@@ -1206,6 +1207,7 @@ class AsyncIoAdapter:
         self.complete = complete
         self.abort_on_error = abort_on_error
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
+        self.assertions_enabled = self.cfg.opts("driver", "assertions")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
         self.logger = logging.getLogger(__name__)
 
@@ -1240,6 +1242,9 @@ class AsyncIoAdapter:
         client_count = len(self.task_allocations)
         es = es_clients(self.cfg.opts("client", "hosts").all_hosts,
                         self.cfg.opts("client", "options").with_max_connections(client_count))
+
+        self.logger.info("Task assertions enabled: %s", str(self.assertions_enabled))
+        runner.enable_assertions(self.assertions_enabled)
 
         aws = []
         # A parameter source should only be created once per task - it is partitioned later on per client.
@@ -1400,9 +1405,9 @@ class AsyncExecutor:
                 if completed:
                     self.logger.info("Task [%s] is considered completed due to external event.", self.task)
                     break
-        except BaseException:
+        except BaseException as e:
             self.logger.exception("Could not execute schedule")
-            raise
+            raise exceptions.RallyError(f"Cannot run task [{self.task}]: {e}") from None
         finally:
             # Actively set it if this task completes its parent
             if task_completes_parent:

@@ -23,10 +23,10 @@ For ad-hoc use you can store a track definition anywhere on the file system and 
 
    # provide a directory - Rally searches for a track.json file in this directory
    # Track name is "app-logs"
-   esrally --track-path=~/Projects/tracks/app-logs
+   esrally race --track-path=~/Projects/tracks/app-logs
    # provide a file name - Rally uses this file directly
    # Track name is "syslog"
-   esrally --track-path=~/Projects/tracks/syslog.json
+   esrally race --track-path=~/Projects/tracks/syslog.json
 
 Rally will also search for additional files like mappings or data files in the provided directory. If you use advanced features like :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>` we recommend that you create a separate directory per track.
 
@@ -38,12 +38,18 @@ Alternatively, you can store Rally tracks also in a dedicated git repository whi
 * The `master` branch needs to work with the latest `master` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
-Rally implements a fallback logic so you don't need to define a branch for each patch release of Elasticsearch. For example:
+.. _track-repositories-fall-back-logic:
 
-* The branch `6.0.0-alpha1` will be chosen for the version ``6.0.0-alpha1`` of Elasticsearch.
-* The branch `5` will be chosen for all versions for Elasticsearch with the major version 5, e.g. ``5.0.0``, ``5.1.3`` (provided there is no specific branch).
+Rally implements a fallback logic in order of specificity up to the minor version level, so you don't need to define a branch for each patch release of Elasticsearch.
 
-Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
+Assuming the track repository has several branches, the order is:
+
+1. Exact branch matches; e.g. if the repo contains branches `7`, `7.1` and `7.10.2` and Elasticsearch version is `7.10.2`, `7.10.2` will be checked out.
+2. Nearest prior minor matches;  e.g. if the repo contains branches `7`, `7.1` and `7.10` and Elasticsearch version is `7.10.2`, `7.10` will be checked out. Alternatively if version is `7.9`, `7.1` will be checked out.
+3. Major branch matches; e.g. if the repo contains branches `7` and `7.10` and Elasticsearch version is `7.1`, `7` will be checked out.
+4. Failing everything, `master` will be elected, e.g. if the repo contains branches `6`, `7` and `master` and Elasticsearch version is `8.1.0`, `master` will be checked out.
+
+In general, Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
 
 Rally will also search for related files like mappings or custom runners or parameter sources in the track repository. However, Rally will use a separate directory to look for data files (``~/.rally/benchmarks/data/$TRACK_NAME/``). The reason is simply that we do not want to check multi-GB data files into git.
 
@@ -298,7 +304,12 @@ Each entry in the ``documents`` list consists of the following properties:
   * Google Storage: Either using `client library authentication <https://cloud.google.com/storage/docs/reference/libraries#setting_up_authentication>`_ or by presenting an `oauth2 token <https://cloud.google.com/storage/docs/authentication>`_ via the ``GOOGLE_AUTH_TOKEN`` environment variable, typically done using: ``export GOOGLE_AUTH_TOKEN=$(gcloud auth print-access-token)``.
 * ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Currently, only ``bulk`` is supported.
 * ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
-* ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an action and meta-data line (``true``) or only documents (``false``).
+* ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an `action and meta-data <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-desc>`_ line (``true``) or only documents (``false``).
+
+    .. note::
+
+        When this is ``true``, the ``documents`` property should only reflect the number of documents and not additionally include the number of action and metadata lines.
+
 * ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
@@ -410,6 +421,7 @@ schedule
 The ``schedule`` element contains a list of tasks that are executed by Rally, i.e. it describes the workload. Each task consists of the following properties:
 
 * ``name`` (optional): This property defines an explicit name for the given task. By default the operation's name is implicitly used as the task name but if the same operation is run multiple times, a unique task name must be specified using this property.
+* ``tags`` (optional): This property defines one or more tags for the given task. This can be used for :ref:`task filtering <clr_include_tasks>`, e.g. with ``--exclude-tasks="tag:setup"`` all tasks except the ones that contain the tag ``setup`` are executed.
 * ``operation`` (mandatory): This property refers either to the name of an operation that has been defined in the ``operations`` section or directly defines an operation inline.
 * ``clients`` (optional, defaults to 1): The number of clients that should execute a task concurrently.
 * ``warmup-iterations`` (optional, defaults to 0): Number of iterations that each client should execute to warmup the benchmark candidate. Warmup iterations will not show up in the measurement results.
@@ -565,9 +577,53 @@ Each operation consists of the following properties:
 * ``name`` (mandatory): The name of this operation. You can choose this name freely. It is only needed to reference the operation when defining schedules.
 * ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
 * ``include-in-reporting`` (optional, defaults to ``true`` for normal operations and to ``false`` for administrative operations): Whether or not this operation should be included in the command line report. For example you might want Rally to create an index for you but you are not interested in detailed metrics about it. Note that Rally will still record all metrics in the metrics store.
+* ``assertions`` (optional, defaults to ``None``): A list of assertions that should be checked. See below for more details.
 * ``request-timeout`` (optional, defaults to ``None``): The client-side timeout for this operation.  Represented as a floating-point number in seconds, e.g. ``1.5``.
 * ``headers`` (optional, defaults to ``None``): A dictionary of key-value pairs to pass as headers in the operation.
 * ``opaque-id`` (optional, defaults to ``None`` [unused]): A special ID set as the value of ``x-opaque-id`` in the client headers of the operation.  Overrides existing ``x-opaque-id`` entries in ``headers`` (case-insensitive).
+
+**Assertions**
+
+Use assertions for sanity checks, e.g. to ensure a query returns results. Assertions need to be defined with the following properties. All of them are mandatory:
+
+* ``property``: A dot-delimited path to the meta-data field to be checked. Only meta-data fields that are returned by an operation are supported. See the respective "meta-data" section of an operation for the supported meta-data.
+* ``condition``: The following conditions are supported: ``<``, ``<=``, ``==``, ``>=``, ``>=``.
+* ``value``: The expected value.
+
+Assertions are disabled by default and can be enabled with the command line flag ``--enable-assertions``. A failing assertion aborts the benchmark.
+
+Example::
+
+    {
+      "name": "term",
+      "operation-type": "search",
+      "detailed-results": true,
+      "assertions": [
+        {
+          "property": "hits",
+          "condition": ">",
+          "value": 0
+        }
+      ],
+      "body": {
+        "query": {
+          "term": {
+            "country_code.raw": "AT"
+          }
+        }
+      }
+    }
+
+.. note::
+
+    This requires to set ``detailed-results`` to ``true`` so the search operation gathers additional meta-data, such as the number of hits.
+
+If assertions are enabled with ``--enable-assertions`` and this assertion fails, it exits with the following error message::
+
+    [ERROR] Cannot race. Error in load generator [0]
+        Cannot run task [term]: Expected [hits] to be > [0] but was [0].
+
+**Retries**
 
 Some of the operations below are also retryable (marked accordingly below). Retryable operations expose the following properties:
 
@@ -582,7 +638,10 @@ Depending on the operation type a couple of further parameters can be specified.
 bulk
 ~~~~
 
-With the operation type ``bulk`` you can execute `bulk requests <http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_. It supports the following properties:
+With the operation type ``bulk`` you can execute `bulk requests <http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html>`_.
+
+Properties
+""""""""""
 
 * ``bulk-size`` (mandatory): Defines the bulk size in number of documents.
 * ``ingest-percentage`` (optional, defaults to 100): A number between (0, 100] that defines how much of the document corpus will be bulk-indexed.
@@ -594,7 +653,7 @@ With the operation type ``bulk`` you can execute `bulk requests <http://www.elas
 * ``conflict-probability`` (optional, defaults to 25 percent): A number between [0, 100] that defines how many of the documents will get replaced. Combining ``conflicts=sequential`` and ``conflict-probability=0`` makes Rally generate index ids by itself, instead of relying on Elasticsearch's `automatic id generation <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html#_automatic_id_generation>`_.
 * ``on-conflict`` (optional, defaults to ``index``): Determines whether Rally should use the action ``index`` or ``update`` on id conflicts.
 * ``recency`` (optional, defaults to 0): A number between [0,1] indicating whether to bias conflicting ids towards more recent ids (``recency`` towards 1) or whether to consider all ids for id conflicts (``recency`` towards 0). See the diagram below for details.
-* ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results.
+* ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results. See the section below for the meta-data that are returned.
 
 The image below shows how Rally behaves with a ``recency`` set to 0.5. Internally, Rally uses the blue function for its calculations but to understand the behavior we will focus on red function (which is just the inverse). Suppose we have already generated ids from 1 to 100 and we are about to simulate an id conflict. Rally will randomly choose a value on the y-axis, e.g. 0.8 which is mapped to 0.1 on the x-axis. This means that in 80% of all cases, Rally will choose an id within the most recent 10%, i.e. between 90 and 100. With 20% probability the id will be between 1 and 89. The closer ``recency`` gets to zero, the "flatter" the red curve gets and the more likely Rally will choose less recent ids.
 
@@ -614,10 +673,137 @@ Example::
 
 Throughput will be reported as number of indexed documents per second.
 
+Meta-data
+"""""""""
+
+The following meta-data are always returned:
+
+* ``index``: name of the affected index. May be ``null`` if it could not be derived.
+* ``weight``: operation-agnostic representation of the bulk size denoted in ``unit``.
+* ``unit``: The unit in which to interpret ``weight``.
+* ``success``: A boolean indicating whether the bulk request has succeeded.
+* ``success-count``: Number of successfully processed bulk items for this request. This value will only be determined in case of errors or the bulk-size has been specified in docs.
+* ``error-count``: Number of failed bulk items for this request.
+* ``took``` Value of the the ``took`` property in the bulk response.
+
+If ``detailed-results`` is ``true`` the following meta-data are returned in addition:
+
+* ``ops``: A nested document with the operation name as key (e.g. ``index``, ``update``, ``delete``) and various counts as values. ``item-count`` contains the total number of items for this key. Additionally, we return a separate counter for each result (indicating e.g. the number of created items, the number of deleted items etc.).
+* ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a shard distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and ``failed`` shards (see examples below).
+* ``bulk-request-size-bytes``: Total size of the bulk request body in bytes.
+* ``total-document-size-bytes``: Total size of all documents within the bulk request body in bytes.
+
+**Examples**
+
+If ``detailed-results`` is ``false`` a typical return value is::
+
+    {
+        "index": "my_index",
+        "weight": 5000,
+        "unit": "docs",
+        "success": True,
+        "success-count": 5000,
+        "error-count": 0,
+        "took": 20
+    }
+
+Whereas the response will look as follow if there are bulk errors::
+
+    {
+        "index": "my_index",
+        "weight": 5000,
+        "unit": "docs",
+        "success": False,
+        "success-count": 4000,
+        "error-count": 1000,
+        "took": 20
+    }
+
+If ``detailed-results`` is ``true`` a typical return value is::
+
+    {
+        "index": "my_index",
+        "weight": 5000,
+        "unit": "docs",
+        "bulk-request-size-bytes": 2250000,
+        "total-document-size-bytes": 2000000,
+        "success": True,
+        "success-count": 5000,
+        "error-count": 0,
+        "took": 20,
+        "ops": {
+            "index": {
+                "item-count": 5000,
+                "created": 5000
+            }
+        },
+        "shards_histogram": [
+            {
+                "item-count": 5000,
+                "shards": {
+                    "total": 2,
+                    "successful": 2,
+                    "failed": 0
+                }
+            }
+        ]
+    }
+
+An example error response may look like this::
+
+    {
+        "index": "my_index",
+        "weight": 5000,
+        "unit": "docs",
+        "bulk-request-size-bytes": 2250000,
+        "total-document-size-bytes": 2000000,
+        "success": False,
+        "success-count": 4000,
+        "error-count": 1000,
+        "took": 20,
+        "ops": {
+            "index": {
+                "item-count": 5000,
+                "created": 4000,
+                "noop": 1000
+            }
+        },
+        "shards_histogram": [
+            {
+                "item-count": 4000,
+                "shards": {
+                    "total": 2,
+                    "successful": 2,
+                    "failed": 0
+                }
+            },
+            {
+                "item-count": 500,
+                "shards": {
+                    "total": 2,
+                    "successful": 1,
+                    "failed": 1
+                }
+            },
+            {
+                "item-count": 500,
+                "shards": {
+                    "total": 2,
+                    "successful": 0,
+                    "failed": 2
+                }
+            }
+        ]
+    }
+
+
 force-merge
 ~~~~~~~~~~~
 
-With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_. On older versions of Elasticsearch (prior to 2.1), Rally will use the ``optimize API`` instead. It supports the following parameters:
+With the operation type ``force-merge`` you can call the `force merge API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>`_.
+
+Properties
+""""""""""
 
 * ``index`` (optional, defaults to the indices defined in the ``indices`` section or the data streams defined in the ``data-streams`` section. If neither are defined defaults to ``_all``.): The name of the index or data stream that should be force-merged.
 * ``mode`` (optional, default to ``blocking``): In the default ``blocking`` mode the Elasticsearch client blocks until the operation returns or times out as dictated by the :ref:`client-options <clr_client_options>`. In mode `polling` the client timeout is ignored. Instead, the api call is given 1s to complete. If the operation has not finished, the operator will poll every ``poll-period`` until all force merges are complete.
@@ -626,10 +812,18 @@ With the operation type ``force-merge`` you can call the `force merge API <http:
 
 This is an administrative operation. Metrics are not reported by default. If reporting is forced by setting ``include-in-reporting`` to ``true``, then throughput is reported as the number of completed force-merge operations per second.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 index-stats
 ~~~~~~~~~~~
 
-With the operation type ``index-stats`` you can call the `indices stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_. It supports the following properties:
+With the operation type ``index-stats`` you can call the `indices stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_.
+
+Properties
+""""""""""
 
 * ``index`` (optional, defaults to `_all`): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this operation.
 * ``condition`` (optional, defaults to no condition): A structured object with the properties ``path`` and ``expected-value``. If the actual value returned by indices stats API is equal to the expected value at the provided path, this operation will return successfully. See below for an example how this can be used.
@@ -650,6 +844,13 @@ Throughput will be reported as number of completed `index-stats` operations per 
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: Always 1.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 node-stats
 ~~~~~~~~~~
 
@@ -657,10 +858,18 @@ With the operation type ``nodes-stats`` you can execute `nodes stats API <http:/
 
 Throughput will be reported as number of completed `node-stats` operations per second.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 search
 ~~~~~~
 
-With the operation type ``search`` you can execute `request body searches <http://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html>`_. It supports the following properties:
+With the operation type ``search`` you can execute `request body searches <http://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html>`_.
+
+Properties
+""""""""""
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
 * ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
@@ -677,17 +886,10 @@ With the operation type ``search`` you can execute `request body searches <http:
 * ``results-per-page`` (optional): Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and can be used for paginated and non-paginated searches.  Defaults to ``10``
 * ``with-point-in-time-from`` (optional): The `name` of an ``open-point-in-time`` operation. Issues query with a `pit_id` parsed from the referenced operation.  Note that this requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
 
-If the following parameters are present in addition, a paginated query will be issued:
+If the following parameters are present in addition, a `paginated query <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html>`_ will be issued:
 
 * ``pages`` (optional): Number of pages to retrieve (at most) for this search. If a query yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all".
 * ``use-search-after`` (optional): If ``True``, use the search_after mechanism in the Search API.  If ``False`` but ``pages`` is defined, use the Scroll API to paginate.
-
-If ``detailed-results`` is set to ``true``, the following meta-data properties will be determined and stored:
-
-* ``hits``
-* ``hits_relation``
-* ``timed_out``
-* ``took``
 
 Example::
 
@@ -709,12 +911,31 @@ For paginated queries, throughput will be reported as number of retrieved pages 
 
 For other queries, throughput will be reported as number of search requests per second (``ops/s``).
 
+Meta-data
+"""""""""
+
+The following meta data are always returned:
+
+* ``weight``: "weight" of an operation. Always 1 for regular queries and the number of retrieved pages for scroll queries.
+* ``unit``: The unit in which to interpret ``weight``. Always "ops" for regular queries and "pages" for scroll queries.
+* ``success``: A boolean indicating whether the query has succeeded.
+
+If ``detailed-results`` is ``true`` the following meta-data are returned in addition:
+
+* ``hits``: Total number of hits for this query.
+* ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
+* ``timed_out``: Whether the query has timed out. For scroll queries, this flag is ``true`` if the flag was ``true`` for any of the queries issued.
+* ``took``` Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
+
 .. _put_pipeline:
 
 put-pipeline
 ~~~~~~~~~~~~
 
-With the operation-type ``put-pipeline`` you can execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_. Note that this API is only available from Elasticsearch 5.0 onwards. It supports the following properties:
+With the operation-type ``put-pipeline`` you can execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_.
+
+Properties
+""""""""""
 
 * `id` (mandatory): Pipeline id.
 * `body` (mandatory): Pipeline definition.
@@ -763,10 +984,18 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 put-settings
 ~~~~~~~~~~~~
 
-With the operation-type ``put-settings`` you can execute the `cluster update settings API <http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html>`_. It supports the following properties:
+With the operation-type ``put-settings`` you can execute the `cluster update settings API <http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html>`_.
+
+Properties
+""""""""""
 
 * `body` (mandatory): The cluster settings to apply.
 
@@ -788,10 +1017,18 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 cluster-health
 ~~~~~~~~~~~~~~
 
-With the operation ``cluster-health`` you can execute the `cluster health API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-health.html>`_. It supports the following properties:
+With the operation ``cluster-health`` you can execute the `cluster health API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-health.html>`_.
+
+Properties
+""""""""""
 
 * ``request-params`` (optional): A structure containing any request parameters that are allowed by the cluster health API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 * ``index`` (optional): The name of the index that should be used to check.
@@ -815,10 +1052,22 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: Always 1.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+* ``cluster-status``: Current cluster status.
+* ``relocating-shards``: The number of currently relocating shards.
+
 refresh
 ~~~~~~~
 
-With the operation ``refresh`` you can execute the `refresh API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html>`_. It supports the following properties:
+With the operation ``refresh`` you can execute the `refresh API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html>`_.
+
+Properties
+""""""""""
 
 * ``index`` (optional, defaults to ``_all``): The name of the index or data stream that should be refreshed.
 
@@ -826,10 +1075,18 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 create-index
 ~~~~~~~~~~~~
 
 With the operation ``create-index`` you can execute the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`_. It supports two modes: it creates either all indices that are specified in the track's ``indices`` section or it creates one specific index defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to create all indices that have been declared in the ``indices`` section you can specify the following properties:
 
@@ -886,10 +1143,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of indices that have been created.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 delete-index
 ~~~~~~~~~~~~
 
 With the operation ``delete-index`` you can execute the `delete index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_. It supports two modes: it deletes either all indices that are specified in the track's ``indices`` section or it deletes one specific index (pattern) defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to delete all indices that have been declared in the ``indices`` section, you can specify the following properties:
 
@@ -929,10 +1196,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of indices that have been deleted.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 create-data-stream
 ~~~~~~~~~~~~~~~~~~
 
 With the operation ``create-data-stream`` you can execute the `create data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-data-stream.html>`_. It supports two modes: it creates either all data streams that are specified in the track's ``data-streams`` section or it creates one specific data stream defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to create all data streams that have been declared in the ``data-streams`` section you can specify the following properties:
 
@@ -967,10 +1244,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of data streams that have been created.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 delete-data-stream
 ~~~~~~~~~~~~~~~~~~
 
 With the operation ``delete-data-stream`` you can execute the `delete data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-data-stream.html>`_. It supports two modes: it deletes either all data streams that are specified in the track's ``data-streams`` section or it deletes one specific data stream (pattern) defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to delete all data streams that have been declared in the ``data-streams`` section, you can specify the following properties:
 
@@ -1005,10 +1292,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of data streams that have been deleted.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 create-composable-template
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``create-composable-template`` you can execute the `create index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-template.html>`_. It supports two modes: it creates either all templates that are specified in the track's ``composable-templates`` section or it creates one specific template defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to create templates that have been declared in the ``composable-templates`` section you can specify the following properties:
 
@@ -1060,10 +1357,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of composable templates that have been created.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 create-component-template
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``create-component-template`` you can execute the `create component template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_. It supports two modes: it creates either all component templates that are specified in the track's ``component-templates`` section or it creates one specific component template defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to create templates that have been declared in the ``component-templates`` section you can specify the following properties:
 
@@ -1093,7 +1400,7 @@ With the following snippet we will create a new component template that is not d
 
     {
       "name": "create-a-template",
-      "operation-type": "create-composable-template",
+      "operation-type": "create-component-template",
       "template": "component_template_with_2_shards",
       "body": {
         "template": {
@@ -1117,10 +1424,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of component templates that have been created.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 create-index-template
 ~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``create-index-template`` you can execute the deprecated `create template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html>`_. It supports two modes: it creates either all index templates that are specified in the track's ``templates`` section or it creates one specific index template defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to create index templates that have been declared in the ``templates`` section you can specify the following properties:
 
@@ -1174,10 +1491,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of index templates that have been created.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 delete-composable-template
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``delete-composable-template`` you can execute the `delete index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-template.html>`_. It supports two modes: it deletes either all index templates that are specified in the track's ``composable-templates`` section or it deletes one specific index template defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to delete all index templates that have been declared in the ``composable-templates`` section, you can specify the following properties:
 
@@ -1219,10 +1546,20 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of composable templates that have been deleted.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 delete-component-template
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``delete-component-template`` you can execute the `delete component template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-component-template.html>`_. It supports two modes: it deletes either all component templates that are specified in the track's ``component-templates`` section or it deletes one specific component template defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to delete all component templates that have been declared in the ``component-templates`` section, you can specify the following properties:
 
@@ -1260,10 +1597,21 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of component templates that have been deleted.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
+
 delete-index-template
 ~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``delete-index-template`` you can execute the `delete template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_. It supports two modes: it deletes either all index templates that are specified in the track's ``templates`` section or it deletes one specific index template defined by this operation.
+
+Properties
+""""""""""
 
 If you want it to delete all index templates that have been declared in the ``templates`` section, you can specify the following properties:
 
@@ -1305,10 +1653,21 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of index templates that have been deleted.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
+
 shrink-index
 ~~~~~~~~~~~~
 
-With the operation ``shrink-index`` you can execute the `shrink index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-shrink-index.html>`_. Note that this does not correspond directly to the shrink index API call in Elasticsearch but it is a high-level operation that executes all the necessary low-level operations under the hood to shrink an index. It supports the following parameters:
+With the operation ``shrink-index`` you can execute the `shrink index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-shrink-index.html>`_. Note that this does not correspond directly to the shrink index API call in Elasticsearch but it is a high-level operation that executes all the necessary low-level operations under the hood to shrink an index.
+
+Properties
+""""""""""
 
 * ``source-index`` (mandatory): The name of the index that should be shrinked. Multiple indices can be defined using the `Multi-target syntax <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_.
 * ``target-index`` (mandatory): The name of the index that contains the shrinked shards. If multiple indices match ``source-index``, one shrink operation will execute for every matching index. Each shrink operation will use a modified ``target-index``: the unique suffix of the source index (derived by removing the common prefix of all matching source indices) will be appended to ``target-index``. See also the example below.
@@ -1353,10 +1712,21 @@ and will reindex ``src-a`` as ``target-a`` and ``src-b`` as ``target-b``.
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of source indices.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
+
 delete-ml-datafeed
 ~~~~~~~~~~~~~~~~~~
 
-With the operation ``delete-ml-datafeed`` you can execute the `delete datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-datafeed.html>`_. The ``delete-ml-datafeed`` operation supports the following parameters:
+With the operation ``delete-ml-datafeed`` you can execute the `delete datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-datafeed.html>`_.
+
+Properties
+""""""""""
 
 * ``datafeed-id`` (mandatory): The name of the machine learning datafeed to delete.
 * ``force`` (optional, defaults to ``false``): Whether to force deletion of a datafeed that has already been started.
@@ -1365,10 +1735,18 @@ This runner will intentionally ignore 404s from Elasticsearch so it is safe to e
 
 This operation works only if `machine-learning <https://www.elastic.co/products/stack/machine-learning>`__ is properly installed and enabled. This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 create-ml-datafeed
 ~~~~~~~~~~~~~~~~~~
 
-With the operation ``create-ml-datafeed`` you can execute the `create datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`__. The ``create-ml-datafeed`` operation supports the following parameters:
+With the operation ``create-ml-datafeed`` you can execute the `create datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`__.
+
+Properties
+""""""""""
 
 * ``datafeed-id`` (mandatory): The name of the machine learning datafeed to create.
 * ``body`` (mandatory): Request body containing the definition of the datafeed. Please see the `create datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`__ documentation for more details.
@@ -1377,10 +1755,18 @@ This operation works only if `machine-learning <https://www.elastic.co/products/
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 start-ml-datafeed
 ~~~~~~~~~~~~~~~~~
 
-With the operation ``start-ml-datafeed`` you can execute the `start datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__. The ``start-ml-datafeed`` operation supports the following parameters which are documented in the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__ documentation:
+With the operation ``start-ml-datafeed`` you can execute the `start datafeeds API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`__.
+
+Properties
+""""""""""
 
 * ``datafeed-id`` (mandatory): The name of the machine learning datafeed to start.
 * ``body`` (optional, defaults to empty): Request body with start parameters.
@@ -1392,10 +1778,18 @@ This operation works only if `machine-learning <https://www.elastic.co/products/
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 stop-ml-datafeed
 ~~~~~~~~~~~~~~~~
 
-With the operation ``stop-ml-datafeed`` you can execute the `stop datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-stop-datafeed.html>`_. The ``stop-ml-datafeed`` operation supports the following parameters:
+With the operation ``stop-ml-datafeed`` you can execute the `stop datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-stop-datafeed.html>`_.
+
+Properties
+""""""""""
 
 * ``datafeed-id`` (mandatory): The name of the machine learning datafeed to start.
 * ``force`` (optional, defaults to ``false``): Whether to forcefully stop an already started datafeed.
@@ -1405,10 +1799,18 @@ This operation works only if `machine-learning <https://www.elastic.co/products/
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 delete-ml-job
 ~~~~~~~~~~~~~
 
-With the operation ``delete-ml-job`` you can execute the `delete jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-job.html>`_. The ``delete-ml-job`` operation supports the following parameters:
+With the operation ``delete-ml-job`` you can execute the `delete jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-job.html>`_.
+
+Properties
+""""""""""
 
 * ``job-id`` (mandatory): The name of the machine learning job to delete.
 * ``force`` (optional, defaults to ``false``): Whether to force deletion of a job that has already been opened.
@@ -1419,10 +1821,18 @@ This operation works only if `machine-learning <https://www.elastic.co/products/
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 create-ml-job
 ~~~~~~~~~~~~~
 
-With the operation ``create-ml-job`` you can execute the `create jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`__. The ``create-ml-job`` operation supports the following parameters:
+With the operation ``create-ml-job`` you can execute the `create jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`__.
+
+Properties
+""""""""""
 
 * ``job-id`` (mandatory): The name of the machine learning job to create.
 * ``body`` (mandatory): Request body containing the definition of the job. Please see the `create job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`__ documentation for more details.
@@ -1431,10 +1841,18 @@ This operation works only if `machine-learning <https://www.elastic.co/products/
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 open-ml-job
 ~~~~~~~~~~~
 
-With the operation ``open-ml-job`` you can execute the `open jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-open-job.html>`_. The ``open-ml-job`` operation supports the following parameters:
+With the operation ``open-ml-job`` you can execute the `open jobs API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-open-job.html>`_.
+
+Properties
+""""""""""
 
 * ``job-id`` (mandatory): The name of the machine learning job to open.
 
@@ -1442,10 +1860,18 @@ This operation works only if `machine-learning <https://www.elastic.co/products/
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 close-ml-job
 ~~~~~~~~~~~~
 
-With the operation ``close-ml-job`` you can execute the `close jobs API. The ``close-ml-job`` operation supports the following parameters:
+With the operation ``close-ml-job`` you can execute the `close job` API.
+
+Properties
+""""""""""
 
 * ``job-id`` (mandatory): The name of the machine learning job to start.
 * ``force`` (optional, defaults to ``false``): Whether to forcefully stop an already opened job.
@@ -1455,10 +1881,18 @@ This operation works only if `machine-learning <https://www.elastic.co/products/
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 raw-request
 ~~~~~~~~~~~
 
-With the operation ``raw-request`` you can execute arbitrary HTTP requests against Elasticsearch. This is a low-level operation that should only be used if no high-level operation is available. Note that it is always possible to write a :ref:`custom runner <adding_tracks_custom_runners>`. The ``raw-request`` operation supports the following parameters:
+With the operation ``raw-request`` you can execute arbitrary HTTP requests against Elasticsearch. This is a low-level operation that should only be used if no high-level operation is available. Note that it is always possible to write a :ref:`custom runner <adding_tracks_custom_runners>`.
+
+Properties
+""""""""""
 
 * ``method`` (optional, defaults to ``GET``): The HTTP request method to use.
 * ``path`` (mandatory): Path for the API call (excluding host and port). The path must begin with a ``/``. Example: ``/myindex/_flush``.
@@ -1467,10 +1901,18 @@ With the operation ``raw-request`` you can execute arbitrary HTTP requests again
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 * ``ignore`` (optional): An array of HTTP response status codes to ignore (i.e. consider as successful).
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 sleep
 ~~~~~
 
-With the operation ``sleep`` you can sleep for a certain duration to ensure no requests are executed by the corresponding clients. The ``sleep`` operation supports the following parameter:
+With the operation ``sleep`` you can sleep for a certain duration to ensure no requests are executed by the corresponding clients.
+
+Properties
+""""""""""
 
 * ``duration`` (mandatory): A non-negative number that defines the sleep duration in seconds.
 
@@ -1479,10 +1921,18 @@ With the operation ``sleep`` you can sleep for a certain duration to ensure no r
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 delete-snapshot-repository
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-With the operation ``delete-snapshot-repository`` you can delete an existing snapshot repository. The ``delete-snapshot-repository`` operation supports the following parameter:
+With the operation ``delete-snapshot-repository`` you can delete an existing snapshot repository.
+
+Properties
+""""""""""
 
 * ``repository`` (mandatory): The name of the snapshot repository to delete.
 
@@ -1490,10 +1940,18 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 create-snapshot-repository
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-With the operation ``create-snapshot-repository`` you can create a new snapshot repository. The ``create-snapshot-repository`` operation supports the following parameters:
+With the operation ``create-snapshot-repository`` you can create a new snapshot repository.
+
+Properties
+""""""""""
 
 * ``repository`` (mandatory): The name of the snapshot repository to create.
 * ``body`` (mandatory): The body of the create snapshot repository request.
@@ -1503,10 +1961,18 @@ This is an administrative operation. Metrics are not reported by default. Report
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 create-snapshot
 ~~~~~~~~~~~~~~~
 
-With the operation ``create-snapshot`` you can `create a snapshot <https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshots-take-snapshot.html>`_. The ``create-snapshot`` operation supports the following parameters:
+With the operation ``create-snapshot`` you can `create a snapshot <https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshots-take-snapshot.html>`_.
+
+Properties
+""""""""""
 
 * ``repository`` (mandatory): The name of the snapshot repository to use.
 * ``snapshot`` (mandatory): The name of the snapshot to create.
@@ -1518,13 +1984,19 @@ With the operation ``create-snapshot`` you can `create a snapshot <https://www.e
     It's not recommended to rely on ``wait-for-completion=true``. Instead you should keep the default value (``False``) and use an additional ``wait-for-snapshot-create`` operation in the next step.
     This is mandatory on `Elastic Cloud <https://www.elastic.co/cloud>`_ or environments where Elasticsearch is connected via intermediate network components, such as proxies, that may terminate the blocking connection after a timeout.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 wait-for-snapshot-create
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``wait-for-snapshot-create`` you can wait until a `snapshot has finished successfully <https://www.elastic.co/guide/en/elasticsearch/reference/current/get-snapshot-status-api.html>`_.
 Typically you'll use this operation directly after a ``create-snapshot`` operation.
 
-It supports the following parameters:
+Properties
+""""""""""
 
 * ``repository`` (mandatory): The name of the snapshot repository to use.
 * ``snapshot`` (mandatory): The name of the snapshot that this operation will wait until it succeeds.
@@ -1534,10 +2006,24 @@ Rally will report the achieved throughput in byte/s.
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: Total size in bytes of this snapshot.
+* ``unit``: Always "byte".
+* ``success``: A boolean indicating whether the operation has succeeded.
+* ``start_time_millis``: A timestamp (in milliseconds) when the snapshot creation has started.
+* ``stop_time_millis``: A timestamp (in milliseconds) when the snapshot creation has ended.
+* ``duration``: The time it took (in milliseconds) to create the snapshot.
+* ``file_count``: The total number of files in the snapshot.
+
 restore-snapshot
 ~~~~~~~~~~~~~~~~
 
-With the operation ``restore-snapshot`` you can restore a snapshot from an already created snapshot repository. The ``restore-snapshot`` operation supports the following parameters:
+With the operation ``restore-snapshot`` you can restore a snapshot from an already created snapshot repository.
+
+Properties
+""""""""""
 
 * ``repository`` (mandatory): The name of the snapshot repository to use. This snapshot repository must exist prior to calling ``restore-snapshot``.
 * ``snapshot`` (mandatory): The name of the snapshot to restore.
@@ -1554,20 +2040,40 @@ With the operation ``restore-snapshot`` you can restore a snapshot from an alrea
 
     However, this might not work if a proxy is in between the client and Elasticsearch and the proxy has a shorter request timeout configured than the client. In this case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 wait-for-recovery
 ~~~~~~~~~~~~~~~~~
 
-With the operation ``wait-for-recovery`` you can wait until an ongoing shard recovery finishes. The ``wait-for-recovery`` operation supports the following parameters:
+With the operation ``wait-for-recovery`` you can wait until an ongoing shard recovery finishes.
+
+Properties
+""""""""""
 
 * ``index`` (mandatory): The name of the index or an index pattern which is being recovered.
 * ``completion-recheck-wait-period`` (optional, defaults to 1 seconds): Time in seconds to wait in between consecutive attempts.
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of bytes recovered.
+* ``unit``: Always "byte".
+* ``success``: A boolean indicating whether the operation has succeeded.
+* ``start_time_millis``: A timestamp (in milliseconds) when the recovery has started.
+* ``stop_time_millis``: A timestamp (in milliseconds) when the recovery has ended.
+
 create-transform
 ~~~~~~~~~~~~~~~~
 
-With the operation ``create-transform`` you can execute the `create transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-transform.html>`_. It supports the following parameters:
+With the operation ``create-transform`` you can execute the `create transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-transform.html>`_.
+
+Properties
+""""""""""
 
 * ``transform-id`` (mandatory): The id of the transform to create.
 * ``body`` (mandatory): Request body containing the configuration of the transform. Please see the `create transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-transform.html>`__ documentation for more details.
@@ -1577,10 +2083,18 @@ This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an admin
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 start-transform
 ~~~~~~~~~~~~~~~
 
-With the operation ``start-transform`` you can execute the `start transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/start-transform.html>`_. It supports the following parameters:
+With the operation ``start-transform`` you can execute the `start transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/start-transform.html>`_.
+
+Properties
+""""""""""
 
 * ``transform-id`` (mandatory): The id of the transform to start.
 * ``timeout`` (optional, defaults to empty): Amount of time to wait until a transform starts.
@@ -1589,10 +2103,18 @@ This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an admin
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 wait-for-transform
 ~~~~~~~~~~~~~~~~~~
 
-With the operation ``wait-for-transform`` you can stop a transform after a certain amount of work is done. Use this operation for measuring performance. It supports the following parameters:
+With the operation ``wait-for-transform`` you can stop a transform after a certain amount of work is done. Use this operation for measuring performance.
+
+Properties
+""""""""""
 
 * ``transform-id`` (mandatory): The id of the transform to stop.
 * ``force`` (optional, defaults to false): Whether to forcefully stop the transform.
@@ -1606,10 +2128,21 @@ This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an admin
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+* ``weight``: The number of documents that have been processed.
+* ``unit``: Always "docs".
+* ``success``: A boolean indicating whether the operation has succeeded.
+* ``transform-id``: The id of the transform that this operation has waited for.
+
 delete-transform
 ~~~~~~~~~~~~~~~~
 
-With the operation ``delete-transform`` you can execute the `delete transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-transform.html>`_. It supports the following parameters:
+With the operation ``delete-transform`` you can execute the `delete transform API <https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-transform.html>`_.
+
+Properties
+""""""""""
 
 * ``transform-id`` (mandatory): The id of the transform to delete.
 * ``force`` (optional, defaults to false): Whether to delete the transform regardless of its current state.
@@ -1618,13 +2151,30 @@ This operation requires at least Elasticsearch 7.5.0 (non-OSS). This is an admin
 
 This operation is :ref:`retryable <track_operations>`.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 composite
 ~~~~~~~~~
 
-With the operation ``composite`` you can specify complex operations consisting of multiple requests to Elasticsearch. This can be used to simulate more complex application behavior, like populating a search page with custom filters. It supports the following parameters:
+With the operation ``composite`` you can specify complex operations consisting of multiple requests to Elasticsearch. This can be used to simulate more complex application behavior, like populating a search page with custom filters.
 
-* ``requests`` (mandatory): A list that specifies the request streams to execute. Each stream consists of operations of either type ``raw-request`` to send requests to Elasticsearch or ``sleep`` to simulate client processing time. Streams execute concurrently, operations within a stream sequentially. It is possible to nest streams. See below for specific examples.
+Properties
+""""""""""
+
+* ``requests`` (mandatory): A list that specifies the request streams to execute. Streams execute concurrently, operations within a stream sequentially. It is possible to nest streams. See below for specific examples.
 * ``max-connections`` (optional: defaults to unbounded): The maximum number of concurrent connections per client executing this composite operation. By default, the operation itself does not restrict the number of connections but is bound to Rally's network connection limit. Therefore raise the number of available network connections appropriately (see :ref:`command line reference <clr_client_options>`).
+
+The ``composite`` operation only supports the following operation-types:
+
+* ``raw-request``
+* ``sleep``
+* ``search``
+* ``submit-async-search``
+* ``get-async-search``
+* ``delete-async-search``
 
 **Examples**
 
@@ -1787,17 +2337,30 @@ The following diagram depicts in which order requests are executed; the specific
 .. image:: nested-streams.png
    :alt: Timing view of nested streams
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 submit-async-search
 ~~~~~~~~~~~~~~~~~~~
 
 .. note::
     This operation can only be used inside a ``composite`` operation because it needs to pass the async search id to following API calls.
 
-With the operation ``submit-async-search`` you can `submit an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#submit-async-search>`_. It supports the following parameters:
+With the operation ``submit-async-search`` you can `submit an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#submit-async-search>`_.
+
+Properties
+""""""""""
 
 * ``name`` (mandatory): The unique name of this operation. Use this name in ``get-async-search`` and ``delete-async-search`` calls later on to wait for search results and delete them in Elasticsearch.
 * ``body`` (mandatory): The query body.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `submit async search docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#submit-async-search>`_.
+
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
 
 get-async-search
 ~~~~~~~~~~~~~~~~
@@ -1805,7 +2368,10 @@ get-async-search
 .. note::
     This operation can only be used inside a ``composite`` operation because it needs to read the async search id from earlier API calls.
 
-With the operation ``get-async-search`` you can `get the results of an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#get-async-search>`_. It supports the following parameters:
+With the operation ``get-async-search`` you can `get the results of an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#get-async-search>`_.
+
+Properties
+""""""""""
 
 * ``retrieve-results-for`` (mandatory): A list of names of ``submit-async-search`` requests to wait for. Async searches that have already completed within ``wait_for_completion_timeout`` are skipped automatically.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `get async search docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#get-async-search>`_.
@@ -1813,6 +2379,10 @@ With the operation ``get-async-search`` you can `get the results of an async sea
 .. note::
     This operation is :ref:`retryable <track_operations>`. It will wait by default until all async searches specified by ``retrieve-results-for`` have finished. To disable this behavior, specify set ``retry-until-success`` to ``false``.
 
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
 
 delete-async-search
 ~~~~~~~~~~~~~~~~~~~
@@ -1820,7 +2390,10 @@ delete-async-search
 .. note::
     This operation can only be used inside a ``composite`` operation because it needs to read the async search id from earlier API calls.
 
-With the operation ``delete-async-search`` you can `delete an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#delete-async-search>`_. It supports the following parameters:
+With the operation ``delete-async-search`` you can `delete an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#delete-async-search>`_.
+
+Properties
+""""""""""
 
 * ``delete-results-for`` (mandatory): A list of names of ``submit-async-search`` requests for which results should be deleted. Async searches that have already completed within ``wait_for_completion_timeout`` are skipped automatically.
 
@@ -1890,6 +2463,11 @@ In the example below we issue two async searches, named ``search-1`` and ``searc
         }
       ]
     }
+
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
 
 open-point-in-time
 ~~~~~~~~~~~~~~~~~~

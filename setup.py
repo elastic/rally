@@ -100,7 +100,7 @@ develop_require = [
     "tox==3.14.0",
     "coverage==4.5.4",
     "sphinx==2.2.0",
-    "sphinx_rtd_theme==0.4.3",
+    "sphinx_rtd_theme==0.5.1",
     "twine==1.15.0",
     "wheel==0.33.6",
     "github3.py==1.3.0",

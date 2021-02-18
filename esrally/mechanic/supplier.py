@@ -36,7 +36,7 @@ def create(cfg, sources, distribution, build, car, plugins=None):
     if plugins is None:
         plugins = []
     caching_enabled = cfg.opts("source", "cache", mandatory=False, default_value=True)
-    revisions = _extract_revisions(cfg.opts("mechanic", "source.revision"))
+    revisions = _extract_revisions(cfg.opts("mechanic", "source.revision", mandatory=sources))
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
     build_needed = any([build for _, _, build in supply_requirements.values()])
@@ -176,7 +176,7 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
                 # this plugin always needs to built unless we explicitly disable it; we cannot solely rely on the Rally pipeline.
                 # We either have:
                 #
-                # * --pipeline=from-sources-skip-build --distribution-version=X.Y.Z where the plugin should not be built but ES should be
+                # * --pipeline=from-sources --distribution-version=X.Y.Z where the plugin should not be built but ES should be
                 #   a distributed version.
                 # * --distribution-version=X.Y.Z --revision="my-plugin:abcdef" where the plugin should be built from sources.
                 # pylint: disable=consider-using-ternary
@@ -394,7 +394,7 @@ class ElasticsearchSourceSupplier:
                                 self.template_renderer.render(self.car.mandatory_var("system.artifact_path_pattern")))
             return glob.glob(path)[0]
         except IndexError:
-            raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources-complete'.")
+            raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources'.")
 
 
 class PluginFileNameResolver:
@@ -463,7 +463,7 @@ class ExternalPluginSourceSupplier:
             name = glob.glob("%s/%s/*.zip" % (self.plugin_src_dir, artifact_path))[0]
             return "file://%s" % name
         except IndexError:
-            raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources-complete'." %
+            raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources'." %
                                    self.plugin.name)
 
 
@@ -494,7 +494,7 @@ class CorePluginSourceSupplier:
             name = glob.glob("%s/plugins/%s/build/distributions/*.zip" % (self.es_src_dir, self.plugin.name))[0]
             return "file://%s" % name
         except IndexError:
-            raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources-complete'." %
+            raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources'." %
                                    self.plugin.name)
 
 
@@ -509,7 +509,7 @@ class ElasticsearchDistributionSupplier:
 
     def fetch(self):
         io.ensure_dir(self.distributions_root)
-        download_url = self.repo.download_url
+        download_url = net.add_url_param_elastic_no_kpi(self.repo.download_url)
         distribution_path = os.path.join(self.distributions_root, self.repo.file_name)
         self.logger.info("Resolved download URL [%s] for version [%s]", download_url, self.version)
         if not os.path.isfile(distribution_path) or not self.repo.cache:
@@ -563,7 +563,7 @@ def _config_value(src_config, key):
 
 
 def _extract_revisions(revision):
-    revisions = revision.split(",")
+    revisions = revision.split(",") if revision else []
     if len(revisions) == 1:
         r = revisions[0]
         if r.startswith("elasticsearch:"):

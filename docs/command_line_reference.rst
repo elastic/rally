@@ -12,7 +12,7 @@ Subcommands
 ``race``
 ~~~~~~~~
 
-The ``race`` subcommand is used to actually run a benchmark. It is the default one and chosen implicitly if none is given.
+The ``race`` subcommand is used to execute a benchmark.
 
 
 ``list``
@@ -167,10 +167,10 @@ Examples::
 
    # provide a directory - Rally searches for a track.json file in this directory
    # Track name is "app-logs"
-   esrally --track-path=~/Projects/tracks/app-logs
+   esrally race --track-path=~/Projects/tracks/app-logs
    # provide a file name - Rally uses this file directly
    # Track name is "syslog"
-   esrally --track-path=~/Projects/tracks/syslog.json
+   esrally race --track-path=~/Projects/tracks/syslog.json
 
 
 ``track-repository``
@@ -186,7 +186,7 @@ Selects a specific revision in the track repository. By default, Rally will choo
 ``track``
 ~~~~~~~~~
 
-Selects the track that Rally should run. By default the ``geonames`` track is run. For more details on how tracks work, see :doc:`adding tracks </adding_tracks>` or the :doc:`track reference </track>`. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
+Selects the track that Rally should run. For more details on how tracks work, see :doc:`adding tracks </adding_tracks>` or the :doc:`track reference </track>`. ``--track-path`` and ``--track-repository`` as well as ``--track`` are mutually exclusive.
 
 .. _clr_track_params:
 
@@ -327,10 +327,15 @@ You can use ``--include-tasks`` to specify a comma-separated list of tasks that 
 
     Tasks will be executed in the order that are defined in the challenge, not in the order they are defined in the command.
 
+.. note::
+
+    Task filters are case-sensitive.
+
 **Examples**:
 
 * Execute only the tasks with the name ``index`` and ``term``: ``--include-tasks="index,term"``
 * Execute only tasks of type ``search``: ``--include-tasks="type:search"``
+* Execute only tasks that contain the tag ``read-op``: ``--include-tasks="tag:read-op"``
 * You can also mix and match: ``--include-tasks="index,type:search"``
 
 ``exclude-tasks``
@@ -344,7 +349,8 @@ You can use ``--exclude-tasks`` to specify a comma-separated list of tasks that 
 
 * Skip any tasks with the name ``index`` and ``term``: ``--exclude-tasks="index,term"``
 * Skip any tasks of type ``search``: ``--exclude-tasks="type:search"``
-* You can also mix and match: ``--exclude-tasks="index,type:search"``
+* Skip any tasks that contain the tag ``setup``: ``--exclude-tasks="tag:setup"``
+* You can also mix and match: ``--exclude-tasks="index,type:search,tag:setup"``
 
 ``team-repository``
 ~~~~~~~~~~~~~~~~~~~
@@ -364,7 +370,7 @@ A directory that contains a team configuration. ``--team-path`` and ``--team-rep
 
 Example::
 
-   esrally --team-path=~/Projects/es-teams
+   esrally race --team-path=~/Projects/es-teams
 
 ``target-os``
 ~~~~~~~~~~~~~
@@ -390,7 +396,7 @@ A :doc:`car </car>` defines the Elasticsearch configuration that will be used fo
 
  ::
 
-   esrally --car="4gheap,ea"
+   esrally race --track=geonames --car="4gheap,ea"
 
 
 Rally will configure Elasticsearch with 4GB of heap (``4gheap``) and enable Java assertions (``ea``).
@@ -404,7 +410,7 @@ Allows to override config variables of Elasticsearch. It accepts a list of comma
 
  ::
 
-   esrally --car="4gheap" --car-params="data_paths:'/opt/elasticsearch'"
+   esrally race --track=geonames --car="4gheap" --car-params="data_paths:'/opt/elasticsearch'"
 
 The variables that are exposed depend on the `car's configuration <https://github.com/elastic/rally-teams/tree/master/cars>`__. In addition, Rally implements special handling for the variable ``data_paths`` (by default the value for this variable is determined by Rally).
 
@@ -416,7 +422,7 @@ A comma-separated list of Elasticsearch plugins to install for the benchmark. If
 
 Example::
 
-   esrally --elasticsearch-plugins="analysis-icu,xpack:security"
+   esrally race --track=geonames --elasticsearch-plugins="analysis-icu,xpack:security"
 
 In this example, Rally will install the ``analysis-icu`` plugin and the ``x-pack`` plugin with the ``security`` configuration. See the reference documentation about :doc:`Elasticsearch plugins </elasticsearch_plugins>` for more details.
 
@@ -427,7 +433,7 @@ Allows to override variables of Elasticsearch plugins. It accepts a list of comm
 
 Example::
 
-    esrally --distribution-version=6.1.1. --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'https',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
+    esrally race --track=geonames --distribution-version=6.1.1. --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'https',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
 
 This enables the HTTP exporter of `X-Pack Monitoring <https://www.elastic.co/products/x-pack/monitoring>`_ and exports the data to the configured monitoring host.
 
@@ -437,6 +443,11 @@ This enables the HTTP exporter of `X-Pack Monitoring <https://www.elastic.co/pro
 Selects the :doc:`pipeline </pipelines>` that Rally should run.
 
 Rally can autodetect the pipeline in most cases. If you specify ``--distribution-version`` it will auto-select the pipeline ``from-distribution`` otherwise it will use ``from-sources``.
+
+``enable-assertions``
+~~~~~~~~~~~~~~~~~~~~~
+
+This option enables assertions on tasks. If an assertion fails, the race is aborted with a message indicating which assertion has failed.
 
 .. _clr_enable_driver_profiling:
 
@@ -485,7 +496,7 @@ Activates the provided :doc:`telemetry devices </telemetry>` for this race.
 
  ::
 
-   esrally --telemetry=jfr,jit
+   esrally race --track=geonames --telemetry=jfr,jit
 
 
 This activates Java flight recorder and the JIT compiler telemetry devices.
@@ -499,7 +510,7 @@ Allows to set parameters for telemetry devices. It accepts a list of comma-separ
 
 Example::
 
-    esrally --telemetry=jfr --telemetry-params="recording-template:'profile'"
+    esrally race --track=geonames --telemetry=jfr --telemetry-params="recording-template:'profile'"
 
 This enables the Java flight recorder telemetry device and sets the ``recording-template`` parameter to "profile".
 
@@ -512,7 +523,7 @@ For more complex cases specify a JSON file. Store the following as ``telemetry-p
 
 and reference it when running Rally::
 
-   esrally --telemetry="node-stats" --telemetry-params="telemetry-params.json"
+   esrally race --track=geonames --telemetry="node-stats" --telemetry-params="telemetry-params.json"
 
 
 ``runtime-jdk``
@@ -525,9 +536,9 @@ This command line parameter sets the major version of the JDK that Rally should 
 Example::
 
    # Run a benchmark with defaults (i.e. JDK 8)
-   esrally --distribution-version=5.0.0
+   esrally race --track=geonames --distribution-version=5.0.0
    # Force to run with JDK 11
-   esrally --distribution-version=7.0.0 --runtime-jdk=11
+   esrally race --track=geonames --distribution-version=7.0.0 --runtime-jdk=11
 
 It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/current/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
 
@@ -569,7 +580,7 @@ If you want Rally to launch and benchmark a cluster using a binary distribution,
 
  ::
 
-   esrally --distribution-version=7.0.0
+   esrally race --track=geonames --distribution-version=7.0.0
 
 
 Rally will then benchmark the official Elasticsearch 7.0.0 distribution. Please check our :doc:`version support page </versions>` to see which Elasticsearch versions are currently supported by Rally.
@@ -592,7 +603,7 @@ The ``url`` property defines the URL pattern for this repository. The ``cache`` 
 
 You can use this distribution repository with the name "in_house_snapshot" as follows::
 
-   esrally --distribution-repository=in_house_snapshot --distribution-version=7.0.0-SNAPSHOT
+   esrally race --track=geonames --distribution-repository=in_house_snapshot --distribution-version=7.0.0-SNAPSHOT
 
 This will benchmark the latest 7.0.0 snapshot build of Elasticsearch.
 
@@ -618,7 +629,7 @@ By default, the command line reporter will print the results only on standard ou
 
  ::
 
-   esrally --report-format=csv --report-file=~/benchmarks/result.csv
+   esrally race --track=geonames --report-format=csv --report-file=~/benchmarks/result.csv
 
 .. _clr_client_options:
 
@@ -691,7 +702,7 @@ By default, Rally will run its load driver on the same machine where you start t
 
  ::
 
-   esrally --load-driver-hosts=10.17.20.5,10.17.20.6
+   esrally race --track=geonames --load-driver-hosts=10.17.20.5,10.17.20.6
 
 In the example, above Rally will generate load from the hosts ``10.17.20.5`` and ``10.17.20.6``. For this to work, you need to start a Rally daemon on these machines, see :ref:`distributing the load test driver <recipe_distributed_load_driver>` for a complete example.
 
@@ -704,7 +715,7 @@ If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally
 
  ::
 
-   esrally --pipeline=benchmark-only --target-hosts=10.17.0.5:9200,10.17.0.6:9200
+   esrally race --track=geonames --pipeline=benchmark-only --target-hosts=10.17.0.5:9200,10.17.0.6:9200
 
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
@@ -760,7 +771,7 @@ The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``valu
 
  ::
 
-   esrally --user-tag="intention:github-issue-1234-baseline,gc:cms"
+   esrally race --track=pmc --user-tag="intention:github-issue-1234-baseline,gc:cms"
 
 You can also specify multiple tags. They need to be separated by a comma.
 
@@ -768,7 +779,7 @@ You can also specify multiple tags. They need to be separated by a comma.
 
  ::
 
-   esrally --user-tag="disk:SSD,data_node_count:4"
+   esrally race --track=pmc --user-tag="disk:SSD,data_node_count:4"
 
 
 

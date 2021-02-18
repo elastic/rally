@@ -279,19 +279,6 @@ def from_sources(cfg):
     return race(cfg, sources=True, build=True)
 
 
-def from_sources_complete(cfg):
-    console.warn("The pipeline from-sources-complete is deprecated. Use the pipeline \"from-sources\" instead.")
-    return from_sources(cfg)
-
-
-def from_sources_skip_build(cfg):
-    console.warn("The pipeline from-sources-skip-build is deprecated. Rally caches artifacts now automatically. "
-                 "Use the pipeline \"from-sources\" instead")
-    port = cfg.opts("provisioning", "node.http.port")
-    set_default_hosts(cfg, port=port)
-    return race(cfg, sources=True, build=False)
-
-
 def from_distribution(cfg):
     port = cfg.opts("provisioning", "node.http.port")
     set_default_hosts(cfg, port=port)
@@ -312,12 +299,6 @@ def docker(cfg):
 
 Pipeline("from-sources",
          "Builds and provisions Elasticsearch, runs a benchmark and reports results.", from_sources)
-
-Pipeline("from-sources-complete",
-         "Builds and provisions Elasticsearch, runs a benchmark and reports results [deprecated].", from_sources_complete)
-
-Pipeline("from-sources-skip-build",
-         "Provisions Elasticsearch (skips the build), runs a benchmark and reports results [deprecated].", from_sources_skip_build)
 
 Pipeline("from-distribution",
          "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.", from_distribution)
@@ -342,7 +323,8 @@ def list_pipelines():
 def run(cfg):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
-
+    race_id = cfg.opts("system", "race.id")
+    logger.info("Race id [%s]", race_id)
     if len(name) == 0:
         # assume from-distribution pipeline if distribution.version has been specified and --pipeline cli arg not set
         if cfg.exists("mechanic", "distribution.version"):

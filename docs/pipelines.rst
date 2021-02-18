@@ -12,8 +12,6 @@ You can get a list of all pipelines with ``esrally list pipelines``::
     Name                     Description
     -----------------------  ---------------------------------------------------------------------------------------------
     from-sources             Builds and provisions Elasticsearch, runs a benchmark and reports results.
-    from-sources-complete    Builds and provisions Elasticsearch, runs a benchmark and reports results [deprecated].
-    from-sources-skip-build  Provisions Elasticsearch (skips the build), runs a benchmark and reports results [deprecated].
     from-distribution        Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.
     benchmark-only           Assumes an already running Elasticsearch instance, runs a benchmark and reports results
 
@@ -24,7 +22,7 @@ This is intended if you want to provision a cluster by yourself. Do not use this
 
 To benchmark a cluster, you also have to specify the hosts to connect to. An example invocation::
 
-    esrally --pipeline=benchmark-only --target-hosts=search-node-a.intranet.acme.com:9200,search-node-b.intranet.acme.com:9200
+    esrally race --track=geonames --pipeline=benchmark-only --target-hosts=search-node-a.intranet.acme.com:9200,search-node-b.intranet.acme.com:9200
 
 
 from-distribution
@@ -32,13 +30,13 @@ from-distribution
 
 This pipeline allows to benchmark an official Elasticsearch distribution which will be automatically downloaded by Rally. An example invocation::
 
-    esrally --pipeline=from-distribution --distribution-version=7.0.0
+    esrally race --track=geonames --pipeline=from-distribution --distribution-version=7.0.0
 
 The version numbers have to match the name in the download URL path.
 
 You can also benchmark Elasticsearch snapshot versions by specifying the snapshot repository::
 
-    esrally --pipeline=from-distribution --distribution-version=5.0.0-SNAPSHOT --distribution-repository=snapshot
+    esrally race --track=geonames --pipeline=from-distribution --distribution-version=5.0.0-SNAPSHOT --distribution-repository=snapshot
 
 However, this feature is mainly intended for continuous integration environments and by default you should just benchmark official distributions.
 
@@ -55,7 +53,7 @@ You should use this pipeline when you want to build and benchmark Elasticsearch 
 
 Remember that you also need git installed. If that's not the case you'll get an error. An example invocation::
 
-    esrally --pipeline=from-sources --revision=latest
+    esrally race --track=geonames --pipeline=from-sources --revision=latest
 
 You have to specify a :ref:`revision <clr_revision>`.
 
@@ -67,13 +65,3 @@ Artifacts are cached for seven days by default in ``~/.rally/benchmarks/distribu
 
 * ``cache`` (default: ``True``): Set to ``False`` to disable artifact caching.
 * ``cache.days`` (default: ``7``): The maximum age in days of an artifact before it gets evicted from the artifact cache.
-
-from-sources-complete
-~~~~~~~~~~~~~~~~~~~~~
-
-This deprecated pipeline is an alias for ``from-sources`` and is only provided for backwards-compatibility. Use ``from-sources`` instead.
-
-from-sources-skip-build
-~~~~~~~~~~~~~~~~~~~~~~~
-
-This deprecated pipeline is similar to ``from-sources-complete`` except that it assumes you have built the binary once. Use ``from-sources`` instead which caches built artifacts automatically.

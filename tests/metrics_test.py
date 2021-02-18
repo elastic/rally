@@ -1513,11 +1513,12 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.params", {})
         cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
         cfg.add(config.Scope.application, "race", "user.tag", "")
-        cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
+        cfg.add(config.Scope.application, "race", "pipeline", "from-sources")
         cfg.add(config.Scope.application, "track", "params", {})
 
-        index = track.Task(name="index #1", operation=track.Operation(name="index", operation_type=track.OperationType.Bulk, params=None))
-        challenge = track.Challenge(name="unittest", schedule=[index], default=True)
+        index1 = track.Task(name="index #1", operation=track.Operation(name="index", operation_type=track.OperationType.Bulk, params=None))
+        index2 = track.Task(name="index #2", operation=track.Operation(name="index", operation_type=track.OperationType.Bulk, params=None))
+        challenge = track.Challenge(name="unittest", schedule=[index1, index2], default=True)
         t = track.Track("unittest", "unittest-track", challenges=[challenge])
 
         store = metrics.metrics_store(cfg, read_only=False, track=t, challenge=challenge)
@@ -1541,6 +1542,15 @@ class StatsCalculatorTests(TestCase):
                                       meta_data={"success": False})
         store.put_value_cluster_level("service_time", 210, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
                                       meta_data={"success": True})
+
+        # only warmup samples
+        store.put_value_cluster_level("throughput", 500, unit="docs/s", task="index #2",
+                                      sample_type=metrics.SampleType.Warmup, operation_type=track.OperationType.Bulk)
+        store.put_value_cluster_level("latency", 2800, unit="ms", task="index #2", operation_type=track.OperationType.Bulk,
+                                      sample_type=metrics.SampleType.Warmup)
+        store.put_value_cluster_level("service_time", 250, unit="ms", task="index #2", operation_type=track.OperationType.Bulk,
+                                      sample_type=metrics.SampleType.Warmup)
+
         store.put_doc(doc={
             "name": "ml_processing_time",
             "job": "benchmark_ml_job_1",
@@ -1564,6 +1574,10 @@ class StatsCalculatorTests(TestCase):
             [("50_0", 200), ("100_0", 210), ("mean", 200), ("unit", "ms")]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
 
+        opm2 = stats.metrics("index #2")
+        self.assertEqual(collections.OrderedDict(
+            [("min", None), ("mean", None), ("median", None), ("max", None), ("unit", "docs/s")]), opm2["throughput"])
+
         self.assertEqual(1, len(stats.ml_processing_time))
         self.assertEqual("benchmark_ml_job_1", stats.ml_processing_time[0]["job"])
         self.assertEqual(2.2, stats.ml_processing_time[0]["min"])
@@ -1582,7 +1596,7 @@ class StatsCalculatorTests(TestCase):
         cfg.add(config.Scope.application, "mechanic", "car.params", {})
         cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
         cfg.add(config.Scope.application, "race", "user.tag", "")
-        cfg.add(config.Scope.application, "race", "pipeline", "from-sources-skip-build")
+        cfg.add(config.Scope.application, "race", "pipeline", "from-sources")
         cfg.add(config.Scope.application, "track", "params", {})
 
         index = track.Task(name="index #1", operation=track.Operation(name="index", operation_type=track.OperationType.Bulk, params=None))
@@ -1663,6 +1677,7 @@ class GlobalStatsTests(TestCase):
                     "operation": "index",
                     "throughput": {
                         "min": 450,
+                        "mean": 450,
                         "median": 450,
                         "max": 452,
                         "unit": "docs/s"
@@ -1686,6 +1701,7 @@ class GlobalStatsTests(TestCase):
                     "operation": "search",
                     "throughput": {
                         "min": 9,
+                        "mean": 10,
                         "median": 10,
                         "max": 12,
                         "unit": "ops/s"
@@ -1750,6 +1766,7 @@ class GlobalStatsTests(TestCase):
             "operation": "index",
             "value": {
                 "min": 450,
+                "mean": 450,
                 "median": 450,
                 "max": 452,
                 "unit": "docs/s"
@@ -1807,6 +1824,7 @@ class GlobalStatsTests(TestCase):
             "operation": "search",
             "value": {
                 "min": 9,
+                "mean": 10,
                 "median": 10,
                 "max": 12,
                 "unit": "ops/s"

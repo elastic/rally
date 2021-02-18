@@ -1409,6 +1409,31 @@ class TrackFilterTests(TestCase):
                         },
                         {
                             "operation": "cluster-stats"
+                        },
+                        {
+                            "parallel": {
+                                "tasks": [
+                                    {
+                                        "name": "query-filtered",
+                                        "tags": "include-me",
+                                        "operation": "match-all",
+                                    },
+                                    {
+                                        "name": "index-4",
+                                        "tags": ["include-me", "bulk-task"],
+                                        "operation": "bulk-index",
+                                    },
+                                    {
+                                        "name": "index-5",
+                                        "operation": "bulk-index",
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "final-cluster-stats",
+                            "operation": "cluster-stats",
+                            "tags": "include-me"
                         }
                     ]
                 }
@@ -1416,18 +1441,21 @@ class TrackFilterTests(TestCase):
         }
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", track_specification, "/mappings")
-        self.assertEqual(5, len(full_track.challenges[0].schedule))
+        self.assertEqual(7, len(full_track.challenges[0].schedule))
 
         filtered = self.filter(full_track, include_tasks=["index-3",
                                                           "type:search",
                                                           # Filtering should also work for non-core operation types.
-                                                          "type:custom-operation-type"])
+                                                          "type:custom-operation-type",
+                                                          "tag:include-me"])
 
         schedule = filtered.challenges[0].schedule
-        self.assertEqual(3, len(schedule))
+        self.assertEqual(5, len(schedule))
         self.assertEqual(["index-3", "match-all-parallel"], [t.name for t in schedule[0].tasks])
         self.assertEqual("match-all-serial", schedule[1].name)
         self.assertEqual("cluster-stats", schedule[2].name)
+        self.assertEqual(["query-filtered", "index-4"], [t.name for t in schedule[3].tasks])
+        self.assertEqual("final-cluster-stats", schedule[4].name)
 
     def test_filters_exclude_tasks(self):
         track_specification = {

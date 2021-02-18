@@ -1286,9 +1286,6 @@ class RaceStore:
     def __init__(self, cfg):
         self.cfg = cfg
         self.environment_name = cfg.opts("system", "env.name")
-        self.race_timestamp = cfg.opts("system", "time.start")
-        self.race_id = cfg.opts("system", "race.id")
-        self.current_race = None
 
     def find_by_race_id(self, race_id):
         raise NotImplementedError("abstract method")
@@ -1297,9 +1294,6 @@ class RaceStore:
         raise NotImplementedError("abstract method")
 
     def store_race(self, race):
-        self._store(race.as_dict())
-
-    def _store(self, doc):
         raise NotImplementedError("abstract method")
 
     def _max_results(self):
@@ -1329,13 +1323,10 @@ class CompositeRaceStore:
 
 
 class FileRaceStore(RaceStore):
-    def __init__(self, cfg):
-        super().__init__(cfg)
-        self.races_path = paths.races_root(self.cfg)
-        self.race_path = paths.race_root(self.cfg)
-
-    def _store(self, doc):
-        io.ensure_dir(self.race_path)
+    def store_race(self, race):
+        doc = race.as_dict()
+        race_path = paths.race_root(self.cfg, race_id=race.race_id)
+        io.ensure_dir(race_path)
         with open(self._race_file(), mode="wt", encoding="utf-8") as f:
             f.write(json.dumps(doc, indent=True, ensure_ascii=False))
 
@@ -1383,13 +1374,15 @@ class EsRaceStore(RaceStore):
         self.client = client_factory_class(cfg).create()
         self.index_template_provider = index_template_provider_class(cfg)
 
-    def _store(self, doc):
+    def store_race(self, race):
+        doc = race.as_dict()
         # always update the mapping to the latest version
         self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(index=self.index_name(), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc, id=doc["race-id"])
+        self.client.index(index=self.index_name(race), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc, id=race.race_id)
 
-    def index_name(self):
-        return "%s%04d-%02d" % (EsRaceStore.INDEX_PREFIX, self.race_timestamp.year, self.race_timestamp.month)
+    def index_name(self, race):
+        race_timestamp = race.race_timestamp
+        return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
     def list(self):
         filters = [{
@@ -1424,21 +1417,16 @@ class EsRaceStore(RaceStore):
             return []
 
     def find_by_race_id(self, race_id):
-        filters = [{
-                "term": {
-                    "environment": self.environment_name
-                }
-            },
-            {
-                "term": {
-                    "race-id": race_id
-                }
-            }]
-
         query = {
             "query": {
                 "bool": {
-                    "filter": filters
+                    "filter": [
+                        {
+                            "term": {
+                                "race-id": race_id
+                            }
+                        }
+                    ]
                 }
             }
         }
@@ -1472,17 +1460,19 @@ class EsResultsStore:
         :param index_template_provider_class: This parameter is optional and needed for testing.
         """
         self.cfg = cfg
-        self.race_timestamp = cfg.opts("system", "time.start")
         self.client = client_factory_class(cfg).create()
         self.index_template_provider = index_template_provider_class(cfg)
 
     def store_results(self, race):
         # always update the mapping to the latest version
         self.client.put_template("rally-results", self.index_template_provider.results_template())
-        self.client.bulk_index(index=self.index_name(), doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
+        self.client.bulk_index(index=self.index_name(race),
+                               doc_type=EsResultsStore.RESULTS_DOC_TYPE,
+                               items=race.to_result_dicts())
 
-    def index_name(self):
-        return "%s%04d-%02d" % (EsResultsStore.INDEX_PREFIX, self.race_timestamp.year, self.race_timestamp.month)
+    def index_name(self, race):
+        race_timestamp = race.race_timestamp
+        return f"{EsResultsStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
 
 class NoopResultsStore:
@@ -1618,7 +1608,7 @@ class GlobalStatsCalculator:
         median = self.store.get_median(metric_name, task=task_name, sample_type=SampleType.Normal)
         unit = self.store.get_unit(metric_name, task=task_name)
         stats = self.store.get_stats(metric_name, task=task_name, sample_type=SampleType.Normal)
-        if median and stats:
+        if mean and median and stats:
             return {
                 "min": stats["min"],
                 "mean": mean,
@@ -1629,6 +1619,7 @@ class GlobalStatsCalculator:
         else:
             return {
                 "min": None,
+                "mean": None,
                 "median": None,
                 "max": None,
                 "unit": unit

@@ -96,6 +96,15 @@ def runner_for(operation_type):
         raise exceptions.RallyError("No runner available for operation type [%s]" % operation_type)
 
 
+def enable_assertions(enabled):
+    """
+    Changes whether assertions are enabled. The status changes for all tasks that are executed after this call.
+
+    :param enabled: ``True`` to enable assertions, ``False`` to disable them.
+    """
+    AssertingRunner.assertions_enabled = enabled
+
+
 def register_runner(operation_type, runner, **kwargs):
     logger = logging.getLogger(__name__)
     async_runner = kwargs.get("async_runner", False)
@@ -110,24 +119,26 @@ def register_runner(operation_type, runner, **kwargs):
         if "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
-            __RUNNERS[operation_type] = _multi_cluster_runner(runner, str(runner), context_manager_enabled=True)
+            cluster_aware_runner = _multi_cluster_runner(runner, str(runner), context_manager_enabled=True)
         else:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
-            __RUNNERS[operation_type] = _multi_cluster_runner(runner, str(runner))
+            cluster_aware_runner = _multi_cluster_runner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     elif isinstance(runner, types.FunctionType):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = _single_cluster_runner(runner, runner.__name__)
+        cluster_aware_runner = _single_cluster_runner(runner, runner.__name__)
     elif "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = _single_cluster_runner(runner, str(runner), context_manager_enabled=True)
+        cluster_aware_runner = _single_cluster_runner(runner, str(runner), context_manager_enabled=True)
     else:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
-        __RUNNERS[operation_type] = _single_cluster_runner(runner, str(runner))
+        cluster_aware_runner = _single_cluster_runner(runner, str(runner))
+
+    __RUNNERS[operation_type] = _with_completion(_with_assertions(cluster_aware_runner))
 
 
 # Only intended for unit-testing!
@@ -213,14 +224,16 @@ def unwrap(runner):
 
 def _single_cluster_runner(runnable, name, context_manager_enabled=False):
     # only pass the default ES client
-    delegate = MultiClientRunner(runnable, name, lambda es: es["default"], context_manager_enabled)
-    return _with_completion(delegate)
+    return MultiClientRunner(runnable, name, lambda es: es["default"], context_manager_enabled)
 
 
 def _multi_cluster_runner(runnable, name, context_manager_enabled=False):
     # pass all ES clients
-    delegate = MultiClientRunner(runnable, name, lambda es: es, context_manager_enabled)
-    return _with_completion(delegate)
+    return MultiClientRunner(runnable, name, lambda es: es, context_manager_enabled)
+
+
+def _with_assertions(delegate):
+    return AssertingRunner(delegate)
 
 
 def _with_completion(delegate):
@@ -312,6 +325,69 @@ class MultiClientRunner(Runner, Delegator):
             return False
 
 
+class AssertingRunner(Runner, Delegator):
+    assertions_enabled = False
+
+    def __init__(self, delegate):
+        super().__init__(delegate=delegate)
+        self.predicates = {
+            ">": self.greater_than,
+            ">=": self.greater_than_or_equal,
+            "<": self.smaller_than,
+            "<=": self.smaller_than_or_equal,
+            "==": self.equal,
+        }
+
+    def greater_than(self, expected, actual):
+        return actual > expected
+
+    def greater_than_or_equal(self, expected, actual):
+        return actual >= expected
+
+    def smaller_than(self, expected, actual):
+        return actual < expected
+
+    def smaller_than_or_equal(self, expected, actual):
+        return actual <= expected
+
+    def equal(self, expected, actual):
+        return actual == expected
+
+    def check_assertion(self, assertion, properties):
+        path = assertion["property"]
+        predicate_name = assertion["condition"]
+        expected_value = assertion["value"]
+        actual_value = properties
+        for k in path.split("."):
+            actual_value = actual_value[k]
+        predicate = self.predicates[predicate_name]
+        success = predicate(expected_value, actual_value)
+        if not success:
+            raise exceptions.RallyTaskAssertionError(
+                f"Expected [{path}] to be {predicate_name} [{expected_value}] but was [{actual_value}].")
+
+    async def __call__(self, *args):
+        params = args[1]
+        return_value = await self.delegate(*args)
+        if AssertingRunner.assertions_enabled and "assertions" in params:
+            if isinstance(return_value, dict):
+                for assertion in params["assertions"]:
+                    self.check_assertion(assertion, return_value)
+            else:
+                self.logger.debug("Skipping assertion check as [%s] does not return a dict.", repr(self.delegate))
+        return return_value
+
+    def __repr__(self, *args, **kwargs):
+        return repr(self.delegate)
+
+    async def __aenter__(self):
+        await self.delegate.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
+
+
 def mandatory(params, key, op):
     try:
         return params[key]
@@ -349,10 +425,6 @@ class BulkIndex(Runner):
     Bulk indexes the given documents.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.first_request = True
-
     async def __call__(self, es, params):
         """
         Runs one bulk indexing operation.
@@ -382,135 +454,6 @@ class BulkIndex(Runner):
          in ``benchmarks/driver``.
         * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present, defaults to
          ``None`` and potentially falls back to the global timeout setting.
-
-        Returned meta data
-
-        The following meta data are always returned:
-
-        * ``index``: name of the affected index. May be `None` if it could not be derived.
-        * ``weight``: operation-agnostic representation of the bulk size denoted in ``unit``.
-        * ``unit``: The unit in which to interpret ``weight``.
-        * ``success``: A boolean indicating whether the bulk request has succeeded.
-        * ``success-count``: Number of successfully processed bulk items for this request. This value will only be
-                             determined in case of errors or the bulk-size has been specified in docs.
-        * ``error-count``: Number of failed bulk items for this request.
-        * ``took``` Value of the the ``took`` property in the bulk response.
-
-        If ``detailed-results`` is ``True`` the following meta data are returned in addition:
-
-        * ``ops``: A hash with the operation name as key (e.g. index, update, delete) and various counts as values. ``item-count`` contains
-          the total number of items for this key. Additionally, we return a separate counter each result (indicating e.g. the number of
-          created items, the number of deleted items etc.).
-        * ``shards_histogram``: An array of hashes where each hash has two keys: ``item-count`` contains the number of items to which a
-          shard distribution applies and ``shards`` contains another hash with the actual distribution of ``total``, ``successful`` and
-          ``failed`` shards (see examples below).
-        * ``bulk-request-size-bytes``: Total size of the bulk request body in bytes.
-        * ``total-document-size-bytes``: Total size of all documents within the bulk request body in bytes.
-
-        Here are a few examples:
-
-        If ``detailed-results`` is ``False`` a typical return value is::
-
-            {
-                "index": "my_index",
-                "weight": 5000,
-                "unit": "docs",
-                "success": True,
-                "success-count": 5000,
-                "error-count": 0,
-                "took": 20
-            }
-
-        Whereas the response will look as follow if there are bulk errors::
-
-            {
-                "index": "my_index",
-                "weight": 5000,
-                "unit": "docs",
-                "success": False,
-                "success-count": 4000,
-                "error-count": 1000,
-                "took": 20
-            }
-
-        If ``detailed-results`` is ``True`` a typical return value is::
-
-
-            {
-                "index": "my_index",
-                "weight": 5000,
-                "unit": "docs",
-                "bulk-request-size-bytes": 2250000,
-                "total-document-size-bytes": 2000000,
-                "success": True,
-                "success-count": 5000,
-                "error-count": 0,
-                "took": 20,
-                "ops": {
-                    "index": {
-                        "item-count": 5000,
-                        "created": 5000
-                    }
-                },
-                "shards_histogram": [
-                    {
-                        "item-count": 5000,
-                        "shards": {
-                            "total": 2,
-                            "successful": 2,
-                            "failed": 0
-                        }
-                    }
-                ]
-            }
-
-        An example error response may look like this::
-
-
-            {
-                "index": "my_index",
-                "weight": 5000,
-                "unit": "docs",
-                "bulk-request-size-bytes": 2250000,
-                "total-document-size-bytes": 2000000,
-                "success": False,
-                "success-count": 4000,
-                "error-count": 1000,
-                "took": 20,
-                "ops": {
-                    "index": {
-                        "item-count": 5000,
-                        "created": 4000,
-                        "noop": 1000
-                    }
-                },
-                "shards_histogram": [
-                    {
-                        "item-count": 4000,
-                        "shards": {
-                            "total": 2,
-                            "successful": 2,
-                            "failed": 0
-                        }
-                    },
-                    {
-                        "item-count": 500,
-                        "shards": {
-                            "total": 2,
-                            "successful": 1,
-                            "failed": 1
-                        }
-                    },
-                    {
-                        "item-count": 500,
-                        "shards": {
-                            "total": 2,
-                            "successful": 0,
-                            "failed": 2
-                        }
-                    }
-                ]
-            }
         """
         detailed_results = params.get("detailed-results", False)
         api_kwargs = self._default_kw_params(params)
@@ -521,14 +464,7 @@ class BulkIndex(Runner):
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)
-        # TODO: Remove this bwc-layer and turn "unit" into a mandatory parameter
-        # unit = mandatory(params, "unit", self)
-        if self.first_request:
-            self.first_request = False
-            if "unit" not in params:
-                self.logger.warning("Specify the mandatory parameter [unit] in the bulk parameter source. "
-                                    "Otherwise this track will fail with the next Rally version.")
-        unit = params.get("unit", "docs")
+        unit = mandatory(params, "unit", self)
         # parse responses lazily in the standard case - responses might be large thus parsing skews results and if no
         # errors have occurred we only need a small amount of information from the potentially large response.
         if not detailed_results:
@@ -814,8 +750,11 @@ class Query(Runner):
     """
     async def __call__(self, es, params):
         request_params, headers = self._transport_request_params(params)
+        # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
+        # composite context where there is no actual parameter source and the entire request structure must be provided
+        # by the composite's parameter source.
+        index = mandatory(params, "index", self)
         body = mandatory(params, "body", self)
-        index = params.get("index", "_all")
         size = params.get("results-per-page")
         if size:
             body["size"] = size
@@ -1090,7 +1029,11 @@ class CreateIndex(Runner):
             api_params.pop(term, None)
         for index, body in indices:
             await es.indices.create(index=index, body=body, **api_params)
-        return len(indices), "ops"
+        return {
+            "weight": len(indices),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-index"
@@ -1106,7 +1049,11 @@ class CreateDataStream(Runner):
         request_params = mandatory(params, "request-params", self)
         for data_stream in data_streams:
             await es.indices.create_data_stream(data_stream, params=request_params)
-        return len(data_streams), "ops"
+        return {
+            "weight": len(data_streams),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-data-stream"
@@ -1133,7 +1080,11 @@ class DeleteIndex(Runner):
                 await es.indices.delete(index=index_name, params=request_params)
                 ops += 1
 
-        return ops, "ops"
+        return {
+            "weight": ops,
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "delete-index"
@@ -1160,7 +1111,11 @@ class DeleteDataStream(Runner):
                 await es.indices.delete_data_stream(data_stream, params=request_params)
                 ops += 1
 
-        return ops, "ops"
+        return {
+            "weight": ops,
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "delete-data-stream"
@@ -1178,7 +1133,11 @@ class CreateComponentTemplate(Runner):
         for template, body in templates:
             await es.cluster.put_component_template(name=template, body=body,
                                                     params=request_params)
-        return len(templates), "ops"
+        return {
+            "weight": len(templates),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-component-template"
@@ -1212,7 +1171,12 @@ class DeleteComponentTemplate(Runner):
                 self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
                 await es.cluster.delete_component_template(name=template_name, params=request_params)
                 ops_count += 1
-        return ops_count, "ops"
+        return {
+            "weight": ops_count,
+            "unit": "ops",
+            "success": True
+        }
+
 
     def __repr__(self, *args, **kwargs):
         return "delete-component-template"
@@ -1227,9 +1191,13 @@ class CreateComposableTemplate(Runner):
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
         for template, body in templates:
-            await es.cluster.put_index_template(name=template, body=body,
-                                                    params=request_params)
-        return len(templates), "ops"
+            await es.cluster.put_index_template(name=template, body=body, params=request_params)
+
+        return {
+            "weight": len(templates),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-composable-template"
@@ -1259,7 +1227,11 @@ class DeleteComposableTemplate(Runner):
                 await es.indices.delete(index=index_pattern)
                 ops_count += 1
 
-        return ops_count, "ops"
+        return {
+            "weight": ops_count,
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "delete-composable-template"
@@ -1277,7 +1249,11 @@ class CreateIndexTemplate(Runner):
             await es.indices.put_template(name=template,
                                           body=body,
                                           params=request_params)
-        return len(templates), "ops"
+        return {
+            "weight": len(templates),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "create-index-template"
@@ -1308,7 +1284,11 @@ class DeleteIndexTemplate(Runner):
                 await es.indices.delete(index=index_pattern)
                 ops_count += 1
 
-        return ops_count, "ops"
+        return {
+            "weight": ops_count,
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "delete-index-template"
@@ -1393,7 +1373,11 @@ class ShrinkIndex(Runner):
             await self._wait_for(es, final_target_index, f"shrink for index [{final_target_index}]")
             self.logger.info("Shrinking [%s] to [%s] has finished.", source_index, final_target_index)
         # ops_count is not really important for this operation...
-        return len(source_indices), "ops"
+        return {
+            "weight": len(source_indices),
+            "unit": "ops",
+            "success": True
+        }
 
     def __repr__(self, *args, **kwargs):
         return "shrink-index"
@@ -1974,6 +1958,7 @@ class WaitForTransform(Runner):
                     "transform-id": transform_id,
                     "weight": transform_stats.get("documents_processed", 0),
                     "unit": "docs",
+                    "success": True
                 }
 
                 throughput = 0
@@ -2043,15 +2028,26 @@ class GetAsyncSearch(Runner):
         success = True
         searches = mandatory(params, "retrieve-results-for", self)
         request_params = params.get("request-params", {})
-        for search_id, _ in async_search_ids(searches):
+        stats = {}
+        for search_id, search in async_search_ids(searches):
             response = await es.async_search.get(id=search_id,
                                                  params=request_params)
-            success = success and not response["is_running"]
+            is_running = response["is_running"]
+            success = success and not is_running
+            if not is_running:
+                stats[search] = {
+                    "hits": response["response"]["hits"]["total"]["value"],
+                    "hits_relation": response["response"]["hits"]["total"]["relation"],
+                    "timed_out": response["response"]["timed_out"],
+                    "took": response["response"]["took"]
+                }
 
         return {
-            "weight": len(searches),
+            # only count completed searches - there is one key per search id in `stats`
+            "weight": len(stats),
             "unit": "ops",
-            "success": success
+            "success": success,
+            "stats": stats
         }
 
     def __repr__(self, *args, **kwargs):

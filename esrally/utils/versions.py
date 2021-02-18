@@ -67,45 +67,79 @@ def components(version, strict=True):
     raise exceptions.InvalidSyntax("version string '%s' does not conform to pattern '%s'" % (version, versions_pattern.pattern))
 
 
-def versions(version):
+def variants_of(version):
+    for v, _ in VersionVariants(version).all_versions:
+        yield v
+
+class VersionVariants:
     """
-    Determines possible variations of a version.
+    Build all possible variations of a version.
 
-    E.g. if version "5.0.0-SNAPSHOT" is given, the possible variations are:
-
-    ["5.0.0-SNAPSHOT", "5.0.0", "5.0", "5"]
-
-    :param version: A version string in the format major.minor.path-suffix (suffix is optional)
-    :return: a list of version variations ordered from most specific to most generic variation.
+    e.g. if version "5.0.0-SNAPSHOT" is given, the possible variations are:
+        self.with_suffix: "5.0.0-SNAPSHOT",
+        self.with_patch: "5.0.0",
+        self.with_minor: "5.0",
+        self.with_major: "5"
     """
-    v = []
-    major, minor, patch, suffix = components(version)
 
-    if suffix:
-        v.append("%d.%d.%d-%s" % (major, minor, patch, suffix))
-    v.append("%d.%d.%d" % (major, minor, patch))
-    v.append("%d.%d" % (major, minor))
-    v.append("%d" % major)
-    return v
+    def __init__(self, version):
+        """
+        :param version: A version string in the format major.minor.path-suffix (suffix is optional)
+        """
+        self.major, self.minor, self.patch, self.suffix = components(version)
+
+        self.with_major = f"{int(self.major)}"
+        self.with_minor = f"{int(self.major)}.{int(self.minor)}"
+        self.with_patch = f"{int(self.major)}.{int(self.minor)}.{int(self.patch)}"
+        self.with_suffix = f"{int(self.major)}.{int(self.minor)}.{int(self.patch)}-{self.suffix}" if self.suffix \
+            else None
+
+    @property
+    def all_versions(self):
+        """
+        :return: a list of tuples containing version variants and version type
+            ordered from most specific to most generic variation.
+
+            Example:
+            [("5.0.0-SNAPSHOT", "with_suffix"), ("5.0.0", "with_patch"), ("5.0", "with_minor"), ("5", "with_major")]
+        """
+
+        versions = [(self.with_suffix, "with_suffix")] if self.suffix else []
+        versions.extend([(self.with_patch, "with_patch"),
+                         (self.with_minor, "with_minor"),
+                         (self.with_major, "with_major")])
+
+        return versions
 
 
 def best_match(available_alternatives, distribution_version):
     """
-
     Finds the most specific branch for a given distribution version assuming that versions have the pattern:
 
         major.minor.patch-suffix
 
     and the provided alternatives reflect this pattern.
+    Best matches for distribution_version from available_alternatives may be:
+     1. exact matches of major.minor
+     2. nearest prior minor within the same major
+     3. major version
+     4. as a last resort, `master`.
+
+    See test_find_best_match() for examples.
 
     :param available_alternatives: A list of possible distribution versions (or shortened versions).
     :param distribution_version: An Elasticsearch distribution version.
-    :return: The most specific alternative that is available (most components of the version match) or None.
+    :return: The most specific alternative that is available or None.
     """
     if is_version_identifier(distribution_version):
-        for version in versions(distribution_version):
+        versions = VersionVariants(distribution_version)
+        for version, version_type in versions.all_versions:
             if version in available_alternatives:
                 return version
+            # match nearest prior minor
+            if version_type == "with_minor" and (latest_minor := latest_bounded_minor(available_alternatives, versions)):
+                if latest_minor:
+                    return f"{versions.major}.{latest_minor}"
         # not found in the available alternatives, it could still be a master version
         major, _, _, _ = components(distribution_version)
         if major > _latest_major(available_alternatives):
@@ -122,3 +156,32 @@ def _latest_major(alternatives):
             major, _, _, _ = components(a, strict=False)
             max_major = max(major, max_major)
     return max_major
+
+
+def latest_bounded_minor(alternatives, target_version):
+    """
+    Finds the closest minor version that is smaller or eq to target_version from a list of version alternatives.
+    Versions including patch or patch-suffix in alternatives are ignored.
+    See test_latest_bounded_minor() for examples.
+
+    :param alternatives: list of alternative versions
+    :param target_version: a VersionVariants object presenting the distribution version
+    :return: the closest minor version (if available) from alternatives otherwise None
+    """
+    eligible_minors = []
+    for a in alternatives:
+        if is_version_identifier(a, strict=False):
+            major, minor, patch, suffix = components(a, strict=False)
+            if patch is not None or suffix is not None:
+                # branches containing patch or patch-suffix aren't supported
+                continue
+            if major == target_version.major and minor and minor <= target_version.minor:
+                eligible_minors.append(minor)
+
+    # no matching minor version
+    if not eligible_minors:
+        return None
+
+    eligible_minors.sort()
+
+    return min(eligible_minors, key=lambda x: abs(x - target_version.minor))

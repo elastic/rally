@@ -18,9 +18,9 @@ Run your first race
 
 Now we're ready to run our first :doc:`race </glossary>`::
 
-    esrally --distribution-version=6.5.3
+    esrally race --distribution-version=6.5.3 --track=geonames
 
-This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glossary>` - the `geonames track <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ - against it. After the race, a :doc:`summary report </summary_report>` is written to the command line:::
+This will download Elasticsearch 6.5.3 and run the `geonames <https://github.com/elastic/rally-tracks/tree/master/geonames>`_ :doc:`track </glossary>` against it. After the race, a :doc:`summary report </summary_report>` is written to the command line:::
 
 
     ------------------------------------------------------
@@ -77,6 +77,7 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
     |   All |                                     Heap used for stored fields |                        |  0.788307 |      MB |
     |   All |                                                   Segment count |                        |        94 |         |
     |   All |                                                  Min Throughput |           index-append |   38089.5 |  docs/s |
+    |   All |                                                 Mean Throughput |           index-append |   38325.2 |  docs/s |
     |   All |                                               Median Throughput |           index-append |   38613.9 |  docs/s |
     |   All |                                                  Max Throughput |           index-append |   40693.3 |  docs/s |
     |   All |                                         50th percentile latency |           index-append |   803.417 |      ms |
@@ -93,6 +94,7 @@ This will download Elasticsearch 6.5.3 and run Rally's default :doc:`track </glo
     |   All |                                                            ...  |                    ... |       ... |     ... |
     |   All |                                                            ...  |                    ... |       ... |     ... |
     |   All |                                                  Min Throughput | large_prohibited_terms |         2 |   ops/s |
+    |   All |                                                 Mean Throughput | large_prohibited_terms |         2 |   ops/s |
     |   All |                                               Median Throughput | large_prohibited_terms |         2 |   ops/s |
     |   All |                                                  Max Throughput | large_prohibited_terms |         2 |   ops/s |
     |   All |                                         50th percentile latency | large_prohibited_terms |   344.429 |      ms |

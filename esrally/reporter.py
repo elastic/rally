@@ -40,10 +40,7 @@ def summarize(results, cfg):
     SummaryReporter(results, cfg).report()
 
 
-def compare(cfg):
-    baseline_id = cfg.opts("reporting", "baseline.id")
-    contender_id = cfg.opts("reporting", "contender.id")
-
+def compare(cfg, baseline_id, contender_id):
     if not baseline_id or not contender_id:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
@@ -161,6 +158,7 @@ class SummaryReporter:
 
         return self._join(
             self._line("Min Throughput", task, throughput["min"], unit, lambda v: "%.2f" % v),
+            self._line("Mean Throughput", task, throughput["mean"], unit, lambda v: "%.2f" % v),
             self._line("Median Throughput", task, throughput["median"], unit, lambda v: "%.2f" % v),
             self._line("Max Throughput", task, throughput["max"], unit, lambda v: "%.2f" % v)
         )
@@ -376,16 +374,19 @@ class ComparisonReporter:
 
     def _report_throughput(self, baseline_stats, contender_stats, task):
         b_min = baseline_stats.metrics(task)["throughput"]["min"]
+        b_mean = baseline_stats.metrics(task)["throughput"]["mean"]
         b_median = baseline_stats.metrics(task)["throughput"]["median"]
         b_max = baseline_stats.metrics(task)["throughput"]["max"]
         b_unit = baseline_stats.metrics(task)["throughput"]["unit"]
 
         c_min = contender_stats.metrics(task)["throughput"]["min"]
+        c_mean = contender_stats.metrics(task)["throughput"]["mean"]
         c_median = contender_stats.metrics(task)["throughput"]["median"]
         c_max = contender_stats.metrics(task)["throughput"]["max"]
 
         return self._join(
             self._line("Min Throughput", b_min, c_min, task, b_unit, treat_increase_as_improvement=True),
+            self._line("Mean Throughput", b_mean, c_mean, task, b_unit, treat_increase_as_improvement=True),
             self._line("Median Throughput", b_median, c_median, task, b_unit, treat_increase_as_improvement=True),
             self._line("Max Throughput", b_max, c_max, task, b_unit, treat_increase_as_improvement=True)
         )

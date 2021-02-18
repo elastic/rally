@@ -36,11 +36,11 @@ Starting a Race
 
 To start a race you have to define the track and challenge to run. For example::
 
-    esrally --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
+    esrally race --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
 
 Rally will then start racing on this track. If you have never started Rally before, it should look similar to the following output::
 
-    dm@io:~ $ esrally --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
+    dm@io:~ $ esrally race --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -82,6 +82,7 @@ When the race has finished, Rally will show a summary on the command line::
     |     Heap used for stored fields |              |  0.683708 |     MB |
     |                   Segment count |              |       115 |        |
     |                  Min Throughput | index-update |   59210.4 | docs/s |
+    |                 Mean Throughput | index-update |   60110.3 | docs/s |
     |               Median Throughput | index-update |   65276.2 | docs/s |
     |                  Max Throughput | index-update |   76516.6 | docs/s |
     |       50.0th percentile latency | index-update |   556.269 |     ms |
@@ -97,6 +98,7 @@ When the race has finished, Rally will show a summary on the command line::
     | 99.99th percentile service time | index-update |   4106.91 |     ms |
     |   100th percentile service time | index-update |   4542.84 |     ms |
     |                  Min Throughput |  force-merge |  0.221067 |  ops/s |
+    |                 Mean Throughput |  force-merge |  0.221067 |  ops/s |
     |               Median Throughput |  force-merge |  0.221067 |  ops/s |
     |                  Max Throughput |  force-merge |  0.221067 |  ops/s |
     |        100th percentile latency |  force-merge |   4523.52 |     ms |

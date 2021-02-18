@@ -15,15 +15,17 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import os
+
 import it
 
 
-@it.random_rally_config
-def test_sources(cfg):
-    it.wait_until_port_is_free()
-    assert it.race(cfg, "--revision=latest --track=geonames --test-mode "
-                        "--challenge=append-no-conflicts --car=4gheap --elasticsearch-plugins=analysis-icu") == 0
-
-    it.wait_until_port_is_free()
-    assert it.race(cfg, "--pipeline=from-sources --track=geonames --test-mode "
-                        "--challenge=append-no-conflicts-index-only --car=\"4gheap,ea\"") == 0
+@it.rally_in_mem
+def test_track_info_with_challenge(cfg, tmp_path):
+    cwd = os.path.dirname(__file__)
+    chart_spec_path = os.path.join(cwd, "resources", "sample-race-config.json")
+    output_path = os.path.join(tmp_path, "nightly-charts.ndjson")
+    assert it.esrally(cfg, f"generate charts "
+                           f"--chart-spec-path={chart_spec_path} "
+                           f"--chart-type=time-series "
+                           f"--output-path={output_path}") == 0
