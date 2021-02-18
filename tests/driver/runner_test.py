@@ -2117,7 +2117,7 @@ class PutPipelineRunnerTests(TestCase):
         r = runner.PutPipeline()
 
         params = {
-            "body": None
+            "body": {}
         }
         with self.assertRaisesRegex(exceptions.DataError,
                                     "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
