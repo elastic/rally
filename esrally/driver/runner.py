@@ -847,7 +847,7 @@ class Query(Runner):
                 index = None
             # explicitly convert to int to provoke an error otherwise
             total_pages = sys.maxsize if params.get("pages") == "all" else int(params.get("pages"))
-            for page in range(1, total_pages):
+            for page in range(1, total_pages + 1):
                 if pit_op:
                     pit_id = CompositeContext.get(pit_op)
                     body["pit"] = {"id": pit_id,
@@ -866,13 +866,13 @@ class Query(Runner):
                     # per the documentation the response pit id is most up-to-date
                     CompositeContext.put(pit_op, parsed.get("pit_id"))
 
-                if results.get("hits") / size <= page:
-                    # clean body for next iteration
+                if results.get("hits") / size > page:
+                    body["search_after"] = last_sort
+                else:
+                    # done. clean body for next iteration
                     for item in ["pit", "search_after"]:
                         body.pop(item, None)
                     break
-                else:
-                    body["search_after"] = last_sort
 
             return results
 
@@ -909,13 +909,13 @@ class Query(Runner):
             hits_relation = None
             timed_out = False
             took = 0
-
+            retrieved_pages = 0
             scroll_id = None
             # explicitly convert to int to provoke an error otherwise
             total_pages = sys.maxsize if params.get("pages") == "all" else int(params.get("pages"))
             try:
-                for page_number in range(1, total_pages):
-                    if page_number == 1:
+                for page in range(total_pages):
+                    if page == 0:
                         sort = "_doc"
                         scroll = "10s"
                         doc_type = params.get("type")
@@ -945,6 +945,7 @@ class Query(Runner):
                         took += props.get("took", 0)
                         # is the list of hits empty?
                         all_results_collected = props.get("hits.hits", False)
+                    retrieved_pages +=1
                     if all_results_collected:
                         break
             finally:
@@ -957,8 +958,8 @@ class Query(Runner):
                                               "Elasticsearch and will skew your benchmark results.", scroll_id)
 
             return {
-                "weight": page_number,
-                "pages": page_number,
+                "weight": retrieved_pages,
+                "pages": retrieved_pages,
                 "hits": hits,
                 "hits_relation": hits_relation,
                 "unit": "pages",
@@ -2070,13 +2071,13 @@ class DeleteAsyncSearch(Runner):
 
 class OpenPointInTime(Runner):
     async def __call__(self, es, params):
+        op_name = mandatory(params, "name", self)
         index = mandatory(params, "index", self)
         keep_alive = params.get("keep-alive", "1m")
         response = await es.open_point_in_time(index=index,
                                          params=params.get("request-params"),
                                          keep_alive=keep_alive)
         id = response.get("id")
-        op_name = mandatory(params, "name", self)
         CompositeContext.put(op_name, id)
 
     def __repr__(self, *args, **kwargs):

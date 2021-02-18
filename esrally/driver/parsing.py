@@ -53,7 +53,7 @@ def extract_search_after_properties(response: BytesIO, get_point_in_time: bool, 
     if hits_total is None:
         properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
 
-    parsed = parse(response, ["hits.total", "hits.total.value"])
+    parsed = parse(response, properties)
 
     # standardize these before returning...
     parsed["hits.total.value"] = parsed.pop("hits.total.value", parsed.pop("hits.total", 0))

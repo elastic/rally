@@ -746,7 +746,21 @@ class PartitionBulkIndexParamSource:
 class OpenPointInTimeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
-        self._index_name = params.get("index")
+        if len(track.indices) == 1:
+            default_target = track.indices[0].name
+        elif len(track.data_streams) == 1:
+            default_target = track.data_streams[0].name
+        else:
+            default_target = None
+        # indices are preferred but data streams can also be queried the same way
+        target_name = params.get("index")
+        type_name = params.get("type")
+        if not target_name:
+            target_name = params.get("data-stream", default_target)
+            if target_name and type_name:
+                raise exceptions.InvalidSyntax(
+                    f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
+        self._index_name = target_name
         self._keep_alive = params.get("keep-alive")
 
     def params(self):

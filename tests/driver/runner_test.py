@@ -139,80 +139,6 @@ class RegisterRunnerTests(TestCase):
         self.assertEqual((all_clients, "some_param"), await returned_runner(all_clients, "some_param"))
 
 
-class SelectiveJsonParserTests(TestCase):
-    def doc_as_text(self, doc):
-        return io.StringIO(json.dumps(doc))
-
-    def test_parse_all_expected(self):
-        doc = self.doc_as_text({
-            "title": "Hello",
-            "meta": {
-                "length": 100,
-                "date": {
-                    "year": 2000
-                }
-            }
-        })
-
-        parsed = runner.parse(doc, [
-            # simple property
-            "title",
-            # a nested property
-            "meta.date.year",
-            # ignores unknown properties
-            "meta.date.month"
-        ])
-
-        self.assertEqual("Hello", parsed.get("title"))
-        self.assertEqual(2000, parsed.get("meta.date.year"))
-        self.assertNotIn("meta.date.month", parsed)
-
-    def test_list_length(self):
-        doc = self.doc_as_text({
-            "title": "Hello",
-            "meta": {
-                "length": 100,
-                "date": {
-                    "year": 2000
-                }
-            },
-            "authors": ["George", "Harry"],
-            "readers": [
-                {
-                    "name": "Tom",
-                    "age": 14
-                },
-                {
-                    "name": "Bob",
-                    "age": 17
-                },
-                {
-                    "name": "Alice",
-                    "age": 22
-                }
-            ],
-            "supporters": []
-        })
-
-        parsed = runner.parse(doc, [
-            # simple property
-            "title",
-            # a nested property
-            "meta.date.year",
-            # ignores unknown properties
-            "meta.date.month"
-        ], ["authors", "readers", "supporters"])
-
-        self.assertEqual("Hello", parsed.get("title"))
-        self.assertEqual(2000, parsed.get("meta.date.year"))
-        self.assertNotIn("meta.date.month", parsed)
-
-        # lists
-        self.assertFalse(parsed.get("authors"))
-        self.assertFalse(parsed.get("readers"))
-        self.assertTrue(parsed.get("supporters"))
-
-
 class BulkIndexRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -4529,7 +4455,7 @@ class OpenPointInTimeTests(TestCase):
             "index": "test-index"
         }
 
-        es.open_point_in_time.return_value = {"id": pit_id}
+        es.open_point_in_time.return_value = as_future({"id": pit_id})
 
         r = runner.OpenPointInTime()
         async with runner.CompositeContext():
@@ -4545,7 +4471,7 @@ class OpenPointInTimeTests(TestCase):
             "index": "test-index"
         }
 
-        es.open_point_in_time.return_value = {"id": pit_id}
+        es.open_point_in_time.return_value = as_future({"id": pit_id})
 
         r = runner.OpenPointInTime()
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
@@ -4562,13 +4488,13 @@ class ClosePointInTimeTests(TestCase):
             "name": "close-pit-test",
             "with-point-in-time-from": "open-pit-task1",
         }
-
+        es.close_point_in_time.return_value=(as_future())
         r = runner.ClosePointInTime()
         async with runner.CompositeContext():
             runner.CompositeContext.put("open-pit-task1", pit_id)
             await r(es, params)
 
-        es.close_point_in_time.assert_called_once_with(body=None, params={"id": pit_id}, headers=None)
+        es.close_point_in_time.assert_called_once_with(body={"id": "0123456789abcdef"}, params={}, headers=None)
 
 class QueryWithSearchAfterScrollTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
@@ -5010,8 +4936,9 @@ class CompositeTests(TestCase):
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             await r(es, params)
 
-        self.assertEqual("Unsupported operation-type [bulk]. Use one of [raw-request, sleep, "
-                         "submit-async-search, get-async-search, delete-async-search].", ctx.exception.args[0])
+        self.assertEqual("Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
+                         "search, raw-request, sleep, submit-async-search, get-async-search, delete-async-search].",
+                         ctx.exception.args[0])
 
 
 class RetryTests(TestCase):

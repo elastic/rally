@@ -7,7 +7,7 @@ import re
 import pytest
 import ujson
 
-from esrally.driver.runner import parse
+from esrally.driver import parsing
 
 @pytest.mark.benchmark(
     group="parse",
@@ -201,7 +201,7 @@ def test_pit_id_parse_large(benchmark):
 
 def pit_id_parsing_candidate_runner_parse(response):
     response_bytes = io.BytesIO(response)
-    parsed = parse(response_bytes, ["pit_id"])
+    parsed = parsing.parse(response_bytes, ["pit_id"])
     pit_id = parsed["pit_id"]
     return pit_id
 
