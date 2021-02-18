@@ -674,8 +674,13 @@ With the operation type ``search`` you can execute `request body searches <http:
 * ``body`` (mandatory): The query body.
 * ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results. This flag is ineffective for scroll queries.
-* ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
-* ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
+* ``results-per-page`` (optional): Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and can be used for paginated and non-paginated searches.  Defaults to ``10``
+* ``with-point-in-time-from`` (optional): The `name` of an ``open-point-in-time`` operation. Issues query with a `pit_id` parsed from the referenced operation.  Note that this requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
+
+If the following parameters are present in addition, a paginated query will be issued:
+
+* ``pages`` (optional): Number of pages to retrieve (at most) for this search. If a query yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all".
+* ``use-search-after`` (optional): If ``True``, use the search_after mechanism in the Search API.  If ``False`` but ``pages`` is defined, use the Scroll API to paginate.
 
 If ``detailed-results`` is set to ``true``, the following meta-data properties will be determined and stored:
 
@@ -700,9 +705,9 @@ Example::
       }
     }
 
-For scroll queries, throughput will be reported as number of retrieved scroll pages per second. The unit is ops/s, where one op(eration) is one page that has been retrieved. The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
+For paginated queries, throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page.
 
-For other queries, throughput will be reported as number of search requests per second, also measured as ops/s.
+For other queries, throughput will be reported as number of search requests per second (``ops/s``).
 
 .. _put_pipeline:
 
@@ -1815,7 +1820,7 @@ delete-async-search
 .. note::
     This operation can only be used inside a ``composite`` operation because it needs to read the async search id from earlier API calls.
 
-With the operation ``get-async-search`` you can `delete an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#delete-async-search>`_. It supports the following parameters:
+With the operation ``delete-async-search`` you can `delete an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#delete-async-search>`_. It supports the following parameters:
 
 * ``delete-results-for`` (mandatory): A list of names of ``submit-async-search`` requests for which results should be deleted. Async searches that have already completed within ``wait_for_completion_timeout`` are skipped automatically.
 
@@ -1886,7 +1891,72 @@ In the example below we issue two async searches, named ``search-1`` and ``searc
       ]
     }
 
+open-point-in-time
+~~~~~~~~~~~~~~~~~~
 
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to write the Point-In-Time ID for use for later operations.
+
+With the ``open-point-in-time`` operation you can open a `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_ to be used in subsequent `search` tasks. It supports the following parameters:
+
+* ``name``: Referenced by other tasks to use the `pit_id` produced by this operation.
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams for which to create this point-in-time. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use.
+* ``keep-alive`` (optional): Duration to keep the point-in-time open after initialization (default: ``1m``)
+
+close-point-in-time
+~~~~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to read the Point-In-Time ID from earlier operations.
+
+With the ``close-point-in-time`` operation you can close a previously opened point in time from another task. There is one supported parameter:
+* ``with-point-in-time-from``: Denotes the `name` of a given ``open-point-in-time`` operation (from the same composite stream) whose `pit_id` should be closed.
+
+**Example**
+In this example, a point-in-time is opened, used by a ``search_after``-based search operation, and closed::
+
+    {
+      "schedule": [
+        {
+          "name": "search-after-with-pit",
+          "operation": {
+            "operation-type": "composite",
+            "requests": [
+              {
+                "stream": [
+                  {
+                    "operation-type": "open-point-in-time",
+                    "name": "open-pit",
+                    "index": "logs-*"
+                  },
+                  {
+                    "operation-type": "search",
+                    "index": "logs-*",
+                    "with-point-in-time-from": "open-pit",
+                    "use-search-after": true,
+                    "pages": 25,
+                    "results-per-page": 1000,
+                    "body": {
+                      "sort": [
+                        {"@timestamp": "desc"}
+                      ],
+                      "query": {
+                        "match_all": {}
+                      }
+                    }
+                  },
+                  {
+                    "name": "close-pit",
+                    "operation-type": "close-point-in-time",
+                    "with-point-in-time-from": "open-pit"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
 
 Examples
 ========
