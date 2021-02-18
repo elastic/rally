@@ -46,19 +46,20 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None):
 
 
 def extract_search_after_properties(response: BytesIO, get_point_in_time: bool, hits_total):
-    response_str = response.getvalue().decode("UTF-8")
+    properties = ["timed_out", "took"]
     if get_point_in_time:
-        pit_id_pattern = r'"pit_id": ?"([^"]*)'
-        result = re.search(pit_id_pattern, response_str)
-        pit_id = result.group(1)
-    else:
-        pit_id = None
-
-    # we only need to parse this the first time
+        properties.append("pit_id")
+    # we only need to parse these the first time
     if hits_total is None:
-        parsed_hits = parse(response, ["hits.total", "hits.total.value"])
-        hits_total = parsed_hits.get("hits.total.value", parsed_hits.get("hits.total", 0))
+        properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
 
+    parsed = parse(response, ["hits.total", "hits.total.value"])
+
+    # standardize these before returning...
+    parsed["hits.total.value"] = parsed.pop("hits.total.value", parsed.pop("hits.total", 0))
+    parsed["hits.total.relation"] = parsed.get("hits.total.relation", "eq")
+
+    response_str = response.getvalue().decode("UTF-8")
     index_of_last_sort = response_str.rfind('"sort"')
     sort_pattern = r"sort\":([^\]]*])"
     last_sort_str = re.search(sort_pattern, response_str[index_of_last_sort::])
@@ -66,4 +67,4 @@ def extract_search_after_properties(response: BytesIO, get_point_in_time: bool, 
         last_sort = json.loads(last_sort_str.group(1))
     else:
         last_sort = None
-    return pit_id, last_sort, hits_total
+    return parsed, last_sort

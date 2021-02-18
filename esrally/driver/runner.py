@@ -29,7 +29,7 @@ from enum import Enum
 from functools import total_ordering
 from os.path import commonprefix
 
-from esrally.driver.parsing import parse, extract_search_after_properties
+from esrally.driver import parsing
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
@@ -626,7 +626,7 @@ class BulkIndex(Runner):
         bulk_error_count = 0
         error_details = set()
         # parse lazily on the fast path
-        props = parse(response, ["errors", "took"])
+        props = parsing.parse(response, ["errors", "took"])
 
         if props.get("errors", False):
             # determine success count regardless of unit because we need to iterate through all items anyway
@@ -808,7 +808,7 @@ class Query(Runner):
     * ``timed_out``: Whether the search has timed out. For scroll queries, this flag is ``True`` if the flag was ``True`` for any of the
                      queries issued.
 
-    For scroll queries we also return:
+    For paginated queries we also return:
 
     * ``pages``: Total number of pages that have been retrieved.
     """
@@ -835,7 +835,11 @@ class Query(Runner):
         async def search_after_query(es, params):
             index = params.get("index", "_all")
             pit_op = params.get("with-point-in-time-from")
-            hits_total = None
+            results = {
+                "unit": "pages",
+                "success": True,
+                "took": 0
+            }
             if pit_op:
                 # these are disallowed as they are encoded in the pit_id
                 for item in ["index", "routing", "preference"]:
@@ -850,23 +854,27 @@ class Query(Runner):
                                    "keep_alive": "1m" } # todo parameterize second keep_alive
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                pit_id, last_sort, hits_total = extract_search_after_properties(response, bool(pit_op), hits_total)
-                if pit_op and pit_id:
+                parsed, last_sort = parsing.extract_search_after_properties(response, bool(pit_op), results.get("hits"))
+                results["pages"] = page
+                results["weight"] = page
+                if results.get("hits") is None:
+                    results["hits"] = parsed.get("hits.total.value")
+                    results["hits_relation"] = parsed.get("hits.total.relation")
+                results["took"] += parsed.get("took")
+                results["timed_out"] = parsed.get("timed_out")
+                if pit_op:
                     # per the documentation the response pit id is most up-to-date
-                    CompositeContext.put(pit_op, pit_id)
-                if hits_total / size <= page:
+                    CompositeContext.put(pit_op, parsed.get("pit_id"))
+
+                if results.get("hits") / size <= page:
                     # clean body for next iteration
                     for item in ["pit", "search_after"]:
                         body.pop(item, None)
                     break
-                # ... else set up next search
-                body["search_after"] = last_sort
-            return {
-                "weight": page,
-                "pages": page,
-                "hits": hits_total,
-                "unit": "pages"
-            }
+                else:
+                    body["search_after"] = last_sort
+
+            return results
 
         async def request_body_query(es, params):
             doc_type = params.get("type")
@@ -874,7 +882,7 @@ class Query(Runner):
             r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
 
             if detailed_results:
-                props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+                props = parsing.parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
                 timed_out = props.get("timed_out", False)
@@ -899,7 +907,6 @@ class Query(Runner):
         async def scroll_query(es, params):
             hits = 0
             hits_relation = None
-            retrieved_pages = 0
             timed_out = False
             took = 0
 
@@ -918,9 +925,10 @@ class Query(Runner):
                         params["size"] = size
                         r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
 
-                        props = parse(r,
-                                      ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"],
-                                      ["hits.hits"])
+                        props = parsing.parse(r,
+                                              ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation",
+                                               "timed_out", "took"],
+                                              ["hits.hits"])
                         scroll_id = props.get("_scroll_id")
                         hits = props.get("hits.total.value", props.get("hits.total", 0))
                         hits_relation = props.get("hits.total.relation", "eq")
@@ -932,7 +940,7 @@ class Query(Runner):
                                                                body={"scroll_id": scroll_id, "scroll": "10s"},
                                                                params=request_params,
                                                                headers=headers)
-                        props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"])
+                        props = parsing.parse(r, ["timed_out", "took"], ["hits.hits"])
                         timed_out = timed_out or props.get("timed_out", False)
                         took += props.get("took", 0)
                         # is the list of hits empty?
