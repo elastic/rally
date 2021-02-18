@@ -47,7 +47,6 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None):
 
 def extract_search_after_properties(response: BytesIO, get_point_in_time: bool, hits_total):
     response_str = response.getvalue().decode("UTF-8")
-
     if get_point_in_time:
         pit_id_pattern = r'"pit_id": ?"([^"]*)'
         result = re.search(pit_id_pattern, response_str)
@@ -63,6 +62,8 @@ def extract_search_after_properties(response: BytesIO, get_point_in_time: bool, 
     index_of_last_sort = response_str.rfind('"sort"')
     sort_pattern = r"sort\":([^\]]*])"
     last_sort_str = re.search(sort_pattern, response_str[index_of_last_sort::])
-    last_sort = json.loads(last_sort_str.group(1))
-
+    if last_sort_str is not None:
+        last_sort = json.loads(last_sort_str.group(1))
+    else:
+        last_sort = None
     return pit_id, last_sort, hits_total

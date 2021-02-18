@@ -29,7 +29,7 @@ from enum import Enum
 from functools import total_ordering
 from os.path import commonprefix
 
-from benchmarks.driver.parsing import parse, extract_search_after_properties
+from esrally.driver.parsing import parse, extract_search_after_properties
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
@@ -855,9 +855,18 @@ class Query(Runner):
                     # per the documentation the response pit id is most up-to-date
                     CompositeContext.put(pit_op, pit_id)
                 if hits_total / size <= page:
+                    # clean body for next iteration
+                    for item in ["pit", "search_after"]:
+                        body.pop(item, None)
                     break
                 # ... else set up next search
                 body["search_after"] = last_sort
+            return {
+                "weight": page,
+                "pages": page,
+                "hits": hits_total,
+                "unit": "pages"
+            }
 
         async def request_body_query(es, params):
             doc_type = params.get("type")
@@ -888,7 +897,6 @@ class Query(Runner):
                 }
 
         async def scroll_query(es, params):
-            doc_type = params.get("type")
             hits = 0
             hits_relation = None
             retrieved_pages = 0
@@ -899,8 +907,8 @@ class Query(Runner):
             # explicitly convert to int to provoke an error otherwise
             total_pages = sys.maxsize if params.get("pages") == "all" else int(params.get("pages"))
             try:
-                for page in range(total_pages):
-                    if page == 0:
+                for page_number in range(1, total_pages):
+                    if page_number == 1:
                         sort = "_doc"
                         scroll = "10s"
                         doc_type = params.get("type")
@@ -929,7 +937,6 @@ class Query(Runner):
                         took += props.get("took", 0)
                         # is the list of hits empty?
                         all_results_collected = props.get("hits.hits", False)
-                    retrieved_pages += 1
                     if all_results_collected:
                         break
             finally:
@@ -942,8 +949,8 @@ class Query(Runner):
                                               "Elasticsearch and will skew your benchmark results.", scroll_id)
 
             return {
-                "weight": retrieved_pages,
-                "pages": retrieved_pages,
+                "weight": page_number,
+                "pages": page_number,
                 "hits": hits,
                 "hits_relation": hits_relation,
                 "unit": "pages",
@@ -2056,9 +2063,9 @@ class DeleteAsyncSearch(Runner):
 class OpenPointInTime(Runner):
     async def __call__(self, es, params):
         index = mandatory(params, "index", self)
-        keep_alive = params.pop("keep-alive", None)
-        response = es.open_point_in_time(index=index,
-                                         params=params,
+        keep_alive = params.get("keep-alive", "1m")
+        response = await es.open_point_in_time(index=index,
+                                         params=params.get("request-params"),
                                          keep_alive=keep_alive)
         id = response.get("id")
         op_name = mandatory(params, "name", self)
@@ -2072,8 +2079,9 @@ class ClosePointInTime(Runner):
     async def __call__(self, es, params):
         pit_op = params.get("with-point-in-time-from")
         pit_id = CompositeContext.get(pit_op)
-        params = {"id": pit_id}
-        es.close_point_in_time(body=None, params=params, headers=None)
+        request_params = params.get("request-params", {})
+        body = {"id": pit_id}
+        await es.close_point_in_time(body=body, params=request_params, headers=None)
 
     def __repr__(self, *args, **kwargs):
         return "close-point-in-time"
@@ -2128,6 +2136,9 @@ class Composite(Runner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.supported_op_types = [
+            "open-point-in-time",
+            "close-point-in-time",
+            "search",
             "raw-request",
             "sleep",
             "submit-async-search",
