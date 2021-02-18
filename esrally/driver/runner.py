@@ -2090,6 +2090,7 @@ class ClosePointInTime(Runner):
         request_params = params.get("request-params", {})
         body = {"id": pit_id}
         await es.close_point_in_time(body=body, params=request_params, headers=None)
+        CompositeContext.remove(pit_op)
 
     def __repr__(self, *args, **kwargs):
         return "close-point-in-time"
