@@ -18,6 +18,7 @@
 import asyncio
 import collections
 import io
+import random
 import threading
 import time
 import unittest.mock as mock
@@ -25,6 +26,7 @@ from datetime import datetime
 from unittest import TestCase
 
 import elasticsearch
+import pytest
 
 from esrally import metrics, track, exceptions, config
 from esrally.driver import driver, runner, scheduler
@@ -1468,16 +1470,19 @@ class AsyncExecutorTests(TestCase):
 
     @run_async
     async def test_execute_single_with_connection_error_aborts_as_fatal(self):
-        es = None
-        params = None
-        # ES client uses pseudo-status "N/A" in this case...
-        runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
+        for on_error in ["continue", "continue-on-non-fatal"]:
+            with self.subTest():
+                # TODO remove deprecated continue-on-fatal
+                es = None
+                params = {"ignore-response-error-level": "non-fatal"}
+                # ES client uses pseudo-status "N/A" in this case...
+                runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
 
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
-            await driver.execute_single(self.context_managed(runner), es, params, on_error="continue-on-non-fatal")
-        self.assertEqual(
-            "Request returned an error. Error type: transport, Description: no route to host",
-            ctx.exception.args[0])
+                with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+                    await driver.execute_single(self.context_managed(runner), es, params, on_error=on_error)
+                self.assertEqual(
+                    "Request returned an error. Error type: transport, Description: no route to host",
+                    ctx.exception.args[0])
 
     @run_async
     async def test_execute_single_with_connection_error_continues(self):
