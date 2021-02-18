@@ -884,7 +884,7 @@ Properties
 * ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results. This flag is ineffective for scroll queries.
 * ``results-per-page`` (optional): Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and can be used for paginated and non-paginated searches.  Defaults to ``10``
-* ``with-point-in-time-from`` (optional): The `name` of an ``open-point-in-time`` operation. Issues query with a `pit_id` parsed from the referenced operation.  Note that this requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
+* ``with-point-in-time-from`` (optional): The `name` of an ``open-point-in-time`` operation. Issues query with a `pit_id` parsed from the referenced operation.  Note that this requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.  Only used when ``use-search-after`` is `True`
 
 If the following parameters are present in addition, a `paginated query <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html>`_ will be issued:
 

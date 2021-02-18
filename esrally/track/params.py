@@ -749,12 +749,8 @@ class OpenPointInTimeParamSource(ParamSource):
             default_target = None
         # indices are preferred but data streams can also be queried the same way
         target_name = params.get("index")
-        type_name = params.get("type")
         if not target_name:
             target_name = params.get("data-stream", default_target)
-            if target_name and type_name:
-                raise exceptions.InvalidSyntax(
-                    f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         self._index_name = target_name
         self._keep_alive = params.get("keep-alive")
 
