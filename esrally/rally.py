@@ -198,6 +198,10 @@ def create_arg_parser():
         "--report-file",
         help="Write the command line report also to the provided file.",
         default="")
+    compare_parser.add_argument(
+        "--show-in-report",
+        help="Whether to include the comparison in the results file.",
+        default=True)
 
     download_parser = subparsers.add_parser("download", help="Downloads an artifact")
     download_parser.add_argument(
