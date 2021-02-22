@@ -249,7 +249,7 @@ class SamplePostprocessorTests(TestCase):
                          value=value,
                          unit="docs/s",
                          task="index",
-                         operation="index",
+                         operation="index-op",
                          operation_type=track.OperationType.Bulk,
                          sample_type=metrics.SampleType.Normal,
                          absolute_time=absolute_time,
@@ -270,7 +270,7 @@ class SamplePostprocessorTests(TestCase):
                          value=value,
                          unit="ms",
                          task="index",
-                         operation="index",
+                         operation="index-op",
                          operation_type=track.OperationType.Bulk,
                          sample_type=metrics.SampleType.Normal,
                          absolute_time=absolute_time,
@@ -285,7 +285,7 @@ class SamplePostprocessorTests(TestCase):
                                                   challenge_meta_data={})
 
         task = track.Task("index",
-                        track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source"))
+                        track.Operation("index-op", track.OperationType.Bulk, param_source="driver-test-param-source"))
         samples = [
             driver.Sample(0, 38598, 24, task, metrics.SampleType.Normal, None, 10, 7, 9, None, 5000, "docs", 1, 1 / 2),
             driver.Sample(0, 38599, 25, task, metrics.SampleType.Normal, None, 10, 7, 9, None, 5000, "docs", 2, 2 / 2),
@@ -309,7 +309,7 @@ class SamplePostprocessorTests(TestCase):
                                                   challenge_meta_data={})
 
         task = track.Task("index",
-                          track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source"))
+                          track.Operation("index-op", track.OperationType.Bulk, param_source="driver-test-param-source"))
         samples = [
             driver.Sample(0, 38598, 24, task, metrics.SampleType.Normal, None, 10, 7, 9, None, 5000, "docs", 1, 1 / 2),
             driver.Sample(0, 38599, 25, task, metrics.SampleType.Normal, None, 10, 7, 9, None, 5000, "docs", 2, 2 / 2),
