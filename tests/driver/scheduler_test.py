@@ -92,13 +92,19 @@ class UnitAwareSchedulerTests(TestCase):
 
         s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
         # first request is unthrottled
+        # suppress pylint false positive
+        # pylint: disable=not-callable
         self.assertEqual(0, s.next(0))
         # we'll start with bulks of 1.000 docs, which corresponds to 5 requests per second for all clients
         s.after_request(now=None, weight=1000, unit="docs", request_meta_data=None)
+        # suppress pylint false positive
+        # pylint: disable=not-callable
         self.assertEqual(1 / 5 * task.clients, s.next(0))
 
         # bulk size changes to 10.000 docs, which means one request every two seconds for all clients
         s.after_request(now=None, weight=10000, unit="docs", request_meta_data=None)
+        # suppress pylint false positive
+        # pylint: disable=not-callable
         self.assertEqual(2 * task.clients, s.next(0))
 
     def test_scheduler_accepts_differing_units_pages_and_ops(self):
@@ -114,10 +120,14 @@ class UnitAwareSchedulerTests(TestCase):
 
         s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
         # first request is unthrottled
+        # suppress pylint false positive
+        # pylint: disable=not-callable
         self.assertEqual(0, s.next(0))
         # no exception despite differing units ...
         s.after_request(now=None, weight=20, unit="pages", request_meta_data=None)
         # ... and it is still throttled in ops/s
+        # suppress pylint false positive
+        # pylint: disable=not-callable
         self.assertEqual(0.1 * task.clients, s.next(0))
 
     def test_scheduler_does_not_change_throughput_for_empty_requests(self):
@@ -134,15 +144,21 @@ class UnitAwareSchedulerTests(TestCase):
         s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
         # first request is unthrottled...
         s.before_request(now=0)
+        # suppress pylint false positive
+        # pylint: disable=not-callable
         self.assertEqual(0, s.next(0))
         # ... but it also produced an error (zero ops)
         s.after_request(now=1, weight=0, unit="ops", request_meta_data=None)
         # next request is still unthrottled
         s.before_request(now=1)
+        # suppress pylint false positive
+        # pylint: disable=not-callable
         self.assertEqual(0, s.next(0))
         s.after_request(now=2, weight=1, unit="ops", request_meta_data=None)
         # now we throttle
         s.before_request(now=2)
+        # suppress pylint false positive
+        # pylint: disable=not-callable
         self.assertEqual(0.1 * task.clients, s.next(0))
 
 
