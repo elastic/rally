@@ -31,14 +31,14 @@ from esrally.utils import git, io, process, net, jvm, convert, sysstats
 REVISION_PATTERN = r"(\w.*?):(.*)"
 
 
-def create(cfg, sources, distribution, build, car, plugins=None):
+def create(cfg, sources, distribution, car, plugins=None):
     logger = logging.getLogger(__name__)
     if plugins is None:
         plugins = []
     caching_enabled = cfg.opts("source", "cache", mandatory=False, default_value=True)
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision", mandatory=sources))
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    supply_requirements = _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version)
+    supply_requirements = _supply_requirements(sources, distribution, plugins, revisions, distribution_version)
     build_needed = any([build for _, _, build in supply_requirements.values()])
     es_supplier_type, es_version, _ = supply_requirements["elasticsearch"]
     src_config = cfg.all_opts("source")
@@ -153,7 +153,7 @@ def _required_revision(revisions, key, name=None):
         raise exceptions.SystemSetupError("No revision specified for %s" % n)
 
 
-def _supply_requirements(sources, distribution, build, plugins, revisions, distribution_version):
+def _supply_requirements(sources, distribution, plugins, revisions, distribution_version):
     # per artifact (elasticsearch or a specific plugin):
     #   * key: artifact
     #   * value: ("source" | "distribution", distribution_version | revision, build = True | False)
@@ -161,7 +161,7 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
 
     # can only build Elasticsearch with source-related pipelines -> ignore revision in that case
     if "elasticsearch" in revisions and sources:
-        supply_requirements["elasticsearch"] = ("source", _required_revision(revisions, "elasticsearch", "Elasticsearch"), build)
+        supply_requirements["elasticsearch"] = ("source", _required_revision(revisions, "elasticsearch", "Elasticsearch"), True)
     else:
         # no revision given or explicitly specified that it's from a distribution -> must use a distribution
         supply_requirements["elasticsearch"] = ("distribution", _required_version(distribution_version), False)
@@ -173,14 +173,6 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
         else:
             # allow catch-all only if we're generally building from sources. If it is mixed, the user should tell explicitly.
             if plugin.name in revisions or ("all" in revisions and sources):
-                # this plugin always needs to built unless we explicitly disable it; we cannot solely rely on the Rally pipeline.
-                # We either have:
-                #
-                # * --pipeline=from-sources --distribution-version=X.Y.Z where the plugin should not be built but ES should be
-                #   a distributed version.
-                # * --distribution-version=X.Y.Z --revision="my-plugin:abcdef" where the plugin should be built from sources.
-                # pylint: disable=consider-using-ternary
-                plugin_needs_build = (sources and build) or distribution
                 # be a bit more lenient when checking for plugin revisions. This allows users to specify `--revision="current"` and
                 # rely on Rally to do the right thing.
                 try:
@@ -193,7 +185,7 @@ def _supply_requirements(sources, distribution, build, plugins, revisions, distr
                     else:
                         logging.getLogger(__name__).info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s].",
                                                          plugin.name, plugin_revision)
-                supply_requirements[plugin.name] = ("source", plugin_revision, plugin_needs_build)
+                supply_requirements[plugin.name] = ("source", plugin_revision, True)
             else:
                 supply_requirements[plugin.name] = (distribution, _required_version(distribution_version), False)
     return supply_requirements

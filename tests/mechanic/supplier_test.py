@@ -618,19 +618,13 @@ class CreateSupplierTests(TestCase):
     def test_derive_supply_requirements_es_source_build(self):
         # corresponds to --revision="abc"
         requirements = supplier._supply_requirements(
-            sources=True, distribution=False, build=True, plugins=[], revisions={"elasticsearch": "abc"}, distribution_version=None)
+            sources=True, distribution=False, plugins=[], revisions={"elasticsearch": "abc"}, distribution_version=None)
         self.assertDictEqual({"elasticsearch": ("source", "abc", True)}, requirements)
-
-    def test_derive_supply_requirements_es_source_skip(self):
-        # corresponds to --pipeline=from-sources
-        requirements = supplier._supply_requirements(
-            sources=True, distribution=False, build=False, plugins=[], revisions={"elasticsearch": "current"}, distribution_version=None)
-        self.assertDictEqual({"elasticsearch": ("source", "current", False)}, requirements)
 
     def test_derive_supply_requirements_es_distribution(self):
         # corresponds to --distribution-version=6.0.0
         requirements = supplier._supply_requirements(
-            sources=False, distribution=True, build=False, plugins=[], revisions={}, distribution_version="6.0.0")
+            sources=False, distribution=True, plugins=[], revisions={}, distribution_version="6.0.0")
         self.assertDictEqual({"elasticsearch": ("distribution", "6.0.0", False)}, requirements)
 
     def test_derive_supply_requirements_es_and_plugin_source_build(self):
@@ -638,7 +632,7 @@ class CreateSupplierTests(TestCase):
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
-        requirements = supplier._supply_requirements(sources=True, distribution=False, build=True, plugins=[core_plugin, external_plugin],
+        requirements = supplier._supply_requirements(sources=True, distribution=False, plugins=[core_plugin, external_plugin],
                                                      revisions={"elasticsearch": "abc", "all": "abc", "community-plugin": "effab"},
                                                      distribution_version=None)
         self.assertDictEqual({
@@ -653,7 +647,7 @@ class CreateSupplierTests(TestCase):
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
-        requirements = supplier._supply_requirements(sources=False, distribution=True, build=False, plugins=[core_plugin, external_plugin],
+        requirements = supplier._supply_requirements(sources=False, distribution=True, plugins=[core_plugin, external_plugin],
                                                      revisions={"community-plugin": "effab"},
                                                      distribution_version="6.0.0")
         # core plugin is not contained, its configured is forced to be derived by ES
@@ -662,21 +656,6 @@ class CreateSupplierTests(TestCase):
             # core plugin configuration is forced to be derived from ES
             "analysis-icu": ("distribution", "6.0.0", False),
             "community-plugin": ("source", "effab", True),
-        }, requirements)
-
-    def test_derive_supply_requirements_es_distribution_and_plugin_source_skip(self):
-        # corresponds to --from-sources --revision="community-plugin:current" --distribution-version="6.0.0"
-        core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
-        external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
-
-        requirements = supplier._supply_requirements(sources=True, distribution=False, build=False, plugins=[core_plugin, external_plugin],
-                                                     revisions={"community-plugin": "current"},
-                                                     distribution_version="6.0.0")
-        self.assertDictEqual({
-            "elasticsearch": ("distribution", "6.0.0", False),
-            # core plugin configuration is forced to be derived from ES
-            "analysis-icu": ("distribution", "6.0.0", False),
-            "community-plugin": ("source", "current", False),
         }, requirements)
 
     def test_create_suppliers_for_es_only_config(self):
@@ -692,65 +671,10 @@ class CreateSupplierTests(TestCase):
 
         car = team.Car("default", root_path=None, config_paths=[])
 
-        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, car=car)
+        composite_supplier = supplier.create(cfg, sources=False, distribution=True, car=car)
 
         self.assertEqual(1, len(composite_supplier.suppliers))
         self.assertIsInstance(composite_supplier.suppliers[0], supplier.ElasticsearchDistributionSupplier)
-
-    def test_create_suppliers_for_es_distribution_plugin_source_skip(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "mechanic", "distribution.version", "6.0.0")
-        # default value from command line
-        cfg.add(config.Scope.application, "mechanic", "source.revision", "community-plugin:current")
-        cfg.add(config.Scope.application, "mechanic", "distribution.repository", "release")
-        cfg.add(config.Scope.application, "distributions", "release.url",
-                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
-        cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
-        cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.dir", "/home/user/Projects/community-plugin")
-
-        car = team.Car("default", root_path=None, config_paths=[])
-        core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
-        external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False, variables={"enabled": True})
-
-        # --pipeline=from-sources
-        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=False, car=car, plugins=[
-            core_plugin,
-            external_plugin
-        ])
-
-        self.assertEqual(3, len(composite_supplier.suppliers))
-        self.assertIsInstance(composite_supplier.suppliers[0], supplier.ElasticsearchDistributionSupplier)
-        self.assertIsInstance(composite_supplier.suppliers[1], supplier.PluginDistributionSupplier)
-        self.assertEqual(core_plugin, composite_supplier.suppliers[1].plugin)
-        self.assertIsInstance(composite_supplier.suppliers[2].source_supplier, supplier.ExternalPluginSourceSupplier)
-        self.assertEqual(external_plugin, composite_supplier.suppliers[2].source_supplier.plugin)
-        self.assertIsNone(composite_supplier.suppliers[2].source_supplier.builder)
-
-    def test_create_suppliers_for_es_missing_distribution_plugin_source_skip(self):
-        cfg = config.Config()
-        # no distribution version!
-        # cfg.add(config.Scope.application, "mechanic", "distribution.version", "")
-        # default value from command line
-        cfg.add(config.Scope.application, "mechanic", "source.revision", "community-plugin:current")
-        cfg.add(config.Scope.application, "mechanic", "distribution.repository", "release")
-        cfg.add(config.Scope.application, "distributions", "release.url",
-                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
-        cfg.add(config.Scope.application, "distributions", "release.cache", True)
-        cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
-
-        core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
-        external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
-
-        car = team.Car("default", root_path=None, config_paths=[])
-
-        # --from-sources --revision="community-plugin:current" (distribution version is missing!)
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            supplier.create(cfg, sources=True, distribution=False, build=False, car=car, plugins=[
-                core_plugin,
-                external_plugin
-            ])
-        self.assertRegex(ctx.exception.args[0], r"Could not determine version..*")
 
     @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
     def test_create_suppliers_for_es_distribution_plugin_source_build(self):
@@ -772,7 +696,7 @@ class CreateSupplierTests(TestCase):
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --revision="community-plugin:effab" --distribution-version="6.0.0"
-        composite_supplier = supplier.create(cfg, sources=False, distribution=True, build=False, car=car, plugins=[
+        composite_supplier = supplier.create(cfg, sources=False, distribution=True, car=car, plugins=[
             core_plugin,
             external_plugin
         ])
@@ -808,7 +732,7 @@ class CreateSupplierTests(TestCase):
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --revision="elasticsearch:abc,community-plugin:effab"
-        composite_supplier = supplier.create(cfg, sources=True, distribution=False, build=True, car=car, plugins=[
+        composite_supplier = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=[
             core_plugin,
             external_plugin
         ])

@@ -61,10 +61,9 @@ class Pipeline:
 
 
 class Setup:
-    def __init__(self, cfg, sources=False, build=False, distribution=False, external=False, docker=False):
+    def __init__(self, cfg, sources=False, distribution=False, external=False, docker=False):
         self.cfg = cfg
         self.sources = sources
-        self.build = build
         self.distribution = distribution
         self.external = external
         self.docker = docker
@@ -105,7 +104,6 @@ class BenchmarkActor(actor.RallyActor):
                                                       self.coordinator.metrics_store.open_context,
                                                       cluster_settings,
                                                       msg.sources,
-                                                      msg.build,
                                                       msg.distribution,
                                                       msg.external,
                                                       msg.docker))
@@ -234,13 +232,13 @@ class BenchmarkCoordinator:
         self.metrics_store.close()
 
 
-def race(cfg, sources=False, build=False, distribution=False, external=False, docker=False):
+def race(cfg, sources=False, distribution=False, external=False, docker=False):
     logger = logging.getLogger(__name__)
     # at this point an actor system has to run and we should only join
     actor_system = actor.bootstrap_actor_system(try_join=True)
     benchmark_actor = actor_system.createActor(BenchmarkActor, targetActorRequirements={"coordinator": True})
     try:
-        result = actor_system.ask(benchmark_actor, Setup(cfg, sources, build, distribution, external, docker))
+        result = actor_system.ask(benchmark_actor, Setup(cfg, sources, distribution, external, docker))
         if isinstance(result, Success):
             logger.info("Benchmark has finished successfully.")
         # may happen if one of the load generators has detected that the user has cancelled the benchmark.
@@ -276,7 +274,7 @@ def set_default_hosts(cfg, host="127.0.0.1", port=9200):
 def from_sources(cfg):
     port = cfg.opts("provisioning", "node.http.port")
     set_default_hosts(cfg, port=port)
-    return race(cfg, sources=True, build=True)
+    return race(cfg, sources=True)
 
 
 def from_distribution(cfg):
