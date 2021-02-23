@@ -27,11 +27,11 @@ We recommend to use `pyenv <https://github.com/pyenv/pyenv>`_ to manage installa
 Once ``pyenv`` is installed, install a compatible Python version::
 
     # Install Python
-    pyenv install {PYVER4DOCS}
+    pyenv install {MIN_PY_VER}
 
     # select that version for the current user
     # see https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-global for details
-    pyenv global {PYVER4DOCS}
+    pyenv global {MIN_PY_VER}
 
     # Upgrade pip
     python3 -m pip install --user --upgrade pip

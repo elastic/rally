@@ -19,23 +19,24 @@
 These tests ensure the validatity of Rally installation instructions (as shown in docs)
 """
 
-import json
 import os
+import warnings
 
 import it
 
 _CI_VARS = ".ci/variables.json"
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+_FALLBACK_MIN_PY_VER = "3.8.7"
 
 # normally set by Makefile, be lenient to allow running from IDE
-PYVER4DOCS = os.environ.get("PYVER4DOCS")
-if not PYVER4DOCS:
-    with open(os.path.join(ROOT_DIR, _CI_VARS), "rt") as fp:
-        try:
-            PYVER4DOCS = json.load(fp)["python_versions"]["DOCS"]
-        except KeyError:
-            raise EnvironmentError(f"Installation tests require [python_versions.DOCS] key in [{_CI_VARS}] or"
-                                   f"the [PYVER4DOCS] environment variable set.")
+try:
+    MIN_PY_VER = os.environ["MIN_PY_VER"]
+except KeyError:
+    warnings.warn(
+        f"Environment variable [MIN_PY_VER] is missing. You should fix this problem if you are running these tests "
+        f"on anything else than through your IDE. Defaulting to [{_FALLBACK_MIN_PY_VER}].",
+        category=RuntimeWarning
+    )
+    MIN_PY_VER = _FALLBACK_MIN_PY_VER
 
 
 def test_installs_inside_venv():
@@ -50,7 +51,7 @@ def test_installs_inside_venv():
         "esrally list tracks"
     )
 
-    assert it.command_in_docker(commands, python_version=PYVER4DOCS) == 0
+    assert it.command_in_docker(commands, python_version=MIN_PY_VER) == 0
 
 
 def test_local_installation():
@@ -64,4 +65,4 @@ def test_local_installation():
         "esrally list tracks"
     )
 
-    assert it.command_in_docker(commands, python_version=PYVER4DOCS) == 0
+    assert it.command_in_docker(commands, python_version=MIN_PY_VER) == 0

@@ -42,12 +42,12 @@ master_doc = 'index'
 language = None
 
 
-def read_docs_python_version():
-    return os.environ["PYVER4DOCS"]
+def read_min_python_version():
+    return os.environ["MIN_PY_VER"]
 
 
 GLOBAL_SUBSTITUTIONS = {
-    "{PYVER4DOCS}": read_docs_python_version()
+    "{MIN_PY_VER}": read_min_python_version()
 }
 
 
@@ -67,7 +67,7 @@ year = date.today().year
 
 rst_prolog = f"""
 .. |year| replace:: {year}
-.. |PYVER4DOCS| replace:: {read_docs_python_version()}
+.. |MIN_PY_VER| replace:: {read_min_python_version()}
 """
 
 # General information about the project.
@@ -82,10 +82,13 @@ author = "Daniel Mitterdorfer"
 # The short X.Y version.
 
 # development versions always have the suffix '.dev0'
+
+
 def read_version(full_version=True):
     with open(join(dirname(__file__), os.pardir, "version.txt")) as f:
         raw_version = f.read().strip()
         return raw_version if full_version else raw_version.replace(".dev0", "")
+
 
 version = read_version(full_version=False)
 # The full version, including alpha/beta/rc tags.

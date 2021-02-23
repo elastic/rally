@@ -21,9 +21,8 @@ PYENV_REGEX = .pyenv/shims
 PY_BIN = python3
 # https://github.com/pypa/pip/issues/5599
 PIP_WRAPPER = $(PY_BIN) -m pip
-PY38 = $(shell jq '.python_versions.PY38' .ci/variables.json)
-PY39 = $(shell jq '.python_versions.PY39' .ci/variables.json)
-export PYVER4DOCS = $(shell jq '.python_versions.DOCS' .ci/variables.json)
+export MIN_PY_VER = $(shell jq -r '.python_versions.PY38' .ci/variables.json)
+export PY39 = $(shell jq -r '.python_versions.PY39' .ci/variables.json)
 VENV_NAME ?= .venv
 VENV_ACTIVATE_FILE = $(VENV_NAME)/bin/activate
 VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
@@ -35,11 +34,11 @@ PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please add \033[0;31meval \"\$$
 VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VENV_NAME); have you executed make venv-create?\033[0m\n"
 
 prereq:
-	pyenv install --skip-existing $(PY38)
+	pyenv install --skip-existing $(MIN_PY_VER)
 	pyenv install --skip-existing $(PY39)
-	pyenv local $(PY38)
+	pyenv local $(MIN_PY_VER)
 	@# Ensure all Python versions are registered for this project
-	@ jq -r '.python_versions | [to_entries[] | select(.key|startswith("PY")) | .value | tostring] | join("\n")' .ci/variables.json > .python-version
+	@ jq -r '.python_versions | .[] | tostring] | join("\n")' .ci/variables.json > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
 
 venv-create:
