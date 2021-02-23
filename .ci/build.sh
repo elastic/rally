@@ -42,7 +42,7 @@ function build {
   export PATH="$HOME/.pyenv/bin:$PATH"
   export TERM=dumb
   export LC_ALL=en_US.UTF-8
-  update_pyenv()
+  update_pyenv
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
 
