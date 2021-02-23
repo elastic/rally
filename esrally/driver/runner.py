@@ -23,13 +23,17 @@ import random
 import sys
 import time
 import types
+import re
 from collections import Counter, OrderedDict
 from copy import deepcopy
 from enum import Enum
 from functools import total_ordering
 from os.path import commonprefix
+from typing import List
+from io import BytesIO
 
-from esrally.driver import parsing
+import ijson
+
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
@@ -562,7 +566,7 @@ class BulkIndex(Runner):
         bulk_error_count = 0
         error_details = set()
         # parse lazily on the fast path
-        props = parsing.parse(response, ["errors", "took"])
+        props = parse(response, ["errors", "took"])
 
         if props.get("errors", False):
             # determine success count regardless of unit because we need to iterate through all items anyway
@@ -702,6 +706,45 @@ class NodeStats(Runner):
         return "node-stats"
 
 
+def parse(text: BytesIO, props: List[str], lists: List[str] = None) -> dict:
+    """
+    Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
+    specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
+    contain elements (respective key will be ``False``).
+
+    :param text: A text to parse.
+    :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
+    :param lists: An optional list of property paths to JSON lists in the provided text.
+    :return: A dict containing all properties and lists that have been found in the provided text.
+    """
+    text.seek(0)
+    parser = ijson.parse(text)
+    parsed = {}
+    parsed_lists = {}
+    current_list = None
+    expect_end_array = False
+    try:
+        for prefix, event, value in parser:
+            if expect_end_array:
+                # True if the list is empty, False otherwise
+                parsed_lists[current_list] = event == "end_array"
+                expect_end_array = False
+            if prefix in props:
+                parsed[prefix] = value
+            elif lists is not None and prefix in lists and event == "start_array":
+                current_list = prefix
+                expect_end_array = True
+            # found all necessary properties
+            if len(parsed) == len(props) and (lists is None or len(parsed_lists) == len(lists)):
+                break
+    except ijson.IncompleteJSONError:
+        # did not find all properties
+        pass
+
+    parsed.update(parsed_lists)
+    return parsed
+
+
 class Query(Runner):
     """
     Runs a request body search against Elasticsearch.
@@ -771,7 +814,7 @@ class Query(Runner):
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
-        async def search_after_query(es, params):
+        async def _search_after_query(es, params):
             index = params.get("index", "_all")
             pit_op = params.get("with-point-in-time-from")
             results = {
@@ -793,7 +836,7 @@ class Query(Runner):
                                    "keep_alive": "1m" } # todo parameterize second keep_alive
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = parsing.extract_search_after_properties(response, bool(pit_op), results.get("hits"))
+                parsed, last_sort = _extract_search_after_properties(response, bool(pit_op), results.get("hits"))
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -815,13 +858,13 @@ class Query(Runner):
 
             return results
 
-        async def request_body_query(es, params):
+        async def _request_body_query(es, params):
             doc_type = params.get("type")
 
             r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
 
             if detailed_results:
-                props = parsing.parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+                props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
                 timed_out = props.get("timed_out", False)
@@ -843,7 +886,7 @@ class Query(Runner):
                     "success": True
                 }
 
-        async def scroll_query(es, params):
+        async def _scroll_query(es, params):
             hits = 0
             hits_relation = None
             timed_out = False
@@ -864,7 +907,7 @@ class Query(Runner):
                         params["size"] = size
                         r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
 
-                        props = parsing.parse(r,
+                        props = parse(r,
                                               ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation",
                                                "timed_out", "took"],
                                               ["hits.hits"])
@@ -879,7 +922,7 @@ class Query(Runner):
                                                                body={"scroll_id": scroll_id, "scroll": "10s"},
                                                                params=request_params,
                                                                headers=headers)
-                        props = parsing.parse(r, ["timed_out", "took"], ["hits.hits"])
+                        props = parse(r, ["timed_out", "took"], ["hits.hits"])
                         timed_out = timed_out or props.get("timed_out", False)
                         took += props.get("took", 0)
                         # is the list of hits empty?
@@ -906,12 +949,36 @@ class Query(Runner):
                 "took": took
             }
 
+        def _extract_search_after_properties(response: BytesIO, get_point_in_time: bool, hits_total: int) -> (dict, List):
+            properties = ["timed_out", "took"]
+            if get_point_in_time:
+                properties.append("pit_id")
+            # we only need to parse these the first time
+            if hits_total is None:
+                properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
+
+            parsed = parse(response, properties)
+
+            # standardize these before returning...
+            parsed["hits.total.value"] = parsed.pop("hits.total.value", parsed.pop("hits.total", 0))
+            parsed["hits.total.relation"] = parsed.get("hits.total.relation", "eq")
+
+            response_str = response.getvalue().decode("UTF-8")
+            index_of_last_sort = response_str.rfind('"sort"')
+            sort_pattern = r"sort\":([^\]]*])"
+            last_sort_str = re.search(sort_pattern, response_str[index_of_last_sort::])
+            if last_sort_str is not None:
+                last_sort = json.loads(last_sort_str.group(1))
+            else:
+                last_sort = None
+            return parsed, last_sort
+
         if params.get("use-search-after"):
-            return await search_after_query(es, params)
+            return await _search_after_query(es, params)
         elif "pages" in params:
-            return await scroll_query(es, params)
+            return await _scroll_query(es, params)
         else:
-            return await request_body_query(es, params)
+            return await _request_body_query(es, params)
 
     async def _raw_search(self, es, doc_type, index, body, params, headers=None):
         components = []

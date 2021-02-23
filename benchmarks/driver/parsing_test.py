@@ -16,15 +16,14 @@
 # under the License.
 
 import io
-from unittest import TestCase
-
 import json
 import re
+from unittest import TestCase
 
 import pytest
 import ujson
 
-from esrally.driver import parsing
+from esrally.driver import runner
 
 @pytest.mark.benchmark(
     group="parse",
@@ -218,10 +217,9 @@ def test_pit_id_parse_large(benchmark):
 
 def pit_id_parsing_candidate_runner_parse(response):
     response_bytes = io.BytesIO(response)
-    parsed = parsing.parse(response_bytes, ["pit_id"])
+    parsed = runner.parse(response_bytes, ["pit_id"])
     pit_id = parsed["pit_id"]
     return pit_id
-
 
 
 class ParsingBenchmarks(TestCase):
