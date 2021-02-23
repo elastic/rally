@@ -27,11 +27,11 @@ We recommend to use `pyenv <https://github.com/pyenv/pyenv>`_ to manage installa
 Once ``pyenv`` is installed, install a compatible Python version::
 
     # Install Python
-    pyenv install 3.8.7
+    pyenv install {MIN_PY_VER}
 
     # select that version for the current user
     # see https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-global for details
-    pyenv global 3.8.7
+    pyenv global {MIN_PY_VER}
 
     # Upgrade pip
     python3 -m pip install --user --upgrade pip

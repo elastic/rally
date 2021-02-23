@@ -28,7 +28,7 @@ def test_tar_distributions(cfg):
         for track in it.TRACKS:
             it.wait_until_port_is_free()
             assert it.race(cfg, f"--distribution-version=\"{dist}\" --track=\"{track}\" "
-                                   f"--test-mode --car=4gheap") == 0
+                                f"--test-mode --car=4gheap") == 0
 
 
 @it.random_rally_config
@@ -37,8 +37,8 @@ def test_docker_distribution(cfg):
     dist = it.DISTRIBUTIONS[-1]
     it.wait_until_port_is_free(port_number=19200)
     assert it.race(cfg, f"--pipeline=\"docker\" --distribution-version=\"{dist}\" "
-                           f"--track=\"geonames\" --challenge=\"append-no-conflicts-index-only\" --test-mode "
-                           f"--car=4gheap --target-hosts=127.0.0.1:19200") == 0
+                        f"--track=\"geonames\" --challenge=\"append-no-conflicts-index-only\" --test-mode "
+                        f"--car=4gheap --target-hosts=127.0.0.1:19200") == 0
 
 
 @pytest.fixture(scope="module")

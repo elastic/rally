@@ -24,6 +24,11 @@ set -o pipefail
 # fail on any unset environment variables
 set -u
 
+function update_pyenv {
+  # need to have the latest pyenv version to ensure latest patch releases are installable
+  cd $HOME/.pyenv/plugins/python-build/../.. && git pull origin master --rebase && cd -
+}
+
 function build {
   export THESPLOG_FILE="${THESPLOG_FILE:-${RALLY_HOME}/.rally/logs/actor-system-internal.log}"
   # this value is in bytes, the default is 50kB. We increase it to 200kiB.
@@ -37,6 +42,7 @@ function build {
   export PATH="$HOME/.pyenv/bin:$PATH"
   export TERM=dumb
   export LC_ALL=en_US.UTF-8
+  update_pyenv
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
 
