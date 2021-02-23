@@ -101,7 +101,7 @@ def shell_cmd(command_line):
     return os.system(command_line)
 
 
-def command_in_docker(command_line, python_version="3.8.7"):
+def command_in_docker(command_line, python_version):
     docker_command = f"docker run --rm -v {ROOT_DIR}:/rally_ro:ro python:{python_version} bash -c '{command_line}'"
 
     return shell_cmd(docker_command)
