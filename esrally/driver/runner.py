@@ -808,7 +808,7 @@ class Query(Runner):
                 if results.get("hits") / size > page:
                     body["search_after"] = last_sort
                 else:
-                    # done. clean body for next iteration
+                    # body needs to be un-mutated for the next iteration (preferring to do this over a deepcopy at the start)
                     for item in ["pit", "search_after"]:
                         body.pop(item, None)
                     break
@@ -2082,7 +2082,7 @@ class OpenPointInTime(Runner):
 
 class ClosePointInTime(Runner):
     async def __call__(self, es, params):
-        pit_op = params.get("with-point-in-time-from")
+        pit_op = mandatory(params, "with-point-in-time-from", self)
         pit_id = CompositeContext.get(pit_op)
         request_params = params.get("request-params", {})
         body = {"id": pit_id}

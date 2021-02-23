@@ -189,7 +189,7 @@ E.g. a key defined on a task, will override the same key defined on a challenge.
 indices
 .......
 
-The ``indices`` section contains a list of all indices that are used by this track.  Cannot be used if the ``data-streams`` section is specified.
+The ``indices`` section contains a list of all indices that are used by this track. Cannot be used if the ``data-streams`` section is specified.
 
 Each index in this list consists of the following properties:
 
@@ -313,9 +313,9 @@ Each entry in the ``documents`` list consists of the following properties:
 * ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
-* ``target-index``: Defines the name of the index which should be targeted for bulk operations.  Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
+* ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true`` or if a ``target-data-stream`` is specified. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
-* ``target-data-stream``: Defines the name of the data stream which should be targeted for bulk operations.  Rally will automatically derive this value if you have defined exactly one index in the ``data-streams`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
+* ``target-data-stream``: Defines the name of the data stream which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``data-streams`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true``. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``meta`` (optional): A mapping of arbitrary key-value pairs with additional meta-data for a source file.
@@ -578,9 +578,9 @@ Each operation consists of the following properties:
 * ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
 * ``include-in-reporting`` (optional, defaults to ``true`` for normal operations and to ``false`` for administrative operations): Whether or not this operation should be included in the command line report. For example you might want Rally to create an index for you but you are not interested in detailed metrics about it. Note that Rally will still record all metrics in the metrics store.
 * ``assertions`` (optional, defaults to ``None``): A list of assertions that should be checked. See below for more details.
-* ``request-timeout`` (optional, defaults to ``None``): The client-side timeout for this operation.  Represented as a floating-point number in seconds, e.g. ``1.5``.
+* ``request-timeout`` (optional, defaults to ``None``): The client-side timeout for this operation. Represented as a floating-point number in seconds, e.g. ``1.5``.
 * ``headers`` (optional, defaults to ``None``): A dictionary of key-value pairs to pass as headers in the operation.
-* ``opaque-id`` (optional, defaults to ``None`` [unused]): A special ID set as the value of ``x-opaque-id`` in the client headers of the operation.  Overrides existing ``x-opaque-id`` entries in ``headers`` (case-insensitive).
+* ``opaque-id`` (optional, defaults to ``None`` [unused]): A special ID set as the value of ``x-opaque-id`` in the client headers of the operation. Overrides existing ``x-opaque-id`` entries in ``headers`` (case-insensitive).
 
 **Assertions**
 
@@ -883,13 +883,17 @@ Properties
 * ``body`` (mandatory): The query body.
 * ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results. This flag is ineffective for scroll queries.
-* ``results-per-page`` (optional): Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and can be used for paginated and non-paginated searches.  Defaults to ``10``
-* ``with-point-in-time-from`` (optional): The `name` of an ``open-point-in-time`` operation. Issues query with a `pit_id` parsed from the referenced operation.  Note that this requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.  Only used when ``use-search-after`` is `True`
+* ``search-size`` (optional): Number of results to retrieve as hits
+* ``results-per-page`` (optional): Number of results to retrieve per page. This maps to the Search API's ``size`` parameter, and can be used for paginated and non-paginated searches. Defaults to ``10``
+* ``with-point-in-time-from`` (optional): The ``name`` of an ``open-point-in-time`` operation. Causes the search to use the generated `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_. Only used when ``use-search-after`` is ``True``
+
+    .. note::
+        This parameter requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
 
 If the following parameters are present in addition, a `paginated query <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html>`_ will be issued:
 
 * ``pages`` (optional): Number of pages to retrieve (at most) for this search. If a query yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all".
-* ``use-search-after`` (optional): If ``True``, use the search_after mechanism in the Search API.  If ``False`` but ``pages`` is defined, use the Scroll API to paginate.
+* ``use-search-after`` (optional): If ``True``, use the search_after mechanism in the Search API. If ``False`` but ``pages`` is defined, use the Scroll API to paginate.
 
 Example::
 
@@ -2475,11 +2479,19 @@ open-point-in-time
 .. note::
     This operation can only be used inside a ``composite`` operation because it needs to write the Point-In-Time ID for use for later operations.
 
-With the ``open-point-in-time`` operation you can open a `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_ to be used in subsequent `search` tasks. It supports the following parameters:
+With the ``open-point-in-time`` operation you can open a `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_ to be used in subsequent `search` tasks.
 
-* ``name``: Referenced by other tasks to use the `pit_id` produced by this operation.
+Properties
+""""""""""
+
+* ``name``: Referenced by other tasks to use the ``pit_id`` produced by this operation.
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams for which to create this point-in-time. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use.
 * ``keep-alive`` (optional): Duration to keep the point-in-time open after initialization (default: ``1m``)
+
+Meta-data
+"""""""""
+
+The operation returns no meta-data.
 
 close-point-in-time
 ~~~~~~~~~~~~~~~~~~~
@@ -2487,10 +2499,15 @@ close-point-in-time
 .. note::
     This operation can only be used inside a ``composite`` operation because it needs to read the Point-In-Time ID from earlier operations.
 
-With the ``close-point-in-time`` operation you can close a previously opened point in time from another task. There is one supported parameter:
-* ``with-point-in-time-from``: Denotes the `name` of a given ``open-point-in-time`` operation (from the same composite stream) whose `pit_id` should be closed.
+With the ``close-point-in-time`` operation you can close a previously opened point in time from another task.
+
+Properties
+""""""""""
+
+* ``with-point-in-time-from``: Denotes the ``name`` of a given ``open-point-in-time`` operation (from the same composite stream) whose `pit_id` should be closed.
 
 **Example**
+
 In this example, a point-in-time is opened, used by a ``search_after``-based search operation, and closed::
 
     {
@@ -2535,6 +2552,11 @@ In this example, a point-in-time is opened, used by a ``search_after``-based sea
         }
       ]
     }
+
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
 
 Examples
 ========

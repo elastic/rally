@@ -477,20 +477,11 @@ class CreateComponentTemplateParamSource(CreateTemplateParamSource):
 class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
-        if len(track.indices) == 1:
-            default_target = track.indices[0].name
-        elif len(track.data_streams) == 1:
-            default_target = track.data_streams[0].name
-        else:
-            default_target = None
-        # indices are preferred by data streams can also be queried the same way
-        target_name = params.get("index")
+        target_name = get_target(track, params)
         type_name = params.get("type")
-        if not target_name:
-            target_name = params.get("data-stream", default_target)
-            if target_name and type_name:
-                raise exceptions.InvalidSyntax(
-                    f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
+        if params.get("data-stream") and type_name:
+            raise exceptions.InvalidSyntax(
+                f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         request_cache = params.get("cache", None)
         detailed_results = params.get("detailed-results", False)
         query_body = params.get("body", None)
@@ -741,16 +732,7 @@ class PartitionBulkIndexParamSource:
 class OpenPointInTimeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
-        if len(track.indices) == 1:
-            default_target = track.indices[0].name
-        elif len(track.data_streams) == 1:
-            default_target = track.data_streams[0].name
-        else:
-            default_target = None
-        # indices are preferred but data streams can also be queried the same way
-        target_name = params.get("index")
-        if not target_name:
-            target_name = params.get("data-stream", default_target)
+        target_name = get_target(track, params)
         self._index_name = target_name
         self._keep_alive = params.get("keep-alive")
 
@@ -803,6 +785,18 @@ class ForceMergeParamSource(ParamSource):
         parsed_params.update(self._client_params())
         return parsed_params
 
+def get_target(track, params):
+    if len(track.indices) == 1:
+        default_target = track.indices[0].name
+    elif len(track.data_streams) == 1:
+        default_target = track.data_streams[0].name
+    else:
+        default_target = None
+    # indices are preferred but data streams can also be queried the same way
+    target_name = params.get("index")
+    if not target_name:
+        target_name = params.get("data-stream", default_target)
+    return target_name
 
 def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):
     """
