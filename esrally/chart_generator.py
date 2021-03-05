@@ -1373,8 +1373,8 @@ class RaceConfigTrack:
             cfg.add(config.Scope.applicationOverride, "track", "repository.name", self.repository)
             cfg.add(config.Scope.applicationOverride, "track", "track.name", name)
         # another hack to ensure any track-params in the race config are used by Rally's track loader
-        cfg.add(config.Scope.application, "track", "exclude.tasks", excluded_tasks)
         cfg.add(config.Scope.applicationOverride, "track", "params", params)
+        cfg.add(config.Scope.application, "track", "exclude.tasks", excluded_tasks)
         return track.load_track(cfg)
 
     def get_track(self, cfg, name=None, params=None, excluded_tasks=None):
@@ -1605,7 +1605,7 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
             excluded_tasks = None
-            if race_config.get("exclude-tasks") is not None:
+            if "exclude-tasks" in race_config:
                 excluded_tasks = race_config.get("exclude-tasks").split(",")
             configs_per_lic.append(
                 RaceConfig(track=race_config_track.get_track(cfg, name=track_name,
