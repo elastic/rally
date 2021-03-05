@@ -162,6 +162,7 @@ class AssertingRunnerTests(TestCase):
         r = runner.AssertingRunner(delegate)
         async with r:
             final_response = await r(es, {
+                "name": "test-task",
                 "assertions": [
                     {
                         "property": "hits.hits.value",
@@ -193,9 +194,10 @@ class AssertingRunnerTests(TestCase):
         delegate.return_value = as_future(response)
         r = runner.AssertingRunner(delegate)
         with self.assertRaisesRegex(exceptions.RallyTaskAssertionError,
-                                    r"Expected \[hits.hits.relation\] to be == \[eq\] but was \[gte\]."):
+                                    r"Expected \[hits.hits.relation\] in \[test-task\] to be == \[eq\] but was \[gte\]."):
             async with r:
                 await r(es, {
+                    "name": "test-task",
                     "assertions": [
                         {
                             "property": "hits.hits.value",
@@ -219,6 +221,7 @@ class AssertingRunnerTests(TestCase):
         r = runner.AssertingRunner(delegate)
         async with r:
             final_response = await r(es, {
+                "name": "test-task",
                 "assertions": [
                     {
                         "property": "hits.hits.value",

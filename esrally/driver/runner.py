@@ -357,7 +357,7 @@ class AssertingRunner(Runner, Delegator):
     def equal(self, expected, actual):
         return actual == expected
 
-    def check_assertion(self, assertion, properties):
+    def check_assertion(self, op_name, assertion, properties):
         path = assertion["property"]
         predicate_name = assertion["condition"]
         expected_value = assertion["value"]
@@ -367,18 +367,24 @@ class AssertingRunner(Runner, Delegator):
         predicate = self.predicates[predicate_name]
         success = predicate(expected_value, actual_value)
         if not success:
-            raise exceptions.RallyTaskAssertionError(
-                f"Expected [{path}] to be {predicate_name} [{expected_value}] but was [{actual_value}].")
+            if op_name:
+                msg = f"Expected [{path}] in [{op_name}] to be {predicate_name} [{expected_value}] but was [{actual_value}]."
+            else:
+                msg = f"Expected [{path}] to be {predicate_name} [{expected_value}] but was [{actual_value}]."
+
+            raise exceptions.RallyTaskAssertionError(msg)
 
     async def __call__(self, *args):
         params = args[1]
         return_value = await self.delegate(*args)
         if AssertingRunner.assertions_enabled and "assertions" in params:
+            op_name = params.get("name")
             if isinstance(return_value, dict):
                 for assertion in params["assertions"]:
-                    self.check_assertion(assertion, return_value)
+                    self.check_assertion(op_name, assertion, return_value)
             else:
-                self.logger.debug("Skipping assertion check as [%s] does not return a dict.", repr(self.delegate))
+                self.logger.debug("Skipping assertion check in [%s] as [%s] does not return a dict.",
+                                  op_name, repr(self.delegate))
         return return_value
 
     def __repr__(self, *args, **kwargs):
