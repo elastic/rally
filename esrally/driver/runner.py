@@ -967,13 +967,16 @@ class ClusterHealth(Runner):
         cluster_status = result["status"]
         relocating_shards = result["relocating_shards"]
 
-        return {
+        result = {
             "weight": 1,
             "unit": "ops",
             "success": status(cluster_status) >= status(expected_cluster_status) and relocating_shards <= expected_relocating_shards,
             "cluster-status": cluster_status,
             "relocating-shards": relocating_shards
         }
+        self.logger.info("%s: expected status=[%s], actual status=[%s], relocating shards=[%d], success=[%s].",
+                         repr(self), expected_cluster_status, cluster_status, relocating_shards, result["success"])
+        return result
 
     def __repr__(self, *args, **kwargs):
         return "cluster-health"
@@ -2208,7 +2211,8 @@ class Retry(Runner, Delegator):
                         self.logger.debug("%s has returned successfully", repr(self.delegate))
                         return return_value
                     else:
-                        self.logger.debug("%s has returned with an error: %s.", repr(self.delegate), return_value)
+                        self.logger.info("[%s] has returned with an error: %s. Retrying in [%.2f] seconds.",
+                                         repr(self.delegate), return_value, sleep_time)
                         await asyncio.sleep(sleep_time)
                 else:
                     return return_value
@@ -2221,7 +2225,7 @@ class Retry(Runner, Delegator):
                 if last_attempt or not retry_on_timeout:
                     raise e
                 elif e.status_code == 408:
-                    self.logger.debug("%s has timed out.", repr(self.delegate))
+                    self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
                     await asyncio.sleep(sleep_time)
                 else:
                     raise e
