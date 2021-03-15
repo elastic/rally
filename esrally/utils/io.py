@@ -19,7 +19,6 @@ import bz2
 import gzip
 import logging
 import os
-import re
 import shutil
 import subprocess
 import tarfile
@@ -484,83 +483,3 @@ def get_size(start_path="."):
             fp = os.path.join(dirpath, f)
             total_size += os.path.getsize(fp)
     return total_size
-
-
-def _run(args, fallback=None, only_first_line=False):
-    # noinspection PyBroadException
-    try:
-        lines = subprocess.Popen(args, stdout=subprocess.PIPE).communicate()[0].splitlines()
-        result_lines = [line.decode("utf-8") for line in lines]
-        if only_first_line:
-            return result_lines[0]
-        else:
-            return result_lines
-    # pylint: disable=W0702
-    except:
-        return fallback
-
-
-def _read_symlink(path):
-    try:
-        return os.path.realpath(path)
-    except FileNotFoundError:
-        return None
-
-
-def guess_install_location(binary_name, fallback=None):
-    """
-    Checks whether a given binary is available on the user's path.
-
-    :param binary_name: The name of the binary, e.g. tail, gradle, mvn.
-    :param fallback: A fallback to return if the binary could not be found on the path.
-    :return: The full path to the provided binary or the provided fallback.
-    """
-    return _run(["which", binary_name], fallback=fallback, only_first_line=True)
-
-
-def guess_java_home(major_version=8, fallback=None, runner=_run, read_symlink=_read_symlink):
-    """
-    Tries to find the JDK root directory for the provided version.
-
-    :param major_version: The JDK major version that is expected.
-    :param fallback: The fallback if the JDK home could not be found.
-    :return: The full path to the JDK root directory or the fallback.
-    """
-    # Mac OS X
-    if major_version < 9:
-        java_home = runner(["/usr/libexec/java_home", "-F", "-v", "1.%d" % major_version])
-    else:
-        java_home = runner(["/usr/libexec/java_home", "-F", "-v", str(major_version)])
-
-    if java_home:
-        return java_home[0]
-    else:
-        # Debian based distributions:
-        #
-        # update-alternatives --list java
-        # /usr/lib/jvm/java-7-openjdk-amd64/jre/bin/java
-        # /usr/lib/jvm/java-7-oracle/jre/bin/java
-        # /usr/lib/jvm/java-8-oracle/jre/bin/java
-        # /usr/lib/jvm/java-9-openjdk-amd64/bin/java
-        java_home = runner(["update-alternatives", "--list", "java"])
-        if java_home:
-            debian_jdk_pattern = re.compile(r"(/.*/(java-%d)[^/]*)/(jre/)?bin/java" % major_version)
-            for j in java_home:
-                m = debian_jdk_pattern.match(j)
-                if m:
-                    return m.group(1)
-        # pylint: disable=line-too-long
-        # Red Hat based distributions
-        #
-        # ls -l /etc/alternatives/jre_1.[789].0
-        # lrwxrwxrwx. 1 root root 63 Sep 10 13:57 /etc/alternatives/jre_1.8.0 -> /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.144-5.b01.fc25.x86_64/jre
-        # lrwxrwxrwx. 1 root root 51 Sep 13 15:04 /etc/alternatives/jre_1.9.0 -> /usr/lib/jvm/java-9-openjdk-9.0.0.163-1.fc25.x86_64        #
-        #
-        # We could also use the output of "alternatives --display java" on Red Hat but the output is so
-        # verbose that it's easier to use the links.
-        path = read_symlink("/etc/alternatives/java_sdk_1.%d.0" % major_version)
-        # return path if and only if it is a proper directory
-        if path and os.path.isdir(path) and not os.path.islink(path):
-            return path
-        else:
-            return fallback
