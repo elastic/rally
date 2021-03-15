@@ -17,6 +17,7 @@
 
 import collections
 import logging
+import fnmatch
 import os
 import threading
 
@@ -933,6 +934,161 @@ class TransformStatsRecorder:
             self.metrics_store.put_value_cluster_level(prefix + "transform_throughput", throughput,
                                                        "docs/s", meta_data=meta_data)
 
+
+class SearchableSnapshotsStats(TelemetryDevice):
+    internal = False
+    command = "searchable-snapshots-stats"
+    human_name = "Searchable Snapshots Stats"
+    help = "Regularly samples searchable snapshots stats"
+
+    """
+    Gathers recovery stats on a cluster level
+    """
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May optionally specify:
+            ``searchable-stats-indices``: Array or index-pattern of indices that stats should be collected from.
+            Specifying this this will implicitly use the level=indices parameter in the API call, as opposed to
+            the level=cluster (default).
+
+            Not all clusters need to be specified, but any name used must be be present in target.hosts. Alternatively,
+            the index pattern can be specified as a string can be specified in case only one cluster is involved.
+            Example:
+            {
+              "searchable-snapshots-stats-indices": {
+                "cluster_a": ["follower-elasticlogs-*"],
+                "default": ["leader-elasticlogs-*"]
+              }
+            }
+
+            ``searchable-snapshots-stats-sample-interval``: positive integer controlling the sampling interval.
+            Default: 1 second.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.sample_interval = telemetry_params.get("searchable-snapshots-stats-sample-interval", 1)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                f"The telemetry parameter 'searchable-snapshots-stats-sample-interval' must be greater than zero "
+                f"but was {self.sample_interval}.")
+        self.specified_cluster_names = self.clients.keys()
+        indices_per_cluster = self.telemetry_params.get("searchable-snapshots-stats-indices", False)
+        # allow the user to specify either an index pattern as string or as a JSON object
+        if isinstance(indices_per_cluster, str):
+            self.indices_per_cluster = {opts.TargetHosts.DEFAULT: indices_per_cluster}
+        else:
+            self.indices_per_cluster = indices_per_cluster
+
+        if self.indices_per_cluster:
+            for cluster_name in self.indices_per_cluster.keys():
+                if cluster_name not in clients:
+                    raise exceptions.SystemSetupError(
+                        f"The telemetry parameter 'searchable-snapshots-stats-indices' must be a JSON Object "
+                        f"with keys matching the cluster names [{','.join(sorted(clients.keys()))}] specified in "
+                        f"--target-hosts but it had [{cluster_name}].")
+            self.specified_cluster_names = self.indices_per_cluster.keys()
+
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def on_benchmark_start(self):
+        for cluster_name in self.specified_cluster_names:
+            recorder = SearchableSnapshotsStatsRecorder(
+                cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
+                self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "")
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.setDaemon(True)
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+
+
+class SearchableSnapshotsStatsRecorder:
+    """
+    Collects and pushes searchable snapshots stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
+        :param indices: optional list of indices to filter results from.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.indices = indices
+        self.logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return "searchable snapshots stats"
+
+    def record(self):
+        """
+        Collect searchable snapshots stats for indexes (optionally) specified in telemetry parameters
+        and push to metrics store.
+        """
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            stats_api_endpoint = "/_searchable_snapshots/stats"
+            level = "indices" if self.indices else "cluster"
+            stats = self.client.transport.perform_request("GET", stats_api_endpoint, params={"level": level})
+        except elasticsearch.TransportError:
+            msg = f"A transport error occurred while collecting searchable snapshots stats on " \
+                  f"cluster [{self.cluster_name}]"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        # always push total stats
+        doc = {
+            "name": "searchable-snapshots-stats",
+            "total": stats.get("total")
+        }
+        meta_data = {
+            "cluster": self.cluster_name,
+            "level": "cluster"
+        }
+        self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=meta_data)
+
+        if self.indices:
+            for idx, idx_stats in stats.get("indices"):
+                if not self._match_list_or_pattern(idx):
+                    continue
+
+                doc = {
+                    "name": "searchable-snapshots-stats",
+                    "index": idx,
+                    "total": idx_stats.get("total")
+                }
+                meta_data = {
+                    "cluster": self.cluster_name,
+                    "level": "index"
+                }
+                self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=meta_data)
+
+    def _match_list_or_pattern(self, idx):
+        # index pattern
+        if len(self.indices) == 1:
+            return fnmatch.fnmatch(idx, self.indices)
+        # match against list of exact index names
+        else:
+            return idx in self.indices
 
 class StartupTime(InternalTelemetryDevice):
     def __init__(self, stopwatch=time.StopWatch):
