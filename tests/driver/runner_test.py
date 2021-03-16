@@ -4808,7 +4808,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
         params = {
             "name": "search-with-pit",
             "index": "test-index",
-            "use-search-after": True,
+            "operation-type": "paginated-search",
             "with-point-in-time-from": pit_op,
             "pages": "all",
             "results-per-page": 2,
@@ -4894,7 +4894,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
     async def test_search_after_without_pit(self, es):
         params = {
             "name": "search-with-pit",
-            "use-search-after": True,
+            "operation-type": "paginated-search",
             "index": "test-index-1",
             "pages": "all",
             "results-per-page": 2,

@@ -510,8 +510,6 @@ class SearchParamSource(ParamSource):
             self.query_params["pages"] = pages
         if results_per_page:
             self.query_params["results-per-page"] = results_per_page
-        if use_search_after:
-            self.query_params["use-search-after"] = use_search_after
         if with_point_in_time_from:
             self.query_params["with-point-in-time-from"] = with_point_in_time_from
         if "assertions" in params:

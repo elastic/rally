@@ -18,7 +18,7 @@
 from unittest import TestCase
 
 from esrally import exceptions
-from esrally.track import track
+from esrally.track import track, OperationType
 
 
 class TrackTests(TestCase):
@@ -228,7 +228,11 @@ class DocumentCorpusTests(TestCase):
 class OperationTypeTests(TestCase):
     def test_string_hyphenation_is_symmetric(self):
         for op_type in track.OperationType:
-            self.assertEqual(op_type, track.OperationType.from_hyphenated_string(op_type.to_hyphenated_string()))
+            # a few exceptions to the symmetry rule.  we map multiple operations to the search runner for simplicity
+            if op_type in (OperationType.PaginatedSearch, OperationType.ScrollSearch):
+                self.assertEqual(OperationType.Search, track.OperationType.from_hyphenated_string(op_type.to_hyphenated_string()))
+            else:
+                self.assertEqual(op_type, track.OperationType.from_hyphenated_string(op_type.to_hyphenated_string()))
 
 
 class TaskFilterTests(TestCase):
