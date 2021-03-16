@@ -587,7 +587,7 @@ Each operation consists of the following properties:
 Use assertions for sanity checks, e.g. to ensure a query returns results. Assertions need to be defined with the following properties. All of them are mandatory:
 
 * ``property``: A dot-delimited path to the meta-data field to be checked. Only meta-data fields that are returned by an operation are supported. See the respective "meta-data" section of an operation for the supported meta-data.
-* ``condition``: The following conditions are supported: ``<``, ``<=``, ``==``, ``>=``, ``>=``.
+* ``condition``: The following conditions are supported: ``<``, ``<=``, ``==``, ``>=``, ``>``.
 * ``value``: The expected value.
 
 Assertions are disabled by default and can be enabled with the command line flag ``--enable-assertions``. A failing assertion aborts the benchmark.
@@ -867,6 +867,74 @@ search
 ~~~~~~
 
 With the operation type ``search`` you can execute `request body searches <http://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html>`_.
+
+Properties
+""""""""""
+
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
+* ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
+
+    .. note::
+        1. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+* ``body`` (mandatory): The query body.
+* ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
+* ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results. This flag is ineffective for scroll queries.
+* ``search-size`` (optional): Number of results to retrieve as hits
+* ``results-per-page`` (optional): Number of results to retrieve per page. This maps to the Search API's ``size`` parameter, and can be used for paginated and non-paginated searches. Defaults to ``10``
+* ``with-point-in-time-from`` (optional): The ``name`` of an ``open-point-in-time`` operation. Causes the search to use the generated `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_. Only used when ``use-search-after`` is ``True``
+
+    .. note::
+        This parameter requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
+
+If the following parameters are present in addition, a `paginated query <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html>`_ will be issued:
+
+* ``pages`` (optional): Number of pages to retrieve (at most) for this search. If a query yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all".
+* ``use-search-after`` (optional): If ``True``, use the search_after mechanism in the Search API. If ``False`` but ``pages`` is defined, use the Scroll API to paginate.
+
+Example::
+
+    {
+      "name": "default",
+      "operation-type": "search",
+      "body": {
+        "query": {
+          "match_all": {}
+        }
+      },
+      "request-params": {
+        "_source_include": "some_field",
+        "analyze_wildcard": "false"
+      }
+    }
+
+For paginated queries, throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page.
+
+For other queries, throughput will be reported as number of search requests per second (``ops/s``).
+
+Meta-data
+"""""""""
+
+The following meta data are always returned:
+
+* ``weight``: "weight" of an operation. Always 1 for regular queries and the number of retrieved pages for scroll queries.
+* ``unit``: The unit in which to interpret ``weight``. Always "ops" for regular queries and "pages" for scroll queries.
+* ``success``: A boolean indicating whether the query has succeeded.
+
+If ``detailed-results`` is ``true`` the following meta-data are returned in addition:
+
+* ``hits``: Total number of hits for this query.
+* ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
+* ``timed_out``: Whether the query has timed out. For scroll queries, this flag is ``true`` if the flag was ``true`` for any of the queries issued.
+* ``took``` Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
+
+scroll-search
+~~~~~~~~~~~~~
+
+With the operation type ``search`` you can execute `scroll-based searches <http://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html>`_.
 
 Properties
 """"""""""

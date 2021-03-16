@@ -570,9 +570,10 @@ class OperationType(Enum):
     SubmitAsyncSearch = 9
     GetAsyncSearch = 10
     DeleteAsyncSearch = 11
-    QueryWithSearchAfterScroll = 12
-    OpenPointInTime = 13
-    ClosePointInTime = 14
+    PaginatedSearch = 12
+    ScrollSearch = 13
+    OpenPointInTime = 14
+    ClosePointInTime = 15
 
     # administrative actions
     ForceMerge = 1001
@@ -631,7 +632,7 @@ class OperationType(Enum):
             return OperationType.IndexStats
         elif v == "node-stats":
             return OperationType.NodeStats
-        elif v == "search":
+        elif (v == "search" or v == "scroll-search" or v == "paginated-search"):
             return OperationType.Search
         elif v == "cluster-health":
             return OperationType.ClusterHealth
@@ -717,8 +718,6 @@ class OperationType(Enum):
             return OperationType.OpenPointInTime
         elif v == "close-point-in-time":
             return OperationType.ClosePointInTime
-        elif v == "query-with-search-after-scroll":
-            return OperationType.QueryWithSearchAfterScroll
         else:
             raise KeyError(f"No enum value for [{v}]")
 

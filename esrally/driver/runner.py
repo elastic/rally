@@ -46,6 +46,8 @@ def register_default_runners():
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
     register_runner(track.OperationType.Search, Query(), async_runner=True)
+    register_runner(track.OperationType.PaginatedSearch, Query(), async_runner=True)
+    register_runner(track.OperationType.ScrollSearch, Query(), async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
     register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
@@ -979,9 +981,11 @@ class Query(Runner):
                 last_sort = None
             return parsed, last_sort
 
-        if params.get("use-search-after"):
+        search_method = params.get("operation-type")
+        if search_method == "paginated-search":
             return await _search_after_query(es, params)
-        elif "pages" in params:
+        # also allow if pages is defined, for backward compatiblity
+        elif search_method == "scroll-search" or "pages" in params.keys():
             return await _scroll_query(es, params)
         else:
             return await _request_body_query(es, params)
