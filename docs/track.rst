@@ -906,6 +906,8 @@ For scroll queries, throughput will be reported as number of retrieved pages per
 
 For other queries, throughput will be reported as number of search requests per second (``ops/s``).
 
+ Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
+
 Meta-data
 """""""""
 
@@ -923,7 +925,7 @@ If ``detailed-results`` is ``true`` the following meta-data are returned in addi
 * ``took``` Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
 
 paginated-search
-~~~~~~
+~~~~~~~~~~~~~~~~
 
 With the operation type ``paginated-search`` you can execute `paginated searches <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html#search-after>`_, specifically using the ``search_after`` mechanism.
 
@@ -942,7 +944,7 @@ Properties
 * ``body`` (mandatory): The query body.
 * ``pages`` (mandatory): Number of pages to retrieve (at most) for this search. If a query yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all".
 * ``results-per-page`` (optional): Number of results to retrieve per page. This maps to the Search API's ``size`` parameter, and can be used for paginated and non-paginated searches. Defaults to ``10``
-* ``with-point-in-time-from`` (optional): The ``name`` of an ``open-point-in-time`` operation. Causes the search to use the generated `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_. Only used when ``use-search-after`` is ``True``
+* ``with-point-in-time-from`` (optional): The ``name`` of an ``open-point-in-time`` operation. Causes the search to use the generated `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_.
 
     .. note::
         This parameter requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
@@ -969,7 +971,7 @@ Example::
 .. note::
     See also the ``close-point-in-time`` operation for a larger example.
 
-Throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page.
+Throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
 
 Meta-data
 """""""""
@@ -987,7 +989,7 @@ The following meta data are always returned:
 scroll-search
 ~~~~~~~~~~~~~
 
-With the operation type ``search`` you can execute `scroll-based searches <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html#scroll-search-results>`_.
+With the operation type ``scroll-search`` you can execute `scroll-based searches <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html#scroll-search-results>`_.
 
 Properties
 """"""""""
@@ -1023,7 +1025,7 @@ Example::
       }
     }
 
-Throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page.
+Throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
 
 Meta-data
 """""""""
@@ -2632,10 +2634,9 @@ In this example, a point-in-time is opened, used by a ``search_after``-based sea
                     "index": "logs-*"
                   },
                   {
-                    "operation-type": "search",
+                    "operation-type": "paginated-search",
                     "index": "logs-*",
                     "with-point-in-time-from": "open-pit",
-                    "use-search-after": true,
                     "pages": 25,
                     "results-per-page": 1000,
                     "body": {

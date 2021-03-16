@@ -779,8 +779,6 @@ class Query(Runner):
 
     * `pages`: Number of pages to retrieve at most for this search. If a query yields fewer results than the specified
                number of pages we will terminate earlier.
-    * `use-search-after`: If ``True``, use the search_after mechanism in the Search API.  If ``False`` but ``pages`` is
-                          defined, use the Scroll API to paginate.
 
 
     Returned meta data
@@ -841,7 +839,7 @@ class Query(Runner):
                 if pit_op:
                     pit_id = CompositeContext.get(pit_op)
                     body["pit"] = {"id": pit_id,
-                                   "keep_alive": "1m" } # todo parameterize second keep_alive
+                                   "keep_alive": "1m" }
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
                 parsed, last_sort = _extract_search_after_properties(response, bool(pit_op), results.get("hits"))

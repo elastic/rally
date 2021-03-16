@@ -489,7 +489,6 @@ class SearchParamSource(ParamSource):
         results_per_page = params.get("results-per-page", None)
         request_params = params.get("request-params", {})
         response_compression_enabled = params.get("response-compression-enabled", True)
-        use_search_after = params.get("use-search-after", None)
         with_point_in_time_from = params.get("with-point-in-time-from", None)
 
         self.query_params = {
