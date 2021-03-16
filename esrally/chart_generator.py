@@ -58,7 +58,7 @@ class BarCharts:
         {
             "vis": {
                 "colors": dict(
-                    zip(["bare-oss", "bare-basic", "bare-trial-security", "docker-oss", "ear-oss"], color_scheme_rgba))
+                    zip(["bare-oss", "bare-basic", "bare-trial-security", "docker-basic", "ear-basic"], color_scheme_rgba))
             }
         })
 
@@ -1362,7 +1362,7 @@ class RaceConfigTrack:
         self.repository = repository
         self.cached_track = self.load_track(cfg, name=name)
 
-    def load_track(self, cfg, name=None, params=None):
+    def load_track(self, cfg, name=None, params=None, excluded_tasks=None):
         if not params:
             params = {}
         # required in case a previous track using a different repository has specified the revision
@@ -1374,11 +1374,12 @@ class RaceConfigTrack:
             cfg.add(config.Scope.applicationOverride, "track", "track.name", name)
         # another hack to ensure any track-params in the race config are used by Rally's track loader
         cfg.add(config.Scope.applicationOverride, "track", "params", params)
+        cfg.add(config.Scope.application, "track", "exclude.tasks", excluded_tasks)
         return track.load_track(cfg)
 
-    def get_track(self, cfg, name=None, params=None):
-        if params:
-            return self.load_track(cfg, name, params)
+    def get_track(self, cfg, name=None, params=None, excluded_tasks=None):
+        if params or excluded_tasks:
+            return self.load_track(cfg, name, params, excluded_tasks)
         # if no params specified, return the initially cached, (non-parametrized) track
         return self.cached_track
 
@@ -1518,9 +1519,6 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
 class RaceConfig:
     def __init__(self, track, cfg=None, flavor=None, es_license=None, challenge=None, car=None, node_count=None, charts=None):
         self.track = track
-        self.excluded_tasks = []
-        if cfg.get("exclude-tasks") is not None:
-            self.excluded_tasks =  cfg.get("exclude-tasks").split(",")
         if cfg:
             self.configuration = cfg
             self.configuration["flavor"] = flavor
@@ -1581,8 +1579,7 @@ class RaceConfig:
                     if track.OperationType.Bulk.to_hyphenated_string() != sub_task.operation.type:
                         console.info(f"Found [{sub_task.name}] of type [{sub_task.operation.type}] in "\
                                      f"[{self.challenge}], adding it to indexing dashboard.\n", flush=True)
-                    if sub_task.name not in self.excluded_tasks:
-                        task_names.append(sub_task.name)
+                    task_names.append(sub_task.name)
         return task_names
 
     @property
@@ -1599,8 +1596,7 @@ class RaceConfig:
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
                 # which tasks / or types of operations should be used for which chart types.
                 if "target-throughput" in sub_task.params or "target-interval" in sub_task.params or sub_task.operation.type == "eql":
-                    if sub_task.name not in self.excluded_tasks:
-                        task_names.append(sub_task.name)
+                    task_names.append(sub_task.name)
         return task_names
 
 
@@ -1608,9 +1604,13 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
     def add_configs(race_configs_per_lic, flavor_name="oss", lic="oss", track_name=None):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
+            excluded_tasks = None
+            if "exclude-tasks" in race_config:
+                excluded_tasks = race_config.get("exclude-tasks").split(",")
             configs_per_lic.append(
                 RaceConfig(track=race_config_track.get_track(cfg, name=track_name,
-                                                             params=race_config.get("track-params", {})),
+                                                             params=race_config.get("track-params", {}),
+                                                             excluded_tasks=excluded_tasks),
                            cfg=race_config,
                            flavor=flavor_name,
                            es_license=lic)

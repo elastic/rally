@@ -1746,12 +1746,12 @@ class ScheduleHandle:
             self.task_progress_control.start()
             while True:
                 try:
+                    next_scheduled = self.sched.next(next_scheduled)
                     # does not contribute at all to completion. Hence, we cannot define completion.
                     percent_completed = self.params.percent_completed if param_source_knows_progress else None
                     #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
                     yield (next_scheduled, self.task_progress_control.sample_type, percent_completed, self.runner,
                            self.params.params())
-                    next_scheduled = self.sched.next(next_scheduled)
                     self.task_progress_control.next()
                 except StopIteration:
                     return
@@ -1759,13 +1759,13 @@ class ScheduleHandle:
             self.task_progress_control.start()
             while not self.task_progress_control.completed:
                 try:
+                    next_scheduled = self.sched.next(next_scheduled)
                     #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
                     yield (next_scheduled,
                            self.task_progress_control.sample_type,
                            self.task_progress_control.percent_completed,
                            self.runner,
                            self.params.params())
-                    next_scheduled = self.sched.next(next_scheduled)
                     self.task_progress_control.next()
                 except StopIteration:
                     return
