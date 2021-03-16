@@ -959,7 +959,7 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:merge_time) "
+                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:merge_times) "
                                         "AND environment:\"%s\"" % (race_config.track, environment),
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
@@ -981,7 +981,7 @@ class TimeSeriesCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
-                "description": "merge_time",
+                "description": "merge_times",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
@@ -1612,9 +1612,9 @@ def generate_gc(chart_type, race_configs, environment):
 def generate_merge_time(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
-        if "merge_time" in race_config.charts:
+        if "merge_times" in race_config.charts:
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                            suffix="%s-merge-time" % race_config.label)
+                                            suffix="%s-merge-times" % race_config.label)
             structures.append(chart_type.merge_time(title, environment, race_config))
 
     return structures
