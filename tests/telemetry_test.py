@@ -16,6 +16,7 @@
 # under the License.
 
 import collections
+import logging
 import random
 import unittest.mock as mock
 from collections import namedtuple
@@ -23,6 +24,7 @@ from unittest import TestCase
 from unittest.mock import call
 
 import elasticsearch
+import pytest
 
 from esrally import config, metrics, exceptions, telemetry
 from esrally.mechanic import cluster
@@ -153,13 +155,14 @@ raiseTransportError = TransportErrorSupplier()
 
 
 class TransportClient:
-    def __init__(self, response=None, force_error=False):
+    def __init__(self, response=None, force_error=False, error=elasticsearch.TransportError):
         self._response = response
         self._force_error = force_error
+        self._error = error
 
     def perform_request(self, *args, **kwargs):
         if self._force_error:
-            raise elasticsearch.TransportError
+            raise self._error
         else:
             return self._response
 
@@ -680,6 +683,253 @@ class RecoveryStatsTests(TestCase):
         recorder.record()
 
         self.assertEqual(0, metrics_store_put_doc.call_count)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_stores_single_shard_stats(self, metrics_store_put_doc):
+        response = {
+            "index1": {
+                "shards": [{
+                    "id": 0,
+                    "type": "STORE",
+                    "stage": "DONE",
+                    "primary": True,
+                    "start_time": "2014-02-24T12:38:06.349",
+                    "start_time_in_millis": "1393245486349",
+                    "stop_time": "2014-02-24T12:38:08.464",
+                    "stop_time_in_millis": "1393245488464",
+                    "total_time": "2.1s",
+                    "total_time_in_millis": 2115,
+                    "source": {
+                        "id": "RGMdRc-yQWWKIBM4DGvwqQ",
+                        "host": "my.fqdn",
+                        "transport_address": "my.fqdn",
+                        "ip": "10.0.1.7",
+                        "name": "my_es_node"
+                    },
+                    "target": {
+                        "id": "RGMdRc-yQWWKIBM4DGvwqQ",
+                        "host": "my.fqdn",
+                        "transport_address": "my.fqdn",
+                        "ip": "10.0.1.7",
+                        "name": "my_es_node"
+                    },
+                    "index": {
+                        "size": {
+                            "total": "24.7mb",
+                            "total_in_bytes": 26001617,
+                            "reused": "24.7mb",
+                            "reused_in_bytes": 26001617,
+                            "recovered": "0b",
+                            "recovered_in_bytes": 0,
+                            "percent": "100.0%"
+                        },
+                        "files": {
+                            "total": 26,
+                            "reused": 26,
+                            "recovered": 0,
+                            "percent": "100.0%"
+                        },
+                        "total_time": "2ms",
+                        "total_time_in_millis": 2,
+                        "source_throttle_time": "0s",
+                        "source_throttle_time_in_millis": 0,
+                        "target_throttle_time": "0s",
+                        "target_throttle_time_in_millis": 0
+                    },
+                    "translog": {
+                        "recovered": 71,
+                        "total": 0,
+                        "percent": "100.0%",
+                        "total_on_start": 0,
+                        "total_time": "2.0s",
+                        "total_time_in_millis": 2025
+                    },
+                    "verify_index": {
+                        "check_index_time": 0,
+                        "check_index_time_in_millis": 0,
+                        "total_time": "88ms",
+                        "total_time_in_millis": 88
+                    }
+                }
+                ]
+            }
+        }
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client = Client(indices=SubClient(recovery=response))
+        recorder = telemetry.RecoveryStatsRecorder(cluster_name="leader",
+                                                   client=client,
+                                                   metrics_store=metrics_store,
+                                                   sample_interval=1,
+                                                   indices=["index1"])
+        recorder.record()
+
+        shard_metadata = {
+            "cluster": "leader",
+            "index": "index1",
+            "shard": 0
+        }
+
+        metrics_store_put_doc.assert_has_calls([
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index1"]["shards"][0]
+            }, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+        ],  any_order=True)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_stores_multi_index_multi_shard_stats(self, metrics_store_put_doc):
+        response = {
+            "index1": {
+                "shards": [
+                    {
+                        # for the test we only assume a subset of the fields
+                        "id": 0,
+                        "type": "STORE",
+                        "stage": "DONE",
+                        "primary": True,
+                        "total_time_in_millis": 100
+                    },
+                    {
+                        "id": 1,
+                        "type": "STORE",
+                        "stage": "DONE",
+                        "primary": True,
+                        "total_time_in_millis": 200
+                    }
+                ]
+            },
+            "index2": {
+                "shards": [
+                    {
+                        "id": 0,
+                        "type": "STORE",
+                        "stage": "DONE",
+                        "primary": True,
+                        "total_time_in_millis": 300
+                    },
+                    {
+                        "id": 1,
+                        "type": "STORE",
+                        "stage": "DONE",
+                        "primary": True,
+                        "total_time_in_millis": 400
+                    },
+                    {
+                        "id": 2,
+                        "type": "STORE",
+                        "stage": "DONE",
+                        "primary": True,
+                        "total_time_in_millis": 500
+                    }
+                ]
+            }
+        }
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client = Client(indices=SubClient(recovery=response))
+        recorder = telemetry.RecoveryStatsRecorder(cluster_name="leader",
+                                                   client=client,
+                                                   metrics_store=metrics_store,
+                                                   sample_interval=1,
+                                                   indices=["index1", "index2"])
+        recorder.record()
+
+        metrics_store_put_doc.assert_has_calls([
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index1"]["shards"][0]
+            }, level=MetaInfoScope.cluster, meta_data={
+                "cluster": "leader",
+                "index": "index1",
+                "shard": 0
+            }),
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index1"]["shards"][1]
+            }, level=MetaInfoScope.cluster, meta_data={
+                "cluster": "leader",
+                "index": "index1",
+                "shard": 1
+            }),
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index2"]["shards"][0]
+            }, level=MetaInfoScope.cluster, meta_data={
+                "cluster": "leader",
+                "index": "index2",
+                "shard": 0
+            }),
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index2"]["shards"][1]
+            }, level=MetaInfoScope.cluster, meta_data={
+                "cluster": "leader",
+                "index": "index2",
+                "shard": 1
+            }),
+            mock.call({
+                "name": "recovery-stats",
+                "shard": response["index2"]["shards"][2]
+            }, level=MetaInfoScope.cluster, meta_data={
+                "cluster": "leader",
+                "index": "index2",
+                "shard": 2
+            }),
+        ],  any_order=True)
+
+
+class TestSearchableSnapshotsStats:
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_empty_metrics_if_empty_searchable_snapshots_stats(self, metrics_store_put_doc):
+        response = {}
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client = Client(transport_client=TransportClient(response=response))
+        recorder = telemetry.SearchableSnapshotsStatsRecorder(
+            cluster_name="default",
+            client=client,
+            metrics_store=metrics_store,
+            sample_interval=1,
+            indices=["logs*"])
+
+        recorder.record()
+
+        metrics_store_put_doc.assert_called_once_with(
+            {'name': 'searchable-snapshots-stats', 'total': None},
+            level=MetaInfoScope.cluster,
+            meta_data={'cluster': 'default', 'level': 'cluster'})
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_no_metrics_if_no_searchable_snapshots_stats(self, metrics_store_put_doc):
+        response = {}
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client = Client(transport_client=TransportClient(
+            force_error=True,
+            error=elasticsearch.NotFoundError(
+                "",
+                "",
+                {"error": {"reason": "No searchable snapshots indices found"}})
+        ))
+        recorder = telemetry.SearchableSnapshotsStatsRecorder(
+            cluster_name="default",
+            client=client,
+            metrics_store=metrics_store,
+            sample_interval=1,
+            indices=["logs*"])
+
+        logger = logging.getLogger("esrally.telemetry")
+        with mock.patch.object(logger, "info") as mocked_info:
+            recorder.record()
+            mocked_info.assert_called_once_with(
+                "Unable to find valid indices while collecting searchable snapshots stats on cluster [default]"
+            )
+
+        assert 0 == metrics_store_put_doc.call_count
+
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_single_shard_stats(self, metrics_store_put_doc):

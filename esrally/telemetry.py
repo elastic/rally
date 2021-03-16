@@ -1048,7 +1048,15 @@ class SearchableSnapshotsStatsRecorder:
         try:
             stats_api_endpoint = "/_searchable_snapshots/stats"
             level = "indices" if self.indices else "cluster"
+            # we don't use the existing client support (searchable_snapshots.stats()) as the API is deliberately undocumented and might change:
+            # https://www.elastic.co/guide/en/elasticsearch/reference/current/searchable-snapshots-api-stats.html
             stats = self.client.transport.perform_request("GET", stats_api_endpoint, params={"level": level})
+        except elasticsearch.NotFoundError as e:
+            if "No searchable snapshots indices found" in e.info.get("error").get("reason"):
+                msg = f"Unable to find valid indices while collecting searchable snapshots stats on cluster [{self.cluster_name}]"
+                self.logger.info(msg)
+                # allow collection, indices might be mounted later on
+                return
         except elasticsearch.TransportError:
             msg = f"A transport error occurred while collecting searchable snapshots stats on " \
                   f"cluster [{self.cluster_name}]"
@@ -1067,7 +1075,7 @@ class SearchableSnapshotsStatsRecorder:
         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=meta_data)
 
         if self.indices:
-            for idx, idx_stats in stats.get("indices"):
+            for idx, idx_stats in stats.get("indices", {}):
                 if not self._match_list_or_pattern(idx):
                     continue
 
