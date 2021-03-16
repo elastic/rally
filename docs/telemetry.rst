@@ -16,16 +16,18 @@ You probably want to gain additional insights from a race. Therefore, we have ad
 
    Available telemetry devices:
 
-   Command         Name                   Description
-   --------------  ---------------------  --------------------------------------------------------------------
-   jit              JIT Compiler Profiler  Enables JIT compiler logs.
-   gc               GC log                 Enables GC logs.
-   jfr              Flight Recorder        Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
-   heapdump         Heap Dump              Captures a heap dump.
-   node-stats       Node Stats             Regularly samples node stats
-   recovery-stats   Recovery Stats         Regularly samples shard recovery stats
-   ccr-stats        CCR Stats              Regularly samples Cross Cluster Replication (CCR) related stats
-   transform-stats  Transform Stats        Regularly samples transform stats
+    Command                     Name                        Description
+    --------------------------  --------------------------  --------------------------------------------------------------------
+    jit                         JIT Compiler Profiler       Enables JIT compiler logs.
+    gc                          GC log                      Enables GC logs.
+    jfr                         Flight Recorder             Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
+    heapdump                    Heap Dump                   Captures a heap dump.
+    node-stats                  Node Stats                  Regularly samples node stats
+    recovery-stats              Recovery Stats              Regularly samples shard recovery stats
+    ccr-stats                   CCR Stats                   Regularly samples Cross Cluster Replication (CCR) related stats
+    segment-stats               Segment Stats               Determines segment stats at the end of the benchmark.
+    transform-stats             Transform Stats             Regularly samples transform stats
+    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -146,3 +148,15 @@ Supported telemetry parameters:
 
 * ``transform-stats-transforms`` (default: all transforms): A list of transforms per cluster for which transform stats should be checked.
 * ``transform-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+
+searchable-snapshots-stats
+--------------------------
+
+The searchable-snapshots-stats telemetry device regularly calls the low level `searchable snapshots stats API <https://www.elastic.co/guide/en/elasticsearch/reference/7.11/searchable-snapshots-api-stats.html>` and records one metrics document per file extension.
+
+As the API is currently undocumented, there are no guarantees about future compatibility or completeness of metrics captured.
+
+Supported telemetry parameters:
+
+* ``searchable-snapshots-stats-indices`` (default: None): A string with the index/index pattern, or list of strings/index patterns that searchable snapshots stats should additionally be collected from.
+* ``searchable-snapshots-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
