@@ -834,7 +834,7 @@ class Query(Runner):
                     body.pop(item, None)
                 index = None
             # explicitly convert to int to provoke an error otherwise
-            total_pages = sys.maxsize if params.get("pages") == "all" else int(params.get("pages"))
+            total_pages = sys.maxsize if params.get("pages") == "all" else int(mandatory(params, "pages", self))
             for page in range(1, total_pages + 1):
                 if pit_op:
                     pit_id = CompositeContext.get(pit_op)
@@ -900,7 +900,7 @@ class Query(Runner):
             retrieved_pages = 0
             scroll_id = None
             # explicitly convert to int to provoke an error otherwise
-            total_pages = sys.maxsize if params.get("pages") == "all" else int(params.get("pages"))
+            total_pages = sys.maxsize if params.get("pages") == "all" else int(mandatory(params, "pages", self))
             try:
                 for page in range(total_pages):
                     if page == 0:
