@@ -2119,6 +2119,7 @@ class Composite(Runner):
 
     async def run_stream(self, es, stream, connection_limit):
         streams = []
+        timings = []
         try:
             for item in stream:
                 if "stream" in item:
@@ -2126,16 +2127,22 @@ class Composite(Runner):
                 elif "operation-type" in item:
                     # consume all prior streams first
                     if streams:
-                        await asyncio.gather(*streams)
+                        streams_timings = await asyncio.gather(*streams)
+                        for stream_timings in streams_timings:
+                            timings += stream_timings
                         streams = []
                     op_type = item["operation-type"]
                     if op_type not in self.supported_op_types:
                         raise exceptions.RallyAssertionError(
                             f"Unsupported operation-type [{op_type}]. Use one of [{', '.join(self.supported_op_types)}].")
-                    runner = runner_for(op_type)
+                    runner = RequestTiming(runner_for(op_type))
                     async with connection_limit:
                         async with runner:
-                            await runner({"default": es}, item)
+                            response = await runner({"default": es}, item)
+                            timing = response.get("dependent_timing") if response else None
+                            if timing:
+                                timings.append(timing)
+
                 else:
                     raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
         except BaseException:
@@ -2147,16 +2154,68 @@ class Composite(Runner):
 
         # complete any outstanding streams
         if streams:
-            await asyncio.gather(*streams)
+            streams_timings = await asyncio.gather(*streams)
+            for stream_timings in streams_timings:
+                timings += stream_timings
+        return timings
 
     async def __call__(self, es, params):
         requests = mandatory(params, "requests", self)
         max_connections = params.get("max-connections", sys.maxsize)
         async with CompositeContext():
-            await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+            response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+        return {
+            "weight": 1,
+            "unit": "ops",
+            "dependent_timing": response
+        }
 
     def __repr__(self, *args, **kwargs):
         return "composite"
+
+
+class RequestTiming(Runner, Delegator):
+    def __init__(self, delegate):
+        super().__init__(delegate=delegate)
+
+    async def __aenter__(self):
+        await self.delegate.__aenter__()
+        return self
+
+    async def __call__(self, es, params):
+        absolute_time = time.time()
+        async with es["default"].new_request_context() as request_context:
+            return_value = await self.delegate(es, params)
+            if isinstance(return_value, tuple) and len(return_value) == 2:
+                total_ops, total_ops_unit = return_value
+                result = {
+                    "weight": total_ops,
+                    "unit": total_ops_unit,
+                    "success": True
+                }
+            elif isinstance(return_value, dict):
+                result = return_value
+            else:
+                result = {
+                    "weight": 1,
+                    "unit": "ops",
+                    "success": True
+                }
+
+            start = request_context.request_start
+            end = request_context.request_end
+            result["dependent_timing"] = {
+                "operation": params.get("name"),
+                "operation-type": params.get("operation-type"),
+                "absolute_time": absolute_time,
+                "request_start": start,
+                "request_end": end,
+                "service_time": end - start
+            }
+        return result
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
 
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
