@@ -17,6 +17,7 @@
 
 import collections
 import logging
+import fnmatch
 import os
 import threading
 
@@ -32,7 +33,8 @@ def list_telemetry():
     console.println("Available telemetry devices:\n")
     devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder,
                                                                                Heapdump, NodeStats, RecoveryStats,
-                                                                               CcrStats, SegmentStats, TransformStats]]
+                                                                               CcrStats, SegmentStats, TransformStats,
+                                                                               SearchableSnapshotsStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -933,6 +935,192 @@ class TransformStatsRecorder:
             self.metrics_store.put_value_cluster_level(prefix + "transform_throughput", throughput,
                                                        "docs/s", meta_data=meta_data)
 
+
+class SearchableSnapshotsStats(TelemetryDevice):
+    internal = False
+    command = "searchable-snapshots-stats"
+    human_name = "Searchable Snapshots Stats"
+    help = "Regularly samples searchable snapshots stats"
+
+    """
+    Gathers searchable snapshots stats on a cluster level
+    """
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May optionally specify:
+            ``searchable-stats-indices``: str with index/index-pattern or list of indices or index-patterns
+            that stats should be collected from.
+            Specifying this will implicitly use the level=indices parameter in the API call, as opposed to
+            the level=cluster (default).
+
+            Not all clusters need to be specified, but any name used must be be present in target.hosts.
+            Alternatively, the index or index pattern can be specified as a string in case only one cluster is involved.
+
+            Examples:
+
+            --telemetry-params="searchable-snapshots-stats-indices:elasticlogs-2020-01-01"
+
+            --telemetry-params="searchable-snapshots-stats-indices:elasticlogs*"
+
+            --telemetry-params=./telemetry-params.json
+
+            where telemetry-params.json is:
+
+            {
+              "searchable-snapshots-stats-indices": {
+                "default": ["leader-elasticlogs-*"],
+                "follower": ["follower-elasticlogs-*"]
+              }
+            }
+
+
+            ``searchable-snapshots-stats-sample-interval``: positive integer controlling the sampling interval.
+            Default: 1 second.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.sample_interval = telemetry_params.get("searchable-snapshots-stats-sample-interval", 1)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                f"The telemetry parameter 'searchable-snapshots-stats-sample-interval' must be greater than zero "
+                f"but was {self.sample_interval}.")
+        self.specified_cluster_names = self.clients.keys()
+        indices_per_cluster = self.telemetry_params.get("searchable-snapshots-stats-indices", None)
+        # allow the user to specify either an index pattern as string or as a JSON object
+        if isinstance(indices_per_cluster, str):
+            self.indices_per_cluster = {opts.TargetHosts.DEFAULT: [indices_per_cluster]}
+        else:
+            self.indices_per_cluster = indices_per_cluster
+
+        if self.indices_per_cluster:
+            for cluster_name in self.indices_per_cluster.keys():
+                if cluster_name not in clients:
+                    raise exceptions.SystemSetupError(
+                        f"The telemetry parameter 'searchable-snapshots-stats-indices' must be a JSON Object "
+                        f"with keys matching the cluster names [{','.join(sorted(clients.keys()))}] specified in "
+                        f"--target-hosts but it had [{cluster_name}].")
+            self.specified_cluster_names = self.indices_per_cluster.keys()
+
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def on_benchmark_start(self):
+        for cluster_name in self.specified_cluster_names:
+            recorder = SearchableSnapshotsStatsRecorder(
+                cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
+                self.indices_per_cluster[cluster_name] if self.indices_per_cluster else None)
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.setDaemon(True)
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+
+
+class SearchableSnapshotsStatsRecorder:
+    """
+    Collects and pushes searchable snapshots stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
+        :param indices: optional list of indices to filter results from.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.indices = indices
+        self.logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return "searchable snapshots stats"
+
+    def record(self):
+        """
+        Collect searchable snapshots stats for indexes (optionally) specified in telemetry parameters
+        and push to metrics store.
+        """
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            stats_api_endpoint = "/_searchable_snapshots/stats"
+            level = "indices" if self.indices else "cluster"
+            # we don't use the existing client support (searchable_snapshots.stats())
+            # as the API is deliberately undocumented and might change:
+            # https://www.elastic.co/guide/en/elasticsearch/reference/current/searchable-snapshots-api-stats.html
+            stats = self.client.transport.perform_request("GET", stats_api_endpoint, params={"level": level})
+        except elasticsearch.NotFoundError as e:
+            if "No searchable snapshots indices found" in e.info.get("error").get("reason"):
+                self.logger.info(
+                    "Unable to find valid indices while collecting searchable snapshots stats "
+                    "on cluster [%s]", self.cluster_name)
+                # allow collection, indices might be mounted later on
+                return
+        except elasticsearch.TransportError:
+            raise exceptions.RallyError(
+                f"A transport error occurred while collecting searchable snapshots stats on cluster "
+                f"[{self.cluster_name}]") from None
+
+        total_stats = stats.get("total", [])
+        for lucene_file_stats in total_stats:
+            self._push_stats(level="cluster", stats=lucene_file_stats)
+
+        if self.indices:
+            for idx, idx_stats in stats.get("indices", {}).items():
+                if not self._match_list_or_pattern(idx):
+                    continue
+
+                for lucene_file_stats in idx_stats.get("total", []):
+                    self._push_stats(level="index", stats=lucene_file_stats, index=idx)
+
+    def _push_stats(self, level, stats, index=None):
+        doc = {
+            "name": "searchable-snapshots-stats",
+            # be lenient as the API is still WiP
+            "lucene_file_type": stats.get("file_ext"),
+            "stats": stats,
+        }
+
+        if index:
+            doc["index"] = index
+
+        meta_data = {
+            "cluster": self.cluster_name,
+            "level": level
+        }
+
+        self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=meta_data)
+
+    # TODO Consider moving under the utils package for broader/future use?
+    # at the moment it's only useful here as this stats API is undocumented and we don't wan't to use
+    # a specific elasticsearch-py stats method that could support index filtering in a standard way
+    def _match_list_or_pattern(self, idx):
+        """
+        Match idx from self.indices
+
+        :param idx: String that may include shell style wildcards (https://docs.python.org/3/library/fnmatch.html)
+        :return: Boolean if idx matches anything from self.indices
+        """
+        for index_param in self.indices:
+            if fnmatch.fnmatch(idx, index_param):
+                return True
+        return False
 
 class StartupTime(InternalTelemetryDevice):
     def __init__(self, stopwatch=time.StopWatch):
