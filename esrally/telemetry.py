@@ -993,7 +993,7 @@ class SearchableSnapshotsStats(TelemetryDevice):
         indices_per_cluster = self.telemetry_params.get("searchable-snapshots-stats-indices", False)
         # allow the user to specify either an index pattern as string or as a JSON object
         if isinstance(indices_per_cluster, str):
-            self.indices_per_cluster = {opts.TargetHosts.DEFAULT: indices_per_cluster}
+            self.indices_per_cluster = {opts.TargetHosts.DEFAULT: [indices_per_cluster]}
         else:
             self.indices_per_cluster = indices_per_cluster
 
@@ -1013,7 +1013,7 @@ class SearchableSnapshotsStats(TelemetryDevice):
         for cluster_name in self.specified_cluster_names:
             recorder = SearchableSnapshotsStatsRecorder(
                 cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
-                self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "")
+                self.indices_per_cluster[cluster_name] if self.indices_per_cluster else None)
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
             sampler.setDaemon(True)
@@ -1037,14 +1037,14 @@ class SearchableSnapshotsStatsRecorder:
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
-        :param indices: optional string or list of indices to filter results from.
+        :param indices: optional list of indices to filter results from.
         """
 
         self.cluster_name = cluster_name
         self.client = client
         self.metrics_store = metrics_store
         self.sample_interval = sample_interval
-        self.indices = [indices] if isinstance(indices, str) else indices
+        self.indices = indices
         self.logger = logging.getLogger(__name__)
 
     def __str__(self):
@@ -1067,13 +1067,15 @@ class SearchableSnapshotsStatsRecorder:
             stats = self.client.transport.perform_request("GET", stats_api_endpoint, params={"level": level})
         except elasticsearch.NotFoundError as e:
             if "No searchable snapshots indices found" in e.info.get("error").get("reason"):
-                msg = f"Unable to find valid indices while collecting searchable snapshots stats on cluster [{self.cluster_name}]"
-                self.logger.info(msg)
+                self.logger.info(
+                    "Unable to find valid indices while collecting searchable snapshots stats "
+                    "on cluster [%s]", self.cluster_name)
                 # allow collection, indices might be mounted later on
                 return
         except elasticsearch.TransportError:
-            msg = f"A transport error occurred while collecting searchable snapshots stats on " \
-                  f"cluster [{self.cluster_name}]"
+            msg = f"A transport error occurred while collecting searchable snapshots stats on cluster " \
+                  f"[{self.cluster_name}]"
+
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
@@ -1107,16 +1109,20 @@ class SearchableSnapshotsStatsRecorder:
 
         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=meta_data)
 
+    # TODO Consider moving under the utils package for broader/future use?
+    # at the moment it's only useful here as this stats API is undocumented and we don't wan't to use
+    # a specific elasticsearch-py stats method that could support index filtering in a standard way
     def _match_list_or_pattern(self, idx):
-        # index pattern
-        if isinstance(self.indices, str):
-            return fnmatch.fnmatch(idx, self.indices)
-        # match against list of exact index names
-        else:
-            for index_param in self.indices:
-                if fnmatch.fnmatch(idx, index_param):
-                    return True
-            return False
+        """
+        Match idx from self.indices
+
+        :param idx: String that may include shell style wildcards (https://docs.python.org/3/library/fnmatch.html)
+        :return: Boolean if idx matches anything from self.indices
+        """
+        for index_param in self.indices:
+            if fnmatch.fnmatch(idx, index_param):
+                return True
+        return False
 
 class StartupTime(InternalTelemetryDevice):
     def __init__(self, stopwatch=time.StopWatch):

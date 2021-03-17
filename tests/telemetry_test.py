@@ -1292,7 +1292,7 @@ class TestSearchableSnapshotsStats:
         with mock.patch.object(logger, "info") as mocked_info:
             recorder.record()
             mocked_info.assert_called_once_with(
-                "Unable to find valid indices while collecting searchable snapshots stats on cluster [default]"
+                "Unable to find valid indices while collecting searchable snapshots stats on cluster [%s]", "default"
             )
 
         assert metrics_store_put_doc.call_count == 0
@@ -1347,8 +1347,6 @@ class TestSearchableSnapshotsStats:
             sample_interval=1,
             indices=random.choice([
                 ["elasticlogs*"],
-                "elasticlogs-2020-01-01",
-                "elasticlogs*",
                 ["elasticlogs-2020-01-01"]
             ])
         )
