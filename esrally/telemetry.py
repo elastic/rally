@@ -990,7 +990,7 @@ class SearchableSnapshotsStats(TelemetryDevice):
                 f"The telemetry parameter 'searchable-snapshots-stats-sample-interval' must be greater than zero "
                 f"but was {self.sample_interval}.")
         self.specified_cluster_names = self.clients.keys()
-        indices_per_cluster = self.telemetry_params.get("searchable-snapshots-stats-indices", False)
+        indices_per_cluster = self.telemetry_params.get("searchable-snapshots-stats-indices", None)
         # allow the user to specify either an index pattern as string or as a JSON object
         if isinstance(indices_per_cluster, str):
             self.indices_per_cluster = {opts.TargetHosts.DEFAULT: [indices_per_cluster]}
@@ -1073,11 +1073,9 @@ class SearchableSnapshotsStatsRecorder:
                 # allow collection, indices might be mounted later on
                 return
         except elasticsearch.TransportError:
-            msg = f"A transport error occurred while collecting searchable snapshots stats on cluster " \
-                  f"[{self.cluster_name}]"
-
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
+            raise exceptions.RallyError(
+                f"A transport error occurred while collecting searchable snapshots stats on cluster "
+                f"[{self.cluster_name}]") from None
 
         total_stats = stats.get("total", [])
         for lucene_file_stats in total_stats:
