@@ -1318,7 +1318,7 @@ class TestSearchableSnapshotsStats:
         expected_calls = [
             call({
                 "name": "searchable-snapshots-stats",
-                "lucene_file": stat["file_ext"],
+                "lucene_file_type": stat["file_ext"],
                 "stats": stat},
                 level=MetaInfoScope.cluster,
                 meta_data={
@@ -1355,7 +1355,7 @@ class TestSearchableSnapshotsStats:
         expected_calls = [
             call({
                 "name": "searchable-snapshots-stats",
-                "lucene_file": stat["file_ext"],
+                "lucene_file_type": stat["file_ext"],
                 "stats": stat},
                 level=MetaInfoScope.cluster,
                 meta_data={
@@ -1365,7 +1365,7 @@ class TestSearchableSnapshotsStats:
         expected_calls.extend([
             call({
                 "name": "searchable-snapshots-stats",
-                "lucene_file": stat["file_ext"],
+                "lucene_file_type": stat["file_ext"],
                 "stats": stat,
                 "index": "elasticlogs-2020-01-01"
                 },

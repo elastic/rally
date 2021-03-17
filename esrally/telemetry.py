@@ -1095,7 +1095,7 @@ class SearchableSnapshotsStatsRecorder:
         doc = {
             "name": "searchable-snapshots-stats",
             # be lenient as the API is still WiP
-            "lucene_file": stats.get("file_ext"),
+            "lucene_file_type": stats.get("file_ext"),
             "stats": stats,
         }
 
