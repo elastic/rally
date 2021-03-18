@@ -29,7 +29,7 @@ from copy import deepcopy
 from enum import Enum
 from functools import total_ordering
 from os.path import commonprefix
-from typing import List
+from typing import List, Optional
 from io import BytesIO
 
 import ijson
@@ -37,6 +37,7 @@ import ijson
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
+
 __RUNNERS = {}
 
 
@@ -821,11 +822,13 @@ class Query(Runner):
         es.return_raw_response()
 
         async def _search_after_query(es, params):
+            extract = SearchAfterExtractor()
             index = params.get("index", "_all")
             pit_op = params.get("with-point-in-time-from")
             results = {
                 "unit": "pages",
                 "success": True,
+                "timed_out": False,
                 "took": 0
             }
             if pit_op:
@@ -842,14 +845,16 @@ class Query(Runner):
                                    "keep_alive": "1m" }
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = _extract_search_after_properties(response, bool(pit_op), results.get("hits"))
+                parsed, last_sort = extract(response, bool(pit_op), results.get("hits"))
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
                     results["hits"] = parsed.get("hits.total.value")
                     results["hits_relation"] = parsed.get("hits.total.relation")
                 results["took"] += parsed.get("took")
-                results["timed_out"] = parsed.get("timed_out")
+                # when this evaluates to True, keep it for the final result
+                if not results["timed_out"]:
+                    results["timed_out"] = parsed.get("timed_out")
                 if pit_op:
                     # per the documentation the response pit id is most up-to-date
                     CompositeContext.put(pit_op, parsed.get("pit_id"))
@@ -955,35 +960,14 @@ class Query(Runner):
                 "took": took
             }
 
-        def _extract_search_after_properties(response: BytesIO, get_point_in_time: bool, hits_total: int) -> (dict, List):
-            properties = ["timed_out", "took"]
-            if get_point_in_time:
-                properties.append("pit_id")
-            # we only need to parse these the first time
-            if hits_total is None:
-                properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
-
-            parsed = parse(response, properties)
-
-            # standardize these before returning...
-            parsed["hits.total.value"] = parsed.pop("hits.total.value", parsed.pop("hits.total", 0))
-            parsed["hits.total.relation"] = parsed.get("hits.total.relation", "eq")
-
-            response_str = response.getvalue().decode("UTF-8")
-            index_of_last_sort = response_str.rfind('"sort"')
-            sort_pattern = r"sort\":([^\]]*])"
-            last_sort_str = re.search(sort_pattern, response_str[index_of_last_sort::])
-            if last_sort_str is not None:
-                last_sort = json.loads(last_sort_str.group(1))
-            else:
-                last_sort = None
-            return parsed, last_sort
-
         search_method = params.get("operation-type")
         if search_method == "paginated-search":
             return await _search_after_query(es, params)
-        # also allow if pages is defined, for backward compatiblity
-        elif search_method == "scroll-search" or "pages" in params.keys():
+        elif search_method == "scroll-search":
+            return await _scroll_query(es, params)
+        elif "pages" in params:
+            logging.getLogger(__name__).warning("Invoking a scroll search with the 'search' operation is deprecated "
+                                                "and will be removed in a future release. Use 'scroll-search' instead.")
             return await _scroll_query(es, params)
         else:
             return await _request_body_query(es, params)
@@ -1007,6 +991,44 @@ class Query(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "query"
+
+
+class SearchAfterExtractor:
+    def __init__(self):
+        # extracts e.g. '[1609780186, "2"]' from '"sort": [1609780186, "2"]'
+        self.sort_pattern = re.compile(r"sort\":([^\]]*])")
+
+    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, List):
+        # not a class member as we would want to mutate over the course of execution for efficiency
+        properties = ["timed_out", "took"]
+        if get_point_in_time:
+            properties.append("pit_id")
+        # we only need to parse these the first time, subsequent responses should have the same values
+        if hits_total is None:
+            properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
+
+        parsed = parse(response, properties)
+
+        if get_point_in_time and not parsed.get("pit_id"):
+            raise exceptions.RallyAssertionError("Paginated query failure: "
+                                                 "pit_id was expected but not found in the response.")
+        # standardize these before returning...
+        parsed["hits.total.value"] = parsed.pop("hits.total.value", parsed.pop("hits.total", hits_total))
+        parsed["hits.total.relation"] = parsed.get("hits.total.relation", "eq")
+
+        return parsed, self._get_last_sort(response)
+
+    def _get_last_sort(self, response):
+        """
+        Algorithm is based on findings from benchmarks/driver/parsing_test.py. Potentially a huge time sink if changed.
+        """
+        response_str = response.getvalue().decode("UTF-8")
+        index_of_last_sort = response_str.rfind('"sort"')
+        last_sort_str = re.search(self.sort_pattern, response_str[index_of_last_sort::])
+        if last_sort_str is not None:
+            return json.loads(last_sort_str.group(1))
+        else:
+            return None
 
 
 class ClusterHealth(Runner):

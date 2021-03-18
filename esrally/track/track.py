@@ -632,8 +632,12 @@ class OperationType(Enum):
             return OperationType.IndexStats
         elif v == "node-stats":
             return OperationType.NodeStats
-        elif v in ["search", "scroll-search", "paginated-search"]:
+        elif v == "search":
             return OperationType.Search
+        elif v == "scroll-search":
+            return OperationType.ScrollSearch
+        elif v == "paginated-search":
+            return OperationType.PaginatedSearch
         elif v == "cluster-health":
             return OperationType.ClusterHealth
         elif v == "bulk":

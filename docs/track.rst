@@ -684,7 +684,7 @@ The following meta-data are always returned:
 * ``success``: A boolean indicating whether the bulk request has succeeded.
 * ``success-count``: Number of successfully processed bulk items for this request. This value will only be determined in case of errors or the bulk-size has been specified in docs.
 * ``error-count``: Number of failed bulk items for this request.
-* ``took``` Value of the the ``took`` property in the bulk response.
+* ``took``: Value of the the ``took`` property in the bulk response.
 
 If ``detailed-results`` is ``true`` the following meta-data are returned in addition:
 
@@ -877,7 +877,7 @@ Properties
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
     .. note::
-        1. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        1. Parameters that are implicitly set by Rally (e.g. ``body`` or ``request_cache``) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
         2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 * ``body`` (mandatory): The query body.
@@ -922,7 +922,7 @@ If ``detailed-results`` is ``true`` the following meta-data are returned in addi
 * ``hits``: Total number of hits for this query.
 * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
 * ``timed_out``: Whether the query has timed out. For scroll queries, this flag is ``true`` if the flag was ``true`` for any of the queries issued.
-* ``took``` Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
+* ``took``: Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
 
 paginated-search
 ~~~~~~~~~~~~~~~~
@@ -933,12 +933,11 @@ Properties
 """"""""""
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
-* ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
     .. note::
-        1. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        1. Parameters that are implicitly set by Rally (e.g. ``body`` or ``request_cache``) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
         2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 * ``body`` (mandatory): The query body.
@@ -983,8 +982,8 @@ The following meta data are always returned:
 * ``success``: A boolean indicating whether the query has succeeded.
 * ``hits``: Total number of hits for this query.
 * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
-* ``timed_out``: Whether the query has timed out. For scroll queries, this flag is ``true`` if the flag was ``true`` for any of the queries issued.
-* ``took``` Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
+* ``timed_out``: Whether any of the issued queries has timed out.
+* ``took``: The sum of all ``took`` values in query responses.
 
 scroll-search
 ~~~~~~~~~~~~~
@@ -1000,7 +999,7 @@ Properties
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
     .. note::
-        1. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        1. Parameters that are implicitly set by Rally (e.g. ``body`` or ``request_cache``) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
         2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 * ``body`` (mandatory): The query body.
@@ -1037,8 +1036,8 @@ The following meta data are always returned:
 * ``success``: A boolean indicating whether the query has succeeded.
 * ``hits``: Total number of hits for this query.
 * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
-* ``timed_out``: Whether the query has timed out. For scroll queries, this flag is ``true`` if the flag was ``true`` for any of the queries issued.
-* ``took``` Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
+* ``timed_out``: Whether any of the issued queries has timed out.
+* ``took``: The sum of all ``took`` values in query responses.
 
 .. _put_pipeline:
 
@@ -1110,7 +1109,7 @@ With the operation-type ``put-settings`` you can execute the `cluster update set
 Properties
 """"""""""
 
-* `body` (mandatory): The cluster settings to apply.
+* ``body`` (mandatory): The cluster settings to apply.
 
 Example::
 

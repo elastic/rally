@@ -4799,6 +4799,7 @@ class ClosePointInTimeTests(TestCase):
 
         es.close_point_in_time.assert_called_once_with(body={"id": "0123456789abcdef"}, params={}, headers=None)
 
+
 class QueryWithSearchAfterScrollTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -4964,6 +4965,90 @@ class QueryWithSearchAfterScrollTests(TestCase):
                                                                        'search_after': [1609780186, '2']},
                                                                  headers=None)]
                                                       )
+
+
+class SearchAfterExtractorTests(TestCase):
+    response_text = """
+        {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": false,
+            "hits": {
+                "total": 2,
+                "hits": [
+                    {
+                        "_id": "1",
+                         "timestamp": 1609780186,
+                         "sort": [1609780186, "1"]
+                    },
+                    {
+                        "_id": "2",
+                         "timestamp": 1609780186,
+                         "sort": [1609780186, "2"]
+                    }
+                ]
+            }
+        }"""
+    response = io.BytesIO(response_text.encode())
+
+    def test_extract_all_properties(self):
+        target = runner.SearchAfterExtractor()
+        props, last_sort = target(response=self.response, get_point_in_time=True, hits_total=None)
+        expected_props = {"hits.total.relation": "eq",
+                    "hits.total.value": 2,
+                    "pit_id": "fedcba9876543210",
+                    "timed_out": False,
+                    "took": 10}
+        expected_sort_value = [1609780186, '2']
+        self.assertEqual(expected_props, props)
+        self.assertEqual(expected_sort_value, last_sort)
+
+    def test_extract_ignore_point_in_time(self):
+        target = runner.SearchAfterExtractor()
+        props, last_sort = target(response=self.response, get_point_in_time=False, hits_total=None)
+        expected_props = {"hits.total.relation": "eq",
+                          "hits.total.value": 2,
+                          "timed_out": False,
+                          "took": 10}
+        expected_sort_value = [1609780186, '2']
+        self.assertEqual(expected_props, props)
+        self.assertEqual(expected_sort_value, last_sort)
+
+    def test_extract_uses_provided_hits_total(self):
+        target = runner.SearchAfterExtractor()
+        # we use an incorrect hits_total just to prove we didn't extract it from the response
+        props, last_sort = target(response=self.response, get_point_in_time=False, hits_total=10)
+        expected_props = {"hits.total.relation": "eq",
+                          "hits.total.value": 10,
+                          "timed_out": False,
+                          "took": 10}
+        expected_sort_value = [1609780186, '2']
+        self.assertEqual(expected_props, props)
+        self.assertEqual(expected_sort_value, last_sort)
+
+    def test_extract_missing_required_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.SearchAfterExtractor()
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            target(response=response_copy_bytesio, get_point_in_time=True, hits_total=None)
+        self.assertEqual("Paginated query failure: pit_id was expected but not found in the response.",
+                         ctx.exception.args[0])
+
+    def test_extract_missing_ignored_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.SearchAfterExtractor()
+        props, last_sort = target(response=response_copy_bytesio, get_point_in_time=False, hits_total=None)
+        expected_props = {"hits.total.relation": "eq",
+                          "hits.total.value": 2,
+                          "timed_out": False,
+                          "took": 10}
+        expected_sort_value = [1609780186, '2']
+        self.assertEqual(expected_props, props)
+        self.assertEqual(expected_sort_value, last_sort)
 
 
 class CompositeContextTests(TestCase):
