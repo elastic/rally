@@ -5127,6 +5127,94 @@ class CompositeTests(TestCase):
                          "submit-async-search, get-async-search, delete-async-search].", ctx.exception.args[0])
 
 
+class RequestTimingTests(TestCase):
+    class StaticRequestTiming:
+        def __init__(self, task_start):
+            self.task_start = task_start
+            self.current_request_start = self.task_start
+
+        async def __aenter__(self):
+            # pretend time advances on each request
+            self.current_request_start += 5
+            return self
+
+        @property
+        def request_start(self):
+            return self.current_request_start
+
+        @property
+        def request_end(self):
+            return self.current_request_start + 0.1
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_merges_timing_info(self, es):
+        multi_cluster_client = {"default": es}
+        es.new_request_context.return_value = RequestTimingTests.StaticRequestTiming(task_start=2)
+
+        delegate = mock.Mock(return_value=as_future({
+            "weight": 5,
+            "unit": "ops",
+            "success": True
+        }))
+        params = {
+            "name": "unit-test-operation",
+            "operation-type": "test-op"
+        }
+        timer = runner.RequestTiming(delegate)
+
+        response = await timer(multi_cluster_client, params)
+
+        self.assertEqual(5, response["weight"])
+        self.assertEqual("ops", response["unit"])
+        self.assertTrue(response["success"])
+        self.assertIn("dependent_timing", response)
+        timing = response["dependent_timing"]
+        self.assertEqual("unit-test-operation", timing["operation"])
+        self.assertEqual("test-op", timing["operation-type"])
+        self.assertIsNotNone(timing["absolute_time"])
+        self.assertEqual(7, timing["request_start"])
+        self.assertEqual(7.1, timing["request_end"])
+        self.assertAlmostEqual(0.1, timing["service_time"])
+
+        delegate.assert_called_once_with(multi_cluster_client, params)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_creates_new_timing_info(self, es):
+        multi_cluster_client = {"default": es}
+        es.new_request_context.return_value = RequestTimingTests.StaticRequestTiming(task_start=2)
+
+        # a simple runner without a return value
+        delegate = mock.Mock(return_value=as_future())
+        params = {
+            "name": "unit-test-operation",
+            "operation-type": "test-op"
+        }
+        timer = runner.RequestTiming(delegate)
+
+        response = await timer(multi_cluster_client, params)
+
+        # defaults added by the timing runner
+        self.assertEqual(1, response["weight"])
+        self.assertEqual("ops", response["unit"])
+        self.assertTrue(response["success"])
+
+        self.assertIn("dependent_timing", response)
+        timing = response["dependent_timing"]
+        self.assertEqual("unit-test-operation", timing["operation"])
+        self.assertEqual("test-op", timing["operation-type"])
+        self.assertIsNotNone(timing["absolute_time"])
+        self.assertEqual(7, timing["request_start"])
+        self.assertEqual(7.1, timing["request_end"])
+        self.assertAlmostEqual(0.1, timing["service_time"])
+
+        delegate.assert_called_once_with(multi_cluster_client, params)
+
+
 class RetryTests(TestCase):
     @run_async
     async def test_is_transparent_on_success_when_no_retries(self):
