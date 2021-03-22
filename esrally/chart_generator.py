@@ -867,8 +867,8 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:gc) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") AND ((NOT _exists_:chart) OR chart:gc) "
+                                        f"AND ((NOT _exists_:chart_name) OR chart:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1137,8 +1137,8 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:io) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") AND ((NOT _exists_:chart) OR chart:io) "
+                                        f"AND ((NOT _exists_:chart_name) OR chart:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1251,8 +1251,9 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:segment_memory) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:segment_memory) "
+                                        f"AND ((NOT _exists_:chart_name) OR chart:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1412,8 +1413,9 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:query) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:query) "
+                                        f"AND ((NOT _exists_:chart_name) OR chart:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1505,8 +1507,9 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:indexing) "
-                                        "AND environment:\"%s\"" % (t, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{t}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:indexing) "
+                                        f"AND ((NOT _exists_:chart_name) OR chart:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",

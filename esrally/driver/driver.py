@@ -415,7 +415,8 @@ class Driver:
             telemetry.SegmentStats(log_root, es_default),
             telemetry.CcrStats(telemetry_params, es, self.metrics_store),
             telemetry.RecoveryStats(telemetry_params, es, self.metrics_store),
-            telemetry.TransformStats(telemetry_params, es, self.metrics_store)
+            telemetry.TransformStats(telemetry_params, es, self.metrics_store),
+            telemetry.SearchableSnapshotsStats(telemetry_params, es, self.metrics_store)
         ])
 
     def wait_for_rest_api(self, es):
