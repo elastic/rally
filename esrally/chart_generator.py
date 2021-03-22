@@ -959,8 +959,9 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:merge_times) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:merge_times) "
+                                        f"AND ((NOT _exists_:chart_name) OR chart:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1045,8 +1046,9 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:merge_count) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:merge_count) "
+                                        f"AND ((NOT _exists_:chart_name) OR chart:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1617,7 +1619,7 @@ def generate_merge_time(chart_type, race_configs, environment):
     for race_config in race_configs:
         if "merge_times" in race_config.charts:
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                            suffix="%s-merge-times" % race_config.label)
+                                            suffix=f"{race_config.label}-merge-times")
             structures.append(chart_type.merge_time(title, environment, race_config))
 
     return structures
@@ -1627,7 +1629,7 @@ def generate_merge_count(chart_type, race_configs, environment):
     for race_config in race_configs:
         if "merge_count" in race_config.charts:
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                            suffix="%s-merge-count" % race_config.label)
+                                            suffix=f"{race_config.label}-merge-count")
             structures.append(chart_type.merge_count(title, environment, race_config))
 
     return structures
