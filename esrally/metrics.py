@@ -1521,6 +1521,7 @@ class GlobalStatsCalculator:
             for task in tasks:
                 t = task.name
                 error_rate = self.error_rate(t)
+                duration = self.duration(t)
                 if task.operation.include_in_reporting or error_rate > 0:
                     self.logger.debug("Gathering request metrics for [%s].", t)
                     result.add_op_metrics(
@@ -1531,6 +1532,7 @@ class GlobalStatsCalculator:
                         self.single_latency(t, metric_name="service_time"),
                         self.single_latency(t, metric_name="processing_time"),
                         error_rate,
+                        duration,
                         self.merge(
                             self.track.meta_data,
                             self.challenge.meta_data,
@@ -1671,6 +1673,11 @@ class GlobalStatsCalculator:
     def error_rate(self, task_name):
         return self.store.get_error_rate(task=task_name, sample_type=SampleType.Normal)
 
+    def duration(self, task_name):
+        values = self.store.get_raw("service_time", task_name, mapper=lambda doc: doc["relative-time"])
+        sorted_values = sorted(values)
+        return sorted_values[-1]
+
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
         return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
 
@@ -1770,6 +1777,8 @@ class GlobalStats:
                         all_results.append(op_metrics(item, "processing_time"))
                     if "error_rate" in item:
                         all_results.append(op_metrics(item, "error_rate", single_value=True))
+                    if "duration_time" in item:
+                        all_results.append(op_metrics(item, "duration_time", single_value=True))
             elif metric == "ml_processing_time":
                 for item in value:
                     all_results.append({
@@ -1808,7 +1817,7 @@ class GlobalStats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_op_metrics(self, task, operation, throughput, latency, service_time, processing_time, error_rate, meta):
+    def add_op_metrics(self, task, operation, throughput, latency, service_time, processing_time, error_rate, duration, meta):
         doc = {
             "task": task,
             "operation": operation,
@@ -1817,6 +1826,7 @@ class GlobalStats:
             "service_time": service_time,
             "processing_time": processing_time,
             "error_rate": error_rate,
+            "duration_time": duration
         }
         if meta:
             doc["meta"] = meta
