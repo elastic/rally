@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 2.1.0
 ------------------------
 
+Semantics of request-related timestamps have changed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When Rally stores metrics in a dedicated metrics store, it records additional meta-data such as the absolute and relative timestamp when a sample has been collected. Previously, these timestamps have represented the point in time when a sample has been collected. For request-related metrics such as ``latency`` and ``service_time`` these timestamps represent now the point in time when a request has been sent by Rally.
+
 Throttling is active from the beginning
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
