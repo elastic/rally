@@ -24,7 +24,7 @@ from unittest import TestCase
 
 import elasticsearch
 
-from esrally import exceptions
+from esrally import client, exceptions
 from esrally.driver import runner
 from tests import run_async, as_future
 
@@ -5034,6 +5034,65 @@ class CompositeTests(TestCase):
             "stream-c", "stream-d",
             "call-after-stream-cd"
         ], self.call_recorder_runner.calls)
+
+    @run_async
+    async def test_adds_request_timings(self):
+        # We only need the request context holder functionality but not any calls to Elasticsearch.
+        # Therefore we can use the the request context holder as a substitute and get proper timing info.
+        es = client.RequestContextHolder()
+
+        params = {
+            "requests": [
+                {
+                    "name": "initial-call",
+                    "operation-type": "sleep",
+                    "duration": 0.1
+                },
+                {
+                    "stream": [
+                        {
+                            "name": "stream-a",
+                            "operation-type": "sleep",
+                            "duration": 0.2
+                        }
+                    ]
+                },
+                {
+                    "stream": [
+                        {
+                            "name": "stream-b",
+                            "operation-type": "sleep",
+                            "duration": 0.1
+                        }
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        response = await r(es, params)
+
+        self.assertEqual(1, response["weight"])
+        self.assertEqual("ops", response["unit"])
+        timings = response["dependent_timing"]
+        self.assertEqual(3, len(timings))
+
+        self.assertEqual("initial-call", timings[0]["operation"])
+        self.assertAlmostEqual(0.1, timings[0]["service_time"], delta=0.05)
+
+        self.assertEqual("stream-a", timings[1]["operation"])
+        self.assertAlmostEqual(0.2, timings[1]["service_time"], delta=0.05)
+
+        self.assertEqual("stream-b", timings[2]["operation"])
+        self.assertAlmostEqual(0.1, timings[2]["service_time"], delta=0.05)
+
+        # common properties
+        for timing in timings:
+            self.assertEqual("sleep", timing["operation-type"])
+            self.assertIn("absolute_time", timing)
+            self.assertIn("request_start", timing)
+            self.assertIn("request_end", timing)
+            self.assertGreater(timing["request_end"], timing["request_start"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async

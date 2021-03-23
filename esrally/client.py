@@ -32,13 +32,13 @@ class RequestContextManager:
     This means that we can span a top-level request context, open sub-request contexts that can be used to measure
     individual timings and still measure the proper total time on the top-level request context.
     """
-    def __init__(self, client):
-        self.client = client
+    def __init__(self, request_context_holder):
+        self.ctx_holder = request_context_holder
         self.ctx = None
         self.token = None
 
     async def __aenter__(self):
-        self.ctx, self.token = self.client.init_request_context()
+        self.ctx, self.token = self.ctx_holder.init_request_context()
         return self
 
     @property
@@ -53,11 +53,11 @@ class RequestContextManager:
         # propagate earliest request start and most recent request end to parent
         request_start = self.request_start
         request_end = self.request_end
-        self.client.restore_context(self.token)
+        self.ctx_holder.restore_context(self.token)
         # don't attempt to restore these values on the top-level context as they don't exist
         if self.token.old_value != contextvars.Token.MISSING:
-            self.client.update_request_start(request_start)
-            self.client.update_request_end(request_end)
+            self.ctx_holder.update_request_start(request_start)
+            self.ctx_holder.update_request_end(request_end)
         self.token = None
         return False
 
