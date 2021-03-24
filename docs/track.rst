@@ -975,10 +975,8 @@ Throughput will be reported as number of retrieved pages per second (``pages/s``
 Meta-data
 """""""""
 
-The following meta data are always returned:
-
-* ``weight``: "weight" of an operation. Always 1 for regular queries and the number of retrieved pages for scroll queries.
-* ``unit``: The unit in which to interpret ``weight``. Always "ops" for regular queries and "pages" for scroll queries.
+* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
+* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
 * ``success``: A boolean indicating whether the query has succeeded.
 * ``hits``: Total number of hits for this query.
 * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
@@ -1029,10 +1027,8 @@ Throughput will be reported as number of retrieved pages per second (``pages/s``
 Meta-data
 """""""""
 
-The following meta data are always returned:
-
-* ``weight``: "weight" of an operation. Always 1 for regular queries and the number of retrieved pages for scroll queries.
-* ``unit``: The unit in which to interpret ``weight``. Always "ops" for regular queries and "pages" for scroll queries.
+* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
+* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
 * ``success``: A boolean indicating whether the query has succeeded.
 * ``hits``: Total number of hits for this query.
 * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
@@ -2616,7 +2612,7 @@ Properties
 
 **Example**
 
-In this example, a point-in-time is opened, used by a ``search_after``-based search operation, and closed::
+In this example, a point-in-time is opened, used by a ``paginated-search`` operation, and closed::
 
     {
       "schedule": [

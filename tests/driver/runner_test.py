@@ -4870,24 +4870,38 @@ class QueryWithSearchAfterScrollTests(TestCase):
             # make sure pit_id is updated afterward
             self.assertEqual("fedcba9876543211", runner.CompositeContext.get(pit_op))
 
-        es.transport.perform_request.assert_has_calls([mock.call('GET', '/_search', params={},
-                                                                 body={'query': {'match-all': {}},
-                                                                       'sort': [
-                                                                           {'timestamp': 'asc',
-                                                                            'tie_breaker_id': 'asc'}],
-                                                                       'size': 2,
-                                                                       'pit': {'id': '0123456789abcdef',
-                                                                               'keep_alive': '1m'}},
+        es.transport.perform_request.assert_has_calls([mock.call("GET", "/_search", params={},
+                                                                 body={
+                                                                     "query": {
+                                                                         "match-all": {}
+                                                                       },
+                                                                     "sort": [{
+                                                                         "timestamp": "asc",
+                                                                         "tie_breaker_id": "asc"
+                                                                     }],
+                                                                     "size": 2,
+                                                                     "pit": {
+                                                                         "id": "0123456789abcdef",
+                                                                         "keep_alive": "1m"
+                                                                     }
+                                                                 },
                                                                  headers=None),
-                                                       mock.call('GET', '/_search', params={},
-                                                                 body={'query': {'match-all': {}},
-                                                                       'sort': [
-                                                                           {'timestamp': 'asc',
-                                                                            'tie_breaker_id': 'asc'}],
-                                                                       'size': 2,
-                                                                       'pit': {'id': 'fedcba9876543210',
-                                                                               'keep_alive': '1m'},
-                                                                       'search_after': [1609780186, '2']},
+                                                       mock.call("GET", "/_search", params={},
+                                                                 body={
+                                                                     "query": {
+                                                                         "match-all": {}
+                                                                     },
+                                                                     "sort": [{
+                                                                         "timestamp": "asc",
+                                                                         "tie_breaker_id": "asc"
+                                                                     }],
+                                                                     "size": 2,
+                                                                     "pit": {
+                                                                         "id": "fedcba9876543210",
+                                                                         "keep_alive": "1m"
+                                                                     },
+                                                                     "search_after": [1609780186, "2"]
+                                                                 },
                                                                  headers=None)])
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -4949,20 +4963,20 @@ class QueryWithSearchAfterScrollTests(TestCase):
         r = runner.Query()
         await r(es, params)
 
-        es.transport.perform_request.assert_has_calls([mock.call('GET', '/test-index-1/_search', params={},
-                                                                 body={'query': {'match-all': {}},
-                                                                       'sort': [
-                                                                           {'timestamp': 'asc',
-                                                                            'tie_breaker_id': 'asc'}],
-                                                                       'size': 2},
+        es.transport.perform_request.assert_has_calls([mock.call("GET", "/test-index-1/_search", params={},
+                                                                 body={"query": {"match-all": {}},
+                                                                       "sort": [
+                                                                           {"timestamp": "asc",
+                                                                            "tie_breaker_id": "asc"}],
+                                                                       "size": 2},
                                                                  headers=None),
-                                                       mock.call('GET', '/test-index-1/_search', params={},
-                                                                 body={'query': {'match-all': {}},
-                                                                       'sort': [
-                                                                           {'timestamp': 'asc',
-                                                                            'tie_breaker_id': 'asc'}],
-                                                                       'size': 2,
-                                                                       'search_after': [1609780186, '2']},
+                                                       mock.call("GET", "/test-index-1/_search", params={},
+                                                                 body={"query": {"match-all": {}},
+                                                                       "sort": [
+                                                                           {"timestamp": "asc",
+                                                                            "tie_breaker_id": "asc"}],
+                                                                       "size": 2,
+                                                                       "search_after": [1609780186, "2"]},
                                                                  headers=None)]
                                                       )
 
@@ -4999,7 +5013,7 @@ class SearchAfterExtractorTests(TestCase):
                     "pit_id": "fedcba9876543210",
                     "timed_out": False,
                     "took": 10}
-        expected_sort_value = [1609780186, '2']
+        expected_sort_value = [1609780186, "2"]
         self.assertEqual(expected_props, props)
         self.assertEqual(expected_sort_value, last_sort)
 
@@ -5010,7 +5024,7 @@ class SearchAfterExtractorTests(TestCase):
                           "hits.total.value": 2,
                           "timed_out": False,
                           "took": 10}
-        expected_sort_value = [1609780186, '2']
+        expected_sort_value = [1609780186, "2"]
         self.assertEqual(expected_props, props)
         self.assertEqual(expected_sort_value, last_sort)
 
@@ -5022,7 +5036,7 @@ class SearchAfterExtractorTests(TestCase):
                           "hits.total.value": 10,
                           "timed_out": False,
                           "took": 10}
-        expected_sort_value = [1609780186, '2']
+        expected_sort_value = [1609780186, "2"]
         self.assertEqual(expected_props, props)
         self.assertEqual(expected_sort_value, last_sort)
 
@@ -5046,7 +5060,7 @@ class SearchAfterExtractorTests(TestCase):
                           "hits.total.value": 2,
                           "timed_out": False,
                           "took": 10}
-        expected_sort_value = [1609780186, '2']
+        expected_sort_value = [1609780186, "2"]
         self.assertEqual(expected_props, props)
         self.assertEqual(expected_sort_value, last_sort)
 

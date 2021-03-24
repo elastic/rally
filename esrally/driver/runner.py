@@ -798,6 +798,11 @@ class Query(Runner):
 
     * ``pages``: Total number of pages that have been retrieved.
     """
+
+    def __init__(self):
+        super().__init__()
+        self._extractor = SearchAfterExtractor()
+
     async def __call__(self, es, params):
         request_params, headers = self._transport_request_params(params)
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
@@ -822,7 +827,6 @@ class Query(Runner):
         es.return_raw_response()
 
         async def _search_after_query(es, params):
-            extract = SearchAfterExtractor()
             index = params.get("index", "_all")
             pit_op = params.get("with-point-in-time-from")
             results = {
@@ -845,7 +849,7 @@ class Query(Runner):
                                    "keep_alive": "1m" }
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = extract(response, bool(pit_op), results.get("hits"))
+                parsed, last_sort = self._extractor(response, bool(pit_op), results.get("hits"))
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -918,10 +922,8 @@ class Query(Runner):
                         params["size"] = size
                         r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
 
-                        props = parse(r,
-                                              ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation",
-                                               "timed_out", "took"],
-                                              ["hits.hits"])
+                        props = parse(r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation",
+                                          "timed_out", "took"], ["hits.hits"])
                         scroll_id = props.get("_scroll_id")
                         hits = props.get("hits.total.value", props.get("hits.total", 0))
                         hits_relation = props.get("hits.total.relation", "eq")
