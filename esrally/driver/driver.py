@@ -25,12 +25,15 @@ import math
 import multiprocessing
 import queue
 import threading
+from enum import Enum
+
 import time
 
 import thespian.actors
 
 from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME, telemetry
 from esrally.driver import runner, scheduler
+from esrally.track.loader import TrackProcessorRegistry, load_track_plugins
 from esrally.utils import convert, console, net
 
 
@@ -39,6 +42,8 @@ from esrally.utils import convert, console, net
 # Messages sent between drivers
 #
 ##################################
+
+
 class PrepareBenchmark:
     """
     Initiates preparation steps for a benchmark. The benchmark should only be started after StartBenchmark is sent.
@@ -72,6 +77,23 @@ class PrepareTrack:
 
 
 class TrackPrepared:
+    pass
+
+
+class StartTaskLoop:
+    pass
+
+
+class DoTask:
+    def __init__(self, task):
+        self.task = task
+
+
+class ReadyForWork:
+    pass
+
+
+class WorkerIdle:
     pass
 
 
@@ -313,25 +335,34 @@ def load_local_config(coordinator_config):
     return cfg
 
 
-class TrackPreparationActor(actor.RallyActor):
+class TaskExecutionActor(actor.RallyActor):
+    """
+    This class should be used for long-running tasks, as it ensures they do not block the actor's messaging system
+    """
     def __init__(self):
         super().__init__()
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.executor_future = None
-        self.original_sender = None
         self.wakeup_interval = 5
+        self.parent = None
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_PrepareTrack(self, msg, sender):
-        self.original_sender = sender
-        # load node-specific config to have correct paths available
-        cfg = load_local_config(msg.config)
-        if cfg.opts("track", "test.mode.enabled"):
-            self.wakeup_interval = 0.5
-        # this is a potentially long-running operation so we offload it a background thread so we don't block
-        # the actor (e.g. logging works properly as log messages are forwarded timely).
-        self.executor_future = self.pool.submit(track.prepare_track, msg.track, cfg)
-        self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+    def receiveMsg_StartTaskLoop(self, msg, sender):
+        self.parent = sender
+        self.send(self.parent, ReadyForWork())
+
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_DoTask(self, msg, sender):
+        if msg.task is None:
+            self.send(self.parent, WorkerIdle())
+        else:
+            cfg = load_local_config(msg.config)
+            if cfg.opts("track", "test.mode.enabled"):
+                self.wakeup_interval = 0.5
+            # this is a potentially long-running operation so we offload it a background thread so we don't block
+            # the actor (e.g. logging works properly as log messages are forwarded timely).
+            self.executor_future = self.pool.submit(msg.task)
+            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WakeupMessage(self, msg, sender):
@@ -341,12 +372,95 @@ class TrackPreparationActor(actor.RallyActor):
                 self.logger.exception("Track preparator has detected a benchmark failure. Notifying master...", exc_info=e)
                 # the exception might be user-defined and not be on the load path of the original sender. Hence, it
                 # cannot be deserialized on the receiver so we convert it here to a plain string.
-                self.send(self.original_sender, actor.BenchmarkFailure("Error in track preparator", str(e)))
+                self.send(self.parent, actor.BenchmarkFailure("Error in track preparator", str(e)))
             else:
                 self.executor_future = None
-                self.send(self.original_sender, TrackPrepared())
+                self.send(self.parent, TrackPrepared())
         else:
             self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+
+
+class TrackPreparationActor(actor.RallyActor):
+    class Status(Enum):
+        INITIALIZING = "initializing"
+        PROCESSOR_RUNNING = "processor running"
+        PROCESSOR_COMPLETE = "processor complete"
+
+    def __init__(self):
+        super().__init__()
+        self.processors = queue.Queue()
+        self.original_sender = None
+        self.logger = logging.getLogger(__name__)
+        self.status = self.Status.INITIALIZING
+        self.children = []
+        self.tasks = []
+        self.data_root_dir = None
+        self.track = None
+
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_ActorExitRequest(self, msg, sender):
+        self.logger.info("ActorExitRequest received. Forwarding to children")
+        for child in self.children:
+            self.send(child, msg)
+
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_PrepareTrack(self, msg, sender):
+        self.original_sender = sender
+        # load node-specific config to have correct paths available
+        cfg = load_local_config(msg.config)
+        self.data_root_dir = cfg.opts("benchmarks", "local.dataset.cache")
+        tpr = TrackProcessorRegistry(cfg)
+        self.track = msg.track
+
+        self.logger.info("Preparing track [%s]", self.track.name)
+        if self.track.has_plugins:
+            self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", self.track.name)
+            # the track might have been loaded on a different machine (the coordinator machine) so we force a track
+            # update to ensure we use the latest version of plugins.
+            load_track_plugins(cfg, self.track.name, register_track_processor=tpr.register_track_processor,
+                               force_update=True)
+
+        if tpr.processors():
+            # do this locally...
+            for processor in tpr.processors():
+                processor.on_after_load_track(track)
+            # ...and delegate the rest
+            self.children = [self._create_task_worker() for _ in range(num_cores(cfg))]
+            map(self.processors.put, tpr.processors())
+            self._seed_tasks(self.processors.get())
+            self.send_to_children_and_transition(self, StartTaskLoop(), self.Status.INITIALIZING,
+                                                 self.Status.PROCESSOR_RUNNING)
+
+    def resume(self):
+        if self.processors:
+            self._seed_tasks(self.processors.get())
+            self.send_to_children_and_transition(self, StartTaskLoop(), self.Status.PROCESSOR_COMPLETE,
+                                                 self.Status.PROCESSOR_RUNNING)
+        else:
+            self.send(self.original_sender, TrackPrepared())
+
+    def _seed_tasks(self, processor):
+        self.tasks = [task for task in processor.on_prepare_track(self.track, self.data_root_dir)]
+
+    def _create_task_worker(self):
+        child = self.createActor(TaskExecutionActor)
+        self.send(child, StartTaskLoop())
+
+    def receiveMsg_ReadyForWork(self, msg, sender):
+        if self.tasks:
+            next_task = self.tasks.pop()
+        else:
+            next_task = None
+        self.send(sender, DoTask(next_task))
+
+    def receiveMsg_WorkerIdle(self, msg, sender):
+        self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING,
+                                                    self.Status.PROCESSOR_COMPLETE, self.resume)
+
+
+def num_cores(conf):
+    return int(conf.opts("system", "available.cores", mandatory=False,
+                         default_value=multiprocessing.cpu_count()))
 
 
 class Driver:
@@ -461,8 +575,7 @@ class Driver:
         for host in self.config.opts("driver", "load_driver_hosts"):
             host_config = {
                 # for simplicity we assume that all benchmark machines have the same specs
-                "cores": int(self.config.opts("system", "available.cores", mandatory=False,
-                                              default_value=multiprocessing.cpu_count()))
+                "cores": num_cores(self.config)
             }
             if host != "localhost":
                 host_config["host"] = net.resolve(host)

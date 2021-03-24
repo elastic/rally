@@ -16,7 +16,7 @@
 # under the License.
 
 from .loader import (
-    list_tracks, track_info, load_track, load_track_plugins, track_repo, prepare_track, operation_parameters, set_absolute_data_path
+    list_tracks, track_info, load_track, load_track_plugins, track_repo, operation_parameters, set_absolute_data_path
 )
 
 # expose the complete track API

@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import copy
 import glob
 import json
 import logging
@@ -64,7 +64,7 @@ class TrackProcessor:
         """
 
 
-class CompositeTrackProcessor(TrackProcessor):
+class TrackProcessorRegistry():
     def __init__(self, cfg):
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
@@ -77,6 +77,11 @@ class CompositeTrackProcessor(TrackProcessor):
             processor.decompressor = Decompressor()
         self.track_processors.append(processor)
 
+    def processors(self):
+        if self.track_processors is []:
+            self.track_processors.append(DefaultTrackPreparator())
+        return self.track_processors
+
     def on_after_load_track(self, track):
         current_track = track
         for t in self.track_processors:
@@ -84,6 +89,7 @@ class CompositeTrackProcessor(TrackProcessor):
         return current_track
 
     def on_prepare_track(self, track, data_root_dir):
+
         for t in self.track_processors:
             if not t.on_prepare_track(track, data_root_dir):
                 break
@@ -190,7 +196,7 @@ def _load_single_track(cfg, track_repository, track_name):
 
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
 
-        track_processor = CompositeTrackProcessor(cfg)
+        track_processor = TrackProcessorRegistry(cfg)
         track_processor.register_track_processor(TaskFilterTrackProcessor(cfg))
         track_processor.register_track_processor(TestModeTrackProcessor(cfg))
 
@@ -391,55 +397,31 @@ def used_corpora(t):
     return corpora.values()
 
 
-def prepare_track(t, cfg):
-    """
-    Ensures that all track data are available for running the benchmark.
-
-    :param t: A track that is about to be run.
-    :param cfg: The config object.
-    """
-    data_root_dir = cfg.opts("benchmarks", "local.dataset.cache")
-    tp = CompositeTrackProcessor(cfg)
-    logger = logging.getLogger(__name__)
-
-    logger.info("Preparing track [%s]", t.name)
-    if t.has_plugins:
-        logger.info("Reloading track [%s] to ensure plugins are up-to-date.", t.name)
-        # the track might have been loaded on a different machine (the coordinator machine) so we force a track update
-        # to ensure we use the latest version of plugins.
-        load_track_plugins(cfg, t.name, register_track_processor=tp.register_track_processor, force_update=True)
-
-    # register last so user-defined track processors can override the default behavior
-    tp.register_track_processor(DefaultTrackPreparator(cfg))
-
-    tp.on_prepare_track(t, data_root_dir)
-
-
 class DefaultTrackPreparator(TrackProcessor):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.logger = logging.getLogger(__name__)
         # just declare here, will be injected later
         self.downloader = None
         self.decompressor = None
+        self.track = None
+
+    def __call__(self, corpus):
+        prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
+        for document_set in corpus.documents:
+            if document_set.is_bulk:
+                data_root = data_dir(self.cfg, self.track.name, corpus.name)
+                logging.getLogger(__name__).info(f"Resolved data root directory for document corpus [{corpus.name}] in "
+                                                 f"track [{self.track.name}] to [{data_root}].")
+                if len(data_root) == 1:
+                    prep.prepare_document_set(document_set, data_root[0])
+                # attempt to prepare everything in the current directory and fallback to the corpus directory
+                elif not prep.prepare_bundled_document_set(document_set, data_root[0]):
+                    prep.prepare_document_set(document_set, data_root[1])
 
     def on_prepare_track(self, track, data_root_dir):
         for corpus in used_corpora(track):
-            data_root = data_dir(self.cfg, track.name, corpus.name)
-            self.logger.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s].",
-                             corpus.name, track.name, data_root)
-            prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
-
-            for document_set in corpus.documents:
-                if document_set.is_bulk:
-                    if len(data_root) == 1:
-                        prep.prepare_document_set(document_set, data_root[0])
-                    # attempt to prepare everything in the current directory and fallback to the corpus directory
-                    elif not prep.prepare_bundled_document_set(document_set, data_root[0]):
-                        prep.prepare_document_set(document_set, data_root[1])
-        # don't run any other track processors
-        return False
+            yield lambda: self(corpus)
 
 
 class Decompressor:
