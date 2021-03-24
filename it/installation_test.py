@@ -16,33 +16,22 @@
 # under the License.
 
 """
-These tests ensure the validatity of Rally installation instructions (as shown in docs)
+These tests ensure the validity of Rally installation instructions (as shown in docs)
 """
 
 import json
 import os
-import warnings
 
 import it
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 _CI_VARS = ".ci/variables.json"
 
-# normally set by Makefile, be lenient to allow running from IDE
-MIN_PY_VER = os.environ.get("MIN_PY_VER")
-if not MIN_PY_VER:
-    with open(os.path.join(ROOT_DIR, _CI_VARS), "rt") as fp:
-        try:
-            MIN_PY_VER = json.load(fp)["python_versions"]["PY38"]
-            warnings.warn(
-                f"Environment variable [MIN_PY_VER] is missing. You should fix this problem "
-                f"if you are running these tests "
-                f"on anything else than through your IDE. Defaulting to [{MIN_PY_VER}].",
-                category=RuntimeWarning
-            )
-        except KeyError:
-            raise EnvironmentError(f"Installation tests require [python_versions.PY38] key in [{_CI_VARS}] or"
-                                   f"the [MIN_PY_VER] environment variable set.")
+with open(os.path.join(ROOT_DIR, _CI_VARS), "rt") as fp:
+    try:
+        MIN_PY_VER = json.load(fp)["python_versions"]["MIN_PY_VER"]
+    except KeyError:
+        raise EnvironmentError(f"Installation tests require [python_versions.MIN_PY_VER] key in [{_CI_VARS}]")
 
 
 def test_installs_inside_venv():

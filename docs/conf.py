@@ -43,14 +43,13 @@ source_suffix = '.rst'
 master_doc = 'index'
 language = None
 
-PY_MAJOR_MINOR = "PY38"
 CI_VARS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".ci", "variables.json")
 
 
 def read_min_python_version():
     try:
         with open(CI_VARS, "rt") as fp:
-            return json.load(fp)["python_versions"][PY_MAJOR_MINOR]
+            return json.load(fp)["python_versions"]["MIN_PY_VER"]
     except KeyError as e:
         raise ConfigError(
             f"Failed building docs as required key [{e}] couldn't be found in the file [{CI_VARS}]."
