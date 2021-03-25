@@ -250,7 +250,7 @@ class SamplePostprocessorTests(TestCase):
                          unit="docs/s",
                          task="index",
                          operation="index-op",
-                         operation_type=track.OperationType.Bulk,
+                         operation_type="bulk",
                          sample_type=metrics.SampleType.Normal,
                          absolute_time=absolute_time,
                          relative_time=relative_time,
@@ -271,7 +271,7 @@ class SamplePostprocessorTests(TestCase):
                          unit="ms",
                          task="index",
                          operation="index-op",
-                         operation_type=track.OperationType.Bulk,
+                         operation_type="bulk",
                          sample_type=metrics.SampleType.Normal,
                          absolute_time=absolute_time,
                          relative_time=relative_time,
@@ -284,18 +284,17 @@ class SamplePostprocessorTests(TestCase):
                                                   track_meta_data={},
                                                   challenge_meta_data={})
 
-        task = track.Task("index",
-                        track.Operation("index-op", track.OperationType.Bulk, param_source="driver-test-param-source"))
+        task = track.Task("index", track.Operation("index-op", "bulk", param_source="driver-test-param-source"))
         samples = [
-            driver.Sample(0, 38598, 24, task, metrics.SampleType.Normal, None, 10, 7, 9, None, 5000, "docs", 1, 1 / 2),
-            driver.Sample(0, 38599, 25, task, metrics.SampleType.Normal, None, 10, 7, 9, None, 5000, "docs", 2, 2 / 2),
+            driver.Sample(0, 38598, 24, 0, task, metrics.SampleType.Normal, None, 0.01, 0.007, 0.009, None, 5000, "docs", 1, 1 / 2),
+            driver.Sample(0, 38599, 25, 0, task, metrics.SampleType.Normal, None, 0.01, 0.007, 0.009, None, 5000, "docs", 2, 2 / 2),
         ]
 
         post_process(samples)
 
         calls = [
-            self.latency(38598, 24, 10), self.service_time(38598, 24, 7), self.processing_time(38598, 24, 9),
-            self.latency(38599, 25, 10), self.service_time(38599, 25, 7), self.processing_time(38599, 25, 9),
+            self.latency(38598, 24, 10.0), self.service_time(38598, 24, 7.0), self.processing_time(38598, 24, 9.0),
+            self.latency(38599, 25, 10.0), self.service_time(38599, 25, 7.0), self.processing_time(38599, 25, 9.0),
             self.throughput(38598, 24, 5000),
             self.throughput(38599, 25, 5000),
         ]
@@ -308,20 +307,59 @@ class SamplePostprocessorTests(TestCase):
                                                   track_meta_data={},
                                                   challenge_meta_data={})
 
-        task = track.Task("index",
-                          track.Operation("index-op", track.OperationType.Bulk, param_source="driver-test-param-source"))
+        task = track.Task("index", track.Operation("index-op", "bulk", param_source="driver-test-param-source"))
+
         samples = [
-            driver.Sample(0, 38598, 24, task, metrics.SampleType.Normal, None, 10, 7, 9, None, 5000, "docs", 1, 1 / 2),
-            driver.Sample(0, 38599, 25, task, metrics.SampleType.Normal, None, 10, 7, 9, None, 5000, "docs", 2, 2 / 2),
+            driver.Sample(0, 38598, 24, 0, task, metrics.SampleType.Normal, None, 0.01, 0.007, 0.009, None, 5000, "docs", 1, 1 / 2),
+            driver.Sample(0, 38599, 25, 0, task, metrics.SampleType.Normal, None, 0.01, 0.007, 0.009, None, 5000, "docs", 2, 2 / 2),
         ]
 
         post_process(samples)
 
         calls = [
             # only the first out of two request samples is included, throughput metrics are still complete
-            self.latency(38598, 24, 10), self.service_time(38598, 24, 7), self.processing_time(38598, 24, 9),
+            self.latency(38598, 24, 10.0), self.service_time(38598, 24, 7.0), self.processing_time(38598, 24, 9.0),
             self.throughput(38598, 24, 5000),
             self.throughput(38599, 25, 5000),
+        ]
+        metrics_store.put_value_cluster_level.assert_has_calls(calls)
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_dependent_samples(self, metrics_store):
+        post_process = driver.SamplePostprocessor(metrics_store,
+                                                  downsample_factor=1,
+                                                  track_meta_data={},
+                                                  challenge_meta_data={})
+
+        task = track.Task("index", track.Operation("index-op", "bulk", param_source="driver-test-param-source"))
+        samples = [
+            driver.Sample(0, 38598, 24, 0, task, metrics.SampleType.Normal, None, 0.01, 0.007, 0.009, None, 5000, "docs", 1, 1 / 2,
+                          dependent_timing=[
+                              {
+                                  "absolute_time": 38601,
+                                  "request_start": 25,
+                                  "service_time": 0.05,
+                                  "operation": "index-op",
+                                  "operation-type": "bulk"
+                              },
+                              {
+                                  "absolute_time": 38602,
+                                  "request_start": 26,
+                                  "service_time": 0.08,
+                                  "operation": "index-op",
+                                  "operation-type": "bulk"
+                              }
+                          ]),
+        ]
+
+        post_process(samples)
+
+        calls = [
+            self.latency(38598, 24, 10.0), self.service_time(38598, 24, 7.0), self.processing_time(38598, 24, 9.0),
+            # dependent timings
+            self.service_time(38601, 25, 50.0),
+            self.service_time(38602, 26, 80.0),
+            self.throughput(38598, 24, 5000),
         ]
         metrics_store.put_value_cluster_level.assert_has_calls(calls)
 
@@ -665,9 +703,8 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 1470838595, 21, op, metrics.SampleType.Warmup, None, -1, -1, -1, None, 3000, "docs", 1, 1),
-            driver.Sample(0, 1470838595.5, 21.5, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 2500, "docs", 1,
-                          1),
+            driver.Sample(0, 1470838595, 21, 0, op, metrics.SampleType.Warmup, None, -1, -1, -1, None, 3000, "docs", 1, 1),
+            driver.Sample(0, 1470838595.5, 21.5, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 2500, "docs", 1, 1),
         ]
 
         aggregated = self.calculate_global_throughput(samples)
@@ -684,18 +721,15 @@ class MetricsAggregationTests(TestCase):
         op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 38595, 21, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 1, 1 / 9),
-            driver.Sample(0, 38596, 22, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 2, 2 / 9),
-            driver.Sample(0, 38597, 23, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 3, 3 / 9),
-            driver.Sample(0, 38598, 24, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 4, 4 / 9),
-            driver.Sample(0, 38599, 25, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 5, 5 / 9),
-            driver.Sample(0, 38600, 26, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 6, 6 / 9),
-            driver.Sample(1, 38598.5, 24.5, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 4.5,
-                          7 / 9),
-            driver.Sample(1, 38599.5, 25.5, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 5.5,
-                          8 / 9),
-            driver.Sample(1, 38600.5, 26.5, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 6.5,
-                          9 / 9)
+            driver.Sample(0, 38595, 21, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 1, 1 / 9),
+            driver.Sample(0, 38596, 22, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 2, 2 / 9),
+            driver.Sample(0, 38597, 23, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 3, 3 / 9),
+            driver.Sample(0, 38598, 24, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 4, 4 / 9),
+            driver.Sample(0, 38599, 25, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 5, 5 / 9),
+            driver.Sample(0, 38600, 26, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 6, 6 / 9),
+            driver.Sample(1, 38598.5, 24.5, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 4.5, 7 / 9),
+            driver.Sample(1, 38599.5, 25.5, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 5.5, 8 / 9),
+            driver.Sample(1, 38600.5, 26.5, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 5000, "docs", 6.5, 9 / 9)
         ]
 
         aggregated = self.calculate_global_throughput(samples)
@@ -718,9 +752,9 @@ class MetricsAggregationTests(TestCase):
                              param_source="driver-test-param-source")
 
         samples = [
-            driver.Sample(0, 38595, 21, op, metrics.SampleType.Normal, None, -1, -1, -1, 8000, 5000, "byte", 1, 1 / 3),
-            driver.Sample(0, 38596, 22, op, metrics.SampleType.Normal, None, -1, -1, -1, 8000, 5000, "byte", 2, 2 / 3),
-            driver.Sample(0, 38597, 23, op, metrics.SampleType.Normal, None, -1, -1, -1, 8000, 5000, "byte", 3, 3 / 3),
+            driver.Sample(0, 38595, 21, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, 8000, 5000, "byte", 1, 1 / 3),
+            driver.Sample(0, 38596, 22, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, 8000, 5000, "byte", 2, 2 / 3),
+            driver.Sample(0, 38597, 23, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, 8000, 5000, "byte", 3, 3 / 3),
         ]
 
         aggregated = self.calculate_global_throughput(samples)
@@ -1033,6 +1067,27 @@ class AsyncExecutorTests(TestCase):
         def __str__(self):
             return str(self.mock)
 
+    class StaticRequestTiming:
+        def __init__(self, task_start):
+            self.task_start = task_start
+            self.current_request_start = self.task_start
+
+        async def __aenter__(self):
+            # pretend time advances on each request
+            self.current_request_start += 5
+            return self
+
+        @property
+        def request_start(self):
+            return self.current_request_start
+
+        @property
+        def request_end(self):
+            return self.current_request_start + 0.05
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return False
+
     class RunnerWithProgress:
         def __init__(self, iterations=5):
             self.iterations_left = iterations
@@ -1075,10 +1130,9 @@ class AsyncExecutorTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_in_throughput_mode(self, es):
-        es.init_request_context.return_value = {
-            "request_start": 0,
-            "request_end": 10
-        }
+        task_start = time.perf_counter()
+        es.new_request_context.return_value = AsyncExecutorTests.StaticRequestTiming(task_start=task_start)
+
         es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
@@ -1102,7 +1156,7 @@ class AsyncExecutorTests(TestCase):
         param_source = track.operation_parameters(test_track, task)
         schedule = driver.schedule_for(task, 0, param_source)
 
-        sampler = driver.Sampler(start_timestamp=time.perf_counter())
+        sampler = driver.Sampler(start_timestamp=task_start)
         cancel = threading.Event()
         complete = threading.Event()
 
@@ -1134,17 +1188,15 @@ class AsyncExecutorTests(TestCase):
             # we don't have any warmup time period
             self.assertEqual(metrics.SampleType.Normal, sample.sample_type)
             # latency equals service time in throughput mode
-            self.assertEqual(sample.latency_ms, sample.service_time_ms)
+            self.assertEqual(sample.latency, sample.service_time)
             self.assertEqual(1, sample.total_ops)
             self.assertEqual("docs", sample.total_ops_unit)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_with_progress_determined_by_runner(self, es):
-        es.init_request_context.return_value = {
-            "request_start": 0,
-            "request_end": 10
-        }
+        task_start = time.perf_counter()
+        es.new_request_context.return_value = AsyncExecutorTests.StaticRequestTiming(task_start=task_start)
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -1159,7 +1211,7 @@ class AsyncExecutorTests(TestCase):
         param_source = track.operation_parameters(test_track, task)
         schedule = driver.schedule_for(task, 0, param_source)
 
-        sampler = driver.Sampler(start_timestamp=time.perf_counter())
+        sampler = driver.Sampler(start_timestamp=task_start)
         cancel = threading.Event()
         complete = threading.Event()
 
@@ -1195,17 +1247,15 @@ class AsyncExecutorTests(TestCase):
             # throughput is not overridden and will be calculated later
             self.assertIsNone(sample.throughput)
             # latency equals service time in throughput mode
-            self.assertEqual(sample.latency_ms, sample.service_time_ms)
+            self.assertEqual(sample.latency, sample.service_time)
             self.assertEqual(1, sample.total_ops)
             self.assertEqual("ops", sample.total_ops_unit)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_runner_overrides_times(self, es):
-        es.init_request_context.return_value = {
-            "request_start": 0,
-            "request_end": 10
-        }
+        task_start = time.perf_counter()
+        es.new_request_context.return_value = AsyncExecutorTests.StaticRequestTiming(task_start=task_start)
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track",
@@ -1223,7 +1273,7 @@ class AsyncExecutorTests(TestCase):
         param_source = track.operation_parameters(test_track, task)
         schedule = driver.schedule_for(task, 0, param_source)
 
-        sampler = driver.Sampler(start_timestamp=time.perf_counter())
+        sampler = driver.Sampler(start_timestamp=task_start)
         cancel = threading.Event()
         complete = threading.Event()
 
@@ -1248,11 +1298,11 @@ class AsyncExecutorTests(TestCase):
         self.assertEqual(task, sample.task)
         # we don't have any warmup samples
         self.assertEqual(metrics.SampleType.Normal, sample.sample_type)
-        self.assertEqual(sample.latency_ms, sample.service_time_ms)
+        self.assertEqual(sample.latency, sample.service_time)
         self.assertEqual(1, sample.total_ops)
         self.assertEqual("ops", sample.total_ops_unit)
         self.assertEqual(1.23, sample.throughput)
-        self.assertIsNotNone(sample.service_time_ms)
+        self.assertIsNotNone(sample.service_time)
         self.assertIsNotNone(sample.time_period)
 
     @mock.patch("elasticsearch.Elasticsearch")

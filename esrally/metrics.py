@@ -659,17 +659,18 @@ class MetricsStore:
         """
         return self._get(name, task, operation_type, sample_type, node_name, mapper)
 
-    def get_unit(self, name, task=None, node_name=None):
+    def get_unit(self, name, task=None, operation_type=None, node_name=None):
         """
         Gets the unit for the given metric name.
 
         :param name: The metric name to query.
         :param task The task name to query. Optional.
+        :param operation_type The operation type to query. Optional.
         :param node_name The name of the node where this metric was gathered. Optional.
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, task, None, None, node_name, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, operation_type, None, node_name, lambda doc: doc["unit"]))
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         raise NotImplementedError("abstract method")
@@ -936,7 +937,7 @@ class EsMetricsStore(MetricsStore):
         if operation_type:
             q["bool"]["filter"].append({
                 "term": {
-                    "operation-type": operation_type.name
+                    "operation-type": operation_type
                 }
             })
         if sample_type:
@@ -1034,7 +1035,7 @@ class InMemoryMetricsStore(MetricsStore):
         for doc in self.docs:
             # we can use any request metrics record (i.e. service time or latency)
             if doc["name"] == "service_time" and doc["task"] == task and \
-                    (operation_type is None or doc["operation-type"] == operation_type.name) and \
+                    (operation_type is None or doc["operation-type"] == operation_type) and \
                     (sample_type is None or doc["sample-type"] == sample_type.name.lower()):
                 total_count += 1
                 if doc["meta"]["success"] is False:
@@ -1063,7 +1064,7 @@ class InMemoryMetricsStore(MetricsStore):
                 for doc in self.docs
                 if doc["name"] == name and
                 (task is None or doc["task"] == task) and
-                (operation_type is None or doc["operation-type"] == operation_type.name) and
+                (operation_type is None or doc["operation-type"] == operation_type) and
                 (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
                 (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
                 ]
@@ -1520,17 +1521,18 @@ class GlobalStatsCalculator:
         for tasks in self.challenge.schedule:
             for task in tasks:
                 t = task.name
-                error_rate = self.error_rate(t)
+                op_type = task.operation.type
+                error_rate = self.error_rate(t, op_type)
                 duration = self.duration(t)
                 if task.operation.include_in_reporting or error_rate > 0:
                     self.logger.debug("Gathering request metrics for [%s].", t)
                     result.add_op_metrics(
                         t,
                         task.operation.name,
-                        self.summary_stats("throughput", t),
-                        self.single_latency(t),
-                        self.single_latency(t, metric_name="service_time"),
-                        self.single_latency(t, metric_name="processing_time"),
+                        self.summary_stats("throughput", t, op_type),
+                        self.single_latency(t, op_type),
+                        self.single_latency(t, op_type, metric_name="service_time"),
+                        self.single_latency(t, op_type, metric_name="processing_time"),
                         error_rate,
                         duration,
                         self.merge(
@@ -1605,11 +1607,11 @@ class GlobalStatsCalculator:
     def one(self, metric_name):
         return self.store.get_one(metric_name)
 
-    def summary_stats(self, metric_name, task_name):
-        mean = self.store.get_mean(metric_name, task=task_name, sample_type=SampleType.Normal)
-        median = self.store.get_median(metric_name, task=task_name, sample_type=SampleType.Normal)
-        unit = self.store.get_unit(metric_name, task=task_name)
-        stats = self.store.get_stats(metric_name, task=task_name, sample_type=SampleType.Normal)
+    def summary_stats(self, metric_name, task_name, operation_type):
+        mean = self.store.get_mean(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
+        median = self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
+        unit = self.store.get_unit(metric_name, task=task_name, operation_type=operation_type)
+        stats = self.store.get_stats(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
         if mean and median and stats:
             return {
                 "min": stats["min"],
@@ -1670,8 +1672,8 @@ class GlobalStatsCalculator:
                     })
         return result
 
-    def error_rate(self, task_name):
-        return self.store.get_error_rate(task=task_name, sample_type=SampleType.Normal)
+    def error_rate(self, task_name, operation_type):
+        return self.store.get_error_rate(task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
 
     def duration(self, task_name):
         values = self.store.get_raw("service_time", task_name, mapper=lambda doc: doc["relative-time"])
@@ -1681,19 +1683,21 @@ class GlobalStatsCalculator:
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
         return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
 
-    def single_latency(self, task, metric_name="latency"):
+    def single_latency(self, task, operation_type, metric_name="latency"):
         sample_type = SampleType.Normal
-        stats = self.store.get_stats(metric_name, task=task, sample_type=sample_type)
+        stats = self.store.get_stats(metric_name, task=task, operation_type=operation_type, sample_type=sample_type)
         sample_size = stats["count"] if stats else 0
         if sample_size > 0:
             percentiles = self.store.get_percentiles(metric_name,
                                                      task=task,
+                                                     operation_type=operation_type,
                                                      sample_type=sample_type,
                                                      percentiles=percentiles_for_sample_size(sample_size))
             mean = self.store.get_mean(metric_name,
                                        task=task,
+                                       operation_type=operation_type,
                                        sample_type=sample_type)
-            unit = self.store.get_unit(metric_name, task=task)
+            unit = self.store.get_unit(metric_name, task=task, operation_type=operation_type)
             stats = collections.OrderedDict()
             for k, v in percentiles.items():
                 # safely encode so we don't have any dots in field names
