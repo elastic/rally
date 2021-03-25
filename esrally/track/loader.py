@@ -29,7 +29,7 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import exceptions, time, PROGRAM_NAME, config, version
+from esrally import actor, exceptions, time, PROGRAM_NAME, config, version
 from esrally.track import params, track
 from esrally.utils import io, collections, convert, net, console, modules, opts, repo
 
@@ -38,6 +38,10 @@ class TrackSyntaxError(exceptions.InvalidSyntax):
     """
     Raised whenever a syntax problem is encountered when loading the track specification.
     """
+
+
+class TrackProcessingTask(actor.WorkerTask):
+    pass
 
 
 class TrackProcessor:
@@ -62,9 +66,10 @@ class TrackProcessor:
         :return: an Iterable[Callable, dict] of function/parameter pairs to be executed by the prepare track's executor
         actors.
         """
+        return []
 
 
-class TrackProcessorRegistry():
+class TrackProcessorRegistry:
     def __init__(self, cfg):
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
@@ -88,14 +93,6 @@ class TrackProcessorRegistry():
         for t in self.track_processors:
             t.on_after_load_track(current_track)
         return current_track
-    #
-    # def on_prepare_track(self, track, data_root_dir):
-    #
-    #     for t in self.track_processors:
-    #         if not t.on_prepare_track(track, data_root_dir):
-    #             break
-    #
-    #     return False
 
 
 def tracks(cfg):
@@ -424,13 +421,14 @@ class DefaultTrackPreparator(TrackProcessor):
         self.track = track
         prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
+
             params = {
                 "cfg": self.cfg,
                 "track": track,
                 "corpus": corpus,
                 "preparator": prep
             }
-            yield DefaultTrackPreparator.prepare_docs, params
+            yield TrackProcessingTask(DefaultTrackPreparator.prepare_docs, params)
 
 
 class Decompressor:

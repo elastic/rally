@@ -17,6 +17,8 @@
 
 import logging
 import socket
+from dataclasses import dataclass
+from typing import Callable
 
 import thespian.actors
 import thespian.system.messages.status
@@ -38,6 +40,14 @@ class BenchmarkCancelled:
     """
     Indicates that the benchmark has been cancelled (by the user).
     """
+
+@dataclass
+class WorkerTask:
+    """
+    Unit of work that should be completed by the low-level TaskExecutionActor
+    """
+    func: Callable
+    params: dict
 
 
 def parametrized(decorator):

@@ -26,7 +26,6 @@ import multiprocessing
 import queue
 import threading
 from enum import Enum
-
 import time
 
 import thespian.actors
@@ -355,7 +354,8 @@ class TaskExecutionActor(actor.RallyActor):
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_DoTask(self, msg, sender):
-        if msg.task is None:
+        task = msg.task
+        if task is None:
             self.send(self.parent, WorkerIdle())
         else:
             cfg = load_local_config(msg.cfg)
@@ -363,9 +363,7 @@ class TaskExecutionActor(actor.RallyActor):
                 self.wakeup_interval = 0.5
             # this is a potentially long-running operation so we offload it a background thread so we don't block
             # the actor (e.g. logging works properly as log messages are forwarded timely).
-            func = msg.task[0]
-            kwargs = msg.task[1]
-            self.executor_future = self.pool.submit(func, **kwargs)
+            self.executor_future = self.pool.submit(task.func, **task.params)
             self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
