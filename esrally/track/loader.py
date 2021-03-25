@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import copy
 import glob
 import json
 import logging
@@ -60,7 +59,8 @@ class TrackProcessor:
         :param track: The current track. This parameter should be treated as effectively immutable. Any modifications
                       will not be reflected in subsequent phases of the benchmark.
         :param data_root_dir: The data root directory on the current machine as configured by the user.
-        :return: `True` if the next track processor should be executed, `False` to prohibit further processing.
+        :return: an Iterable[Callable, dict] of function/parameter pairs to be executed by the prepare track's executor
+        actors.
         """
 
 
@@ -69,6 +69,7 @@ class TrackProcessorRegistry():
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
         self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
+        self.base_config = cfg
 
     def register_track_processor(self, processor):
         if hasattr(processor, "downloader"):
@@ -78,8 +79,8 @@ class TrackProcessorRegistry():
         self.track_processors.append(processor)
 
     def processors(self):
-        if self.track_processors is []:
-            self.track_processors.append(DefaultTrackPreparator())
+        if not self.track_processors:
+            self.register_track_processor(DefaultTrackPreparator(self.base_config))
         return self.track_processors
 
     def on_after_load_track(self, track):
@@ -87,14 +88,14 @@ class TrackProcessorRegistry():
         for t in self.track_processors:
             t.on_after_load_track(current_track)
         return current_track
-
-    def on_prepare_track(self, track, data_root_dir):
-
-        for t in self.track_processors:
-            if not t.on_prepare_track(track, data_root_dir):
-                break
-
-        return False
+    #
+    # def on_prepare_track(self, track, data_root_dir):
+    #
+    #     for t in self.track_processors:
+    #         if not t.on_prepare_track(track, data_root_dir):
+    #             break
+    #
+    #     return False
 
 
 def tracks(cfg):
@@ -406,22 +407,30 @@ class DefaultTrackPreparator(TrackProcessor):
         self.decompressor = None
         self.track = None
 
-    def __call__(self, corpus):
-        prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
+    @staticmethod
+    def prepare_docs(cfg, track, corpus, preparator):
         for document_set in corpus.documents:
             if document_set.is_bulk:
-                data_root = data_dir(self.cfg, self.track.name, corpus.name)
-                logging.getLogger(__name__).info(f"Resolved data root directory for document corpus [{corpus.name}] in "
-                                                 f"track [{self.track.name}] to [{data_root}].")
+                data_root = data_dir(cfg, track.name, corpus.name)
+                logging.getLogger(__name__).info("Resolved data root directory for document corpus [%s] in track [%s] "
+                                                 "to [%s].", corpus.name, track.name, data_root)
                 if len(data_root) == 1:
-                    prep.prepare_document_set(document_set, data_root[0])
+                    preparator.prepare_document_set(document_set, data_root[0])
                 # attempt to prepare everything in the current directory and fallback to the corpus directory
-                elif not prep.prepare_bundled_document_set(document_set, data_root[0]):
-                    prep.prepare_document_set(document_set, data_root[1])
+                elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
+                    preparator.prepare_document_set(document_set, data_root[1])
 
     def on_prepare_track(self, track, data_root_dir):
+        self.track = track
+        prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
-            yield lambda: self(corpus)
+            params = {
+                "cfg": self.cfg,
+                "track": track,
+                "corpus": corpus,
+                "preparator": prep
+            }
+            yield DefaultTrackPreparator.prepare_docs, params
 
 
 class Decompressor:

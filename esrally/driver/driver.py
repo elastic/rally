@@ -85,8 +85,9 @@ class StartTaskLoop:
 
 
 class DoTask:
-    def __init__(self, task):
+    def __init__(self, task, cfg):
         self.task = task
+        self.cfg = cfg
 
 
 class ReadyForWork:
@@ -298,6 +299,7 @@ class DriverActor(actor.RallyActor):
         self.cluster_details = cluster_details
 
     def prepare_track(self, hosts, cfg, track):
+        self.logger.info("Starting prepare track process on hosts [%s]", hosts)
         self.children = [self._create_track_preparator(h) for h in hosts]
         msg = PrepareTrack(cfg, track)
         for child in self.children:
@@ -356,12 +358,14 @@ class TaskExecutionActor(actor.RallyActor):
         if msg.task is None:
             self.send(self.parent, WorkerIdle())
         else:
-            cfg = load_local_config(msg.config)
+            cfg = load_local_config(msg.cfg)
             if cfg.opts("track", "test.mode.enabled"):
                 self.wakeup_interval = 0.5
             # this is a potentially long-running operation so we offload it a background thread so we don't block
             # the actor (e.g. logging works properly as log messages are forwarded timely).
-            self.executor_future = self.pool.submit(msg.task)
+            func = msg.task[0]
+            kwargs = msg.task[1]
+            self.executor_future = self.pool.submit(func, **kwargs)
             self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
@@ -369,13 +373,13 @@ class TaskExecutionActor(actor.RallyActor):
         if self.executor_future is not None and self.executor_future.done():
             e = self.executor_future.exception(timeout=0)
             if e:
-                self.logger.exception("Track preparator has detected a benchmark failure. Notifying master...", exc_info=e)
+                self.logger.exception("Worker failed. Notifying master...", exc_info=e)
                 # the exception might be user-defined and not be on the load path of the original sender. Hence, it
                 # cannot be deserialized on the receiver so we convert it here to a plain string.
                 self.send(self.parent, actor.BenchmarkFailure("Error in track preparator", str(e)))
             else:
                 self.executor_future = None
-                self.send(self.parent, TrackPrepared())
+                self.send(self.parent, ReadyForWork())
         else:
             self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
@@ -390,10 +394,11 @@ class TrackPreparationActor(actor.RallyActor):
         super().__init__()
         self.processors = queue.Queue()
         self.original_sender = None
-        self.logger = logging.getLogger(__name__)
+        self.logger.info("Track Preparator started")
         self.status = self.Status.INITIALIZING
         self.children = []
         self.tasks = []
+        self.cfg = None
         self.data_root_dir = None
         self.track = None
 
@@ -403,13 +408,18 @@ class TrackPreparationActor(actor.RallyActor):
         for child in self.children:
             self.send(child, msg)
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+
+    def receiveMsg_BenchmarkFailure(self, msg, sender):
+        # sent by our generic worker; give context and forward
+        msg.message = "Track preparator has detected a benchmark failure. Notifying master..."
+        self.send(self.original_sender, msg)
+
     def receiveMsg_PrepareTrack(self, msg, sender):
         self.original_sender = sender
         # load node-specific config to have correct paths available
-        cfg = load_local_config(msg.config)
-        self.data_root_dir = cfg.opts("benchmarks", "local.dataset.cache")
-        tpr = TrackProcessorRegistry(cfg)
+        self.cfg = load_local_config(msg.config)
+        self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
+        tpr = TrackProcessorRegistry(self.cfg)
         self.track = msg.track
 
         self.logger.info("Preparing track [%s]", self.track.name)
@@ -417,7 +427,7 @@ class TrackPreparationActor(actor.RallyActor):
             self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", self.track.name)
             # the track might have been loaded on a different machine (the coordinator machine) so we force a track
             # update to ensure we use the latest version of plugins.
-            load_track_plugins(cfg, self.track.name, register_track_processor=tpr.register_track_processor,
+            load_track_plugins(self.cfg, self.track.name, register_track_processor=tpr.register_track_processor,
                                force_update=True)
 
         if tpr.processors():
@@ -425,14 +435,17 @@ class TrackPreparationActor(actor.RallyActor):
             for processor in tpr.processors():
                 processor.on_after_load_track(track)
             # ...and delegate the rest
-            self.children = [self._create_task_worker() for _ in range(num_cores(cfg))]
-            map(self.processors.put, tpr.processors())
+            self.children = [self._create_task_worker() for _ in range(num_cores(self.cfg))]
+            for processor in tpr.processors():
+                self.processors.put(processor)
             self._seed_tasks(self.processors.get())
             self.send_to_children_and_transition(self, StartTaskLoop(), self.Status.INITIALIZING,
                                                  self.Status.PROCESSOR_RUNNING)
+        else:
+            self.send(sender, TrackPrepared())
 
     def resume(self):
-        if self.processors:
+        if not self.processors.empty():
             self._seed_tasks(self.processors.get())
             self.send_to_children_and_transition(self, StartTaskLoop(), self.Status.PROCESSOR_COMPLETE,
                                                  self.Status.PROCESSOR_RUNNING)
@@ -440,18 +453,18 @@ class TrackPreparationActor(actor.RallyActor):
             self.send(self.original_sender, TrackPrepared())
 
     def _seed_tasks(self, processor):
-        self.tasks = [task for task in processor.on_prepare_track(self.track, self.data_root_dir)]
+        self.tasks = list(processor.on_prepare_track(self.track, self.data_root_dir))
 
     def _create_task_worker(self):
         child = self.createActor(TaskExecutionActor)
-        self.send(child, StartTaskLoop())
+        return child
 
     def receiveMsg_ReadyForWork(self, msg, sender):
         if self.tasks:
             next_task = self.tasks.pop()
         else:
             next_task = None
-        self.send(sender, DoTask(next_task))
+        self.send(sender, DoTask(next_task, self.cfg))
 
     def receiveMsg_WorkerIdle(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING,
