@@ -477,20 +477,11 @@ class CreateComponentTemplateParamSource(CreateTemplateParamSource):
 class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
-        if len(track.indices) == 1:
-            default_target = track.indices[0].name
-        elif len(track.data_streams) == 1:
-            default_target = track.data_streams[0].name
-        else:
-            default_target = None
-        # indices are preferred by data streams can also be queried the same way
-        target_name = params.get("index")
+        target_name = get_target(track, params)
         type_name = params.get("type")
-        if not target_name:
-            target_name = params.get("data-stream", default_target)
-            if target_name and type_name:
-                raise exceptions.InvalidSyntax(
-                    f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
+        if params.get("data-stream") and type_name:
+            raise exceptions.InvalidSyntax(
+                f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         request_cache = params.get("cache", None)
         detailed_results = params.get("detailed-results", False)
         query_body = params.get("body", None)
@@ -498,6 +489,7 @@ class SearchParamSource(ParamSource):
         results_per_page = params.get("results-per-page", None)
         request_params = params.get("request-params", {})
         response_compression_enabled = params.get("response-compression-enabled", True)
+        with_point_in_time_from = params.get("with-point-in-time-from", None)
 
         self.query_params = {
             "index": target_name,
@@ -517,11 +509,13 @@ class SearchParamSource(ParamSource):
             self.query_params["pages"] = pages
         if results_per_page:
             self.query_params["results-per-page"] = results_per_page
+        if with_point_in_time_from:
+            self.query_params["with-point-in-time-from"] = with_point_in_time_from
         if "assertions" in params:
             if not detailed_results:
-                # for scroll queries the value does not matter because detailed results are always retrieved.
-                is_scroll_query = pages and results_per_page
-                if not is_scroll_query:
+                # for paginated queries the value does not matter because detailed results are always retrieved.
+                is_paginated = bool(pages)
+                if not is_paginated:
                     raise exceptions.InvalidSyntax("The property [detailed-results] must be [true] if assertions are defined")
             self.query_params["assertions"] = params["assertions"]
 
@@ -732,6 +726,35 @@ class PartitionBulkIndexParamSource:
         return self.current_bulk / self.total_bulks
 
 
+class OpenPointInTimeParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        target_name = get_target(track, params)
+        self._index_name = target_name
+        self._keep_alive = params.get("keep-alive")
+
+    def params(self):
+        parsed_params = {
+            "index": self._index_name,
+            "keep-alive": self._keep_alive
+        }
+        parsed_params.update(self._client_params())
+        return parsed_params
+
+
+class ClosePointInTimeParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self._pit_task_name = params.get("with-point-in-time-from")
+
+    def params(self):
+        parsed_params = {
+            "with-point-in-time-from": self._pit_task_name
+        }
+        parsed_params.update(self._client_params())
+        return parsed_params
+
+
 class ForceMergeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
@@ -759,6 +782,18 @@ class ForceMergeParamSource(ParamSource):
         parsed_params.update(self._client_params())
         return parsed_params
 
+def get_target(track, params):
+    if len(track.indices) == 1:
+        default_target = track.indices[0].name
+    elif len(track.data_streams) == 1:
+        default_target = track.data_streams[0].name
+    else:
+        default_target = None
+    # indices are preferred but data streams can also be queried the same way
+    target_name = params.get("index")
+    if not target_name:
+        target_name = params.get("data-stream", default_target)
+    return target_name
 
 def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):
     """
