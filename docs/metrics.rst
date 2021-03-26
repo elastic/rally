@@ -76,7 +76,7 @@ A UUID that changes on every invocation of Rally. It is intended to group all sa
 @timestamp
 ~~~~~~~~~~
 
-The timestamp in milliseconds since epoch determined when the sample was taken.
+The timestamp in milliseconds since epoch determined when the sample was taken. For request-related metrics, such as ``latency`` or ``service_time`` this is the timestamp when Rally has issued the request.
 
 relative-time
 ~~~~~~~~~~~~~

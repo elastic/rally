@@ -616,6 +616,11 @@ class EsMetricsTests(TestCase):
                             "term": {
                                 "name": "indexing_throughput"
                             }
+                        },
+                        {
+                            "term": {
+                                "operation-type": "bulk"
+                            }
                         }
                     ]
                 }
@@ -630,7 +635,7 @@ class EsMetricsTests(TestCase):
             }
         }
 
-        actual_mean_throughput = self.metrics_store.get_mean("indexing_throughput")
+        actual_mean_throughput = self.metrics_store.get_mean("indexing_throughput", operation_type="bulk")
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
@@ -667,6 +672,11 @@ class EsMetricsTests(TestCase):
                             "term": {
                                 "name": "indexing_throughput"
                             }
+                        },
+                        {
+                            "term": {
+                                "operation-type": "bulk"
+                            }
                         }
                     ]
                 }
@@ -682,7 +692,7 @@ class EsMetricsTests(TestCase):
             }
         }
 
-        actual_median_throughput = self.metrics_store.get_median("indexing_throughput")
+        actual_median_throughput = self.metrics_store.get_median("indexing_throughput", operation_type="bulk")
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 

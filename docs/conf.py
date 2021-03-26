@@ -18,9 +18,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import json
 import os
 from datetime import date
 from os.path import join, dirname
+
+from sphinx.config import ConfigError
 
 # -- General configuration ------------------------------------------------
 
@@ -40,12 +43,42 @@ source_suffix = '.rst'
 master_doc = 'index'
 language = None
 
+CI_VARS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".ci", "variables.json")
+
+
+def read_min_python_version():
+    try:
+        with open(CI_VARS, "rt") as fp:
+            return json.load(fp)["python_versions"]["MIN_PY_VER"]
+    except KeyError as e:
+        raise ConfigError(
+            f"Failed building docs as required key [{e}] couldn't be found in the file [{CI_VARS}]."
+        )
+
+
+GLOBAL_SUBSTITUTIONS = {
+    "{MIN_PY_VER}": read_min_python_version()
+}
+
+
+# inspiration from https://github.com/sphinx-doc/sphinx/issues/4054#issuecomment-329097229
+def replace_globals(app, docname, source):
+    tmp_source = source[0]
+    for k, v in GLOBAL_SUBSTITUTIONS.items():
+        tmp_source = tmp_source.replace(k, v)
+    source[0] = tmp_source
+
+
+def setup(app):
+    app.connect("source-read", replace_globals)
+
+
 year = date.today().year
 
-rst_prolog = '''
-.. |year| replace:: {0}
-'''.format(year)
-
+rst_prolog = f"""
+.. |year| replace:: {year}
+.. |MIN_PY_VER| replace:: {read_min_python_version()}
+"""
 
 # General information about the project.
 project = "Rally"
@@ -58,8 +91,9 @@ author = "Daniel Mitterdorfer"
 #
 # The short X.Y version.
 
-
 # development versions always have the suffix '.dev0'
+
+
 def read_version(full_version=True):
     with open(join(dirname(__file__), os.pardir, "version.txt")) as f:
         raw_version = f.read().strip()

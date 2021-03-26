@@ -16,6 +16,8 @@
 # under the License.
 
 import collections
+import copy
+import logging
 import random
 import unittest.mock as mock
 from collections import namedtuple
@@ -23,6 +25,7 @@ from unittest import TestCase
 from unittest.mock import call
 
 import elasticsearch
+import pytest
 
 from esrally import config, metrics, exceptions, telemetry
 from esrally.mechanic import cluster
@@ -153,13 +156,14 @@ raiseTransportError = TransportErrorSupplier()
 
 
 class TransportClient:
-    def __init__(self, response=None, force_error=False):
+    def __init__(self, response=None, force_error=False, error=elasticsearch.TransportError):
         self._response = response
         self._force_error = force_error
+        self._error = error
 
     def perform_request(self, *args, **kwargs):
         if self._force_error:
-            raise elasticsearch.TransportError
+            raise self._error
         else:
             return self._response
 
@@ -876,6 +880,501 @@ class RecoveryStatsTests(TestCase):
                 "shard": 2
             }),
         ],  any_order=True)
+
+
+class TestSearchableSnapshotsStats:
+    response_fragment_total = [
+            {
+                "file_ext": "fnm",
+                "num_files": 50,
+                "total_size": 279900,
+                "open_count": 274,
+                "close_count": 274,
+                "contiguous_bytes_read": {
+                    "count": 1644,
+                    "sum": 1533852,
+                    "min": 478,
+                    "max": 1024
+                },
+                "non_contiguous_bytes_read": {
+                    "count": 0,
+                    "sum": 0,
+                    "min": 0,
+                    "max": 0
+                },
+                "cached_bytes_read": {
+                    "count": 1613,
+                    "sum": 1502108,
+                    "min": 478,
+                    "max": 1024
+                },
+                "index_cache_bytes_read": {
+                    "count": 31,
+                    "sum": 173538,
+                    "min": 0,
+                    "max": 5598
+                },
+                "cached_bytes_written": {
+                    "count": 81,
+                    "sum": 453438,
+                    "min": 5598,
+                    "max": 5598,
+                    "time": "1.6s",
+                    "time_in_nanos": 1607457548
+                },
+                "direct_bytes_read": {
+                    "count": 0,
+                    "sum": 0,
+                    "min": 0,
+                    "max": 0,
+                    "time": "0s",
+                    "time_in_nanos": 0
+                },
+                "optimized_bytes_read": {
+                    "count": 0,
+                    "sum": 0,
+                    "min": 0,
+                    "max": 0,
+                    "time": "0s",
+                    "time_in_nanos": 0
+                },
+                "forward_seeks": {
+                    "small": {
+                        "count": 0,
+                        "sum": 0,
+                        "min": 0,
+                        "max": 0
+                    },
+                    "large": {
+                        "count": 0,
+                        "sum": 0,
+                        "min": 0,
+                        "max": 0
+                    }
+                },
+                "backward_seeks": {
+                    "small": {
+                        "count": 0,
+                        "sum": 0,
+                        "min": 0,
+                        "max": 0
+                    },
+                    "large": {
+                        "count": 0,
+                        "sum": 0,
+                        "min": 0,
+                        "max": 0
+                    }
+                },
+                "blob_store_bytes_requested": {
+                    "count": 50,
+                    "sum": 279900,
+                    "min": 5598,
+                    "max": 5598
+                },
+                "current_index_cache_fills": 0
+            },
+            {
+                "file_ext": "kdd",
+                "num_files": 50,
+                "total_size": 356841728759,
+                "open_count": 174,
+                "close_count": 174,
+                "contiguous_bytes_read": {
+                    "count": 184852,
+                    "sum": 189288448,
+                    "min": 1024,
+                    "max": 1024
+                },
+                "non_contiguous_bytes_read": {
+                    "count": 2228,
+                    "sum": 2281472,
+                    "min": 0,
+                    "max": 1024
+                },
+                "cached_bytes_read": {
+                    "count": 187049,
+                    "sum": 191538176,
+                    "min": 1024,
+                    "max": 1024
+                },
+                "index_cache_bytes_read": {
+                    "count": 31,
+                    "sum": 31744,
+                    "min": 0,
+                    "max": 1024
+                },
+                "cached_bytes_written": {
+                    "count": 122,
+                    "sum": 274173997,
+                    "min": 1024,
+                    "max": 7942949,
+                    "time": "22.2s",
+                    "time_in_nanos": 22277973991
+                },
+                "direct_bytes_read": {
+                    "count": 0,
+                    "sum": 0,
+                    "min": 0,
+                    "max": 0,
+                    "time": "0s",
+                    "time_in_nanos": 0
+                },
+                "optimized_bytes_read": {
+                    "count": 0,
+                    "sum": 0,
+                    "min": 0,
+                    "max": 0,
+                    "time": "0s",
+                    "time_in_nanos": 0
+                },
+                "forward_seeks": {
+                    "small": {
+                        "count": 2114,
+                        "sum": 11467,
+                        "min": 0,
+                        "max": 10
+                    },
+                    "large": {
+                        "count": 174,
+                        "sum": 1241804830245,
+                        "min": 7134354745,
+                        "max": 7139204589
+                    }
+                },
+                "backward_seeks": {
+                    "small": {
+                        "count": 114,
+                        "sum": 192303474,
+                        "min": 0,
+                        "max": 1689340
+                    },
+                    "large": {
+                        "count": 0,
+                        "sum": 0,
+                        "min": 0,
+                        "max": 0
+                    }
+                },
+                "blob_store_bytes_requested": {
+                    "count": 91,
+                    "sum": 274142253,
+                    "min": 131072,
+                    "max": 7942949
+                },
+                "current_index_cache_fills": 0
+            }
+        ]
+
+    response_fragment_indices = {
+        "elasticlogs-2020-01-01": {
+                                      "total": [
+                                          {
+                                              "file_ext": "fnm",
+                                              "num_files": 5,
+                                              "total_size": 27990,
+                                              "open_count": 20,
+                                              "close_count": 20,
+                                              "contiguous_bytes_read": {
+                                                  "count": 120,
+                                                  "sum": 111960,
+                                                  "min": 478,
+                                                  "max": 1024
+                                              },
+                                              "non_contiguous_bytes_read": {
+                                                  "count": 0,
+                                                  "sum": 0,
+                                                  "min": 0,
+                                                  "max": 0
+                                              },
+                                              "cached_bytes_read": {
+                                                  "count": 120,
+                                                  "sum": 111960,
+                                                  "min": 478,
+                                                  "max": 1024
+                                              },
+                                              "index_cache_bytes_read": {
+                                                  "count": 0,
+                                                  "sum": 0,
+                                                  "min": 0,
+                                                  "max": 0
+                                              },
+                                              "cached_bytes_written": {
+                                                  "count": 5,
+                                                  "sum": 27990,
+                                                  "min": 5598,
+                                                  "max": 5598,
+                                                  "time": "193.9ms",
+                                                  "time_in_nanos": 193930007
+                                              },
+                                              "direct_bytes_read": {
+                                                  "count": 0,
+                                                  "sum": 0,
+                                                  "min": 0,
+                                                  "max": 0,
+                                                  "time": "0s",
+                                                  "time_in_nanos": 0
+                                              },
+                                              "optimized_bytes_read": {
+                                                  "count": 0,
+                                                  "sum": 0,
+                                                  "min": 0,
+                                                  "max": 0,
+                                                  "time": "0s",
+                                                  "time_in_nanos": 0
+                                              },
+                                              "forward_seeks": {
+                                                  "small": {
+                                                      "count": 0,
+                                                      "sum": 0,
+                                                      "min": 0,
+                                                      "max": 0
+                                                  },
+                                                  "large": {
+                                                      "count": 0,
+                                                      "sum": 0,
+                                                      "min": 0,
+                                                      "max": 0
+                                                  }
+                                              },
+                                              "backward_seeks": {
+                                                  "small": {
+                                                      "count": 0,
+                                                      "sum": 0,
+                                                      "min": 0,
+                                                      "max": 0
+                                                  },
+                                                  "large": {
+                                                      "count": 0,
+                                                      "sum": 0,
+                                                      "min": 0,
+                                                      "max": 0
+                                                  }
+                                              },
+                                              "blob_store_bytes_requested": {
+                                                  "count": 5,
+                                                  "sum": 27990,
+                                                  "min": 5598,
+                                                  "max": 5598
+                                              },
+                                              "current_index_cache_fills": 0
+                                          },
+                                          {
+                                              "file_ext": "kdd",
+                                              "num_files": 5,
+                                              "total_size": 35672988421,
+                                              "open_count": 10,
+                                              "close_count": 10,
+                                              "contiguous_bytes_read": {
+                                                  "count": 10,
+                                                  "sum": 10240,
+                                                  "min": 1024,
+                                                  "max": 1024
+                                              },
+                                              "non_contiguous_bytes_read": {
+                                                  "count": 0,
+                                                  "sum": 0,
+                                                  "min": 0,
+                                                  "max": 0
+                                              },
+                                              "cached_bytes_read": {
+                                                  "count": 10,
+                                                  "sum": 10240,
+                                                  "min": 1024,
+                                                  "max": 1024
+                                              },
+                                              "index_cache_bytes_read": {
+                                                  "count": 0,
+                                                  "sum": 0,
+                                                  "min": 0,
+                                                  "max": 0
+                                              },
+                                              "cached_bytes_written": {
+                                                  "count": 5,
+                                                  "sum": 655360,
+                                                  "min": 131072,
+                                                  "max": 131072,
+                                                  "time": "414.4ms",
+                                                  "time_in_nanos": 414455967
+                                              },
+                                              "direct_bytes_read": {
+                                                  "count": 0,
+                                                  "sum": 0,
+                                                  "min": 0,
+                                                  "max": 0,
+                                                  "time": "0s",
+                                                  "time_in_nanos": 0
+                                              },
+                                              "optimized_bytes_read": {
+                                                  "count": 0,
+                                                  "sum": 0,
+                                                  "min": 0,
+                                                  "max": 0,
+                                                  "time": "0s",
+                                                  "time_in_nanos": 0
+                                              },
+                                              "forward_seeks": {
+                                                  "small": {
+                                                      "count": 0,
+                                                      "sum": 0,
+                                                      "min": 0,
+                                                      "max": 0
+                                                  },
+                                                  "large": {
+                                                      "count": 10,
+                                                      "sum": 71345966442,
+                                                      "min": 7134354745,
+                                                      "max": 7134854030
+                                                  }
+                                              },
+                                              "backward_seeks": {
+                                                  "small": {
+                                                      "count": 0,
+                                                      "sum": 0,
+                                                      "min": 0,
+                                                      "max": 0
+                                                  },
+                                                  "large": {
+                                                      "count": 0,
+                                                      "sum": 0,
+                                                      "min": 0,
+                                                      "max": 0
+                                                  }
+                                              },
+                                              "blob_store_bytes_requested": {
+                                                  "count": 5,
+                                                  "sum": 655360,
+                                                  "min": 131072,
+                                                  "max": 131072
+                                              },
+                                              "current_index_cache_fills": 0
+                                          }
+                                          ]
+                                  }
+    }
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_no_metrics_if_empty_searchable_snapshots_stats(self, metrics_store_put_doc):
+        response = {}
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client = Client(transport_client=TransportClient(response=response))
+        recorder = telemetry.SearchableSnapshotsStatsRecorder(
+            cluster_name="default",
+            client=client,
+            metrics_store=metrics_store,
+            sample_interval=1,
+            indices=["logs*"])
+
+        recorder.record()
+
+        assert metrics_store_put_doc.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_no_metrics_if_no_searchable_snapshots_stats(self, metrics_store_put_doc):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client = Client(transport_client=TransportClient(
+            force_error=True,
+            error=elasticsearch.NotFoundError(
+                "",
+                "",
+                {"error": {"reason": "No searchable snapshots indices found"}})
+        ))
+        recorder = telemetry.SearchableSnapshotsStatsRecorder(
+            cluster_name="default",
+            client=client,
+            metrics_store=metrics_store,
+            sample_interval=1,
+            indices=["logs*"])
+
+        logger = logging.getLogger("esrally.telemetry")
+        with mock.patch.object(logger, "info") as mocked_info:
+            recorder.record()
+            mocked_info.assert_called_once_with(
+                "Unable to find valid indices while collecting searchable snapshots stats on cluster [%s]", "default"
+            )
+
+        assert metrics_store_put_doc.call_count == 0
+
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_stores_total_stats(self, metrics_store_put_doc):
+        response = {
+            "total": copy.deepcopy(TestSearchableSnapshotsStats.response_fragment_total)
+        }
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client = Client(transport_client=TransportClient(response=response))
+
+        recorder = telemetry.SearchableSnapshotsStatsRecorder(
+            cluster_name="leader",
+            client=client,
+            metrics_store=metrics_store,
+            sample_interval=1)
+        recorder.record()
+
+        expected_calls = [
+            call({
+                "name": "searchable-snapshots-stats",
+                "lucene_file_type": stat["file_ext"],
+                "stats": stat},
+                level=MetaInfoScope.cluster,
+                meta_data={
+                    "cluster": "leader", "level": "cluster"})
+            for stat in TestSearchableSnapshotsStats.response_fragment_total]
+
+        metrics_store_put_doc.assert_has_calls(expected_calls, any_order=True)
+
+    @pytest.mark.parametrize("seed", range(40))
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_stores_index_stats(self, metrics_store_put_doc, seed):
+        random.seed(seed)
+        response = {
+            "total": copy.deepcopy(TestSearchableSnapshotsStats.response_fragment_total),
+            "indices": copy.deepcopy(TestSearchableSnapshotsStats.response_fragment_indices)
+        }
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client = Client(transport_client=TransportClient(response=response))
+
+        recorder = telemetry.SearchableSnapshotsStatsRecorder(
+            cluster_name="default",
+            client=client,
+            metrics_store=metrics_store,
+            sample_interval=1,
+            indices=random.choice([
+                ["elasticlogs*"],
+                ["elasticlogs-2020-01-01"]
+            ])
+        )
+        recorder.record()
+
+        expected_calls = [
+            call({
+                "name": "searchable-snapshots-stats",
+                "lucene_file_type": stat["file_ext"],
+                "stats": stat},
+                level=MetaInfoScope.cluster,
+                meta_data={
+                    "cluster": "default", "level": "cluster"})
+            for stat in TestSearchableSnapshotsStats.response_fragment_total]
+
+        expected_calls.extend([
+            call({
+                "name": "searchable-snapshots-stats",
+                "lucene_file_type": stat["file_ext"],
+                "stats": stat,
+                "index": "elasticlogs-2020-01-01"
+                },
+                level=MetaInfoScope.cluster,
+                meta_data={
+                    "cluster": "default", "level": "index"})
+            for stat in TestSearchableSnapshotsStats.response_fragment_indices["elasticlogs-2020-01-01"]["total"]])
+
+        metrics_store_put_doc.assert_has_calls(expected_calls, any_order=True)
 
 
 class NodeStatsTests(TestCase):

@@ -415,7 +415,8 @@ class Driver:
             telemetry.SegmentStats(log_root, es_default),
             telemetry.CcrStats(telemetry_params, es, self.metrics_store),
             telemetry.RecoveryStats(telemetry_params, es, self.metrics_store),
-            telemetry.TransformStats(telemetry_params, es, self.metrics_store)
+            telemetry.TransformStats(telemetry_params, es, self.metrics_store),
+            telemetry.SearchableSnapshotsStats(telemetry_params, es, self.metrics_store)
         ])
 
     def wait_for_rest_api(self, es):
@@ -671,26 +672,34 @@ class SamplePostprocessor:
                 meta_data = self.merge(
                     self.track_meta_data,
                     self.challenge_meta_data,
-                    sample.operation.meta_data,
+                    sample.operation_meta_data,
                     sample.task.meta_data,
                     sample.request_meta_data)
 
-                self.metrics_store.put_value_cluster_level(name="latency", value=sample.latency_ms, unit="ms", task=sample.task.name,
-                                                           operation=sample.operation.name, operation_type=sample.operation.type,
+                self.metrics_store.put_value_cluster_level(name="latency", value=convert.seconds_to_ms(sample.latency),
+                                                           unit="ms", task=sample.task.name,
+                                                           operation=sample.operation_name, operation_type=sample.operation_type,
                                                            sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                            relative_time=sample.relative_time, meta_data=meta_data)
 
-                self.metrics_store.put_value_cluster_level(name="service_time", value=sample.service_time_ms,
+                self.metrics_store.put_value_cluster_level(name="service_time", value=convert.seconds_to_ms(sample.service_time),
                                                            unit="ms", task=sample.task.name,
-                                                           operation=sample.task.name, operation_type=sample.operation.type,
+                                                           operation=sample.operation_name, operation_type=sample.operation_type,
                                                            sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                            relative_time=sample.relative_time, meta_data=meta_data)
 
-                self.metrics_store.put_value_cluster_level(name="processing_time", value=sample.processing_time_ms,
+                self.metrics_store.put_value_cluster_level(name="processing_time", value=convert.seconds_to_ms(sample.processing_time),
                                                            unit="ms", task=sample.task.name,
-                                                           operation=sample.task.name, operation_type=sample.operation.type,
+                                                           operation=sample.operation_name, operation_type=sample.operation_type,
                                                            sample_type=sample.sample_type, absolute_time=sample.absolute_time,
                                                            relative_time=sample.relative_time, meta_data=meta_data)
+
+                for timing in sample.dependent_timings:
+                    self.metrics_store.put_value_cluster_level(name="service_time", value=convert.seconds_to_ms(timing.service_time),
+                                                               unit="ms", task=timing.task.name,
+                                                               operation=timing.operation_name, operation_type=timing.operation_type,
+                                                               sample_type=timing.sample_type, absolute_time=timing.absolute_time,
+                                                               relative_time=timing.relative_time, meta_data=meta_data)
 
         end = time.perf_counter()
         self.logger.debug("Storing latency and service time took [%f] seconds.", (end - start))
@@ -991,12 +1000,13 @@ class Sampler:
         self.q = queue.Queue(maxsize=buffer_size)
         self.logger = logging.getLogger(__name__)
 
-    def add(self, task, client_id, sample_type, meta_data, latency, service_time, processing_time, throughput,
-            ops, ops_unit, time_period, percent_completed):
+    def add(self, task, client_id, sample_type, meta_data, absolute_time, request_start, latency, service_time,
+            processing_time, throughput, ops, ops_unit, time_period, percent_completed, dependent_timing=None):
         try:
             self.q.put_nowait(
-                Sample(client_id, time.time(), time.perf_counter() - self.start_timestamp, task, sample_type, meta_data,
-                       latency, service_time, processing_time, throughput, ops, ops_unit, time_period, percent_completed))
+                Sample(client_id, absolute_time, request_start, self.start_timestamp, task, sample_type, meta_data,
+                       latency, service_time, processing_time, throughput, ops, ops_unit, time_period,
+                       percent_completed, dependent_timing))
         except queue.Full:
             self.logger.warning("Dropping sample for [%s] due to a full sampling queue.", task.operation.name)
 
@@ -1012,33 +1022,58 @@ class Sampler:
 
 
 class Sample:
-    def __init__(self, client_id, absolute_time, relative_time, task, sample_type, request_meta_data, latency_ms,
-                 service_time_ms, processing_time_ms, throughput, total_ops, total_ops_unit, time_period,
-                 percent_completed):
+    def __init__(self, client_id, absolute_time, request_start, task_start, task, sample_type, request_meta_data, latency,
+                 service_time, processing_time, throughput, total_ops, total_ops_unit, time_period,
+                 percent_completed, dependent_timing=None, operation_name=None, operation_type=None):
         self.client_id = client_id
         self.absolute_time = absolute_time
-        self.relative_time = relative_time
+        self.request_start = request_start
+        self.task_start = task_start
         self.task = task
         self.sample_type = sample_type
         self.request_meta_data = request_meta_data
-        self.latency_ms = latency_ms
-        self.service_time_ms = service_time_ms
-        self.processing_time_ms = processing_time_ms
+        self.latency = latency
+        self.service_time = service_time
+        self.processing_time = processing_time
         self.throughput = throughput
         self.total_ops = total_ops
         self.total_ops_unit = total_ops_unit
         self.time_period = time_period
+        self._dependent_timing = dependent_timing
+        self._operation_name = operation_name
+        self._operation_type = operation_type
         # may be None for eternal tasks!
         self.percent_completed = percent_completed
 
     @property
-    def operation(self):
-        return self.task.operation
+    def operation_name(self):
+        return self._operation_name if self._operation_name else self.task.operation.name
+
+    @property
+    def operation_type(self):
+        return self._operation_type if self._operation_type else self.task.operation.type
+
+    @property
+    def operation_meta_data(self):
+        return self.task.operation.meta_data
+
+    @property
+    def relative_time(self):
+        return self.request_start - self.task_start
+
+    @property
+    def dependent_timings(self):
+        if self._dependent_timing:
+            for t in self._dependent_timing:
+                yield Sample(self.client_id, t["absolute_time"], t["request_start"], self.task_start, self.task,
+                             self.sample_type, self.request_meta_data, 0, t["service_time"], 0, 0, self.total_ops,
+                             self.total_ops_unit, self.time_period, self.percent_completed, None,
+                             t["operation"], t["operation-type"])
 
     def __repr__(self, *args, **kwargs):
-        return "[%f; %f] [client [%s]] [%s] [%s]: [%f] ms request latency, [%f] ms service time, [%d %s]" % \
-               (self.absolute_time, self.relative_time, self.client_id, self.task, self.sample_type, self.latency_ms, self.service_time_ms,
-                self.total_ops, self.total_ops_unit)
+        return f"[{self.absolute_time}; {self.relative_time}] [client [{self.client_id}]] [{self.task}] " \
+               f"[{self.sample_type}]: [{self.latency}s] request latency, [{self.service_time}s] service time, " \
+               f"[{self.total_ops} {self.total_ops_unit}]"
 
 
 def select_challenge(config, t):
@@ -1358,15 +1393,19 @@ class AsyncExecutor:
                     rest = absolute_expected_schedule_time - time.perf_counter()
                     if rest > 0:
                         await asyncio.sleep(rest)
-                request_context = self.es["default"].init_request_context()
+
+                absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
                 self.schedule_handle.before_request(processing_start)
-                total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
+                async with self.es["default"].new_request_context() as request_context:
+                    total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
+                    request_start = request_context.request_start
+                    request_end = request_context.request_end
+
                 processing_end = time.perf_counter()
+                service_time = request_end - request_start
                 processing_time = processing_end - processing_start
-                stop = request_context["request_end"]
-                service_time = request_context["request_end"] - request_context["request_start"]
-                time_period = stop - total_start
+                time_period = request_end - total_start
                 self.schedule_handle.after_request(processing_end, total_ops, total_ops_unit, request_meta_data)
                 # Allow runners to override the throughput calculation in very specific circumstances. Usually, Rally
                 # assumes that throughput is the "amount of work" (determined by the "weight") per unit of time
@@ -1380,7 +1419,7 @@ class AsyncExecutor:
                 #
                 throughput = request_meta_data.pop("throughput", None)
                 # Do not calculate latency separately when we run unthrottled. This metric is just confusing then.
-                latency = stop - absolute_expected_schedule_time if throughput_throttled else service_time
+                latency = request_end - absolute_expected_schedule_time if throughput_throttled else service_time
                 # If this task completes the parent task we should *not* check for completion by another client but
                 # instead continue until our own runner has completed. We need to do this because the current
                 # worker (process) could run multiple clients that execute the same task. We do not want all clients to
@@ -1397,10 +1436,11 @@ class AsyncExecutor:
                     progress = runner.percent_completed
                 else:
                     progress = percent_completed
+
                 self.sampler.add(self.task, self.client_id, sample_type, request_meta_data,
-                                 convert.seconds_to_ms(latency), convert.seconds_to_ms(service_time),
-                                 convert.seconds_to_ms(processing_time), throughput, total_ops, total_ops_unit,
-                                 time_period, progress)
+                                 absolute_processing_start, request_start,
+                                 latency, service_time, processing_time, throughput, total_ops, total_ops_unit,
+                                 time_period, progress, request_meta_data.pop("dependent_timing", None))
 
                 if completed:
                     self.logger.info("Task [%s] is considered completed due to external event.", self.task)
@@ -1751,12 +1791,12 @@ class ScheduleHandle:
             self.task_progress_control.start()
             while True:
                 try:
+                    next_scheduled = self.sched.next(next_scheduled)
                     # does not contribute at all to completion. Hence, we cannot define completion.
                     percent_completed = self.params.percent_completed if param_source_knows_progress else None
                     #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
                     yield (next_scheduled, self.task_progress_control.sample_type, percent_completed, self.runner,
                            self.params.params())
-                    next_scheduled = self.sched.next(next_scheduled)
                     self.task_progress_control.next()
                 except StopIteration:
                     return
@@ -1764,13 +1804,13 @@ class ScheduleHandle:
             self.task_progress_control.start()
             while not self.task_progress_control.completed:
                 try:
+                    next_scheduled = self.sched.next(next_scheduled)
                     #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
                     yield (next_scheduled,
                            self.task_progress_control.sample_type,
                            self.task_progress_control.percent_completed,
                            self.runner,
                            self.params.params())
-                    next_scheduled = self.sched.next(next_scheduled)
                     self.task_progress_control.next()
                 except StopIteration:
                     return

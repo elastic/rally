@@ -189,7 +189,7 @@ E.g. a key defined on a task, will override the same key defined on a challenge.
 indices
 .......
 
-The ``indices`` section contains a list of all indices that are used by this track.  Cannot be used if the ``data-streams`` section is specified.
+The ``indices`` section contains a list of all indices that are used by this track. Cannot be used if the ``data-streams`` section is specified.
 
 Each index in this list consists of the following properties:
 
@@ -313,9 +313,9 @@ Each entry in the ``documents`` list consists of the following properties:
 * ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
-* ``target-index``: Defines the name of the index which should be targeted for bulk operations.  Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
+* ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true`` or if a ``target-data-stream`` is specified. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
-* ``target-data-stream``: Defines the name of the data stream which should be targeted for bulk operations.  Rally will automatically derive this value if you have defined exactly one index in the ``data-streams`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
+* ``target-data-stream``: Defines the name of the data stream which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``data-streams`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true``. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``meta`` (optional): A mapping of arbitrary key-value pairs with additional meta-data for a source file.
@@ -578,16 +578,16 @@ Each operation consists of the following properties:
 * ``operation-type`` (mandatory): Type of this operation. See below for the operation types that are supported out of the box in Rally. You can also add arbitrary operations by defining :doc:`custom runners </adding_tracks>`.
 * ``include-in-reporting`` (optional, defaults to ``true`` for normal operations and to ``false`` for administrative operations): Whether or not this operation should be included in the command line report. For example you might want Rally to create an index for you but you are not interested in detailed metrics about it. Note that Rally will still record all metrics in the metrics store.
 * ``assertions`` (optional, defaults to ``None``): A list of assertions that should be checked. See below for more details.
-* ``request-timeout`` (optional, defaults to ``None``): The client-side timeout for this operation.  Represented as a floating-point number in seconds, e.g. ``1.5``.
+* ``request-timeout`` (optional, defaults to ``None``): The client-side timeout for this operation. Represented as a floating-point number in seconds, e.g. ``1.5``.
 * ``headers`` (optional, defaults to ``None``): A dictionary of key-value pairs to pass as headers in the operation.
-* ``opaque-id`` (optional, defaults to ``None`` [unused]): A special ID set as the value of ``x-opaque-id`` in the client headers of the operation.  Overrides existing ``x-opaque-id`` entries in ``headers`` (case-insensitive).
+* ``opaque-id`` (optional, defaults to ``None`` [unused]): A special ID set as the value of ``x-opaque-id`` in the client headers of the operation. Overrides existing ``x-opaque-id`` entries in ``headers`` (case-insensitive).
 
 **Assertions**
 
 Use assertions for sanity checks, e.g. to ensure a query returns results. Assertions need to be defined with the following properties. All of them are mandatory:
 
 * ``property``: A dot-delimited path to the meta-data field to be checked. Only meta-data fields that are returned by an operation are supported. See the respective "meta-data" section of an operation for the supported meta-data.
-* ``condition``: The following conditions are supported: ``<``, ``<=``, ``==``, ``>=``, ``>=``.
+* ``condition``: The following conditions are supported: ``<``, ``<=``, ``==``, ``>=``, ``>``.
 * ``value``: The expected value.
 
 Assertions are disabled by default and can be enabled with the command line flag ``--enable-assertions``. A failing assertion aborts the benchmark.
@@ -684,7 +684,7 @@ The following meta-data are always returned:
 * ``success``: A boolean indicating whether the bulk request has succeeded.
 * ``success-count``: Number of successfully processed bulk items for this request. This value will only be determined in case of errors or the bulk-size has been specified in docs.
 * ``error-count``: Number of failed bulk items for this request.
-* ``took``` Value of the the ``took`` property in the bulk response.
+* ``took``: Value of the the ``took`` property in the bulk response.
 
 If ``detailed-results`` is ``true`` the following meta-data are returned in addition:
 
@@ -877,14 +877,14 @@ Properties
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
     .. note::
-        1. Parameters that are implicitly set by Rally (e.g. `body` or `request_cache`) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        1. Parameters that are implicitly set by Rally (e.g. ``body`` or ``request_cache``) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
         2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 * ``body`` (mandatory): The query body.
 * ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results. This flag is ineffective for scroll queries.
-* ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".
-* ``results-per-page`` (optional):  Number of documents to retrieve per page for scroll queries.
+* ``pages`` (optional): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all".  See also the ``scroll-search`` operation type.
+* ``results-per-page`` (optional):  Number of documents to retrieve per page. This maps to the Search API's ``size`` parameter, and can be used for scroll and non-scroll searches. Defaults to ``10``
 
 Example::
 
@@ -902,9 +902,11 @@ Example::
       }
     }
 
-For scroll queries, throughput will be reported as number of retrieved scroll pages per second. The unit is ops/s, where one op(eration) is one page that has been retrieved. The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
+For scroll queries, throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page.
 
-For other queries, throughput will be reported as number of search requests per second, also measured as ops/s.
+For other queries, throughput will be reported as number of search requests per second (``ops/s``).
+
+ Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
 
 Meta-data
 """""""""
@@ -920,7 +922,118 @@ If ``detailed-results`` is ``true`` the following meta-data are returned in addi
 * ``hits``: Total number of hits for this query.
 * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
 * ``timed_out``: Whether the query has timed out. For scroll queries, this flag is ``true`` if the flag was ``true`` for any of the queries issued.
-* ``took``` Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
+* ``took``: Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
+
+paginated-search
+~~~~~~~~~~~~~~~~
+
+With the operation type ``paginated-search`` you can execute `paginated searches <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html#search-after>`_, specifically using the ``search_after`` mechanism.
+
+Properties
+""""""""""
+
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
+
+    .. note::
+        1. Parameters that are implicitly set by Rally (e.g. ``body`` or ``request_cache``) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+* ``body`` (mandatory): The query body.
+* ``pages`` (mandatory): Number of pages to retrieve (at most) for this search. If a query yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all".
+* ``results-per-page`` (optional): Number of results to retrieve per page. This maps to the Search API's ``size`` parameter, and can be used for paginated and non-paginated searches. Defaults to ``10``
+* ``with-point-in-time-from`` (optional): The ``name`` of an ``open-point-in-time`` operation. Causes the search to use the generated `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_.
+
+    .. note::
+        This parameter requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
+
+* ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
+
+Example::
+
+    {
+      "name": "default",
+      "operation-type": "paginated-search",
+      "pages": 10,
+      "body": {
+        "query": {
+          "match_all": {}
+        }
+      },
+      "request-params": {
+        "_source_include": "some_field",
+        "analyze_wildcard": "false"
+      }
+    }
+
+.. note::
+    See also the ``close-point-in-time`` operation for a larger example.
+
+Throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
+
+Meta-data
+"""""""""
+
+* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
+* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
+* ``success``: A boolean indicating whether the query has succeeded.
+* ``hits``: Total number of hits for this query.
+* ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
+* ``timed_out``: Whether any of the issued queries has timed out.
+* ``took``: The sum of all ``took`` values in query responses.
+
+scroll-search
+~~~~~~~~~~~~~
+
+With the operation type ``scroll-search`` you can execute `scroll-based searches <https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html#scroll-search-results>`_.
+
+Properties
+""""""""""
+
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
+* ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
+
+    .. note::
+        1. Parameters that are implicitly set by Rally (e.g. ``body`` or ``request_cache``) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+* ``body`` (mandatory): The query body.
+* ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
+* ``pages`` (mandatory): Number of pages to retrieve (at most) for this search. If a query yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all".
+* ``results-per-page`` (optional): Number of results to retrieve per page.
+
+Example::
+
+    {
+      "name": "default",
+      "operation-type": "scroll-search",
+      "pages": 10,
+      "body": {
+        "query": {
+          "match_all": {}
+        }
+      },
+      "request-params": {
+        "_source_include": "some_field",
+        "analyze_wildcard": "false"
+      }
+    }
+
+Throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
+
+Meta-data
+"""""""""
+
+* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
+* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
+* ``success``: A boolean indicating whether the query has succeeded.
+* ``hits``: Total number of hits for this query.
+* ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
+* ``timed_out``: Whether any of the issued queries has timed out.
+* ``took``: The sum of all ``took`` values in query responses.
 
 .. _put_pipeline:
 
@@ -992,7 +1105,7 @@ With the operation-type ``put-settings`` you can execute the `cluster update set
 Properties
 """"""""""
 
-* `body` (mandatory): The cluster settings to apply.
+* ``body`` (mandatory): The cluster settings to apply.
 
 Example::
 
@@ -2385,7 +2498,7 @@ delete-async-search
 .. note::
     This operation can only be used inside a ``composite`` operation because it needs to read the async search id from earlier API calls.
 
-With the operation ``get-async-search`` you can `delete an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#delete-async-search>`_.
+With the operation ``delete-async-search`` you can `delete an async search <https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html#delete-async-search>`_.
 
 Properties
 """"""""""
@@ -2451,6 +2564,90 @@ In the example below we issue two async searches, named ``search-1`` and ``searc
                 "delete-results-for": [
                   "search-1",
                   "search-2"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
+open-point-in-time
+~~~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to write the Point-In-Time ID for use for later operations.
+
+With the ``open-point-in-time`` operation you can open a `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_ to be used in subsequent `search` tasks.
+
+Properties
+""""""""""
+
+* ``name``: Referenced by other tasks to use the ``pit_id`` produced by this operation.
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams for which to create this point-in-time. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use.
+* ``keep-alive`` (optional): Duration to keep the point-in-time open after initialization (default: ``1m``)
+
+Meta-data
+"""""""""
+
+The operation returns no meta-data.
+
+close-point-in-time
+~~~~~~~~~~~~~~~~~~~
+
+.. note::
+    This operation can only be used inside a ``composite`` operation because it needs to read the Point-In-Time ID from earlier operations.
+
+With the ``close-point-in-time`` operation you can close a previously opened point in time from another task.
+
+Properties
+""""""""""
+
+* ``with-point-in-time-from``: Denotes the ``name`` of a given ``open-point-in-time`` operation (from the same composite stream) whose `pit_id` should be closed.
+
+**Example**
+
+In this example, a point-in-time is opened, used by a ``paginated-search`` operation, and closed::
+
+    {
+      "schedule": [
+        {
+          "name": "search-after-with-pit",
+          "operation": {
+            "operation-type": "composite",
+            "requests": [
+              {
+                "stream": [
+                  {
+                    "operation-type": "open-point-in-time",
+                    "name": "open-pit",
+                    "index": "logs-*"
+                  },
+                  {
+                    "operation-type": "paginated-search",
+                    "index": "logs-*",
+                    "with-point-in-time-from": "open-pit",
+                    "pages": 25,
+                    "results-per-page": 1000,
+                    "body": {
+                      "sort": [
+                        {"@timestamp": "desc"}
+                      ],
+                      "query": {
+                        "match_all": {}
+                      }
+                    }
+                  },
+                  {
+                    "name": "close-pit",
+                    "operation-type": "close-point-in-time",
+                    "with-point-in-time-from": "open-pit"
+                  }
                 ]
               }
             ]
