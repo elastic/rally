@@ -23,6 +23,8 @@ import os
 from datetime import date
 from os.path import join, dirname
 
+from sphinx.config import ConfigError
+
 # -- General configuration ------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -41,9 +43,17 @@ source_suffix = '.rst'
 master_doc = 'index'
 language = None
 
+CI_VARS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".ci", "variables.json")
+
 
 def read_min_python_version():
-    return os.environ["MIN_PY_VER"]
+    try:
+        with open(CI_VARS, "rt") as fp:
+            return json.load(fp)["python_versions"]["MIN_PY_VER"]
+    except KeyError as e:
+        raise ConfigError(
+            f"Failed building docs as required key [{e}] couldn't be found in the file [{CI_VARS}]."
+        )
 
 
 GLOBAL_SUBSTITUTIONS = {
