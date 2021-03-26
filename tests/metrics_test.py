@@ -1545,13 +1545,13 @@ class StatsCalculatorTests(TestCase):
         store.put_value_cluster_level("latency", 225, unit="ms", task="index #1", operation_type=track.OperationType.Bulk)
 
         store.put_value_cluster_level("service_time", 250, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
-                                      sample_type=metrics.SampleType.Warmup, meta_data={"success": False})
+                                      sample_type=metrics.SampleType.Warmup, meta_data={"success": False}, relative_time=536)
         store.put_value_cluster_level("service_time", 190, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
-                                      meta_data={"success": True})
+                                      meta_data={"success": True}, relative_time=595)
         store.put_value_cluster_level("service_time", 200, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
-                                      meta_data={"success": False})
+                                      meta_data={"success": False}, relative_time=709)
         store.put_value_cluster_level("service_time", 210, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
-                                      meta_data={"success": True})
+                                      meta_data={"success": True}, relative_time=653)
 
         # only warmup samples
         store.put_value_cluster_level("throughput", 500, unit="docs/s", task="index #2",
@@ -1559,7 +1559,7 @@ class StatsCalculatorTests(TestCase):
         store.put_value_cluster_level("latency", 2800, unit="ms", task="index #2", operation_type=track.OperationType.Bulk,
                                       sample_type=metrics.SampleType.Warmup)
         store.put_value_cluster_level("service_time", 250, unit="ms", task="index #2", operation_type=track.OperationType.Bulk,
-                                      sample_type=metrics.SampleType.Warmup)
+                                      sample_type=metrics.SampleType.Warmup, relative_time=600)
 
         store.put_doc(doc={
             "name": "ml_processing_time",
@@ -1583,6 +1583,7 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(collections.OrderedDict(
             [("50_0", 200), ("100_0", 210), ("mean", 200), ("unit", "ms")]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
+        self.assertAlmostEqual(709*1000*1000, opm["duration_time"])
 
         opm2 = stats.metrics("index #2")
         self.assertEqual(collections.OrderedDict(
@@ -1595,6 +1596,7 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(17.2, stats.ml_processing_time[0]["median"])
         self.assertEqual(36.0, stats.ml_processing_time[0]["max"])
         self.assertEqual("ms", stats.ml_processing_time[0]["unit"])
+        self.assertAlmostEqual(600*1000*1000, opm2["duration_time"])
 
     def test_calculate_system_stats(self):
         cfg = config.Config()
