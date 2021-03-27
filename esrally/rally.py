@@ -933,7 +933,7 @@ def main():
             sys.exit(64)
     except KeyboardInterrupt:
         console.println("")
-        console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
+        console.info("ABORTED (took %d seconds)" % (end - start), overline="-", underline="-")
         print("\nRally has detected KeyboardInterrupt. Shutting down...", file=sys.stderr)
         sys.exit(130)
 
