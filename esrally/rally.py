@@ -923,13 +923,19 @@ def main():
     success = dispatch_sub_command(arg_parser, args, cfg)
 
     end = time.time()
-    if success:
-        console.println("")
-        console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
-    else:
+    try:
+        if success:
+            console.println("")
+            console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
+        else:
+            console.println("")
+            console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
+            sys.exit(64)
+    except KeyboardInterrupt:
         console.println("")
         console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
-        sys.exit(64)
+        print("\nRally has detected KeyboardInterrupt. Shutting down...", file=sys.stderr)
+        sys.exit(130)
 
 
 if __name__ == "__main__":
