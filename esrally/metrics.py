@@ -521,7 +521,9 @@ class MetricsStore:
 
         doc = {
             "@timestamp": time.to_epoch_millis(absolute_time),
+            # deprecated
             "relative-time": int(relative_time * 1000 * 1000),
+            "relative-time-ms": convert.seconds_to_ms(relative_time),
             "race-id": self._race_id,
             "race-timestamp": self._race_timestamp,
             "environment": self._environment_name,
@@ -579,6 +581,7 @@ class MetricsStore:
         doc.update({
             "@timestamp": time.to_epoch_millis(absolute_time),
             "relative-time": int(relative_time * 1000 * 1000),
+            "relative-time-ms": convert.seconds_to_ms(relative_time),
             "race-id": self._race_id,
             "race-timestamp": self._race_timestamp,
             "environment": self._environment_name,

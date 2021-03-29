@@ -315,6 +315,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
+            "relative-time-ms": 0,
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
@@ -344,6 +345,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 10000000,
+            "relative-time-ms": 10000,
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
@@ -382,6 +384,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
+            "relative-time-ms": 0,
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
@@ -420,6 +423,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
+            "relative-time-ms": 0,
             "environment": "unittest",
             "track": "test",
             "track-params": {
@@ -465,6 +469,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
+            "relative-time-ms": 0,
             "environment": "unittest",
             "track": "test",
             "track-params": {
@@ -1664,7 +1669,9 @@ class GlobalStatsCalculatorTests(TestCase):
 
         self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
                                 "test", "append-fast-with-conflicts", "defaults", create=True)
-        self.metrics_store.put_doc(doc={"@timestamp": 1595896761994, "relative-time": 283382,
+        self.metrics_store.put_doc(doc={"@timestamp": 1595896761994,
+                                        "relative-time": 283382,
+                                        "relative-time-ms": 283.382,
                                         "race-id": "fb26018b-428d-4528-b36b-cf8c54a303ec",
                                         "race-timestamp": "20200728T003905Z", "environment": "local",
                                         "track": "geonames", "challenge": "append-fast-with-conflicts",
