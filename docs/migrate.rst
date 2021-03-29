@@ -4,6 +4,20 @@ Migration Guide
 Migrating to Rally 2.1.0
 ------------------------
 
+``relative-time`` is deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+    This deprecation is only relevant if you have configured an Elasticsearch metrics store for Rally.
+
+The metric ``relative-time`` contains the relative time since Rally has started executing a task denoted in microseconds. All other time-based metrics like service time or latency are denoted in milliseconds and we will align this property over the coming minor releases as follows:
+
+* Rally 2.1.0: ``relative-time`` is deprecated and Rally adds a new field ``relative-time-ms`` which contains the relative time in milliseconds.
+* Rally 2.2.0: ``relative-time`` will be dropped. Rally only populates the field ``relative-time-ms`` which contains the relative time in milliseconds.
+* Rally 2.3.0: ``relative-time`` will be reintroduced and contain the relative time in milliseconds. The field ``relative-time-ms`` will be deprecated.
+* Rally 2.4.0: ``relative-time-ms`` will be dropped.
+
 Semantics of request-related timestamps have changed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
