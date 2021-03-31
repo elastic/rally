@@ -1,3 +1,40 @@
+### 2.1.0
+
+#### Highlights
+
+* [#1190](https://github.com/elastic/rally/pull/1190): Add support for search_after and point-in-time
+
+#### Enhancements
+
+* [#1223](https://github.com/elastic/rally/pull/1223): Fix Issue #1222: esrally CLI should always return 130 when cancelled
+* [#1221](https://github.com/elastic/rally/pull/1221): Store relative-time in milliseconds
+* [#1216](https://github.com/elastic/rally/pull/1216): Upgrade template engine
+* [#1214](https://github.com/elastic/rally/pull/1214): Collect metrics on composite subtasks
+* [#1213](https://github.com/elastic/rally/pull/1213): Support chart_name filters in chart annotations
+* [#1211](https://github.com/elastic/rally/pull/1211): Add support for merge_count and merge_time graphs
+* [#1207](https://github.com/elastic/rally/pull/1207): Expose an API to handle file offset tables
+* [#1203](https://github.com/elastic/rally/pull/1203): Log results of cluster health check
+* [#1200](https://github.com/elastic/rally/pull/1200): Add optional name in assertion message
+* [#1199](https://github.com/elastic/rally/pull/1199): Throttle requests from the beginning
+* [#1193](https://github.com/elastic/rally/pull/1193): Add IT tests to test installation according to docs
+* [#1178](https://github.com/elastic/rally/pull/1178): Always rely on source artifact caching
+* [#1175](https://github.com/elastic/rally/pull/1175) (Breaking): Always require a subcommand
+* [#1172](https://github.com/elastic/rally/pull/1172): Improve isolation in race control tests
+* [#1171](https://github.com/elastic/rally/pull/1171): Add request-id to search operator
+* [#1165](https://github.com/elastic/rally/pull/1165): Fallback to closest minor branch for track/team repositories
+* [#1093](https://github.com/elastic/rally/pull/1093): Modify chart generator to support Kibana 7.x dashboards
+
+#### Bug Fixes
+
+* [#1217](https://github.com/elastic/rally/pull/1217): Fix auto build of docs
+* [#1209](https://github.com/elastic/rally/pull/1209): Ensure stable mappings for metrics
+* [#1192](https://github.com/elastic/rally/pull/1192): Fix compare subcommand
+* [#1177](https://github.com/elastic/rally/pull/1177): Use operation name consistently in metrics samples
+
+#### Doc Changes
+
+* [#1185](https://github.com/elastic/rally/pull/1185): Fix installation docs after #1151
+
 ### 2.0.4
 
 #### Enhancements
