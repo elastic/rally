@@ -25,9 +25,8 @@ import math
 import multiprocessing
 import queue
 import threading
-from enum import Enum
-
 import time
+from enum import Enum
 
 import thespian.actors
 
@@ -42,8 +41,6 @@ from esrally.utils import convert, console, net
 # Messages sent between drivers
 #
 ##################################
-
-
 class PrepareBenchmark:
     """
     Initiates preparation steps for a benchmark. The benchmark should only be started after StartBenchmark is sent.
@@ -350,7 +347,7 @@ class TaskExecutionActor(actor.RallyActor):
         self.wakeup_interval = 5
         self.parent = None
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartTaskLoop(self, msg, sender):
         self.parent = sender
         self.track_name = msg.track_name
@@ -358,7 +355,7 @@ class TaskExecutionActor(actor.RallyActor):
         track.load_track_plugins(self.cfg, self.track_name)
         self.send(self.parent, ReadyForWork())
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_DoTask(self, msg, sender):
         # actor can arbitrarily execute code based on these messages. if anyone besides our parent sends a task, ignore
         task = msg.task
@@ -373,7 +370,7 @@ class TaskExecutionActor(actor.RallyActor):
             self.executor_future = self.pool.submit(task.func, **task.params)
             self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WakeupMessage(self, msg, sender):
         if self.executor_future is not None and self.executor_future.done():
             e = self.executor_future.exception(timeout=0)
