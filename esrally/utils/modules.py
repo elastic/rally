@@ -65,7 +65,6 @@ class ComponentLoader:
                 p = p.split(".")[0]
             self.logger.debug("Loading module [%s]", p)
             m = importlib.import_module(p)
-            # importlib.reload(m)
             if p == root_module_name:
                 root_module = m
         return root_module
