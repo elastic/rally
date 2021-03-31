@@ -474,7 +474,7 @@ class TrackPreparationActor(actor.RallyActor):
         else:
             next_task = None
         new_msg = DoTask(next_task, self.cfg)
-        self.logger.debug(f"Track Preparator sending {vars(new_msg)} to {sender}")
+        self.logger.debug("Track Preparator sending %s to %s", vars(new_msg), sender)
         self.send(sender, new_msg)
 
     def receiveMsg_WorkerIdle(self, msg, sender):

@@ -89,7 +89,6 @@ class TrackProcessorRegistry:
         return self.track_processors
 
     def on_after_load_track(self, track):
-        logging.getLogger(__name__).debug(f"Joined on_after_load_track with {vars(track)}")
         current_track = track
         for t in self.track_processors:
             t.on_after_load_track(current_track)
