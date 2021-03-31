@@ -26,6 +26,7 @@ import multiprocessing
 import queue
 import threading
 from enum import Enum
+
 import time
 
 import thespian.actors
@@ -80,7 +81,9 @@ class TrackPrepared:
 
 
 class StartTaskLoop:
-    pass
+    def __init__(self, track_name, cfg):
+        self.track_name = track_name
+        self.cfg = cfg
 
 
 class DoTask:
@@ -350,10 +353,14 @@ class TaskExecutionActor(actor.RallyActor):
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartTaskLoop(self, msg, sender):
         self.parent = sender
+        self.track_name = msg.track_name
+        self.cfg = msg.cfg
+        track.load_track_plugins(self.cfg, self.track_name)
         self.send(self.parent, ReadyForWork())
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_DoTask(self, msg, sender):
+        # actor can arbitrarily execute code based on these messages. if anyone besides our parent sends a task, ignore
         task = msg.task
         if task is None:
             self.send(self.parent, WorkerIdle())
@@ -400,18 +407,24 @@ class TrackPreparationActor(actor.RallyActor):
         self.data_root_dir = None
         self.track = None
 
+
+    def receiveMsg_PoisonMessage(self, poisonmsg, sender):
+        self.logger.error("Track Preparator received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
+        self.send(self.original_sender, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
+
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
         self.logger.info("ActorExitRequest received. Forwarding to children")
         for child in self.children:
             self.send(child, msg)
 
-
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our generic worker; give context and forward
         msg.message = "Track preparator has detected a benchmark failure. Notifying master..."
         self.send(self.original_sender, msg)
 
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
         self.original_sender = sender
         # load node-specific config to have correct paths available
@@ -431,13 +444,13 @@ class TrackPreparationActor(actor.RallyActor):
         if tpr.processors():
             # do this locally...
             for processor in tpr.processors():
-                processor.on_after_load_track(track)
+                processor.on_after_load_track(self.track)
             # ...and delegate the rest
             self.children = [self._create_task_worker() for _ in range(num_cores(self.cfg))]
             for processor in tpr.processors():
                 self.processors.put(processor)
             self._seed_tasks(self.processors.get())
-            self.send_to_children_and_transition(self, StartTaskLoop(), self.Status.INITIALIZING,
+            self.send_to_children_and_transition(self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING,
                                                  self.Status.PROCESSOR_RUNNING)
         else:
             self.send(sender, TrackPrepared())
@@ -445,7 +458,7 @@ class TrackPreparationActor(actor.RallyActor):
     def resume(self):
         if not self.processors.empty():
             self._seed_tasks(self.processors.get())
-            self.send_to_children_and_transition(self, StartTaskLoop(), self.Status.PROCESSOR_COMPLETE,
+            self.send_to_children_and_transition(self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE,
                                                  self.Status.PROCESSOR_RUNNING)
         else:
             self.send(self.original_sender, TrackPrepared())
@@ -457,12 +470,15 @@ class TrackPreparationActor(actor.RallyActor):
         child = self.createActor(TaskExecutionActor)
         return child
 
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ReadyForWork(self, msg, sender):
         if self.tasks:
             next_task = self.tasks.pop()
         else:
             next_task = None
-        self.send(sender, DoTask(next_task, self.cfg))
+        new_msg = DoTask(next_task, self.cfg)
+        self.logger.debug(f"Track Preparator sending {vars(new_msg)} to {sender}")
+        self.send(sender, new_msg)
 
     def receiveMsg_WorkerIdle(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING,
@@ -596,6 +612,8 @@ class Driver:
             self.load_driver_hosts.append(host_config)
 
         self.target.prepare_track([h["host"] for h in self.load_driver_hosts], self.config, self.track)
+        for es in es_clients:
+            es.transport.close()
 
     def start_benchmark(self):
         self.logger.info("Benchmark is about to start.")

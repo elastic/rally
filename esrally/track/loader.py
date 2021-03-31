@@ -89,6 +89,7 @@ class TrackProcessorRegistry:
         return self.track_processors
 
     def on_after_load_track(self, track):
+        logging.getLogger(__name__).debug(f"Joined on_after_load_track with {vars(track)}")
         current_track = track
         for t in self.track_processors:
             t.on_after_load_track(current_track)
@@ -231,7 +232,7 @@ def load_track_plugins(cfg,
     """
     repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_plugin_path = repo.track_dir(track_name)
-
+    logging.getLogger(__name__).debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
     plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
 
     if plugin_reader.can_load():
