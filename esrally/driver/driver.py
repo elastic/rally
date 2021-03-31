@@ -612,8 +612,6 @@ class Driver:
             self.load_driver_hosts.append(host_config)
 
         self.target.prepare_track([h["host"] for h in self.load_driver_hosts], self.config, self.track)
-        for es in es_clients:
-            es.transport.close()
 
     def start_benchmark(self):
         self.logger.info("Benchmark is about to start.")
