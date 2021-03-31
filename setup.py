@@ -89,6 +89,7 @@ install_requires = [
 ]
 
 tests_require = [
+    "ujson",
     "pytest==5.4.0",
     "pytest-benchmark==3.2.2",
     "pytest-asyncio==0.14.0"
