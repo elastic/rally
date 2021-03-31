@@ -105,8 +105,8 @@ def main():
     print("### %s\n" % milestone_name)
 
     print_category("Highlights", prs(gh, milestone, with_labels="highlight"))
-    print_category("Enhancements", prs(gh, milestone, with_labels="enhancement", without_labels=[":Docs", "highlight"]))
-    print_category("Bug Fixes", prs(gh, milestone, with_labels="bug", without_labels=[":Docs", "highlight"]))
+    print_category("Enhancements", prs(gh, milestone, with_labels="enhancement", without_labels=[":Docs", "highlight", ":internal"]))
+    print_category("Bug Fixes", prs(gh, milestone, with_labels="bug", without_labels=[":Docs", "highlight", ":internal"]))
     print_category("Doc Changes", prs(gh, milestone, with_labels=":Docs", without_labels=["highlight"]))
 
 
