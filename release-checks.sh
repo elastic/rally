@@ -45,10 +45,25 @@ then
     exit 1
 fi
 
+if ! git config commit.gpgsign >/dev/null
+then
+    echo "Error: the variable commit.gpgsign is not configured for git on this system."
+    echo "The release process requires commit.gpgsign to be set to True."
+    echo "Please follow the instructions in https://git-scm.com/book/id/v2/Git-Tools-Signing-Your-Work"
+    echo "to set your gpg for git."
+    exit 1
+fi
+
 if [[ ! -f ~/.github/rally_release_changelog.token ]]
 then
     echo "Error: didn't find a valid GitHub token in ~/.github/rally_release_changelog.token."
     echo "The release process requires a valid GitHub token. See RELEASE.md for details."
+    exit 1
+fi
+
+if [[ ! -v GPG_TTY ]]
+then
+    echo "Error: env variable GPG_TTY is not set. Please execute export GPG_TTY=\$(tty)"
     exit 1
 fi
 
