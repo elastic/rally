@@ -619,7 +619,7 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None, node_name=None, task=None):
+    def get_one(self, name, sample_type=None, node_name=None, task=None, sort_key=None, sort_reverse=False):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
@@ -627,6 +627,8 @@ class MetricsStore:
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
         :param task The task name to query. Optional.
+        :param sort_key 
+        :param 
         :return: The corresponding value for the given metric name or None if there is no value.
         """
         return self._first_or_none(self.get(name=name, task=task, sample_type=sample_type, node_name=node_name))
@@ -1784,8 +1786,8 @@ class GlobalStats:
                         all_results.append(op_metrics(item, "processing_time"))
                     if "error_rate" in item:
                         all_results.append(op_metrics(item, "error_rate", single_value=True))
-                    if "duration_time" in item:
-                        all_results.append(op_metrics(item, "duration_time", single_value=True))
+                    if "duration" in item:
+                        all_results.append(op_metrics(item, "duration", single_value=True))
             elif metric == "ml_processing_time":
                 for item in value:
                     all_results.append({
@@ -1833,7 +1835,7 @@ class GlobalStats:
             "service_time": service_time,
             "processing_time": processing_time,
             "error_rate": error_rate,
-            "duration_time": duration
+            "duration": duration
         }
         if meta:
             doc["meta"] = meta
