@@ -121,7 +121,7 @@ function test_docker_release_image {
         exit 1
     fi
 
-    export TEST_COMMAND="--pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    export TEST_COMMAND="race --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
     info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
     docker_compose up
     docker_compose down
@@ -139,7 +139,7 @@ function test_docker_release_image {
     docker_compose down
 
     # allow overriding CMD too
-    export TEST_COMMAND="esrally --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    export TEST_COMMAND="esrally race --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
     info "Testing Rally docker image using parameters: ${TEST_COMMAND}"
     docker_compose up
     docker_compose down
