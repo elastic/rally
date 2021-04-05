@@ -63,7 +63,7 @@ As mentioned above, Rally also allows you to specify a plugin configuration and 
 
 You can also override plugin variables with ``--plugin-params`` which is needed for example if you want to use the ``monitoring-http`` configuration in order to export monitoring data. You can export monitoring data e.g. with the following configuration::
 
-    --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'https',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
+    --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'http',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
 
 The ``monitoring_user`` and ``monitoring_password`` parameters are optional, the other parameters are mandatory. For more details on the configuration options check the `Monitoring plugin documentation <https://www.elastic.co/guide/en/x-pack/current/monitoring-production.html>`_.
 
