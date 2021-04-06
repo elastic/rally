@@ -41,7 +41,7 @@ class BenchmarkCancelled:
     Indicates that the benchmark has been cancelled (by the user).
     """
 
-@dataclass
+@dataclass(frozen=True)
 class WorkerTask:
     """
     Unit of work that should be completed by the low-level TaskExecutionActor

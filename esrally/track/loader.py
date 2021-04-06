@@ -22,6 +22,7 @@ import re
 import sys
 import tempfile
 import urllib.error
+from functools import cached_property
 
 import jinja2
 import jinja2.exceptions
@@ -83,6 +84,7 @@ class TrackProcessorRegistry:
             processor.decompressor = Decompressor()
         self.track_processors.append(processor)
 
+    @cached_property
     def processors(self):
         if not self.track_processors:
             self.register_track_processor(DefaultTrackPreparator(self.base_config))
