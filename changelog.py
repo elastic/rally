@@ -108,6 +108,7 @@ def main():
     print_category("Enhancements", prs(gh, milestone, with_labels="enhancement", without_labels=[":Docs", "highlight", ":internal"]))
     print_category("Bug Fixes", prs(gh, milestone, with_labels="bug", without_labels=[":Docs", "highlight", ":internal"]))
     print_category("Doc Changes", prs(gh, milestone, with_labels=":Docs", without_labels=["highlight"]))
+    print_category("Miscellaneous Changes", prs(gh, milestone, with_labels=":misc", without_labels=[":internal"]))
 
 
 if __name__ == '__main__':
