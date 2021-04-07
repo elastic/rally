@@ -4,6 +4,30 @@ Migration Guide
 Migrating to Rally 2.1.0
 ------------------------
 
+``relative-time`` is deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+    This deprecation is only relevant if you have configured an Elasticsearch metrics store for Rally.
+
+The metric ``relative-time`` contains the relative time since Rally has started executing a task denoted in microseconds. All other time-based metrics like service time or latency are denoted in milliseconds and we will align this property over the coming minor releases as follows:
+
+* Rally 2.1.0: ``relative-time`` is deprecated and Rally adds a new field ``relative-time-ms`` which contains the relative time in milliseconds.
+* Rally 2.2.0: ``relative-time`` will be dropped. Rally only populates the field ``relative-time-ms`` which contains the relative time in milliseconds.
+* Rally 2.3.0: ``relative-time`` will be reintroduced and contain the relative time in milliseconds. The field ``relative-time-ms`` will be deprecated.
+* Rally 2.4.0: ``relative-time-ms`` will be dropped.
+
+Semantics of request-related timestamps have changed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When Rally stores metrics in a dedicated metrics store, it records additional meta-data such as the absolute and relative timestamp when a sample has been collected. Previously, these timestamps have represented the point in time when a sample has been collected. For request-related metrics such as ``latency`` and ``service_time`` these timestamps represent now the point in time when a request has been sent by Rally.
+
+Throttling is active from the beginning
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously Rally has issued the first request immediately regardless of the target throughput. With this release, Rally will defer the first request according to the target throughput and the scheduling policy. Together with a poisson schedule, this measure avoids coordination among clients that hit Elasticsearch at exactly the same time causing a large initial spike.
+
 Custom bulk parameter sources need to provide a unit
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

@@ -8,6 +8,7 @@
   },
   "mappings": {
     "_doc": {
+      "date_detection": false,
       "dynamic_templates": [
         {
           "strings": {
@@ -29,6 +30,9 @@
         },
         "relative-time": {
           "type": "long"
+        },
+        "relative-time-ms": {
+          "type": "float"
         },
         "race-id": {
           "type": "keyword"

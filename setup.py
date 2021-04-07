@@ -51,7 +51,7 @@ install_requires = [
     # transitive dependencies:
     #   urllib3: MIT
     #   aiohttp: Apache 2.0
-    "elasticsearch[async]==7.9.1",
+    "elasticsearch[async]==7.10.1",
     # License: BSD
     "psutil==5.8.0",
     # License: MIT
@@ -62,7 +62,7 @@ install_requires = [
     "jsonschema==3.1.1",
     # License: BSD
     # transitive dependency Markupsafe: BSD
-    "Jinja2==2.10.3",
+    "Jinja2==2.11.3",
     # License: MIT
     "thespian==3.10.1",
     # recommended library for thespian to identify actors more easily with `ps`
@@ -89,6 +89,7 @@ install_requires = [
 ]
 
 tests_require = [
+    "ujson",
     "pytest==5.4.0",
     "pytest-benchmark==3.2.2",
     "pytest-asyncio==0.14.0"

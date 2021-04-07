@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import logging
 import os
 import random
@@ -27,6 +28,7 @@ import urllib3.exceptions
 
 from esrally import client, exceptions, doc_link
 from esrally.utils import console
+from tests import run_async
 
 
 class EsClientFactoryTests(TestCase):
@@ -277,6 +279,27 @@ class EsClientFactoryTests(TestCase):
         self.assertNotIn("client_key", f.client_options)
 
         self.assertDictEqual(original_client_options, client_options)
+
+
+class RequestContextManagerTests(TestCase):
+    @run_async
+    async def test_propagates_nested_context(self):
+        test_client = client.RequestContextHolder()
+        async with test_client.new_request_context() as top_level_ctx:
+            test_client.on_request_start()
+            await asyncio.sleep(0.1)
+            async with test_client.new_request_context() as nested_ctx:
+                test_client.on_request_start()
+                await asyncio.sleep(0.1)
+                test_client.on_request_end()
+                nested_duration = nested_ctx.request_end - nested_ctx.request_start
+            test_client.on_request_end()
+            top_level_duration = top_level_ctx.request_end - top_level_ctx.request_start
+
+        # top level request should cover total duration
+        self.assertAlmostEqual(top_level_duration, 0.2, delta=0.05)
+        # nested request should only cover nested duration
+        self.assertAlmostEqual(nested_duration, 0.1, delta=0.05)
 
 
 class RestLayerTests(TestCase):

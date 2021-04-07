@@ -27,11 +27,11 @@ We recommend to use `pyenv <https://github.com/pyenv/pyenv>`_ to manage installa
 Once ``pyenv`` is installed, install a compatible Python version::
 
     # Install Python
-    pyenv install 3.8.0
+    pyenv install {MIN_PY_VER}
 
     # select that version for the current user
     # see https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-global for details
-    pyenv global 3.8.0
+    pyenv global {MIN_PY_VER}
 
     # Upgrade pip
     python3 -m pip install --user --upgrade pip
@@ -113,16 +113,20 @@ Installing Rally
 ----------------
 
 1. Ensure ``~/.local/bin`` is in your ``$PATH``.
-2. Install Rally: ``python3 -m pip install --user esrally``.
+2. Ensure pip is the latest version: ``python3 -m pip install --user --upgrade pip``
+3. Install Rally: ``python3 -m pip install --user esrally``.
 
 VirtualEnv Install
 ------------------
 
 You can also use Virtualenv to install Rally into an isolated Python environment without sudo.
 
-1. Set up a new virtualenv environment in a directory with ``python3 -m venv .``
-2. Activate the environment with ``source /path/to/virtualenv/dir/bin/activate``
-3. Install Rally with ``python3 -m pip install esrally``
+1. Set up a new virtualenv environment in a directory with ``python3 -m venv .venv``
+2. Activate the environment with ``source /path/to/virtualenv/.venv/bin/activate``
+3. Ensure pip is the latest version: ``python3 -m pip install --upgrade pip``
+    .. important::
+       Omitting this step might cause the next step (Rally installation) to fail due to broken dependencies. The pip version must be at minimum ``20.3``.
+4. Install Rally with ``python3 -m pip install esrally``
 
 Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
 

@@ -24,7 +24,7 @@ from unittest import TestCase
 
 import elasticsearch
 
-from esrally import exceptions
+from esrally import client, exceptions
 from esrally.driver import runner
 from tests import run_async, as_future
 
@@ -162,6 +162,7 @@ class AssertingRunnerTests(TestCase):
         r = runner.AssertingRunner(delegate)
         async with r:
             final_response = await r(es, {
+                "name": "test-task",
                 "assertions": [
                     {
                         "property": "hits.hits.value",
@@ -193,9 +194,10 @@ class AssertingRunnerTests(TestCase):
         delegate.return_value = as_future(response)
         r = runner.AssertingRunner(delegate)
         with self.assertRaisesRegex(exceptions.RallyTaskAssertionError,
-                                    r"Expected \[hits.hits.relation\] to be == \[eq\] but was \[gte\]."):
+                                    r"Expected \[hits.hits.relation\] in \[test-task\] to be == \[eq\] but was \[gte\]."):
             async with r:
                 await r(es, {
+                    "name": "test-task",
                     "assertions": [
                         {
                             "property": "hits.hits.value",
@@ -219,6 +221,7 @@ class AssertingRunnerTests(TestCase):
         r = runner.AssertingRunner(delegate)
         async with r:
             final_response = await r(es, {
+                "name": "test-task",
                 "assertions": [
                     {
                         "property": "hits.hits.value",
@@ -4745,6 +4748,323 @@ class DeleteAsyncSearchTests(TestCase):
         ])
 
 
+class OpenPointInTimeTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_creates_point_in_time(self, es):
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "open-pit-test",
+            "index": "test-index"
+        }
+
+        es.open_point_in_time.return_value = as_future({"id": pit_id})
+
+        r = runner.OpenPointInTime()
+        async with runner.CompositeContext():
+            await r(es, params)
+            self.assertEqual(pit_id, runner.CompositeContext.get("open-pit-test"))
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_can_only_be_run_in_composite(self, es):
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "open-pit-test",
+            "index": "test-index"
+        }
+
+        es.open_point_in_time.return_value = as_future({"id": pit_id})
+
+        r = runner.OpenPointInTime()
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            await r(es, params)
+
+        self.assertEqual("This operation is only allowed inside a composite operation.", ctx.exception.args[0])
+
+class ClosePointInTimeTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_closes_point_in_time(self, es):
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "close-pit-test",
+            "with-point-in-time-from": "open-pit-task1",
+        }
+        es.close_point_in_time.return_value=(as_future())
+        r = runner.ClosePointInTime()
+        async with runner.CompositeContext():
+            runner.CompositeContext.put("open-pit-task1", pit_id)
+            await r(es, params)
+
+        es.close_point_in_time.assert_called_once_with(body={"id": "0123456789abcdef"}, params={}, headers=None)
+
+
+class QueryWithSearchAfterScrollTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_search_after_with_pit(self, es):
+        pit_op = "open-point-in-time1"
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "search-with-pit",
+            "index": "test-index",
+            "operation-type": "paginated-search",
+            "with-point-in-time-from": pit_op,
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
+                "query": {"match-all": {}}
+            }
+        }
+
+        page_1 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {
+                    "value": 3,
+                    "relation": "eq"
+                },
+                "hits": [
+                    {
+                        "_id": "1",
+                         "timestamp": 1609780186,
+                         "sort": [1609780186, "1"]
+                    },
+                    {
+                        "_id": "2",
+                         "timestamp": 1609780186,
+                         "sort": [1609780186, "2"]
+                    }
+                ]
+            }
+        }
+
+        page_2 = {"pit_id": "fedcba9876543211",
+                 "took": 10,
+                 "timed_out": False,
+                 "hits": {
+                     "total": {
+                         "value": "3",
+                         "relation": "eq"
+                     },
+                     "hits": [
+                         {"_id": "3",
+                          "timestamp": 1609780187,
+                          "sort": [1609780187, "3"]
+                          }
+                     ]
+                 }}
+
+        es.transport.perform_request.side_effect = [as_future(io.BytesIO(json.dumps(page_1).encode())),
+                                                    as_future(io.BytesIO(json.dumps(page_2).encode()))]
+
+        r = runner.Query()
+
+        async with runner.CompositeContext():
+            runner.CompositeContext.put(pit_op, pit_id)
+            await r(es, params)
+            # make sure pit_id is updated afterward
+            self.assertEqual("fedcba9876543211", runner.CompositeContext.get(pit_op))
+
+        es.transport.perform_request.assert_has_calls([mock.call("GET", "/_search", params={},
+                                                                 body={
+                                                                     "query": {
+                                                                         "match-all": {}
+                                                                       },
+                                                                     "sort": [{
+                                                                         "timestamp": "asc",
+                                                                         "tie_breaker_id": "asc"
+                                                                     }],
+                                                                     "size": 2,
+                                                                     "pit": {
+                                                                         "id": "0123456789abcdef",
+                                                                         "keep_alive": "1m"
+                                                                     }
+                                                                 },
+                                                                 headers=None),
+                                                       mock.call("GET", "/_search", params={},
+                                                                 body={
+                                                                     "query": {
+                                                                         "match-all": {}
+                                                                     },
+                                                                     "sort": [{
+                                                                         "timestamp": "asc",
+                                                                         "tie_breaker_id": "asc"
+                                                                     }],
+                                                                     "size": 2,
+                                                                     "pit": {
+                                                                         "id": "fedcba9876543210",
+                                                                         "keep_alive": "1m"
+                                                                     },
+                                                                     "search_after": [1609780186, "2"]
+                                                                 },
+                                                                 headers=None)])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_search_after_without_pit(self, es):
+        params = {
+            "name": "search-with-pit",
+            "operation-type": "paginated-search",
+            "index": "test-index-1",
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
+                "query": {"match-all": {}}
+            }
+        }
+        page_1 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {
+                    "value": 3,
+                    "relation": "eq"
+                },
+                "hits": [
+                    {
+                        "_id": "1",
+                        "timestamp": 1609780186,
+                        "sort": [1609780186, "1"]
+                    },
+                    {
+                        "_id": "2",
+                        "timestamp": 1609780186,
+                        "sort": [1609780186, "2"]
+                    }
+                ]
+            }
+        }
+
+        page_2 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+              "total": {
+                  "value": 3,
+                  "relation": "eq"
+              },
+              "hits": [
+                  {"_id": "3",
+                   "timestamp": 1609780187,
+                   "sort": [1609780187, "3"]
+                   }
+              ]
+            }
+        }
+
+        es.transport.perform_request.side_effect = [as_future(io.BytesIO(json.dumps(page_1).encode())),
+                                                    as_future(io.BytesIO(json.dumps(page_2).encode()))]
+        r = runner.Query()
+        await r(es, params)
+
+        es.transport.perform_request.assert_has_calls([mock.call("GET", "/test-index-1/_search", params={},
+                                                                 body={"query": {"match-all": {}},
+                                                                       "sort": [
+                                                                           {"timestamp": "asc",
+                                                                            "tie_breaker_id": "asc"}],
+                                                                       "size": 2},
+                                                                 headers=None),
+                                                       mock.call("GET", "/test-index-1/_search", params={},
+                                                                 body={"query": {"match-all": {}},
+                                                                       "sort": [
+                                                                           {"timestamp": "asc",
+                                                                            "tie_breaker_id": "asc"}],
+                                                                       "size": 2,
+                                                                       "search_after": [1609780186, "2"]},
+                                                                 headers=None)]
+                                                      )
+
+
+class SearchAfterExtractorTests(TestCase):
+    response_text = """
+        {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": false,
+            "hits": {
+                "total": 2,
+                "hits": [
+                    {
+                        "_id": "1",
+                         "timestamp": 1609780186,
+                         "sort": [1609780186, "1"]
+                    },
+                    {
+                        "_id": "2",
+                         "timestamp": 1609780186,
+                         "sort": [1609780186, "2"]
+                    }
+                ]
+            }
+        }"""
+    response = io.BytesIO(response_text.encode())
+
+    def test_extract_all_properties(self):
+        target = runner.SearchAfterExtractor()
+        props, last_sort = target(response=self.response, get_point_in_time=True, hits_total=None)
+        expected_props = {"hits.total.relation": "eq",
+                    "hits.total.value": 2,
+                    "pit_id": "fedcba9876543210",
+                    "timed_out": False,
+                    "took": 10}
+        expected_sort_value = [1609780186, "2"]
+        self.assertEqual(expected_props, props)
+        self.assertEqual(expected_sort_value, last_sort)
+
+    def test_extract_ignore_point_in_time(self):
+        target = runner.SearchAfterExtractor()
+        props, last_sort = target(response=self.response, get_point_in_time=False, hits_total=None)
+        expected_props = {"hits.total.relation": "eq",
+                          "hits.total.value": 2,
+                          "timed_out": False,
+                          "took": 10}
+        expected_sort_value = [1609780186, "2"]
+        self.assertEqual(expected_props, props)
+        self.assertEqual(expected_sort_value, last_sort)
+
+    def test_extract_uses_provided_hits_total(self):
+        target = runner.SearchAfterExtractor()
+        # we use an incorrect hits_total just to prove we didn't extract it from the response
+        props, last_sort = target(response=self.response, get_point_in_time=False, hits_total=10)
+        expected_props = {"hits.total.relation": "eq",
+                          "hits.total.value": 10,
+                          "timed_out": False,
+                          "took": 10}
+        expected_sort_value = [1609780186, "2"]
+        self.assertEqual(expected_props, props)
+        self.assertEqual(expected_sort_value, last_sort)
+
+    def test_extract_missing_required_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.SearchAfterExtractor()
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            target(response=response_copy_bytesio, get_point_in_time=True, hits_total=None)
+        self.assertEqual("Paginated query failure: pit_id was expected but not found in the response.",
+                         ctx.exception.args[0])
+
+    def test_extract_missing_ignored_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.SearchAfterExtractor()
+        props, last_sort = target(response=response_copy_bytesio, get_point_in_time=False, hits_total=None)
+        expected_props = {"hits.total.relation": "eq",
+                          "hits.total.value": 2,
+                          "timed_out": False,
+                          "took": 10}
+        expected_sort_value = [1609780186, "2"]
+        self.assertEqual(expected_props, props)
+        self.assertEqual(expected_sort_value, last_sort)
+
+
 class CompositeContextTests(TestCase):
     def test_cannot_be_used_outside_of_composite(self):
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
@@ -5032,6 +5352,65 @@ class CompositeTests(TestCase):
             "call-after-stream-cd"
         ], self.call_recorder_runner.calls)
 
+    @run_async
+    async def test_adds_request_timings(self):
+        # We only need the request context holder functionality but not any calls to Elasticsearch.
+        # Therefore we can use the the request context holder as a substitute and get proper timing info.
+        es = client.RequestContextHolder()
+
+        params = {
+            "requests": [
+                {
+                    "name": "initial-call",
+                    "operation-type": "sleep",
+                    "duration": 0.1
+                },
+                {
+                    "stream": [
+                        {
+                            "name": "stream-a",
+                            "operation-type": "sleep",
+                            "duration": 0.2
+                        }
+                    ]
+                },
+                {
+                    "stream": [
+                        {
+                            "name": "stream-b",
+                            "operation-type": "sleep",
+                            "duration": 0.1
+                        }
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        response = await r(es, params)
+
+        self.assertEqual(1, response["weight"])
+        self.assertEqual("ops", response["unit"])
+        timings = response["dependent_timing"]
+        self.assertEqual(3, len(timings))
+
+        self.assertEqual("initial-call", timings[0]["operation"])
+        self.assertAlmostEqual(0.1, timings[0]["service_time"], delta=0.05)
+
+        self.assertEqual("stream-a", timings[1]["operation"])
+        self.assertAlmostEqual(0.2, timings[1]["service_time"], delta=0.05)
+
+        self.assertEqual("stream-b", timings[2]["operation"])
+        self.assertAlmostEqual(0.1, timings[2]["service_time"], delta=0.05)
+
+        # common properties
+        for timing in timings:
+            self.assertEqual("sleep", timing["operation-type"])
+            self.assertIn("absolute_time", timing)
+            self.assertIn("request_start", timing)
+            self.assertIn("request_end", timing)
+            self.assertGreater(timing["request_end"], timing["request_start"])
+
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_limits_connections(self, es):
@@ -5120,8 +5499,96 @@ class CompositeTests(TestCase):
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             await r(es, params)
 
-        self.assertEqual("Unsupported operation-type [bulk]. Use one of [raw-request, sleep, search, "
-                         "submit-async-search, get-async-search, delete-async-search].", ctx.exception.args[0])
+        self.assertEqual("Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
+                         "search, raw-request, sleep, submit-async-search, get-async-search, delete-async-search].",
+                         ctx.exception.args[0])
+
+class RequestTimingTests(TestCase):
+    class StaticRequestTiming:
+        def __init__(self, task_start):
+            self.task_start = task_start
+            self.current_request_start = self.task_start
+
+        async def __aenter__(self):
+            # pretend time advances on each request
+            self.current_request_start += 5
+            return self
+
+        @property
+        def request_start(self):
+            return self.current_request_start
+
+        @property
+        def request_end(self):
+            return self.current_request_start + 0.1
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_merges_timing_info(self, es):
+        multi_cluster_client = {"default": es}
+        es.new_request_context.return_value = RequestTimingTests.StaticRequestTiming(task_start=2)
+
+        delegate = mock.Mock(return_value=as_future({
+            "weight": 5,
+            "unit": "ops",
+            "success": True
+        }))
+        params = {
+            "name": "unit-test-operation",
+            "operation-type": "test-op"
+        }
+        timer = runner.RequestTiming(delegate)
+
+        response = await timer(multi_cluster_client, params)
+
+        self.assertEqual(5, response["weight"])
+        self.assertEqual("ops", response["unit"])
+        self.assertTrue(response["success"])
+        self.assertIn("dependent_timing", response)
+        timing = response["dependent_timing"]
+        self.assertEqual("unit-test-operation", timing["operation"])
+        self.assertEqual("test-op", timing["operation-type"])
+        self.assertIsNotNone(timing["absolute_time"])
+        self.assertEqual(7, timing["request_start"])
+        self.assertEqual(7.1, timing["request_end"])
+        self.assertAlmostEqual(0.1, timing["service_time"])
+
+        delegate.assert_called_once_with(multi_cluster_client, params)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_creates_new_timing_info(self, es):
+        multi_cluster_client = {"default": es}
+        es.new_request_context.return_value = RequestTimingTests.StaticRequestTiming(task_start=2)
+
+        # a simple runner without a return value
+        delegate = mock.Mock(return_value=as_future())
+        params = {
+            "name": "unit-test-operation",
+            "operation-type": "test-op"
+        }
+        timer = runner.RequestTiming(delegate)
+
+        response = await timer(multi_cluster_client, params)
+
+        # defaults added by the timing runner
+        self.assertEqual(1, response["weight"])
+        self.assertEqual("ops", response["unit"])
+        self.assertTrue(response["success"])
+
+        self.assertIn("dependent_timing", response)
+        timing = response["dependent_timing"]
+        self.assertEqual("unit-test-operation", timing["operation"])
+        self.assertEqual("test-op", timing["operation-type"])
+        self.assertIsNotNone(timing["absolute_time"])
+        self.assertEqual(7, timing["request_start"])
+        self.assertEqual(7.1, timing["request_end"])
+        self.assertAlmostEqual(0.1, timing["service_time"])
+
+        delegate.assert_called_once_with(multi_cluster_client, params)
 
 
 class RetryTests(TestCase):

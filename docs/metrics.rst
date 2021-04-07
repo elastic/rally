@@ -15,6 +15,7 @@ Here is a typical metrics record::
           "race-id": "6ebc6e53-ee20-4b0c-99b4-09697987e9f4",
           "@timestamp": 1461213093093,
           "relative-time": 10507328,
+          "relative-time-ms": 10507.328,
           "track": "geonames",
           "track-params": {
             "shard-count": 3
@@ -76,12 +77,27 @@ A UUID that changes on every invocation of Rally. It is intended to group all sa
 @timestamp
 ~~~~~~~~~~
 
-The timestamp in milliseconds since epoch determined when the sample was taken.
+The timestamp in milliseconds since epoch determined when the sample was taken. For request-related metrics, such as ``latency`` or ``service_time`` this is the timestamp when Rally has issued the request.
 
 relative-time
 ~~~~~~~~~~~~~
 
+.. warning::
+
+    This property is deprecated with Rally 2.1.0. Use ``relative-time-ms`` for the transition period (between Rally 2.1.0 and Rally 2.3.0). In Rally 2.2.0 this field will be dropped and reintroduced in Rally 2.3.0 as the relative time denoted in milliseconds.
+
+
 The relative time in microseconds since the start of the benchmark. This is useful for comparing time-series graphs over multiple races, e.g. you might want to compare the indexing throughput over time across multiple races. Obviously, they should always start at the same (relative) point in time and absolute timestamps are useless for that.
+
+relative-time-ms
+~~~~~~~~~~~~~~~~
+
+.. warning::
+
+    This property is introduced for a transition period between Rally 2.1.0 and Rally 2.4.0. It will be deprecated with Rally 2.3.0 and removed in Rally 2.4.0.
+
+
+The relative time in milliseconds since the start of the benchmark. This is useful for comparing time-series graphs over multiple races, e.g. you might want to compare the indexing throughput over time across multiple races. As they should always start at the same (relative) point in time, absolute timestamps are not helpful.
 
 name, value, unit
 ~~~~~~~~~~~~~~~~~

@@ -58,7 +58,7 @@ class BarCharts:
         {
             "vis": {
                 "colors": dict(
-                    zip(["bare-oss", "bare-basic", "bare-trial-security", "docker-oss", "ear-oss"], color_scheme_rgba))
+                    zip(["bare-oss", "bare-basic", "bare-trial-security", "docker-basic", "ear-basic"], color_scheme_rgba))
             }
         })
 
@@ -867,8 +867,8 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:gc) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") AND ((NOT _exists_:chart) OR chart:gc) "
+                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -890,6 +890,186 @@ class TimeSeriesCharts:
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "gc",
+                "version": 1,
+                "kibanaSavedObjectMeta": {
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
+                }
+            }
+        }
+
+    @staticmethod
+    def merge_time(title, environment, race_config):
+        vis_state = {
+            "title": title,
+            "type": "metrics",
+            "params": {
+                "axis_formatter": "number",
+                "axis_position": "left",
+                "id": str(uuid.uuid4()),
+                "index_pattern": "rally-results-*",
+                "interval": "1d",
+                "series": [
+                    {
+                        "axis_position": "left",
+                        "chart_type": "line",
+                        "color": "#68BC00",
+                        "fill": "0",
+                        "formatter": "number",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "type": "avg",
+                                "field": "value.single"
+                            }
+                        ],
+                        "point_size": "3",
+                        "seperate_axis": 1,
+                        "split_mode": "filters",
+                        "stacked": "none",
+                        "filter": "",
+                        "split_filters": [
+                            {
+                                "filter": "merge_time",
+                                "label": "Cumulative merge time",
+                                "color": "rgba(0,191,179,1)",
+                                "id": str(uuid.uuid4())
+                            },
+                            {
+                                "filter": "merge_throttle_time",
+                                "label": "Cumulative merge throttle time",
+                                "color": "rgba(254,209,10,1)",
+                                "id": str(uuid.uuid4())
+                            }
+                        ],
+                        "label": "Merge Times",
+                        "value_template": "{{value}} ms",
+                        "steps": 0
+                    }
+                ],
+                "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
+                "time_field": "race-timestamp",
+                "type": "timeseries",
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:merge_times) "
+                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "race-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ],
+                "axis_min": "0"
+            },
+            "aggs": [],
+            "listeners": {}
+        }
+
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
+                "description": "merge_times",
+                "version": 1,
+                "kibanaSavedObjectMeta": {
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
+                }
+            }
+        }
+
+    @staticmethod
+    def merge_count(title, environment, race_config):
+        vis_state = {
+            "title": title,
+            "type": "metrics",
+            "params": {
+                "axis_formatter": "number",
+                "axis_position": "left",
+                "id": str(uuid.uuid4()),
+                "index_pattern": "rally-results-*",
+                "interval": "1d",
+                "series": [
+                    {
+                        "axis_position": "left",
+                        "chart_type": "line",
+                        "color": "#68BC00",
+                        "fill": "0",
+                        "formatter": "number",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "type": "avg",
+                                "field": "value.single"
+                            }
+                        ],
+                        "point_size": "3",
+                        "seperate_axis": 1,
+                        "split_mode": "filters",
+                        "stacked": "none",
+                        "filter": "",
+                        "split_filters": [
+                            {
+                                "filter": "merge_count",
+                                "label": "Cumulative merge count",
+                                "color": "rgba(0,191,179,1)",
+                                "id": str(uuid.uuid4())
+                            }
+                        ],
+                        "label": "Merge Count",
+                        "value_template": "{{value}}",
+                        "steps": 0
+                    }
+                ],
+                "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
+                "time_field": "race-timestamp",
+                "type": "timeseries",
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:merge_count) "
+                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "race-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ],
+                "axis_min": "0"
+            },
+            "aggs": [],
+            "listeners": {}
+        }
+
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
+                "description": "merge_count",
                 "version": 1,
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
@@ -959,8 +1139,8 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:io) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") AND ((NOT _exists_:chart) OR chart:io) "
+                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1073,8 +1253,9 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:segment_memory) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:segment_memory) "
+                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1234,8 +1415,9 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:query) "
-                                        "AND environment:\"%s\"" % (race_config.track, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:query) "
+                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1327,8 +1509,9 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": "((NOT _exists_:track) OR track:\"%s\") AND ((NOT _exists_:chart) OR chart:indexing) "
-                                        "AND environment:\"%s\"" % (t, environment),
+                        "query_string": f"((NOT _exists_:track) OR track:\"{t}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:indexing) "
+                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
@@ -1362,7 +1545,7 @@ class RaceConfigTrack:
         self.repository = repository
         self.cached_track = self.load_track(cfg, name=name)
 
-    def load_track(self, cfg, name=None, params=None):
+    def load_track(self, cfg, name=None, params=None, excluded_tasks=None):
         if not params:
             params = {}
         # required in case a previous track using a different repository has specified the revision
@@ -1374,11 +1557,13 @@ class RaceConfigTrack:
             cfg.add(config.Scope.applicationOverride, "track", "track.name", name)
         # another hack to ensure any track-params in the race config are used by Rally's track loader
         cfg.add(config.Scope.applicationOverride, "track", "params", params)
+        if excluded_tasks:
+            cfg.add(config.Scope.application, "track", "exclude.tasks", excluded_tasks)
         return track.load_track(cfg)
 
-    def get_track(self, cfg, name=None, params=None):
-        if params:
-            return self.load_track(cfg, name, params)
+    def get_track(self, cfg, name=None, params=None, excluded_tasks=None):
+        if params or excluded_tasks:
+            return self.load_track(cfg, name, params, excluded_tasks)
         # if no params specified, return the initially cached, (non-parametrized) track
         return self.cached_track
 
@@ -1426,6 +1611,26 @@ def generate_gc(chart_type, race_configs, environment):
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
                                             suffix="%s-gc" % race_config.label)
             structures.append(chart_type.gc(title, environment, race_config))
+
+    return structures
+
+def generate_merge_time(chart_type, race_configs, environment):
+    structures = []
+    for race_config in race_configs:
+        if "merge_times" in race_config.charts:
+            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
+                                            suffix=f"{race_config.label}-merge-times")
+            structures.append(chart_type.merge_time(title, environment, race_config))
+
+    return structures
+
+def generate_merge_count(chart_type, race_configs, environment):
+    structures = []
+    for race_config in race_configs:
+        if "merge_count" in race_config.charts:
+            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
+                                            suffix=f"{race_config.label}-merge-count")
+            structures.append(chart_type.merge_count(title, environment, race_config))
 
     return structures
 
@@ -1518,9 +1723,6 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
 class RaceConfig:
     def __init__(self, track, cfg=None, flavor=None, es_license=None, challenge=None, car=None, node_count=None, charts=None):
         self.track = track
-        self.excluded_tasks = []
-        if cfg.get("exclude-tasks") is not None:
-            self.excluded_tasks =  cfg.get("exclude-tasks").split(",")
         if cfg:
             self.configuration = cfg
             self.configuration["flavor"] = flavor
@@ -1581,8 +1783,7 @@ class RaceConfig:
                     if track.OperationType.Bulk.to_hyphenated_string() != sub_task.operation.type:
                         console.info(f"Found [{sub_task.name}] of type [{sub_task.operation.type}] in "\
                                      f"[{self.challenge}], adding it to indexing dashboard.\n", flush=True)
-                    if sub_task.name not in self.excluded_tasks:
-                        task_names.append(sub_task.name)
+                    task_names.append(sub_task.name)
         return task_names
 
     @property
@@ -1599,8 +1800,7 @@ class RaceConfig:
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
                 # which tasks / or types of operations should be used for which chart types.
                 if "target-throughput" in sub_task.params or "target-interval" in sub_task.params or sub_task.operation.type == "eql":
-                    if sub_task.name not in self.excluded_tasks:
-                        task_names.append(sub_task.name)
+                    task_names.append(sub_task.name)
         return task_names
 
 
@@ -1608,9 +1808,13 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
     def add_configs(race_configs_per_lic, flavor_name="oss", lic="oss", track_name=None):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
+            excluded_tasks = None
+            if "exclude-tasks" in race_config:
+                excluded_tasks = race_config.get("exclude-tasks").split(",")
             configs_per_lic.append(
                 RaceConfig(track=race_config_track.get_track(cfg, name=track_name,
-                                                             params=race_config.get("track-params", {})),
+                                                             params=race_config.get("track-params", {}),
+                                                             excluded_tasks=excluded_tasks),
                            cfg=race_config,
                            flavor=flavor_name,
                            es_license=lic)
@@ -1657,6 +1861,8 @@ def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, log
     charts = generate_index_ops(chart_type, race_configs, env, logger) + \
              generate_io(chart_type, race_configs, env) + \
              generate_gc(chart_type, race_configs, env) + \
+             generate_merge_time(chart_type, race_configs, env) + \
+             generate_merge_count(chart_type, race_configs, env) + \
              generate_segment_memory(chart_type, race_configs, env) + \
              generate_queries(chart_type, race_configs, env)
 

@@ -90,6 +90,23 @@ def race(cfg, command_line):
     return esrally(cfg, f"race {command_line} --kill-running-processes --on-error='abort' --enable-assertions")
 
 
+def shell_cmd(command_line):
+    """
+    Executes a given command_line in a subshell.
+
+    :param command_line: (str) The command to execute
+    :return: (int) the exit code
+    """
+
+    return os.system(command_line)
+
+
+def command_in_docker(command_line, python_version):
+    docker_command = f"docker run --rm -v {ROOT_DIR}:/rally_ro:ro python:{python_version} bash -c '{command_line}'"
+
+    return shell_cmd(docker_command)
+
+
 def wait_until_port_is_free(port_number=39200, timeout=120):
     start = time.perf_counter()
     end = start + timeout

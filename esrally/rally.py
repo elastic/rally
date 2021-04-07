@@ -198,6 +198,10 @@ def create_arg_parser():
         "--report-file",
         help="Write the command line report also to the provided file.",
         default="")
+    compare_parser.add_argument(
+        "--show-in-report",
+        help="Whether to include the comparison in the results file.",
+        default=True)
 
     download_parser = subparsers.add_parser("download", help="Downloads an artifact")
     download_parser.add_argument(
@@ -246,11 +250,6 @@ def create_arg_parser():
              " The timestamp must be specified as: \"@ts\" where \"ts\" must be a valid ISO 8601 timestamp, "
              "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
         default="current")  # optimized for local usage, don't fetch sources
-    install_parser.add_argument(
-        "--skip-build",
-        help="Whether Rally should skip rebuilding Elasticsearch (default: false).",
-        default=False,
-        action="store_true")
     # Intentionally undocumented as we do not consider Docker a fully supported option.
     install_parser.add_argument(
         "--build-type",
@@ -789,8 +788,6 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
-            # TODO: Remove this special treatment and rely on artifact caching (follow-up PR)
-            cfg.add(config.Scope.applicationOverride, "mechanic", "skip.build", args.skip_build)
             cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
