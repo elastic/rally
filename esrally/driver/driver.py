@@ -1299,7 +1299,8 @@ class AsyncIoAdapter:
             # need to start from (client) index 0 in both cases instead of 0 for indexA and 4 for indexB.
             schedule = schedule_for(task, task_allocation.client_index_in_task, params_per_task[task])
             async_executor = AsyncExecutor(
-                client_id, task, schedule, es, self.sampler, self.cancel, self.complete, self.abort_on_error)
+                client_id, task, schedule, es, self.sampler, self.cancel, self.complete,
+                task.on_error(self.abort_on_error))
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
             aws.append(final_executor())
         run_start = time.perf_counter()
@@ -1464,7 +1465,6 @@ async def execute_single(runner, es, params, on_error):
     """
     # pylint: disable=import-outside-toplevel
     import elasticsearch
-    abort_on_fatal = False
     fatal_error = False
     try:
         async with runner:
@@ -1501,7 +1501,7 @@ async def execute_single(runner, es, params, on_error):
         if isinstance(e, elasticsearch.ConnectionTimeout):
             request_meta_data["error-description"] = "network connection timed out"
         elif e.info:
-            request_meta_data["error-description"] = "%s (%s)" % (e.error, e.info)
+            request_meta_data["error-description"] = f"{e.error} ({e.info})"
         else:
             if isinstance(e.error, bytes):
                 error_description = e.error.decode("utf-8")
@@ -1513,12 +1513,8 @@ async def execute_single(runner, es, params, on_error):
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
         raise exceptions.SystemSetupError(msg)
 
-    # TODO remove deprecated continue-on-non-fatal
-    if on_error in ["continue", "continue-on-non-fatal"] and fatal_error and params:
-        abort_on_fatal = params.get("ignore-response-error-level") == "non-fatal"
-
     if not request_meta_data["success"]:
-        if on_error == "abort" or abort_on_fatal:
+        if on_error == "abort" or fatal_error:
             msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
             description = request_meta_data.get("error-description")
             if description:
