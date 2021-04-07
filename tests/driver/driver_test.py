@@ -18,7 +18,6 @@
 import asyncio
 import collections
 import io
-import random
 import threading
 import time
 import unittest.mock as mock
@@ -26,7 +25,6 @@ from datetime import datetime
 from unittest import TestCase
 
 import elasticsearch
-import pytest
 
 from esrally import metrics, track, exceptions, config
 from esrally.driver import driver, runner, scheduler
