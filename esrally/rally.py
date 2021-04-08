@@ -521,11 +521,6 @@ def create_arg_parser():
         default=False,
         help="If any processes is running, it is going to kill them and allow Rally to continue to run."
     )
-    race_parser.add_argument(
-        "--skip-rest-api-check",
-        help="Skips checking that the REST API is available before proceeding with the benchmark",
-        action="store_true",
-        default=False)
 
     ###############################################################################
     #
@@ -539,6 +534,12 @@ def create_arg_parser():
         help=argparse.SUPPRESS,
         type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
         default=None)
+    # Skips checking that the REST API is available before proceeding with the benchmark
+    race_parser.add_argument(
+        "--skip-rest-api-check",
+        help=argparse.SUPPRESS,
+        action="store_true",
+        default=False)
 
     for p in [list_parser, race_parser, compare_parser, download_parser, install_parser,
               start_parser, stop_parser, info_parser, generate_parser, create_track_parser]:

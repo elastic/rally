@@ -444,11 +444,6 @@ Selects the :doc:`pipeline </pipelines>` that Rally should run.
 
 Rally can autodetect the pipeline in most cases. If you specify ``--distribution-version`` it will auto-select the pipeline ``from-distribution`` otherwise it will use ``from-sources``.
 
-``skip-rest-api-check``
-~~~~~~~~~~~~~~~~~~~~~~~
-
-This option skips the check whether the REST API of the targeted cluster is available. It should not be specified usually and is meant to be used together with the :ref:`client option <clr_client_options>` ``static_responses``.
-
 ``enable-assertions``
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -660,7 +655,7 @@ Rally recognizes the following client options in addition:
 
 * ``max_connections``: By default, Rally will choose the maximum allowed number of connections automatically (equal to the number of simulated clients but at least 256 connections). With this property it is possible to override that logic but a minimum of 256 is enforced internally.
 * ``enable_cleanup_closed`` (default: ``false``): In some cases, SSL connections might not be properly closed and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections.
-* ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. Use together with ``--skip-rest-api-check``. See below for a specific example.
+* ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. See below for a specific example.
 
 **Examples**
 
@@ -740,10 +735,7 @@ Here we define the necessary responses for a track that bulk-indexes data::
 
 Save the above responses as ``responses.json`` and execute a benchmark as follows::
 
-    esrally race --track=geonames --challenge=append-no-conflicts-index-only --pipeline=benchmark-only --skip-rest-api-check --distribution-version=8.0.0 --client-options="static_responses:'responses.json'"
-
-.. note::
-   Use ``--skip-rest-api-check`` to ensure that Rally skips any probing requests that are not directly related to the benchmark (e.g. checks whether the cluster is up).
+    esrally race --track=geonames --challenge=append-no-conflicts-index-only --pipeline=benchmark-only --distribution-version=8.0.0 --client-options="static_responses:'responses.json'"
 
 .. _command_line_reference_on_error:
 
