@@ -619,7 +619,8 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None, node_name=None, task=None, sort_key=None, sort_reverse=False):
+    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
+                sort_key=None, sort_reverse=False):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
@@ -627,11 +628,11 @@ class MetricsStore:
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
         :param task The task name to query. Optional.
-        :param sort_key 
-        :param 
+        :param sort_key The key to sort the docs before returning the first value. Optional.
+        :param sort_reverse  The flag to reverse the sort. Optional.
         :return: The corresponding value for the given metric name or None if there is no value.
         """
-        return self._first_or_none(self.get(name=name, task=task, sample_type=sample_type, node_name=node_name))
+        raise NotImplementedError("abstract method")
 
     @staticmethod
     def _first_or_none(values):
@@ -829,6 +830,29 @@ class EsMetricsStore(MetricsStore):
         result = self._client.search(index=self._index, body=query)
         self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
+
+    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
+                sort_key=None, sort_reverse=False):
+        order = "desc"
+        if not sort_reverse:
+            order = "asc"
+        if sort_key:
+            query = {
+                "query": self._query_by_name(name, task, None, sample_type, node_name),
+                "sort": [
+                    {sort_key: {"order": order}}
+                ],
+                "size": 1
+            }
+        else:
+            query = {
+                "query": self._query_by_name(name, task, None, sample_type, node_name),
+                "size": 1
+            }
+        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
+        result = self._client.search(index=self._index, body=query)
+        self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
+        return mapper(result["hits"]["hits"][0]["_source"])
 
     def get_error_rate(self, task, operation_type=None, sample_type=None):
         query = {
@@ -1073,6 +1097,18 @@ class InMemoryMetricsStore(MetricsStore):
                 (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
                 (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
                 ]
+
+    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
+                sort_key=None, sort_reverse=False):
+        if sort_key:
+            docs = sorted(self.docs, key=lambda k: k[sort_key], reverse=sort_reverse)
+        else:
+            docs = self.docs
+        for doc in docs:
+            if (doc["name"] == name and (task is None or doc["task"] == task) and
+                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
+                    (node_name is None or doc.get("meta", {}).get("node_name") == node_name)):
+                return mapper(doc)
 
     def __str__(self):
         return "in-memory metrics store"
@@ -1681,9 +1717,8 @@ class GlobalStatsCalculator:
         return self.store.get_error_rate(task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
 
     def duration(self, task_name):
-        values = self.store.get_raw("service_time", task_name, mapper=lambda doc: doc["relative-time"])
-        sorted_values = sorted(values)
-        return sorted_values[-1]
+        return self.store.get_one("service_time", task=task_name, mapper=lambda doc: doc["relative-time-ms"],
+                                  sort_key="relative-time-ms", sort_reverse=True)
 
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
         return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
