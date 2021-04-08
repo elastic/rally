@@ -910,7 +910,7 @@ class Task:
                 ignore_response_error_level not in Task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST:
             raise exceptions.InvalidSyntax(
                 f"Task [{self}] specifies ignore-response-error-level to [{ignore_response_error_level}] but "
-                f'the only allowed values are [{",".join(Task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST)}].')
+                f"the only allowed values are [{','.join(Task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST)}].")
 
         return ignore_response_error_level
 
