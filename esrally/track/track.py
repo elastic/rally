@@ -910,26 +910,26 @@ class Task:
                 ignore_response_error_level not in Task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST:
             raise exceptions.InvalidSyntax(
                 f"Task [{self}] specifies ignore-response-error-level to [{ignore_response_error_level}] but "
-                f"the only allowed values are [{Task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST}].")
+                f'the only allowed values are [{",".join(Task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST)}].')
 
         return ignore_response_error_level
 
-    def on_error(self, global_on_error):
+    def error_behavior(self, default_error_behavior):
         """
         Returns the desired behavior when encountering errors during task execution.
 
-        :param global_on_error: The cli argument for on-error.
+        :param default_error_behavior: (str) the default error behavior for the benchmark
         :return: (str) prescribing error handling when a non-fatal error occurs:
             "abort": will fail when any error gets encountered
-            "continue": will continue for non fatal errors.
+            "continue": will continue for non fatal errors
         """
 
-        effective_on_error = "continue"
-        if global_on_error == "abort":
+        behavior = "continue"
+        if default_error_behavior == "abort":
             if self.ignore_response_error_level != "non-fatal":
-                effective_on_error = "abort"
+                behavior = "abort"
 
-        return effective_on_error
+        return behavior
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)

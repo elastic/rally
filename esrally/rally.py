@@ -451,7 +451,7 @@ def create_arg_parser():
              f"Python client (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS}).",
         default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
     race_parser.add_argument("--on-error",
-                             choices=["continue", "continue-on-non-fatal", "abort"],
+                             choices=["continue", "abort"],
                              help="Controls how Rally behaves on response errors (default: continue).",
                              default="continue")
     race_parser.add_argument(
@@ -822,10 +822,6 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
             cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
             cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
-            if args.on_error == "continue-on-non-fatal":
-                console.warn(
-                    f"The value [{args.on_error}] for the parameter [--on-error] is deprecated and will be removed in "
-                    f"the future. The default value [continue] will do the same so skip the parameter going forwards.")
             cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
             cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
             configure_track_params(arg_parser, args, cfg)

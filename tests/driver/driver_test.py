@@ -1520,7 +1520,6 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_with_connection_error_always_aborts(self):
         for on_error in ["abort", "continue"]:
             with self.subTest():
-                # TODO remove deprecated continue-on-fatal
                 es = None
                 params = None
                 # ES client uses pseudo-status "N/A" in this case...

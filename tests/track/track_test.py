@@ -315,21 +315,20 @@ class TaskTests(TestCase):
         with self.assertRaises(exceptions.InvalidSyntax) as e:
             # pylint: disable=pointless-statement
             task.ignore_response_error_level
-        self.assertEqual(f"Task [test] specifies ignore-response-error-level to [invalid-value] but "
-                         f"the only allowed values are [{task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST}].",
-                         e.exception.args[0])
+        self.assertEqual("Task [test] specifies ignore-response-error-level to [invalid-value] but "
+                         "the only allowed values are [non-fatal].", e.exception.args[0])
 
     def test_task_continues_with_global_continue(self):
         task = self.task()
-        effective_on_error = task.on_error(global_on_error="continue")
+        effective_on_error = task.error_behavior(default_error_behavior="continue")
         self.assertEqual(effective_on_error, "continue")
 
     def test_task_continues_with_global_abort_and_task_override(self):
         task = self.task(ignore_response_error_level="non-fatal")
-        effective_on_error = task.on_error(global_on_error="abort")
+        effective_on_error = task.error_behavior(default_error_behavior="abort")
         self.assertEqual(effective_on_error, "continue")
 
     def test_task_aborts_with_global_abort(self):
         task = self.task()
-        effective_on_error = task.on_error(global_on_error="abort")
+        effective_on_error = task.error_behavior(default_error_behavior="abort")
         self.assertEqual(effective_on_error, "abort")
