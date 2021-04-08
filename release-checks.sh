@@ -48,7 +48,7 @@ fi
 if [[ ! -f ~/.github/rally_release_changelog.token ]]
 then
     echo "Error: didn't find a valid GitHub token in ~/.github/rally_release_changelog.token."
-    echo "The release process requires a valid GitHub token. See https://wiki.elastic.co/display/DEV/Rally+Release+Process for details."
+    echo "The release process requires a valid GitHub token."
     exit 1
 fi
 
