@@ -31,13 +31,14 @@ class FormatterTests(TestCase):
             ["Median Throughput", "index", "17500", "18500", "1000", "ops/s"],
             ["Max Throughput", "index", "17700", "19000", "1300", "ops/s"]
         ]
+        self.numbers_align = "right"
 
     def test_formats_as_markdown(self):
-        formatted = reporter.format_as_markdown(self.empty_header, self.empty_data)
+        formatted = reporter.format_as_markdown(self.empty_header, self.empty_data, self.numbers_align)
         # 1 header line, 1 separation line + 0 data lines
         self.assertEqual(1 + 1 + 0, len(formatted.splitlines()))
 
-        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data)
+        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data, self.numbers_align)
         # 1 header line, 1 separation line + 3 data lines
         self.assertEqual(1 + 1 + 3, len(formatted.splitlines()))
 
