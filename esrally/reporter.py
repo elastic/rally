@@ -312,7 +312,8 @@ class ComparisonReporter:
     def __init__(self, config):
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
-        self.numbers_align = config.opts("reporting", "numbers.align")
+        self.numbers_align = config.opts("reporting", "numbers.align",
+                                         mandatory=False, default_value="right")
         self.cwd = config.opts("node", "rally.cwd")
         self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime",
                                                                 mandatory=False, default_value=False))
