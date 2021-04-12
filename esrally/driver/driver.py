@@ -447,7 +447,7 @@ class TrackPreparationActor(actor.RallyActor):
         if tpr.processors:
             # we expect on_after_load_track finishes quickly. do this locally.
             for processor in tpr.processors:
-                processor.on_after_load_track(self.track)
+                processor.on_after_load_track(track=self.track) # pylint: disable=no-value-for-parameter
             # we expect on_prepare_track can take a long time. seed a queue of tasks and delegate to child workers
             self.children = [self._create_task_executor() for _ in range(num_cores(self.cfg))]
             for processor in tpr.processors:

@@ -72,6 +72,7 @@ class TrackProcessor:
 
 class TrackProcessorRegistry:
     def __init__(self, cfg):
+        self.required_processors = [TaskFilterTrackProcessor, TestModeTrackProcessor]
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
         self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
@@ -88,7 +89,7 @@ class TrackProcessorRegistry:
     def processors(self):
         if not self.track_processors:
             self.register_track_processor(DefaultTrackPreparator(self.base_config))
-        return self.track_processors
+        return [*self.required_processors, *self.track_processors]
 
     def on_after_load_track(self, track):
         current_track = track
@@ -193,17 +194,11 @@ def _load_single_track(cfg, track_repository, track_name):
     try:
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
-
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
-
         track_processor = TrackProcessorRegistry(cfg)
-        track_processor.register_track_processor(TaskFilterTrackProcessor(cfg))
-        track_processor.register_track_processor(TestModeTrackProcessor(cfg))
-
         has_plugins = load_track_plugins(cfg, track_name, register_track_processor=track_processor.register_track_processor)
         current_track.has_plugins = has_plugins
-
-        return track_processor.on_after_load_track(current_track)
+        return current_track
     except FileNotFoundError as e:
         logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
         raise exceptions.SystemSetupError(f"Cannot load track [{track_name}]. "
