@@ -4,6 +4,16 @@ Migration Guide
 Migrating to Rally 2.2.0
 ------------------------
 
+Semantics of on-error cli argument have changed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Starting with Rally 2.2.0 the behavior of ``on-error`` cli argument has changed.
+
+The existing default value ``continue-on-non-fatal`` is now renamed to ``continue`` and will keep the same behavior as the older default, i.e. cause the benchmark to fail only on network connection errors.
+The ``abort`` value also continues to behave the same (abort as soon as any error happens), however, it can be made to behave like ``continue`` on the **task level** using the new task property ``ignore-response-error-level=non-fatal``.
+
+For more details see: :ref:`cli option on-error <command_line_reference_on_error>` and the task parameter :ref:`ignore-response-error-level <track_schedule>`.
+
 ``relative-time`` is removed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

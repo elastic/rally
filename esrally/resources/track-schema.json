@@ -105,6 +105,10 @@
                       "type": "number",
                       "minimum": 0,
                       "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
+                    },
+                    "ignore-response-error-level": {
+                      "type": "string",
+                      "description": "Overrides non-fatal error handling globally defined via the cli arg on-error=abort. Only 'non-fatal' may be defined which will continue unless a fatal error occurs."
                     }
                   },
                   "required": [
