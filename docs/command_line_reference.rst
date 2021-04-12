@@ -529,14 +529,14 @@ and reference it when running Rally::
 ``runtime-jdk``
 ~~~~~~~~~~~~~~~
 
-By default, Rally will derive the appropriate runtime JDK versions automatically per version of Elasticsearch. For example, it will choose JDK 8 for Elasticsearch 5.0.0 but JDK 12, 11 or 8 for Elasticsearch 7.0.0. It will choose the highest available version.
+By default, Rally will derive the appropriate runtime JDK versions automatically per version of Elasticsearch. For example, it will choose JDK 12, 11 or 8 for Elasticsearch 7.0.0. It will choose the highest available version.
 
 This command line parameter sets the major version of the JDK that Rally should use to run Elasticsearch. It is required that either ``JAVA_HOME`` or ``JAVAx_HOME`` (where ``x`` is the major version, e.g. ``JAVA11_HOME`` for a JDK 11) points to the appropriate JDK.
 
 Example::
 
-   # Run a benchmark with defaults (i.e. JDK 8)
-   esrally race --track=geonames --distribution-version=5.0.0
+   # Run a benchmark with defaults
+   esrally race --track=geonames --distribution-version=7.0.0
    # Force to run with JDK 11
    esrally race --track=geonames --distribution-version=7.0.0 --runtime-jdk=11
 
@@ -563,7 +563,7 @@ If you want to create source builds of Elasticsearch plugins, you need to specif
 Examples:
 
 * Build latest Elasticsearch and plugin "my-plugin": ``--revision="elasticsearch:latest,my-plugin:latest"``
-* Build Elasticsearch tag ``v5.6.1`` and revision ``abc123`` of plugin "my-plugin": ``--revision="elasticsearch:v5.6.1,my-plugin:abc123"``
+* Build Elasticsearch tag ``v7.12.0`` and revision ``abc123`` of plugin "my-plugin": ``--revision="elasticsearch:v7.12.0,my-plugin:abc123"``
 
 Note that it is still required to provide the parameter ``--elasticsearch-plugins``. Specifying a plugin with ``--revision`` just tells Rally which revision to use for building the artifact. See the documentation on :doc:`Elasticsearch plugins </elasticsearch_plugins>` for more details.
 

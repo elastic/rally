@@ -36,7 +36,7 @@ The version numbers have to match the name in the download URL path.
 
 You can also benchmark Elasticsearch snapshot versions by specifying the snapshot repository::
 
-    esrally race --track=geonames --pipeline=from-distribution --distribution-version=5.0.0-SNAPSHOT --distribution-repository=snapshot
+    esrally race --track=geonames --pipeline=from-distribution --distribution-version=8.0.0-SNAPSHOT --distribution-repository=snapshot
 
 However, this feature is mainly intended for continuous integration environments and by default you should just benchmark official distributions.
 
