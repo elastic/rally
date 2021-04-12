@@ -837,6 +837,7 @@ Throughput = collections.namedtuple("Throughput", ["value", "unit"])
 
 class Task:
     THROUGHPUT_PATTERN = re.compile(r"(?P<value>(\d*\.)?\d+)\s(?P<unit>\w+/s)")
+    IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST = ["non-fatal"]
 
     def __init__(self, name, operation, tags=None, meta_data=None, warmup_iterations=None, iterations=None,
                  warmup_time_period=None, time_period=None, clients=1, completes_parent=False, schedule=None, params=None):
@@ -900,6 +901,35 @@ class Task:
             return Throughput(value, unit)
         else:
             return None
+
+    @property
+    def ignore_response_error_level(self):
+        ignore_response_error_level = self.params.get("ignore-response-error-level")
+
+        if ignore_response_error_level and \
+                ignore_response_error_level not in Task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST:
+            raise exceptions.InvalidSyntax(
+                f"Task [{self}] specifies ignore-response-error-level to [{ignore_response_error_level}] but "
+                f"the only allowed values are [{','.join(Task.IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST)}].")
+
+        return ignore_response_error_level
+
+    def error_behavior(self, default_error_behavior):
+        """
+        Returns the desired behavior when encountering errors during task execution.
+
+        :param default_error_behavior: (str) the default error behavior for the benchmark
+        :return: (str) prescribing error handling when a non-fatal error occurs:
+            "abort": will fail when any error gets encountered
+            "continue": will continue for non fatal errors
+        """
+
+        behavior = "continue"
+        if default_error_behavior == "abort":
+            if self.ignore_response_error_level != "non-fatal":
+                behavior = "abort"
+
+        return behavior
 
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)
