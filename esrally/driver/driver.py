@@ -25,6 +25,9 @@ import math
 import multiprocessing
 import queue
 import threading
+from dataclasses import dataclass
+from typing import Callable
+
 import time
 from enum import Enum
 
@@ -87,6 +90,15 @@ class DoTask:
     def __init__(self, task, cfg):
         self.task = task
         self.cfg = cfg
+
+
+@dataclass(frozen=True)
+class WorkerTask:
+    """
+    Unit of work that should be completed by the low-level TaskExecutionActor
+    """
+    func: Callable
+    params: dict
 
 
 class ReadyForWork:
@@ -435,28 +447,19 @@ class TrackPreparationActor(actor.RallyActor):
         self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
         tpr = TrackProcessorRegistry(self.cfg)
         self.track = msg.track
-
         self.logger.info("Preparing track [%s]", self.track.name)
-        if self.track.has_plugins:
-            self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", self.track.name)
-            # the track might have been loaded on a different machine (the coordinator machine) so we force a track
-            # update to ensure we use the latest version of plugins.
-            load_track_plugins(self.cfg, self.track.name, register_track_processor=tpr.register_track_processor,
-                               force_update=True)
-
-        if tpr.processors:
-            # we expect on_after_load_track finishes quickly. do this locally.
-            for processor in tpr.processors:
-                processor.on_after_load_track(track=self.track) # pylint: disable=no-value-for-parameter
-            # we expect on_prepare_track can take a long time. seed a queue of tasks and delegate to child workers
-            self.children = [self._create_task_executor() for _ in range(num_cores(self.cfg))]
-            for processor in tpr.processors:
-                self.processors.put(processor)
-            self._seed_tasks(self.processors.get())
-            self.send_to_children_and_transition(self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING,
-                                                 self.Status.PROCESSOR_RUNNING)
-        else:
-            self.send(sender, TrackPrepared())
+        self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", self.track.name)
+        # the track might have been loaded on a different machine (the coordinator machine) so we force a track
+        # update to ensure we use the latest version of plugins.
+        load_track_plugins(self.cfg, self.track.name, register_track_processor=tpr.register_track_processor,
+                           force_update=True)
+        # we expect on_prepare_track can take a long time. seed a queue of tasks and delegate to child workers
+        self.children = [self._create_task_executor() for _ in range(num_cores(self.cfg))]
+        for processor in tpr.processors:
+            self.processors.put(processor)
+        self._seed_tasks(self.processors.get())
+        self.send_to_children_and_transition(self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING,
+                                             self.Status.PROCESSOR_RUNNING)
 
     def resume(self):
         if not self.processors.empty():
@@ -467,7 +470,8 @@ class TrackPreparationActor(actor.RallyActor):
             self.send(self.original_sender, TrackPrepared())
 
     def _seed_tasks(self, processor):
-        self.tasks = list(processor.on_prepare_track(self.track, self.data_root_dir))
+        self.tasks = list(WorkerTask(func, params) for func, params in
+                          processor.on_prepare_track(self.track, self.data_root_dir))
 
     def _create_task_executor(self):
         return self.createActor(TaskExecutionActor)

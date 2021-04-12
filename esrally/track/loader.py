@@ -30,7 +30,7 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import actor, exceptions, time, PROGRAM_NAME, config, version
+from esrally import exceptions, time, PROGRAM_NAME, config, version
 from esrally.track import params, track
 from esrally.utils import io, collections, convert, net, console, modules, opts, repo
 
@@ -39,10 +39,6 @@ class TrackSyntaxError(exceptions.InvalidSyntax):
     """
     Raised whenever a syntax problem is encountered when loading the track specification.
     """
-
-
-class TrackProcessingTask(actor.WorkerTask):
-    pass
 
 
 class TrackProcessor:
@@ -72,7 +68,7 @@ class TrackProcessor:
 
 class TrackProcessorRegistry:
     def __init__(self, cfg):
-        self.required_processors = [TaskFilterTrackProcessor, TestModeTrackProcessor]
+        self.required_processors = [TaskFilterTrackProcessor(cfg), TestModeTrackProcessor(cfg)]
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
         self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
@@ -90,12 +86,6 @@ class TrackProcessorRegistry:
         if not self.track_processors:
             self.register_track_processor(DefaultTrackPreparator(self.base_config))
         return [*self.required_processors, *self.track_processors]
-
-    def on_after_load_track(self, track):
-        current_track = track
-        for t in self.track_processors:
-            t.on_after_load_track(current_track)
-        return current_track
 
 
 def tracks(cfg):
@@ -198,6 +188,8 @@ def _load_single_track(cfg, track_repository, track_name):
         track_processor = TrackProcessorRegistry(cfg)
         has_plugins = load_track_plugins(cfg, track_name, register_track_processor=track_processor.register_track_processor)
         current_track.has_plugins = has_plugins
+        for processor in track_processor.processors:
+            processor.on_after_load_track(current_track)
         return current_track
     except FileNotFoundError as e:
         logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
@@ -415,17 +407,15 @@ class DefaultTrackPreparator(TrackProcessor):
                     preparator.prepare_document_set(document_set, data_root[1])
 
     def on_prepare_track(self, track, data_root_dir):
-        self.track = track
         prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
-
             params = {
                 "cfg": self.cfg,
                 "track": track,
                 "corpus": corpus,
                 "preparator": prep
             }
-            yield TrackProcessingTask(DefaultTrackPreparator.prepare_docs, params)
+            yield DefaultTrackPreparator.prepare_docs, params
 
 
 class Decompressor:
