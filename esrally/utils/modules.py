@@ -61,8 +61,6 @@ class ComponentLoader:
         root_module_name = "%s.%s" % (component_name, self.component_entry_point)
 
         for p in self._modules(module_dirs, component_name):
-            if p.endswith(".__init__"):
-                p = p.split(".")[0]
             self.logger.debug("Loading module [%s]", p)
             m = importlib.import_module(p)
             if p == root_module_name:
