@@ -370,7 +370,7 @@ A directory that contains a team configuration. ``--team-path`` and ``--team-rep
 
 Example::
 
-   esrally race --team-path=~/Projects/es-teams
+   esrally race --track=geonames --team-path=~/Projects/es-teams
 
 ``target-os``
 ~~~~~~~~~~~~~
