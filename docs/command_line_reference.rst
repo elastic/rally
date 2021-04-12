@@ -737,6 +737,9 @@ Save the above responses as ``responses.json`` and execute a benchmark as follow
 
     esrally race --track=geonames --challenge=append-no-conflicts-index-only --pipeline=benchmark-only --distribution-version=8.0.0 --client-options="static_responses:'responses.json'"
 
+.. note::
+   Use ``--pipeline=benchmark-only`` as Rally should not start any cluster when static responses are used.
+
 .. _command_line_reference_on_error:
 
 ``on-error``
