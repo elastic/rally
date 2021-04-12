@@ -655,6 +655,7 @@ Rally recognizes the following client options in addition:
 
 * ``max_connections``: By default, Rally will choose the maximum allowed number of connections automatically (equal to the number of simulated clients but at least 256 connections). With this property it is possible to override that logic but a minimum of 256 is enforced internally.
 * ``enable_cleanup_closed`` (default: ``false``): In some cases, SSL connections might not be properly closed and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections.
+* ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. See below for a specific example.
 
 **Examples**
 
@@ -681,6 +682,63 @@ Client certificates can be presented regardless of the ``verify_certs`` setting,
 * Enable SSL, verify server certificates using public CA: ``--client-options="use_ssl:true,verify_certs:true"``. Note that you don't need to set ``ca_cert`` (which defines the path to the root certificates). Rally does this automatically for you.
 * Enable SSL, verify server certificates using private CA: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"``
 * Enable SSL, verify server certificates using private CA, present client certificates: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key:'/path/to/client_key.pem'"``
+
+**Static Responses**
+
+Define a JSON file containing a list of objects with the following properties:
+
+* ``path``: A path or path pattern that should be matched. Only leading and trailing wildcards (``*``) are supported. A path containing only a wildcard acts matches any path.
+* ``body``: The respective response body.
+* ``body-encoding``: Either ``raw`` or ``json``. Use ``json`` by default and ``raw`` for the operation-type ``bulk`` and ``search``.
+
+Here we define the necessary responses for a track that bulk-indexes data::
+
+    [
+      {
+        "path": "*/_bulk",
+        "body": {
+          "errors": false,
+          "took": 1
+        },
+        "body-encoding": "raw"
+      },
+      {
+        "path": "/_cluster/health*",
+        "body": {
+          "status": "green",
+          "relocating_shards": 0
+        },
+        "body-encoding": "json"
+      },
+      {
+        "path": "/_all/_stats/_all",
+        "body": {
+          "_all": {
+            "total": {
+              "merges": {
+                "current": 0
+              }
+            }
+          }
+        },
+        "body-encoding": "json"
+      },
+      {
+        "path": "*",
+        "body": {},
+        "body-encoding": "json"
+      }
+    ]
+
+.. note::
+   Paths are evaluated from top to bottom. Therefore, place more restrictive paths at the top of the file.
+
+Save the above responses as ``responses.json`` and execute a benchmark as follows::
+
+    esrally race --track=geonames --challenge=append-no-conflicts-index-only --pipeline=benchmark-only --distribution-version=8.0.0 --client-options="static_responses:'responses.json'"
+
+.. note::
+   Use ``--pipeline=benchmark-only`` as Rally should not start any cluster when static responses are used.
 
 .. _command_line_reference_on_error:
 

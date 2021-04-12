@@ -534,7 +534,7 @@ def create_arg_parser():
         help=argparse.SUPPRESS,
         type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
         default=None)
-    # skips checking that the REST API is available before proceeding with the benchmark
+    # Skips checking that the REST API is available before proceeding with the benchmark
     race_parser.add_argument(
         "--skip-rest-api-check",
         help=argparse.SUPPRESS,

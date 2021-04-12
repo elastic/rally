@@ -399,38 +399,39 @@ class Driver:
             es[cluster_name] = self.es_client_factory(cluster_hosts, cluster_client_options).create()
         return es
 
-    def prepare_telemetry(self, es):
+    def prepare_telemetry(self, es, enable):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
 
         es_default = es["default"]
-        self.telemetry = telemetry.Telemetry(enabled_devices, devices=[
-            telemetry.NodeStats(telemetry_params, es, self.metrics_store),
-            telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
-            telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
-            telemetry.JvmStatsSummary(es_default, self.metrics_store),
-            telemetry.IndexStats(es_default, self.metrics_store),
-            telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
-            telemetry.SegmentStats(log_root, es_default),
-            telemetry.CcrStats(telemetry_params, es, self.metrics_store),
-            telemetry.RecoveryStats(telemetry_params, es, self.metrics_store),
-            telemetry.TransformStats(telemetry_params, es, self.metrics_store),
-            telemetry.SearchableSnapshotsStats(telemetry_params, es, self.metrics_store)
-        ])
+
+        if enable:
+            devices = [
+                telemetry.NodeStats(telemetry_params, es, self.metrics_store),
+                telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
+                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
+                telemetry.JvmStatsSummary(es_default, self.metrics_store),
+                telemetry.IndexStats(es_default, self.metrics_store),
+                telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
+                telemetry.SegmentStats(log_root, es_default),
+                telemetry.CcrStats(telemetry_params, es, self.metrics_store),
+                telemetry.RecoveryStats(telemetry_params, es, self.metrics_store),
+                telemetry.TransformStats(telemetry_params, es, self.metrics_store),
+                telemetry.SearchableSnapshotsStats(telemetry_params, es, self.metrics_store)
+            ]
+        else:
+            devices = []
+        self.telemetry = telemetry.Telemetry(enabled_devices, devices=devices)
 
     def wait_for_rest_api(self, es):
-        skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
-        if skip_rest_api_check:
-            self.logger.info("Skipping REST API check.")
+        es_default = es["default"]
+        self.logger.info("Checking if REST API is available.")
+        if client.wait_for_rest_layer(es_default, max_attempts=40):
+            self.logger.info("REST API is available.")
         else:
-            es_default = es["default"]
-            self.logger.info("Checking if REST API is available.")
-            if client.wait_for_rest_layer(es_default, max_attempts=40):
-                self.logger.info("REST API is available.")
-            else:
-                self.logger.error("REST API layer is not yet available. Stopping benchmark.")
-                raise exceptions.SystemSetupError("Elasticsearch REST API layer is not available.")
+            self.logger.error("REST API layer is not yet available. Stopping benchmark.")
+            raise exceptions.SystemSetupError("Elasticsearch REST API layer is not available.")
 
     def retrieve_cluster_info(self, es):
         try:
@@ -455,9 +456,21 @@ class Driver:
                                                          self.challenge.meta_data)
 
         es_clients = self.create_es_clients()
-        self.wait_for_rest_api(es_clients)
-        self.prepare_telemetry(es_clients)
-        self.target.on_cluster_details_retrieved(self.retrieve_cluster_info(es_clients))
+
+        skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
+        uses_static_responses = self.config.opts("client", "options").uses_static_responses
+        if skip_rest_api_check:
+            self.logger.info("Skipping REST API check as requested explicitly.")
+        elif uses_static_responses:
+            self.logger.info("Skipping REST API check as static responses are used.")
+        else:
+            self.wait_for_rest_api(es_clients)
+            self.target.on_cluster_details_retrieved(self.retrieve_cluster_info(es_clients))
+
+        # Avoid issuing any requests to the target cluster when static responses are enabled. The results
+        # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
+        self.prepare_telemetry(es_clients, enable=not uses_static_responses)
+
         for host in self.config.opts("driver", "load_driver_hosts"):
             host_config = {
                 # for simplicity we assume that all benchmark machines have the same specs

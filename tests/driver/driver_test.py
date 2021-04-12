@@ -63,6 +63,7 @@ class DriverTests(TestCase):
         def __init__(self, all_hosts=None, all_client_options=None):
             self.all_hosts = all_hosts
             self.all_client_options = all_client_options
+            self.uses_static_responses = False
 
     def __init__(self, methodName='runTest'):
         super().__init__(methodName)
