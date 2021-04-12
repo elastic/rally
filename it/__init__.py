@@ -29,7 +29,7 @@ from esrally import client, config, version
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
-DISTRIBUTIONS = ["5.6.16", "6.8.0", "7.6.0"]
+DISTRIBUTIONS = ["6.8.0", "7.6.0"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 

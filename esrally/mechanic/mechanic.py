@@ -57,7 +57,7 @@ def install(cfg):
 
     if build_type == "tar":
         binary_supplier = supplier.create(cfg, sources, distribution, car, plugins)
-        p = provisioner.local(cfg=cfg, car=car, plugins=plugins, cluster_settings={}, ip=ip, http_port=http_port,
+        p = provisioner.local(cfg=cfg, car=car, plugins=plugins, ip=ip, http_port=http_port,
                               all_node_ips=seed_hosts, all_node_names=master_nodes, target_root=root_path,
                               node_name=node_name)
         node_config = p.prepare(binary=binary_supplier())
@@ -65,8 +65,7 @@ def install(cfg):
         if len(plugins) > 0:
             raise exceptions.SystemSetupError("You cannot specify any plugins for Docker clusters. Please remove "
                                               "\"--elasticsearch-plugins\" and try again.")
-        p = provisioner.docker(cfg=cfg, car=car, cluster_settings={}, ip=ip, http_port=http_port,
-                               target_root=root_path, node_name=node_name)
+        p = provisioner.docker(cfg=cfg, car=car, ip=ip, http_port=http_port, target_root=root_path, node_name=node_name)
         # there is no binary for Docker that can be downloaded / built upfront
         node_config = p.prepare(binary=None)
     else:
@@ -165,11 +164,10 @@ def _delete_node_file(root_path):
 ##############################
 
 class StartEngine:
-    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, distribution, external, docker, ip=None, port=None,
+    def __init__(self, cfg, open_metrics_context, sources, distribution, external, docker, ip=None, port=None,
                  node_id=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
-        self.cluster_settings = cluster_settings
         self.sources = sources
         self.distribution = distribution
         self.external = external
@@ -190,7 +188,7 @@ class StartEngine:
         :param node_ids: A list of node id to set.
         :return: A corresponding ``StartNodes`` message with the specified IP, port number and node ids.
         """
-        return StartNodes(self.cfg, self.open_metrics_context, self.cluster_settings, self.sources, self.distribution,
+        return StartNodes(self.cfg, self.open_metrics_context, self.sources, self.distribution,
                           self.external, self.docker, all_node_ips, all_node_ids, ip, port, node_ids)
 
 
@@ -217,11 +215,10 @@ class ResetRelativeTime:
 ##############################
 
 class StartNodes:
-    def __init__(self, cfg, open_metrics_context, cluster_settings, sources, distribution, external, docker,
+    def __init__(self, cfg, open_metrics_context, sources, distribution, external, docker,
                  all_node_ips, all_node_ids, ip, port, node_ids):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
-        self.cluster_settings = cluster_settings
         self.sources = sources
         self.distribution = distribution
         self.external = external
@@ -357,12 +354,6 @@ class MechanicActor(actor.RallyActor):
         self.externally_provisioned = msg.external
         if self.externally_provisioned:
             self.logger.info("Cluster will not be provisioned by Rally.")
-            # TODO: This needs to be handled later - we should probably disallow this entirely
-            if msg.cluster_settings:
-                pretty_settings = json.dumps(msg.cluster_settings, indent=2)
-                warning = "Ensure that these settings are defined in elasticsearch.yml:\n\n{}\n\nIf they are absent, running this track " \
-                          "will fail or lead to unexpected results.".format(pretty_settings)
-                console.warn(warning, logger=self.logger)
             self.status = "nodes_started"
             self.received_responses = []
             self.on_all_nodes_started()
@@ -558,8 +549,7 @@ class NodeMechanicActor(actor.RallyActor):
             # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
 
             self.mechanic = create(cfg, metrics_store, msg.ip, msg.port, msg.all_node_ips, msg.all_node_ids,
-                                   msg.cluster_settings, msg.sources, msg.distribution,
-                                   msg.external, msg.docker)
+                                   msg.sources, msg.distribution, msg.external, msg.docker)
             self.mechanic.start_engine()
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             self.send(getattr(msg, "reply_to", sender), NodesStarted())
@@ -618,8 +608,8 @@ def load_team(cfg, external):
     return car, plugins
 
 
-def create(cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_ids, cluster_settings=None,
-           sources=False, distribution=False, external=False, docker=False):
+def create(cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_ids, sources=False, distribution=False,
+           external=False, docker=False):
     race_root_path = paths.race_root(cfg)
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
@@ -632,7 +622,7 @@ def create(cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_i
         for node_id in node_ids:
             node_name = "%s-%s" % (node_name_prefix, node_id)
             p.append(
-                provisioner.local(cfg, car, plugins, cluster_settings, node_ip, node_http_port, all_node_ips,
+                provisioner.local(cfg, car, plugins, node_ip, node_http_port, all_node_ips,
                                   all_node_names, race_root_path, node_name))
         l = launcher.ProcessLauncher(cfg)
     elif external:
@@ -645,7 +635,7 @@ def create(cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_i
         p = []
         for node_id in node_ids:
             node_name = "%s-%s" % (node_name_prefix, node_id)
-            p.append(provisioner.docker(cfg, car, cluster_settings, node_ip, node_http_port, race_root_path, node_name))
+            p.append(provisioner.docker(cfg, car, node_ip, node_http_port, race_root_path, node_name))
         l = launcher.DockerLauncher(cfg)
     else:
         # It is a programmer error (and not a user error) if this function is called with wrong parameters

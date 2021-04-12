@@ -28,6 +28,14 @@ The deprecated metric ``relative-time`` has been dropped in Rally 2.2.0. Use ``r
 * Rally 2.3.0: ``relative-time`` will be reintroduced and contain the relative time in milliseconds. The field ``relative-time-ms`` will be deprecated.
 * Rally 2.4.0: ``relative-time-ms`` will be dropped.
 
+``cluster-settings`` specified in the track are not honored
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The deprecated challenge property ``cluster_settings`` is not honored anymore. Custom cluster settings should be set as follows:
+
+* Static cluster settings should be defined via rally-teams and the property ``additional_cluster_settings``
+* Dynamic cluster settings should be defined via the put-settings operation
+
 Migrating to Rally 2.1.0
 ------------------------
 
