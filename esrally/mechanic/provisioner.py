@@ -407,7 +407,8 @@ class DockerProvisioner:
             "network_host": "0.0.0.0",
             "discovery_type": "single-node",
             "http_port": str(self.http_port),
-            "transport_port": str(self.http_port + 100)
+            "transport_port": str(self.http_port + 100),
+            "cluster_settings": {}
         }
 
         self.config_vars = {}

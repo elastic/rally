@@ -582,6 +582,8 @@ class DockerProvisionerTests(TestCase):
             "network_host": "0.0.0.0",
             "http_port": "39200",
             "transport_port": "39300",
+            "cluster_settings": {
+            },
             "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss"
         }, docker.config_vars)
 
