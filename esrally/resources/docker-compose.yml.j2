@@ -27,7 +27,7 @@ services:
       - {{host_path}}:{{docker_path}}
 {%- endfor %}
     healthcheck:
-      test: curl -k -u elastic:changeme 127.0.0.1:{{http_port}}
+      test: nc -z 127.0.0.1 {{http_port}}
       interval: 5s
       timeout: 2s
       retries: 10
