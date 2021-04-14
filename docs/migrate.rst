@@ -1,6 +1,33 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.2.0
+------------------------
+
+Semantics of on-error cli argument have changed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Starting with Rally 2.2.0 the behavior of ``on-error`` cli argument has changed.
+
+The existing default value ``continue-on-non-fatal`` is now renamed to ``continue`` and will keep the same behavior as the older default, i.e. cause the benchmark to fail only on network connection errors.
+The ``abort`` value also continues to behave the same (abort as soon as any error happens), however, it can be made to behave like ``continue`` on the **task level** using the new task property ``ignore-response-error-level=non-fatal``.
+
+For more details see: :ref:`cli option on-error <command_line_reference_on_error>` and the task parameter :ref:`ignore-response-error-level <track_schedule>`.
+
+``relative-time`` is removed
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+    This removal is only relevant if you have configured an Elasticsearch metrics store for Rally.
+
+The deprecated metric ``relative-time`` has been dropped in Rally 2.2.0. Use ``relative-time-ms`` instead to retrieve the same metric but denoted in milliseconds instead of microseconds. We will reintroduce this property with new semantics in Rally 2.3.0. See below for an overview of the migration plan for this metric:
+
+* Rally 2.1.0: ``relative-time`` has been deprecated and Rally added a new field ``relative-time-ms`` which contains the relative time in milliseconds.
+* Rally 2.2.0: ``relative-time`` is dropped. Rally only populates the field ``relative-time-ms`` which contains the relative time in milliseconds.
+* Rally 2.3.0: ``relative-time`` will be reintroduced and contain the relative time in milliseconds. The field ``relative-time-ms`` will be deprecated.
+* Rally 2.4.0: ``relative-time-ms`` will be dropped.
+
 Migrating to Rally 2.1.0
 ------------------------
 

@@ -63,6 +63,7 @@ class DriverTests(TestCase):
         def __init__(self, all_hosts=None, all_client_options=None):
             self.all_hosts = all_hosts
             self.all_client_options = all_client_options
+            self.uses_static_responses = False
 
     def __init__(self, methodName='runTest'):
         super().__init__(methodName)
@@ -1517,36 +1518,33 @@ class AsyncExecutorTests(TestCase):
         }, request_meta_data)
 
     @run_async
-    async def test_execute_single_with_connection_error_aborts_as_fatal(self):
-        es = None
-        params = None
-        # ES client uses pseudo-status "N/A" in this case...
-        runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
+    async def test_execute_single_with_connection_error_always_aborts(self):
+        for on_error in ["abort", "continue"]:
+            with self.subTest():
+                es = None
+                params = None
+                # ES client uses pseudo-status "N/A" in this case...
+                runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
 
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
-            await driver.execute_single(self.context_managed(runner), es, params, on_error="continue-on-non-fatal")
-        self.assertEqual(
-            "Request returned an error. Error type: transport, Description: no route to host",
-            ctx.exception.args[0])
+                with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+                    await driver.execute_single(self.context_managed(runner), es, params, on_error=on_error)
+                self.assertEqual(
+                    "Request returned an error. Error type: transport, Description: no route to host",
+                    ctx.exception.args[0])
 
     @run_async
-    async def test_execute_single_with_connection_error_continues(self):
+    async def test_execute_single_with_http_400_aborts_when_specified(self):
         es = None
         params = None
-        # ES client uses pseudo-status "N/A" in this case...
-        runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
+        runner = mock.Mock(side_effect=
+                           as_future(exception=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found")))
 
-        ops, unit, request_meta_data = await driver.execute_single(
-            self.context_managed(runner), es, params, on_error="continue")
+        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
+        self.assertEqual(
+            "Request returned an error. Error type: transport, Description: not found (the requested document could not be found)",
+            ctx.exception.args[0])
 
-        self.assertEqual(0, ops)
-        self.assertEqual("ops", unit)
-        self.assertEqual({
-            # Look ma: No http-status!
-            "error-description": "no route to host",
-            "error-type": "transport",
-            "success": False
-        }, request_meta_data)
 
     @run_async
     async def test_execute_single_with_http_400(self):
@@ -1556,7 +1554,7 @@ class AsyncExecutorTests(TestCase):
                            as_future(exception=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found")))
 
         ops, unit, request_meta_data = await driver.execute_single(
-            self.context_managed(runner), es, params, on_error="continue-on-non-fatal")
+            self.context_managed(runner), es, params, on_error="continue")
 
         self.assertEqual(0, ops)
         self.assertEqual("ops", unit)
@@ -1575,7 +1573,7 @@ class AsyncExecutorTests(TestCase):
                            as_future(exception=elasticsearch.NotFoundError(413, b"", b"")))
 
         ops, unit, request_meta_data = await driver.execute_single(
-            self.context_managed(runner), es, params, on_error="continue-on-non-fatal")
+            self.context_managed(runner), es, params, on_error="continue")
 
         self.assertEqual(0, ops)
         self.assertEqual("ops", unit)

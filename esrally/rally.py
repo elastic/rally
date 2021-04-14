@@ -451,9 +451,9 @@ def create_arg_parser():
              f"Python client (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS}).",
         default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
     race_parser.add_argument("--on-error",
-                             choices=["continue", "continue-on-non-fatal", "abort"],
-                             help="Controls how Rally behaves on response errors (default: continue-on-non-fatal).",
-                             default="continue-on-non-fatal")
+                             choices=["continue", "abort"],
+                             help="Controls how Rally behaves on response errors (default: continue).",
+                             default="continue")
     race_parser.add_argument(
         "--telemetry",
         help=f"Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry "
@@ -534,7 +534,7 @@ def create_arg_parser():
         help=argparse.SUPPRESS,
         type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
         default=None)
-    # skips checking that the REST API is available before proceeding with the benchmark
+    # Skips checking that the REST API is available before proceeding with the benchmark
     race_parser.add_argument(
         "--skip-rest-api-check",
         help=argparse.SUPPRESS,
