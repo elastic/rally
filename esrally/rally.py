@@ -711,7 +711,7 @@ def configure_track_params(arg_parser, args, cfg, command_requires_track=True):
         cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
         if command_requires_track:
             if not args.track:
-                raise exceptions.SystemSetupError("Starting Rally without specifying --track is not supported.")
+                raise arg_parser.error("argument --track is required")
             cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
 
     if command_requires_track:
