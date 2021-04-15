@@ -1168,7 +1168,7 @@ async def set_destructive_requires_name(es, value):
     """
     all_settings = await es.cluster.get_settings(flat_settings=True)
     # If the setting was persistent or left as default, we consider resetting later with null sufficient
-    prior_value = all_settings.get("transient").get("action.destructive_requires_name", None)
+    prior_value = all_settings.get("transient").get("action.destructive_requires_name")
     settings_body = {
         "transient": {
             "action.destructive_requires_name": value
