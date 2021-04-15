@@ -490,6 +490,113 @@ class EsMetricsTests(TestCase):
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
 
+    def test_get_one(self):
+        duration = StaticClock.NOW * 1000
+        search_result = {
+            "hits": {
+                "total": 2,
+                "hits": [
+                    {
+                        "_source": {
+                            "relative-time-ms": duration,
+                            "value": 500
+                        }
+                    },
+                    {
+                        "_source": {
+                            "relative-time-ms": duration-200,
+                            "value": 700
+                        }
+                    },
+                ]
+            }
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+
+        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "race-id": EsMetricsTests.RACE_ID
+                            }
+                        },
+                        {
+                            "term": {
+                                "name": "service_time"
+                            }
+                        },
+                        {
+                            "term": {
+                                "task": "task1"
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": 1,
+            "sort": [
+                {"relative-time-ms": {"order": "desc" }}
+                ]
+        }
+
+        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
+                                                         sort_key="relative-time-ms", sort_reverse=True)
+
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+
+        self.assertEqual(duration, actual_duration)
+
+    def test_get_one_no_hits(self):
+        duration = None
+        search_result = {
+            "hits": {
+                "total": 0,
+                "hits": []
+            }
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+
+        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "race-id": EsMetricsTests.RACE_ID
+                            }
+                        },
+                        {
+                            "term": {
+                                "name": "latency"
+                            }
+                        },
+                        {
+                            "term": {
+                                "task": "task2"
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": 1,
+            "sort": [
+                {"value": {"order": "asc" }}
+                ]
+        }
+
+        actual_duration = self.metrics_store.get_one("latency", task="task2", mapper=lambda doc: doc["value"],
+                                                         sort_key="value", sort_reverse=False)
+
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+
+        self.assertEqual(duration, actual_duration)
+
     def test_get_value(self):
         throughput = 5000
         search_result = {
@@ -1289,6 +1396,40 @@ class InMemoryMetricsStoreTests(TestCase):
     def tearDown(self):
         del self.metrics_store
         del self.cfg
+
+    def test_get_one(self):
+        duration = StaticClock.NOW
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.put_value_cluster_level("service_time", 500, "ms", relative_time=duration-400, task="task1")
+        self.metrics_store.put_value_cluster_level("service_time", 600, "ms", relative_time=duration, task="task1")
+        self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB", relative_time=duration-300)
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
+
+        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
+                                                         sort_key="relative-time-ms", sort_reverse=True)
+
+        self.assertEqual(duration * 1000, actual_duration)
+
+    def test_get_one_no_hits(self):
+        duration = StaticClock.NOW
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB", relative_time=duration-300)
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
+
+        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
+                                                     sort_key="relative-time-ms", sort_reverse=True)
+
+        self.assertEqual(None, actual_duration)
 
     def test_get_value(self):
         throughput = 5000
