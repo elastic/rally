@@ -547,7 +547,7 @@ It is also possible to specify the JDK that is bundled with Elasticsearch with t
 ``revision``
 ~~~~~~~~~~~~
 
-If you actively develop Elasticsearch and want to benchmark a source build of Elasticsearch (which Rally will create for you), you can specify the git revision of Elasticsearch that you want to benchmark. But note that Rally uses and expects the Gradle Wrapper in the Elasticsearch repository (``./gradlew``) which effectively means that it will only support this for Elasticsearch 5.0 or better. The default value is ``current``.
+If you actively develop Elasticsearch and want to benchmark a source build of Elasticsearch (which Rally will create for you), you can specify the git revision of Elasticsearch that you want to benchmark. The default value is ``current``.
 
 You can specify the revision in different formats:
 
