@@ -2542,8 +2542,8 @@ class DeleteIndexRunnerTests(TestCase):
         }, result)
 
         es.cluster.put_settings.assert_has_calls([
-            mock.call(body={"transient": {"action.destructive_requires_name": False}}, params={}),
-            mock.call(body={"transient": {"action.destructive_requires_name": True}}, params={})
+            mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+            mock.call(body={"transient": {"action.destructive_requires_name": True}})
         ])
         es.indices.delete.assert_called_once_with(index="indexB", params={})
 
@@ -2573,8 +2573,8 @@ class DeleteIndexRunnerTests(TestCase):
         }, result)
 
         es.cluster.put_settings.assert_has_calls([
-            mock.call(body={"transient": {"action.destructive_requires_name": False}}, params=params["request-params"]),
-            mock.call(body={"transient": {"action.destructive_requires_name": None}}, params=params["request-params"])
+            mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+            mock.call(body={"transient": {"action.destructive_requires_name": None}})
         ])
         es.indices.delete.assert_has_calls([
             mock.call(index="indexA", params=params["request-params"]),
