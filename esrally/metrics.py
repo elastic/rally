@@ -830,26 +830,24 @@ class EsMetricsStore(MetricsStore):
 
     def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
                 sort_key=None, sort_reverse=False):
-        order = "desc"
-        if not sort_reverse:
-            order = "asc"
+        order = "desc" if sort_reverse else "asc"
+        query = {
+            "query": self._query_by_name(name, task, None, sample_type, node_name),
+            "size": 1
+        }
         if sort_key:
-            query = {
-                "query": self._query_by_name(name, task, None, sample_type, node_name),
-                "sort": [
-                    {sort_key: {"order": order}}
-                ],
-                "size": 1
-            }
-        else:
-            query = {
-                "query": self._query_by_name(name, task, None, sample_type, node_name),
-                "size": 1
-            }
+            query["sort"] = [{sort_key: {"order": order}}]
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
         result = self._client.search(index=self._index, body=query)
-        self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
-        return mapper(result["hits"]["hits"][0]["_source"])
+        hits = result["hits"]["total"]
+        # Elasticsearch 7.0+
+        if isinstance(hits, dict):
+            hits = hits["value"]
+        self.logger.debug("Metrics query produced [%s] results.", hits)
+        if hits > 0:
+            return mapper(result["hits"]["hits"][0]["_source"])
+        else:
+            return None
 
     def get_error_rate(self, task, operation_type=None, sample_type=None):
         query = {
@@ -1106,6 +1104,7 @@ class InMemoryMetricsStore(MetricsStore):
                     (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
                     (node_name is None or doc.get("meta", {}).get("node_name") == node_name)):
                 return mapper(doc)
+        return None
 
     def __str__(self):
         return "in-memory metrics store"

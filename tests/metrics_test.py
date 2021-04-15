@@ -1585,7 +1585,7 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(collections.OrderedDict(
             [("50_0", 200), ("100_0", 210), ("mean", 200), ("unit", "ms")]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
-        self.assertAlmostEqual(709*1000, opm["duration"])
+        self.assertEqual(709*1000, opm["duration"])
 
         opm2 = stats.metrics("index #2")
         self.assertEqual(collections.OrderedDict(
@@ -1598,7 +1598,7 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(17.2, stats.ml_processing_time[0]["median"])
         self.assertEqual(36.0, stats.ml_processing_time[0]["max"])
         self.assertEqual("ms", stats.ml_processing_time[0]["unit"])
-        self.assertAlmostEqual(600*1000, opm2["duration"])
+        self.assertEqual(600*1000, opm2["duration"])
 
     def test_calculate_system_stats(self):
         cfg = config.Config()
