@@ -710,15 +710,9 @@ def configure_track_params(arg_parser, args, cfg, command_requires_track=True):
     else:
         cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
         if command_requires_track:
-            # TODO #1176: We should not choose a track implicitly.
-            # set the default programmatically because we need to determine whether the user has provided a value
-            if args.track:
-                chosen_track = args.track
-            else:
-                chosen_track = "geonames"
-                console.warn(f"Starting Rally without --track is deprecated. Add --track={chosen_track} to your parameters.")
-
-            cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
+            if not args.track:
+                raise arg_parser.error("argument --track is required")
+            cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
 
     if command_requires_track:
         cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
