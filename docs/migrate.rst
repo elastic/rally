@@ -28,6 +28,11 @@ The deprecated metric ``relative-time`` has been dropped in Rally 2.2.0. Use ``r
 * Rally 2.3.0: ``relative-time`` will be reintroduced and contain the relative time in milliseconds. The field ``relative-time-ms`` will be deprecated.
 * Rally 2.4.0: ``relative-time-ms`` will be dropped.
 
+``race`` and ``info`` now require ``--track``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Previously we deprecated the default ``--track`` value of ``geonames``.  As of Rally 2.2.0, this parameter is mandatory where applicable.
+
 Migrating to Rally 2.1.0
 ------------------------
 
