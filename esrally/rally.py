@@ -195,6 +195,11 @@ def create_arg_parser():
         choices=["markdown", "csv"],
         default="markdown")
     compare_parser.add_argument(
+        "--report-numbers-align",
+        help="Define the output column number alignment for the command line report (default: right).",
+        choices=["right", "center", "left", "decimal"],
+        default="right")
+    compare_parser.add_argument(
         "--report-file",
         help="Write the command line report also to the provided file.",
         default="")
@@ -487,6 +492,11 @@ def create_arg_parser():
         choices=["markdown", "csv"],
         default="markdown")
     race_parser.add_argument(
+        "--report-numbers-align",
+        help="Define the output column number alignment for the command line report (default: right).",
+        choices=["right", "center", "left", "decimal"],
+        default="right")
+    race_parser.add_argument(
         "--show-in-report",
         help="Define which values are shown in the summary report (default: available).",
         choices=["available", "all-percentiles", "all"],
@@ -760,6 +770,7 @@ def configure_reporting_params(args, cfg):
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
     cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
     cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
+    cfg.add(config.Scope.applicationOverride, "reporting", "numbers.align", args.report_numbers_align)
 
 
 def dispatch_sub_command(arg_parser, args, cfg):
