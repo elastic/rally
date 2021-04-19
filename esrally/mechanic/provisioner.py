@@ -29,7 +29,7 @@ from esrally.mechanic import team, java_resolver
 from esrally.utils import console, convert, io, process, versions
 
 
-def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
+def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
 
     node_root_dir = os.path.join(target_root, node_name)
@@ -41,17 +41,16 @@ def local(cfg, car, plugins, cluster_settings, ip, http_port, all_node_ips, all_
     es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
-    return BareProvisioner(cluster_settings, es_installer, plugin_installers, distribution_version=distribution_version)
+    return BareProvisioner(es_installer, plugin_installers, distribution_version=distribution_version)
 
 
-def docker(cfg, car, cluster_settings, ip, http_port, target_root, node_name):
+def docker(cfg, car, ip, http_port, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     rally_root = cfg.opts("node", "rally.root")
 
     node_root_dir = os.path.join(target_root, node_name)
 
-    return DockerProvisioner(car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version,
-                             rally_root)
+    return DockerProvisioner(car, node_name, ip, http_port, node_root_dir, distribution_version, rally_root)
 
 
 class NodeConfiguration:
@@ -166,8 +165,7 @@ class BareProvisioner:
     of the benchmark candidate to the appropriate place.
     """
 
-    def __init__(self, cluster_settings, es_installer, plugin_installers, distribution_version=None, apply_config=_apply_config):
-        self._cluster_settings = cluster_settings
+    def __init__(self, es_installer, plugin_installers, distribution_version=None, apply_config=_apply_config):
         self.es_installer = es_installer
         self.plugin_installers = plugin_installers
         self.distribution_version = distribution_version
@@ -219,8 +217,6 @@ class BareProvisioner:
             plugin_variables.update(installer.variables)
 
         cluster_settings = {}
-        # Merge cluster config from the track. These may not be dynamically updateable so we need to define them in the config file.
-        cluster_settings.update(self._cluster_settings)
         if mandatory_plugins:
             # as a safety measure, prevent the cluster to startup if something went wrong during plugin installation which
             # we did not detect already here. This ensures we fail fast.
@@ -384,7 +380,7 @@ class PluginInstaller:
 
 
 class DockerProvisioner:
-    def __init__(self, car, node_name, cluster_settings, ip, http_port, node_root_dir, distribution_version, rally_root):
+    def __init__(self, car, node_name, ip, http_port, node_root_dir, distribution_version, rally_root):
         self.car = car
         self.node_name = node_name
         self.node_ip = ip
@@ -412,7 +408,7 @@ class DockerProvisioner:
             "discovery_type": "single-node",
             "http_port": str(self.http_port),
             "transport_port": str(self.http_port + 100),
-            "cluster_settings": cluster_settings
+            "cluster_settings": {}
         }
 
         self.config_vars = {}

@@ -53,7 +53,7 @@ You can test the Rally Docker image by first issuing a simple command to list th
 As a next step, we assume that Elasticsearch is running on ``es01:9200`` and is accessible from the host where you are running the Rally Docker image.
 Run the ``nyc_taxis`` track in ``test-mode`` using::
 
-    $ docker run elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
+    $ docker run elastic/rally race --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
 
 
 .. note::
@@ -72,7 +72,7 @@ To customize Rally you can create your own ``rally.ini`` and bind mount it using
 Persistence
 -----------
 
-It is highly recommended to use a local bind mount (or a `named volume <https://success.docker.com/article/different-types-of-volumes>`_) for the directory ``/rally/.rally`` in the container.
+It is highly recommended to use a local bind mount (or a `named volume <https://docs.docker.com/storage/>`_) for the directory ``/rally/.rally`` in the container.
 This will ensure you have persistence across invocations and any tracks downloaded and extracted can be reused, reducing the startup time.
 You need to ensure the UID is ``1000`` (or GID is ``0`` especially in OpenShift) so that Rally can write to the bind-mounted directory.
 
@@ -84,7 +84,7 @@ Example::
     sudo chgrp 0 myrally
 
     # First run will also generate the rally.ini
-    docker run --rm -v $PWD/myrally:/rally/.rally elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
+    docker run --rm -v $PWD/myrally:/rally/.rally elastic/rally race --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200
 
     ...
 
@@ -97,9 +97,9 @@ Example::
     1 directory, 1 file
 
 
-In case you forgot to bind mount a directory, the Rally Docker image will create an `anonymous volume <https://success.docker.com/article/different-types-of-volumes>`_ for ``/rally/.rally`` to ensure logs and results get persisted even after the container has terminated.
+In case you forgot to bind mount a directory, the Rally Docker image will create an `anonymous volume <https://docs.docker.com/storage/>`_ for ``/rally/.rally`` to ensure logs and results get persisted even after the container has terminated.
 
-For example, after executing our earlier quickstart example ``docker run elastic/rally --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200``, ``docker volume ls`` shows a volume::
+For example, after executing our earlier quickstart example ``docker run elastic/rally race --track=nyc_taxis --test-mode --pipeline=benchmark-only --target-hosts=es01:9200``, ``docker volume ls`` shows a volume::
 
     $ docker volume ls
     DRIVER              VOLUME NAME
@@ -122,7 +122,7 @@ To further examine the contents we can bind mount it from another image e.g.::
 Specifics about the image
 -------------------------
 
-Rally runs as user ``1000`` and its files are installed with uid:gid ``1000:0`` (to support `Arbitrary User IDs <https://docs.openshift.com/enterprise/3.1/creating_images/guidelines.html>`_).
+Rally runs as user ``1000`` and its files are installed with uid:gid ``1000:0`` (to support `Arbitrary User IDs <https://docs.openshift.com/container-platform/3.11/creating_images/guidelines.html>`_).
 
 Extending the Docker image
 --------------------------

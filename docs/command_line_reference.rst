@@ -370,7 +370,7 @@ A directory that contains a team configuration. ``--team-path`` and ``--team-rep
 
 Example::
 
-   esrally race --team-path=~/Projects/es-teams
+   esrally race --track=geonames --team-path=~/Projects/es-teams
 
 ``target-os``
 ~~~~~~~~~~~~~
@@ -433,7 +433,7 @@ Allows to override variables of Elasticsearch plugins. It accepts a list of comm
 
 Example::
 
-    esrally race --track=geonames --distribution-version=6.1.1. --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'https',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
+    esrally race --track=geonames --distribution-version=6.1.1. --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'http',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
 
 This enables the HTTP exporter of `X-Pack Monitoring <https://www.elastic.co/products/x-pack/monitoring>`_ and exports the data to the configured monitoring host.
 
@@ -529,14 +529,14 @@ and reference it when running Rally::
 ``runtime-jdk``
 ~~~~~~~~~~~~~~~
 
-By default, Rally will derive the appropriate runtime JDK versions automatically per version of Elasticsearch. For example, it will choose JDK 8 for Elasticsearch 5.0.0 but JDK 12, 11 or 8 for Elasticsearch 7.0.0. It will choose the highest available version.
+By default, Rally will derive the appropriate runtime JDK versions automatically per version of Elasticsearch. For example, it will choose JDK 12, 11 or 8 for Elasticsearch 7.0.0. It will choose the highest available version.
 
 This command line parameter sets the major version of the JDK that Rally should use to run Elasticsearch. It is required that either ``JAVA_HOME`` or ``JAVAx_HOME`` (where ``x`` is the major version, e.g. ``JAVA11_HOME`` for a JDK 11) points to the appropriate JDK.
 
 Example::
 
-   # Run a benchmark with defaults (i.e. JDK 8)
-   esrally race --track=geonames --distribution-version=5.0.0
+   # Run a benchmark with defaults
+   esrally race --track=geonames --distribution-version=7.0.0
    # Force to run with JDK 11
    esrally race --track=geonames --distribution-version=7.0.0 --runtime-jdk=11
 
@@ -547,7 +547,7 @@ It is also possible to specify the JDK that is bundled with Elasticsearch with t
 ``revision``
 ~~~~~~~~~~~~
 
-If you actively develop Elasticsearch and want to benchmark a source build of Elasticsearch (which Rally will create for you), you can specify the git revision of Elasticsearch that you want to benchmark. But note that Rally uses and expects the Gradle Wrapper in the Elasticsearch repository (``./gradlew``) which effectively means that it will only support this for Elasticsearch 5.0 or better. The default value is ``current``.
+If you actively develop Elasticsearch and want to benchmark a source build of Elasticsearch (which Rally will create for you), you can specify the git revision of Elasticsearch that you want to benchmark. The default value is ``current``.
 
 You can specify the revision in different formats:
 
@@ -563,7 +563,7 @@ If you want to create source builds of Elasticsearch plugins, you need to specif
 Examples:
 
 * Build latest Elasticsearch and plugin "my-plugin": ``--revision="elasticsearch:latest,my-plugin:latest"``
-* Build Elasticsearch tag ``v5.6.1`` and revision ``abc123`` of plugin "my-plugin": ``--revision="elasticsearch:v5.6.1,my-plugin:abc123"``
+* Build Elasticsearch tag ``v7.12.0`` and revision ``abc123`` of plugin "my-plugin": ``--revision="elasticsearch:v7.12.0,my-plugin:abc123"``
 
 Note that it is still required to provide the parameter ``--elasticsearch-plugins``. Specifying a plugin with ``--revision`` just tells Rally which revision to use for building the artifact. See the documentation on :doc:`Elasticsearch plugins </elasticsearch_plugins>` for more details.
 
@@ -655,6 +655,7 @@ Rally recognizes the following client options in addition:
 
 * ``max_connections``: By default, Rally will choose the maximum allowed number of connections automatically (equal to the number of simulated clients but at least 256 connections). With this property it is possible to override that logic but a minimum of 256 is enforced internally.
 * ``enable_cleanup_closed`` (default: ``false``): In some cases, SSL connections might not be properly closed and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections.
+* ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. See below for a specific example.
 
 **Examples**
 
@@ -682,6 +683,63 @@ Client certificates can be presented regardless of the ``verify_certs`` setting,
 * Enable SSL, verify server certificates using private CA: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"``
 * Enable SSL, verify server certificates using private CA, present client certificates: ``--client-options="use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem',client_cert:'/path/to/client_cert.pem',client_key:'/path/to/client_key.pem'"``
 
+**Static Responses**
+
+Define a JSON file containing a list of objects with the following properties:
+
+* ``path``: A path or path pattern that should be matched. Only leading and trailing wildcards (``*``) are supported. A path containing only a wildcard acts matches any path.
+* ``body``: The respective response body.
+* ``body-encoding``: Either ``raw`` or ``json``. Use ``json`` by default and ``raw`` for the operation-type ``bulk`` and ``search``.
+
+Here we define the necessary responses for a track that bulk-indexes data::
+
+    [
+      {
+        "path": "*/_bulk",
+        "body": {
+          "errors": false,
+          "took": 1
+        },
+        "body-encoding": "raw"
+      },
+      {
+        "path": "/_cluster/health*",
+        "body": {
+          "status": "green",
+          "relocating_shards": 0
+        },
+        "body-encoding": "json"
+      },
+      {
+        "path": "/_all/_stats/_all",
+        "body": {
+          "_all": {
+            "total": {
+              "merges": {
+                "current": 0
+              }
+            }
+          }
+        },
+        "body-encoding": "json"
+      },
+      {
+        "path": "*",
+        "body": {},
+        "body-encoding": "json"
+      }
+    ]
+
+.. note::
+   Paths are evaluated from top to bottom. Therefore, place more restrictive paths at the top of the file.
+
+Save the above responses as ``responses.json`` and execute a benchmark as follows::
+
+    esrally race --track=geonames --challenge=append-no-conflicts-index-only --pipeline=benchmark-only --distribution-version=8.0.0 --client-options="static_responses:'responses.json'"
+
+.. note::
+   Use ``--pipeline=benchmark-only`` as Rally should not start any cluster when static responses are used.
+
 .. _command_line_reference_on_error:
 
 ``on-error``
@@ -689,9 +747,12 @@ Client certificates can be presented regardless of the ``verify_certs`` setting,
 
 This option controls how Rally behaves when a response error occurs. The following values are possible:
 
-* ``continue``: only records that an error has happened and will continue with the benchmark. At the end of a race, errors show up in the "error rate" metric.
-* ``continue-on-non-fatal`` (default): Behaves as ``continue`` but aborts the benchmark immediately on all fatal errors. The only error that is considered fatal is "Connection Refused" (`ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_).
-* ``abort``: aborts the benchmark on the first request error with a detailed error message.
+* ``continue``: (default) only records that an error has happened and will continue with the benchmark unless there is a fatal error. At the end of a race, errors show up in the "error rate" metric.
+* ``abort``: aborts the benchmark on the first request error with a detailed error message. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`.
+
+.. attention::
+
+    The only error that is considered fatal is "Connection Refused" (`ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_).
 
 ``load-driver-hosts``
 ~~~~~~~~~~~~~~~~~~~~~

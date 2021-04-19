@@ -48,7 +48,13 @@ fi
 if [[ ! -f ~/.github/rally_release_changelog.token ]]
 then
     echo "Error: didn't find a valid GitHub token in ~/.github/rally_release_changelog.token."
-    echo "The release process requires a valid GitHub token. See RELEASE.md for details."
+    echo "The release process requires a valid GitHub token."
+    exit 1
+fi
+
+if [[ ! -v GPG_TTY ]]
+then
+    echo "Error: env variable GPG_TTY is not set. Please execute export GPG_TTY=\$(tty)"
     exit 1
 fi
 

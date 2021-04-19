@@ -52,8 +52,7 @@ class BareProvisionerTests(TestCase):
             ip="10.17.22.23",
             http_port=9200)
 
-        p = provisioner.BareProvisioner(cluster_settings={"indices.query.bool.max_clause_count": 50000},
-                                        es_installer=installer,
+        p = provisioner.BareProvisioner(es_installer=installer,
                                         plugin_installers=[],
                                         apply_config=null_apply_config)
 
@@ -69,7 +68,6 @@ class BareProvisionerTests(TestCase):
         self.assertEqual("/opt/elasticsearch-5.0.0", target_root_path)
         self.assertEqual({
             "cluster_settings": {
-                "indices.query.bool.max_clause_count": 50000,
             },
             "heap": "4g",
             "runtime.jdk": "8",
@@ -160,8 +158,7 @@ class BareProvisionerTests(TestCase):
             ip="10.17.22.23",
             http_port=9200)
 
-        p = provisioner.BareProvisioner(cluster_settings={"indices.query.bool.max_clause_count": 50000},
-                                        es_installer=installer,
+        p = provisioner.BareProvisioner(es_installer=installer,
                                         plugin_installers=[
                                             provisioner.PluginInstaller(BareProvisionerTests.MockRallyTeamXPackPlugin(),
                                                                         java_home="/usr/local/javas/java8",
@@ -185,7 +182,6 @@ class BareProvisionerTests(TestCase):
 
         self.assertEqual({
             "cluster_settings": {
-                "indices.query.bool.max_clause_count": 50000,
                 "plugin.mandatory": ["x-pack-security"]
             },
             "heap": "4g",
@@ -240,8 +236,7 @@ class BareProvisionerTests(TestCase):
             ip="10.17.22.23",
             http_port=9200)
 
-        p = provisioner.BareProvisioner(cluster_settings={"indices.query.bool.max_clause_count": 50000},
-                                        es_installer=installer,
+        p = provisioner.BareProvisioner(es_installer=installer,
                                         plugin_installers=[
                                             provisioner.PluginInstaller(BareProvisionerTests.MockRallyTeamXPackPlugin(),
                                                                         java_home="/usr/local/javas/java8",
@@ -265,7 +260,6 @@ class BareProvisionerTests(TestCase):
 
         self.assertEqual({
             "cluster_settings": {
-                "indices.query.bool.max_clause_count": 50000,
                 "plugin.mandatory": ["x-pack"]
             },
             "heap": "4g",
@@ -571,7 +565,6 @@ class DockerProvisionerTests(TestCase):
 
         docker = provisioner.DockerProvisioner(car=c,
                                                node_name="rally-node-0",
-                                               cluster_settings={"indices.query.bool.max_clause_count": 5000},
                                                ip="10.17.22.33",
                                                http_port=39200,
                                                node_root_dir=node_root_dir,
@@ -590,7 +583,6 @@ class DockerProvisionerTests(TestCase):
             "http_port": "39200",
             "transport_port": "39300",
             "cluster_settings": {
-                "indices.query.bool.max_clause_count": 5000
             },
             "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss"
         }, docker.config_vars)
@@ -651,7 +643,6 @@ services:
 
         docker = provisioner.DockerProvisioner(car=c,
                                                node_name="rally-node-0",
-                                               cluster_settings=None,
                                                ip="10.17.22.33",
                                                http_port=39200,
                                                node_root_dir=node_root_dir,

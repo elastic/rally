@@ -16,8 +16,6 @@ You want to benchmark Elasticsearch? Then Rally is for you. It can help you with
 
 We have also put considerable effort in Rally to ensure that benchmarking data are reproducible.
 
-In general, Rally works with all versions of Elasticsearch starting from 1.x but benchmarking with plugins and benchmarking source builds will only work from Elasticsearch 5.0 onwards.
-
 Quick Start
 -----------
 
