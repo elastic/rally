@@ -139,8 +139,7 @@ def create(cfg, sources, distribution, car, plugins=None):
 def _required_version(version):
     if not version or version.strip() == "":
         raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
-                                          "to download with the command line parameter --distribution-version. "
-                                          "E.g. --distribution-version=5.0.0")
+                                          "to download with the command line parameter --distribution-version.")
     else:
         return version
 
