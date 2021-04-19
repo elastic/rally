@@ -1429,7 +1429,7 @@ class InMemoryMetricsStoreTests(TestCase):
         actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
                                                      sort_key="relative-time-ms", sort_reverse=True)
 
-        self.assertEqual(None, actual_duration)
+        self.assertIsNone(actual_duration)
 
     def test_get_value(self):
         throughput = 5000
