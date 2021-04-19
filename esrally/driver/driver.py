@@ -374,16 +374,16 @@ class TaskExecutionActor(actor.RallyActor):
     def receiveMsg_DoTask(self, msg, sender):
         # actor can arbitrarily execute code based on these messages. if anyone besides our parent sends a task, ignore
         if sender != self.parent:
-            self.logger.warning("TaskExecutionActor expected message from [%s] but the received the following from "
-                                "[%s]: %s", self.parent, sender, vars(msg))
-            return
+            msg = f"TaskExecutionActor expected message from [{self.parent}] but the received the following from " \
+                  f"[{sender}]: {vars(msg)}"
+            raise exceptions.RallyError(msg)
         task = msg.task
         if self.executor_future is not None:
-            raise exceptions.RallyError("TaskExecutionActor received DoTask message, but was already busy")
+            msg = f"TaskExecutionActor received DoTask message [{vars(msg)}], but was already busy"
+            raise exceptions.RallyError(msg)
         if task is None:
             self.send(self.parent, WorkerIdle())
         else:
-
             # this is a potentially long-running operation so we offload it a background thread so we don't block
             # the actor (e.g. logging works properly as log messages are forwarded timely).
             self.executor_future = self.pool.submit(task.func, **task.params)

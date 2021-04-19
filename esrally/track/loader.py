@@ -22,7 +22,6 @@ import re
 import sys
 import tempfile
 import urllib.error
-from functools import cached_property
 
 import jinja2
 import jinja2.exceptions
@@ -73,17 +72,24 @@ class TrackProcessorRegistry:
         self.offline = cfg.opts("system", "offline.mode")
         self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
         self.base_config = cfg
+        self.custom_configuration = False
 
     def register_track_processor(self, processor):
+        if not self.custom_configuration:
+            # given processor should become the only element
+            self.track_processors = []
+        if not isinstance(processor, DefaultTrackPreparator):
+            # stop resetting self.track_processors
+            self.custom_configuration = True
         if hasattr(processor, "downloader"):
             processor.downloader = Downloader(self.offline, self.test_mode)
         if hasattr(processor, "decompressor"):
             processor.decompressor = Decompressor()
         self.track_processors.append(processor)
 
-    @cached_property
+    @property
     def processors(self):
-        if not self.track_processors:
+        if self.custom_configuration is False:
             self.register_track_processor(DefaultTrackPreparator(self.base_config))
         return [*self.required_processors, *self.track_processors]
 
@@ -185,10 +191,10 @@ def _load_single_track(cfg, track_repository, track_name):
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
-        track_processor = TrackProcessorRegistry(cfg)
-        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=track_processor.register_track_processor)
+        tpr = TrackProcessorRegistry(cfg)
+        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
         current_track.has_plugins = has_plugins
-        for processor in track_processor.processors:
+        for processor in tpr.processors:
             processor.on_after_load_track(current_track)
         return current_track
     except FileNotFoundError as e:
