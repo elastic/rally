@@ -510,7 +510,6 @@ class Challenge:
                  name,
                  description=None,
                  user_info=None,
-                 cluster_settings=None,
                  default=False,
                  selected=False,
                  auto_generated=False,
@@ -522,7 +521,6 @@ class Challenge:
         self.meta_data = meta_data if meta_data else {}
         self.description = description
         self.user_info = user_info
-        self.cluster_settings = cluster_settings if cluster_settings else {}
         self.default = default
         self.selected = selected
         self.auto_generated = auto_generated
@@ -544,15 +542,15 @@ class Challenge:
         return ", ".join(r)
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.description) ^ hash(self.cluster_settings) ^ hash(self.default) ^ \
+        return hash(self.name) ^ hash(self.description) ^ hash(self.default) ^ \
                hash(self.selected) ^ hash(self.auto_generated) ^ hash(self.parameters) ^ hash(self.meta_data) ^ \
                hash(self.schedule)
 
     def __eq__(self, othr):
         return (isinstance(othr, type(self)) and
-                (self.name, self.description, self.cluster_settings, self.default, self.selected, self.auto_generated,
+                (self.name, self.description, self.default, self.selected, self.auto_generated,
                  self.parameters, self.meta_data, self.schedule) ==
-                (othr.name, othr.description, othr.cluster_settings, othr.default, othr.selected, othr.auto_generated,
+                (othr.name, othr.description, othr.default, othr.selected, othr.auto_generated,
                  othr.parameters, othr.meta_data, othr.schedule))
 
 

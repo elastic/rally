@@ -33,6 +33,14 @@ The deprecated metric ``relative-time`` has been dropped in Rally 2.2.0. Use ``r
 
 Previously we deprecated the default ``--track`` value of ``geonames``.  As of Rally 2.2.0, this parameter is mandatory where applicable.
 
+``cluster-settings`` specified in the track are not honored
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The deprecated challenge property ``cluster_settings`` is not honored anymore. Custom cluster settings should be set as follows:
+
+* Static cluster settings should be defined via rally-teams and the property ``additional_cluster_settings``
+* Dynamic cluster settings should be defined via the put-settings operation
+
 Migrating to Rally 2.1.0
 ------------------------
 

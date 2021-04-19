@@ -98,11 +98,9 @@ class BenchmarkActor(actor.RallyActor):
         self.coordinator = BenchmarkCoordinator(msg.cfg)
         self.coordinator.setup(sources=msg.sources)
         self.logger.info("Asking mechanic to start the engine.")
-        cluster_settings = self.coordinator.current_challenge.cluster_settings
         self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
         self.send(self.mechanic, mechanic.StartEngine(self.cfg,
                                                       self.coordinator.metrics_store.open_context,
-                                                      cluster_settings,
                                                       msg.sources,
                                                       msg.distribution,
                                                       msg.external,
