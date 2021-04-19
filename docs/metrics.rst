@@ -37,7 +37,7 @@ Here is a typical metrics record::
             "host_name": "beast2",
             "node_name": "rally-node0",
             "source_revision": "a6c0a81",
-            "distribution_version": "5.0.0-SNAPSHOT",
+            "distribution_version": "8.0.0-SNAPSHOT",
             "tag_reference": "Github ticket 1234"
           }
         }

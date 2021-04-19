@@ -36,7 +36,7 @@ The version numbers have to match the name in the download URL path.
 
 You can also benchmark Elasticsearch snapshot versions by specifying the snapshot repository::
 
-    esrally race --track=geonames --pipeline=from-distribution --distribution-version=5.0.0-SNAPSHOT --distribution-repository=snapshot
+    esrally race --track=geonames --pipeline=from-distribution --distribution-version=8.0.0-SNAPSHOT --distribution-repository=snapshot
 
 However, this feature is mainly intended for continuous integration environments and by default you should just benchmark official distributions.
 
@@ -49,7 +49,7 @@ However, this feature is mainly intended for continuous integration environments
 from-sources
 ~~~~~~~~~~~~
 
-You should use this pipeline when you want to build and benchmark Elasticsearch from sources. This pipeline will only work from Elasticsearch 5.0 onwards because Elasticsearch switched from Maven to Gradle and Rally only supports one build tool in the interest of maintainability.
+You should use this pipeline when you want to build and benchmark Elasticsearch from sources.
 
 Remember that you also need git installed. If that's not the case you'll get an error. An example invocation::
 
