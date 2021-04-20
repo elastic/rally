@@ -138,3 +138,7 @@ class TestsVersions:
 
         assert versions.best_match(["7", "7.11", "7.2", "5", "6", "master"], "7.1.0") == "7",\
             "If no exact match and no minor match, next best match is major version"
+
+    def test_version_comparison(self):
+        assert versions.Version.from_string("7.10.2") < versions.Version.from_string("7.11.0")
+        assert versions.Version.from_string("7.10.2") == versions.Version.from_string("7.10.2")

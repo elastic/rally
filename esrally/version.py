@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import os
 import re
 
 import pkg_resources
@@ -64,3 +65,11 @@ def release_version():
         return int(matches.group(1)), int(matches.group(2)), int(matches.group(3)), matches.group(4)
     elif matches.start(3) > 0:
         return int(matches.group(1)), int(matches.group(2)), int(matches.group(3)), None
+
+
+def minimum_es_version():
+    """
+    :return: A string identifying the minimum version of Elasticsearch that is supported by Rally.
+    """
+    with open(os.path.join(os.path.dirname(__file__), os.pardir, ".es-version.txt")) as f:
+        return f.read().strip()
