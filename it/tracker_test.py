@@ -27,7 +27,7 @@ def test_cluster():
     cluster = it.TestCluster("in-memory-it")
     # test with a recent distribution
     dist = it.DISTRIBUTIONS[-1]
-    port = 49200
+    port = 19200
     race_id = str(uuid.uuid4())
 
     it.wait_until_port_is_free(port_number=port)
