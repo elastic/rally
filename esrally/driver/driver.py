@@ -35,7 +35,7 @@ import thespian.actors
 
 from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME, telemetry
 from esrally.driver import runner, scheduler
-from esrally.track import TrackProcessorRegistry, load_track_plugins
+from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
 from esrally.utils import convert, console, net
 
 
@@ -455,6 +455,7 @@ class TrackPreparationActor(actor.RallyActor):
         self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", self.track.name)
         # the track might have been loaded on a different machine (the coordinator machine) so we force a track
         # update to ensure we use the latest version of plugins.
+        load_track(self.cfg)
         load_track_plugins(self.cfg, self.track.name, register_track_processor=tpr.register_track_processor,
                            force_update=True)
         # we expect on_prepare_track can take a long time. seed a queue of tasks and delegate to child workers
