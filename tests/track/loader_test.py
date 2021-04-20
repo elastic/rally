@@ -3553,13 +3553,13 @@ class TrackProcessorRegistryTests(TestCase):
         # call this once beforehand to make sure we don't "harden" the default in case calls are made out of order
         tpr.processors # pylint: disable=pointless-statement
         tpr.register_track_processor(MyMockTrackProcessor())
-        expected_preparators = [
+        expected_processors = [
             loader.TaskFilterTrackProcessor,
             loader.TestModeTrackProcessor,
             MyMockTrackProcessor
         ]
-        actual_preparators = [proc.__class__ for proc in tpr.processors]
-        self.assertCountEqual(expected_preparators, actual_preparators)
+        actual_processors = [proc.__class__ for proc in tpr.processors]
+        self.assertCountEqual(expected_processors, actual_processors)
 
     def test_allow_to_specify_default_preparator(self):
         cfg = config.Config()
@@ -3569,11 +3569,11 @@ class TrackProcessorRegistryTests(TestCase):
         # should be idempotent now that we have a custom config
         tpr.processors # pylint: disable=pointless-statement
         tpr.register_track_processor(loader.DefaultTrackPreparator(cfg))
-        expected_preparators = [
+        expected_processors = [
             loader.TaskFilterTrackProcessor,
             loader.TestModeTrackProcessor,
             MyMockTrackProcessor,
             loader.DefaultTrackPreparator
         ]
-        actual_preparators = [proc.__class__ for proc in tpr.processors]
-        self.assertCountEqual(expected_preparators, actual_preparators)
+        actual_processors = [proc.__class__ for proc in tpr.processors]
+        self.assertCountEqual(expected_processors, actual_processors)

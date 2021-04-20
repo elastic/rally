@@ -359,6 +359,8 @@ class TaskExecutionActor(actor.RallyActor):
         self.wakeup_interval = 5
         self.parent = None
         self.logger = logging.getLogger(__name__)
+        self.track_name = None
+        self.cfg = None
 
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartTaskLoop(self, msg, sender):
@@ -423,7 +425,6 @@ class TrackPreparationActor(actor.RallyActor):
         self.data_root_dir = None
         self.track = None
 
-
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Track Preparator received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
         self.send(self.original_sender, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
@@ -476,7 +477,6 @@ class TrackPreparationActor(actor.RallyActor):
     def _create_task_executor(self):
         return self.createActor(TaskExecutionActor)
 
-
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ReadyForWork(self, msg, sender):
         if self.tasks:
@@ -487,6 +487,7 @@ class TrackPreparationActor(actor.RallyActor):
         self.logger.debug("Track Preparator sending %s to %s", vars(new_msg), sender)
         self.send(sender, new_msg)
 
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WorkerIdle(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING,
                                                     self.Status.PROCESSOR_COMPLETE, self.resume)

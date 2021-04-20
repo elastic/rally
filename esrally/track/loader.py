@@ -89,7 +89,7 @@ class TrackProcessorRegistry:
 
     @property
     def processors(self):
-        if self.custom_configuration is False:
+        if not self.custom_configuration:
             self.register_track_processor(DefaultTrackPreparator(self.base_config))
         return [*self.required_processors, *self.track_processors]
 
