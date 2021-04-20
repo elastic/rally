@@ -62,6 +62,7 @@ def create_arg_parser():
             specified_version = versions.Version.from_string(v)
             if specified_version < min_es_version:
                 raise argparse.ArgumentTypeError(f"must be at least {min_es_version} but was {v}")
+        return v
 
     def add_track_source(subparser):
         track_source_group = subparser.add_mutually_exclusive_group()
