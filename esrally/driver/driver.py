@@ -406,6 +406,9 @@ class TaskExecutionActor(actor.RallyActor):
         else:
             self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
+    def receiveMsg_BenchmarkFailure(self, msg, sender):
+        # sent by our no_retry infrastructure; forward to master
+        self.send(self.parent, msg)
 
 class TrackPreparationActor(actor.RallyActor):
     class Status(Enum):
