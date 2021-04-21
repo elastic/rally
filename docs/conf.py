@@ -84,7 +84,7 @@ year = date.today().year
 rst_prolog = f"""
 .. |year| replace:: {year}
 .. |MIN_PY_VER| replace:: {read_min_python_version()}
-.. |min_es_version| replace:: {read_version(version_file="esrally/es-version.txt")}
+.. |min_es_version| replace:: {read_version(version_file="esrally/min-es-version.txt")}
 """
 
 # General information about the project.

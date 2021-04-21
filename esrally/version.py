@@ -71,4 +71,4 @@ def minimum_es_version():
     """
     :return: A string identifying the minimum version of Elasticsearch that is supported by Rally.
     """
-    return resources.read_text("esrally", "es-version.txt").strip()
+    return resources.read_text("esrally", "min-es-version.txt").strip()
