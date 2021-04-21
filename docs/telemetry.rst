@@ -31,7 +31,12 @@ You probably want to gain additional insights from a race. Therefore, we have ad
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
-You can attach one or more of these telemetry devices to the benchmarked cluster. Except for ``node-stats``, this only works if Rally provisions the cluster (i.e. it does not work with ``--pipeline=benchmark-only``).
+All telemetry devices with a ``-stats`` suffix can be used even with a cluster that hasn't been provisioned by Rally (i.e. using ``--pipeline=benchmark-only``). They are collectively referred to as **runtime level** telemetry devices.
+The remaining telemetry devices i.e. ``jit``, ``gc``, ``jfr`` and ``heapdump`` can only be used when Rally provisions the cluster itself (i.e. won't work with ``--pipeline=benchmark-only``) and are **setup level** telemetry devices.
+
+.. note::
+
+    If you are using the experimental `cluster management commands <cluster_management>`_, setup level telemetry devices (and their parameters) should only be specified via the ``start`` subcommand and not via the ``race`` subcommand. For more details check ``esrally start --help``.
 
 jfr
 ---
