@@ -4,7 +4,7 @@ Elasticsearch Version Support
 Minimum supported version
 =========================
 
-Rally |release| can benchmark Elasticsearch 6.0.0 and above.
+Rally |release| can benchmark Elasticsearch |min_es_version| and above.
 
 End-of-life Policy
 ==================

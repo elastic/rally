@@ -23,8 +23,8 @@ import sys
 import tabulate
 import thespian.actors
 
-from esrally import actor, config, doc_link, driver, exceptions, mechanic, metrics, reporter, track, PROGRAM_NAME
-from esrally.utils import console, opts
+from esrally import actor, config, doc_link, driver, exceptions, mechanic, metrics, reporter, track, version, PROGRAM_NAME
+from esrally.utils import console, opts, versions
 
 
 pipelines = collections.OrderedDict()
@@ -175,6 +175,10 @@ class BenchmarkCoordinator:
             distribution_version = mechanic.cluster_distribution_version(self.cfg)
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
+            min_es_version = versions.Version.from_string(version.minimum_es_version())
+            specified_version = versions.Version.from_string(distribution_version)
+            if specified_version < min_es_version:
+                raise exceptions.SystemSetupError(f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]")
 
         self.current_track = track.load_track(self.cfg)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)

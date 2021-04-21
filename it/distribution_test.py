@@ -43,6 +43,14 @@ def test_docker_distribution(cfg):
                         f"--car=4gheap --target-hosts=127.0.0.1:{port}") == 0
 
 
+@it.random_rally_config
+def test_does_not_benchmark_unsupported_distribution(cfg):
+    port = 19200
+    it.wait_until_port_is_free(port_number=port)
+    assert it.race(cfg, f"--distribution-version=\"1.7.6\" --track=\"{it.TRACKS[0]}\" "
+                        f"--target-hosts=127.0.0.1:{port} --test-mode --car=4gheap") != 0
+
+
 @pytest.fixture(scope="module")
 def test_cluster():
     cluster = it.TestCluster("in-memory-it")

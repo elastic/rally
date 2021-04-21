@@ -31,7 +31,7 @@ from esrally import version, actor, config, paths, racecontrol, reporter, metric
     log
 from esrally.mechanic import team, mechanic
 from esrally.tracker import tracker
-from esrally.utils import io, convert, process, console, net, opts
+from esrally.utils import io, convert, process, console, net, opts, versions
 
 
 def create_arg_parser():
@@ -55,6 +55,14 @@ def create_arg_parser():
                 return positive_number(v)
             except argparse.ArgumentTypeError:
                 raise argparse.ArgumentTypeError(f"must be a positive number or 'bundled' but was {v}")
+
+    def supported_es_version(v):
+        if v:
+            min_es_version = versions.Version.from_string(version.minimum_es_version())
+            specified_version = versions.Version.from_string(v)
+            if specified_version < min_es_version:
+                raise argparse.ArgumentTypeError(f"must be at least {min_es_version} but was {v}")
+        return v
 
     def add_track_source(subparser):
         track_source_group = subparser.add_mutually_exclusive_group()
@@ -217,6 +225,7 @@ def create_arg_parser():
         help="Define the path to the car and plugin configurations to use.")
     download_parser.add_argument(
         "--distribution-version",
+        type=supported_es_version,
         help="Define the version of the Elasticsearch distribution to download. "
              "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
         default="")
@@ -278,6 +287,7 @@ def create_arg_parser():
         default="release")
     install_parser.add_argument(
         "--distribution-version",
+        type=supported_es_version,
         help="Define the version of the Elasticsearch distribution to download. "
              "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
         default="")
@@ -369,6 +379,7 @@ def create_arg_parser():
     for p in [list_parser, race_parser]:
         p.add_argument(
             "--distribution-version",
+            type=supported_es_version,
             help="Define the version of the Elasticsearch distribution to download. "
                  "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
             default="")
