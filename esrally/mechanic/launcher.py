@@ -172,7 +172,9 @@ class ProcessLauncher:
         env = {k: v for k, v in os.environ.items() if k in self.pass_env_vars}
         if java_home:
             self._set_env(env, "PATH", os.path.join(java_home, "bin"), separator=os.pathsep, prepend=True)
-            # Don't merge here!
+            # This property is the higher priority starting in ES 7.12.0, and is the only supported java home in >=8.0
+            env["ES_JAVA_HOME"] = java_home
+            # TODO remove this when ES <8.0 becomes unsupported by Rally
             env["JAVA_HOME"] = java_home
         if not env.get("ES_JAVA_OPTS"):
             env["ES_JAVA_OPTS"] = "-XX:+ExitOnOutOfMemoryError"

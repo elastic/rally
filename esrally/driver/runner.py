@@ -1062,13 +1062,11 @@ class ClusterHealth(Runner):
         api_kw_params = self._default_kw_params(params)
         # by default, Elasticsearch will not wait and thus we treat this as success
         expected_cluster_status = request_params.get("wait_for_status", str(ClusterHealthStatus.UNKNOWN))
-        # newer ES versions >= 5.0
         if "wait_for_no_relocating_shards" in request_params:
             expected_relocating_shards = 0
         else:
-            # older ES versions
-            # either the user has defined something or we're good with any count of relocating shards.
-            expected_relocating_shards = int(request_params.get("wait_for_relocating_shards", sys.maxsize))
+            # we're good with any count of relocating shards.
+            expected_relocating_shards = sys.maxsize
 
         result = await es.cluster.health(**api_kw_params)
         cluster_status = result["status"]
@@ -1091,8 +1089,7 @@ class ClusterHealth(Runner):
 
 class PutPipeline(Runner):
     """
-    Execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_. Note that this
-    API is only available from Elasticsearch 5.0 onwards.
+    Execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_.
     """
 
     async def __call__(self, es, params):

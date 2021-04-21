@@ -616,7 +616,8 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None, node_name=None, task=None):
+    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
+                sort_key=None, sort_reverse=False):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
@@ -624,9 +625,11 @@ class MetricsStore:
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
         :param task The task name to query. Optional.
+        :param sort_key The key to sort the docs before returning the first value. Optional.
+        :param sort_reverse  The flag to reverse the sort. Optional.
         :return: The corresponding value for the given metric name or None if there is no value.
         """
-        return self._first_or_none(self.get(name=name, task=task, sample_type=sample_type, node_name=node_name))
+        raise NotImplementedError("abstract method")
 
     @staticmethod
     def _first_or_none(values):
@@ -824,6 +827,27 @@ class EsMetricsStore(MetricsStore):
         result = self._client.search(index=self._index, body=query)
         self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
+
+    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
+                sort_key=None, sort_reverse=False):
+        order = "desc" if sort_reverse else "asc"
+        query = {
+            "query": self._query_by_name(name, task, None, sample_type, node_name),
+            "size": 1
+        }
+        if sort_key:
+            query["sort"] = [{sort_key: {"order": order}}]
+        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
+        result = self._client.search(index=self._index, body=query)
+        hits = result["hits"]["total"]
+        # Elasticsearch 7.0+
+        if isinstance(hits, dict):
+            hits = hits["value"]
+        self.logger.debug("Metrics query produced [%s] results.", hits)
+        if hits > 0:
+            return mapper(result["hits"]["hits"][0]["_source"])
+        else:
+            return None
 
     def get_error_rate(self, task, operation_type=None, sample_type=None):
         query = {
@@ -1068,6 +1092,19 @@ class InMemoryMetricsStore(MetricsStore):
                 (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
                 (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
                 ]
+
+    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
+                sort_key=None, sort_reverse=False):
+        if sort_key:
+            docs = sorted(self.docs, key=lambda k: k[sort_key], reverse=sort_reverse)
+        else:
+            docs = self.docs
+        for doc in docs:
+            if (doc["name"] == name and (task is None or doc["task"] == task) and
+                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
+                    (node_name is None or doc.get("meta", {}).get("node_name") == node_name)):
+                return mapper(doc)
+        return None
 
     def __str__(self):
         return "in-memory metrics store"
@@ -1523,6 +1560,7 @@ class GlobalStatsCalculator:
                 t = task.name
                 op_type = task.operation.type
                 error_rate = self.error_rate(t, op_type)
+                duration = self.duration(t)
                 if task.operation.include_in_reporting or error_rate > 0:
                     self.logger.debug("Gathering request metrics for [%s].", t)
                     result.add_op_metrics(
@@ -1533,6 +1571,7 @@ class GlobalStatsCalculator:
                         self.single_latency(t, op_type, metric_name="service_time"),
                         self.single_latency(t, op_type, metric_name="processing_time"),
                         error_rate,
+                        duration,
                         self.merge(
                             self.track.meta_data,
                             self.challenge.meta_data,
@@ -1673,6 +1712,10 @@ class GlobalStatsCalculator:
     def error_rate(self, task_name, operation_type):
         return self.store.get_error_rate(task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
 
+    def duration(self, task_name):
+        return self.store.get_one("service_time", task=task_name, mapper=lambda doc: doc["relative-time-ms"],
+                                  sort_key="relative-time-ms", sort_reverse=True)
+
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
         return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
 
@@ -1774,6 +1817,8 @@ class GlobalStats:
                         all_results.append(op_metrics(item, "processing_time"))
                     if "error_rate" in item:
                         all_results.append(op_metrics(item, "error_rate", single_value=True))
+                    if "duration" in item:
+                        all_results.append(op_metrics(item, "duration", single_value=True))
             elif metric == "ml_processing_time":
                 for item in value:
                     all_results.append({
@@ -1812,7 +1857,7 @@ class GlobalStats:
     def v(self, d, k, default=None):
         return d.get(k, default) if d else default
 
-    def add_op_metrics(self, task, operation, throughput, latency, service_time, processing_time, error_rate, meta):
+    def add_op_metrics(self, task, operation, throughput, latency, service_time, processing_time, error_rate, duration, meta):
         doc = {
             "task": task,
             "operation": operation,
@@ -1821,6 +1866,7 @@ class GlobalStats:
             "service_time": service_time,
             "processing_time": processing_time,
             "error_rate": error_rate,
+            "duration": duration
         }
         if meta:
             doc["meta"] = meta
