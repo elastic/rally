@@ -16,6 +16,7 @@
 # under the License.
 
 import re
+from importlib import resources
 
 import pkg_resources
 
@@ -64,3 +65,10 @@ def release_version():
         return int(matches.group(1)), int(matches.group(2)), int(matches.group(3)), matches.group(4)
     elif matches.start(3) > 0:
         return int(matches.group(1)), int(matches.group(2)), int(matches.group(3)), None
+
+
+def minimum_es_version():
+    """
+    :return: A string identifying the minimum version of Elasticsearch that is supported by Rally.
+    """
+    return resources.read_text("esrally", "min-es-version.txt").strip()

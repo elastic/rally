@@ -31,7 +31,7 @@ from esrally import version, actor, config, paths, racecontrol, reporter, metric
     log
 from esrally.mechanic import team, mechanic
 from esrally.tracker import tracker
-from esrally.utils import io, convert, process, console, net, opts
+from esrally.utils import io, convert, process, console, net, opts, versions
 
 
 def create_arg_parser():
@@ -55,6 +55,14 @@ def create_arg_parser():
                 return positive_number(v)
             except argparse.ArgumentTypeError:
                 raise argparse.ArgumentTypeError(f"must be a positive number or 'bundled' but was {v}")
+
+    def supported_es_version(v):
+        if v:
+            min_es_version = versions.Version.from_string(version.minimum_es_version())
+            specified_version = versions.Version.from_string(v)
+            if specified_version < min_es_version:
+                raise argparse.ArgumentTypeError(f"must be at least {min_es_version} but was {v}")
+        return v
 
     def add_track_source(subparser):
         track_source_group = subparser.add_mutually_exclusive_group()
@@ -222,6 +230,7 @@ def create_arg_parser():
         help="Define the path to the car and plugin configurations to use.")
     download_parser.add_argument(
         "--distribution-version",
+        type=supported_es_version,
         help="Define the version of the Elasticsearch distribution to download. "
              "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
         default="")
@@ -283,6 +292,7 @@ def create_arg_parser():
         default="release")
     install_parser.add_argument(
         "--distribution-version",
+        type=supported_es_version,
         help="Define the version of the Elasticsearch distribution to download. "
              "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
         default="")
@@ -374,6 +384,7 @@ def create_arg_parser():
     for p in [list_parser, race_parser]:
         p.add_argument(
             "--distribution-version",
+            type=supported_es_version,
             help="Define the version of the Elasticsearch distribution to download. "
                  "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
             default="")
@@ -456,9 +467,9 @@ def create_arg_parser():
              f"Python client (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS}).",
         default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
     race_parser.add_argument("--on-error",
-                             choices=["continue", "continue-on-non-fatal", "abort"],
-                             help="Controls how Rally behaves on response errors (default: continue-on-non-fatal).",
-                             default="continue-on-non-fatal")
+                             choices=["continue", "abort"],
+                             help="Controls how Rally behaves on response errors (default: continue).",
+                             default="continue")
     race_parser.add_argument(
         "--telemetry",
         help=f"Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry "
@@ -544,7 +555,7 @@ def create_arg_parser():
         help=argparse.SUPPRESS,
         type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
         default=None)
-    # skips checking that the REST API is available before proceeding with the benchmark
+    # Skips checking that the REST API is available before proceeding with the benchmark
     race_parser.add_argument(
         "--skip-rest-api-check",
         help=argparse.SUPPRESS,
@@ -720,15 +731,9 @@ def configure_track_params(arg_parser, args, cfg, command_requires_track=True):
     else:
         cfg.add(config.Scope.applicationOverride, "track", "repository.name", args.track_repository)
         if command_requires_track:
-            # TODO #1176: We should not choose a track implicitly.
-            # set the default programmatically because we need to determine whether the user has provided a value
-            if args.track:
-                chosen_track = args.track
-            else:
-                chosen_track = "geonames"
-                console.warn(f"Starting Rally without --track is deprecated. Add --track={chosen_track} to your parameters.")
-
-            cfg.add(config.Scope.applicationOverride, "track", "track.name", chosen_track)
+            if not args.track:
+                raise arg_parser.error("argument --track is required")
+            cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
 
     if command_requires_track:
         cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))

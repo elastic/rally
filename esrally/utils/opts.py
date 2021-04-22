@@ -203,6 +203,10 @@ class ClientOptions(ConnectOptions):
         """Return a dict with all client options"""
         return self.all_options
 
+    @property
+    def uses_static_responses(self):
+        return self.default.get("static_responses", False)
+
     def with_max_connections(self, max_connections):
         final_client_options = {}
         for cluster, original_opts in self.all_client_options.items():

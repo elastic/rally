@@ -314,7 +314,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "relative-time": 0,
             "relative-time-ms": 0,
             "environment": "unittest",
             "sample-type": "normal",
@@ -344,7 +343,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": 0,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "relative-time": 10000000,
             "relative-time-ms": 10000,
             "environment": "unittest",
             "sample-type": "normal",
@@ -383,7 +381,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "relative-time": 0,
             "relative-time-ms": 0,
             "environment": "unittest",
             "sample-type": "normal",
@@ -422,7 +419,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "relative-time": 0,
             "relative-time-ms": 0,
             "environment": "unittest",
             "track": "test",
@@ -468,7 +464,6 @@ class EsMetricsTests(TestCase):
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
-            "relative-time": 0,
             "relative-time-ms": 0,
             "environment": "unittest",
             "track": "test",
@@ -494,6 +489,113 @@ class EsMetricsTests(TestCase):
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
+
+    def test_get_one(self):
+        duration = StaticClock.NOW * 1000
+        search_result = {
+            "hits": {
+                "total": 2,
+                "hits": [
+                    {
+                        "_source": {
+                            "relative-time-ms": duration,
+                            "value": 500
+                        }
+                    },
+                    {
+                        "_source": {
+                            "relative-time-ms": duration-200,
+                            "value": 700
+                        }
+                    },
+                ]
+            }
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+
+        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "race-id": EsMetricsTests.RACE_ID
+                            }
+                        },
+                        {
+                            "term": {
+                                "name": "service_time"
+                            }
+                        },
+                        {
+                            "term": {
+                                "task": "task1"
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": 1,
+            "sort": [
+                {"relative-time-ms": {"order": "desc" }}
+                ]
+        }
+
+        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
+                                                         sort_key="relative-time-ms", sort_reverse=True)
+
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+
+        self.assertEqual(duration, actual_duration)
+
+    def test_get_one_no_hits(self):
+        duration = None
+        search_result = {
+            "hits": {
+                "total": 0,
+                "hits": []
+            }
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+
+        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "race-id": EsMetricsTests.RACE_ID
+                            }
+                        },
+                        {
+                            "term": {
+                                "name": "latency"
+                            }
+                        },
+                        {
+                            "term": {
+                                "task": "task2"
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": 1,
+            "sort": [
+                {"value": {"order": "asc" }}
+                ]
+        }
+
+        actual_duration = self.metrics_store.get_one("latency", task="task2", mapper=lambda doc: doc["value"],
+                                                         sort_key="value", sort_reverse=False)
+
+        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+
+        self.assertEqual(duration, actual_duration)
 
     def test_get_value(self):
         throughput = 5000
@@ -530,7 +632,8 @@ class EsMetricsTests(TestCase):
                         }
                     ]
                 }
-            }
+            },
+            "size": 1
         }
 
         actual_throughput = self.metrics_store.get_one("indexing_throughput")
@@ -579,7 +682,8 @@ class EsMetricsTests(TestCase):
                         }
                     ]
                 }
-            }
+            },
+            "size": 1
         }
 
         actual_index_size = self.metrics_store.get_one("final_index_size_bytes", node_name="rally-node-3")
@@ -1293,6 +1397,40 @@ class InMemoryMetricsStoreTests(TestCase):
         del self.metrics_store
         del self.cfg
 
+    def test_get_one(self):
+        duration = StaticClock.NOW
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.put_value_cluster_level("service_time", 500, "ms", relative_time=duration-400, task="task1")
+        self.metrics_store.put_value_cluster_level("service_time", 600, "ms", relative_time=duration, task="task1")
+        self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB", relative_time=duration-300)
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
+
+        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
+                                                         sort_key="relative-time-ms", sort_reverse=True)
+
+        self.assertEqual(duration * 1000, actual_duration)
+
+    def test_get_one_no_hits(self):
+        duration = StaticClock.NOW
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB", relative_time=duration-300)
+
+        self.metrics_store.close()
+
+        self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+                                "test", "append-no-conflicts", "defaults")
+
+        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
+                                                     sort_key="relative-time-ms", sort_reverse=True)
+
+        self.assertIsNone(actual_duration)
+
     def test_get_value(self):
         throughput = 5000
         self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
@@ -1550,13 +1688,13 @@ class StatsCalculatorTests(TestCase):
         store.put_value_cluster_level("latency", 225, unit="ms", task="index #1", operation_type=track.OperationType.Bulk)
 
         store.put_value_cluster_level("service_time", 250, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
-                                      sample_type=metrics.SampleType.Warmup, meta_data={"success": False})
+                                      sample_type=metrics.SampleType.Warmup, meta_data={"success": False}, relative_time=536)
         store.put_value_cluster_level("service_time", 190, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
-                                      meta_data={"success": True})
+                                      meta_data={"success": True}, relative_time=595)
         store.put_value_cluster_level("service_time", 200, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
-                                      meta_data={"success": False})
+                                      meta_data={"success": False}, relative_time=709)
         store.put_value_cluster_level("service_time", 210, unit="ms", task="index #1", operation_type=track.OperationType.Bulk,
-                                      meta_data={"success": True})
+                                      meta_data={"success": True}, relative_time=653)
 
         # only warmup samples
         store.put_value_cluster_level("throughput", 500, unit="docs/s", task="index #2",
@@ -1564,7 +1702,7 @@ class StatsCalculatorTests(TestCase):
         store.put_value_cluster_level("latency", 2800, unit="ms", task="index #2", operation_type=track.OperationType.Bulk,
                                       sample_type=metrics.SampleType.Warmup)
         store.put_value_cluster_level("service_time", 250, unit="ms", task="index #2", operation_type=track.OperationType.Bulk,
-                                      sample_type=metrics.SampleType.Warmup)
+                                      sample_type=metrics.SampleType.Warmup, relative_time=600)
 
         store.put_doc(doc={
             "name": "ml_processing_time",
@@ -1588,6 +1726,7 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(collections.OrderedDict(
             [("50_0", 200), ("100_0", 210), ("mean", 200), ("unit", "ms")]), opm["service_time"])
         self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
+        self.assertEqual(709*1000, opm["duration"])
 
         opm2 = stats.metrics("index #2")
         self.assertEqual(collections.OrderedDict(
@@ -1600,6 +1739,7 @@ class StatsCalculatorTests(TestCase):
         self.assertEqual(17.2, stats.ml_processing_time[0]["median"])
         self.assertEqual(36.0, stats.ml_processing_time[0]["max"])
         self.assertEqual("ms", stats.ml_processing_time[0]["unit"])
+        self.assertEqual(600*1000, opm2["duration"])
 
     def test_calculate_system_stats(self):
         cfg = config.Config()
@@ -1668,7 +1808,6 @@ class GlobalStatsCalculatorTests(TestCase):
         self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
                                 "test", "append-fast-with-conflicts", "defaults", create=True)
         self.metrics_store.put_doc(doc={"@timestamp": 1595896761994,
-                                        "relative-time": 283382,
                                         "relative-time-ms": 283.382,
                                         "race-id": "fb26018b-428d-4528-b36b-cf8c54a303ec",
                                         "race-timestamp": "20200728T003905Z", "environment": "local",

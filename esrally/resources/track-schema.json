@@ -105,6 +105,10 @@
                       "type": "number",
                       "minimum": 0,
                       "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
+                    },
+                    "ignore-response-error-level": {
+                      "type": "string",
+                      "description": "Overrides non-fatal error handling globally defined via the cli arg on-error=abort. Only 'non-fatal' may be defined which will continue unless a fatal error occurs."
                     }
                   },
                   "required": [
@@ -487,7 +491,7 @@
           },
           "pipeline": {
             "type": "string",
-            "description": "[Only for type == 'index']: Defines the name of the ingest node pipeline to use (only supported from Elasticsearch 5.0)."
+            "description": "[Only for type == 'index']: Defines the name of the ingest node pipeline to use."
           },
           "conflicts": {
             "type": "string",

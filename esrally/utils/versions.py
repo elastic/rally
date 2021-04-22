@@ -16,6 +16,7 @@
 # under the License.
 
 import re
+import functools
 
 from esrally import exceptions
 
@@ -67,9 +68,40 @@ def components(version, strict=True):
     raise exceptions.InvalidSyntax("version string '%s' does not conform to pattern '%s'" % (version, versions_pattern.pattern))
 
 
+@functools.total_ordering
+class Version:
+    """
+    Represents a version with components major, minor, patch and suffix (suffix is optional). Suffixes are not
+    considered for version comparisons as its contents are opaque and a semantically correct order cannot be defined.
+    """
+    def __init__(self, major, minor, patch, suffix=None):
+        self.major = major
+        self.minor = minor
+        self.patch = patch
+        self.suffix = suffix
+
+    def __eq__(self, o: object) -> bool:
+        return isinstance(o, type(self)) and (self.major, self.minor, self.patch) == (o.major, o.minor, o.patch)
+
+    def __lt__(self, o: object) -> bool:
+        return isinstance(o, type(self)) and (self.major, self.minor, self.patch) < (o.major, o.minor, o.patch)
+
+    def __hash__(self) -> int:
+        return hash(self.major) ^ hash(self.minor) ^ hash(self.patch) ^ hash(self.suffix)
+
+    def __repr__(self) -> str:
+        v = f"{self.major}.{self.minor}.{self.patch}"
+        return f"{v}-{self.suffix}" if self.suffix else v
+
+    @classmethod
+    def from_string(cls, v):
+        return cls(*components(v))
+
+
 def variants_of(version):
     for v, _ in VersionVariants(version).all_versions:
         yield v
+
 
 class VersionVariants:
     """
