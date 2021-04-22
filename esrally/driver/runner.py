@@ -1190,7 +1190,7 @@ class DeleteIndex(Runner):
         try:
             for index_name in indices:
                 if not only_if_exists:
-                    await es.indices.delete(index=index_name, params=request_params)
+                    await es.indices.delete(index=index_name, params=request_params, ignore=[404])
                     ops += 1
                 elif only_if_exists and await es.indices.exists(index=index_name):
                     self.logger.info("Index [%s] already exists. Deleting it.", index_name)
