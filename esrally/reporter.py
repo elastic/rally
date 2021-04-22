@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from functools import partial
 import csv
 import io
 import logging
@@ -57,9 +58,9 @@ def print_header(message):
     print_internal(console.format.bold(message))
 
 
-def write_single_report(report_file, report_format, cwd, headers, data_plain, data_rich):
+def write_single_report(report_file, report_format, cwd, numbers_align, headers, data_plain, data_rich):
     if report_format == "markdown":
-        formatter = format_as_markdown
+        formatter = partial(format_as_markdown, numbers_align=numbers_align)
     elif report_format == "csv":
         formatter = format_as_csv
     else:
@@ -74,8 +75,8 @@ def write_single_report(report_file, report_format, cwd, headers, data_plain, da
             f.writelines(formatter(headers, data_plain))
 
 
-def format_as_markdown(headers, data):
-    rendered = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign="right", stralign="right")
+def format_as_markdown(headers, data, numbers_align):
+    rendered = tabulate.tabulate(data, headers=headers, tablefmt="pipe", numalign=numbers_align, stralign="right")
     return rendered + "\n"
 
 
@@ -93,6 +94,8 @@ class SummaryReporter:
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
+        self.numbers_align = config.opts("reporting", "numbers.align",
+                                         mandatory=False, default_value="right")
         reporting_values = config.opts("reporting", "values")
         self.report_all_values = reporting_values == "all"
         self.report_all_percentile_values = reporting_values == "all-percentiles"
@@ -147,7 +150,7 @@ class SummaryReporter:
                 warnings.append("No throughput metrics available for [%s]. Likely cause: The benchmark ended already during warmup." % op)
 
     def write_report(self, metrics_table):
-        write_single_report(self.report_file, self.report_format, self.cwd,
+        write_single_report(self.report_file, self.report_format, self.cwd, self.numbers_align,
                             headers=["Metric", "Task", "Value", "Unit"],
                             data_plain=metrics_table,
                             data_rich=metrics_table)
@@ -309,6 +312,8 @@ class ComparisonReporter:
     def __init__(self, config):
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
+        self.numbers_align = config.opts("reporting", "numbers.align",
+                                         mandatory=False, default_value="right")
         self.cwd = config.opts("node", "rally.cwd")
         self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime",
                                                                 mandatory=False, default_value=False))
@@ -368,7 +373,7 @@ class ComparisonReporter:
         return metrics_table
 
     def _write_report(self, metrics_table, metrics_table_console):
-        write_single_report(self.report_file, self.report_format, self.cwd,
+        write_single_report(self.report_file, self.report_format, self.cwd, self.numbers_align,
                             headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
                             data_plain=metrics_table, data_rich=metrics_table_console)
 

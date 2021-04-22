@@ -612,6 +612,11 @@ This will benchmark the latest 7.0.0 snapshot build of Elasticsearch.
 
 The command line reporter in Rally displays a table with key metrics after a race. With this option you can specify whether this table should be in ``markdown`` format (default) or ``csv``.
 
+``report-numbers-align``
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, the number columns are aligned to the right for the command line report. You can override the default alignment. Possible values are ``right``, ``center``, ``left``, and ``decimal``.
+
 ``show-in-report``
 ~~~~~~~~~~~~~~~~~~
 
