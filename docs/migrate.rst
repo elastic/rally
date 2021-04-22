@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 2.2.0
 ------------------------
 
+Support for Elasticsearch 5.x has been dropped
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+According to our :doc:`version policy </versions>` we have dropped support for Elasticsearch 5.x with Rally 2.2.0. Attempting to benchmark an unsupported Elasticsearch version leads to an error at startup.
+
 Semantics of on-error cli argument have changed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
