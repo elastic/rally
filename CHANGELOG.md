@@ -1,3 +1,27 @@
+### 2.2.0
+
+#### Enhancements
+
+* [#1245](https://github.com/elastic/rally/pull/1245): Strictly check for supported version
+* [#1238](https://github.com/elastic/rally/pull/1238) (Breaking): Disallow to specify cluster settings in the track
+* [#1236](https://github.com/elastic/rally/pull/1236): add support for numbers alignment in table output (#1202)
+* [#1235](https://github.com/elastic/rally/pull/1235):  Allow to selectively ignore response errors
+* [#1234](https://github.com/elastic/rally/pull/1234): Allow to specify static responses
+* [#1231](https://github.com/elastic/rally/pull/1231) (Breaking): Drop relative-time metric
+* [#1220](https://github.com/elastic/rally/pull/1220): Store duration time of task in rally-results metrics record
+
+#### Doc Changes
+
+* [#1250](https://github.com/elastic/rally/pull/1250): Add note about ES version support
+* [#1247](https://github.com/elastic/rally/pull/1247): Update telemetry device docs
+* [#1233](https://github.com/elastic/rally/pull/1233): Document proper usage of the Docker image
+* [#1230](https://github.com/elastic/rally/pull/1230): Update community resources videos
+
+#### Miscellaneous Changes
+
+* [#1244](https://github.com/elastic/rally/pull/1244): Avoid ephemeral ports in integration tests
+* [#1226](https://github.com/elastic/rally/pull/1226): Fix docker release
+
 ### 2.1.0
 
 #### Highlights
