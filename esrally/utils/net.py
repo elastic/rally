@@ -70,10 +70,22 @@ class Progress:
         self.p.finish()
 
 
+def _fake_import_boto3():
+    # This function only exists to be mocked in tests to raise an ImportError, in
+    # order to simulate the absence of boto3
+    pass
+
+
 def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size_in_bytes=None, progress_indicator=None):
     # pylint: disable=import-outside-toplevel
-    # lazily initialize S3 support - we might not need it
-    import boto3.s3.transfer
+    # lazily initialize S3 support - it might not be available
+    try:
+        _fake_import_boto3()
+        import boto3.s3.transfer
+    except ImportError:
+        console.error("S3 support is optional. Install it with `python -m pip install esrally[s3]`")
+        raise
+
 
     class S3ProgressAdapter:
         def __init__(self, size, progress):

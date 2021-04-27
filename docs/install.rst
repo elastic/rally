@@ -109,6 +109,11 @@ To find the JDK, Rally expects the environment variable ``JAVA_HOME`` to be set 
 
    If you have Rally download, install and benchmark a local copy of Elasticsearch (i.e., the `default Rally behavior <http://esrally.readthedocs.io/en/stable/quickstart.html#run-your-first-race>`_) be sure to configure the Operating System (OS) of your Rally server with the `recommended kernel settings <https://www.elastic.co/guide/en/elasticsearch/reference/master/system-config.html>`_
 
+Optional dependencies
+---------------------
+
+S3 support is optional and can be installed using the ``s3`` extra. If you need S3 support, install ``esrally[s3]`` instead of just ``esrally``, but other than that follow the instructions below.
+
 Installing Rally
 ----------------
 

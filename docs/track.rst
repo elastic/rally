@@ -298,7 +298,12 @@ The ``corpora`` section contains all document corpora that are used by this trac
 
 Each entry in the ``documents`` list consists of the following properties:
 
-* ``base-url`` (optional): A http(s), S3 or Google Storage URL that points to the root path where Rally can obtain the corresponding source file. Rally can also download data from private S3 or Google Storage buckets if access is properly configured:
+* ``base-url`` (optional): A http(s), S3 or Google Storage URL that points to the root path where Rally can obtain the corresponding source file.
+
+  * S3 support is optional and can be installed with ``python -m pip install esrally[s3]``.
+  * http(s) and Google Storage are supported by default.
+
+  Rally can also download data from private S3 or Google Storage buckets if access is properly configured:
 
   * S3 according to `docs <https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration>`_.
   * Google Storage: Either using `client library authentication <https://cloud.google.com/storage/docs/reference/libraries#setting_up_authentication>`_ or by presenting an `oauth2 token <https://cloud.google.com/storage/docs/authentication>`_ via the ``GOOGLE_AUTH_TOKEN`` environment variable, typically done using: ``export GOOGLE_AUTH_TOKEN=$(gcloud auth print-access-token)``.
