@@ -82,6 +82,15 @@ install_requires = [
     "google-auth==1.22.1"
 ]
 
+s3_require = [
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   botocore: Apache 2.0
+    #   jmespath: MIT
+    #   s3transfer: Apache 2.0
+    "boto3==1.10.32",
+]
+
 tests_require = [
     "ujson",
     "pytest==5.4.0",
@@ -141,15 +150,8 @@ setup(name="esrally",
       test_suite="tests",
       tests_require=tests_require,
       extras_require={
-          "develop": tests_require + develop_require,
-          "s3": [
-              # License: Apache 2.0
-              # transitive dependencies:
-              #   botocore: Apache 2.0
-              #   jmespath: MIT
-              #   s3transfer: Apache 2.0
-              "boto3==1.10.32",
-          ]
+          "develop": tests_require + develop_require + s3_require,
+          "s3": s3_require
       },
       entry_points={
           "console_scripts": [
