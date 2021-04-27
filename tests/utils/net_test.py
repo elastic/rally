@@ -19,7 +19,7 @@ import unittest.mock as mock
 
 import pytest
 
-from esrally.utils import console, net
+from esrally.utils import net
 
 
 class TestNetUtils:
