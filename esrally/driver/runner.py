@@ -1158,6 +1158,23 @@ class CreateDataStream(Runner):
         return "create-data-stream"
 
 
+async def set_destructive_requires_name(es, value):
+    """
+    Sets `action.destructive_requires_name` to provided value
+    :return: the prior setting, if any
+    """
+    all_settings = await es.cluster.get_settings(flat_settings=True)
+    # If the setting was persistent or left as default, we consider resetting later with null sufficient
+    prior_value = all_settings.get("transient").get("action.destructive_requires_name")
+    settings_body = {
+        "transient": {
+            "action.destructive_requires_name": value
+        }
+    }
+    await es.cluster.put_settings(body=settings_body)
+    return prior_value
+
+
 class DeleteIndex(Runner):
     """
     Execute the `delete index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_.
@@ -1169,16 +1186,18 @@ class DeleteIndex(Runner):
         indices = mandatory(params, "indices", self)
         only_if_exists = params.get("only-if-exists", False)
         request_params = params.get("request-params", {})
-
-        for index_name in indices:
-            if not only_if_exists:
-                await es.indices.delete(index=index_name, params=request_params)
-                ops += 1
-            elif only_if_exists and await es.indices.exists(index=index_name):
-                self.logger.info("Index [%s] already exists. Deleting it.", index_name)
-                await es.indices.delete(index=index_name, params=request_params)
-                ops += 1
-
+        prior_destructive_setting = await set_destructive_requires_name(es, False)
+        try:
+            for index_name in indices:
+                if not only_if_exists:
+                    await es.indices.delete(index=index_name, params=request_params)
+                    ops += 1
+                elif only_if_exists and await es.indices.exists(index=index_name):
+                    self.logger.info("Index [%s] already exists. Deleting it.", index_name)
+                    await es.indices.delete(index=index_name, params=request_params)
+                    ops += 1
+        finally:
+            await set_destructive_requires_name(es, prior_destructive_setting)
         return {
             "weight": ops,
             "unit": "ops",

@@ -2523,7 +2523,9 @@ class DeleteIndexRunnerTests(TestCase):
     async def test_deletes_existing_indices(self, es):
         es.indices.exists.side_effect = [as_future(False), as_future(True)]
         es.indices.delete.return_value = as_future()
-
+        es.cluster.get_settings.return_value = as_future({"persistent": {},
+                                                          "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings.return_value = as_future()
         r = runner.DeleteIndex()
 
         params = {
@@ -2539,13 +2541,18 @@ class DeleteIndexRunnerTests(TestCase):
             "success": True
         }, result)
 
+        es.cluster.put_settings.assert_has_calls([
+            mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+            mock.call(body={"transient": {"action.destructive_requires_name": True}})
+        ])
         es.indices.delete.assert_called_once_with(index="indexB", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_deletes_all_indices(self, es):
         es.indices.delete.return_value = as_future()
-
+        es.cluster.get_settings.return_value = as_future({"persistent": {}, "transient": {}})
+        es.cluster.put_settings.return_value = as_future()
         r = runner.DeleteIndex()
 
         params = {
@@ -2565,6 +2572,10 @@ class DeleteIndexRunnerTests(TestCase):
             "success": True
         }, result)
 
+        es.cluster.put_settings.assert_has_calls([
+            mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+            mock.call(body={"transient": {"action.destructive_requires_name": None}})
+        ])
         es.indices.delete.assert_has_calls([
             mock.call(index="indexA", params=params["request-params"]),
             mock.call(index="indexB", params=params["request-params"])
