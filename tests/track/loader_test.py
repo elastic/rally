@@ -3527,3 +3527,53 @@ class TrackSpecificationReaderTests(TestCase):
             "level": "track",
             "value": 7
         }, resulting_track.challenges[1].parameters)
+
+
+class MyMockTrackProcessor(loader.TrackProcessor):
+    pass
+
+
+class TrackProcessorRegistryTests(TestCase):
+    def test_default_track_processors(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "offline.mode", False)
+        tpr = loader.TrackProcessorRegistry(cfg)
+        expected_defaults = [
+            loader.TaskFilterTrackProcessor,
+            loader.TestModeTrackProcessor,
+            loader.DefaultTrackPreparator
+        ]
+        actual_defaults = [proc.__class__ for proc in tpr.processors]
+        self.assertCountEqual(expected_defaults, actual_defaults)
+
+    def test_override_default_preparator(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "offline.mode", False)
+        tpr = loader.TrackProcessorRegistry(cfg)
+        # call this once beforehand to make sure we don't "harden" the default in case calls are made out of order
+        tpr.processors # pylint: disable=pointless-statement
+        tpr.register_track_processor(MyMockTrackProcessor())
+        expected_processors = [
+            loader.TaskFilterTrackProcessor,
+            loader.TestModeTrackProcessor,
+            MyMockTrackProcessor
+        ]
+        actual_processors = [proc.__class__ for proc in tpr.processors]
+        self.assertCountEqual(expected_processors, actual_processors)
+
+    def test_allow_to_specify_default_preparator(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "offline.mode", False)
+        tpr = loader.TrackProcessorRegistry(cfg)
+        tpr.register_track_processor(MyMockTrackProcessor())
+        # should be idempotent now that we have a custom config
+        tpr.processors # pylint: disable=pointless-statement
+        tpr.register_track_processor(loader.DefaultTrackPreparator(cfg))
+        expected_processors = [
+            loader.TaskFilterTrackProcessor,
+            loader.TestModeTrackProcessor,
+            MyMockTrackProcessor,
+            loader.DefaultTrackPreparator
+        ]
+        actual_processors = [proc.__class__ for proc in tpr.processors]
+        self.assertCountEqual(expected_processors, actual_processors)
