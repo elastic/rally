@@ -34,7 +34,7 @@ def list_telemetry():
     devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder,
                                                                                Heapdump, NodeStats, RecoveryStats,
                                                                                CcrStats, SegmentStats, TransformStats,
-                                                                               SearchableSnapshotsStats]]
+                                                                               SearchableSnapshotsStats, ShardStats]]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -566,6 +566,134 @@ class RecoveryStatsRecorder:
                     "shard": shard["id"]
                 }
                 self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+
+
+class ShardStats(TelemetryDevice):
+    """
+    Gathers different shard per index stats every minute.
+    """
+
+    internal = False
+    command = "shard-stats"
+    human_name = "Shard Stats"
+    help = "Regularly samples _cat/shards"
+
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May optionally specify:
+            ``shard-stats-indices``: JSON structure specifying the index pattern per cluster to publish stats from.
+            Not all clusters need to be specified, but any name used must be be present in target.hosts. Alternatively,
+            the index pattern can be specified as a string can be specified in case only one cluster is involved.
+            Example:
+            {"shard-stats-indices": {"cluster_a": ["follower"],"default": ["leader"]}
+
+            ``shard-stats-sample-interval``: positive integer controlling the sampling interval. Default: 60 seconds.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.sample_interval = telemetry_params.get("shard-stats-sample-interval", 60)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                f"The telemetry parameter 'shard-stats-sample-interval' must be greater than zero but was {self.sample_interval}.")
+        
+        self.specified_cluster_names = self.clients.keys()
+        indices_per_cluster = self.telemetry_params.get("shard-stats-indices", False)
+        # allow the user to specify either an index pattern as string or as a JSON object
+        if isinstance(indices_per_cluster, str):
+            self.indices_per_cluster = {opts.TargetHosts.DEFAULT: indices_per_cluster}
+        else:
+            self.indices_per_cluster = indices_per_cluster
+
+        if self.indices_per_cluster:
+            for cluster_name in self.indices_per_cluster.keys():
+                if cluster_name not in clients:
+                    raise exceptions.SystemSetupError(
+                        "The telemetry parameter 'shard-stats-indices' must be a JSON Object with keys matching "
+                        "the cluster names [{}] specified in --target-hosts "
+                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name))
+            self.specified_cluster_names = self.indices_per_cluster.keys()
+
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def on_benchmark_start(self):
+        for cluster_name in self.specified_cluster_names:
+            recorder = ShardStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
+                                             self.sample_interval,
+                                             self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "")
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.setDaemon(True)
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+
+
+class ShardStatsRecorder:
+    """
+    Collects and pushes shard stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
+        :param indices: optional list of indices to filter results from.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.indices = indices
+        self.logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return "shard stats"
+
+    def record(self):
+        """
+        Collect _cat/shards for indexes (optionally) specified in telemetry parameters and push to metrics store.
+        """
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+        try:
+            stats = self.client.cat.shards(index=self.indices)
+        except elasticsearch.TransportError:
+            msg = "A transport error occurred while collecting _cat/shards on cluster [{}]".format(self.cluster_name)
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+        """
+        _cat/shards gives out put
+        index shard prirep state docs store ip node
+        """
+
+        for line in stats.splitlines():
+            shard_stats = line.split()
+            doc = {
+                    "name": "shard-stats",
+                    "shard-id": shard_stats[1],
+                    "index": shard_stats[0],
+                    "prirep": shard_stats[2],
+                    "docs": shard_stats[4],
+                    "store": shard_stats[5],
+                    "node": shard_stats[7]
+                }
+            shard_metadata = {
+                    "cluster": self.cluster_name
+                }
+            self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
 class NodeStats(TelemetryDevice):
