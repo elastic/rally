@@ -91,3 +91,13 @@ class TestNetUtils:
         mock_progress.reset_mock()
         progress(42, None)
         assert mock_progress.print.called
+
+    def test_s3_dependency(self):
+        #pylint: disable=import-outside-toplevel,unused-import
+        import boto3
+        assert True
+
+    def test_gcs_dependency(self):
+        #pylint: disable=import-outside-toplevel,unused-import
+        import google.auth
+        assert True
