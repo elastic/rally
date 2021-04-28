@@ -81,6 +81,8 @@ class TrackProcessorRegistry:
         if not isinstance(processor, DefaultTrackPreparator):
             # stop resetting self.track_processors
             self.custom_configuration = True
+        if hasattr(processor, "cfg"):
+            processor.cfg = self.base_config
         if hasattr(processor, "downloader"):
             processor.downloader = Downloader(self.offline, self.test_mode)
         if hasattr(processor, "decompressor"):
@@ -90,7 +92,7 @@ class TrackProcessorRegistry:
     @property
     def processors(self):
         if not self.custom_configuration:
-            self.register_track_processor(DefaultTrackPreparator(self.base_config))
+            self.register_track_processor(DefaultTrackPreparator())
         return [*self.required_processors, *self.track_processors]
 
 
@@ -391,10 +393,10 @@ def used_corpora(t):
 
 
 class DefaultTrackPreparator(TrackProcessor):
-    def __init__(self, cfg):
+    def __init__(self):
         super().__init__()
-        self.cfg = cfg
         # just declare here, will be injected later
+        self.cfg = None
         self.downloader = None
         self.decompressor = None
         self.track = None
