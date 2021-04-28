@@ -1446,12 +1446,14 @@ class IndexStats(InternalTelemetryDevice):
     def on_benchmark_start(self):
         # we only determine this value at the start of the benchmark. This is actually only useful for
         # the pipeline "benchmark-only" where we don't have control over the cluster and the user might not have restarted
-        # the cluster so we can at least tell them.
+        # the cluster so we can at least tell them. 
+        # Adding a small threshold for the warning to allow for indexing of internal indices
+        threshold = 2000
         if self.first_time:
             for t in self.index_times(self.index_stats(), per_shard_stats=False):
                 n = t["name"]
                 v = t["value"]
-                if t["value"] > 0:
+                if t["value"] > threshold:
                     console.warn("%s is %d ms indicating that the cluster is not in a defined clean state. Recorded index time "
                                  "metrics may be misleading." % (n, v), logger=self.logger)
             self.first_time = False
