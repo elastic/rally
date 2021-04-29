@@ -1446,7 +1446,7 @@ class IndexStats(InternalTelemetryDevice):
     def on_benchmark_start(self):
         # we only determine this value at the start of the benchmark. This is actually only useful for
         # the pipeline "benchmark-only" where we don't have control over the cluster and the user might not have restarted
-        # the cluster so we can at least tell them. 
+        # the cluster so we can at least tell them.
         # Adding a small threshold for the warning to allow for indexing of internal indices
         threshold = 2000
         if self.first_time:
