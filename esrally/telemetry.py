@@ -600,7 +600,7 @@ class ShardStats(TelemetryDevice):
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
                 f"The telemetry parameter 'shard-stats-sample-interval' must be greater than zero but was {self.sample_interval}.")
-        
+
         self.specified_cluster_names = self.clients.keys()
         indices_per_cluster = self.telemetry_params.get("shard-stats-indices", False)
         # allow the user to specify either an index pattern as string or as a JSON object
@@ -674,10 +674,10 @@ class ShardStatsRecorder:
             msg = "A transport error occurred while collecting _cat/shards on cluster [{}]".format(self.cluster_name)
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
-        """
-        _cat/shards gives out put
-        index shard prirep state docs store ip node
-        """
+
+        # _cat/shards gives out put
+        # index shard prirep state docs store ip node
+
 
         for line in stats.splitlines():
             shard_stats = line.split()

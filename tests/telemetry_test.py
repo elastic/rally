@@ -887,9 +887,8 @@ class ShardStatsTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     def test_stores_single_shard_stats(self, es, metrics_store_put_doc):
         response = "geonames         0     p      STARTED    55     60b 127.0.0.1 rally-node-0"
-        
         es.cat.shards.return_value = response
-        
+
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         recorder = telemetry.ShardStatsRecorder(cluster_name="leader",
