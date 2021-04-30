@@ -19,7 +19,6 @@ import glob
 import json
 import logging
 import uuid
-from datetime import datetime
 
 from esrally import track, config, exceptions
 from esrally.utils import io, console
@@ -1688,12 +1687,11 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
         if col == 0:
             row += 1
 
-    publish_date = datetime.now().strftime("%Y%m%d")
     return {
         "id": str(uuid.uuid4()),
         "type": "dashboard",
         "attributes": {
-            "title": chart_type.format_title(environment, track.name, flavor=flavor, suffix=publish_date),
+            "title": chart_type.format_title(environment, track.name, flavor=flavor),
             "hits": 0,
             "description": "",
             "panelsJSON": json.dumps(panels),
