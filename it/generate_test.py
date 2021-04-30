@@ -37,4 +37,4 @@ def test_fails_when_spec_not_found(cfg, tmp_path):
     assert it.esrally(cfg, f"generate charts "
                            f"--chart-spec-path={chart_spec_path} "
                            f"--chart-type=time-series "
-                           f"--output-path={output_path}") == 64
+                           f"--output-path={output_path}") !=0
