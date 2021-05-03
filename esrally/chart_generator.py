@@ -1265,6 +1265,7 @@ class TimeSeriesCharts:
                 ],
                 "show_grid": 1,
                 "drop_last_bucket": 0,
+                "axis_scale": "log",
                 "axis_min": "0"
             },
             "aggs": []
@@ -1837,8 +1838,10 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
     race_configs = {"oss": [], "default": []}
     if chart_type == BarCharts:
         race_configs = []
-
-    for _track_file in glob.glob(io.normalize_path(chart_spec_path)):
+    chart_specs = glob.glob(io.normalize_path(chart_spec_path))
+    if not chart_specs:
+        raise exceptions.NotFound(f"Chart spec path [{chart_spec_path}] not found.")
+    for _track_file in chart_specs:
         with open(_track_file, mode="rt", encoding="utf-8") as f:
             for item in json.load(f):
                 _track_repository = item.get("track-repository", "default")
