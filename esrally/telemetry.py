@@ -603,6 +603,7 @@ class ShardStats(TelemetryDevice):
 
         self.specified_cluster_names = self.clients.keys()
         indices_per_cluster = self.telemetry_params.get("shard-stats-indices", False)
+        self.segment_stats = self.telemetry_params.get("segment_stats", False)
         # allow the user to specify either an index pattern as string or as a JSON object
         if isinstance(indices_per_cluster, str):
             self.indices_per_cluster = {opts.TargetHosts.DEFAULT: indices_per_cluster}
@@ -624,7 +625,7 @@ class ShardStats(TelemetryDevice):
     def on_benchmark_start(self):
         for cluster_name in self.specified_cluster_names:
             recorder = ShardStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
-                                             self.sample_interval,
+                                             self.sample_interval, self.segment_stats,
                                              self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "")
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
@@ -643,7 +644,7 @@ class ShardStatsRecorder:
     Collects and pushes shard stats for the specified cluster to the metric store.
     """
 
-    def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, segment_stats, indices=None):
         """
         :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
         :param client: The Elasticsearch client for this cluster.
@@ -657,6 +658,7 @@ class ShardStatsRecorder:
         self.metrics_store = metrics_store
         self.sample_interval = sample_interval
         self.indices = indices
+        self.segment_stats = segment_stats
         self.logger = logging.getLogger(__name__)
 
     def __str__(self):
@@ -669,7 +671,7 @@ class ShardStatsRecorder:
         # pylint: disable=import-outside-toplevel
         import elasticsearch
         try:
-            stats = self.client.cat.shards(index=self.indices)
+            stats = self.client.cat.shards(index=self.indices, bytes="b", h="index,shard,prirep,state,docs,store,ip,node,sc")
         except elasticsearch.TransportError:
             msg = "A transport error occurred while collecting _cat/shards on cluster [{}]".format(self.cluster_name)
             self.logger.exception(msg)
@@ -678,21 +680,25 @@ class ShardStatsRecorder:
         # _cat/shards gives out put
         # index shard prirep state docs store ip node
 
-
+        print(f"{stats}")
         for line in stats.splitlines():
             shard_stats = line.split()
+            primary = True if "p" == shard_stats[2] else False
+            if (self.segment_stats) :
             doc = {
                     "name": "shard-stats",
                     "shard-id": shard_stats[1],
                     "index": shard_stats[0],
-                    "prirep": shard_stats[2],
-                    "docs": shard_stats[4],
-                    "store": shard_stats[5],
-                    "node": shard_stats[7]
+                    "primary": primary,
+                    "docs": int(shard_stats[4]),
+                    "store_in_bytes": int(shard_stats[5]),
+                    "node": shard_stats[7],
+                    "segment_count": int(shard_stats[8])
                 }
             shard_metadata = {
                     "cluster": self.cluster_name
                 }
+            print(f"{doc} {shard_metadata}")
             self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
