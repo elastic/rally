@@ -44,6 +44,7 @@ function build {
   export LC_ALL=en_US.UTF-8
   update_pyenv
   eval "$(pyenv init -)"
+  eval "$(pyenv init --path)"
   eval "$(pyenv virtualenv-init -)"
 
   make prereq
@@ -58,6 +59,7 @@ function license-scan {
 
   export PATH="$HOME/.pyenv/bin:$PATH"
   eval "$(pyenv init -)"
+  eval "$(pyenv init --path)"
   eval "$(pyenv virtualenv-init -)"
 
   make prereq
