@@ -29,8 +29,7 @@ VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
 VEPYTHON = $(VENV_NAME)/bin/$(PY_BIN)
 VEPYLINT = $(VENV_NAME)/bin/pylint
 PYENV_ERROR = "\033[0;31mIMPORTANT\033[0m: Please install pyenv.\n"
-PYENV_PATH_ERROR = "\033[0;31mIMPORTANT\033[0m: Please add $(HOME)/$(PYENV_REGEX) to your PATH env.\n"
-PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please add \033[0;31meval \"\$$(pyenv init -)\"\033[0m to your bash profile and restart your terminal before proceeding any further.\n"
+PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please type \033[0;31mpyenv init\033[0m, follow the instructions there and restart your terminal before proceeding any further.\n"
 VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VENV_NAME); have you executed make venv-create?\033[0m\n"
 
 prereq:
@@ -46,12 +45,8 @@ venv-create:
 		printf $(PYENV_ERROR); \
 		exit 1; \
 	fi;
-	@if [[ ! "$(PATH)" =~ $(PYENV_REGEX) ]]; then \
-		printf $(PYENV_PATH_ERROR); \
-		exit 1; \
-	fi;
 	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
-		eval "$$(pyenv init -)" && $(PY_BIN) -mvenv $(VENV_NAME); \
+		eval "$$(pyenv init -)" && eval "$$(pyenv init --path)" && $(PY_BIN) -mvenv $(VENV_NAME); \
 		printf "Created python3 venv under $(PWD)/$(VENV_NAME).\n"; \
 	fi;
 
