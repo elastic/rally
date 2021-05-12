@@ -42,7 +42,7 @@ Alternatively, you can store Rally tracks also in a dedicated git repository whi
 
 When a track repository has several branches, Rally will pick the most appropriate branch, depending on the Elasticsearch version to be benchmarked, using a match logic in the following order:
 
-#. *Exact match major.minor.patch-extension_label* (e.g. ``7.0.0-beta1``)
+#. *Exact match major.minor.patch-SUFFIX* (e.g. ``7.0.0-beta1``)
 #. *Exact match major.minor.patch* (e.g. ``7.10.2``, ``6.7.0``)
 #. *Exact match major.minor* (e.g. ``7.10``)
 #. *Nearest prior minor branch*
