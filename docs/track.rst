@@ -35,23 +35,37 @@ Custom Track Repositories
 
 Alternatively, you can store Rally tracks also in a dedicated git repository which we call a "track repository". Rally provides a default track repository that is hosted on `Github <https://github.com/elastic/rally-tracks>`_. You can also add your own track repositories although this requires a bit of additional work. First of all, track repositories need to be managed by git. The reason is that Rally can benchmark multiple versions of Elasticsearch and we use git branches in the track repository to determine the best match for each track (based on the command line parameter ``--distribution-version``). The versioning scheme is as follows:
 
-* The `master` branch needs to work with the latest `master` branch of Elasticsearch.
+* The ``master`` branch needs to work with the latest ``master`` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
-.. _track-repositories-fall-back-logic:
+.. _track-repositories-branch-logic:
 
-Rally implements a fallback logic in order of specificity up to the minor version level, so you don't need to define a branch for each patch release of Elasticsearch.
+When a track repository has several branches, Rally will pick the most appropriate branch, depending on the Elasticsearch version to be benchmarked, using a match logic in the following order:
 
-Assuming the track repository has several branches, the order is:
+#. *Exact match major.minor.patch-extension_label* (e.g. ``7.0.0-beta1``)
+#. *Exact match major.minor.patch* (e.g. ``7.10.2``, ``6.7.0``)
+#. *Exact match major.minor* (e.g. ``7.10``)
+#. *Nearest prior minor branch*
 
-1. Exact branch matches; e.g. if the repo contains branches `7`, `7.1` and `7.10.2` and Elasticsearch version is `7.10.2`, `7.10.2` will be checked out.
-2. Nearest prior minor matches;  e.g. if the repo contains branches `7`, `7.1` and `7.10` and Elasticsearch version is `7.10.2`, `7.10` will be checked out. Alternatively if version is `7.9`, `7.1` will be checked out.
-3. Major branch matches; e.g. if the repo contains branches `7` and `7.10` and Elasticsearch version is `7.1`, `7` will be checked out.
-4. Failing everything, `master` will be elected, e.g. if the repo contains branches `6`, `7` and `master` and Elasticsearch version is `8.1.0`, `master` will be checked out.
+    e.g. if available branches are ``master``, ``7``, ``7.2`` and ``7.11`` attempting to benchmarking ES ``7.10.2`` will pick ``7.2``, whereas benchmarking ES ``7.12.1`` will pick branch ``7.11``
+#. *Nearest major branch*
 
-In general, Rally tries to use the branch with the best match to the benchmarked version of Elasticsearch.
+    e.g. if available branches are ``master``, ``5``, ``6`` and ``7``, benchmarking ES ``7.11.0`` will pick branch ``7``
 
-Rally will also search for related files like mappings or custom runners or parameter sources in the track repository. However, Rally will use a separate directory to look for data files (``~/.rally/benchmarks/data/$TRACK_NAME/``). The reason is simply that we do not want to check multi-GB data files into git.
+The following table explains in more detail the ES version compatibility scheme using a scenario where a track repository contains four branches ``master``, ``7.0.0-beta1``, ``7.3`` and ``6``:
+
+.. tabularcolumns:: |l|l|
+
+================ ===========================================================================================================
+track branch     ES version compatibility
+================ ===========================================================================================================
+``master``       compatible only with the latest development version of Elasticsearch
+``7.0.0-beta1``  compatible only with the released version ``7.0.0-beta1``
+``7.3``          compatible with all ES ``7`` releases equal or greater than ``7.3`` (e.g. ``7.3.0``, ``7.10.2``)
+``6``            compatible with all Elasticsearch releases with the major release number ``6`` (e.g. ``6.4.0``, ``6.8.13``)
+================ ===========================================================================================================
+
+Rally will also search for related files like mappings or custom runners or parameter sources in the track repository. However, Rally will use a separate directory to look for data files (``~/.rally/benchmarks/data/$TRACK_NAME/``). The reason is simply that we do not want to check-in multi-GB data files into git.
 
 Creating a new track repository
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
