@@ -576,7 +576,7 @@ class ShardStats(TelemetryDevice):
     internal = False
     command = "shard-stats"
     human_name = "Shard Stats"
-    help = "Regularly samples _cat/shards"
+    help = "Regularly samples nodes stats at shard level"
 
     def __init__(self, telemetry_params, clients, metrics_store):
         """
@@ -644,7 +644,7 @@ class ShardStatsRecorder:
     Collects and pushes shard stats for the specified cluster to the metric store.
     """
 
-    def __init__(self, cluster_name, client, metrics_store, sample_interval, segment_stats, indices=None):
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, segment_stats=False, indices=None):
         """
         :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
         :param client: The Elasticsearch client for this cluster.
@@ -666,40 +666,41 @@ class ShardStatsRecorder:
 
     def record(self):
         """
-        Collect _cat/shards for indexes (optionally) specified in telemetry parameters and push to metrics store.
+        Collect node-stats?level=shards for indexes (optionally) specified in telemetry parameters and push to metrics store.
         """
         # pylint: disable=import-outside-toplevel
         import elasticsearch
         try:
-            stats = self.client.cat.shards(index=self.indices, bytes="b", h="index,shard,prirep,state,docs,store,ip,node,sc")
+            sample = self.client.nodes.stats(metric="_all", level="shards")
         except elasticsearch.TransportError:
-            msg = "A transport error occurred while collecting _cat/shards on cluster [{}]".format(self.cluster_name)
+            msg = f"A transport error occurred while collecting shard stats on cluster [{self.cluster_name}]"
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        # _cat/shards gives out put
-        # index shard prirep state docs store ip node
+        shard_metadata = {
+                "cluster": self.cluster_name
+            }
 
-        print(f"{stats}")
-        for line in stats.splitlines():
-            shard_stats = line.split()
-            primary = True if "p" == shard_stats[2] else False
-            if (self.segment_stats) :
-            doc = {
-                    "name": "shard-stats",
-                    "shard-id": shard_stats[1],
-                    "index": shard_stats[0],
-                    "primary": primary,
-                    "docs": int(shard_stats[4]),
-                    "store_in_bytes": int(shard_stats[5]),
-                    "node": shard_stats[7],
-                    "segment_count": int(shard_stats[8])
-                }
-            shard_metadata = {
-                    "cluster": self.cluster_name
-                }
-            print(f"{doc} {shard_metadata}")
-            self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+        for node_stats in sample["nodes"].values():
+            node_name = node_stats["name"]
+            collected_node_stats = collections.OrderedDict()
+            collected_node_stats["name"] = "shard-stats"
+            shard_stats = node_stats["indices"].get("shards")
+
+            for index_name, stats in shard_stats.items():
+                for curr_shard in stats:
+                    for shard_id, curr_stats in curr_shard.items():
+                        doc = {
+                            "name": "shard-stats",
+                            "shard-id": shard_id,
+                            "index": index_name,
+                            "primary": curr_stats["routing"].get("primary"),
+                            "docs": curr_stats["docs"].get("count"),
+                            "store": curr_stats["store"].get("size_in_bytes"),
+                            "node": node_name
+                        }
+                        self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+
 
 
 class NodeStats(TelemetryDevice):

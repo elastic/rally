@@ -883,23 +883,85 @@ class RecoveryStatsTests(TestCase):
 
 
 class ShardStatsTests(TestCase):
-    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_stores_single_shard_stats(self, es, metrics_store_put_doc):
-        response = "geonames         0     p      STARTED    55     60b 127.0.0.1 rally-node-0"
-        es.cat.shards.return_value = response
 
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_stores_single_shard_stats(self, metrics_store_put_doc):
+        node_stats_response = {
+            "cluster_name": "elasticsearch",
+            "nodes": {
+                "Zbl_e8EyRXmiR47gbHgPfg": {
+                    "timestamp": 1524379617017,
+                    "name": "rally0",
+                    "transport_address": "127.0.0.1:9300",
+                    "host": "127.0.0.1",
+                    "ip": "127.0.0.1:9300",
+                    "roles": [
+                        "master",
+                        "data",
+                        "ingest"
+                    ],
+                    "indices": {
+                        "docs": {
+                            "count": 76892364,
+                            "deleted": 324530
+                        },
+                        "store": {
+                            "size_in_bytes": 983409834
+                        },
+                        "shards" : {
+                             "geonames": [
+                            {
+                              "0" : {
+                                "routing" : {
+                                  "state" : "STARTED",
+                                  "primary" : True,
+                                  "node" : "gHQpKO-IT5uo8WVTPmAZXw",
+                                  "relocating_node" : None
+                                },
+                                "docs" : {
+                                  "count" : 1000,
+                                  "deleted" : 0
+                                },
+                                "store" : {
+                                  "size_in_bytes" : 212027,
+                                  "reserved_in_bytes" : 0
+                                },
+                                "segments" : {
+                                  "count" : 8,
+                                  "memory_in_bytes" : 46872,
+                                  "terms_memory_in_bytes" : 13056,
+                                  "stored_fields_memory_in_bytes" : 3904,
+                                  "term_vectors_memory_in_bytes" : 0,
+                                  "norms_memory_in_bytes" : 0,
+                                  "points_memory_in_bytes" : 0,
+                                  "doc_values_memory_in_bytes" : 29912,
+                                  "index_writer_memory_in_bytes" : 0,
+                                  "version_map_memory_in_bytes" : 0,
+                                  "fixed_bit_set_memory_in_bytes" : 0,
+                                  "max_unsafe_auto_id_timestamp" : -1,
+                                  "file_sizes" : { }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                    }
+                }
+            }
+        }
+
+        client = Client(nodes=SubClient(stats=node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        recorder = telemetry.ShardStatsRecorder(cluster_name="leader",
-                                                   client=es,
+        recorder = telemetry.ShardStatsRecorder(cluster_name="remote",
+                                                   client=client,
                                                    metrics_store=metrics_store,
                                                    sample_interval=53,
                                                    indices=["geonames"])
         recorder.record()
 
         shard_metadata = {
-            "cluster": "leader"
+            "cluster": "remote"
         }
 
         metrics_store_put_doc.assert_has_calls([
@@ -907,13 +969,12 @@ class ShardStatsTests(TestCase):
                 "name": "shard-stats",
                 "shard-id": "0",
                 "index": "geonames",
-                "prirep": "p",
-                "docs": "55",
-                "store": "60b",
-                "node": "rally-node-0"
+                "primary": True,
+                "docs": 1000,
+                "store": 212027,
+                "node": "rally0"
             }, level=MetaInfoScope.cluster, meta_data=shard_metadata)
         ],  any_order=True)
-
 
 class TestSearchableSnapshotsStats:
     response_fragment_total = [
