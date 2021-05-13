@@ -602,7 +602,6 @@ class ShardStats(TelemetryDevice):
 
         self.specified_cluster_names = self.clients.keys()
         indices_per_cluster = self.telemetry_params.get("shard-stats-indices", False)
-        self.segment_stats = self.telemetry_params.get("segment_stats", False)
         # allow the user to specify either an index pattern as string or as a JSON object
         if isinstance(indices_per_cluster, str):
             self.indices_per_cluster = {opts.TargetHosts.DEFAULT: indices_per_cluster}
@@ -623,8 +622,7 @@ class ShardStats(TelemetryDevice):
 
     def on_benchmark_start(self):
         for cluster_name in self.specified_cluster_names:
-            recorder = ShardStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
-                                             self.sample_interval, self.segment_stats,
+            recorder = ShardStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
                                              self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "")
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
@@ -643,7 +641,7 @@ class ShardStatsRecorder:
     Collects and pushes shard stats for the specified cluster to the metric store.
     """
 
-    def __init__(self, cluster_name, client, metrics_store, sample_interval, segment_stats=False, indices=None):
+    def __init__(self, cluster_name, client, metrics_store, sample_interval, indices=None):
         """
         :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
         :param client: The Elasticsearch client for this cluster.
@@ -657,7 +655,6 @@ class ShardStatsRecorder:
         self.metrics_store = metrics_store
         self.sample_interval = sample_interval
         self.indices = indices
-        self.segment_stats = segment_stats
         self.logger = logging.getLogger(__name__)
 
     def __str__(self):
@@ -696,6 +693,7 @@ class ShardStatsRecorder:
                             "primary": curr_stats["routing"].get("primary"),
                             "docs": curr_stats["docs"].get("count"),
                             "store": curr_stats["store"].get("size_in_bytes"),
+                            "segments_count":  curr_stats["segments"].get("count"),
                             "node": node_name
                         }
                         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
