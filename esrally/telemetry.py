@@ -570,9 +570,8 @@ class RecoveryStatsRecorder:
 
 class ShardStats(TelemetryDevice):
     """
-    Gathers different shard per index stats every minute.
+    Collects and pushes shard stats for the specified cluster to the metric store.
     """
-
     internal = False
     command = "shard-stats"
     human_name = "Shard Stats"
@@ -614,9 +613,9 @@ class ShardStats(TelemetryDevice):
             for cluster_name in self.indices_per_cluster.keys():
                 if cluster_name not in clients:
                     raise exceptions.SystemSetupError(
-                        "The telemetry parameter 'shard-stats-indices' must be a JSON Object with keys matching "
-                        "the cluster names [{}] specified in --target-hosts "
-                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name))
+                        f"The telemetry parameter 'shard-stats-transforms' must be a JSON Object with keys "
+                        f"matching the cluster names [{','.join(sorted(clients.keys()))}] specified in --target-hosts "
+                        f"but it had [{cluster_name}].")
             self.specified_cluster_names = self.indices_per_cluster.keys()
 
         self.metrics_store = metrics_store
