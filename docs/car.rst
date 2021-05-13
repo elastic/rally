@@ -121,7 +121,7 @@ Rally provides a default team repository that is hosted on `Github <https://gith
 * The `master` branch needs to work with the latest `master` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
-Rally implements a fallback logic similar to the one used for :ref:`track-repositories <track-repositories-fall-back-logic>`.
+Rally implements a branch matching logic similar to the one used for :ref:`track-repositories <track-repositories-branch-logic>`.
 
 Creating a new team repository
 """"""""""""""""""""""""""""""

@@ -44,6 +44,8 @@ function build {
   export LC_ALL=en_US.UTF-8
   update_pyenv
   eval "$(pyenv init -)"
+  # ensure pyenv shims are added to PATH, see https://github.com/pyenv/pyenv/issues/1906
+  eval "$(pyenv init --path)"
   eval "$(pyenv virtualenv-init -)"
 
   make prereq
@@ -58,6 +60,8 @@ function license-scan {
 
   export PATH="$HOME/.pyenv/bin:$PATH"
   eval "$(pyenv init -)"
+  # ensure pyenv shims are added to PATH, see https://github.com/pyenv/pyenv/issues/1906
+  eval "$(pyenv init --path)"
   eval "$(pyenv virtualenv-init -)"
 
   make prereq

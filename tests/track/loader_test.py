@@ -3568,7 +3568,7 @@ class TrackProcessorRegistryTests(TestCase):
         tpr.register_track_processor(MyMockTrackProcessor())
         # should be idempotent now that we have a custom config
         tpr.processors # pylint: disable=pointless-statement
-        tpr.register_track_processor(loader.DefaultTrackPreparator(cfg))
+        tpr.register_track_processor(loader.DefaultTrackPreparator())
         expected_processors = [
             loader.TaskFilterTrackProcessor,
             loader.TestModeTrackProcessor,

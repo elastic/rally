@@ -71,12 +71,6 @@ install_requires = [
     # License: MPL 2.0
     "certifi",
     # License: Apache 2.0
-    # transitive dependencies:
-    #   botocore: Apache 2.0
-    #   jmespath: MIT
-    #   s3transfer: Apache 2.0
-    "boto3==1.10.32",
-    # License: Apache 2.0
     "yappi==1.2.3",
     # License: BSD
     "ijson==2.6.1",
@@ -86,6 +80,15 @@ install_requires = [
     "google-resumable-media==1.1.0",
     # License: Apache 2.0
     "google-auth==1.22.1"
+]
+
+s3_require = [
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   botocore: Apache 2.0
+    #   jmespath: MIT
+    #   s3transfer: Apache 2.0
+    "boto3==1.10.32",
 ]
 
 tests_require = [
@@ -147,7 +150,8 @@ setup(name="esrally",
       test_suite="tests",
       tests_require=tests_require,
       extras_require={
-          "develop": tests_require + develop_require
+          "develop": tests_require + develop_require + s3_require,
+          "s3": s3_require
       },
       entry_points={
           "console_scripts": [

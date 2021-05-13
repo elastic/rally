@@ -36,6 +36,16 @@ class TestNetUtils:
         download.assert_called_once_with("mybucket.elasticsearch.org", "data/documents.json.bz2",
                                          "/tmp/documents.json.bz2", expected_size, progress_indicator)
 
+    @mock.patch("esrally.utils.console.error")
+    @mock.patch("esrally.utils.net._fake_import_boto3")
+    def test_missing_boto3(self, import_boto3, console_error):
+        import_boto3.side_effect = ImportError("no module named 'boto3'")
+        with pytest.raises(ImportError, match="no module named 'boto3'"):
+            net.download_from_bucket("s3", "s3://mybucket/data", "/tmp/data", None, None)
+        console_error.assert_called_once_with(
+            "S3 support is optional. Install it with `python -m pip install esrally[s3]`"
+        )
+
     @pytest.mark.parametrize("seed", range(1))
     @mock.patch("esrally.utils.net._download_from_gcs_bucket")
     def test_download_from_gs_bucket(self, download, seed):
@@ -81,3 +91,13 @@ class TestNetUtils:
         mock_progress.reset_mock()
         progress(42, None)
         assert mock_progress.print.called
+
+    def test_s3_dependency(self):
+        #pylint: disable=import-outside-toplevel,unused-import
+        import boto3
+        assert True
+
+    def test_gcs_dependency(self):
+        #pylint: disable=import-outside-toplevel,unused-import
+        import google.auth
+        assert True
