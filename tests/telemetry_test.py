@@ -956,8 +956,7 @@ class ShardStatsTests(TestCase):
         recorder = telemetry.ShardStatsRecorder(cluster_name="remote",
                                                    client=client,
                                                    metrics_store=metrics_store,
-                                                   sample_interval=53,
-                                                   indices=["geonames"])
+                                                   sample_interval=53)
         recorder.record()
 
         shard_metadata = {
@@ -973,6 +972,79 @@ class ShardStatsTests(TestCase):
                 "docs": 1000,
                 "store": 212027,
                 "segments_count": 8,
+                "node": "rally0"
+            }, level=MetaInfoScope.cluster, meta_data=shard_metadata)
+        ],  any_order=True)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_missing_properties_shard_stats(self, metrics_store_put_doc):
+        node_stats_response = {
+            "cluster_name": "elasticsearch",
+            "nodes": {
+                "Zbl_e8EyRXmiR47gbHgPfg": {
+                    "timestamp": 1524379617017,
+                    "name": "rally0",
+                    "transport_address": "127.0.0.1:9300",
+                    "host": "127.0.0.1",
+                    "ip": "127.0.0.1:9300",
+                    "roles": [
+                        "master",
+                        "data",
+                        "ingest"
+                    ],
+                    "indices": {
+                        "docs": {
+                            "count": 76892364,
+                            "deleted": 324530
+                        },
+                        "store": {
+                            "size_in_bytes": 983409834
+                        },
+                        "shards" : {
+                             "geonames": [
+                            {
+                              "0" : {
+                                "routing" : {
+                                  "state" : "STARTED",
+                                  "primary" : True,
+                                  "node" : "gHQpKO-IT5uo8WVTPmAZXw",
+                                  "relocating_node" : None
+                                },
+                                "store" : {
+                                  "size_in_bytes" : 212027,
+                                  "reserved_in_bytes" : 0
+                                }
+                              }
+                            }
+                          ]
+                        }
+                    }
+                }
+            }
+        }
+
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.ShardStatsRecorder(cluster_name="remote",
+                                                   client=client,
+                                                   metrics_store=metrics_store,
+                                                   sample_interval=53)
+        recorder.record()
+
+        shard_metadata = {
+            "cluster": "remote"
+        }
+
+        metrics_store_put_doc.assert_has_calls([
+            mock.call({
+                "name": "shard-stats",
+                "shard-id": "0",
+                "index": "geonames",
+                "primary": True,
+                "docs": -1,
+                "store": 212027,
+                "segments_count": -1,
                 "node": "rally0"
             }, level=MetaInfoScope.cluster, meta_data=shard_metadata)
         ],  any_order=True)
