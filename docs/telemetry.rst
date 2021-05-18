@@ -28,6 +28,7 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    segment-stats               Segment Stats               Determines segment stats at the end of the benchmark.
    transform-stats             Transform Stats             Regularly samples transform stats
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
+   shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -165,3 +166,25 @@ Supported telemetry parameters:
 
 * ``searchable-snapshots-stats-indices`` (default: None): A string with the index/index pattern, or list of indices/index patterns that searchable snapshots stats should additionally be collected from. If unset, only cluster level stats will be collected.
 * ``searchable-snapshots-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+
+shard-stats
+--------------
+
+The shard-stats telemetry device regularly calls the `cluster nodes-stats API with level=shard parameter <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records one metrics document per shard.
+
+Example of a recorded document::
+
+   {
+     "name": "shard-stats",
+     "shard-id": "0",
+     "index": "geonames",
+     "primary": true,
+     "docs": 1000,
+     "store": 212027,
+     "segments-count": 8,
+     "node": "rally0"
+   }
+
+Supported telemetry parameters:
+
+* ``shard-stats-sample-interval`` (default 60): A positive number greater than zero denoting the sampling interval in seconds.
