@@ -667,7 +667,7 @@ class ShardStatsRecorder:
                             "primary": curr_stats.get("routing", {}).get("primary"),
                             "docs": curr_stats.get("docs", {}).get("count", -1),
                             "store": curr_stats.get("store", {}).get("size_in_bytes", -1),
-                            "segments_count":  curr_stats.get("segments", {}).get("count", -1),
+                            "segments-count":  curr_stats.get("segments", {}).get("count", -1),
                             "node": node_name
                         }
                         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)

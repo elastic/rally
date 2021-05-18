@@ -170,18 +170,18 @@ Supported telemetry parameters:
 shard-stats
 --------------
 
-The shard-stats telemetry device regularly calls the `cluster node-stats API with level=shard parameter <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records one metrics document per shard.
+The shard-stats telemetry device regularly calls the `cluster nodes-stats API with level=shard parameter <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records one metrics document per shard.
 
-Example of the recorded document::
+Example of a recorded document::
 
    {
      "name": "shard-stats",
      "shard-id": "0",
      "index": "geonames",
-     "primary": True,
+     "primary": true,
      "docs": 1000,
      "store": 212027,
-     "segments_count": 8,
+     "segments-count": 8,
      "node": "rally0"
    }
 

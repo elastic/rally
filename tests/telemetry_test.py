@@ -971,7 +971,7 @@ class ShardStatsTests(TestCase):
                 "primary": True,
                 "docs": 1000,
                 "store": 212027,
-                "segments_count": 8,
+                "segments-count": 8,
                 "node": "rally0"
             }, level=MetaInfoScope.cluster, meta_data=shard_metadata)
         ],  any_order=True)
@@ -1044,7 +1044,7 @@ class ShardStatsTests(TestCase):
                 "primary": True,
                 "docs": -1,
                 "store": 212027,
-                "segments_count": -1,
+                "segments-count": -1,
                 "node": "rally0"
             }, level=MetaInfoScope.cluster, meta_data=shard_metadata)
         ],  any_order=True)
