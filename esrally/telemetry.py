@@ -671,7 +671,6 @@ class ShardStatsRecorder:
                             "node": node_name
                         }
                         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
-                        print(f"shards {doc}")
 
 
 class NodeStats(TelemetryDevice):
