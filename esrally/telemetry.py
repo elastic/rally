@@ -589,6 +589,7 @@ class ShardStats(TelemetryDevice):
 
         self.telemetry_params = telemetry_params
         self.clients = clients
+        self.specified_cluster_names = self.clients.keys()
         self.sample_interval = telemetry_params.get("shard-stats-sample-interval", 60)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
