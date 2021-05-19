@@ -228,4 +228,4 @@ Now you can run benchmarks with the custom Elasticsearch plugin, e.g. with ``esr
 For this to work you need ensure two things:
 
 1. The plugin needs to be available for the version that you want to benchmark (7.12.0 in the example above).
-2. Rally will choose the most appropriate branch in the team repository before starting the benchmark. See the documentation on :ref:`how branches are mapped to Elasticsearch versions <track-repositories-fall-back-logic>`.
+2. Rally will choose the most appropriate branch in the team repository before starting the benchmark. See the documentation on :ref:`how branches are mapped to Elasticsearch versions <track-repositories-branch-logic>`.
