@@ -549,8 +549,11 @@ class AllocatorTests(TestCase):
     def setUp(self):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
 
-    def ta(self, task, client_index_in_task):
-        return driver.TaskAllocation(task, client_index_in_task)
+    def ta(self, task, client_index_in_task, global_client_index=None, total_clients=None):
+        return driver.TaskAllocation(task,
+                                     client_index_in_task,
+                                     client_index_in_task if global_client_index is None else global_client_index,
+                                     task.clients if total_clients is None else total_clients)
 
     def test_allocates_one_task(self):
         task = track.Task("index", op("index", track.OperationType.Bulk))
@@ -626,6 +629,7 @@ class AllocatorTests(TestCase):
             self.assertFalse(join_point.preceding_task_completes_parent)
             self.assertEqual(0, join_point.num_clients_executing_completing_task)
 
+    # TODO (follow-up PR): We should probably forbid this
     def test_allocates_more_tasks_than_clients(self):
         index_a = track.Task("index-a", op("index-a", track.OperationType.Bulk))
         index_b = track.Task("index-b", op("index-b", track.OperationType.Bulk), completes_parent=True)
@@ -644,11 +648,22 @@ class AllocatorTests(TestCase):
         # join_point, index_a, index_c, index_e, join_point
         self.assertEqual(5, len(allocations[0]))
         # we really have no chance to extract the join point so we just take what is there...
-        self.assertEqual([allocations[0][0], self.ta(index_a, 0), self.ta(index_c, 0), self.ta(index_e, 0), allocations[0][4]],
-                         allocations[0])
+        self.assertEqual([
+            allocations[0][0],
+            self.ta(index_a, client_index_in_task=0, global_client_index=0, total_clients=2),
+            self.ta(index_c, client_index_in_task=0, global_client_index=2, total_clients=2),
+            self.ta(index_e, client_index_in_task=0, global_client_index=4, total_clients=2),
+            allocations[0][4]
+        ], allocations[0])
         # join_point, index_a, index_c, None, join_point
         self.assertEqual(5, len(allocator.allocations[1]))
-        self.assertEqual([allocations[1][0], self.ta(index_b, 0), self.ta(index_d, 0), None, allocations[1][4]], allocations[1])
+        self.assertEqual([
+            allocations[1][0],
+            self.ta(index_b, client_index_in_task=0, global_client_index=1, total_clients=2),
+            self.ta(index_d, client_index_in_task=0, global_client_index=3, total_clients=2),
+            None,
+            allocations[1][4]
+        ], allocations[1])
 
         self.assertEqual([{index_a, index_b, index_c, index_d, index_e}], allocator.tasks_per_joinpoint)
         self.assertEqual(2, len(allocator.join_points))
@@ -657,6 +672,7 @@ class AllocatorTests(TestCase):
         self.assertEqual(1, final_join_point.num_clients_executing_completing_task)
         self.assertEqual([1], final_join_point.clients_executing_completing_task)
 
+    # TODO (follow-up PR): We should probably forbid this
     def test_considers_number_of_clients_per_subtask(self):
         index_a = track.Task("index-a", op("index-a", track.OperationType.Bulk))
         index_b = track.Task("index-b", op("index-b", track.OperationType.Bulk))
@@ -675,16 +691,31 @@ class AllocatorTests(TestCase):
         # join_point, index_a, index_c, join_point
         self.assertEqual(4, len(allocations[0]))
         # we really have no chance to extract the join point so we just take what is there...
-        self.assertEqual([allocations[0][0], self.ta(index_a, 0), self.ta(index_c, 1), allocations[0][3]], allocations[0])
+        self.assertEqual([
+            allocations[0][0],
+            self.ta(index_a, client_index_in_task=0, global_client_index=0, total_clients=3),
+            self.ta(index_c, client_index_in_task=1, global_client_index=3, total_clients=3),
+            allocations[0][3]
+        ], allocations[0])
 
         # task that client 1 will execute:
         # join_point, index_b, None, join_point
         self.assertEqual(4, len(allocator.allocations[1]))
-        self.assertEqual([allocations[1][0], self.ta(index_b, 0), None, allocations[1][3]], allocations[1])
+        self.assertEqual([
+            allocations[1][0],
+            self.ta(index_b, client_index_in_task=0, global_client_index=1, total_clients=3),
+            None,
+            allocations[1][3]
+        ], allocations[1])
 
         # tasks that client 2 will execute:
         self.assertEqual(4, len(allocator.allocations[2]))
-        self.assertEqual([allocations[2][0], self.ta(index_c, 0), None, allocations[2][3]], allocations[2])
+        self.assertEqual([
+            allocations[2][0],
+            self.ta(index_c, client_index_in_task=0, global_client_index=2, total_clients=3),
+            None,
+            allocations[2][3]
+        ], allocations[2])
 
         self.assertEqual([{index_a, index_b, index_c}], allocator.tasks_per_joinpoint)
 
@@ -806,6 +837,7 @@ class SchedulerTests(TestCase):
 
     async def assert_schedule(self, expected_schedule, schedule_handle, infinite_schedule=False):
         idx = 0
+        schedule_handle.start()
         async for invocation_time, sample_type, progress_percent, runner, params in schedule_handle():
             schedule_handle.before_request(now=idx)
             exp_invocation_time, exp_sample_type, exp_progress_percent, exp_params = expected_schedule[idx]
@@ -848,8 +880,12 @@ class SchedulerTests(TestCase):
                               "target-throughput": "5000 ops/s"
                           })
 
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         self.assertIsNotNone(schedule.sched.parameter_source, "Parameter source has not been injected into scheduler")
         self.assertEqual(param_source, schedule.sched.parameter_source)
@@ -860,7 +896,11 @@ class SchedulerTests(TestCase):
                                                     param_source="driver-test-param-source"),
                           warmup_iterations=3, iterations=5, clients=1, params={"target-throughput": 10, "clients": 1})
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 1 / 8, {}),
@@ -880,7 +920,11 @@ class SchedulerTests(TestCase):
                                                     param_source="driver-test-param-source"),
                           warmup_iterations=1, iterations=5, clients=2, params={"target-throughput": 10, "clients": 2})
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         expected_schedule = [
             (0, metrics.SampleType.Warmup, 1 / 6, {}),
@@ -901,7 +945,11 @@ class SchedulerTests(TestCase):
                           clients=4, params={"target-throughput": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 3, {"body": ["a"], "size": 3}),
@@ -917,7 +965,11 @@ class SchedulerTests(TestCase):
                           warmup_iterations=2, clients=4, params={"target-throughput": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Warmup, 1 / 5, {"body": ["a"], "size": 5}),
@@ -936,7 +988,11 @@ class SchedulerTests(TestCase):
                           clients=1, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 1, {"body": ["a"]}),
@@ -950,7 +1006,11 @@ class SchedulerTests(TestCase):
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 11, {"body": ["a"], "size": 11}),
@@ -974,7 +1034,11 @@ class SchedulerTests(TestCase):
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
@@ -992,7 +1056,11 @@ class SchedulerTests(TestCase):
                           warmup_time_period=0, clients=4, params={"target-throughput": 4, "clients": 4})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, 1 / 5, {"body": ["a"], "size": 5}),
@@ -1011,7 +1079,11 @@ class SchedulerTests(TestCase):
                           params={"target-throughput": 1, "clients": 1})
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         await self.assert_schedule([
             (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
@@ -1031,7 +1103,12 @@ class SchedulerTests(TestCase):
                           clients=1)
 
         param_source = track.operation_parameters(self.test_track, task)
-        schedule_handle = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule_handle = driver.schedule_for(task_allocation, param_source)
+        schedule_handle.start()
         schedule = schedule_handle()
 
         last_progress = -1
@@ -1155,7 +1232,11 @@ class AsyncExecutorTests(TestCase):
                                                         param_source="driver-test-param-source"),
                           warmup_time_period=0, clients=4)
         param_source = track.operation_parameters(test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         sampler = driver.Sampler(start_timestamp=task_start)
         cancel = threading.Event()
@@ -1210,7 +1291,11 @@ class AsyncExecutorTests(TestCase):
             "size": None
         }, param_source="driver-test-param-source"), warmup_time_period=0, clients=4)
         param_source = track.operation_parameters(test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         sampler = driver.Sampler(start_timestamp=task_start)
         cancel = threading.Event()
@@ -1272,7 +1357,11 @@ class AsyncExecutorTests(TestCase):
                                                                  param_source="driver-test-param-source"),
                           warmup_iterations=0, iterations=1, clients=1)
         param_source = track.operation_parameters(test_track, task)
-        schedule = driver.schedule_for(task, 0, param_source)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                client_index_in_task=0,
+                                                global_client_index=0,
+                                                total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
 
         sampler = driver.Sampler(start_timestamp=task_start)
         cancel = threading.Event()
@@ -1347,7 +1436,11 @@ class AsyncExecutorTests(TestCase):
             complete = threading.Event()
 
             param_source = track.operation_parameters(test_track, task)
-            schedule = driver.schedule_for(task, 0, param_source)
+            task_allocation = driver.TaskAllocation(task=task,
+                                                    client_index_in_task=0,
+                                                    global_client_index=0,
+                                                    total_clients=task.clients)
+            schedule = driver.schedule_for(task_allocation, param_source)
             execute_schedule = driver.AsyncExecutor(client_id=0,
                                                     task=task,
                                                     schedule=schedule,
@@ -1397,7 +1490,11 @@ class AsyncExecutorTests(TestCase):
                               params={"target-throughput": target_throughput, "clients": 4})
 
             param_source = track.operation_parameters(test_track, task)
-            schedule = driver.schedule_for(task, 0, param_source)
+            task_allocation = driver.TaskAllocation(task=task,
+                                                    client_index_in_task=0,
+                                                    global_client_index=0,
+                                                    total_clients=task.clients)
+            schedule = driver.schedule_for(task_allocation, param_source)
             sampler = driver.Sampler(start_timestamp=0)
 
             cancel = threading.Event()
@@ -1433,10 +1530,16 @@ class AsyncExecutorTests(TestCase):
             raise ExpectedUnitTestException()
 
         class ScheduleHandle:
+            def __init__(self):
+                self.ramp_up_wait_time = 0
+
             def before_request(self, now):
                 pass
 
             def after_request(self, now, weight, unit, meta_data):
+                pass
+
+            def start(self):
                 pass
 
             async def __call__(self):

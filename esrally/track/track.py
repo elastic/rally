@@ -838,7 +838,8 @@ class Task:
     IGNORE_RESPONSE_ERROR_LEVEL_WHITELIST = ["non-fatal"]
 
     def __init__(self, name, operation, tags=None, meta_data=None, warmup_iterations=None, iterations=None,
-                 warmup_time_period=None, time_period=None, clients=1, completes_parent=False, schedule=None, params=None):
+                 warmup_time_period=None, time_period=None, ramp_up_time_period=None, clients=1, completes_parent=False,
+                 schedule=None, params=None):
         self.name = name
         self.operation = operation
         if isinstance(tags, str):
@@ -852,6 +853,7 @@ class Task:
         self.iterations = iterations
         self.warmup_time_period = warmup_time_period
         self.time_period = time_period
+        self.ramp_up_time_period = ramp_up_time_period
         self.clients = clients
         self.completes_parent = completes_parent
         self.schedule = schedule
@@ -932,16 +934,17 @@ class Task:
     def __hash__(self):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)
         return hash(self.name) ^ hash(self.operation) ^ hash(self.warmup_iterations) ^ hash(self.iterations) ^ \
-               hash(self.warmup_time_period) ^ hash(self.time_period) ^ hash(self.clients) ^ hash(self.schedule) ^ \
-               hash(self.completes_parent)
+               hash(self.warmup_time_period) ^ hash(self.time_period) ^ hash(self.ramp_up_time_period) ^ \
+               hash(self.clients) ^ hash(self.schedule) ^ hash(self.completes_parent)
 
     def __eq__(self, other):
         # Note that we do not include `params` in __hash__ and __eq__ (the other attributes suffice to uniquely define a task)
-        return isinstance(other, type(self)) and (self.name, self.operation, self.warmup_iterations, self.iterations,
-                                                  self.warmup_time_period, self.time_period, self.clients, self.schedule,
-                                                  self.completes_parent) == (other.name, other.operation, other.warmup_iterations,
-                                                                             other.iterations, other.warmup_time_period, other.time_period,
-                                                                             other.clients, other.schedule, other.completes_parent)
+        return isinstance(other, type(self)) and \
+               (self.name, self.operation, self.warmup_iterations, self.iterations, self.warmup_time_period,
+                self.time_period, self.ramp_up_time_period, self.clients, self.schedule,
+                self.completes_parent) == (other.name, other.operation, other.warmup_iterations, other.iterations,
+                                           other.warmup_time_period, other.time_period, other.ramp_up_time_period,
+                                           other.clients, other.schedule, other.completes_parent)
 
     def __iter__(self):
         return iter([self])

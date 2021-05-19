@@ -1773,8 +1773,8 @@ class TrackSpecificationReaderTests(TestCase):
         }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines '3' warmup "
-                         "iterations and a time period of '60' seconds. Please do not mix time periods and iterations.",
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines 3 warmup "
+                         "iterations and a time period of 60 seconds but mixing time periods and iterations is not allowed.",
                          ctx.exception.args[0])
 
     @mock.patch("esrally.track.loader.register_all_params_in_track")
@@ -1900,7 +1900,7 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines a warmup time "
-                         "period of '20' seconds and '1000' iterations. Please do not mix time periods and iterations.",
+                         "period of 20 seconds and 1000 iterations but mixing time periods and iterations is not allowed.",
                          ctx.exception.args[0])
 
     def test_parse_duplicate_implicit_task_names(self):
@@ -3468,7 +3468,7 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' contains multiple tasks with "
-                         "the name 'index-1' which are marked with 'completed-by' but only task is allowed to match.",
+                         "the name 'index-1' marked with 'completed-by' but only task is allowed to match.",
                          ctx.exception.args[0])
 
     def test_propagate_parameters_to_challenge_level(self):
