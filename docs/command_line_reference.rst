@@ -716,6 +716,13 @@ Here we define the necessary responses for a track that bulk-indexes data::
         "body-encoding": "json"
       },
       {
+        "path": "/_cluster/settings",
+        "body": {
+          "transient": {}
+        },
+        "body-encoding": "json"
+      },
+      {
         "path": "/_all/_stats/_all",
         "body": {
           "_all": {
