@@ -77,7 +77,7 @@ install_requires = [
     # License: Apache 2.0
     # transitive dependencies:
     #   google-crc32c: Apache 2.0
-    "google-resumable-media==1.1.0",
+    "google-resumable-media[requests]==1.1.0",
     # License: Apache 2.0
     "google-auth==1.22.1"
 ]
