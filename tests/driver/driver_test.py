@@ -1098,6 +1098,7 @@ class SchedulerTests(TestCase):
         task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.to_hyphenated_string(),
                                                         params={"body": ["a"], "size": 11},
                                                         param_source="driver-test-param-source"),
+                          ramp_up_time_period=0.1,
                           warmup_time_period=0.1,
                           time_period=0.1,
                           clients=1)
@@ -1109,6 +1110,8 @@ class SchedulerTests(TestCase):
                                                 total_clients=task.clients)
         schedule_handle = driver.schedule_for(task_allocation, param_source)
         schedule_handle.start()
+        # first client does not wait
+        self.assertEqual(0.0, schedule_handle.ramp_up_wait_time)
         schedule = schedule_handle()
 
         last_progress = -1
@@ -1126,6 +1129,46 @@ class SchedulerTests(TestCase):
             self.assertTrue(round(progress_percent, 2) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
             self.assertIsNotNone(runner, "runner must be defined")
             self.assertEqual({"body": ["a"], "size": 11}, params)
+
+    @run_async
+    async def test_schedule_for_time_based_with_multiple_clients(self):
+        task = track.Task("time-based", track.Operation("time-based", track.OperationType.Bulk.to_hyphenated_string(),
+                                                        params={"body": ["a"], "size": 11},
+                                                        param_source="driver-test-param-source"),
+                          ramp_up_time_period=0.1,
+                          warmup_time_period=0.1,
+                          time_period=0.1,
+                          clients=4)
+
+        param_source = track.operation_parameters(self.test_track, task)
+        task_allocation = driver.TaskAllocation(task=task,
+                                                # assume this task is embedded in a parallel structure
+                                                # with 8 clients in total
+                                                client_index_in_task=0,
+                                                global_client_index=4,
+                                                total_clients=8)
+        schedule_handle = driver.schedule_for(task_allocation, param_source)
+        schedule_handle.start()
+        # client number 4 out of 8 -> 0.1 * (4 / 8) = 0.05
+        self.assertEqual(0.05, schedule_handle.ramp_up_wait_time)
+        schedule = schedule_handle()
+
+        last_progress = -1
+
+        async for invocation_time, sample_type, progress_percent, runner, params in schedule:
+            # we're not throughput throttled
+            self.assertEqual(0, invocation_time)
+            if progress_percent <= 0.5:
+                self.assertEqual(metrics.SampleType.Warmup, sample_type)
+            else:
+                self.assertEqual(metrics.SampleType.Normal, sample_type)
+            self.assertTrue(last_progress < progress_percent)
+            last_progress = progress_percent
+            self.assertTrue(round(progress_percent, 2) >= 0.0, "progress should be >= 0.0 but was [%f]" % progress_percent)
+            self.assertTrue(round(progress_percent, 2) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
+            self.assertIsNotNone(runner, "runner must be defined")
+            self.assertEqual({"body": ["a"], "size": 11}, params)
+
 
 
 class AsyncExecutorTests(TestCase):
