@@ -271,6 +271,7 @@ The number of hits from queries can also be investigated if you have configured 
 	{
 	  "@timestamp" : 1597681313435,
 	  "relative-time-ms" : 130273.374,
+	  "relative-time" : 130273.374,
 	  "race-id" : "452ad9d7-9c21-4828-848e-89974af3230e",
 	  "race-timestamp" : "20200817T160412Z",
 	  "environment" : "Personal",
