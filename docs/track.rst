@@ -447,7 +447,7 @@ The ``schedule`` element contains a list of tasks that are executed by Rally, i.
 * ``clients`` (optional, defaults to 1): The number of clients that should execute a task concurrently.
 * ``warmup-iterations`` (optional, defaults to 0): Number of iterations that each client should execute to warmup the benchmark candidate. Warmup iterations will not show up in the measurement results.
 * ``iterations`` (optional, defaults to 1): Number of measurement iterations that each client executes. The command line report will automatically adjust the percentile numbers based on this number (i.e. if you just run 5 iterations you will not get a 99.9th percentile because we need at least 1000 iterations to determine this value precisely).
-* ``ramp-up-time-period`` (optional, defaults to 0): Rally will start clients gradually. It reaches the number specified by ``clients`` at the end of the specified time period in seconds. See the section on :ref:`ramp-up <track_ramp_up>` for more details.
+* ``ramp-up-time-period`` (optional, defaults to 0): Rally will start clients gradually. It reaches the number specified by ``clients`` at the end of the specified time period in seconds. This property requires ``warmup-time-period`` to be set as well, which must be greater than or equal to the ramp-up time. See the section on :ref:`ramp-up <track_ramp_up>` for more details.
 * ``warmup-time-period`` (optional, defaults to 0): A time period in seconds that Rally considers for warmup of the benchmark candidate. All response data captured during warmup will not show up in the measurement results.
 * ``time-period`` (optional): A time period in seconds that Rally considers for measurement. Note that for bulk indexing you should usually not define this time period. Rally will just bulk index all documents and consider every sample after the warmup time period as measurement sample.
 * ``schedule`` (optional, defaults to ``deterministic``): Defines the schedule for this task, i.e. it defines at which point in time during the benchmark an operation should be executed. For example, if you specify a ``deterministic`` schedule and a target-interval of 5 (seconds), Rally will attempt to execute the corresponding operation at second 0, 5, 10, 15 ... . Out of the box, Rally supports ``deterministic`` and ``poisson`` but you can define your own :doc:`custom schedules </adding_tracks>`.
@@ -579,10 +579,6 @@ For benchmarks involving many clients it can be useful to increase load graduall
 .. image:: track-ramp-up.png
    :alt: How ramp-up works
 
-.. note::
-
-    As the number of clients and thus the throughput varies during ramp-up, you should set ``warmup-time-period`` at least to the same value as ``ramp-up-time-period`` to get stable measurement results.
-
 
 Time-based vs. iteration-based
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -592,7 +588,7 @@ You should usually use time periods for batch style operations and iterations fo
 All tasks in the ``schedule`` list are executed sequentially in the order in which they have been defined. However, it is also possible to execute multiple tasks concurrently, by wrapping them in a ``parallel`` element. The ``parallel`` element defines of the following properties:
 
 * ``clients`` (optional): The number of clients that should execute the provided tasks. If you specify this property, Rally will only use as many clients as you have defined on the ``parallel`` element (see examples)!
-* ``ramp-up-time-period`` (optional, defaults to 0): The time-period in seconds across all nested tasks to spend in ramp-up. If this property is defined here, it cannot be overridden in nested tasks. See the section on :ref:`ramp-up <track_ramp_up>` for more details.
+* ``ramp-up-time-period`` (optional, defaults to 0): The time-period in seconds across all nested tasks to spend in ramp-up. If this property is defined here, it cannot be overridden in nested tasks. This property requires ``warmup-time-period`` to be set as well, which must be greater than or equal to the ramp-up time. See the section on :ref:`ramp-up <track_ramp_up>` for more details.
 * ``warmup-time-period`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``time-period`` (optional, no default value if not specified): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``warmup-iterations`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.

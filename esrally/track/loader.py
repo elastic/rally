@@ -1486,6 +1486,16 @@ class TrackSpecificationReader:
                         f"{task.ramp_up_time_period} seconds as well as {task.warmup_iterations} warmup iterations and "
                         f"{task.iterations} iterations but mixing time periods and iterations is not allowed.")
 
+        if task.ramp_up_time_period is not None:
+            if task.warmup_time_period is None:
+                self._error(f"Operation '{op.name}' in challenge '{challenge_name}' defines a ramp-up time period of "
+                            f"{task.ramp_up_time_period} seconds but no warmup-time-period.")
+            elif task.warmup_time_period < task.ramp_up_time_period:
+                self._error(f"The warmup-time-period of operation '{op.name}' in challenge '{challenge_name}' is "
+                            f"{task.warmup_time_period} seconds but must be greater than or equal to the "
+                            f"ramp-up-time-period of {task.ramp_up_time_period} seconds.")
+
+
         return task
 
     def parse_operations(self, ops_specs):

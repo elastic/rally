@@ -3207,6 +3207,67 @@ class TrackSpecificationReaderTests(TestCase):
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(5, resulting_track.challenges[0].schedule[0].params["target-interval"])
 
+    def test_ramp_up_but_no_warmup(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk"
+                }
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "index-append",
+                        "target-throughput": 10,
+                        "ramp-up-time-period": 60
+                    }
+                ]
+            }
+        }
+
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' "
+                         "defines a ramp-up time period of 60 seconds but no warmup-time-period.",
+                         ctx.exception.args[0])
+
+    def test_warmup_shorter_than_ramp_up(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk"
+                }
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "index-append",
+                        "target-throughput": 10,
+                        "ramp-up-time-period": 60,
+                        "warmup-time-period": 59
+                    }
+                ]
+            }
+        }
+
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. The warmup-time-period of operation 'index-append' in "
+                         "challenge 'default-challenge' is 59 seconds but must be greater than or equal to the "
+                         "ramp-up-time-period of 60 seconds.", ctx.exception.args[0])
+
+
+
     def test_parallel_tasks_with_default_values(self):
         track_specification = {
             "description": "description for unit test",
