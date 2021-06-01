@@ -28,6 +28,11 @@
                 "type": "integer",
                 "minimum": 1
               },
+              "ramp-up-time-period": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Defines the time period in seconds to gradually increase the number of clients."
+              },
               "warmup-time-period": {
                 "type": "integer",
                 "minimum": 0,
@@ -74,6 +79,11 @@
                       "type": "integer",
                       "minimum": 1,
                       "description": "Defines the number of times to run the operation."
+                    },
+                    "ramp-up-time-period": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Defines the time period in seconds to gradually increase the number of clients."
                     },
                     "warmup-time-period": {
                       "type": "integer",
@@ -145,6 +155,11 @@
             "type": "integer",
             "minimum": 1,
             "description": "Defines the number of times to run the operation."
+          },
+          "ramp-up-time-period": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Defines the time period in seconds to gradually increase the number of clients."
           },
           "warmup-time-period": {
             "type": "integer",

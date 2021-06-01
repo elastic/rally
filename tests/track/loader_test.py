@@ -1721,8 +1721,7 @@ class TrackSpecificationReaderTests(TestCase):
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Mandatory element 'document-count' is missing.", ctx.exception.args[0])
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_with_mixed_warmup_iterations_and_measurement(self, mocked_params_checker):
+    def test_parse_with_mixed_warmup_iterations_and_measurement(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1773,12 +1772,68 @@ class TrackSpecificationReaderTests(TestCase):
         }))
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines '3' warmup "
-                         "iterations and a time period of '60' seconds. Please do not mix time periods and iterations.",
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines 3 warmup "
+                         "iterations and a time period of 60 seconds but mixing time periods and iterations is not allowed.",
                          ctx.exception.args[0])
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_missing_challenge_or_challenges(self, mocked_params_checker):
+    def test_parse_with_mixed_iterations_and_ramp_up(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [
+                {
+                    "name": "test-index",
+                    "body": "index.json",
+                    "types": ["docs"]
+                }
+            ],
+            "corpora": [
+                {
+                    "name": "test",
+                    "documents": [
+                        {
+                            "source-file": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000
+                        }
+                    ]
+                }
+            ],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk",
+                    "bulk-size": 5000,
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {
+                            "clients": 8,
+                            "operation": "index-append",
+                            "ramp-up-time-period": 120,
+                            "warmup-iterations": 3,
+                            "iterations": 5
+                        }
+                    ]
+                }
+
+            ]
+        }
+
+        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
+            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
+        }))
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' "
+                         "defines a ramp-up time period of 120 seconds as well as 3 warmup iterations and 5 iterations "
+                         "but mixing time periods and iterations is not allowed.",
+                         ctx.exception.args[0])
+
+    def test_parse_missing_challenge_or_challenges(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1811,8 +1866,7 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("Track 'unittest' is invalid. You must define 'challenge', 'challenges' or 'schedule' but none is specified.",
                          ctx.exception.args[0])
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_challenge_and_challenges_are_defined(self, mocked_params_checker):
+    def test_parse_challenge_and_challenges_are_defined(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1847,8 +1901,7 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("Track 'unittest' is invalid. Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only "
                          "one of them is allowed.", ctx.exception.args[0])
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_with_mixed_warmup_time_period_and_iterations(self, mocked_params_checker):
+    def test_parse_with_mixed_warmup_time_period_and_iterations(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -1900,7 +1953,7 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines a warmup time "
-                         "period of '20' seconds and '1000' iterations. Please do not mix time periods and iterations.",
+                         "period of 20 seconds and 1000 iterations but mixing time periods and iterations is not allowed.",
                          ctx.exception.args[0])
 
     def test_parse_duplicate_implicit_task_names(self):
@@ -1967,8 +2020,7 @@ class TrackSpecificationReaderTests(TestCase):
                          "'duplicate-task-name'. Please use the task's name property to assign a unique name for each task.",
                          ctx.exception.args[0])
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_load_invalid_index_body(self, mocked_params_checker):
+    def test_load_invalid_index_body(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -2368,8 +2420,7 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual({"append": True}, resulting_track.challenges[0].schedule[0].operation.meta_data)
         self.assertEqual({"operation-index": 0}, resulting_track.challenges[0].schedule[0].meta_data)
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_valid_without_types(self, mocked_param_checker):
+    def test_parse_valid_without_types(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -2448,8 +2499,7 @@ class TrackSpecificationReaderTests(TestCase):
         # challenges
         self.assertEqual(1, len(resulting_track.challenges))
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_invalid_data_streams_with_indices(self, mocked_param_checker):
+    def test_parse_invalid_data_streams_with_indices(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [
@@ -2494,8 +2544,7 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_invalid_data_streams_with_target_index(self, mocked_param_checker):
+    def test_parse_invalid_data_streams_with_target_index(self):
         track_specification = {
             "description": "description for unit test",
             "data-streams": [
@@ -2535,8 +2584,7 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_invalid_data_streams_with_target_type(self, mocked_param_checker):
+    def test_parse_invalid_data_streams_with_target_type(self):
         track_specification = {
             "description": "description for unit test",
             "data-streams": [
@@ -2576,8 +2624,7 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_invalid_no_data_stream_target(self, mocked_param_checker):
+    def test_parse_invalid_no_data_stream_target(self):
         track_specification = {
             "description": "description for unit test",
             "data-streams": [
@@ -2619,8 +2666,7 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
-    @mock.patch("esrally.track.loader.register_all_params_in_track")
-    def test_parse_valid_without_indices(self, mocked_param_checker):
+    def test_parse_valid_without_indices(self):
         track_specification = {
             "description": "description for unit test",
             "data-streams": [
@@ -3121,13 +3167,19 @@ class TrackSpecificationReaderTests(TestCase):
                     {
                         "operation": "index-append",
                         "target-throughput": 10,
+                        "warmup-time-period": 120,
+                        "ramp-up-time-period": 60
                     }
                 ]
             }
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
-        self.assertEqual(10, resulting_track.challenges[0].schedule[0].params["target-throughput"])
+
+        indexing_task = resulting_track.challenges[0].schedule[0]
+        self.assertEqual(10, indexing_task.params["target-throughput"])
+        self.assertEqual(120, indexing_task.warmup_time_period)
+        self.assertEqual(60, indexing_task.ramp_up_time_period)
 
     def test_supports_target_interval(self):
         track_specification = {
@@ -3155,6 +3207,67 @@ class TrackSpecificationReaderTests(TestCase):
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(5, resulting_track.challenges[0].schedule[0].params["target-interval"])
 
+    def test_ramp_up_but_no_warmup(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk"
+                }
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "index-append",
+                        "target-throughput": 10,
+                        "ramp-up-time-period": 60
+                    }
+                ]
+            }
+        }
+
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' "
+                         "defines a ramp-up time period of 60 seconds but no warmup-time-period.",
+                         ctx.exception.args[0])
+
+    def test_warmup_shorter_than_ramp_up(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk"
+                }
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "index-append",
+                        "target-throughput": 10,
+                        "ramp-up-time-period": 60,
+                        "warmup-time-period": 59
+                    }
+                ]
+            }
+        }
+
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. The warmup-time-period of operation 'index-append' in "
+                         "challenge 'default-challenge' is 59 seconds but must be greater than or equal to the "
+                         "ramp-up-time-period of 60 seconds.", ctx.exception.args[0])
+
+
+
     def test_parallel_tasks_with_default_values(self):
         track_specification = {
             "description": "description for unit test",
@@ -3181,6 +3294,7 @@ class TrackSpecificationReaderTests(TestCase):
                             "parallel": {
                                 "warmup-time-period": 2400,
                                 "time-period": 36000,
+                                "ramp-up-time-period": 300,
                                 "tasks": [
                                     {
                                         "operation": "index-1",
@@ -3213,18 +3327,21 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(3, len(parallel_tasks))
 
         self.assertEqual("index-1", parallel_tasks[0].operation.name)
+        self.assertEqual(300, parallel_tasks[0].ramp_up_time_period)
         self.assertEqual(300, parallel_tasks[0].warmup_time_period)
         self.assertEqual(36000, parallel_tasks[0].time_period)
         self.assertEqual(2, parallel_tasks[0].clients)
         self.assertFalse("target-throughput" in parallel_tasks[0].params)
 
         self.assertEqual("index-2", parallel_tasks[1].operation.name)
+        self.assertEqual(300, parallel_tasks[1].ramp_up_time_period)
         self.assertEqual(2400, parallel_tasks[1].warmup_time_period)
         self.assertEqual(3600, parallel_tasks[1].time_period)
         self.assertEqual(4, parallel_tasks[1].clients)
         self.assertFalse("target-throughput" in parallel_tasks[1].params)
 
         self.assertEqual("index-3", parallel_tasks[2].operation.name)
+        self.assertEqual(300, parallel_tasks[2].ramp_up_time_period)
         self.assertEqual(2400, parallel_tasks[2].warmup_time_period)
         self.assertEqual(36000, parallel_tasks[2].time_period)
         self.assertEqual(16, parallel_tasks[2].clients)
@@ -3468,7 +3585,103 @@ class TrackSpecificationReaderTests(TestCase):
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' contains multiple tasks with "
-                         "the name 'index-1' which are marked with 'completed-by' but only task is allowed to match.",
+                         "the name 'index-1' marked with 'completed-by' but only task is allowed to match.",
+                         ctx.exception.args[0])
+
+    def test_parallel_tasks_ramp_up_cannot_be_overridden(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "bulk"
+                },
+                {
+                    "name": "index-2",
+                    "operation-type": "bulk"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "warmup-time-period": 2400,
+                                "time-period": 36000,
+                                "ramp-up-time-period": 2400,
+                                "tasks": [
+                                    {
+                                        "name": "name-index-1",
+                                        "operation": "index-1",
+                                        "ramp-up-time-period": 500,
+                                    },
+                                    {
+                                        "name": "name-index-2",
+                                        "operation": "index-2"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. task 'name-index-1' specifies a different ramp-up-time-period "
+                         "than its enclosing 'parallel' element in challenge 'default-challenge'.",
+                         ctx.exception.args[0])
+
+    def test_parallel_tasks_ramp_up_only_on_parallel(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "bulk"
+                },
+                {
+                    "name": "index-2",
+                    "operation-type": "bulk"
+                }
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "warmup-time-period": 2400,
+                                "time-period": 36000,
+                                "tasks": [
+                                    {
+                                        "name": "name-index-1",
+                                        "operation": "index-1",
+                                        "ramp-up-time-period": 500,
+                                    },
+                                    {
+                                        "name": "name-index-2",
+                                        "operation": "index-2"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual("Track 'unittest' is invalid. task 'name-index-1' in 'parallel' element of challenge "
+                         "'default-challenge' specifies a ramp-up-time-period but it is only allowed on the 'parallel' "
+                         "element.",
                          ctx.exception.args[0])
 
     def test_propagate_parameters_to_challenge_level(self):

@@ -1407,6 +1407,7 @@ class TrackSpecificationReader:
         default_iterations = self._r(ops_spec, "iterations", error_ctx="parallel", mandatory=False)
         default_warmup_time_period = self._r(ops_spec, "warmup-time-period", error_ctx="parallel", mandatory=False)
         default_time_period = self._r(ops_spec, "time-period", error_ctx="parallel", mandatory=False)
+        default_ramp_up_time_period = self._r(ops_spec, "ramp-up-time-period", error_ctx="parallel", mandatory=False)
         clients = self._r(ops_spec, "clients", error_ctx="parallel", mandatory=False)
         completed_by = self._r(ops_spec, "completed-by", error_ctx="parallel", mandatory=False)
 
@@ -1414,22 +1415,33 @@ class TrackSpecificationReader:
         tasks = []
         for task in self._r(ops_spec, "tasks", error_ctx="parallel"):
             tasks.append(self.parse_task(task, ops, challenge_name, default_warmup_iterations, default_iterations,
-                                         default_warmup_time_period, default_time_period, completed_by))
+                                         default_warmup_time_period, default_time_period, default_ramp_up_time_period,
+                                         completed_by))
+        for task in tasks:
+            if task.ramp_up_time_period != default_ramp_up_time_period:
+                if default_ramp_up_time_period is None:
+                    self._error(f"task '{task.name}' in 'parallel' element of challenge '{challenge_name}' specifies "
+                                f"a ramp-up-time-period but it is only allowed on the 'parallel' element.")
+                else:
+                    self._error(f"task '{task.name}' specifies a different ramp-up-time-period than its enclosing "
+                                f"'parallel' element in challenge '{challenge_name}'.")
+
         if completed_by:
             completion_task = None
             for task in tasks:
                 if task.completes_parent and not completion_task:
                     completion_task = task
                 elif task.completes_parent:
-                    self._error("'parallel' element for challenge '%s' contains multiple tasks with the name '%s' which are marked with "
-                                "'completed-by' but only task is allowed to match." % (challenge_name, completed_by))
+                    self._error(f"'parallel' element for challenge '{challenge_name}' contains multiple tasks with the "
+                                f"name '{completed_by}' marked with 'completed-by' but only task is allowed to match.")
             if not completion_task:
-                self._error("'parallel' element for challenge '%s' is marked with 'completed-by' with task name '%s' but no task with "
-                            "this name exists." % (challenge_name, completed_by))
+                self._error(f"'parallel' element for challenge '{challenge_name}' is marked with 'completed-by' with "
+                            f"task name '{completed_by}' but no task with this name exists.")
         return track.Parallel(tasks, clients)
 
     def parse_task(self, task_spec, ops, challenge_name, default_warmup_iterations=None, default_iterations=None,
-                   default_warmup_time_period=None, default_time_period=None, completed_by_name=None):
+                   default_warmup_time_period=None, default_time_period=None, default_ramp_up_time_period=None,
+                   completed_by_name=None):
 
         op_spec = task_spec["operation"]
         if isinstance(op_spec, str) and op_spec in ops:
@@ -1440,6 +1452,7 @@ class TrackSpecificationReader:
 
         schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False)
         task_name = self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name)
+
         task = track.Task(name=task_name,
                           operation=op,
                           tags=self._r(task_spec, "tags", error_ctx=op.name, mandatory=False),
@@ -1452,17 +1465,36 @@ class TrackSpecificationReader:
                                                      default_value=default_warmup_time_period),
                           time_period=self._r(task_spec, "time-period", error_ctx=op.name, mandatory=False,
                                               default_value=default_time_period),
+                          ramp_up_time_period=self._r(task_spec, "ramp-up-time-period", error_ctx=op.name,
+                                                      mandatory=False, default_value=default_ramp_up_time_period),
                           clients=self._r(task_spec, "clients", error_ctx=op.name, mandatory=False, default_value=1),
                           completes_parent=(task_name == completed_by_name),
                           schedule=schedule,
                           # this is to provide scheduler-specific parameters for custom schedulers.
                           params=task_spec)
         if task.warmup_iterations is not None and task.time_period is not None:
-            self._error("Operation '%s' in challenge '%s' defines '%d' warmup iterations and a time period of '%d' seconds. Please do not "
-                        "mix time periods and iterations." % (op.name, challenge_name, task.warmup_iterations, task.time_period))
+            self._error(f"Operation '{op.name}' in challenge '{challenge_name}' defines {task.warmup_iterations} "
+                        f"warmup iterations and a time period of {task.time_period} seconds but mixing time periods "
+                        f"and iterations is not allowed.")
         elif task.warmup_time_period is not None and task.iterations is not None:
-            self._error("Operation '%s' in challenge '%s' defines a warmup time period of '%d' seconds and '%d' iterations. Please do not "
-                        "mix time periods and iterations." % (op.name, challenge_name, task.warmup_time_period, task.iterations))
+            self._error(f"Operation '{op.name}' in challenge '{challenge_name}' defines a warmup time period of "
+                        f"{task.warmup_time_period} seconds and {task.iterations} iterations but mixing time periods "
+                        f"and iterations is not allowed.")
+
+        if (task.warmup_iterations is not None or task.iterations is not None) and task.ramp_up_time_period is not None:
+            self._error(f"Operation '{op.name}' in challenge '{challenge_name}' defines a ramp-up time period of "
+                        f"{task.ramp_up_time_period} seconds as well as {task.warmup_iterations} warmup iterations and "
+                        f"{task.iterations} iterations but mixing time periods and iterations is not allowed.")
+
+        if task.ramp_up_time_period is not None:
+            if task.warmup_time_period is None:
+                self._error(f"Operation '{op.name}' in challenge '{challenge_name}' defines a ramp-up time period of "
+                            f"{task.ramp_up_time_period} seconds but no warmup-time-period.")
+            elif task.warmup_time_period < task.ramp_up_time_period:
+                self._error(f"The warmup-time-period of operation '{op.name}' in challenge '{challenge_name}' is "
+                            f"{task.warmup_time_period} seconds but must be greater than or equal to the "
+                            f"ramp-up-time-period of {task.ramp_up_time_period} seconds.")
+
 
         return task
 
