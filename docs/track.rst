@@ -2035,6 +2035,29 @@ Properties
 * ``request-params`` (optional): A structure containing HTTP request parameters.
 * ``ignore`` (optional): An array of HTTP response status codes to ignore (i.e. consider as successful).
 
+In the following example we show how Rally can be used to benchmark a hypothetical self-diagnostics API that is provided by custom plugin::
+
+    {
+      "schedule": [
+        {
+          "name": "self-diagnostics",
+          "operation": {
+            "operation-type": "raw",
+            "path": "/_my_custom_system_diag",
+            "method": "GET",
+            "body": {
+              "include-metrics": ["system", "jvm"],
+              "exclude-metrics": ["hardware"]
+            },
+            "warmup-iterations": 100,
+            "iterations": 100,
+            "target-throughput": 10
+          }
+        }
+      ]
+    }
+
+
 Meta-data
 """""""""
 
