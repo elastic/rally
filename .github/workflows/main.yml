@@ -3,7 +3,7 @@ on: [push]
 jobs:
   Explore-GitHub-Actions:
     runs-on: ubuntu-latest
-    steps:
+    steps:  
       - name: Check out repository code
         uses: actions/checkout@v2
       - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
@@ -12,4 +12,6 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - run: bash .ci/build.sh build
+        env:
+          RALLY_HOME: env.GITHUB_WORKSPACE
       - run: echo "🍏 This job's status is ${{ job.status }}."
