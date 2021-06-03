@@ -1,4 +1,4 @@
-name: OpenSearch Benchmark Actions
+name: CI Actions
 on: [pull_request]
 jobs:
   Unit-Tests:
