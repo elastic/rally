@@ -442,9 +442,16 @@ class BarCharts:
         }
 
     @staticmethod
-    def query(environment, race_config, q):
+    def query(environment, race_config, q, iterations):
         metric = "service_time"
-        title = BarCharts.format_title(environment, race_config.track, suffix="%s-%s-p99-%s" % (race_config.label, q, metric))
+        if iterations < 100:
+            prefix = "p90"
+            field= "value.90_0"
+        else:
+            prefix = "p99"
+            field= "value.99_0"
+            
+        title = BarCharts.format_title(environment, race_config.track, suffix=f"{race_config.label}-{q}-{prefix}-{metric}")
         label = "Query Service Time [ms]"
 
         vis_state = {
@@ -533,7 +540,7 @@ class BarCharts:
                     "type": "median",
                     "schema": "metric",
                     "params": {
-                        "field": "value.99_0",
+                        "field": field,
                         "percents": [
                             50
                         ],
@@ -1165,7 +1172,7 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
-    def query(environment, race_config, q):
+    def query(environment, race_config, q, iterations):
         metric = "latency"
         title = TimeSeriesCharts.format_title(environment, race_config.track, es_license=race_config.es_license,
                                               suffix="%s-%s-%s" % (race_config.label, q, metric))
@@ -1467,7 +1474,7 @@ def generate_queries(chart_type, race_configs, environment):
     for race_config in race_configs:
         if "query" in race_config.charts:
             for q in race_config.throttled_tasks:
-                structures.append(chart_type.query(environment, race_config, q))
+                structures.append(chart_type.query(environment, race_config, q.name, q.params.get('iterations', 100)))
     return structures
 
 
@@ -1495,6 +1502,8 @@ def generate_gc(chart_type, race_configs, environment):
 
 def generate_merge_time(chart_type, race_configs, environment):
     structures = []
+    if chart_type == BarCharts:
+        return structures
     for race_config in race_configs:
         if "merge_times" in race_config.charts:
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
@@ -1505,6 +1514,8 @@ def generate_merge_time(chart_type, race_configs, environment):
 
 def generate_merge_count(chart_type, race_configs, environment):
     structures = []
+    if chart_type == BarCharts:
+        return structures
     for race_config in race_configs:
         if "merge_count" in race_config.charts:
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
@@ -1668,7 +1679,7 @@ class RaceConfig:
                 # which tasks / or types of operations should be used for which chart types.
                 if "target-throughput" in sub_task.params or "target-interval" in sub_task.params\
                     or "workflow-interval" in sub_task.params or sub_task.operation.type == "eql":
-                    task_names.append(sub_task.name)
+                    task_names.append(sub_task)
         return task_names
 
 
