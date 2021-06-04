@@ -1658,6 +1658,7 @@ class RaceConfig:
         task_names = []
         for task in self.track.find_challenge_or_default(self.challenge).schedule:
             for sub_task in task:
+                #print(f"here in th {task} {sub_task} {sub_task.operation.type} {sub_task.params}")
                 # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
                 #
                 # As a temporary workaround we're also treating operations of type "eql" as throttled tasks (requiring a latency
@@ -1666,7 +1667,8 @@ class RaceConfig:
                 #
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
                 # which tasks / or types of operations should be used for which chart types.
-                if "target-throughput" in sub_task.params or "target-interval" in sub_task.params or sub_task.operation.type == "eql":
+                if "target-throughput" in sub_task.params or "target-interval" in sub_task.params\
+                    or "workflow-interval" in sub_task.params or sub_task.operation.type == "eql":
                     task_names.append(sub_task.name)
         return task_names
 
