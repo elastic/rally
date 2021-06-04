@@ -19,6 +19,8 @@
 import random
 from unittest import TestCase
 
+import pytest
+
 from esrally import exceptions
 from esrally.track import params, track
 from esrally.utils import io
@@ -64,7 +66,7 @@ class SliceTests(TestCase):
 
         source.open(data, "r", 5)
         # lines are returned as a list so we have to wrap our data once more
-        self.assertEqual([data[2:7]], list(source))
+        assert list(source) == [data[2:7]]
         source.close()
 
     def test_slice_with_slice_larger_than_source(self):
@@ -77,17 +79,17 @@ class SliceTests(TestCase):
 
         source.open(data, "r", 5)
         # lines are returned as a list so we have to wrap our data once more
-        self.assertEqual([data], list(source))
+        assert list(source) == [data]
         source.close()
 
 
 class ConflictingIdsBuilderTests(TestCase):
     def test_no_id_conflicts(self):
-        self.assertIsNone(params.build_conflicting_ids(None, 100, 0))
-        self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 100, 0))
+        assert params.build_conflicting_ids(None, 100, 0) is None
+        assert params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 100, 0) is None
 
     def test_sequential_conflicts(self):
-        self.assertEqual(
+        assert params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 0) == \
             [
                 '0000000000',
                 '0000000001',
@@ -100,11 +102,9 @@ class ConflictingIdsBuilderTests(TestCase):
                 '0000000008',
                 '0000000009',
                 '0000000010'
-            ],
-            params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 0)
-        )
+            ]
 
-        self.assertEqual(
+        assert params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 5) == \
             [
                 '0000000005',
                 '0000000006',
@@ -117,46 +117,36 @@ class ConflictingIdsBuilderTests(TestCase):
                 '0000000013',
                 '0000000014',
                 '0000000015'
-            ],
-            params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 5)
-        )
+            ]
 
     def test_random_conflicts(self):
         predictable_shuffle = list.reverse
 
-        self.assertEqual(
+        assert params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0, shuffle=predictable_shuffle) == \
             [
                 '0000000002', '0000000001', '0000000000'
-            ],
-            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0, shuffle=predictable_shuffle)
-        )
+            ]
 
-        self.assertEqual(
+        assert params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 5, shuffle=predictable_shuffle) == \
             [
                 '0000000007', '0000000006', '0000000005'
-            ],
-            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 5, shuffle=predictable_shuffle)
-        )
+            ]
 
 
 class ActionMetaDataTests(TestCase):
     def test_generate_action_meta_data_without_id_conflicts(self):
-        self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type"}}\n'),
-                         next(params.GenerateActionMetaData("test_index", "test_type")))
+        assert next(params.GenerateActionMetaData("test_index", "test_type")) == ("index", '{"index": {"_index": "test_index", "_type": "test_type"}}\n')
 
     def test_generate_action_meta_data_create(self):
-        self.assertEqual(("create", '{"create": {"_index": "test_index"}}\n'),
-                         next(params.GenerateActionMetaData("test_index", None, use_create=True)))
+        assert next(params.GenerateActionMetaData("test_index", None, use_create=True)) == ("create", '{"create": {"_index": "test_index"}}\n')
 
     def test_generate_action_meta_data_create_with_conflicts(self):
-        with self.assertRaises(exceptions.RallyError) as ctx:
+        with pytest.raises(exceptions.RallyError) as ctx:
             params.GenerateActionMetaData("test_index", None, conflicting_ids=[100, 200, 300, 400], use_create=True)
-        self.assertEqual("Index mode '_create' cannot be used with conflicting ids",
-                         ctx.exception.args[0])
+        assert ctx.value.args[0] == "Index mode '_create' cannot be used with conflicting ids"
 
     def test_generate_action_meta_data_typeless(self):
-        self.assertEqual(("index", '{"index": {"_index": "test_index"}}\n'),
-                         next(params.GenerateActionMetaData("test_index", type_name=None)))
+        assert next(params.GenerateActionMetaData("test_index", type_name=None)) == ("index", '{"index": {"_index": "test_index"}}\n')
 
     def test_generate_action_meta_data_with_id_conflicts(self):
         def idx(id):
@@ -193,15 +183,15 @@ class ActionMetaDataTests(TestCase):
                                                   randint=lambda x, y: next(chosen_index_of_conflicting_ids))
 
         # first one is always *not* drawn from a random index
-        self.assertEqual(idx("100"), next(generator))
+        assert next(generator) == idx("100")
         # now we start using random ids, i.e. look in the first line of the pseudo-random sequence
-        self.assertEqual(conflict(conflict_action, "200"), next(generator))
-        self.assertEqual(conflict(conflict_action, "400"), next(generator))
-        self.assertEqual(conflict(conflict_action, "300"), next(generator))
+        assert next(generator) == conflict(conflict_action, "200")
+        assert next(generator) == conflict(conflict_action, "400")
+        assert next(generator) == conflict(conflict_action, "300")
         # no conflict -> we draw the next sequential one, which is 200
-        self.assertEqual(idx("200"), next(generator))
+        assert next(generator) == idx("200")
         # and we're back to random
-        self.assertEqual(conflict(conflict_action, "100"), next(generator))
+        assert next(generator) == conflict(conflict_action, "100")
 
     def test_generate_action_meta_data_with_id_conflicts_and_recency_bias(self):
         def idx(type_name, id):
@@ -264,18 +254,18 @@ class ActionMetaDataTests(TestCase):
                                                   )
 
         # first one is always *not* drawn from a random index
-        self.assertEqual(idx(type_name, "100"), next(generator))
+        assert next(generator) == idx(type_name, "100")
         # now we start using random ids
-        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
-        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
-        self.assertEqual(conflict(conflict_action, type_name, "100"), next(generator))
+        assert next(generator) == conflict(conflict_action, type_name, "100")
+        assert next(generator) == conflict(conflict_action, type_name, "100")
+        assert next(generator) == conflict(conflict_action, type_name, "100")
         # no conflict
-        self.assertEqual(idx(type_name, "200"), next(generator))
-        self.assertEqual(idx(type_name, "300"), next(generator))
-        self.assertEqual(idx(type_name, "400"), next(generator))
+        assert next(generator) == idx(type_name, "200")
+        assert next(generator) == idx(type_name, "300")
+        assert next(generator) == idx(type_name, "400")
         # conflict
-        self.assertEqual(conflict(conflict_action, type_name, "400"), next(generator))
-        self.assertEqual(conflict(conflict_action, type_name, "300"), next(generator))
+        assert next(generator) == conflict(conflict_action, type_name, "400")
+        assert next(generator) == conflict(conflict_action, type_name, "300")
 
     def test_generate_action_meta_data_with_id_and_zero_conflict_probability(self):
         def idx(id):
@@ -287,7 +277,7 @@ class ActionMetaDataTests(TestCase):
                                                   conflicting_ids=test_ids,
                                                   conflict_probability=0)
 
-        self.assertListEqual([idx(id) for id in test_ids], list(generator))
+        assert list(generator) == [idx(id) for id in test_ids]
 
 
 class IndexDataReaderTests(TestCase):
@@ -481,7 +471,7 @@ class IndexDataReaderTests(TestCase):
                 for bulk_size, bulk in batch:
                     bulks.append(bulk)
 
-        self.assertEqual([
+        assert bulks == [
             b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
             b'{"key": "value1"}\n' +
             b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
@@ -492,7 +482,7 @@ class IndexDataReaderTests(TestCase):
             b'{"doc":{"key": "value4"}}\n',
             b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
             b'{"key": "value5"}\n'
-        ], bulks)
+        ]
 
     def test_read_bulk_with_external_id_and_zero_conflict_probability(self):
         data = [
@@ -523,7 +513,7 @@ class IndexDataReaderTests(TestCase):
                 for bulk_size, bulk in batch:
                     bulks.append(bulk)
 
-        self.assertEqual([
+        assert bulks == [
             b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
             b'{"key": "value1"}\n' +
             b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
@@ -533,18 +523,18 @@ class IndexDataReaderTests(TestCase):
             b'{"key": "value3"}\n' +
             b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
             b'{"key": "value4"}\n'
-        ], bulks)
+        ]
 
     def assert_bulks_sized(self, reader, expected_bulk_sizes, expected_line_sizes):
-        self.assertEqual(len(expected_bulk_sizes), len(expected_line_sizes), "Bulk sizes and line sizes must be equal")
+        assert len(expected_line_sizes) == len(expected_bulk_sizes), "Bulk sizes and line sizes must be equal"
         with reader:
             bulk_index = 0
             for _, _, batch in reader:
                 for bulk_size, bulk in batch:
-                    self.assertEqual(expected_bulk_sizes[bulk_index], bulk_size, msg="bulk size")
-                    self.assertEqual(expected_line_sizes[bulk_index], bulk.count(b"\n"))
+                    assert bulk_size == expected_bulk_sizes[bulk_index], "bulk size"
+                    assert bulk.count(b"\n") == expected_line_sizes[bulk_index]
                     bulk_index += 1
-            self.assertEqual(len(expected_bulk_sizes), bulk_index, "Not all bulk sizes have been checked")
+            assert bulk_index == len(expected_bulk_sizes), "Not all bulk sizes have been checked"
 
 
 class InvocationGeneratorTests(TestCase):
@@ -585,107 +575,107 @@ class InvocationGeneratorTests(TestCase):
         i0 = InvocationGeneratorTests.TestIndexReader([1, 2, 3])
         i1 = InvocationGeneratorTests.TestIndexReader([4, 5, 6])
 
-        self.assertEqual([1, 2, 3, 4, 5, 6], list(params.chain(i0, i1)))
-        self.assertEqual(1, i0.enter_count)
-        self.assertEqual(1, i0.exit_count)
-        self.assertEqual(1, i1.enter_count)
-        self.assertEqual(1, i1.exit_count)
+        assert list(params.chain(i0, i1)) == [1, 2, 3, 4, 5, 6]
+        assert i0.enter_count == 1
+        assert i0.exit_count == 1
+        assert i1.enter_count == 1
+        assert i1.exit_count == 1
 
     def test_calculate_bounds(self):
         num_docs = 1000
         clients = 1
-        self.assertEqual((0, 1000, 1000), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
-        self.assertEqual((0, 1000, 2000), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True))
+        assert params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False) == (0, 1000, 1000)
+        assert params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True) == (0, 1000, 2000)
 
         num_docs = 1000
         clients = 2
-        self.assertEqual((0, 500, 500), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
-        self.assertEqual((500, 500, 500), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
+        assert params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False) == (0, 500, 500)
+        assert params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False) == (500, 500, 500)
 
         num_docs = 800
         clients = 4
-        self.assertEqual((0, 200, 400), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True))
-        self.assertEqual((400, 200, 400), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=True))
-        self.assertEqual((800, 200, 400), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=True))
-        self.assertEqual((1200, 200, 400), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=True))
+        assert params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True) == (0, 200, 400)
+        assert params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=True) == (400, 200, 400)
+        assert params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=True) == (800, 200, 400)
+        assert params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=True) == (1200, 200, 400)
 
         num_docs = 2000
         clients = 8
-        self.assertEqual((0, 250, 250), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
-        self.assertEqual((250, 250, 250), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
-        self.assertEqual((500, 250, 250), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False))
-        self.assertEqual((750, 250, 250), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False))
-        self.assertEqual((1000, 250, 250), params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False))
-        self.assertEqual((1250, 250, 250), params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False))
-        self.assertEqual((1500, 250, 250), params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False))
-        self.assertEqual((1750, 250, 250), params.bounds(num_docs, 7, 7, clients, includes_action_and_meta_data=False))
+        assert params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False) == (0, 250, 250)
+        assert params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False) == (250, 250, 250)
+        assert params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False) == (500, 250, 250)
+        assert params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False) == (750, 250, 250)
+        assert params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False) == (1000, 250, 250)
+        assert params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False) == (1250, 250, 250)
+        assert params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False) == (1500, 250, 250)
+        assert params.bounds(num_docs, 7, 7, clients, includes_action_and_meta_data=False) == (1750, 250, 250)
 
     def test_calculate_non_multiple_bounds_16_clients(self):
         # in this test case, each client would need to read 1333.3333 lines. Instead we let most clients read 1333
         # lines and every third client, one line more (1334).
         num_docs = 16000
         clients = 12
-        self.assertEqual((0, 1333, 1333), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False))
-        self.assertEqual((1333, 1334, 1334), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False))
-        self.assertEqual((2667, 1333, 1333), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False))
-        self.assertEqual((4000, 1333, 1333), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False))
-        self.assertEqual((5333, 1334, 1334), params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False))
-        self.assertEqual((6667, 1333, 1333), params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False))
-        self.assertEqual((8000, 1333, 1333), params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False))
-        self.assertEqual((9333, 1334, 1334), params.bounds(num_docs, 7, 7, clients, includes_action_and_meta_data=False))
-        self.assertEqual((10667, 1333, 1333), params.bounds(num_docs, 8, 8, clients, includes_action_and_meta_data=False))
-        self.assertEqual((12000, 1333, 1333), params.bounds(num_docs, 9, 9, clients, includes_action_and_meta_data=False))
-        self.assertEqual((13333, 1334, 1334), params.bounds(num_docs, 10, 10, clients, includes_action_and_meta_data=False))
-        self.assertEqual((14667, 1333, 1333), params.bounds(num_docs, 11, 11, clients, includes_action_and_meta_data=False))
+        assert params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=False) == (0, 1333, 1333)
+        assert params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=False) == (1333, 1334, 1334)
+        assert params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=False) == (2667, 1333, 1333)
+        assert params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=False) == (4000, 1333, 1333)
+        assert params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=False) == (5333, 1334, 1334)
+        assert params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=False) == (6667, 1333, 1333)
+        assert params.bounds(num_docs, 6, 6, clients, includes_action_and_meta_data=False) == (8000, 1333, 1333)
+        assert params.bounds(num_docs, 7, 7, clients, includes_action_and_meta_data=False) == (9333, 1334, 1334)
+        assert params.bounds(num_docs, 8, 8, clients, includes_action_and_meta_data=False) == (10667, 1333, 1333)
+        assert params.bounds(num_docs, 9, 9, clients, includes_action_and_meta_data=False) == (12000, 1333, 1333)
+        assert params.bounds(num_docs, 10, 10, clients, includes_action_and_meta_data=False) == (13333, 1334, 1334)
+        assert params.bounds(num_docs, 11, 11, clients, includes_action_and_meta_data=False) == (14667, 1333, 1333)
 
     def test_calculate_non_multiple_bounds_6_clients(self):
         # With 3500 docs and 6 clients, every client needs to read 583.33 docs. We have two lines per doc, which makes it
         # 2 * 583.333 docs = 1166.6666 lines per client. We let them read 1166 and 1168 lines respectively (583 and 584 docs).
         num_docs = 3500
         clients = 6
-        self.assertEqual((0, 583, 1166), params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True))
-        self.assertEqual((1166, 584, 1168), params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=True))
-        self.assertEqual((2334, 583, 1166), params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=True))
-        self.assertEqual((3500, 583, 1166), params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=True))
-        self.assertEqual((4666, 584, 1168), params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=True))
-        self.assertEqual((5834, 583, 1166), params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=True))
+        assert params.bounds(num_docs, 0, 0, clients, includes_action_and_meta_data=True) == (0, 583, 1166)
+        assert params.bounds(num_docs, 1, 1, clients, includes_action_and_meta_data=True) == (1166, 584, 1168)
+        assert params.bounds(num_docs, 2, 2, clients, includes_action_and_meta_data=True) == (2334, 583, 1166)
+        assert params.bounds(num_docs, 3, 3, clients, includes_action_and_meta_data=True) == (3500, 583, 1166)
+        assert params.bounds(num_docs, 4, 4, clients, includes_action_and_meta_data=True) == (4666, 584, 1168)
+        assert params.bounds(num_docs, 5, 5, clients, includes_action_and_meta_data=True) == (5834, 583, 1166)
 
     def test_calculate_bounds_for_multiple_clients_per_worker(self):
         num_docs = 2000
         clients = 8
         # four clients per worker, each reads 250 lines
-        self.assertEqual((0, 1000, 1000), params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=False))
-        self.assertEqual((1000, 1000, 1000), params.bounds(num_docs, 4, 7, clients, includes_action_and_meta_data=False))
+        assert params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=False) == (0, 1000, 1000)
+        assert params.bounds(num_docs, 4, 7, clients, includes_action_and_meta_data=False) == (1000, 1000, 1000)
 
         # four clients per worker, each reads 500 lines (includes action and metadata)
-        self.assertEqual((0, 1000, 2000), params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=True))
-        self.assertEqual((2000, 1000, 2000), params.bounds(num_docs, 4, 7, clients, includes_action_and_meta_data=True))
+        assert params.bounds(num_docs, 0, 3, clients, includes_action_and_meta_data=True) == (0, 1000, 2000)
+        assert params.bounds(num_docs, 4, 7, clients, includes_action_and_meta_data=True) == (2000, 1000, 2000)
 
     def test_calculate_number_of_bulks(self):
         docs1 = self.docs(1)
         docs2 = self.docs(2)
 
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 0, 1, 1))
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 0, 1, 2))
-        self.assertEqual(20, self.number_of_bulks(
+        assert self.number_of_bulks([self.corpus("a", [docs1])], 0, 0, 1, 1) == 1
+        assert self.number_of_bulks([self.corpus("a", [docs1])], 0, 0, 1, 2) == 1
+        assert self.number_of_bulks(
             [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 1))
-        self.assertEqual(11, self.number_of_bulks(
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 1) == 20
+        assert self.number_of_bulks(
             [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 2))
-        self.assertEqual(11, self.number_of_bulks(
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 2) == 11
+        assert self.number_of_bulks(
             [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 3))
-        self.assertEqual(11, self.number_of_bulks(
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 3) == 11
+        assert self.number_of_bulks(
             [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 100))
+             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 100) == 11
 
-        self.assertEqual(2, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 0, 3, 250))
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 0, 3, 267))
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 0, 0, 3, 267))
+        assert self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 0, 3, 250) == 2
+        assert self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 0, 3, 267) == 1
+        assert self.number_of_bulks([self.corpus("a", [self.docs(80)])], 0, 0, 3, 267) == 1
         # this looks odd at first but we are prioritizing number of clients above bulk size
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 1, 1, 3, 267))
-        self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(80)])], 2, 2, 3, 267))
+        assert self.number_of_bulks([self.corpus("a", [self.docs(80)])], 1, 1, 3, 267) == 1
+        assert self.number_of_bulks([self.corpus("a", [self.docs(80)])], 2, 2, 3, 267) == 1
 
     @staticmethod
     def corpus(name, docs):
@@ -700,11 +690,10 @@ class InvocationGeneratorTests(TestCase):
         return params.number_of_bulks(corpora, first_partition_index, last_partition_index, total_partitions, bulk_size)
 
     def test_build_conflicting_ids(self):
-        self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 3, 0))
-        self.assertEqual(["0000000000", "0000000001", "0000000002"],
-                         params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 3, 0))
+        assert params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 3, 0) is None
+        assert params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 3, 0) == ["0000000000", "0000000001", "0000000002"]
         # we cannot tell anything specific about the contents...
-        self.assertEqual(3, len(params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0)))
+        assert len(params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0)) == 3
 
 
 # pylint: disable=too-many-public-methods
@@ -717,17 +706,17 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={})
 
-        self.assertEqual("Mandatory parameter 'bulk-size' is missing", ctx.exception.args[0])
+        assert ctx.value.args[0] == "Mandatory parameter 'bulk-size' is missing"
 
     def test_create_without_corpora_definition(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={})
 
-        self.assertEqual("There is no document corpus definition for track unit-test. "
-                         "You must add at least one before making bulk requests to Elasticsearch.", ctx.exception.args[0])
+        assert ctx.value.args[0] == "There is no document corpus definition for track unit-test. " \
+                         "You must add at least one before making bulk requests to Elasticsearch."
 
     def test_create_with_non_numeric_bulk_size(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -737,12 +726,12 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": "Three"
             })
 
-        self.assertEqual("'bulk-size' must be numeric", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'bulk-size' must be numeric"
 
     def test_create_with_negative_bulk_size(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -752,12 +741,12 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": -5
             })
 
-        self.assertEqual("'bulk-size' must be positive but was -5", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'bulk-size' must be positive but was -5"
 
     def test_create_with_fraction_smaller_batch_size(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -767,13 +756,13 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5,
                 "batch-size": 3
             })
 
-        self.assertEqual("'batch-size' must be greater than or equal to 'bulk-size'", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'batch-size' must be greater than or equal to 'bulk-size'"
 
     def test_create_with_fraction_larger_batch_size(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -783,13 +772,13 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5,
                 "batch-size": 8
             })
 
-        self.assertEqual("'batch-size' must be a multiple of 'bulk-size'", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'batch-size' must be a multiple of 'bulk-size'"
 
     def test_create_with_metadata_in_source_file_but_conflicts(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -800,39 +789,39 @@ class BulkIndexParamSourceTests(TestCase):
                             includes_action_and_meta_data=True)
         ])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "conflicts": "random"
             })
 
-        self.assertEqual("Cannot generate id conflicts [random] as [docs.json.bz2] in document corpus [default] already contains "
-                         "an action and meta-data line.", ctx.exception.args[0])
+        assert ctx.value.args[0] == "Cannot generate id conflicts [random] as [docs.json.bz2] in document corpus [default] already contains " \
+                         "an action and meta-data line."
 
     def test_create_with_unknown_id_conflicts(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "conflicts": "crazy"
             })
 
-        self.assertEqual("Unknown 'conflicts' setting [crazy]", ctx.exception.args[0])
+        assert ctx.value.args[0] == "Unknown 'conflicts' setting [crazy]"
 
     def test_create_with_unknown_on_conflict_setting(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "conflicts": "sequential",
                 "on-conflict": "delete"
             })
 
-        self.assertEqual("Unknown 'on-conflict' setting [delete]", ctx.exception.args[0])
+        assert ctx.value.args[0] == "Unknown 'on-conflict' setting [delete]"
 
     def test_create_with_conflicts_and_data_streams(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "data-streams": ["test-data-stream-1", "test-data-stream-2"],
                 "conflicts": "sequential"
             })
 
-        self.assertEqual("'conflicts' cannot be used with 'data-streams'", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'conflicts' cannot be used with 'data-streams'"
 
     def test_create_with_ingest_percentage_too_low(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -842,13 +831,13 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5000,
                 "ingest-percentage": 0.0
             })
 
-        self.assertEqual("'ingest-percentage' must be in the range (0.0, 100.0] but was 0.0", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'ingest-percentage' must be in the range (0.0, 100.0] but was 0.0"
 
     def test_create_with_ingest_percentage_too_high(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -858,13 +847,13 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5000,
                 "ingest-percentage": 100.1
             })
 
-        self.assertEqual("'ingest-percentage' must be in the range (0.0, 100.0] but was 100.1", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'ingest-percentage' must be in the range (0.0, 100.0] but was 100.1"
 
     def test_create_with_ingest_percentage_not_numeric(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -874,13 +863,13 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
                 "bulk-size": 5000,
                 "ingest-percentage": "100 percent"
             })
 
-        self.assertEqual("'ingest-percentage' must be numeric", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'ingest-percentage' must be numeric"
 
     def test_create_valid_param_source(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -890,13 +879,13 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        self.assertIsNotNone(params.BulkIndexParamSource(track.Track(name="unit-test", corpora=[corpus]), params={
+        assert params.BulkIndexParamSource(track.Track(name="unit-test", corpora=[corpus]), params={
             "conflicts": "random",
             "bulk-size": 5000,
             "batch-size": 20000,
             "ingest-percentage": 20.5,
             "pipeline": "test-pipeline"
-        }))
+        }) is not None
 
     def test_passes_all_corpora_by_default(self):
         corpora = [
@@ -926,7 +915,7 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         partition = source.partition(0, 1)
-        self.assertEqual(partition.corpora, corpora)
+        assert corpora == partition.corpora
 
     def test_filters_corpora(self):
         corpora = [
@@ -957,7 +946,7 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         partition = source.partition(0, 1)
-        self.assertEqual(partition.corpora, [corpora[1]])
+        assert [corpora[1]] == partition.corpora
 
     def test_filters_corpora_by_data_stream(self):
         corpora = [
@@ -992,7 +981,7 @@ class BulkIndexParamSourceTests(TestCase):
             })
 
         partition = source.partition(0, 1)
-        self.assertEqual(partition.corpora, [corpora[0], corpora[2]])
+        assert [corpora[0], corpora[2]] == partition.corpora
 
     def test_raises_exception_if_no_corpus_matches(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -1002,7 +991,7 @@ class BulkIndexParamSourceTests(TestCase):
                             target_type="test-type"
                             )])
 
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+        with pytest.raises(exceptions.RallyAssertionError) as ctx:
             params.BulkIndexParamSource(
                 track=track.Track(name="unit-test", corpora=[corpus]),
                 params={
@@ -1013,7 +1002,7 @@ class BulkIndexParamSourceTests(TestCase):
                     "pipeline": "test-pipeline"
                 })
 
-        self.assertEqual("The provided corpus ['does_not_exist'] does not match any of the corpora ['default'].", ctx.exception.args[0])
+        assert ctx.value.args[0] == "The provided corpus ['does_not_exist'] does not match any of the corpora ['default']."
 
     def test_ingests_all_documents_by_default(self):
         corpora = [
@@ -1042,7 +1031,7 @@ class BulkIndexParamSourceTests(TestCase):
         partition = source.partition(0, 1)
         partition._init_internal_params()
         # # no ingest-percentage specified, should issue all one hundred bulk requests
-        self.assertEqual(100, partition.total_bulks)
+        assert partition.total_bulks == 100
 
     def test_restricts_number_of_bulks_if_required(self):
         def create_unit_test_reader(*args):
@@ -1094,8 +1083,8 @@ class BulkIndexParamSourceTests(TestCase):
         partition = source.partition(0, 1)
         partition._init_internal_params()
         # should issue three bulks of size 10.000
-        self.assertEqual(3, partition.total_bulks)
-        self.assertEqual(3, len(list(schedule(partition))))
+        assert partition.total_bulks == 3
+        assert len(list(schedule(partition))) == 3
 
     def test_create_with_conflict_probability_zero(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -1112,34 +1101,34 @@ class BulkIndexParamSourceTests(TestCase):
         })
 
     def test_create_with_conflict_probability_too_low(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "bulk-size": 5000,
                 "conflicts": "sequential",
                 "conflict-probability": -0.1
             })
 
-        self.assertEqual("'conflict-probability' must be in the range [0.0, 100.0] but was -0.1", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'conflict-probability' must be in the range [0.0, 100.0] but was -0.1"
 
     def test_create_with_conflict_probability_too_high(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "bulk-size": 5000,
                 "conflicts": "sequential",
                 "conflict-probability": 100.1
             })
 
-        self.assertEqual("'conflict-probability' must be in the range [0.0, 100.0] but was 100.1", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'conflict-probability' must be in the range [0.0, 100.0] but was 100.1"
 
     def test_create_with_conflict_probability_not_numeric(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
                 "bulk-size": 5000,
                 "conflicts": "sequential",
                 "conflict-probability": "100 percent"
             })
 
-        self.assertEqual("'conflict-probability' must be numeric", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'conflict-probability' must be numeric"
 
 
 class BulkDataGeneratorTests(TestCase):
@@ -1170,8 +1159,8 @@ class BulkDataGeneratorTests(TestCase):
                                        }, create_reader=BulkDataGeneratorTests.
                                        create_test_reader([["1", "2", "3", "4", "5"], ["6", "7", "8"]]))
         all_bulks = list(bulks)
-        self.assertEqual(2, len(all_bulks))
-        self.assertEqual({
+        assert len(all_bulks) == 2
+        assert all_bulks[0] == {
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-size": 5,
@@ -1180,9 +1169,9 @@ class BulkDataGeneratorTests(TestCase):
             "type": "test-type",
             "my-custom-parameter": "foo",
             "my-custom-parameter-2": True
-        }, all_bulks[0])
+        }
 
-        self.assertEqual({
+        assert all_bulks[1] == {
             "action-metadata-present": True,
             "body": ["6", "7", "8"],
             "bulk-size": 3,
@@ -1191,7 +1180,7 @@ class BulkDataGeneratorTests(TestCase):
             "type": "test-type",
             "my-custom-parameter": "foo",
             "my-custom-parameter-2": True
-        }, all_bulks[1])
+        }
 
     def test_generate_bulks_from_multiple_corpora(self):
         corpora = [
@@ -1228,8 +1217,8 @@ class BulkDataGeneratorTests(TestCase):
                                        }, create_reader=BulkDataGeneratorTests.
                                        create_test_reader([["1", "2", "3", "4", "5"]]))
         all_bulks = list(bulks)
-        self.assertEqual(3, len(all_bulks))
-        self.assertEqual({
+        assert len(all_bulks) == 3
+        assert all_bulks[0] == {
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-size": 5,
@@ -1238,9 +1227,9 @@ class BulkDataGeneratorTests(TestCase):
             "type": "docs",
             "my-custom-parameter": "foo",
             "my-custom-parameter-2": True
-        }, all_bulks[0])
+        }
 
-        self.assertEqual({
+        assert all_bulks[1] == {
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-size": 5,
@@ -1249,9 +1238,9 @@ class BulkDataGeneratorTests(TestCase):
             "type": "docs",
             "my-custom-parameter": "foo",
             "my-custom-parameter-2": True
-        }, all_bulks[1])
+        }
 
-        self.assertEqual({
+        assert all_bulks[2] == {
             "action-metadata-present": True,
             "body": ["1", "2", "3", "4", "5"],
             "bulk-size": 5,
@@ -1260,7 +1249,7 @@ class BulkDataGeneratorTests(TestCase):
             "type": "docs",
             "my-custom-parameter": "foo",
             "my-custom-parameter-2": True
-        }, all_bulks[2])
+        }
 
     def test_internal_params_take_precedence(self):
         corpus = track.DocumentCorpus(name="default", documents=[
@@ -1281,9 +1270,9 @@ class BulkDataGeneratorTests(TestCase):
                                        }, create_reader=BulkDataGeneratorTests.
                                        create_test_reader([["1", "2", "3"]]))
         all_bulks = list(bulks)
-        self.assertEqual(1, len(all_bulks))
+        assert len(all_bulks) == 1
         # body must not contain 'foo'!
-        self.assertEqual({
+        assert all_bulks[0] == {
             "action-metadata-present": True,
             "body": ["1", "2", "3"],
             "bulk-size": 3,
@@ -1291,7 +1280,7 @@ class BulkDataGeneratorTests(TestCase):
             "index": "test-idx",
             "type": "test-type",
             "custom-param": "bar"
-        }, all_bulks[0])
+        }
 
 
 class ParamsRegistrationTests(TestCase):
@@ -1347,7 +1336,7 @@ class ParamsRegistrationTests(TestCase):
 
         params.register_param_source_for_name(source_name, ParamsRegistrationTests.param_source_legacy_function)
         source = params.param_source_for_name(source_name, track.Track(name="unit-test"), {"parameter": 42})
-        self.assertEqual({"key": 42}, source.params())
+        assert source.params() == {"key": 42}
 
         params._unregister_param_source_for_name(source_name)
 
@@ -1356,7 +1345,7 @@ class ParamsRegistrationTests(TestCase):
 
         params.register_param_source_for_name(source_name, ParamsRegistrationTests.param_source_function)
         source = params.param_source_for_name(source_name, track.Track(name="unit-test"), {"parameter": 42})
-        self.assertEqual({"key": 42}, source.params())
+        assert source.params() == {"key": 42}
 
         params._unregister_param_source_for_name(source_name)
 
@@ -1365,7 +1354,7 @@ class ParamsRegistrationTests(TestCase):
 
         params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceLegacyClass)
         source = params.param_source_for_name(source_name, track.Track(name="unit-test"), {"parameter": 42})
-        self.assertEqual({"class-key": 42}, source.params())
+        assert source.params() == {"class-key": 42}
 
         params._unregister_param_source_for_name(source_name)
 
@@ -1374,36 +1363,33 @@ class ParamsRegistrationTests(TestCase):
 
         params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceClass)
         source = params.param_source_for_name(source_name, track.Track(name="unit-test"), {"parameter": 42})
-        self.assertEqual({"class-key": 42}, source.params())
+        assert source.params() == {"class-key": 42}
 
         params._unregister_param_source_for_name(source_name)
 
     def test_cannot_register_an_instance_as_param_source(self):
         source_name = "params-test-class-param-source"
         # we create an instance, instead of passing the class
-        with self.assertRaisesRegex(exceptions.RallyAssertionError,
-                                    "Parameter source \\[test param source\\] must be either a function or a class\\."):
+        with pytest.raises(exceptions.RallyAssertionError, match="Parameter source \\[test param source\\] must be either a function or a class\\."):
             params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceClass())
 
 
 class SleepParamSourceTests(TestCase):
     def test_missing_duration_parameter(self):
-        with self.assertRaisesRegex(exceptions.InvalidSyntax, "parameter 'duration' is mandatory for sleep operation"):
+        with pytest.raises(exceptions.InvalidSyntax, match="parameter 'duration' is mandatory for sleep operation"):
             params.SleepParamSource(track.Track(name="unit-test"), params={})
 
     def test_duration_parameter_wrong_type(self):
-        with self.assertRaisesRegex(exceptions.InvalidSyntax,
-                                    "parameter 'duration' for sleep operation must be a number"):
+        with pytest.raises(exceptions.InvalidSyntax, match="parameter 'duration' for sleep operation must be a number"):
             params.SleepParamSource(track.Track(name="unit-test"), params={"duration": "this is a string"})
 
     def test_duration_parameter_negative_number(self):
-        with self.assertRaisesRegex(exceptions.InvalidSyntax,
-                                    "parameter 'duration' must be non-negative but was -1.0"):
+        with pytest.raises(exceptions.InvalidSyntax, match="parameter 'duration' must be non-negative but was -1.0"):
             params.SleepParamSource(track.Track(name="unit-test"), params={"duration": -1.0})
 
     def test_param_source_passes_all_parameters(self):
         p = params.SleepParamSource(track.Track(name="unit-test"), params={"duration": 3.4, "additional": True})
-        self.assertDictEqual({"duration": 3.4, "additional": True}, p.params())
+        assert p.params() == {"duration": 3.4, "additional": True}
 
 
 class CreateIndexParamSourceTests(TestCase):
@@ -1427,11 +1413,11 @@ class CreateIndexParamSourceTests(TestCase):
         })
 
         p = source.params()
-        self.assertEqual(1, len(p["indices"]))
+        assert len(p["indices"]) == 1
         index, body = p["indices"][0]
-        self.assertEqual("test", index)
-        self.assertTrue(len(body) > 0)
-        self.assertEqual({}, p["request-params"])
+        assert index == "test"
+        assert len(body) > 0
+        assert p["request-params"] == {}
 
     def test_create_index_inline_without_body(self):
         source = params.CreateIndexParamSource(track.Track(name="unit-test"), params={
@@ -1442,13 +1428,13 @@ class CreateIndexParamSourceTests(TestCase):
         })
 
         p = source.params()
-        self.assertEqual(1, len(p["indices"]))
+        assert len(p["indices"]) == 1
         index, body = p["indices"][0]
-        self.assertEqual("test", index)
-        self.assertIsNone(body)
-        self.assertDictEqual({
+        assert index == "test"
+        assert body is None
+        assert p["request-params"] == {
             "wait_for_active_shards": True
-        }, p["request-params"])
+        }
 
     def test_create_index_from_track_with_settings(self):
         index1 = track.Index(name="index1", types=["type1"])
@@ -1475,21 +1461,21 @@ class CreateIndexParamSourceTests(TestCase):
         })
 
         p = source.params()
-        self.assertEqual(2, len(p["indices"]))
+        assert len(p["indices"]) == 2
 
         index, body = p["indices"][0]
-        self.assertEqual("index1", index)
+        assert index == "index1"
         # index did not specify any body
-        self.assertDictEqual({
+        assert body == {
             "settings": {
                 "index.number_of_replicas": 1
             }
-        }, body)
+        }
 
         index, body = p["indices"][1]
-        self.assertEqual("index2", index)
+        assert index == "index2"
         # index specified a body + we need to merge settings
-        self.assertDictEqual({
+        assert body == {
             "settings": {
                 # we have properly merged (overridden) an existing setting
                 "index.number_of_replicas": 1,
@@ -1505,7 +1491,7 @@ class CreateIndexParamSourceTests(TestCase):
                     }
                 }
             }
-        }, body)
+        }
 
     def test_create_index_from_track_without_settings(self):
         index1 = track.Index(name="index1", types=["type1"])
@@ -1528,17 +1514,17 @@ class CreateIndexParamSourceTests(TestCase):
         source = params.CreateIndexParamSource(track.Track(name="unit-test", indices=[index1, index2]), params={})
 
         p = source.params()
-        self.assertEqual(2, len(p["indices"]))
+        assert len(p["indices"]) == 2
 
         index, body = p["indices"][0]
-        self.assertEqual("index1", index)
+        assert index == "index1"
         # index did not specify any body
-        self.assertDictEqual({}, body)
+        assert body == {}
 
         index, body = p["indices"][1]
-        self.assertEqual("index2", index)
+        assert index == "index2"
         # index specified a body
-        self.assertDictEqual({
+        assert body == {
             "settings": {
                 "index.number_of_replicas": 0,
                 "index.number_of_shards": 3
@@ -1552,7 +1538,7 @@ class CreateIndexParamSourceTests(TestCase):
                     }
                 }
             }
-        }, body)
+        }
 
     def test_filter_index(self):
         index1 = track.Index(name="index1", types=["type1"])
@@ -1564,10 +1550,10 @@ class CreateIndexParamSourceTests(TestCase):
         })
 
         p = source.params()
-        self.assertEqual(1, len(p["indices"]))
+        assert len(p["indices"]) == 1
 
         index, _ = p["indices"][0]
-        self.assertEqual("index2", index)
+        assert index == "index2"
 
 
 class CreateDataStreamParamSourceTests(TestCase):
@@ -1576,10 +1562,10 @@ class CreateDataStreamParamSourceTests(TestCase):
             "data-stream": "test-data-stream"
         })
         p = source.params()
-        self.assertEqual(1, len(p["data-streams"]))
+        assert len(p["data-streams"]) == 1
         ds = p["data-streams"][0]
-        self.assertEqual("test-data-stream", ds)
-        self.assertEqual({}, p["request-params"])
+        assert ds == "test-data-stream"
+        assert p["request-params"] == {}
 
     def test_create_data_stream_inline_without_body(self):
         source = params.CreateDataStreamParamSource(track.Track(name="unit-test"), params={
@@ -1590,12 +1576,12 @@ class CreateDataStreamParamSourceTests(TestCase):
         })
 
         p = source.params()
-        self.assertEqual(1, len(p["data-streams"]))
+        assert len(p["data-streams"]) == 1
         ds = p["data-streams"][0]
-        self.assertEqual("test-data-stream", ds)
-        self.assertDictEqual({
+        assert ds == "test-data-stream"
+        assert p["request-params"] == {
             "wait_for_active_shards": True
-        }, p["request-params"])
+        }
 
     def test_filter_data_stream(self):
         source = params.CreateDataStreamParamSource(
@@ -1605,10 +1591,10 @@ class CreateDataStreamParamSourceTests(TestCase):
             params={"data-stream": "data-stream-2"})
 
         p = source.params()
-        self.assertEqual(1, len(p["data-streams"]))
+        assert len(p["data-streams"]) == 1
 
         ds = p["data-streams"][0]
-        self.assertEqual("data-stream-2", ds)
+        assert ds == "data-stream-2"
 
 
 class DeleteIndexParamSourceTests(TestCase):
@@ -1621,9 +1607,9 @@ class DeleteIndexParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(["index1", "index2", "index3"], p["indices"])
-        self.assertDictEqual({}, p["request-params"])
-        self.assertTrue(p["only-if-exists"])
+        assert p["indices"] == ["index1", "index2", "index3"]
+        assert p["request-params"] == {}
+        assert p["only-if-exists"]
 
     def test_filter_index_from_track(self):
         source = params.DeleteIndexParamSource(track.Track(name="unit-test", indices=[
@@ -1634,21 +1620,21 @@ class DeleteIndexParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(["index2"], p["indices"])
-        self.assertDictEqual({"allow_no_indices": True}, p["request-params"])
-        self.assertFalse(p["only-if-exists"])
+        assert p["indices"] == ["index2"]
+        assert p["request-params"] == {"allow_no_indices": True}
+        assert not p["only-if-exists"]
 
     def test_delete_index_by_name(self):
         source = params.DeleteIndexParamSource(track.Track(name="unit-test"), params={"index": "index2"})
 
         p = source.params()
 
-        self.assertEqual(["index2"], p["indices"])
+        assert p["indices"] == ["index2"]
 
     def test_delete_no_index(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.DeleteIndexParamSource(track.Track(name="unit-test"), params={})
-        self.assertEqual("delete-index operation targets no index", ctx.exception.args[0])
+        assert ctx.value.args[0] == "delete-index operation targets no index"
 
 
 class DeleteDataStreamParamSourceTests(TestCase):
@@ -1661,9 +1647,9 @@ class DeleteDataStreamParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(["data-stream-1", "data-stream-2", "data-stream-3"], p["data-streams"])
-        self.assertDictEqual({}, p["request-params"])
-        self.assertTrue(p["only-if-exists"])
+        assert p["data-streams"] == ["data-stream-1", "data-stream-2", "data-stream-3"]
+        assert p["request-params"] == {}
+        assert p["only-if-exists"]
 
     def test_filter_data_stream_from_track(self):
         source = params.DeleteDataStreamParamSource(track.Track(name="unit-test", data_streams=[
@@ -1675,9 +1661,9 @@ class DeleteDataStreamParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(["data-stream-2"], p["data-streams"])
-        self.assertDictEqual({"allow_no_indices": True}, p["request-params"])
-        self.assertFalse(p["only-if-exists"])
+        assert p["data-streams"] == ["data-stream-2"]
+        assert p["request-params"] == {"allow_no_indices": True}
+        assert not p["only-if-exists"]
 
     def test_delete_data_stream_by_name(self):
         source = params.DeleteDataStreamParamSource(track.Track(name="unit-test"),
@@ -1685,12 +1671,12 @@ class DeleteDataStreamParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(["data-stream-2"], p["data-streams"])
+        assert p["data-streams"] == ["data-stream-2"]
 
     def test_delete_no_data_stream(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.DeleteDataStreamParamSource(track.Track(name="unit-test"), params={})
-        self.assertEqual("delete-data-stream operation targets no data stream", ctx.exception.args[0])
+        assert ctx.value.args[0] == "delete-data-stream operation targets no data stream"
 
 
 class CreateIndexTemplateParamSourceTests(TestCase):
@@ -1714,11 +1700,11 @@ class CreateIndexTemplateParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(1, len(p["templates"]))
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p["templates"]) == 1
+        assert p["request-params"] == {}
         template, body = p["templates"][0]
-        self.assertEqual("test", template)
-        self.assertDictEqual({
+        assert template == "test"
+        assert body == {
             "index_patterns": ["*"],
             "settings": {
                 "index.number_of_shards": 3
@@ -1730,7 +1716,7 @@ class CreateIndexTemplateParamSourceTests(TestCase):
                     }
                 }
             }
-        }, body)
+        }
 
     def test_create_index_template_from_track(self):
         tpl = track.IndexTemplate(name="default", pattern="*", content={
@@ -1755,11 +1741,11 @@ class CreateIndexTemplateParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(1, len(p["templates"]))
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p["templates"]) == 1
+        assert p["request-params"] == {}
         template, body = p["templates"][0]
-        self.assertEqual("default", template)
-        self.assertDictEqual({
+        assert template == "default"
+        assert body == {
             "index_patterns": ["*"],
             "settings": {
                 "index.number_of_shards": 3,
@@ -1772,7 +1758,7 @@ class CreateIndexTemplateParamSourceTests(TestCase):
                     }
                 }
             }
-        }, body)
+        }
 
 
 class DeleteIndexTemplateParamSourceTests(TestCase):
@@ -1781,10 +1767,10 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(1, len(p["templates"]))
-        self.assertEqual(("default", False, None), p["templates"][0])
-        self.assertTrue(p["only-if-exists"])
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p["templates"]) == 1
+        assert p["templates"][0] == ("default", False, None)
+        assert p["only-if-exists"]
+        assert p["request-params"] == {}
 
     def test_delete_index_template_by_name_and_matching_indices(self):
         source = params.DeleteIndexTemplateParamSource(track.Track(name="unit-test"),
@@ -1796,20 +1782,19 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(1, len(p["templates"]))
-        self.assertEqual(("default", True, "logs-*"), p["templates"][0])
-        self.assertTrue(p["only-if-exists"])
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p["templates"]) == 1
+        assert p["templates"][0] == ("default", True, "logs-*")
+        assert p["only-if-exists"]
+        assert p["request-params"] == {}
 
     def test_delete_index_template_by_name_and_matching_indices_missing_index_pattern(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.DeleteIndexTemplateParamSource(track.Track(name="unit-test"),
                                                   params={
                                                       "template": "default",
                                                       "delete-matching-indices": True
                                                   })
-        self.assertEqual("The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true.",
-                         ctx.exception.args[0])
+        assert ctx.value.args[0] == "The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true."
 
     def test_delete_index_template_from_track(self):
         tpl1 = track.IndexTemplate(name="metrics", pattern="metrics-*", delete_matching_indices=True, content={
@@ -1832,11 +1817,11 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(2, len(p["templates"]))
-        self.assertEqual(("metrics", True, "metrics-*"), p["templates"][0])
-        self.assertEqual(("logs", False, "logs-*"), p["templates"][1])
-        self.assertFalse(p["only-if-exists"])
-        self.assertDictEqual({"master_timeout": 20}, p["request-params"])
+        assert len(p["templates"]) == 2
+        assert p["templates"][0] == ("metrics", True, "metrics-*")
+        assert p["templates"][1] == ("logs", False, "logs-*")
+        assert not p["only-if-exists"]
+        assert p["request-params"] == {"master_timeout": 20}
 
 
 class CreateComposableTemplateParamSourceTests(TestCase):
@@ -1856,11 +1841,11 @@ class CreateComposableTemplateParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(1, len(p["templates"]))
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p["templates"]) == 1
+        assert p["request-params"] == {}
         template, body = p["templates"][0]
-        self.assertEqual("test", template)
-        self.assertDictEqual({
+        assert template == "test"
+        assert body == {
               "index_patterns": ["my*"],
               "template": {
                 "settings" : {
@@ -1868,7 +1853,7 @@ class CreateComposableTemplateParamSourceTests(TestCase):
                 }
               },
               "composed_of": ["ct1", "ct2"]
-            }, body)
+            }
 
     def test_create_composable_index_template_from_track(self):
         tpl = track.IndexTemplate(name="default", pattern="*", content={
@@ -1889,11 +1874,11 @@ class CreateComposableTemplateParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(1, len(p["templates"]))
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p["templates"]) == 1
+        assert p["request-params"] == {}
         template, body = p["templates"][0]
-        self.assertEqual("default", template)
-        self.assertDictEqual({
+        assert template == "default"
+        assert body == {
               "index_patterns": ["my*"],
               "template": {
                 "settings" : {
@@ -1902,7 +1887,7 @@ class CreateComposableTemplateParamSourceTests(TestCase):
                 }
               },
               "composed_of": ["ct1", "ct2"]
-            }, body)
+            }
 
     def test_create_or_merge(self):
         content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {}}, ["parent", "child", "grandchild"],
@@ -1934,7 +1919,7 @@ class CreateComposableTemplateParamSourceTests(TestCase):
         assert content["parent"]["child"]["grandchild"]["name"]["last"] == "Smith"
 
     def test_no_templates_specified(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.CreateComposableTemplateParamSource(
                 track=track.Track(name="unit-test"), params={
                     "settings": {
@@ -1943,8 +1928,8 @@ class CreateComposableTemplateParamSourceTests(TestCase):
                     },
                     "operation-type": "create-composable-template"
                 })
-        self.assertEqual("Please set the properties 'template' and 'body' for the create-composable-template operation "
-                         "or declare composable and/or component templates in the track", ctx.exception.args[0])
+        assert ctx.value.args[0] == "Please set the properties 'template' and 'body' for the create-composable-template operation " \
+                         "or declare composable and/or component templates in the track"
 
 
 class CreateComponentTemplateParamSourceTests(TestCase):
@@ -1971,11 +1956,11 @@ class CreateComponentTemplateParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual(1, len(p["templates"]))
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p["templates"]) == 1
+        assert p["request-params"] == {}
         template, body = p["templates"][0]
-        self.assertEqual("default", template)
-        self.assertDictEqual({
+        assert template == "default"
+        assert body == {
           "template": {
             "settings": {
               "index.number_of_shards": 1,
@@ -1989,24 +1974,23 @@ class CreateComponentTemplateParamSourceTests(TestCase):
               }
             }
           }
-        }, body)
+        }
 
 
 class DeleteComponentTemplateParamSource(TestCase):
     def test_delete_index_template_by_name(self):
         source = params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
         p = source.params()
-        self.assertEqual(1, len(p["templates"]))
-        self.assertEqual("default", p["templates"][0])
-        self.assertTrue(p["only-if-exists"])
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p["templates"]) == 1
+        assert p["templates"][0] == "default"
+        assert p["only-if-exists"]
+        assert p["request-params"] == {}
 
     def test_delete_index_template_no_name(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"),
                                                   params={"operation-type": "delete-component-template"})
-        self.assertEqual("Please set the property 'template' for the delete-component-template operation.",
-                         ctx.exception.args[0])
+        assert ctx.value.args[0] == "Please set the property 'template' for the delete-component-template operation."
 
     def test_delete_index_template_from_track(self):
         tpl1 = track.ComponentTemplate(name="logs", content={
@@ -2037,11 +2021,11 @@ class DeleteComponentTemplateParamSource(TestCase):
 
         p = source.params()
 
-        self.assertEqual(2, len(p["templates"]))
-        self.assertEqual("logs", p["templates"][0])
-        self.assertEqual("metrics", p["templates"][1])
-        self.assertFalse(p["only-if-exists"])
-        self.assertDictEqual({"master_timeout": 20}, p["request-params"])
+        assert len(p["templates"]) == 2
+        assert p["templates"][0] == "logs"
+        assert p["templates"][1] == "metrics"
+        assert not p["only-if-exists"]
+        assert p["request-params"] == {"master_timeout": 20}
 
 
 class SearchParamSourceTests(TestCase):
@@ -2061,22 +2045,22 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(10, len(p))
-        self.assertEqual("index1", p["index"])
-        self.assertIsNone(p["type"])
-        self.assertIsNone(p["request-timeout"])
-        self.assertIsNone(p["opaque-id"])
-        self.assertDictEqual({"header1": "value1"}, p["headers"])
-        self.assertEqual({}, p["request-params"])
+        assert len(p) == 10
+        assert p["index"] == "index1"
+        assert p["type"] is None
+        assert p["request-timeout"] is None
+        assert p["opaque-id"] is None
+        assert p["headers"] == {"header1": "value1"}
+        assert p["request-params"] == {}
         # Explicitly check in these tests for equality - assertFalse would also succeed if it is `None`.
-        self.assertEqual(True, p["cache"])
-        self.assertEqual(True, p["response-compression-enabled"])
-        self.assertEqual(False, p["detailed-results"])
-        self.assertEqual({
+        assert p["cache"] is True
+        assert p["response-compression-enabled"] is True
+        assert p["detailed-results"] is False
+        assert p["body"] == {
             "query": {
                 "match_all": {}
             }
-        }, p["body"])
+        }
 
     def test_uses_data_stream(self):
         ds1 = track.DataStream(name="data-stream-1")
@@ -2097,27 +2081,27 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(10, len(p))
-        self.assertEqual("data-stream-1", p["index"])
-        self.assertIsNone(p["type"])
-        self.assertEqual(1.0, p["request-timeout"])
-        self.assertDictEqual({
+        assert len(p) == 10
+        assert p["index"] == "data-stream-1"
+        assert p["type"] is None
+        assert p["request-timeout"] == 1.0
+        assert p["headers"] == {
             "header1": "value1",
             "header2": "value2"
-        }, p["headers"])
-        self.assertEqual("12345abcde", p["opaque-id"])
-        self.assertEqual({}, p["request-params"])
-        self.assertEqual(True, p["cache"])
-        self.assertEqual(True, p["response-compression-enabled"])
-        self.assertEqual(False, p["detailed-results"])
-        self.assertEqual({
+        }
+        assert p["opaque-id"] == "12345abcde"
+        assert p["request-params"] == {}
+        assert p["cache"] is True
+        assert p["response-compression-enabled"] is True
+        assert p["detailed-results"] is False
+        assert p["body"] == {
             "query": {
                 "match_all": {}
             }
-        }, p["body"])
+        }
 
     def test_create_without_index(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             params.SearchParamSource(track=track.Track(name="unit-test"), params={
                 "type": "type1",
                 "body": {
@@ -2127,7 +2111,7 @@ class SearchParamSourceTests(TestCase):
                 }
             }, operation_name="test_operation")
 
-        self.assertEqual("'index' or 'data-stream' is mandatory and is missing for operation 'test_operation'", ctx.exception.args[0])
+        assert ctx.value.args[0] == "'index' or 'data-stream' is mandatory and is missing for operation 'test_operation'"
 
     def test_passes_request_parameters(self):
         index1 = track.Index(name="index1", types=["type1"])
@@ -2144,23 +2128,23 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(10, len(p))
-        self.assertEqual("index1", p["index"])
-        self.assertIsNone(p["type"])
-        self.assertIsNone(p["request-timeout"])
-        self.assertIsNone(p["headers"])
-        self.assertIsNone(p["opaque-id"])
-        self.assertEqual({
+        assert len(p) == 10
+        assert p["index"] == "index1"
+        assert p["type"] is None
+        assert p["request-timeout"] is None
+        assert p["headers"] is None
+        assert p["opaque-id"] is None
+        assert p["request-params"] == {
             "_source_include": "some_field"
-        }, p["request-params"])
-        self.assertIsNone(p["cache"])
-        self.assertEqual(True, p["response-compression-enabled"])
-        self.assertEqual(False, p["detailed-results"])
-        self.assertEqual({
+        }
+        assert p["cache"] is None
+        assert p["response-compression-enabled"] is True
+        assert p["detailed-results"] is False
+        assert p["body"] == {
             "query": {
                 "match_all": {}
             }
-        }, p["body"])
+        }
 
     def test_user_specified_overrides_defaults(self):
         index1 = track.Index(name="index1", types=["type1"])
@@ -2180,22 +2164,22 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(10, len(p))
-        self.assertEqual("_all", p["index"])
-        self.assertEqual("type1", p["type"])
-        self.assertDictEqual({}, p["request-params"])
-        self.assertIsNone(p["request-timeout"])
-        self.assertIsNone(p["headers"])
-        self.assertEqual("12345abcde", p["opaque-id"])
+        assert len(p) == 10
+        assert p["index"] == "_all"
+        assert p["type"] == "type1"
+        assert p["request-params"] == {}
+        assert p["request-timeout"] is None
+        assert p["headers"] is None
+        assert p["opaque-id"] == "12345abcde"
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
-        self.assertEqual(False, p["cache"])
-        self.assertEqual(False, p["response-compression-enabled"])
-        self.assertEqual(True, p["detailed-results"])
-        self.assertEqual({
+        assert p["cache"] is False
+        assert p["response-compression-enabled"] is False
+        assert p["detailed-results"] is True
+        assert p["body"] == {
             "query": {
                 "match_all": {}
             }
-        }, p["body"])
+        }
 
     def test_user_specified_data_stream_overrides_defaults(self):
         ds1 = track.DataStream(name="data-stream-1")
@@ -2213,25 +2197,25 @@ class SearchParamSourceTests(TestCase):
         })
         p = source.params()
 
-        self.assertEqual(10, len(p))
-        self.assertEqual("data-stream-2", p["index"])
-        self.assertIsNone(p["type"])
-        self.assertEqual(1.0, p["request-timeout"])
-        self.assertIsNone(p["headers"])
-        self.assertIsNone(p["opaque-id"])
-        self.assertDictEqual({}, p["request-params"])
+        assert len(p) == 10
+        assert p["index"] == "data-stream-2"
+        assert p["type"] is None
+        assert p["request-timeout"] == 1.0
+        assert p["headers"] is None
+        assert p["opaque-id"] is None
+        assert p["request-params"] == {}
         # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
-        self.assertEqual(False, p["cache"])
-        self.assertEqual(False, p["response-compression-enabled"])
-        self.assertEqual(False, p["detailed-results"])
-        self.assertEqual({
+        assert p["cache"] is False
+        assert p["response-compression-enabled"] is False
+        assert p["detailed-results"] is False
+        assert p["body"] == {
             "query": {
                 "match_all": {}
             }
-        }, p["body"])
+        }
 
     def test_invalid_data_stream_with_type(self):
-        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+        with pytest.raises(exceptions.InvalidSyntax) as ctx:
             ds1 = track.DataStream(name="data-stream-1")
 
             params.SearchParamSource(track=track.Track(name="unit-test", data_streams=[ds1]), params={
@@ -2246,13 +2230,11 @@ class SearchParamSourceTests(TestCase):
                 }
             }, operation_name="test_operation")
 
-        self.assertEqual("'type' not supported with 'data-stream' for operation 'test_operation'",
-                         ctx.exception.args[0])
+        assert ctx.value.args[0] == "'type' not supported with 'data-stream' for operation 'test_operation'"
 
     def test_assertions_without_detailed_results_are_invalid(self):
         index1 = track.Index(name="index1", types=["type1"])
-        with self.assertRaisesRegex(exceptions.InvalidSyntax,
-                                    r"The property \[detailed-results\] must be \[true\] if assertions are defined"):
+        with pytest.raises(exceptions.InvalidSyntax, match=r"The property \[detailed-results\] must be \[true\] if assertions are defined"):
             params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
                 "index": "_all",
                 # unset!
@@ -2280,8 +2262,8 @@ class ForceMergeParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual("index1,index2,index3", p["index"])
-        self.assertEqual("blocking", p["mode"])
+        assert p["index"] == "index1,index2,index3"
+        assert p["mode"] == "blocking"
 
     def test_force_merge_data_stream_from_track(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test", data_streams=[
@@ -2292,32 +2274,32 @@ class ForceMergeParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual("data-stream-1,data-stream-2,data-stream-3", p["index"])
-        self.assertEqual("blocking", p["mode"])
+        assert p["index"] == "data-stream-1,data-stream-2,data-stream-3"
+        assert p["mode"] == "blocking"
 
     def test_force_merge_index_by_name(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2"})
 
         p = source.params()
 
-        self.assertEqual("index2", p["index"])
-        self.assertEqual("blocking", p["mode"])
+        assert p["index"] == "index2"
+        assert p["mode"] == "blocking"
 
     def test_force_merge_by_data_stream_name(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"data-stream": "data-stream-2"})
 
         p = source.params()
 
-        self.assertEqual("data-stream-2", p["index"])
-        self.assertEqual("blocking", p["mode"])
+        assert p["index"] == "data-stream-2"
+        assert p["mode"] == "blocking"
 
     def test_default_force_merge_index(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={})
 
         p = source.params()
 
-        self.assertEqual("_all", p["index"])
-        self.assertEqual("blocking", p["mode"])
+        assert p["index"] == "_all"
+        assert p["mode"] == "blocking"
 
     def test_force_merge_all_params(self):
         source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2",
@@ -2328,7 +2310,7 @@ class ForceMergeParamSourceTests(TestCase):
 
         p = source.params()
 
-        self.assertEqual("index2", p["index"])
-        self.assertEqual(30, p["request-timeout"])
-        self.assertEqual(1, p["max-num-segments"])
-        self.assertEqual("polling", p["mode"])
+        assert p["index"] == "index2"
+        assert p["request-timeout"] == 30
+        assert p["max-num-segments"] == 1
+        assert p["mode"] == "polling"

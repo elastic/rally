@@ -52,4 +52,4 @@ class ResponseMatcherTests(TestCase):
 
     def assert_response_type(self, matcher, path, expected_response_type):
         response = json.loads(matcher.response(path))
-        self.assertEqual(response["response-type"], expected_response_type)
+        assert expected_response_type == response["response-type"]

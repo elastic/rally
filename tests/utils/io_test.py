@@ -47,24 +47,24 @@ def mock_red_hat(path):
 
 class IoTests(TestCase):
     def test_normalize_path(self):
-        self.assertEqual("/already/a/normalized/path", io.normalize_path("/already/a/normalized/path"))
-        self.assertEqual("/not/normalized", io.normalize_path("/not/normalized/path/../"))
-        self.assertEqual(os.path.expanduser("~"), io.normalize_path("~/Documents/.."))
+        assert io.normalize_path("/already/a/normalized/path") == "/already/a/normalized/path"
+        assert io.normalize_path("/not/normalized/path/../") == "/not/normalized"
+        assert io.normalize_path("~/Documents/..") == os.path.expanduser("~")
 
     def test_archive(self):
-        self.assertTrue(io.is_archive("/tmp/some-archive.tar.gz"))
-        self.assertTrue(io.is_archive("/tmp/some-archive.tgz"))
+        assert io.is_archive("/tmp/some-archive.tar.gz")
+        assert io.is_archive("/tmp/some-archive.tgz")
         # Rally does not recognize .7z
-        self.assertFalse(io.is_archive("/tmp/some-archive.7z"))
-        self.assertFalse(io.is_archive("/tmp/some.log"))
-        self.assertFalse(io.is_archive("some.log"))
+        assert not io.is_archive("/tmp/some-archive.7z")
+        assert not io.is_archive("/tmp/some.log")
+        assert not io.is_archive("some.log")
 
     def test_has_extension(self):
-        self.assertTrue(io.has_extension("/tmp/some-archive.tar.gz", ".tar.gz"))
-        self.assertFalse(io.has_extension("/tmp/some-archive.tar.gz", ".gz"))
-        self.assertTrue(io.has_extension("/tmp/text.txt", ".txt"))
+        assert io.has_extension("/tmp/some-archive.tar.gz", ".tar.gz")
+        assert not io.has_extension("/tmp/some-archive.tar.gz", ".gz")
+        assert io.has_extension("/tmp/text.txt", ".txt")
         # no extension whatsoever
-        self.assertFalse(io.has_extension("/tmp/README", "README"))
+        assert not io.has_extension("/tmp/README", "README")
 
 
 class TestDecompression:

@@ -78,9 +78,9 @@ class TelemetryTests(TestCase):
 
         opts = t.instrument_candidate_java_opts()
 
-        self.assertIsNotNone(opts)
-        self.assertEqual(len(opts), 3)
-        self.assertEqual(["-Xms256M", "-Xmx512M", "-Des.network.host=127.0.0.1"], opts)
+        assert opts is not None
+        assert len(opts) == 3
+        assert opts == ["-Xms256M", "-Xmx512M", "-Des.network.host=127.0.0.1"]
 
 
 class StartupTimeTests(TestCase):
@@ -172,79 +172,77 @@ class JfrTests(TestCase):
     def test_sets_options_for_pre_java_9_default_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(0, 8))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
+        assert java_opts == ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
                           "-XX:+FlightRecorder", "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
-                          "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true"], java_opts)
+                          "dumponexitpath=/var/log/test-recording.jfr", "-XX:StartFlightRecording=defaultrecording=true"]
 
     def test_sets_options_for_java_9_or_10_default_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(9, 10))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
+        assert java_opts == ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
                           "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,"
-                          "dumponexit=true,filename=/var/log/test-recording.jfr"], java_opts)
+                          "dumponexit=true,filename=/var/log/test-recording.jfr"]
 
     def test_sets_options_for_java_11_or_above_default_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(11, 999))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints",
+        assert java_opts == ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints",
                           "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,"
-                          "dumponexit=true,filename=/var/log/test-recording.jfr"], java_opts)
+                          "dumponexit=true,filename=/var/log/test-recording.jfr"]
 
     def test_sets_options_for_pre_java_9_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={"recording-template": "profile"},
                                        log_root="/var/log",
                                        java_major_version=random.randint(0, 8))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
+        assert java_opts == ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
                           "-XX:+FlightRecorder", "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,"
                           "dumponexitpath=/var/log/test-recording.jfr",
-                          "-XX:StartFlightRecording=defaultrecording=true,settings=profile"], java_opts)
+                          "-XX:StartFlightRecording=defaultrecording=true,settings=profile"]
 
     def test_sets_options_for_java_9_or_10_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={"recording-template": "profile"},
                                        log_root="/var/log",
                                        java_major_version=random.randint(9, 10))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
+        assert java_opts == ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints", "-XX:+UnlockCommercialFeatures",
                           "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
-                          "filename=/var/log/test-recording.jfr,settings=profile"], java_opts)
+                          "filename=/var/log/test-recording.jfr,settings=profile"]
 
     def test_sets_options_for_java_11_or_above_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(telemetry_params={"recording-template": "profile"},
                                        log_root="/var/log",
                                        java_major_version=random.randint(11, 999))
         java_opts = jfr.java_opts("/var/log/test-recording.jfr")
-        self.assertEqual(["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints",
+        assert java_opts == ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints",
                           "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
-                          "filename=/var/log/test-recording.jfr,settings=profile"], java_opts)
+                          "filename=/var/log/test-recording.jfr,settings=profile"]
 
 
 class GcTests(TestCase):
     def test_sets_options_for_pre_java_9(self):
         gc = telemetry.Gc(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(0, 8))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
-        self.assertEqual(7, len(gc_java_opts))
-        self.assertEqual(["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps",
+        assert len(gc_java_opts) == 7
+        assert gc_java_opts == ["-Xloggc:/var/log/defaults-node-0.gc.log", "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps",
                           "-XX:+PrintGCTimeStamps", "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
-                          "-XX:+PrintTenuringDistribution"], gc_java_opts)
+                          "-XX:+PrintTenuringDistribution"]
 
     def test_sets_options_for_java_9_or_above(self):
         gc = telemetry.Gc(telemetry_params={}, log_root="/var/log", java_major_version=random.randint(9, 999))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
-        self.assertEqual(1, len(gc_java_opts))
-        self.assertEqual(
-            ["-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"],
-            gc_java_opts)
+        assert len(gc_java_opts) == 1
+        assert gc_java_opts == \
+            ["-Xlog:gc*=info,safepoint=info,age*=trace:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"]
 
     def test_can_override_options_for_java_9_or_above(self):
         gc = telemetry.Gc(telemetry_params={"gc-log-config": "gc,safepoint"},
                           log_root="/var/log",
                           java_major_version=random.randint(9, 999))
         gc_java_opts = gc.java_opts("/var/log/defaults-node-0.gc.log")
-        self.assertEqual(1, len(gc_java_opts))
-        self.assertEqual(
-            ["-Xlog:gc,safepoint:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"],
-            gc_java_opts)
+        assert len(gc_java_opts) == 1
+        assert gc_java_opts == \
+            ["-Xlog:gc,safepoint:file=/var/log/defaults-node-0.gc.log:utctime,uptimemillis,level,tags:filecount=0"]
 
 
 class HeapdumpTests(TestCase):
@@ -290,8 +288,7 @@ class CcrStatsTests(TestCase):
         telemetry_params = {
             "ccr-stats-sample-interval": -1 * random.random()
         }
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    r"The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was .*\."):
+        with pytest.raises(exceptions.SystemSetupError, match=r"The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was .*\."):
             telemetry.CcrStats(telemetry_params, clients, metrics_store)
 
     def test_wrong_cluster_name_in_ccr_stats_indices_forbidden(self):
@@ -304,11 +301,9 @@ class CcrStatsTests(TestCase):
                 "wrong_cluster_name": ["follower"]
             }
         }
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    r"The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
+        with pytest.raises(exceptions.SystemSetupError, match=r"The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
                                     r"the cluster names \[{}] specified in --target-hosts "
-                                    r"but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))
-                                    ):
+                                    r"but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))):
             telemetry.CcrStats(telemetry_params, clients, metrics_store)
 
 
@@ -319,8 +314,7 @@ class CcrStatsRecorderTests(TestCase):
         client = Client(transport_client=TransportClient(response={}, force_error=True))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        with self.assertRaisesRegex(exceptions.RallyError,
-                                    r"A transport error occurred while collecting CCR stats from the endpoint "
+        with pytest.raises(exceptions.RallyError, match=r"A transport error occurred while collecting CCR stats from the endpoint "
                                     r"\[/_ccr/stats\?filter_path=follow_stats\] on "
                                     r"cluster \[remote\]"):
             telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1).record()
@@ -683,7 +677,7 @@ class RecoveryStatsTests(TestCase):
                                                    indices=["index1"])
         recorder.record()
 
-        self.assertEqual(0, metrics_store_put_doc.call_count)
+        assert metrics_store_put_doc.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_single_shard_stats(self, metrics_store_put_doc):
@@ -1878,8 +1872,7 @@ class NodeStatsRecorderTests(TestCase):
         telemetry_params = {
             "node-stats-sample-interval": -1 * random.random()
         }
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    r"The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was .*\."):
+        with pytest.raises(exceptions.SystemSetupError, match=r"The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was .*\."):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="default", client=client, metrics_store=metrics_store)
 
     def test_flatten_indices_fields(self):
@@ -1892,7 +1885,7 @@ class NodeStatsRecorderTests(TestCase):
             prefix="indices",
             stats=NodeStatsRecorderTests.node_stats_response["nodes"]["Zbl_e8EyRXmiR47gbHgPfg"]["indices"]
         )
-        self.assertDictEqual(NodeStatsRecorderTests.indices_stats_response_flattened, flattened_fields)
+        assert flattened_fields == NodeStatsRecorderTests.indices_stats_response_flattened
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_default_nodes_stats(self, metrics_store_put_doc):
@@ -2522,8 +2515,7 @@ class NodeStatsRecorderTests(TestCase):
         telemetry_params = {
             "node-stats-include-indices-metrics": {"bad": "input"}
         }
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "The telemetry parameter 'node-stats-include-indices-metrics' must be "
+        with pytest.raises(exceptions.SystemSetupError, match="The telemetry parameter 'node-stats-include-indices-metrics' must be "
                                     "a comma-separated string but was <class 'dict'>"):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
 
@@ -2536,8 +2528,7 @@ class TransformStatsTests(TestCase):
         telemetry_params = {
             "transform-stats-sample-interval": -1 * random.random()
         }
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    r"The telemetry parameter 'transform-stats-sample-interval' must be greater than zero but was .*\."):
+        with pytest.raises(exceptions.SystemSetupError, match=r"The telemetry parameter 'transform-stats-sample-interval' must be greater than zero but was .*\."):
             telemetry.TransformStats(telemetry_params, clients, metrics_store)
 
     def test_wrong_cluster_name_in_transform_stats_indices_forbidden(self):
@@ -2550,11 +2541,9 @@ class TransformStatsTests(TestCase):
                 "wrong_cluster_name": ["follower"]
             }
         }
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    r"The telemetry parameter 'transform-stats-transforms' must be a JSON Object with keys matching "
+        with pytest.raises(exceptions.SystemSetupError, match=r"The telemetry parameter 'transform-stats-transforms' must be a JSON Object with keys matching "
                                     r"the cluster names \[{}] specified in --target-hosts "
-                                    r"but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))
-                                    ):
+                                    r"but it had \[wrong_cluster_name\].".format(",".join(sorted(clients.keys())))):
             telemetry.TransformStats(telemetry_params, clients, metrics_store)
 
 
@@ -2730,7 +2719,7 @@ class ClusterEnvironmentInfoTests(TestCase):
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
-        self.assertEqual(0, metrics_store_add_meta_info.call_count)
+        assert metrics_store_add_meta_info.call_count == 0
 
 
 class NodeEnvironmentInfoTests(TestCase):
@@ -2899,7 +2888,7 @@ class ExternalEnvironmentInfoTests(TestCase):
         t = telemetry.Telemetry(self.cfg, devices=[env_device])
         t.on_benchmark_start()
 
-        self.assertEqual(0, metrics_store_add_meta_info.call_count)
+        assert metrics_store_add_meta_info.call_count == 0
 
 
 class DiskIoTests(TestCase):
@@ -3374,7 +3363,7 @@ class MlBucketProcessingTimeTests(TestCase):
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_stop()
 
-        self.assertEqual(0, metrics_store_put_doc.call_count)
+        assert metrics_store_put_doc.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("elasticsearch.Elasticsearch")
@@ -3392,7 +3381,7 @@ class MlBucketProcessingTimeTests(TestCase):
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_stop()
 
-        self.assertEqual(0, metrics_store_put_doc.call_count)
+        assert metrics_store_put_doc.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("elasticsearch.Elasticsearch")
@@ -3511,6 +3500,6 @@ class IndexSizeTests(TestCase):
         t.detach_from_node(node, running=False)
         t.store_system_metrics(node, metrics_store)
 
-        self.assertEqual(0, run_subprocess.call_count)
-        self.assertEqual(0, metrics_store_cluster_value.call_count)
-        self.assertEqual(0, get_size.call_count)
+        assert run_subprocess.call_count == 0
+        assert metrics_store_cluster_value.call_count == 0
+        assert get_size.call_count == 0

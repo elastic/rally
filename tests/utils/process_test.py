@@ -82,8 +82,7 @@ class ProcessTests(TestCase):
             night_rally_process,
         ]
 
-        self.assertEqual([rally_process_p, rally_process_r, rally_process_e, rally_process_mac],
-                         process.find_all_other_rally_processes())
+        assert process.find_all_other_rally_processes() == [rally_process_p, rally_process_r, rally_process_e, rally_process_mac]
 
     @mock.patch("psutil.process_iter")
     def test_find_no_other_rally_process_running(self, process_iter):
@@ -94,7 +93,7 @@ class ProcessTests(TestCase):
 
         process_iter.return_value = [ metrics_store_process, random_python]
 
-        self.assertEqual(0, len(process.find_all_other_rally_processes()))
+        assert len(process.find_all_other_rally_processes()) == 0
 
     @mock.patch("psutil.process_iter")
     def test_kills_only_rally_processes(self, process_iter):
@@ -133,14 +132,14 @@ class ProcessTests(TestCase):
 
         process.kill_running_rally_instances()
 
-        self.assertFalse(rally_es_5_process.killed)
-        self.assertFalse(rally_es_1_process.killed)
-        self.assertFalse(metrics_store_process.killed)
-        self.assertFalse(random_python.killed)
-        self.assertFalse(other_process.killed)
-        self.assertTrue(rally_process_p.killed)
-        self.assertTrue(rally_process_r.killed)
-        self.assertTrue(rally_process_e.killed)
-        self.assertTrue(rally_process_mac.killed)
-        self.assertFalse(own_rally_process.killed)
-        self.assertFalse(night_rally_process.killed)
+        assert not rally_es_5_process.killed
+        assert not rally_es_1_process.killed
+        assert not metrics_store_process.killed
+        assert not random_python.killed
+        assert not other_process.killed
+        assert rally_process_p.killed
+        assert rally_process_r.killed
+        assert rally_process_e.killed
+        assert rally_process_mac.killed
+        assert not own_rally_process.killed
+        assert not night_rally_process.killed

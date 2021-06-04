@@ -17,6 +17,9 @@
 
 import os
 from unittest import TestCase
+import re
+
+import pytest
 
 from esrally import exceptions
 from esrally.mechanic import team
@@ -43,91 +46,91 @@ class CarLoaderTests(TestCase):
 
     def test_load_known_car(self):
         car = team.load_car(self.team_dir, ["default"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
-        self.assertEqual("default", car.name)
-        self.assertEqual([os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")], car.config_paths)
-        self.assertIsNone(car.root_path)
-        self.assertDictEqual({
+        assert car.name == "default"
+        assert car.config_paths == [os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")]
+        assert car.root_path is None
+        assert car.variables == {
             "heap_size": "1g",
             "clean_command": "./gradlew clean",
             "data_paths": ["/mnt/disk0", "/mnt/disk1"]
-        }, car.variables)
-        self.assertIsNone(car.root_path)
+        }
+        assert car.root_path is None
 
     def test_load_car_with_mixin_single_config_base(self):
         car = team.load_car(self.team_dir, ["32gheap", "ea"])
-        self.assertEqual("32gheap+ea", car.name)
-        self.assertEqual([os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")], car.config_paths)
-        self.assertIsNone(car.root_path)
-        self.assertEqual({
+        assert car.name == "32gheap+ea"
+        assert car.config_paths == [os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")]
+        assert car.root_path is None
+        assert car.variables == {
             "heap_size": "32g",
             "clean_command": "./gradlew clean",
             "assertions": "true"
-        }, car.variables)
-        self.assertIsNone(car.root_path)
+        }
+        assert car.root_path is None
 
     def test_load_car_with_mixin_multiple_config_bases(self):
         car = team.load_car(self.team_dir, ["32gheap", "ea", "verbose"])
-        self.assertEqual("32gheap+ea+verbose", car.name)
-        self.assertEqual([
+        assert car.name == "32gheap+ea+verbose"
+        assert car.config_paths == [
             os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "verbose_logging", "templates"),
-        ], car.config_paths)
-        self.assertIsNone(car.root_path)
-        self.assertEqual({
+        ]
+        assert car.root_path is None
+        assert car.variables == {
             "heap_size": "32g",
             "clean_command": "./gradlew clean",
             "verbose_logging": "true",
             "assertions": "true"
-        }, car.variables)
+        }
 
     def test_load_car_with_install_hook(self):
         car = team.load_car(self.team_dir, ["default", "with_hook"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
-        self.assertEqual("default+with_hook", car.name)
-        self.assertEqual([
+        assert car.name == "default+with_hook"
+        assert car.config_paths == [
             os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "with_hook", "templates"),
-        ], car.config_paths)
-        self.assertEqual(os.path.join(current_dir, "data", "cars", "v1", "with_hook"), car.root_path)
-        self.assertDictEqual({
+        ]
+        assert car.root_path == os.path.join(current_dir, "data", "cars", "v1", "with_hook")
+        assert car.variables == {
             "heap_size": "1g",
             "clean_command": "./gradlew clean",
             "data_paths": ["/mnt/disk0", "/mnt/disk1"]
-        }, car.variables)
+        }
 
     def test_load_car_with_multiple_bases_referring_same_install_hook(self):
         car = team.load_car(self.team_dir, ["with_hook", "another_with_hook"])
-        self.assertEqual("with_hook+another_with_hook", car.name)
-        self.assertEqual([
+        assert car.name == "with_hook+another_with_hook"
+        assert car.config_paths == [
             os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "with_hook", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "verbose_logging", "templates")
-        ], car.config_paths)
-        self.assertEqual(os.path.join(current_dir, "data", "cars", "v1", "with_hook"), car.root_path)
-        self.assertDictEqual({
+        ]
+        assert car.root_path == os.path.join(current_dir, "data", "cars", "v1", "with_hook")
+        assert car.variables == {
             "heap_size": "16g",
             "clean_command": "./gradlew clean",
             "verbose_logging": "true"
-        }, car.variables)
+        }
 
     def test_raises_error_on_unknown_car(self):
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             team.load_car(self.team_dir, ["don_t-know-you"])
-        self.assertRegex(ctx.exception.args[0], r"Unknown car \[don_t-know-you\]. List the available cars with [^\s]+ list cars.")
+        assert re.search(r"Unknown car \[don_t-know-you\]. List the available cars with [^\s]+ list cars.", ctx.value.args[0])
 
     def test_raises_error_on_empty_config_base(self):
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             team.load_car(self.team_dir, ["empty_cfg_base"])
-        self.assertEqual("At least one config base is required for car ['empty_cfg_base']", ctx.exception.args[0])
+        assert ctx.value.args[0] == "At least one config base is required for car ['empty_cfg_base']"
 
     def test_raises_error_on_missing_config_base(self):
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             team.load_car(self.team_dir, ["missing_cfg_base"])
-        self.assertEqual("At least one config base is required for car ['missing_cfg_base']", ctx.exception.args[0])
+        assert ctx.value.args[0] == "At least one config base is required for car ['missing_cfg_base']"
 
     def test_raises_error_if_more_than_one_different_install_hook(self):
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             team.load_car(self.team_dir, ["multi_hook"])
-        self.assertEqual("Invalid car: ['multi_hook']. Multiple bootstrap hooks are forbidden.", ctx.exception.args[0])
+        assert ctx.value.args[0] == "Invalid car: ['multi_hook']. Multiple bootstrap hooks are forbidden."
 
 
 class PluginLoaderTests(TestCase):
@@ -149,63 +152,62 @@ class PluginLoaderTests(TestCase):
             ], self.loader.plugins())
 
     def test_loads_core_plugin(self):
-        self.assertEqual(team.PluginDescriptor(name="my-analysis-plugin", core_plugin=True, variables={"dbg": True}),
-                         self.loader.load_plugin("my-analysis-plugin", config_names=None, plugin_params={"dbg": True}))
+        assert self.loader.load_plugin("my-analysis-plugin", config_names=None, plugin_params={"dbg": True}) == team.PluginDescriptor(name="my-analysis-plugin", core_plugin=True, variables={"dbg": True})
 
     def test_loads_core_plugin_with_config(self):
         plugin = self.loader.load_plugin("my-core-plugin-with-config", config_names=None, plugin_params={"dbg": True})
-        self.assertEqual("my-core-plugin-with-config", plugin.name)
-        self.assertTrue(plugin.core_plugin)
+        assert plugin.name == "my-core-plugin-with-config"
+        assert plugin.core_plugin
 
         expected_root_path = os.path.join(current_dir, "data", "plugins", "v1", "my_core_plugin_with_config")
 
-        self.assertEqual(expected_root_path, plugin.root_path)
-        self.assertEqual(0, len(plugin.config_paths))
+        assert plugin.root_path == expected_root_path
+        assert len(plugin.config_paths) == 0
 
-        self.assertEqual({
+        assert plugin.variables == {
             # from plugin params
             "dbg": True
-        }, plugin.variables)
+        }
 
     def test_cannot_load_plugin_with_missing_config(self):
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             self.loader.load_plugin("my-analysis-plugin", ["missing-config"])
-        self.assertRegex(ctx.exception.args[0], r"Plugin \[my-analysis-plugin\] does not provide configuration \[missing-config\]. List the"
-                                                r" available plugins and configurations with [^\s]+ list elasticsearch-plugins "
-                                                r"--distribution-version=VERSION.")
+        assert re.search(r"Plugin \[my-analysis-plugin\] does not provide configuration \[missing-config\]. List the" \
+                                                r" available plugins and configurations with [^\s]+ list elasticsearch-plugins " \
+                                                r"--distribution-version=VERSION.", ctx.value.args[0])
 
     def test_loads_community_plugin_without_configuration(self):
-        self.assertEqual(team.PluginDescriptor("my-community-plugin"), self.loader.load_plugin("my-community-plugin", None))
+        assert self.loader.load_plugin("my-community-plugin", None) == team.PluginDescriptor("my-community-plugin")
 
     def test_cannot_load_community_plugin_with_missing_config(self):
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             self.loader.load_plugin("my-community-plugin", "some-configuration")
-        self.assertRegex(ctx.exception.args[0], r"Unknown plugin \[my-community-plugin\]. List the available plugins with [^\s]+ list "
-                                                r"elasticsearch-plugins --distribution-version=VERSION.")
+        assert re.search(r"Unknown plugin \[my-community-plugin\]. List the available plugins with [^\s]+ list " \
+                                                r"elasticsearch-plugins --distribution-version=VERSION.", ctx.value.args[0])
 
     def test_loads_configured_plugin(self):
         plugin = self.loader.load_plugin("complex-plugin", ["config-a", "config-b"], plugin_params={"dbg": True})
-        self.assertEqual("complex-plugin", plugin.name)
-        self.assertFalse(plugin.core_plugin)
+        assert plugin.name == "complex-plugin"
+        assert not plugin.core_plugin
         self.assertCountEqual(["config-a", "config-b"], plugin.config)
 
         expected_root_path = os.path.join(current_dir, "data", "plugins", "v1", "complex_plugin")
 
-        self.assertEqual(expected_root_path, plugin.root_path)
+        assert plugin.root_path == expected_root_path
         # order does matter here! We should not swap it
-        self.assertListEqual([
+        assert plugin.config_paths == [
             os.path.join(expected_root_path, "default", "templates"),
             os.path.join(expected_root_path, "special", "templates"),
-        ], plugin.config_paths)
+        ]
 
-        self.assertEqual({
+        assert plugin.variables == {
             "foo": "bar",
             "baz": "foo",
             "var": "0",
             "hello": "true",
             # from plugin params
             "dbg": True
-        }, plugin.variables)
+        }
 
 
 class BootstrapHookHandlerTests(TestCase):
@@ -243,7 +245,7 @@ class BootstrapHookHandlerTests(TestCase):
         handler.invoke("post_install", variables={"increment": 4})
 
         # we registered our hook twice. Check that it has been called twice.
-        self.assertEqual(hook.call_counter, 2 * 4)
+        assert 2 * 4 == hook.call_counter
 
     def test_cannot_register_for_unknown_phase(self):
         plugin = team.PluginDescriptor("unittest-plugin")
@@ -251,7 +253,6 @@ class BootstrapHookHandlerTests(TestCase):
         handler = team.BootstrapHookHandler(plugin, loader_class=BootstrapHookHandlerTests.UnitTestComponentLoader)
 
         handler.loader.registration_function = hook
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             handler.load()
-        self.assertEqual("Unknown bootstrap phase [this_is_an_unknown_install_phase]. Valid phases are: ['post_install'].",
-                         ctx.exception.args[0])
+        assert ctx.value.args[0] == "Unknown bootstrap phase [this_is_an_unknown_install_phase]. Valid phases are: ['post_install']."

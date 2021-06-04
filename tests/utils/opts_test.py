@@ -23,37 +23,32 @@ from esrally.utils import opts
 
 class ConfigHelperFunctionTests(TestCase):
     def test_csv_to_list(self):
-        self.assertEqual([], opts.csv_to_list(""))
-        self.assertEqual(["a", "b", "c", "d"], opts.csv_to_list("    a,b,c   , d"))
-        self.assertEqual(["a-;d", "b", "c", "d"], opts.csv_to_list("    a-;d    ,b,c   , d"))
+        assert opts.csv_to_list("") == []
+        assert opts.csv_to_list("    a,b,c   , d") == ["a", "b", "c", "d"]
+        assert opts.csv_to_list("    a-;d    ,b,c   , d") == ["a-;d", "b", "c", "d"]
 
     def test_kv_to_map(self):
-        self.assertEqual({}, opts.kv_to_map([]))
+        assert opts.kv_to_map([]) == {}
         # explicit treatment as string
-        self.assertEqual({"k": "3"}, opts.kv_to_map(["k:'3'"]))
-        self.assertEqual({"k": 3}, opts.kv_to_map(["k:3"]))
+        assert opts.kv_to_map(["k:'3'"]) == {"k": "3"}
+        assert opts.kv_to_map(["k:3"]) == {"k": 3}
         # implicit treatment as string
-        self.assertEqual({"k": "v"}, opts.kv_to_map(["k:v"]))
-        self.assertEqual({"k": "v", "size": 4, "empty": False, "temperature": 0.5},
-                         opts.kv_to_map(["k:'v'", "size:4", "empty:false", "temperature:0.5"]))
+        assert opts.kv_to_map(["k:v"]) == {"k": "v"}
+        assert opts.kv_to_map(["k:'v'", "size:4", "empty:false", "temperature:0.5"]) == {"k": "v", "size": 4, "empty": False, "temperature": 0.5}
 
 
 class GenericHelperFunctionTests(TestCase):
     def test_list_as_bulleted_list(self):
         src_list = ["param-1", "param-2", "a_longer-parameter"]
 
-        self.assertEqual(
-            ["- param-1", "- param-2", "- a_longer-parameter"],
-            opts.bulleted_list_of(src_list)
-        )
+        assert opts.bulleted_list_of(src_list) == \
+            ["- param-1", "- param-2", "- a_longer-parameter"]
 
     def test_list_as_double_quoted_list(self):
         src_list = ["oneitem", "_another-weird_item", "param-3"]
 
-        self.assertEqual(
-            opts.double_quoted_list_of(src_list),
-            ['"oneitem"', '"_another-weird_item"', '"param-3"']
-        )
+        assert ['"oneitem"', '"_another-weird_item"', '"param-3"'] == \
+            opts.double_quoted_list_of(src_list)
 
     def test_make_list_of_close_matches(self):
         word_list = [
@@ -108,7 +103,7 @@ class GenericHelperFunctionTests(TestCase):
             "target_throughput",
             "translog_sync"]
 
-        self.assertEqual(
+        assert opts.make_list_of_close_matches(word_list, available_word_list) == \
             ['bulk_indexing_clients',
              'bulk_indexing_iterations',
              'target_throughput',
@@ -116,64 +111,51 @@ class GenericHelperFunctionTests(TestCase):
              # number_of-shards had a typo
              'number_of_shards',
              'number_of_replicas',
-             'index_refresh_interval'],
-            opts.make_list_of_close_matches(word_list, available_word_list)
-        )
+             'index_refresh_interval']
 
     def test_make_list_of_close_matches_returns_with_empty_word_list(self):
-        self.assertEqual(
-            [],
-            opts.make_list_of_close_matches([], ["number_of_shards"])
-        )
+        assert opts.make_list_of_close_matches([], ["number_of_shards"]) == \
+            []
 
     def test_make_list_of_close_matches_returns_empty_list_with_no_close_matches(self):
-        self.assertEqual(
-            [],
-            opts.make_list_of_close_matches(
+        assert opts.make_list_of_close_matches(
                 ["number_of_shards", "number_of-replicas"],
-                [])
-        )
+                []) == \
+            []
 
 
 class TestTargetHosts(TestCase):
     def test_empty_arg_parses_as_empty_list(self):
-        self.assertEqual([], opts.TargetHosts('').default)
-        self.assertEqual({'default': []}, opts.TargetHosts('').all_hosts)
+        assert opts.TargetHosts('').default == []
+        assert opts.TargetHosts('').all_hosts == {'default': []}
 
     def test_csv_hosts_parses(self):
         target_hosts = '127.0.0.1:9200,10.17.0.5:19200'
 
-        self.assertEqual(
-            {'default': [{'host': '127.0.0.1', 'port': 9200},{'host': '10.17.0.5', 'port': 19200}]},
-            opts.TargetHosts(target_hosts).all_hosts
-        )
+        assert opts.TargetHosts(target_hosts).all_hosts == \
+            {'default': [{'host': '127.0.0.1', 'port': 9200},{'host': '10.17.0.5', 'port': 19200}]}
 
-        self.assertEqual(
-            [{'host': '127.0.0.1', 'port': 9200},{'host': '10.17.0.5', 'port': 19200}],
-            opts.TargetHosts(target_hosts).default
-        )
+        assert opts.TargetHosts(target_hosts).default == \
+            [{'host': '127.0.0.1', 'port': 9200},{'host': '10.17.0.5', 'port': 19200}]
 
-        self.assertEqual(
-            [{'host': '127.0.0.1', 'port': 9200},{'host': '10.17.0.5', 'port': 19200}],
-            opts.TargetHosts(target_hosts).default)
+        assert opts.TargetHosts(target_hosts).default == \
+            [{'host': '127.0.0.1', 'port': 9200},{'host': '10.17.0.5', 'port': 19200}]
 
     def test_jsonstring_parses_as_dict_of_clusters(self):
         target_hosts = ('{"default": ["127.0.0.1:9200","10.17.0.5:19200"],'
                         ' "remote_1": ["88.33.22.15:19200"],'
                         ' "remote_2": ["10.18.0.6:19200","10.18.0.7:19201"]}')
 
-        self.assertEqual(
+        assert opts.TargetHosts(target_hosts).all_hosts == \
             {'default': ['127.0.0.1:9200','10.17.0.5:19200'],
              'remote_1': ['88.33.22.15:19200'],
-             'remote_2': ['10.18.0.6:19200','10.18.0.7:19201']},
-            opts.TargetHosts(target_hosts).all_hosts)
+             'remote_2': ['10.18.0.6:19200','10.18.0.7:19201']}
 
     def test_json_file_parameter_parses(self):
-        self.assertEqual(
-            {"default": ["127.0.0.1:9200","10.127.0.3:19200"] },
-            opts.TargetHosts(os.path.join(os.path.dirname(__file__), "resources", "target_hosts_1.json")).all_hosts)
+        assert opts.TargetHosts(os.path.join(os.path.dirname(__file__), "resources", "target_hosts_1.json")).all_hosts == \
+            {"default": ["127.0.0.1:9200","10.127.0.3:19200"] }
 
-        self.assertEqual(
+        assert opts.TargetHosts(os.path.join(os.path.dirname(__file__), "resources", "target_hosts_2.json")).all_hosts == \
             {
               "default": [
                 {"host": "127.0.0.1", "port": 9200},
@@ -186,106 +168,87 @@ class TestTargetHosts(TestCase):
               "remote_2":[
                 {"host": "88.33.27.15", "port": 39200}
               ]
-            },
-            opts.TargetHosts(os.path.join(os.path.dirname(__file__), "resources", "target_hosts_2.json")).all_hosts)
+            }
 
 
 class TestClientOptions(TestCase):
     def test_csv_client_options_parses(self):
         client_options_string = "use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"
 
-        self.assertEqual(
-            {'use_ssl': True, 'verify_certs': True, 'ca_certs': '/path/to/cacert.pem'},
-            opts.ClientOptions(client_options_string).default)
+        assert opts.ClientOptions(client_options_string).default == \
+            {'use_ssl': True, 'verify_certs': True, 'ca_certs': '/path/to/cacert.pem'}
 
-        self.assertEqual(
-            {'use_ssl': True, 'verify_certs': True, 'ca_certs': '/path/to/cacert.pem'},
-            opts.ClientOptions(client_options_string).default
-        )
+        assert opts.ClientOptions(client_options_string).default == \
+            {'use_ssl': True, 'verify_certs': True, 'ca_certs': '/path/to/cacert.pem'}
 
-        self.assertEqual(
-            {'default': {'use_ssl': True, 'verify_certs': True, 'ca_certs': '/path/to/cacert.pem'}},
-            opts.ClientOptions(client_options_string).all_client_options
-        )
+        assert opts.ClientOptions(client_options_string).all_client_options == \
+            {'default': {'use_ssl': True, 'verify_certs': True, 'ca_certs': '/path/to/cacert.pem'}}
 
     def test_jsonstring_client_options_parses(self):
         client_options_string = '{"default": {"timeout": 60},' \
             '"remote_1": {"use_ssl":true,"verify_certs":true,"basic_auth_user": "elastic", "basic_auth_password": "changeme"},'\
             '"remote_2": {"use_ssl":true,"verify_certs":true,"ca_certs":"/path/to/cacert.pem"}}'
 
-        self.assertEqual(
-            {'timeout': 60},
-            opts.ClientOptions(client_options_string).default)
+        assert opts.ClientOptions(client_options_string).default == \
+            {'timeout': 60}
 
-        self.assertEqual(
-            {'timeout': 60},
-            opts.ClientOptions(client_options_string).default)
+        assert opts.ClientOptions(client_options_string).default == \
+            {'timeout': 60}
 
-        self.assertEqual(
+        assert opts.ClientOptions(client_options_string).all_client_options == \
             {'default': {'timeout':60},
              'remote_1': {'use_ssl': True,'verify_certs': True,'basic_auth_user':'elastic','basic_auth_password':'changeme'},
-             'remote_2': {'use_ssl': True,'verify_certs': True, 'ca_certs':'/path/to/cacert.pem'}},
-            opts.ClientOptions(client_options_string).all_client_options)
+             'remote_2': {'use_ssl': True,'verify_certs': True, 'ca_certs':'/path/to/cacert.pem'}}
 
     def test_json_file_parameter_parses(self):
-        self.assertEqual(
+        assert opts.ClientOptions(os.path.join(os.path.dirname(__file__), "resources", "client_options_1.json")).all_client_options == \
             {'default': {'timeout':60},
              'remote_1': {'use_ssl': True,'verify_certs': True,'basic_auth_user':'elastic','basic_auth_password':'changeme'},
-             'remote_2': {'use_ssl': True,'verify_certs': True, 'ca_certs':'/path/to/cacert.pem'}},
-            opts.ClientOptions(os.path.join(os.path.dirname(__file__), "resources", "client_options_1.json")).all_client_options)
+             'remote_2': {'use_ssl': True,'verify_certs': True, 'ca_certs':'/path/to/cacert.pem'}}
 
-        self.assertEqual(
-            {'default': {'timeout':60}},
-            opts.ClientOptions(os.path.join(os.path.dirname(__file__), "resources", "client_options_2.json")).all_client_options)
+        assert opts.ClientOptions(os.path.join(os.path.dirname(__file__), "resources", "client_options_2.json")).all_client_options == \
+            {'default': {'timeout':60}}
 
     def test_no_client_option_parses_to_default(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = None
 
-        self.assertEqual(
-            {"timeout": 60},
-            opts.ClientOptions(client_options_string,
-                                 target_hosts=target_hosts).default)
+        assert opts.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).default == \
+            {"timeout": 60}
 
-        self.assertEqual(
-            {"default": {"timeout": 60}},
-            opts.ClientOptions(client_options_string,
-                                 target_hosts=target_hosts).all_client_options)
+        assert opts.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).all_client_options == \
+            {"default": {"timeout": 60}}
 
-        self.assertEqual(
-            {"timeout": 60},
-            opts.ClientOptions(client_options_string,
-                                 target_hosts=target_hosts).default)
+        assert opts.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).default == \
+            {"timeout": 60}
 
     def test_no_client_option_parses_to_default_with_multicluster(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = opts.TargetHosts('{"default": ["127.0.0.1:9200,10.17.0.5:19200"], "remote": ["88.33.22.15:19200"]}')
 
-        self.assertEqual(
-            {"timeout": 60},
-            opts.ClientOptions(client_options_string,
-                                 target_hosts=target_hosts).default)
+        assert opts.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).default == \
+            {"timeout": 60}
 
-        self.assertEqual(
-            {"default": {"timeout": 60}, "remote": {"timeout": 60}},
-            opts.ClientOptions(client_options_string,
-                                 target_hosts=target_hosts).all_client_options)
+        assert opts.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).all_client_options == \
+            {"default": {"timeout": 60}, "remote": {"timeout": 60}}
 
-        self.assertEqual(
-            {"timeout": 60},
-            opts.ClientOptions(client_options_string,
-                                 target_hosts=target_hosts).default)
+        assert opts.ClientOptions(client_options_string,
+                                 target_hosts=target_hosts).default == \
+            {"timeout": 60}
 
     def test_amends_with_max_connections(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = opts.TargetHosts('{"default": ["10.17.0.5:9200"], "remote": ["88.33.22.15:9200"]}')
-        self.assertEqual(
-            {"default": {"timeout": 60, "max_connections": 128}, "remote": {"timeout": 60, "max_connections": 128}},
-            opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(128))
+        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(128) == \
+            {"default": {"timeout": 60, "max_connections": 128}, "remote": {"timeout": 60, "max_connections": 128}}
 
     def test_keeps_already_specified_max_connections(self):
         client_options_string = '{"default": {"timeout":60,"max_connections":5}, "remote": {"timeout":60}}'
         target_hosts = opts.TargetHosts('{"default": ["10.17.0.5:9200"], "remote": ["88.33.22.15:9200"]}')
-        self.assertEqual(
-            {"default": {"timeout": 60, "max_connections": 5}, "remote": {"timeout": 60, "max_connections": 32}},
-            opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(32))
+        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(32) == \
+            {"default": {"timeout": 60, "max_connections": 5}, "remote": {"timeout": 60, "max_connections": 32}}

@@ -25,6 +25,7 @@ from unittest import TestCase, mock
 
 import elasticsearch
 import urllib3.exceptions
+import pytest
 
 from esrally import client, exceptions, doc_link
 from esrally.utils import console
@@ -42,12 +43,12 @@ class EsClientFactoryTests(TestCase):
 
         f = client.EsClientFactory(hosts, client_options)
 
-        self.assertEqual(hosts, f.hosts)
-        self.assertIsNone(f.ssl_context)
-        self.assertEqual("http", f.client_options["scheme"])
-        self.assertFalse("http_auth" in f.client_options)
+        assert f.hosts == hosts
+        assert f.ssl_context is None
+        assert f.client_options["scheme"] == "http"
+        assert "http_auth" not in f.client_options
 
-        self.assertDictEqual(original_client_options, client_options)
+        assert client_options == original_client_options
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_verify_server(self, mocked_load_cert_chain):
@@ -72,17 +73,17 @@ class EsClientFactoryTests(TestCase):
         assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied " \
                                                   "client certs"
 
-        self.assertEqual(hosts, f.hosts)
-        self.assertTrue(f.ssl_context.check_hostname)
-        self.assertEqual(ssl.CERT_REQUIRED, f.ssl_context.verify_mode)
+        assert f.hosts == hosts
+        assert f.ssl_context.check_hostname
+        assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        self.assertEqual("https", f.client_options["scheme"])
-        self.assertEqual(("user", "password"), f.client_options["http_auth"])
-        self.assertNotIn("use_ssl", f.client_options)
-        self.assertNotIn("verify_certs", f.client_options)
-        self.assertNotIn("ca_certs", f.client_options)
+        assert f.client_options["scheme"] == "https"
+        assert f.client_options["http_auth"] == ("user", "password")
+        assert "use_ssl" not in f.client_options
+        assert "verify_certs" not in f.client_options
+        assert "ca_certs" not in f.client_options
 
-        self.assertDictEqual(original_client_options, client_options)
+        assert client_options == original_client_options
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_verify_self_signed_server_and_client_certificate(self, mocked_load_cert_chain):
@@ -112,19 +113,19 @@ class EsClientFactoryTests(TestCase):
             keyfile=client_options["client_key"]
         )
 
-        self.assertEqual(hosts, f.hosts)
-        self.assertTrue(f.ssl_context.check_hostname)
-        self.assertEqual(ssl.CERT_REQUIRED, f.ssl_context.verify_mode)
+        assert f.hosts == hosts
+        assert f.ssl_context.check_hostname
+        assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        self.assertEqual("https", f.client_options["scheme"])
-        self.assertEqual(("user", "password"), f.client_options["http_auth"])
-        self.assertNotIn("use_ssl", f.client_options)
-        self.assertNotIn("verify_certs", f.client_options)
-        self.assertNotIn("ca_certs", f.client_options)
-        self.assertNotIn("client_cert", f.client_options)
-        self.assertNotIn("client_key", f.client_options)
+        assert f.client_options["scheme"] == "https"
+        assert f.client_options["http_auth"] == ("user", "password")
+        assert "use_ssl" not in f.client_options
+        assert "verify_certs" not in f.client_options
+        assert "ca_certs" not in f.client_options
+        assert "client_cert" not in f.client_options
+        assert "client_key" not in f.client_options
 
-        self.assertDictEqual(original_client_options, client_options)
+        assert client_options == original_client_options
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_only_verify_self_signed_server_certificate(self, mocked_load_cert_chain):
@@ -149,17 +150,17 @@ class EsClientFactoryTests(TestCase):
 
         assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied " \
             "client certs"
-        self.assertEqual(hosts, f.hosts)
-        self.assertTrue(f.ssl_context.check_hostname)
-        self.assertEqual(ssl.CERT_REQUIRED, f.ssl_context.verify_mode)
+        assert f.hosts == hosts
+        assert f.ssl_context.check_hostname
+        assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        self.assertEqual("https", f.client_options["scheme"])
-        self.assertEqual(("user", "password"), f.client_options["http_auth"])
-        self.assertNotIn("use_ssl", f.client_options)
-        self.assertNotIn("verify_certs", f.client_options)
-        self.assertNotIn("ca_certs", f.client_options)
+        assert f.client_options["scheme"] == "https"
+        assert f.client_options["http_auth"] == ("user", "password")
+        assert "use_ssl" not in f.client_options
+        assert "verify_certs" not in f.client_options
+        assert "ca_certs" not in f.client_options
 
-        self.assertDictEqual(original_client_options, client_options)
+        assert client_options == original_client_options
 
     def test_raises_error_when_only_one_of_client_cert_and_client_key_defined(self):
         hosts = [{"host": "127.0.0.1", "port": 9200}]
@@ -181,7 +182,7 @@ class EsClientFactoryTests(TestCase):
             {random_client_ssl_option: client_ssl_options[random_client_ssl_option]}
         )
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             with mock.patch.object(console, "println") as mocked_console_println:
                 client.EsClientFactory(hosts, client_options)
         mocked_console_println.assert_called_once_with(
@@ -193,13 +194,11 @@ class EsClientFactoryTests(TestCase):
                 console.format.link(doc_link("command_line_reference.html#client-options"))
             )
         )
-        self.assertEqual(
+        assert ctx.value.args[0] == \
             "Cannot specify '{}' without also specifying '{}' in client-options.".format(
                 random_client_ssl_option,
                 missing_client_ssl_option
-            ),
-            ctx.exception.args[0]
-        )
+            )
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_unverified_certificate(self, mocked_load_cert_chain):
@@ -225,18 +224,18 @@ class EsClientFactoryTests(TestCase):
         assert not mocked_load_cert_chain.called, "ssl_context.load_cert_chain should not have been called as we have not supplied " \
                                                   "client certs"
 
-        self.assertEqual(hosts, f.hosts)
-        self.assertFalse(f.ssl_context.check_hostname)
-        self.assertEqual(ssl.CERT_NONE, f.ssl_context.verify_mode)
+        assert f.hosts == hosts
+        assert not f.ssl_context.check_hostname
+        assert f.ssl_context.verify_mode == ssl.CERT_NONE
 
-        self.assertEqual("https", f.client_options["scheme"])
-        self.assertEqual(("user", "password"), f.client_options["http_auth"])
-        self.assertNotIn("use_ssl", f.client_options)
-        self.assertNotIn("verify_certs", f.client_options)
-        self.assertNotIn("basic_auth_user", f.client_options)
-        self.assertNotIn("basic_auth_password", f.client_options)
+        assert f.client_options["scheme"] == "https"
+        assert f.client_options["http_auth"] == ("user", "password")
+        assert "use_ssl" not in f.client_options
+        assert "verify_certs" not in f.client_options
+        assert "basic_auth_user" not in f.client_options
+        assert "basic_auth_password" not in f.client_options
 
-        self.assertDictEqual(original_client_options, client_options)
+        assert client_options == original_client_options
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_unverified_certificate_present_client_certificates(self, mocked_load_cert_chain):
@@ -264,21 +263,21 @@ class EsClientFactoryTests(TestCase):
             keyfile=client_options["client_key"]
         )
 
-        self.assertEqual(hosts, f.hosts)
-        self.assertFalse(f.ssl_context.check_hostname)
-        self.assertEqual(ssl.CERT_NONE, f.ssl_context.verify_mode)
+        assert f.hosts == hosts
+        assert not f.ssl_context.check_hostname
+        assert f.ssl_context.verify_mode == ssl.CERT_NONE
 
-        self.assertEqual("https", f.client_options["scheme"])
-        self.assertEqual(("user", "password"), f.client_options["http_auth"])
-        self.assertNotIn("use_ssl", f.client_options)
-        self.assertNotIn("verify_certs", f.client_options)
-        self.assertNotIn("basic_auth_user", f.client_options)
-        self.assertNotIn("basic_auth_password", f.client_options)
-        self.assertNotIn("ca_certs", f.client_options)
-        self.assertNotIn("client_cert", f.client_options)
-        self.assertNotIn("client_key", f.client_options)
+        assert f.client_options["scheme"] == "https"
+        assert f.client_options["http_auth"] == ("user", "password")
+        assert "use_ssl" not in f.client_options
+        assert "verify_certs" not in f.client_options
+        assert "basic_auth_user" not in f.client_options
+        assert "basic_auth_password" not in f.client_options
+        assert "ca_certs" not in f.client_options
+        assert "client_cert" not in f.client_options
+        assert "client_key" not in f.client_options
 
-        self.assertDictEqual(original_client_options, client_options)
+        assert client_options == original_client_options
 
 
 class RequestContextManagerTests(TestCase):
@@ -297,9 +296,9 @@ class RequestContextManagerTests(TestCase):
             top_level_duration = top_level_ctx.request_end - top_level_ctx.request_start
 
         # top level request should cover total duration
-        self.assertAlmostEqual(top_level_duration, 0.2, delta=0.05)
+        assert abs(top_level_duration-0.2) < 0.05
         # nested request should only cover nested duration
-        self.assertAlmostEqual(nested_duration, 0.1, delta=0.05)
+        assert abs(nested_duration-0.1) < 0.05
 
 
 class RestLayerTests(TestCase):
@@ -310,7 +309,7 @@ class RestLayerTests(TestCase):
             {"host": "node-b.example.org", "port": 9200}
         ]
 
-        self.assertTrue(client.wait_for_rest_layer(es, max_attempts=3))
+        assert client.wait_for_rest_layer(es, max_attempts=3)
 
         es.cluster.health.assert_has_calls([
             mock.call(wait_for_nodes=">=2"),
@@ -332,14 +331,14 @@ class RestLayerTests(TestCase):
                 }
             }
         ]
-        self.assertTrue(client.wait_for_rest_layer(es, max_attempts=5))
+        assert client.wait_for_rest_layer(es, max_attempts=5)
 
     # don't sleep in realtime
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
     def test_dont_retry_eternally_on_transport_errors(self, es, sleep):
         es.cluster.health.side_effect = elasticsearch.TransportError(401, "Unauthorized")
-        self.assertFalse(client.wait_for_rest_layer(es, max_attempts=3))
+        assert not client.wait_for_rest_layer(es, max_attempts=3)
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_ssl_error(self, es):
@@ -347,6 +346,5 @@ class RestLayerTests(TestCase):
                                                             "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)",
                                                             urllib3.exceptions.SSLError(
                                                                 "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)"))
-        with self.assertRaisesRegex(expected_exception=exceptions.SystemSetupError,
-                                    expected_regex="Could not connect to cluster via https. Is this an https endpoint?"):
+        with pytest.raises(exceptions.SystemSetupError, match="Could not connect to cluster via https. Is this an https endpoint?"):
             client.wait_for_rest_layer(es, max_attempts=3)

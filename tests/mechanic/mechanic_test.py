@@ -18,6 +18,8 @@
 import unittest.mock as mock
 from unittest import TestCase
 
+import pytest
+
 from esrally import config, exceptions
 from esrally.mechanic import mechanic
 
@@ -34,11 +36,11 @@ class HostHandlingTests(TestCase):
             {"host": "site.example.com", "port": 9200},
         ]
 
-        self.assertEqual([
+        assert mechanic.to_ip_port(hosts) == [
             ("127.0.0.1", 9200),
             ("10.16.23.5", 9200),
             ("11.22.33.44", 9200),
-        ], mechanic.to_ip_port(hosts))
+        ]
 
     @mock.patch("esrally.utils.net.resolve")
     def test_rejects_hosts_with_unexpected_properties(self, resolver):
@@ -50,10 +52,10 @@ class HostHandlingTests(TestCase):
             {"host": "site.example.com", "port": 9200},
         ]
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             mechanic.to_ip_port(hosts)
-        self.assertEqual("When specifying nodes to be managed by Rally you can only supply hostname:port pairs (e.g. 'localhost:9200'), "
-                         "any additional options cannot be supported.", ctx.exception.args[0])
+        assert ctx.value.args[0] == "When specifying nodes to be managed by Rally you can only supply hostname:port pairs (e.g. 'localhost:9200'), " \
+                         "any additional options cannot be supported."
 
     def test_groups_nodes_by_host(self):
         ip_port = [
@@ -65,14 +67,13 @@ class HostHandlingTests(TestCase):
             ("11.22.33.44", 9200),
         ]
 
-        self.assertDictEqual(
+        assert mechanic.nodes_by_host(ip_port) == \
             {
                 ("127.0.0.1", 9200): [0, 1, 2],
                 ("10.16.23.5", 9200): [3],
                 ("11.22.33.44", 9200): [4, 5],
 
-            }, mechanic.nodes_by_host(ip_port)
-        )
+            }
 
     def test_extract_all_node_ips(self):
         ip_port = [
@@ -83,8 +84,7 @@ class HostHandlingTests(TestCase):
             ("11.22.33.44", 9200),
             ("11.22.33.44", 9200),
         ]
-        self.assertSetEqual({"127.0.0.1", "10.16.23.5", "11.22.33.44"},
-                            mechanic.extract_all_node_ips(ip_port))
+        assert mechanic.extract_all_node_ips(ip_port) == {"127.0.0.1", "10.16.23.5", "11.22.33.44"}
 
 
 class MechanicTests(TestCase):
@@ -122,10 +122,10 @@ class MechanicTests(TestCase):
         metrics_store = mock.Mock()
         m = MechanicTests.TestMechanic(cfg, metrics_store, supplier, provisioners, launcher)
         m.start_engine()
-        self.assertTrue(launcher.started)
+        assert launcher.started
         for p in provisioners:
-            self.assertTrue(p.prepare.called)
+            assert p.prepare.called
 
         m.stop_engine()
-        self.assertFalse(launcher.started)
-        self.assertEqual(cleanup.call_count, 2)
+        assert not launcher.started
+        assert cleanup.call_count == 2

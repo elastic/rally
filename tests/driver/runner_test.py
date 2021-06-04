@@ -23,6 +23,7 @@ import unittest.mock as mock
 from unittest import TestCase
 
 import elasticsearch
+import pytest
 
 from esrally import client, exceptions
 from esrally.driver import runner
@@ -50,10 +51,9 @@ class RegisterRunnerTests(TestCase):
 
         runner.register_runner(operation_type="unit_test", runner=runner_function, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.NoCompletion)
-        self.assertEqual("user-defined runner for [runner_function]", repr(returned_runner))
-        self.assertEqual(("default_client", "param"),
-                         await returned_runner({"default": "default_client", "other": "other_client"}, "param"))
+        assert isinstance(returned_runner, runner.NoCompletion)
+        assert repr(returned_runner) == "user-defined runner for [runner_function]"
+        assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == ("default_client", "param")
 
     @run_async
     async def test_single_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
@@ -67,15 +67,13 @@ class RegisterRunnerTests(TestCase):
         test_runner = UnitTestSingleClusterContextManagerRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.NoCompletion)
-        self.assertEqual("user-defined context-manager enabled runner for [UnitTestSingleClusterContextManagerRunner]",
-                         repr(returned_runner))
+        assert isinstance(returned_runner, runner.NoCompletion)
+        assert repr(returned_runner) == "user-defined context-manager enabled runner for [UnitTestSingleClusterContextManagerRunner]"
         # test that context_manager functionality gets preserved after wrapping
         async with returned_runner:
-            self.assertEqual(("default_client", "param"),
-                             await returned_runner({"default": "default_client", "other": "other_client"}, "param"))
+            assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == ("default_client", "param")
         # check that the context manager interface of our inner runner has been respected.
-        self.assertTrue(test_runner.fp.closed)
+        assert test_runner.fp.closed
 
     @run_async
     async def test_multi_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
@@ -91,16 +89,15 @@ class RegisterRunnerTests(TestCase):
         test_runner = UnitTestMultiClusterContextManagerRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.NoCompletion)
-        self.assertEqual("user-defined context-manager enabled runner for [UnitTestMultiClusterContextManagerRunner]",
-                         repr(returned_runner))
+        assert isinstance(returned_runner, runner.NoCompletion)
+        assert repr(returned_runner) == "user-defined context-manager enabled runner for [UnitTestMultiClusterContextManagerRunner]"
 
         # test that context_manager functionality gets preserved after wrapping
         all_clients = {"default": "default_client", "other": "other_client"}
         async with returned_runner:
-            self.assertEqual((all_clients, "param1", "param2"), await returned_runner(all_clients, "param1", "param2"))
+            assert await returned_runner(all_clients, "param1", "param2") == (all_clients, "param1", "param2")
         # check that the context manager interface of our inner runner has been respected.
-        self.assertTrue(test_runner.fp.closed)
+        assert test_runner.fp.closed
 
     @run_async
     async def test_single_cluster_runner_class_should_be_wrapped(self):
@@ -114,10 +111,9 @@ class RegisterRunnerTests(TestCase):
         test_runner = UnitTestSingleClusterRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.NoCompletion)
-        self.assertEqual("user-defined runner for [UnitTestSingleClusterRunner]", repr(returned_runner))
-        self.assertEqual(("default_client", "param"),
-                         await returned_runner({"default": "default_client", "other": "other_client"}, "param"))
+        assert isinstance(returned_runner, runner.NoCompletion)
+        assert repr(returned_runner) == "user-defined runner for [UnitTestSingleClusterRunner]"
+        assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == ("default_client", "param")
 
     @run_async
     async def test_multi_cluster_runner_class_should_be_wrapped(self):
@@ -133,10 +129,10 @@ class RegisterRunnerTests(TestCase):
         test_runner = UnitTestMultiClusterRunner()
         runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
-        self.assertIsInstance(returned_runner, runner.NoCompletion)
-        self.assertEqual("user-defined runner for [UnitTestMultiClusterRunner]", repr(returned_runner))
+        assert isinstance(returned_runner, runner.NoCompletion)
+        assert repr(returned_runner) == "user-defined runner for [UnitTestMultiClusterRunner]"
         all_clients = {"default": "default_client", "other": "other_client"}
-        self.assertEqual((all_clients, "some_param"), await returned_runner(all_clients, "some_param"))
+        assert await returned_runner(all_clients, "some_param") == (all_clients, "some_param")
 
 
 class AssertingRunnerTests(TestCase):
@@ -177,7 +173,7 @@ class AssertingRunnerTests(TestCase):
                 ]
             })
 
-        self.assertEqual(response, final_response)
+        assert final_response == response
 
     @run_async
     async def test_asserts_equal_fails(self):
@@ -193,8 +189,7 @@ class AssertingRunnerTests(TestCase):
         delegate = mock.MagicMock()
         delegate.return_value = as_future(response)
         r = runner.AssertingRunner(delegate)
-        with self.assertRaisesRegex(exceptions.RallyTaskAssertionError,
-                                    r"Expected \[hits.hits.relation\] in \[test-task\] to be == \[eq\] but was \[gte\]."):
+        with pytest.raises(exceptions.RallyTaskAssertionError, match=r"Expected \[hits.hits.relation\] in \[test-task\] to be == \[eq\] but was \[gte\]."):
             async with r:
                 await r(es, {
                     "name": "test-task",
@@ -231,11 +226,11 @@ class AssertingRunnerTests(TestCase):
                 ]
             })
         # still passes response as is
-        self.assertEqual(response, final_response)
+        assert final_response == response
 
     def test_predicates(self):
         r = runner.AssertingRunner(delegate=None)
-        self.assertEqual(5, len(r.predicates))
+        assert len(r.predicates) == 5
 
         predicate_success = {
             # predicate: (expected, actual)
@@ -248,8 +243,8 @@ class AssertingRunnerTests(TestCase):
 
         for predicate, vals in predicate_success.items():
             expected, actual = vals
-            self.assertTrue(r.predicates[predicate](expected, actual),
-                            f"Expected [{expected} {predicate} {actual}] to succeed.")
+            assert r.predicates[predicate](expected, actual), \
+                            f"Expected [{expected} {predicate} {actual}] to succeed."
 
         predicate_fail = {
             # predicate: (expected, actual)
@@ -262,8 +257,8 @@ class AssertingRunnerTests(TestCase):
 
         for predicate, vals in predicate_fail.items():
             expected, actual = vals
-            self.assertFalse(r.predicates[predicate](expected, actual),
-                             f"Expected [{expected} {predicate} {actual}] to fail.")
+            assert not r.predicates[predicate](expected, actual), \
+                             f"Expected [{expected} {predicate} {actual}] to fail."
 
 
 class SelectiveJsonParserTests(TestCase):
@@ -290,9 +285,9 @@ class SelectiveJsonParserTests(TestCase):
             "meta.date.month"
         ])
 
-        self.assertEqual("Hello", parsed.get("title"))
-        self.assertEqual(2000, parsed.get("meta.date.year"))
-        self.assertNotIn("meta.date.month", parsed)
+        assert parsed.get("title") == "Hello"
+        assert parsed.get("meta.date.year") == 2000
+        assert "meta.date.month" not in parsed
 
     def test_list_length(self):
         doc = self.doc_as_text({
@@ -330,14 +325,14 @@ class SelectiveJsonParserTests(TestCase):
             "meta.date.month"
         ], ["authors", "readers", "supporters"])
 
-        self.assertEqual("Hello", parsed.get("title"))
-        self.assertEqual(2000, parsed.get("meta.date.year"))
-        self.assertNotIn("meta.date.month", parsed)
+        assert parsed.get("title") == "Hello"
+        assert parsed.get("meta.date.year") == 2000
+        assert "meta.date.month" not in parsed
 
         # lists
-        self.assertFalse(parsed.get("authors"))
-        self.assertFalse(parsed.get("readers"))
-        self.assertTrue(parsed.get("supporters"))
+        assert not parsed.get("authors")
+        assert not parsed.get("readers")
+        assert parsed.get("supporters")
 
 
 class BulkIndexRunnerTests(TestCase):
@@ -361,11 +356,11 @@ class BulkIndexRunnerTests(TestCase):
                     "index_line\n"
         }
 
-        with self.assertRaises(exceptions.DataError) as ctx:
+        with pytest.raises(exceptions.DataError) as ctx:
             await bulk(es, bulk_params)
-        self.assertEqual(
-            "Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'action-metadata-present'. "
-            "Add it to your parameter source and try again.", ctx.exception.args[0])
+        assert ctx.value.args[0] == \
+            "Parameter source for operation 'bulk-index' did not provide the mandatory parameter 'action-metadata-present'. " \
+            "Add it to your parameter source and try again."
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -392,13 +387,13 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual(8, result["took"])
-        self.assertIsNone(result["index"])
-        self.assertEqual(3, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(True, result["success"])
-        self.assertEqual(0, result["error-count"])
-        self.assertFalse("error-type" in result)
+        assert result["took"] == 8
+        assert result["index"] is None
+        assert result["weight"] == 3
+        assert result["unit"] == "docs"
+        assert result["success"] is True
+        assert result["error-count"] == 0
+        assert "error-type" not in result
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
@@ -429,12 +424,12 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual(8, result["took"])
-        self.assertEqual(3, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(True, result["success"])
-        self.assertEqual(0, result["error-count"])
-        self.assertFalse("error-type" in result)
+        assert result["took"] == 8
+        assert result["weight"] == 3
+        assert result["unit"] == "docs"
+        assert result["success"] is True
+        assert result["error-count"] == 0
+        assert "error-type" not in result
 
         es.bulk.assert_called_with(doc_type="_doc",
                                    params={},
@@ -467,13 +462,13 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual(8, result["took"])
-        self.assertEqual("test-index", result["index"])
-        self.assertEqual(3, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(True, result["success"])
-        self.assertEqual(0, result["error-count"])
-        self.assertFalse("error-type" in result)
+        assert result["took"] == 8
+        assert result["index"] == "test-index"
+        assert result["weight"] == 3
+        assert result["unit"] == "docs"
+        assert result["success"] is True
+        assert result["error-count"] == 0
+        assert "error-type" not in result
 
         es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type="_doc", params={})
 
@@ -499,13 +494,13 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual(8, result["took"])
-        self.assertEqual("test-index", result["index"])
-        self.assertEqual(3, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(True, result["success"])
-        self.assertEqual(0, result["error-count"])
-        self.assertFalse("error-type" in result)
+        assert result["took"] == 8
+        assert result["index"] == "test-index"
+        assert result["weight"] == 3
+        assert result["unit"] == "docs"
+        assert result["success"] is True
+        assert result["error-count"] == 0
+        assert "error-type" not in result
 
         es.bulk.assert_called_with(body=bulk_params["body"], index="test-index", doc_type=None, params={})
 
@@ -568,13 +563,13 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual("test", result["index"])
-        self.assertEqual(5, result["took"])
-        self.assertEqual(3, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(False, result["success"])
-        self.assertEqual(2, result["error-count"])
-        self.assertEqual("bulk", result["error-type"])
+        assert result["index"] == "test"
+        assert result["took"] == 5
+        assert result["weight"] == 3
+        assert result["unit"] == "docs"
+        assert result["success"] is False
+        assert result["error-count"] == 2
+        assert result["error-type"] == "bulk"
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
@@ -635,13 +630,13 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual("test", result["index"])
-        self.assertEqual(20, result["took"])
-        self.assertEqual(3, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(False, result["success"])
-        self.assertEqual(3, result["error-count"])
-        self.assertEqual("bulk", result["error-type"])
+        assert result["index"] == "test"
+        assert result["took"] == 20
+        assert result["weight"] == 3
+        assert result["unit"] == "docs"
+        assert result["success"] is False
+        assert result["error-count"] == 3
+        assert result["error-type"] == "bulk"
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
@@ -742,14 +737,14 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual("test", result["index"])
-        self.assertEqual(30, result["took"])
-        self.assertNotIn("ingest_took", result, "ingest_took is not extracted with simple stats")
-        self.assertEqual(4, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(False, result["success"])
-        self.assertEqual(2, result["error-count"])
-        self.assertEqual("bulk", result["error-type"])
+        assert result["index"] == "test"
+        assert result["took"] == 30
+        assert "ingest_took" not in result, "ingest_took is not extracted with simple stats"
+        assert result["weight"] == 4
+        assert result["unit"] == "docs"
+        assert result["success"] is False
+        assert result["error-count"] == 2
+        assert result["error-type"] == "bulk"
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
@@ -887,15 +882,15 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual("test", result["index"])
-        self.assertEqual(30, result["took"])
-        self.assertEqual(20, result["ingest_took"])
-        self.assertEqual(6, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(False, result["success"])
-        self.assertEqual(3, result["error-count"])
-        self.assertEqual("bulk", result["error-type"])
-        self.assertEqual(
+        assert result["index"] == "test"
+        assert result["took"] == 30
+        assert result["ingest_took"] == 20
+        assert result["weight"] == 6
+        assert result["unit"] == "docs"
+        assert result["success"] is False
+        assert result["error-count"] == 3
+        assert result["error-type"] == "bulk"
+        assert result["ops"] == \
             {
                 "index": {
                     "item-count": 4,
@@ -908,8 +903,8 @@ class BulkIndexRunnerTests(TestCase):
                     "updated": 1,
                     "noop": 1
                 }
-            }, result["ops"])
-        self.assertEqual(
+            }
+        assert result["shards_histogram"] == \
             [
                 {
                     "item-count": 3,
@@ -935,15 +930,15 @@ class BulkIndexRunnerTests(TestCase):
                         "failed": 1
                     }
                 }
-            ], result["shards_histogram"])
-        self.assertEqual(582, result["bulk-request-size-bytes"])
-        self.assertEqual(234, result["total-document-size-bytes"])
+            ]
+        assert result["bulk-request-size-bytes"] == 582
+        assert result["total-document-size-bytes"] == 234
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
         es.bulk.return_value.result().pop("ingest_took")
         result = await bulk(es, bulk_params)
-        self.assertNotIn("ingest_took", result)
+        assert "ingest_took" not in result
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -986,21 +981,21 @@ class BulkIndexRunnerTests(TestCase):
 
         result = await bulk(es, bulk_params)
 
-        self.assertEqual("test", result["index"])
-        self.assertEqual(30, result["took"])
-        self.assertEqual(20, result["ingest_took"])
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("docs", result["unit"])
-        self.assertEqual(True, result["success"])
-        self.assertEqual(0, result["error-count"])
-        self.assertEqual(
+        assert result["index"] == "test"
+        assert result["took"] == 30
+        assert result["ingest_took"] == 20
+        assert result["weight"] == 1
+        assert result["unit"] == "docs"
+        assert result["success"] is True
+        assert result["error-count"] == 0
+        assert result["ops"] == \
             {
                 "index": {
                     "item-count": 1,
                     "created": 1
                 },
-            }, result["ops"])
-        self.assertEqual(
+            }
+        assert result["shards_histogram"] == \
             [
                 {
                     "item-count": 1,
@@ -1010,15 +1005,15 @@ class BulkIndexRunnerTests(TestCase):
                         "failed": 0
                     }
                 }
-            ], result["shards_histogram"])
-        self.assertEqual(93, result["bulk-request-size-bytes"])
-        self.assertEqual(39, result["total-document-size-bytes"])
+            ]
+        assert result["bulk-request-size-bytes"] == 93
+        assert result["total-document-size-bytes"] == 39
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
 
         es.bulk.return_value.result().pop("ingest_took")
         result = await bulk(es, bulk_params)
-        self.assertNotIn("ingest_took", result)
+        assert "ingest_took" not in result
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1061,7 +1056,7 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test"
         }
 
-        with self.assertRaisesRegex(exceptions.DataError, "bulk body is neither string nor list"):
+        with pytest.raises(exceptions.DataError, match="bulk body is neither string nor list"):
             await bulk(es, bulk_params)
 
         es.bulk.assert_called_with(body=bulk_params["body"], params={})
@@ -1233,9 +1228,9 @@ class IndicesStatsRunnerTests(TestCase):
         es.indices.stats.return_value = as_future({})
         indices_stats = runner.IndicesStats()
         result = await indices_stats(es, params={})
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertTrue(result["success"])
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["success"]
 
         es.indices.stats.assert_called_once_with(index="_all", metric="_all")
 
@@ -1247,9 +1242,9 @@ class IndicesStatsRunnerTests(TestCase):
         result = await indices_stats(es, params={"request-timeout": 3.0,
                                                  "headers": {"header1": "value1"},
                                                  "opaque-id": "test-id1"})
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertTrue(result["success"])
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["success"]
 
         es.indices.stats.assert_called_once_with(index="_all",
                                                  metric="_all",
@@ -1280,14 +1275,14 @@ class IndicesStatsRunnerTests(TestCase):
                 "expected-value": 0
             }
         })
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertFalse(result["success"])
-        self.assertDictEqual({
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert not result["success"]
+        assert result["condition"] == {
             "path": "_all.total.merges.current",
             "actual-value": "2",
             "expected-value": "0"
-        }, result["condition"])
+        }
 
         es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
@@ -1314,14 +1309,14 @@ class IndicesStatsRunnerTests(TestCase):
                 "expected-value": 0
             }
         })
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertTrue(result["success"])
-        self.assertDictEqual({
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["success"]
+        assert result["condition"] == {
             "path": "_all.total.merges.current",
             "actual-value": "0",
             "expected-value": "0"
-        }, result["condition"])
+        }
 
         es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
@@ -1348,14 +1343,14 @@ class IndicesStatsRunnerTests(TestCase):
                 "expected-value": 0
             }
         })
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertFalse(result["success"])
-        self.assertDictEqual({
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert not result["success"]
+        assert result["condition"] == {
             "path": "indices.my_index.total.docs.count",
             "actual-value": None,
             "expected-value": "0"
-        }, result["condition"])
+        }
 
         es.indices.stats.assert_called_once_with(index="logs-*", metric="_all")
 
@@ -1400,13 +1395,13 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             result = await query_runner(es, params)
 
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertEqual(1, result["hits"])
-        self.assertEqual("gte", result["hits_relation"])
-        self.assertFalse(result["timed_out"])
-        self.assertEqual(5, result["took"])
-        self.assertFalse("error-type" in result)
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["hits"] == 1
+        assert result["hits_relation"] == "gte"
+        assert not result["timed_out"]
+        assert result["took"] == 5
+        assert "error-type" not in result
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1459,13 +1454,13 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             result = await query_runner(es, params)
 
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertEqual(1, result["hits"])
-        self.assertEqual("gte", result["hits_relation"])
-        self.assertFalse(result["timed_out"])
-        self.assertEqual(5, result["took"])
-        self.assertFalse("error-type" in result)
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["hits"] == 1
+        assert result["hits_relation"] == "gte"
+        assert not result["timed_out"]
+        assert result["took"] == 5
+        assert "error-type" not in result
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1514,13 +1509,13 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             result = await query_runner(es, params)
 
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertEqual(2, result["hits"])
-        self.assertEqual("eq", result["hits_relation"])
-        self.assertFalse(result["timed_out"])
-        self.assertEqual(62, result["took"])
-        self.assertFalse("error-type" in result)
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["hits"] == 2
+        assert result["hits_relation"] == "eq"
+        assert not result["timed_out"]
+        assert result["took"] == 62
+        assert "error-type" not in result
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1571,13 +1566,13 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             result = await query_runner(es, params)
 
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertNotIn("hits", result)
-        self.assertNotIn("hits_relation", result)
-        self.assertNotIn("timed_out", result)
-        self.assertNotIn("took", result)
-        self.assertNotIn("error-type", result)
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert "hits" not in result
+        assert "hits_relation" not in result
+        assert "timed_out" not in result
+        assert "took" not in result
+        assert "error-type" not in result
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1624,13 +1619,13 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             result = await query_runner(es, params)
 
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertEqual(2, result["hits"])
-        self.assertEqual("eq", result["hits_relation"])
-        self.assertFalse(result["timed_out"])
-        self.assertEqual(5, result["took"])
-        self.assertFalse("error-type" in result)
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["hits"] == 2
+        assert result["hits_relation"] == "eq"
+        assert not result["timed_out"]
+        assert result["took"] == 5
+        assert "error-type" not in result
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1682,13 +1677,13 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             result = await query_runner(es, params)
 
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertEqual(2, result["hits"])
-        self.assertEqual("eq", result["hits_relation"])
-        self.assertFalse(result["timed_out"])
-        self.assertEqual(5, result["took"])
-        self.assertFalse("error-type" in result)
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["hits"] == 2
+        assert result["hits_relation"] == "eq"
+        assert not result["timed_out"]
+        assert result["took"] == 5
+        assert "error-type" not in result
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1740,13 +1735,13 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             result = await query_runner(es, params)
 
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
-        self.assertEqual(2, result["hits"])
-        self.assertEqual("eq", result["hits_relation"])
-        self.assertFalse(result["timed_out"])
-        self.assertEqual(5, result["took"])
-        self.assertFalse("error-type" in result)
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["hits"] == 2
+        assert result["hits_relation"] == "eq"
+        assert not result["timed_out"]
+        assert result["took"] == 5
+        assert "error-type" not in result
 
         es.transport.perform_request.assert_called_once_with(
             "GET", "/unittest/type/_search",
@@ -1800,14 +1795,14 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             results = await query_runner(es, params)
 
-        self.assertEqual(1, results["weight"])
-        self.assertEqual(1, results["pages"])
-        self.assertEqual(2, results["hits"])
-        self.assertEqual("eq", results["hits_relation"])
-        self.assertEqual(4, results["took"])
-        self.assertEqual("pages", results["unit"])
-        self.assertFalse(results["timed_out"])
-        self.assertFalse("error-type" in results)
+        assert results["weight"] == 1
+        assert results["pages"] == 1
+        assert results["hits"] == 2
+        assert results["hits_relation"] == "eq"
+        assert results["took"] == 4
+        assert results["unit"] == "pages"
+        assert not results["timed_out"]
+        assert "error-type" not in results
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1862,14 +1857,14 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             results = await query_runner(es, params)
 
-        self.assertEqual(1, results["weight"])
-        self.assertEqual(1, results["pages"])
-        self.assertEqual(2, results["hits"])
-        self.assertEqual("eq", results["hits_relation"])
-        self.assertEqual(4, results["took"])
-        self.assertEqual("pages", results["unit"])
-        self.assertFalse(results["timed_out"])
-        self.assertFalse("error-type" in results)
+        assert results["weight"] == 1
+        assert results["pages"] == 1
+        assert results["hits"] == 2
+        assert results["hits_relation"] == "eq"
+        assert results["took"] == 4
+        assert results["unit"] == "pages"
+        assert not results["timed_out"]
+        assert "error-type" not in results
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -1923,14 +1918,14 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             results = await query_runner(es, params)
 
-        self.assertEqual(1, results["weight"])
-        self.assertEqual(1, results["pages"])
-        self.assertEqual(2, results["hits"])
-        self.assertEqual("eq", results["hits_relation"])
-        self.assertEqual(4, results["took"])
-        self.assertEqual("pages", results["unit"])
-        self.assertFalse(results["timed_out"])
-        self.assertFalse("error-type" in results)
+        assert results["weight"] == 1
+        assert results["pages"] == 1
+        assert results["hits"] == 2
+        assert results["hits_relation"] == "eq"
+        assert results["took"] == 4
+        assert results["unit"] == "pages"
+        assert not results["timed_out"]
+        assert "error-type" not in results
 
         es.transport.perform_request.assert_called_once_with(
             "GET",
@@ -2005,14 +2000,14 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             results = await query_runner(es, params)
 
-        self.assertEqual(2, results["weight"])
-        self.assertEqual(2, results["pages"])
-        self.assertEqual(3, results["hits"])
-        self.assertEqual("eq", results["hits_relation"])
-        self.assertEqual(79, results["took"])
-        self.assertEqual("pages", results["unit"])
-        self.assertTrue(results["timed_out"])
-        self.assertFalse("error-type" in results)
+        assert results["weight"] == 2
+        assert results["pages"] == 2
+        assert results["hits"] == 3
+        assert results["hits_relation"] == "eq"
+        assert results["took"] == 79
+        assert results["unit"] == "pages"
+        assert results["timed_out"]
+        assert "error-type" not in results
 
         es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
@@ -2057,13 +2052,13 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             results = await query_runner(es, params)
 
-        self.assertEqual(1, results["weight"])
-        self.assertEqual(1, results["pages"])
-        self.assertEqual(1, results["hits"])
-        self.assertEqual("eq", results["hits_relation"])
-        self.assertEqual("pages", results["unit"])
-        self.assertEqual(53, results["took"])
-        self.assertFalse("error-type" in results)
+        assert results["weight"] == 1
+        assert results["pages"] == 1
+        assert results["hits"] == 1
+        assert results["hits_relation"] == "eq"
+        assert results["unit"] == "pages"
+        assert results["took"] == 53
+        assert "error-type" not in results
 
         es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
@@ -2130,14 +2125,14 @@ class QueryRunnerTests(TestCase):
         async with query_runner:
             results = await query_runner(es, params)
 
-        self.assertEqual(2, results["weight"])
-        self.assertEqual(2, results["pages"])
-        self.assertEqual(4, results["hits"])
-        self.assertEqual("gte", results["hits_relation"])
-        self.assertEqual(878, results["took"])
-        self.assertEqual("pages", results["unit"])
-        self.assertFalse(results["timed_out"])
-        self.assertFalse("error-type" in results)
+        assert results["weight"] == 2
+        assert results["pages"] == 2
+        assert results["hits"] == 4
+        assert results["hits_relation"] == "gte"
+        assert results["took"] == 878
+        assert results["unit"] == "pages"
+        assert not results["timed_out"]
+        assert "error-type" not in results
 
         es.clear_scroll.assert_called_once_with(body={"scroll_id": ["some-scroll-id"]})
 
@@ -2179,12 +2174,11 @@ class PutPipelineRunnerTests(TestCase):
         params = {
             "id": "rename"
         }
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'body'. "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'body'. "
                                     "Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.ingest.put_pipeline.call_count)
+        assert es.ingest.put_pipeline.call_count == 0
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2196,12 +2190,11 @@ class PutPipelineRunnerTests(TestCase):
         params = {
             "body": {}
         }
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
                                     "Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.ingest.put_pipeline.call_count)
+        assert es.ingest.put_pipeline.call_count == 0
 
 
 class ClusterHealthRunnerTests(TestCase):
@@ -2222,13 +2215,13 @@ class ClusterHealthRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True,
             "cluster-status": "green",
             "relocating-shards": 0
-        }, result)
+        }
 
         es.cluster.health.assert_called_once_with(params={"wait_for_status": "green"})
 
@@ -2249,13 +2242,13 @@ class ClusterHealthRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True,
             "cluster-status": "green",
             "relocating-shards": 0
-        }, result)
+        }
 
         es.cluster.health.assert_called_once_with(params={"wait_for_status": "yellow"})
 
@@ -2279,13 +2272,13 @@ class ClusterHealthRunnerTests(TestCase):
 
         result = await cluster_health_runner(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True,
             "cluster-status": "green",
             "relocating-shards": 0
-        }, result)
+        }
 
         es.cluster.health.assert_called_once_with(headers={"header1": "value1"},
                                                   opaque_id="testid-1",
@@ -2311,13 +2304,13 @@ class ClusterHealthRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": False,
             "cluster-status": "yellow",
             "relocating-shards": 3
-        }, result)
+        }
 
         es.cluster.health.assert_called_once_with(index="logs-*",
                                                   params={"wait_for_status": "red", "wait_for_no_relocating_shards": True})
@@ -2339,13 +2332,13 @@ class ClusterHealthRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": False,
             "cluster-status": None,
             "relocating-shards": 0
-        }, result)
+        }
 
         es.cluster.health.assert_called_once_with(params={"wait_for_status": "green"})
 
@@ -2372,11 +2365,11 @@ class CreateIndexRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 2,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.create.assert_has_calls([
             mock.call(index="indexA", body={"settings": {}}, params=request_params),
@@ -2406,11 +2399,11 @@ class CreateIndexRunnerTests(TestCase):
 
         result = await create_index_runner(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
 
         es.indices.create.assert_called_once_with(index="indexA",
@@ -2442,11 +2435,11 @@ class CreateIndexRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.create.assert_called_once_with(index="indexA",
                                                   body={"settings": {}},
@@ -2460,12 +2453,11 @@ class CreateIndexRunnerTests(TestCase):
         r = runner.CreateIndex()
 
         params = {}
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'create-index' did not provide the mandatory parameter 'indices'. "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'create-index' did not provide the mandatory parameter 'indices'. "
                                     "Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.indices.create.call_count)
+        assert es.indices.create.call_count == 0
 
 
 class CreateDataStreamRunnerTests(TestCase):
@@ -2490,11 +2482,11 @@ class CreateDataStreamRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 2,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.create_data_stream.assert_has_calls([
             mock.call("data-stream-A", params=request_params),
@@ -2509,12 +2501,11 @@ class CreateDataStreamRunnerTests(TestCase):
         r = runner.CreateDataStream()
 
         params = {}
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'create-data-stream' did not provide the "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'create-data-stream' did not provide the "
                                     "mandatory parameter 'data-streams'. Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.indices.create_data_stream.call_count)
+        assert es.indices.create_data_stream.call_count == 0
 
 
 class DeleteIndexRunnerTests(TestCase):
@@ -2535,11 +2526,11 @@ class DeleteIndexRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.cluster.put_settings.assert_has_calls([
             mock.call(body={"transient": {"action.destructive_requires_name": False}}),
@@ -2566,11 +2557,11 @@ class DeleteIndexRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 2,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.cluster.put_settings.assert_has_calls([
             mock.call(body={"transient": {"action.destructive_requires_name": False}}),
@@ -2580,7 +2571,7 @@ class DeleteIndexRunnerTests(TestCase):
             mock.call(index="indexA", params=params["request-params"]),
             mock.call(index="indexB", params=params["request-params"])
         ])
-        self.assertEqual(0, es.indices.exists.call_count)
+        assert es.indices.exists.call_count == 0
 
 
 class DeleteDataStreamRunnerTests(TestCase):
@@ -2600,11 +2591,11 @@ class DeleteDataStreamRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.delete_data_stream.assert_called_once_with("data-stream-B", params={})
 
@@ -2626,17 +2617,17 @@ class DeleteDataStreamRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 2,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.delete_data_stream.assert_has_calls([
             mock.call("data-stream-A", ignore=[404], params=params["request-params"]),
             mock.call("data-stream-B", ignore=[404], params=params["request-params"])
         ])
-        self.assertEqual(0, es.indices.exists.call_count)
+        assert es.indices.exists.call_count == 0
 
 
 class CreateIndexTemplateRunnerTests(TestCase):
@@ -2660,11 +2651,11 @@ class CreateIndexTemplateRunnerTests(TestCase):
 
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 2,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.put_template.assert_has_calls([
             mock.call(name="templateA", body={"settings": {}}, params=params["request-params"]),
@@ -2679,12 +2670,11 @@ class CreateIndexTemplateRunnerTests(TestCase):
         r = runner.CreateIndexTemplate()
 
         params = {}
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'create-index-template' did not provide the mandatory parameter "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'create-index-template' did not provide the mandatory parameter "
                                     "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.indices.put_template.call_count)
+        assert es.indices.put_template.call_count == 0
 
 
 class DeleteIndexTemplateRunnerTests(TestCase):
@@ -2708,11 +2698,11 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
-        self.assertDictEqual({
+        assert result == {
             "weight": 3,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.delete_template.assert_has_calls([
             mock.call(name="templateA", params=params["request-params"]),
@@ -2742,15 +2732,15 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.delete_template.assert_called_once_with(name="templateB", params=params["request-params"])
         # not called because the matching index is empty.
-        self.assertEqual(0, es.indices.delete.call_count)
+        assert es.indices.delete.call_count == 0
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2758,12 +2748,11 @@ class DeleteIndexTemplateRunnerTests(TestCase):
         r = runner.DeleteIndexTemplate()
 
         params = {}
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'delete-index-template' did not provide the mandatory parameter "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'delete-index-template' did not provide the mandatory parameter "
                                     "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.indices.delete_template.call_count)
+        assert es.indices.delete_template.call_count == 0
 
 
 class CreateComponentTemplateRunnerTests(TestCase):
@@ -2784,11 +2773,11 @@ class CreateComponentTemplateRunnerTests(TestCase):
         }
 
         result = await r(es, params)
-        self.assertDictEqual({
+        assert result == {
             "weight": 2,
             "unit": "ops",
             "success": True
-        }, result)
+        }
         es.cluster.put_component_template.assert_has_calls([
             mock.call(name="templateA", body={"template":{"mappings":{"properties":{"@timestamp":{"type": "date"}}}}},
                       params=params["request-params"]),
@@ -2804,12 +2793,11 @@ class CreateComponentTemplateRunnerTests(TestCase):
         r = runner.CreateComponentTemplate()
 
         params = {}
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'create-component-template' did not provide the mandatory parameter "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'create-component-template' did not provide the mandatory parameter "
                                     "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.cluster.put_component_template.call_count)
+        assert es.cluster.put_component_template.call_count == 0
 
 
 class DeleteComponentTemplateRunnerTests(TestCase):
@@ -2832,11 +2820,11 @@ class DeleteComponentTemplateRunnerTests(TestCase):
             "only-if-exists": False
         }
         result = await r(es, params)
-        self.assertDictEqual({
+        assert result == {
             "weight": 2,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.cluster.delete_component_template.assert_has_calls([
             mock.call(name="templateA", params=params["request-params"], ignore=[404]),
@@ -2869,11 +2857,11 @@ class DeleteComponentTemplateRunnerTests(TestCase):
         }
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.cluster.delete_component_template.assert_called_once_with(name="templateB", params=params["request-params"])
 
@@ -2883,12 +2871,11 @@ class DeleteComponentTemplateRunnerTests(TestCase):
         r = runner.DeleteComponentTemplate()
 
         params = {}
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'delete-component-template' did not provide the mandatory parameter "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'delete-component-template' did not provide the mandatory parameter "
                                     "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.indices.delete_template.call_count)
+        assert es.indices.delete_template.call_count == 0
 
 
 class CreateComposableTemplateRunnerTests(TestCase):
@@ -2910,11 +2897,11 @@ class CreateComposableTemplateRunnerTests(TestCase):
         }
 
         result = await r(es, params)
-        self.assertDictEqual({
+        assert result == {
             "weight": 2,
             "unit": "ops",
             "success": True
-        }, result)
+        }
         es.cluster.put_index_template.assert_has_calls([
             mock.call(name="templateA", body={"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},
                                               "composed_of":["ct1","ct2"]}, params=params["request-params"]),
@@ -2930,12 +2917,11 @@ class CreateComposableTemplateRunnerTests(TestCase):
         r = runner.CreateComposableTemplate()
 
         params = {}
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'create-composable-template' did not provide the mandatory parameter "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'create-composable-template' did not provide the mandatory parameter "
                                     "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.cluster.put_index_template.call_count)
+        assert es.cluster.put_index_template.call_count == 0
 
 
 class DeleteComposableTemplateRunnerTests(TestCase):
@@ -2960,11 +2946,11 @@ class DeleteComposableTemplateRunnerTests(TestCase):
         result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
-        self.assertDictEqual({
+        assert result == {
             "weight": 3,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.delete_index_template.assert_has_calls([
             mock.call(name="templateA", params=params["request-params"], ignore=[404]),
@@ -2994,15 +2980,15 @@ class DeleteComposableTemplateRunnerTests(TestCase):
         result = await r(es, params)
 
         # 2 times delete index template, one time delete matching indices
-        self.assertDictEqual({
+        assert result == {
             "weight": 1,
             "unit": "ops",
             "success": True
-        }, result)
+        }
 
         es.indices.delete_index_template.assert_called_once_with(name="templateB", params=params["request-params"])
         # not called because the matching index is empty.
-        self.assertEqual(0, es.indices.delete.call_count)
+        assert es.indices.delete.call_count == 0
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -3010,12 +2996,11 @@ class DeleteComposableTemplateRunnerTests(TestCase):
         r = runner.DeleteComposableTemplate()
 
         params = {}
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'delete-composable-template' did not provide the mandatory parameter "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'delete-composable-template' did not provide the mandatory parameter "
                                     "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.indices.delete_index_template.call_count)
+        assert es.indices.delete_index_template.call_count == 0
 
 
 class CreateMlDatafeedTests(TestCase):
@@ -3389,9 +3374,9 @@ class RawRequestRunnerTests(TestCase):
         }
 
         with mock.patch.object(r.logger, "error") as mocked_error_logger:
-            with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            with pytest.raises(exceptions.RallyAssertionError) as ctx:
                 await r(es, params)
-                self.assertEqual("RawRequest [_cat/count] failed. Path parameter must begin with a '/'.", ctx.exception.args[0])
+                assert ctx.value.args[0] == "RawRequest [_cat/count] failed. Path parameter must begin with a '/'."
             mocked_error_logger.assert_has_calls([
                 mock.call("RawRequest failed. Path parameter: [%s] must begin with a '/'.", params["path"])
             ])
@@ -3539,15 +3524,14 @@ class SleepTests(TestCase):
     @run_async
     async def test_missing_parameter(self, sleep, es):
         r = runner.Sleep()
-        with self.assertRaisesRegex(exceptions.DataError,
-                                    "Parameter source for operation 'sleep' did not provide the mandatory parameter "
+        with pytest.raises(exceptions.DataError, match="Parameter source for operation 'sleep' did not provide the mandatory parameter "
                                     "'duration'. Add it to your parameter source and try again."):
             await r(es, params={})
 
-        self.assertEqual(0, es.call_count)
-        self.assertEqual(1, es.on_request_start.call_count)
-        self.assertEqual(1, es.on_request_end.call_count)
-        self.assertEqual(0, sleep.call_count)
+        assert es.call_count == 0
+        assert es.on_request_start.call_count == 1
+        assert es.on_request_end.call_count == 1
+        assert sleep.call_count == 0
 
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
@@ -3557,9 +3541,9 @@ class SleepTests(TestCase):
         r = runner.Sleep()
         await r(es, params={"duration": 4.3})
 
-        self.assertEqual(0, es.call_count)
-        self.assertEqual(1, es.on_request_start.call_count)
-        self.assertEqual(1, es.on_request_end.call_count)
+        assert es.call_count == 0
+        assert es.on_request_start.call_count == 1
+        assert es.on_request_end.call_count == 1
         sleep.assert_called_once_with(4.3)
 
 
@@ -3781,7 +3765,7 @@ class WaitForSnapshotCreateTests(TestCase):
             ignore_unavailable=True
         )
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 243468188055,
             "unit": "byte",
             "success": True,
@@ -3790,9 +3774,9 @@ class WaitForSnapshotCreateTests(TestCase):
             "throughput": 218658731.10622546,
             "start_time_millis": 1597317564956,
             "stop_time_millis": 1597317564956 + 1113462
-        }, result)
+        }
 
-        self.assertEqual(3, es.snapshot.status.call_count)
+        assert es.snapshot.status.call_count == 3
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -3825,7 +3809,7 @@ class WaitForSnapshotCreateTests(TestCase):
         r = runner.WaitForSnapshotCreate()
         result = await r(es, params)
 
-        self.assertDictEqual({
+        assert result == {
             "weight": 9399505,
             "unit": "byte",
             "success": True,
@@ -3834,7 +3818,7 @@ class WaitForSnapshotCreateTests(TestCase):
             "throughput": 46997525.0,
             "start_time_millis": 1591776481060,
             "stop_time_millis": 1591776481060 + 200
-        }, result)
+        }
 
         es.snapshot.status.assert_called_once_with(repository="backups",
                                                    snapshot="snapshot-001",
@@ -3863,9 +3847,9 @@ class WaitForSnapshotCreateTests(TestCase):
         r = runner.WaitForSnapshotCreate()
 
         with mock.patch.object(r.logger, "error") as mocked_error_logger:
-            with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+            with pytest.raises(exceptions.RallyAssertionError) as ctx:
                 await r(es, params)
-                self.assertEqual("Snapshot [snapshot-001] failed. Please check logs.", ctx.exception.args[0])
+                assert ctx.value.args[0] == "Snapshot [snapshot-001] failed. Please check logs."
             mocked_error_logger.assert_has_calls([
                 mock.call("Snapshot [%s] failed. Response:\n%s", "snapshot-001", json.dumps(snapshot_status, indent=2))
             ])
@@ -4065,17 +4049,17 @@ class IndicesRecoveryTests(TestCase):
         })
 
         # sum of both shards
-        self.assertEqual(237783878, result["weight"])
-        self.assertEqual("byte", result["unit"])
-        self.assertTrue(result["success"])
+        assert result["weight"] == 237783878
+        assert result["unit"] == "byte"
+        assert result["success"]
         # bytes recovered within these 5 seconds
-        self.assertEqual(47556775.6, result["throughput"])
-        self.assertEqual(1393244155000, result["start_time_millis"])
-        self.assertEqual(1393244160000, result["stop_time_millis"])
+        assert result["throughput"] == 47556775.6
+        assert result["start_time_millis"] == 1393244155000
+        assert result["stop_time_millis"] == 1393244160000
 
         es.indices.recovery.assert_called_with(index="index1")
         # retries four times
-        self.assertEqual(4, es.indices.recovery.call_count)
+        assert es.indices.recovery.call_count == 4
 
 
 class ShrinkIndexTests(TestCase):
@@ -4446,15 +4430,15 @@ class WaitForTransformTests(TestCase):
         })
 
         r = runner.WaitForTransform()
-        self.assertFalse(r.completed)
-        self.assertEqual(r.percent_completed, 0.0)
+        assert not r.completed
+        assert r.percent_completed == 0.0
 
         result = await r(es, params)
 
-        self.assertTrue(r.completed)
-        self.assertEqual(r.percent_completed, 1.0)
-        self.assertEqual(2, result["weight"], 2)
-        self.assertEqual(result["unit"], "docs")
+        assert r.completed
+        assert r.percent_completed == 1.0
+        assert result["weight"] == 2, 2
+        assert result["unit"] == "docs"
 
         es.transform.stop_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
                                                             timeout=params["timeout"],
@@ -4622,21 +4606,21 @@ class WaitForTransformTests(TestCase):
         ]
 
         r = runner.WaitForTransform()
-        self.assertFalse(r.completed)
-        self.assertEqual(r.percent_completed, 0.0)
+        assert not r.completed
+        assert r.percent_completed == 0.0
 
         total_calls = 0
         while not r.completed:
             result = await r(es, params)
             total_calls += 1
             if total_calls < 4:
-                self.assertAlmostEqual(r.percent_completed, (total_calls * 10.20) / 100.0)
+                assert round(abs(r.percent_completed-(total_calls * 10.20) / 100.0), 7) == 0
 
-        self.assertEqual(total_calls, 4)
-        self.assertTrue(r.completed)
-        self.assertEqual(r.percent_completed, 1.0)
-        self.assertEqual(result["weight"], 60000)
-        self.assertEqual(result["unit"], "docs")
+        assert total_calls == 4
+        assert r.completed
+        assert r.percent_completed == 1.0
+        assert result["weight"] == 60000
+        assert result["unit"] == "docs"
 
         es.transform.stop_transform.assert_called_once_with(transform_id=transform_id, force=params["force"],
                                                             timeout=params["timeout"],
@@ -4683,7 +4667,7 @@ class SubmitAsyncSearchTests(TestCase):
         async with runner.CompositeContext():
             await r(es, params)
             # search id is registered in context
-            self.assertEqual("12345", runner.CompositeContext.get("search-1"))
+            assert runner.CompositeContext.get("search-1") == "12345"
 
         es.async_search.submit.assert_called_once_with(body={
             "query": {
@@ -4717,7 +4701,7 @@ class GetAsyncSearchTests(TestCase):
         async with runner.CompositeContext():
             runner.CompositeContext.put("search-1", "12345")
             response = await r(es, params)
-            self.assertDictEqual(response, {
+            assert {
                 "weight": 1,
                 "unit": "ops",
                 "success": True,
@@ -4729,7 +4713,7 @@ class GetAsyncSearchTests(TestCase):
                         "took": 1122
                     }
                 }
-            })
+            } == response
 
         es.async_search.get.assert_called_once_with(id="12345", params={})
 
@@ -4774,7 +4758,7 @@ class OpenPointInTimeTests(TestCase):
         r = runner.OpenPointInTime()
         async with runner.CompositeContext():
             await r(es, params)
-            self.assertEqual(pit_id, runner.CompositeContext.get("open-pit-test"))
+            assert runner.CompositeContext.get("open-pit-test") == pit_id
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -4788,10 +4772,10 @@ class OpenPointInTimeTests(TestCase):
         es.open_point_in_time.return_value = as_future({"id": pit_id})
 
         r = runner.OpenPointInTime()
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+        with pytest.raises(exceptions.RallyAssertionError) as ctx:
             await r(es, params)
 
-        self.assertEqual("This operation is only allowed inside a composite operation.", ctx.exception.args[0])
+        assert ctx.value.args[0] == "This operation is only allowed inside a composite operation."
 
 class ClosePointInTimeTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
@@ -4879,7 +4863,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
             runner.CompositeContext.put(pit_op, pit_id)
             await r(es, params)
             # make sure pit_id is updated afterward
-            self.assertEqual("fedcba9876543211", runner.CompositeContext.get(pit_op))
+            assert runner.CompositeContext.get(pit_op) == "fedcba9876543211"
 
         es.transport.perform_request.assert_has_calls([mock.call("GET", "/_search", params={},
                                                                  body={
@@ -5025,8 +5009,8 @@ class SearchAfterExtractorTests(TestCase):
                     "timed_out": False,
                     "took": 10}
         expected_sort_value = [1609780186, "2"]
-        self.assertEqual(expected_props, props)
-        self.assertEqual(expected_sort_value, last_sort)
+        assert props == expected_props
+        assert last_sort == expected_sort_value
 
     def test_extract_ignore_point_in_time(self):
         target = runner.SearchAfterExtractor()
@@ -5036,8 +5020,8 @@ class SearchAfterExtractorTests(TestCase):
                           "timed_out": False,
                           "took": 10}
         expected_sort_value = [1609780186, "2"]
-        self.assertEqual(expected_props, props)
-        self.assertEqual(expected_sort_value, last_sort)
+        assert props == expected_props
+        assert last_sort == expected_sort_value
 
     def test_extract_uses_provided_hits_total(self):
         target = runner.SearchAfterExtractor()
@@ -5048,18 +5032,17 @@ class SearchAfterExtractorTests(TestCase):
                           "timed_out": False,
                           "took": 10}
         expected_sort_value = [1609780186, "2"]
-        self.assertEqual(expected_props, props)
-        self.assertEqual(expected_sort_value, last_sort)
+        assert props == expected_props
+        assert last_sort == expected_sort_value
 
     def test_extract_missing_required_point_in_time(self):
         response_copy = json.loads(self.response_text)
         del response_copy["pit_id"]
         response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
         target = runner.SearchAfterExtractor()
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+        with pytest.raises(exceptions.RallyAssertionError) as ctx:
             target(response=response_copy_bytesio, get_point_in_time=True, hits_total=None)
-        self.assertEqual("Paginated query failure: pit_id was expected but not found in the response.",
-                         ctx.exception.args[0])
+        assert ctx.value.args[0] == "Paginated query failure: pit_id was expected but not found in the response."
 
     def test_extract_missing_ignored_point_in_time(self):
         response_copy = json.loads(self.response_text)
@@ -5072,49 +5055,46 @@ class SearchAfterExtractorTests(TestCase):
                           "timed_out": False,
                           "took": 10}
         expected_sort_value = [1609780186, "2"]
-        self.assertEqual(expected_props, props)
-        self.assertEqual(expected_sort_value, last_sort)
+        assert props == expected_props
+        assert last_sort == expected_sort_value
 
 
 class CompositeContextTests(TestCase):
     def test_cannot_be_used_outside_of_composite(self):
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+        with pytest.raises(exceptions.RallyAssertionError) as ctx:
             runner.CompositeContext.put("test", 1)
 
-        self.assertEqual("This operation is only allowed inside a composite operation.", ctx.exception.args[0])
+        assert ctx.value.args[0] == "This operation is only allowed inside a composite operation."
 
     @run_async
     async def test_put_get_and_remove(self):
         async with runner.CompositeContext():
             runner.CompositeContext.put("test", 1)
             runner.CompositeContext.put("don't clear this key", 1)
-            self.assertEqual(runner.CompositeContext.get("test"), 1)
+            assert runner.CompositeContext.get("test") == 1
             runner.CompositeContext.remove("test")
 
         # context is cleared properly
         async with runner.CompositeContext():
-            with self.assertRaises(KeyError) as ctx:
+            with pytest.raises(KeyError) as ctx:
                 runner.CompositeContext.get("don't clear this key")
-            self.assertEqual("Unknown property [don't clear this key]. Currently recognized properties are [].",
-                             ctx.exception.args[0])
+            assert ctx.value.args[0] == "Unknown property [don't clear this key]. Currently recognized properties are []."
 
     @run_async
     async def test_fails_to_read_unknown_key(self):
         async with runner.CompositeContext():
-            with self.assertRaises(KeyError) as ctx:
+            with pytest.raises(KeyError) as ctx:
                 runner.CompositeContext.put("test", 1)
                 runner.CompositeContext.get("unknown")
-            self.assertEqual("Unknown property [unknown]. Currently recognized properties are [test].",
-                             ctx.exception.args[0])
+            assert ctx.value.args[0] == "Unknown property [unknown]. Currently recognized properties are [test]."
 
     @run_async
     async def test_fails_to_remove_unknown_key(self):
         async with runner.CompositeContext():
-            with self.assertRaises(KeyError) as ctx:
+            with pytest.raises(KeyError) as ctx:
                 runner.CompositeContext.put("test", 1)
                 runner.CompositeContext.remove("unknown")
-            self.assertEqual("Unknown property [unknown]. Currently recognized properties are [test].",
-                             ctx.exception.args[0])
+            assert ctx.value.args[0] == "Unknown property [unknown]. Currently recognized properties are [test]."
 
 
 class CompositeTests(TestCase):
@@ -5278,8 +5258,7 @@ class CompositeTests(TestCase):
         }
 
         r = runner.Composite()
-        with self.assertRaisesRegex(exceptions.RallyTaskAssertionError,
-                                    r"Expected \[hits\] to be > \[0\] but was \[0\]."):
+        with pytest.raises(exceptions.RallyTaskAssertionError, match=r"Expected \[hits\] to be > \[0\] but was \[0\]."):
             await r(es, params)
 
         es.transport.perform_request.assert_has_calls([
@@ -5353,7 +5332,7 @@ class CompositeTests(TestCase):
         r.supported_op_types = ["call-recorder"]
         await r(es, params)
 
-        self.assertEqual([
+        assert self.call_recorder_runner.calls == [
             "initial-call",
             # concurrent
             "stream-a", "stream-b",
@@ -5361,7 +5340,7 @@ class CompositeTests(TestCase):
             # concurrent
             "stream-c", "stream-d",
             "call-after-stream-cd"
-        ], self.call_recorder_runner.calls)
+        ]
 
     @run_async
     async def test_adds_request_timings(self):
@@ -5400,27 +5379,27 @@ class CompositeTests(TestCase):
         r = runner.Composite()
         response = await r(es, params)
 
-        self.assertEqual(1, response["weight"])
-        self.assertEqual("ops", response["unit"])
+        assert response["weight"] == 1
+        assert response["unit"] == "ops"
         timings = response["dependent_timing"]
-        self.assertEqual(3, len(timings))
+        assert len(timings) == 3
 
-        self.assertEqual("initial-call", timings[0]["operation"])
-        self.assertAlmostEqual(0.1, timings[0]["service_time"], delta=0.05)
+        assert timings[0]["operation"] == "initial-call"
+        assert abs(0.1-timings[0]["service_time"]) < 0.05
 
-        self.assertEqual("stream-a", timings[1]["operation"])
-        self.assertAlmostEqual(0.2, timings[1]["service_time"], delta=0.05)
+        assert timings[1]["operation"] == "stream-a"
+        assert abs(0.2-timings[1]["service_time"]) < 0.05
 
-        self.assertEqual("stream-b", timings[2]["operation"])
-        self.assertAlmostEqual(0.1, timings[2]["service_time"], delta=0.05)
+        assert timings[2]["operation"] == "stream-b"
+        assert abs(0.1-timings[2]["service_time"]) < 0.05
 
         # common properties
         for timing in timings:
-            self.assertEqual("sleep", timing["operation-type"])
-            self.assertIn("absolute_time", timing)
-            self.assertIn("request_start", timing)
-            self.assertIn("request_end", timing)
-            self.assertGreater(timing["request_end"], timing["request_start"])
+            assert timing["operation-type"] == "sleep"
+            assert "absolute_time" in timing
+            assert "request_start" in timing
+            assert "request_end" in timing
+            assert timing["request_end"] > timing["request_start"]
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -5458,7 +5437,7 @@ class CompositeTests(TestCase):
         await r(es, params)
 
         # composite runner should limit to two concurrent connections
-        self.assertEqual(2, self.counter_runner.max_value)
+        assert self.counter_runner.max_value == 2
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -5486,10 +5465,10 @@ class CompositeTests(TestCase):
         }
 
         r = runner.Composite()
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+        with pytest.raises(exceptions.RallyAssertionError) as ctx:
             await r(es, params)
 
-        self.assertEqual("Requests structure must contain [stream] or [operation-type].", ctx.exception.args[0])
+        assert ctx.value.args[0] == "Requests structure must contain [stream] or [operation-type]."
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -5507,12 +5486,11 @@ class CompositeTests(TestCase):
         }
 
         r = runner.Composite()
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+        with pytest.raises(exceptions.RallyAssertionError) as ctx:
             await r(es, params)
 
-        self.assertEqual("Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
-                         "search, raw-request, sleep, submit-async-search, get-async-search, delete-async-search].",
-                         ctx.exception.args[0])
+        assert ctx.value.args[0] == "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, " \
+                         "search, raw-request, sleep, submit-async-search, get-async-search, delete-async-search]."
 
 class RequestTimingTests(TestCase):
     class StaticRequestTiming:
@@ -5555,17 +5533,17 @@ class RequestTimingTests(TestCase):
 
         response = await timer(multi_cluster_client, params)
 
-        self.assertEqual(5, response["weight"])
-        self.assertEqual("ops", response["unit"])
-        self.assertTrue(response["success"])
-        self.assertIn("dependent_timing", response)
+        assert response["weight"] == 5
+        assert response["unit"] == "ops"
+        assert response["success"]
+        assert "dependent_timing" in response
         timing = response["dependent_timing"]
-        self.assertEqual("unit-test-operation", timing["operation"])
-        self.assertEqual("test-op", timing["operation-type"])
-        self.assertIsNotNone(timing["absolute_time"])
-        self.assertEqual(7, timing["request_start"])
-        self.assertEqual(7.1, timing["request_end"])
-        self.assertAlmostEqual(0.1, timing["service_time"])
+        assert timing["operation"] == "unit-test-operation"
+        assert timing["operation-type"] == "test-op"
+        assert timing["absolute_time"] is not None
+        assert timing["request_start"] == 7
+        assert timing["request_end"] == 7.1
+        assert round(abs(0.1-timing["service_time"]), 7) == 0
 
         delegate.assert_called_once_with(multi_cluster_client, params)
 
@@ -5586,18 +5564,18 @@ class RequestTimingTests(TestCase):
         response = await timer(multi_cluster_client, params)
 
         # defaults added by the timing runner
-        self.assertEqual(1, response["weight"])
-        self.assertEqual("ops", response["unit"])
-        self.assertTrue(response["success"])
+        assert response["weight"] == 1
+        assert response["unit"] == "ops"
+        assert response["success"]
 
-        self.assertIn("dependent_timing", response)
+        assert "dependent_timing" in response
         timing = response["dependent_timing"]
-        self.assertEqual("unit-test-operation", timing["operation"])
-        self.assertEqual("test-op", timing["operation-type"])
-        self.assertIsNotNone(timing["absolute_time"])
-        self.assertEqual(7, timing["request_start"])
-        self.assertEqual(7.1, timing["request_end"])
-        self.assertAlmostEqual(0.1, timing["service_time"])
+        assert timing["operation"] == "unit-test-operation"
+        assert timing["operation-type"] == "test-op"
+        assert timing["absolute_time"] is not None
+        assert timing["request_start"] == 7
+        assert timing["request_end"] == 7.1
+        assert round(abs(0.1-timing["service_time"]), 7) == 0
 
         delegate.assert_called_once_with(multi_cluster_client, params)
 
@@ -5625,7 +5603,7 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        with self.assertRaises(elasticsearch.ConnectionError):
+        with pytest.raises(elasticsearch.ConnectionError):
             await retrier(es, params)
 
         delegate.assert_called_once_with(es, params)
@@ -5643,7 +5621,7 @@ class RetryTests(TestCase):
 
         result = await retrier(es, params)
 
-        self.assertEqual(original_return_value, result)
+        assert result == original_return_value
         delegate.assert_called_once_with(es, params)
 
     @run_async
@@ -5679,7 +5657,7 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        with self.assertRaises(elasticsearch.ConnectionError):
+        with pytest.raises(elasticsearch.ConnectionError):
             await retrier(es, params)
 
         delegate.assert_has_calls([
@@ -5706,7 +5684,7 @@ class RetryTests(TestCase):
         retrier = runner.Retry(delegate)
 
         result = await retrier(es, params)
-        self.assertEqual(failed_return_value, result)
+        assert result == failed_return_value
 
         delegate.assert_has_calls([
             # has returned a connection error
@@ -5740,7 +5718,7 @@ class RetryTests(TestCase):
         retrier = runner.Retry(delegate)
 
         result = await retrier(es, params)
-        self.assertEqual(success_return_value, result)
+        assert result == success_return_value
 
         delegate.assert_has_calls([
             # connection error
@@ -5769,7 +5747,7 @@ class RetryTests(TestCase):
         }
         retrier = runner.Retry(delegate)
 
-        with self.assertRaises(elasticsearch.ConnectionTimeout):
+        with pytest.raises(elasticsearch.ConnectionTimeout):
             await retrier(es, params)
 
         delegate.assert_called_once_with(es, params)
@@ -5794,7 +5772,7 @@ class RetryTests(TestCase):
 
         result = await retrier(es, params)
 
-        self.assertEqual(success_return_value, result)
+        assert result == success_return_value
 
         delegate.assert_has_calls([
             mock.call(es, params),
@@ -5818,7 +5796,7 @@ class RetryTests(TestCase):
 
         result = await retrier(es, params)
 
-        self.assertEqual(failed_return_value, result)
+        assert result == failed_return_value
 
         delegate.assert_called_once_with(es, params)
 
@@ -5836,7 +5814,7 @@ class RetryTests(TestCase):
 
         result = await retrier(es, params)
 
-        self.assertEqual((1, "ops"), result)
+        assert result == (1, "ops")
 
         delegate.assert_called_once_with(es, params)
 
@@ -5861,7 +5839,7 @@ class RetryTests(TestCase):
 
         result = await retrier(es, params)
 
-        self.assertEqual(success_return_value, result)
+        assert result == success_return_value
 
         delegate.assert_has_calls([mock.call(es, params) for _ in range(failure_count + 1)])
 
@@ -5870,10 +5848,10 @@ class RemovePrefixTests(TestCase):
     def test_remove_matching_prefix(self):
         suffix = runner.remove_prefix("index-20201117", "index")
 
-        self.assertEqual(suffix, "-20201117")
+        assert suffix == "-20201117"
 
     def test_prefix_doesnt_exit(self):
         index_name = "index-20201117"
         suffix = runner.remove_prefix(index_name, "unrelatedprefix")
 
-        self.assertEqual(suffix, index_name)
+        assert index_name == suffix
