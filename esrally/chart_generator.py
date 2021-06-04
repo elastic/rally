@@ -1658,7 +1658,6 @@ class RaceConfig:
         task_names = []
         for task in self.track.find_challenge_or_default(self.challenge).schedule:
             for sub_task in task:
-                #print(f"here in th {task} {sub_task} {sub_task.operation.type} {sub_task.params}")
                 # We are assuming here that each task with a target throughput or target interval is interesting for latency charts.
                 #
                 # As a temporary workaround we're also treating operations of type "eql" as throttled tasks (requiring a latency
