@@ -12,3 +12,8 @@ jobs:
         run: bash .ci/build.sh build
         env:
           RALLY_HOME: env.GITHUB_WORKSPACE
+  DCO-Check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run signoff check script
+        run: bash .ci/signoff-check.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
