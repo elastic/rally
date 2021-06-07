@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
+      - name: ls
+        run: ls
       - name: Log 
         run: git log
       - name: Run signoff check script
