@@ -18,6 +18,6 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v2
       - name: Dry run
-        uses: echo bash .ci/signoff-check.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+        run: echo bash .ci/signoff-check.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
       - name: Run signoff check script
         run: bash .ci/signoff-check.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
