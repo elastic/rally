@@ -27,6 +27,13 @@ Installation Instructions for Development
     source .venv/bin/activate
     ./rally
 
+IDE Setup
+---------
+
+Rally uses automatic code formatters. They're enforced by ``make lint`` and you can apply then by running ``make format``.
+
+However, consider using editor integrations to do it automatically: you'll need to configure `black <https://black.readthedocs.io/en/stable/integrations/editors.html>`_ and `isort <https://github.com/PyCQA/isort/wiki/isort-Plugins>`_.
+
 Known Issues
 ~~~~~~~~~~~~
 
