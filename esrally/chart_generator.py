@@ -450,7 +450,7 @@ class BarCharts:
         else:
             prefix = "p99"
             field= "value.99_0"
-            
+
         title = BarCharts.format_title(environment, race_config.track, suffix=f"{race_config.label}-{q}-{prefix}-{metric}")
         label = "Query Service Time [ms]"
 
@@ -1677,8 +1677,8 @@ class RaceConfig:
                 #
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
                 # which tasks / or types of operations should be used for which chart types.
-                if "target-throughput" in sub_task.params or "target-interval" in sub_task.params\
-                    or "workflow-interval" in sub_task.params or sub_task.operation.type == "eql":
+                if sub_task.operation.type == "search" or sub_task.operation.type == "composite" or sub_task.operation.type == "eql"\
+                    or sub_task.operation.type == "paginated-search" or sub_task.operation.type == "scroll-search":
                     task_names.append(sub_task)
         return task_names
 
