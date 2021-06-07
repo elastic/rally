@@ -15,6 +15,7 @@ Here is a typical metrics record::
           "race-id": "6ebc6e53-ee20-4b0c-99b4-09697987e9f4",
           "@timestamp": 1461213093093,
           "relative-time-ms": 10507.328,
+          "relative-time": 10507.328,
           "track": "geonames",
           "track-params": {
             "shard-count": 3
@@ -83,8 +84,13 @@ relative-time-ms
 
 .. warning::
 
-    This property is introduced for a transition period between Rally 2.1.0 and Rally 2.4.0. It will be deprecated with Rally 2.3.0 and removed in Rally 2.4.0.
+    This property has been introduced for a transition period between Rally 2.1.0 and Rally 2.3.0. It is deprecated with Rally 2.2.1 and will be removed in Rally 2.3.0. Use ``relative-time`` instead.
 
+
+The relative time in milliseconds since the start of the benchmark. This is useful for comparing time-series graphs over multiple races, e.g. you might want to compare the indexing throughput over time across multiple races. As they should always start at the same (relative) point in time, absolute timestamps are not helpful.
+
+relative-time
+~~~~~~~~~~~~~
 
 The relative time in milliseconds since the start of the benchmark. This is useful for comparing time-series graphs over multiple races, e.g. you might want to compare the indexing throughput over time across multiple races. As they should always start at the same (relative) point in time, absolute timestamps are not helpful.
 

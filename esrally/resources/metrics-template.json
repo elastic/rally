@@ -31,6 +31,9 @@
         "relative-time-ms": {
           "type": "float"
         },
+        "relative-time": {
+          "type": "float"
+        },
         "race-id": {
           "type": "keyword"
         },

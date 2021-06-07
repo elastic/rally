@@ -1,6 +1,18 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.2.1
+------------------------
+
+``relative-time-ms`` is deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+    This deprecation is only relevant if you have configured an Elasticsearch metrics store for Rally.
+
+The property ``relative-time-ms`` has been deprecated in Rally 2.2.1. Use the re-introduced property ``relative-time`` instead to retrieve the same metric. ``relative-time-ms`` will be dropped in Rally 2.3.0.
+
 Migrating to Rally 2.2.0
 ------------------------
 

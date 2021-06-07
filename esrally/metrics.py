@@ -521,7 +521,9 @@ class MetricsStore:
 
         doc = {
             "@timestamp": time.to_epoch_millis(absolute_time),
+            # deprecated
             "relative-time-ms": convert.seconds_to_ms(relative_time),
+            "relative-time": convert.seconds_to_ms(relative_time),
             "race-id": self._race_id,
             "race-timestamp": self._race_timestamp,
             "environment": self._environment_name,
@@ -578,7 +580,9 @@ class MetricsStore:
 
         doc.update({
             "@timestamp": time.to_epoch_millis(absolute_time),
+            # deprecated
             "relative-time-ms": convert.seconds_to_ms(relative_time),
+            "relative-time": convert.seconds_to_ms(relative_time),
             "race-id": self._race_id,
             "race-timestamp": self._race_timestamp,
             "environment": self._environment_name,
@@ -1713,8 +1717,8 @@ class GlobalStatsCalculator:
         return self.store.get_error_rate(task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
 
     def duration(self, task_name):
-        return self.store.get_one("service_time", task=task_name, mapper=lambda doc: doc["relative-time-ms"],
-                                  sort_key="relative-time-ms", sort_reverse=True)
+        return self.store.get_one("service_time", task=task_name, mapper=lambda doc: doc["relative-time"],
+                                  sort_key="relative-time", sort_reverse=True)
 
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
         return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)

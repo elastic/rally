@@ -315,6 +315,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time-ms": 0,
+            "relative-time": 0,
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
@@ -344,6 +345,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time-ms": 10000,
+            "relative-time": 10000,
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
@@ -382,6 +384,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time-ms": 0,
+            "relative-time": 0,
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
@@ -420,6 +423,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time-ms": 0,
+            "relative-time": 0,
             "environment": "unittest",
             "track": "test",
             "track-params": {
@@ -465,6 +469,7 @@ class EsMetricsTests(TestCase):
             "race-id": EsMetricsTests.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time-ms": 0,
+            "relative-time": 0,
             "environment": "unittest",
             "track": "test",
             "track-params": {
@@ -498,13 +503,13 @@ class EsMetricsTests(TestCase):
                 "hits": [
                     {
                         "_source": {
-                            "relative-time-ms": duration,
+                            "relative-time": duration,
                             "value": 500
                         }
                     },
                     {
                         "_source": {
-                            "relative-time-ms": duration-200,
+                            "relative-time": duration-200,
                             "value": 700
                         }
                     },
@@ -539,12 +544,15 @@ class EsMetricsTests(TestCase):
             },
             "size": 1,
             "sort": [
-                {"relative-time-ms": {"order": "desc" }}
+                {"relative-time": {"order": "desc" }}
                 ]
         }
 
-        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
-                                                         sort_key="relative-time-ms", sort_reverse=True)
+        actual_duration = self.metrics_store.get_one("service_time",
+                                                     task="task1",
+                                                     mapper=lambda doc: doc["relative-time"],
+                                                     sort_key="relative-time",
+                                                     sort_reverse=True)
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
@@ -1410,8 +1418,11 @@ class InMemoryMetricsStoreTests(TestCase):
         self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults")
 
-        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
-                                                         sort_key="relative-time-ms", sort_reverse=True)
+        actual_duration = self.metrics_store.get_one("service_time",
+                                                     task="task1",
+                                                     mapper=lambda doc: doc["relative-time"],
+                                                     sort_key="relative-time",
+                                                     sort_reverse=True)
 
         self.assertEqual(duration * 1000, actual_duration)
 
@@ -1426,8 +1437,11 @@ class InMemoryMetricsStoreTests(TestCase):
         self.metrics_store.open(InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP,
                                 "test", "append-no-conflicts", "defaults")
 
-        actual_duration = self.metrics_store.get_one("service_time", task="task1", mapper=lambda doc: doc["relative-time-ms"],
-                                                     sort_key="relative-time-ms", sort_reverse=True)
+        actual_duration = self.metrics_store.get_one("service_time",
+                                                     task="task1",
+                                                     mapper=lambda doc: doc["relative-time"],
+                                                     sort_key="relative-time",
+                                                     sort_reverse=True)
 
         self.assertIsNone(actual_duration)
 
@@ -1809,6 +1823,7 @@ class GlobalStatsCalculatorTests(TestCase):
                                 "test", "append-fast-with-conflicts", "defaults", create=True)
         self.metrics_store.put_doc(doc={"@timestamp": 1595896761994,
                                         "relative-time-ms": 283.382,
+                                        "relative-time": 283.382,
                                         "race-id": "fb26018b-428d-4528-b36b-cf8c54a303ec",
                                         "race-timestamp": "20200728T003905Z", "environment": "local",
                                         "track": "geonames", "challenge": "append-fast-with-conflicts",
