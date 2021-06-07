@@ -17,9 +17,10 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
-      - name: ls
-        run: ls
-      - name: Log 
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Git log
         run: git log
       - name: Run signoff check script
-        run: bash .ci/signoff-check.sh ${{ github.event.pull_request.base.ref }} ${{ github.event.pull_request.head.sha }}
+        run: bash .ci/signoff-check.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
