@@ -1073,6 +1073,93 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
+    def ml_processing_time(title, environment, race_config):
+        vis_state = {
+            "title": title,
+            "type": "metrics",
+            "params": {
+                "axis_formatter": "number",
+                "axis_position": "left",
+                "id": str(uuid.uuid4()),
+                "index_pattern": "rally-results-*",
+                "interval": "1d",
+                "series": [
+                    {
+                        "axis_position": "left",
+                        "chart_type": "line",
+                        "color": "#68BC00",
+                        "fill": "0",
+                        "formatter": "number",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "type": "avg",
+                                "field": "value.max"
+                            }
+                        ],
+                        "point_size": "3",
+                        "seperate_axis": 1,
+                        "split_mode": "filters",
+                        "stacked": "none",
+                        "filter": "",
+                        "split_filters": [
+                            {
+                                "filter": "ml_processing_time",
+                                "label": "Maximum ML processing time",
+                                "color": "rgba(0,191,179,1)",
+                                "id": str(uuid.uuid4())
+                            }
+                        ],
+                        "label": "ML Time",
+                        "value_template": "{{value}}",
+                        "steps": 0
+                    }
+                ],
+                "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
+                "time_field": "race-timestamp",
+                "type": "timeseries",
+                "filter": TimeSeriesCharts.filter_string(environment, race_config),
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
+                                        f"AND ((NOT _exists_:chart) OR chart:ml_processing_time) "
+                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "race-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1
+                    }
+                ],
+                "axis_min": "0"
+            },
+            "aggs": [],
+            "listeners": {}
+        }
+
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
+                "description": "ml_processing_time",
+                "version": 1,
+                "kibanaSavedObjectMeta": {
+                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
+                }
+            }
+        }
+
+    @staticmethod
     def io(title, environment, race_config):
         vis_state = {
             "title": title,
@@ -1503,6 +1590,18 @@ def generate_merge_time(chart_type, race_configs, environment):
 
     return structures
 
+def generate_ml_procesing_time(chart_type, race_configs, environment):
+    structures = []
+    if chart_type == BarCharts:
+        return structures
+    for race_config in race_configs:
+        if "ml_processing_time" in race_config.charts:
+            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
+                                            suffix=f"{race_config.label}-ml-processing-time")
+            structures.append(chart_type.ml_processing_time(title, environment, race_config))
+
+    return structures
+
 def generate_merge_count(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
@@ -1512,7 +1611,6 @@ def generate_merge_count(chart_type, race_configs, environment):
             structures.append(chart_type.merge_count(title, environment, race_config))
 
     return structures
-
 
 def generate_dashboard(chart_type, environment, track, charts, flavor=None):
     panels = []
@@ -1732,6 +1830,7 @@ def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, log
              generate_gc(chart_type, race_configs, env) + \
              generate_merge_time(chart_type, race_configs, env) + \
              generate_merge_count(chart_type, race_configs, env) + \
+             generate_ml_procesing_time(chart_type, race_configs, env) + \
              generate_queries(chart_type, race_configs, env)
 
     dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)
