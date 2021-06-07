@@ -44,7 +44,6 @@ BANNER = r"""
 """
 
 
-# pylint: disable=C4002
 SKULL = '''
                  uuuuuuu
              uu$$$$$$$$$$$uu

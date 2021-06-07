@@ -54,16 +54,22 @@ Once your changes and tests are ready to submit for review:
 
     Run the test suite to make sure that nothing is broken: `python3 setup.py test`.
 
-2. Sign the Contributor License Agreement
+2. Format your changes
+
+    Also make sure that lint is passing by running `make lint`. To format your code, run `make format`.
+
+    Consider using editor integrations to do it automatically: you'll need to configure [black](https://black.readthedocs.io/en/stable/integrations/editors.html) and [isort](https://github.com/PyCQA/isort/wiki/isort-Plugins).
+
+3. Sign the Contributor License Agreement
 
     Please make sure you have signed our [Contributor License Agreement](https://www.elastic.co/contributor-agreement/). We are not asking you to assign copyright to us, but to give us the right to distribute your code without restriction. We ask this of all contributors in order to assure our users of the origin and continuing existence of the code. You only need to sign the CLA once.
 
-3. Rebase your changes
+4. Rebase your changes
 
     Update your local repository with the most recent code from the main Rally repository, and rebase your branch on top of the latest master branch. We prefer your initial changes to be squashed into a single commit. Later, if we ask you to make changes, add them as separate commits.  This makes them easier to review.  As a final step before merging we will either ask you to squash all commits yourself or we'll do it for you.
 
 
-4. Submit a pull request
+5. Submit a pull request
 
     Push your local changes to your forked copy of the repository and [submit a pull request](https://help.github.com/articles/using-pull-requests). In the pull request, choose a title which sums up the changes that you have made, and in the body provide more details about what your changes do. Also mention the number of the issue where discussion has taken place, eg "Closes #123".
 
@@ -90,7 +96,7 @@ We require the following license header on all source code files:
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
