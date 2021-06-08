@@ -9,7 +9,7 @@ jobs:
       - name: Clone pyenv
         run: git clone https://github.com/pyenv/pyenv.git ~/.pyenv
       - name: Run the CI build script
-        run: bash .ci/build.sh build
+        run: echo hi
         env:
           RALLY_HOME: env.GITHUB_WORKSPACE
   DCO-Check:
