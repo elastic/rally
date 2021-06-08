@@ -442,6 +442,10 @@ class BarCharts:
         }
 
     @staticmethod
+    def ml_processing_time(title, environment, race_config):
+        return None
+
+    @staticmethod
     def query(environment, race_config, q):
         metric = "service_time"
         title = BarCharts.format_title(environment, race_config.track, suffix="%s-%s-p99-%s" % (race_config.label, q, metric))
@@ -1580,6 +1584,7 @@ def generate_gc(chart_type, race_configs, environment):
 
     return structures
 
+
 def generate_merge_time(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
@@ -1590,17 +1595,19 @@ def generate_merge_time(chart_type, race_configs, environment):
 
     return structures
 
-def generate_ml_procesing_time(chart_type, race_configs, environment):
+
+def generate_ml_processing_time(chart_type, race_configs, environment):
     structures = []
-    if chart_type == BarCharts:
-        return structures
     for race_config in race_configs:
         if "ml_processing_time" in race_config.charts:
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
                                             suffix=f"{race_config.label}-ml-processing-time")
-            structures.append(chart_type.ml_processing_time(title, environment, race_config))
+            chart = chart_type.ml_processing_time(title, environment, race_config)
+            if chart is not None:
+                structures.append(chart)
 
     return structures
+
 
 def generate_merge_count(chart_type, race_configs, environment):
     structures = []
@@ -1611,6 +1618,7 @@ def generate_merge_count(chart_type, race_configs, environment):
             structures.append(chart_type.merge_count(title, environment, race_config))
 
     return structures
+
 
 def generate_dashboard(chart_type, environment, track, charts, flavor=None):
     panels = []
@@ -1830,7 +1838,7 @@ def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, log
              generate_gc(chart_type, race_configs, env) + \
              generate_merge_time(chart_type, race_configs, env) + \
              generate_merge_count(chart_type, race_configs, env) + \
-             generate_ml_procesing_time(chart_type, race_configs, env) + \
+             generate_ml_processing_time(chart_type, race_configs, env) + \
              generate_queries(chart_type, race_configs, env)
 
     dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)
