@@ -442,6 +442,14 @@ class BarCharts:
         }
 
     @staticmethod
+    def merge_count(title, environment, race_config):
+        return None
+
+    @staticmethod
+    def merge_time(title, environment, race_config):
+        return None
+
+    @staticmethod
     def query(environment, race_config, q, iterations):
         metric = "service_time"
         if iterations < 100:
@@ -1500,6 +1508,7 @@ def generate_gc(chart_type, race_configs, environment):
 
     return structures
 
+
 def generate_merge_time(chart_type, race_configs, environment):
     structures = []
     if chart_type == BarCharts:
@@ -1508,19 +1517,22 @@ def generate_merge_time(chart_type, race_configs, environment):
         if "merge_times" in race_config.charts:
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
                                             suffix=f"{race_config.label}-merge-times")
-            structures.append(chart_type.merge_time(title, environment, race_config))
+            chart = chart_type.merge_time(title, environment, race_config)
+            if chart is not None:
+                structures.append(chart)
 
     return structures
 
+
 def generate_merge_count(chart_type, race_configs, environment):
     structures = []
-    if chart_type == BarCharts:
-        return structures
     for race_config in race_configs:
         if "merge_count" in race_config.charts:
             title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
                                             suffix=f"{race_config.label}-merge-count")
-            structures.append(chart_type.merge_count(title, environment, race_config))
+            chart = chart_type.merge_count(title, environment, race_config)
+            if chart is not None:
+                structures.append(chart)
 
     return structures
 
