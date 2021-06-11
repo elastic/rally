@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -19,14 +19,10 @@ import json
 import logging
 import os
 
-INDEX_SETTINGS_EPHEMERAL_KEYS = ["uuid",
-                                 "creation_date",
-                                 "version",
-                                 "provided_name",
-                                 "store"]
+INDEX_SETTINGS_EPHEMERAL_KEYS = ["uuid", "creation_date", "version", "provided_name", "store"]
 INDEX_SETTINGS_PARAMETERS = {
     "number_of_replicas": "{{{{number_of_replicas | default({orig})}}}}",
-    "number_of_shards": "{{{{number_of_shards | default({orig})}}}}"
+    "number_of_shards": "{{{{number_of_shards | default({orig})}}}}",
 }
 
 
@@ -76,12 +72,7 @@ def extract_index_mapping_and_settings(client, index_pattern):
             mappings = details["mappings"]
             index_settings = filter_ephemeral_index_settings(details["settings"]["index"])
             update_index_setting_parameters(index_settings)
-            results[index] = {
-                "mappings": mappings,
-                "settings": {
-                    "index": index_settings
-                }
-            }
+            results[index] = {"mappings": mappings, "settings": {"index": index_settings}}
         else:
             logger.info("Skipping index [%s] (reason: %s).", index, reason)
 
@@ -105,9 +96,11 @@ def extract(client, outdir, index_pattern):
         with open(outpath, "w") as outfile:
             json.dump(details, outfile, indent=4, sort_keys=True)
             outfile.write("\n")
-        results.append({
-            "name": index,
-            "path": outpath,
-            "filename": filename,
-        })
+        results.append(
+            {
+                "name": index,
+                "path": outpath,
+                "filename": filename,
+            }
+        )
     return results

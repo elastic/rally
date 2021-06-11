@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -21,7 +21,7 @@ import subprocess
 
 import psutil
 
-from esrally import time, exceptions, telemetry
+from esrally import exceptions, telemetry, time
 from esrally.mechanic import cluster, java_resolver
 from esrally.utils import io, opts, process
 
@@ -119,6 +119,7 @@ class ProcessLauncher:
     """
     Launcher is responsible for starting and stopping the benchmark candidate.
     """
+
     PROCESS_WAIT_TIMEOUT_SECONDS = 90.0
 
     def __init__(self, cfg, clock=time.Clock):
@@ -138,9 +139,9 @@ class ProcessLauncher:
         data_paths = node_configuration.data_paths
         node_telemetry_dir = os.path.join(node_configuration.node_root_path, "telemetry")
 
-        java_major_version, java_home = java_resolver.java_home(node_configuration.car_runtime_jdks,
-                                                                self.cfg.opts("mechanic", "runtime.jdk"),
-                                                                node_configuration.car_provides_bundled_jdk)
+        java_major_version, java_home = java_resolver.java_home(
+            node_configuration.car_runtime_jdks, self.cfg.opts("mechanic", "runtime.jdk"), node_configuration.car_provides_bundled_jdk
+        )
 
         self.logger.info("Starting node [%s].", node_name)
 
@@ -186,7 +187,7 @@ class ProcessLauncher:
         self.logger.debug("env for [%s]: %s", node_name, str(env))
         return env
 
-    def _set_env(self, env, k, v, separator=' ', prepend=False):
+    def _set_env(self, env, k, v, separator=" ", prepend=False):
         if v is not None:
             if k not in env:
                 env[k] = v
@@ -199,11 +200,9 @@ class ProcessLauncher:
     def _run_subprocess(command_line, env):
         command_line_args = shlex.split(command_line)
 
-        with subprocess.Popen(command_line_args,
-                              stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL,
-                              env=env,
-                              start_new_session=True) as command_line_process:
+        with subprocess.Popen(
+            command_line_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, start_new_session=True
+        ) as command_line_process:
             # wait for it to finish
             command_line_process.wait()
         return command_line_process.returncode

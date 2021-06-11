@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -24,7 +24,7 @@ from jinja2 import Environment, FileSystemLoader
 from esrally import PROGRAM_NAME
 from esrally.client import EsClientFactory
 from esrally.tracker import corpus, index
-from esrally.utils import io, opts, console
+from esrally.utils import console, io, opts
 
 
 def process_template(templates_path, template_filename, template_vars, output_path):
@@ -66,8 +66,9 @@ def create_track(cfg):
 
     logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
 
-    client = EsClientFactory(hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT],
-                             client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]).create()
+    client = EsClientFactory(
+        hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT], client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]
+    ).create()
 
     info = client.info()
     console.info(f"Connected to Elasticsearch cluster [{info['name']}] version [{info['version']['number']}].\n", logger=logger)
@@ -79,11 +80,7 @@ def create_track(cfg):
     if len(indices) == 0:
         raise RuntimeError("Failed to extract any indices for track!")
 
-    template_vars = {
-        "track_name": track_name,
-        "indices": indices,
-        "corpora": corpora
-    }
+    template_vars = {"track_name": track_name, "indices": indices, "corpora": corpora}
 
     track_path = os.path.join(output_path, "track.json")
     templates_path = os.path.join(cfg.opts("node", "rally.root"), "resources")

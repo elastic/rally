@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -22,9 +22,8 @@ import math
 import numbers
 import operator
 import random
-from abc import ABC
-
 import time
+from abc import ABC
 from enum import Enum
 
 from esrally import exceptions
@@ -145,7 +144,7 @@ class ParamSource:
         return {
             "request-timeout": self._params.get("request-timeout"),
             "headers": self._params.get("headers"),
-            "opaque-id": self._params.get("opaque-id")
+            "opaque-id": self._params.get("opaque-id"),
         }
 
 
@@ -195,9 +194,7 @@ class CreateIndexParamSource(ParamSource):
                         else:
                             body["settings"] = settings
                     elif not body and settings:
-                        body = {
-                            "settings": settings
-                        }
+                        body = {"settings": settings}
 
                     self.index_definitions.append((idx.name, body))
         else:
@@ -216,10 +213,12 @@ class CreateIndexParamSource(ParamSource):
         p = {}
         # ensure we pass all parameters...
         p.update(self._params)
-        p.update({
-            "indices": self.index_definitions,
-            "request-params": self.request_params
-        })
+        p.update(
+            {
+                "indices": self.index_definitions,
+                "request-params": self.request_params,
+            }
+        )
         return p
 
 
@@ -248,10 +247,12 @@ class CreateDataStreamParamSource(ParamSource):
         p = {}
         # ensure we pass all parameters...
         p.update(self._params)
-        p.update({
-            "data-streams": self.data_stream_definitions,
-            "request-params": self.request_params
-        })
+        p.update(
+            {
+                "data-streams": self.data_stream_definitions,
+                "request-params": self.request_params,
+            }
+        )
         return p
 
 
@@ -277,11 +278,9 @@ class DeleteDataStreamParamSource(ParamSource):
         p = {}
         # ensure we pass all parameters...
         p.update(self._params)
-        p.update({
-            "data-streams": self.data_stream_definitions,
-            "request-params": self.request_params,
-            "only-if-exists": self.only_if_exists
-        })
+        p.update(
+            {"data-streams": self.data_stream_definitions, "request-params": self.request_params, "only-if-exists": self.only_if_exists}
+        )
         return p
 
 
@@ -308,11 +307,13 @@ class DeleteIndexParamSource(ParamSource):
         p = {}
         # ensure we pass all parameters...
         p.update(self._params)
-        p.update({
-            "indices": self.index_definitions,
-            "request-params": self.request_params,
-            "only-if-exists": self.only_if_exists
-        })
+        p.update(
+            {
+                "indices": self.index_definitions,
+                "request-params": self.request_params,
+                "only-if-exists": self.only_if_exists,
+            }
+        )
         return p
 
 
@@ -345,10 +346,12 @@ class CreateIndexTemplateParamSource(ParamSource):
         p = {}
         # ensure we pass all parameters...
         p.update(self._params)
-        p.update({
-            "templates": self.template_definitions,
-            "request-params": self.request_params
-        })
+        p.update(
+            {
+                "templates": self.template_definitions,
+                "request-params": self.request_params,
+            }
+        )
         return p
 
 
@@ -373,19 +376,22 @@ class DeleteIndexTemplateParamSource(ParamSource):
             try:
                 index_pattern = params["index-pattern"] if delete_matching else None
             except KeyError:
-                raise exceptions.InvalidSyntax("The property 'index-pattern' is required for delete-index-template if "
-                                               "'delete-matching-indices' is true.")
+                raise exceptions.InvalidSyntax(
+                    "The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true."
+                )
             self.template_definitions.append((template, delete_matching, index_pattern))
 
     def params(self):
         p = {}
         # ensure we pass all parameters...
         p.update(self._params)
-        p.update({
-            "templates": self.template_definitions,
-            "only-if-exists": self.only_if_exists,
-            "request-params": self.request_params
-        })
+        p.update(
+            {
+                "templates": self.template_definitions,
+                "only-if-exists": self.only_if_exists,
+                "request-params": self.request_params,
+            }
+        )
         return p
 
 
@@ -411,7 +417,7 @@ class DeleteComponentTemplateParamSource(ParamSource):
         return {
             "templates": self.template_definitions,
             "only-if-exists": self.only_if_exists,
-            "request-params": self.request_params
+            "request-params": self.request_params,
         }
 
 
@@ -429,13 +435,14 @@ class CreateTemplateParamSource(ABC, ParamSource):
                 if not filter_template or template.name == filter_template:
                     body = template.content
                     if body and "template" in body:
-                        body = CreateComposableTemplateParamSource._create_or_merge(template.content,
-                                                                                    ["template", "settings"], settings)
+                        body = CreateComposableTemplateParamSource._create_or_merge(template.content, ["template", "settings"], settings)
                         self.template_definitions.append((template.name, body))
         else:
-            raise exceptions.InvalidSyntax("Please set the properties 'template' and 'body' for the "
-                                           f"{params.get('operation-type')} operation or declare composable and/or component "
-                                           "templates in the track")
+            raise exceptions.InvalidSyntax(
+                "Please set the properties 'template' and 'body' for the "
+                f"{params.get('operation-type')} operation or declare composable and/or component "
+                "templates in the track"
+            )
 
     @staticmethod
     def _create_or_merge(content, path, new_content):
@@ -451,8 +458,7 @@ class CreateTemplateParamSource(ABC, ParamSource):
     @staticmethod
     def __merge(dct, merge_dct):
         for k in merge_dct.keys():
-            if (k in dct and isinstance(dct[k], dict)
-                    and isinstance(merge_dct[k], collections.abc.Mapping)):
+            if k in dct and isinstance(dct[k], dict) and isinstance(merge_dct[k], collections.abc.Mapping):
                 CreateTemplateParamSource.__merge(dct[k], merge_dct[k])
             else:
                 dct[k] = merge_dct[k]
@@ -460,7 +466,7 @@ class CreateTemplateParamSource(ABC, ParamSource):
     def params(self):
         return {
             "templates": self.template_definitions,
-            "request-params": self.request_params
+            "request-params": self.request_params,
         }
 
 
@@ -480,8 +486,7 @@ class SearchParamSource(ParamSource):
         target_name = get_target(track, params)
         type_name = params.get("type")
         if params.get("data-stream") and type_name:
-            raise exceptions.InvalidSyntax(
-                f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
+            raise exceptions.InvalidSyntax(f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
         request_cache = params.get("cache", None)
         detailed_results = params.get("detailed-results", False)
         query_body = params.get("body", None)
@@ -498,12 +503,13 @@ class SearchParamSource(ParamSource):
             "detailed-results": detailed_results,
             "request-params": request_params,
             "response-compression-enabled": response_compression_enabled,
-            "body": query_body
+            "body": query_body,
         }
 
         if not target_name:
             raise exceptions.InvalidSyntax(
-                f"'index' or 'data-stream' is mandatory and is missing for operation '{kwargs.get('operation_name')}'")
+                f"'index' or 'data-stream' is mandatory and is missing for operation '{kwargs.get('operation_name')}'"
+            )
 
         if pages:
             self.query_params["pages"] = pages
@@ -536,6 +542,7 @@ class IndexIdConflict(Enum):
 
     Note that this assumes that each document in the benchmark corpus has an id between [1, size_of(corpus)]
     """
+
     NoConflicts = 0
     SequentialConflicts = 1
     RandomConflicts = 2
@@ -558,8 +565,9 @@ class BulkIndexParamSource(ParamSource):
             raise exceptions.InvalidSyntax("'conflicts' cannot be used with 'data-streams'")
 
         if self.id_conflicts != IndexIdConflict.NoConflicts:
-            self.conflict_probability = self.float_param(params, name="conflict-probability", default_value=25, min_value=0, max_value=100,
-                                                         min_operator=operator.lt)
+            self.conflict_probability = self.float_param(
+                params, name="conflict-probability", default_value=25, min_value=0, max_value=100, min_operator=operator.lt
+            )
             self.on_conflict = params.get("on-conflict", "index")
             if self.on_conflict not in ["index", "update"]:
                 raise exceptions.InvalidSyntax("Unknown 'on-conflict' setting [{}]".format(self.on_conflict))
@@ -573,16 +581,20 @@ class BulkIndexParamSource(ParamSource):
         self.corpora = self.used_corpora(track, params)
 
         if len(self.corpora) == 0:
-            raise exceptions.InvalidSyntax(f"There is no document corpus definition for track {track}. You must add at "
-                                           f"least one before making bulk requests to Elasticsearch.")
+            raise exceptions.InvalidSyntax(
+                f"There is no document corpus definition for track {track}. You must add at "
+                f"least one before making bulk requests to Elasticsearch."
+            )
 
         for corpus in self.corpora:
             for document_set in corpus.documents:
                 if document_set.includes_action_and_meta_data and self.id_conflicts != IndexIdConflict.NoConflicts:
                     file_name = document_set.document_archive if document_set.has_compressed_corpus() else document_set.document_file
 
-                    raise exceptions.InvalidSyntax("Cannot generate id conflicts [%s] as [%s] in document corpus [%s] already contains an "
-                                                   "action and meta-data line." % (id_conflicts, file_name, corpus))
+                    raise exceptions.InvalidSyntax(
+                        "Cannot generate id conflicts [%s] as [%s] in document corpus [%s] already contains an "
+                        "action and meta-data line." % (id_conflicts, file_name, corpus)
+                    )
 
         self.pipeline = params.get("pipeline", None)
         try:
@@ -606,10 +618,18 @@ class BulkIndexParamSource(ParamSource):
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
 
         self.ingest_percentage = self.float_param(params, name="ingest-percentage", default_value=100, min_value=0, max_value=100)
-        self.param_source = PartitionBulkIndexParamSource(self.corpora, self.batch_size, self.bulk_size,
-                                                          self.ingest_percentage, self.id_conflicts,
-                                                          self.conflict_probability, self.on_conflict,
-                                                          self.recency, self.pipeline, self._params)
+        self.param_source = PartitionBulkIndexParamSource(
+            self.corpora,
+            self.batch_size,
+            self.bulk_size,
+            self.ingest_percentage,
+            self.id_conflicts,
+            self.conflict_probability,
+            self.on_conflict,
+            self.recency,
+            self.pipeline,
+            self._params,
+        )
 
     def float_param(self, params, name, default_value, min_value, max_value, min_operator=operator.le):
         try:
@@ -617,7 +637,8 @@ class BulkIndexParamSource(ParamSource):
             if min_operator(value, min_value) or value > max_value:
                 interval_min = "(" if min_operator is operator.le else "["
                 raise exceptions.InvalidSyntax(
-                    "'{}' must be in the range {}{:.1f}, {:.1f}] but was {:.1f}".format(name, interval_min, min_value, max_value, value))
+                    "'{}' must be in the range {}{:.1f}, {:.1f}] but was {:.1f}".format(name, interval_min, min_value, max_value, value)
+                )
             return value
         except ValueError:
             raise exceptions.InvalidSyntax("'{}' must be numeric".format(name))
@@ -631,16 +652,19 @@ class BulkIndexParamSource(ParamSource):
 
         for corpus in t.corpora:
             if corpus.name in corpora_names:
-                filtered_corpus = corpus.filter(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                target_indices=params.get("indices"),
-                                                target_data_streams=params.get("data-streams"))
+                filtered_corpus = corpus.filter(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    target_indices=params.get("indices"),
+                    target_data_streams=params.get("data-streams"),
+                )
                 if filtered_corpus.number_of_documents(source_format=track.Documents.SOURCE_FORMAT_BULK) > 0:
                     corpora.append(filtered_corpus)
 
         # the track has corpora but none of them match
         if t.corpora and not corpora:
-            raise exceptions.RallyAssertionError("The provided corpus %s does not match any of the corpora %s." %
-                                                 (corpora_names, track_corpora_names))
+            raise exceptions.RallyAssertionError(
+                "The provided corpus %s does not match any of the corpora %s." % (corpora_names, track_corpora_names)
+            )
 
         return corpora
 
@@ -654,8 +678,19 @@ class BulkIndexParamSource(ParamSource):
 
 
 class PartitionBulkIndexParamSource:
-    def __init__(self, corpora, batch_size, bulk_size, ingest_percentage, id_conflicts, conflict_probability,
-                 on_conflict, recency, pipeline=None, original_params=None):
+    def __init__(
+        self,
+        corpora,
+        batch_size,
+        bulk_size,
+        ingest_percentage,
+        id_conflicts,
+        conflict_probability,
+        on_conflict,
+        recency,
+        pipeline=None,
+        original_params=None,
+    ):
         """
 
         :param corpora: Specification of affected document corpora.
@@ -694,7 +729,8 @@ class PartitionBulkIndexParamSource:
             self.total_partitions = total_partitions
         elif self.total_partitions != total_partitions:
             raise exceptions.RallyAssertionError(
-                f"Total partitions is expected to be [{self.total_partitions}] but was [{total_partitions}]")
+                f"Total partitions is expected to be [{self.total_partitions}] but was [{total_partitions}]"
+            )
         self.partitions.append(partition_index)
 
     def params(self):
@@ -713,10 +749,21 @@ class PartitionBulkIndexParamSource:
         start_index = self.partitions[0]
         end_index = self.partitions[-1]
 
-        self.internal_params = bulk_data_based(self.total_partitions, start_index, end_index, self.corpora,
-                                               self.batch_size, self.bulk_size, self.id_conflicts,
-                                               self.conflict_probability, self.on_conflict, self.recency,
-                                               self.pipeline, self.original_params, self.create_reader)
+        self.internal_params = bulk_data_based(
+            self.total_partitions,
+            start_index,
+            end_index,
+            self.corpora,
+            self.batch_size,
+            self.bulk_size,
+            self.id_conflicts,
+            self.conflict_probability,
+            self.on_conflict,
+            self.recency,
+            self.pipeline,
+            self.original_params,
+            self.create_reader,
+        )
 
         all_bulks = number_of_bulks(self.corpora, start_index, end_index, self.total_partitions, self.bulk_size)
         self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
@@ -734,10 +781,7 @@ class OpenPointInTimeParamSource(ParamSource):
         self._keep_alive = params.get("keep-alive")
 
     def params(self):
-        parsed_params = {
-            "index": self._index_name,
-            "keep-alive": self._keep_alive
-        }
+        parsed_params = {"index": self._index_name, "keep-alive": self._keep_alive}
         parsed_params.update(self._client_params())
         return parsed_params
 
@@ -748,9 +792,7 @@ class ClosePointInTimeParamSource(ParamSource):
         self._pit_task_name = params.get("with-point-in-time-from")
 
     def params(self):
-        parsed_params = {
-            "with-point-in-time-from": self._pit_task_name
-        }
+        parsed_params = {"with-point-in-time-from": self._pit_task_name}
         parsed_params.update(self._client_params())
         return parsed_params
 
@@ -760,7 +802,7 @@ class ForceMergeParamSource(ParamSource):
         super().__init__(track, params, **kwargs)
         if len(track.indices) > 0 or len(track.data_streams) > 0:
             # force merge data streams and indices - API call is the same so treat as indices
-            default_target = ','.join(map(str, track.indices + track.data_streams))
+            default_target = ",".join(map(str, track.indices + track.data_streams))
         else:
             default_target = "_all"
 
@@ -777,10 +819,11 @@ class ForceMergeParamSource(ParamSource):
             "index": self._target_name,
             "max-num-segments": self._max_num_segments,
             "mode": self._mode,
-            "poll-period": self._poll_period
+            "poll-period": self._poll_period,
         }
         parsed_params.update(self._client_params())
         return parsed_params
+
 
 def get_target(track, params):
     if len(track.indices) == 1:
@@ -795,6 +838,7 @@ def get_target(track, params):
         target_name = params.get("data-stream", default_target)
     return target_name
 
+
 def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):
     """
     :return: The number of bulk operations that the given client will issue.
@@ -802,8 +846,9 @@ def number_of_bulks(corpora, start_partition_index, end_partition_index, total_p
     bulks = 0
     for corpus in corpora:
         for docs in corpus.documents:
-            _, num_docs, _ = bounds(docs.number_of_documents, start_partition_index, end_partition_index,
-                                    total_partitions, docs.includes_action_and_meta_data)
+            _, num_docs, _ = bounds(
+                docs.number_of_documents, start_partition_index, end_partition_index, total_partitions, docs.includes_action_and_meta_data
+            )
             complete_bulks, rest = (num_docs // bulk_size, num_docs % bulk_size)
             bulks += complete_bulks
             if rest > 0:
@@ -837,8 +882,9 @@ def chain(*iterables):
                 yield element
 
 
-def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability,
-                          on_conflict, recency):
+def create_default_reader(
+    docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
+):
     source = Slice(io.MmapSource, offset, num_lines)
     target = None
     use_create = False
@@ -854,32 +900,64 @@ def create_default_reader(docs, offset, num_lines, num_docs, batch_size, bulk_si
     if docs.includes_action_and_meta_data:
         return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, target, docs.target_type)
     else:
-        am_handler = GenerateActionMetaData(target, docs.target_type,
-                                            build_conflicting_ids(id_conflicts, num_docs, offset), conflict_probability,
-                                            on_conflict, recency, use_create=use_create)
+        am_handler = GenerateActionMetaData(
+            target,
+            docs.target_type,
+            build_conflicting_ids(id_conflicts, num_docs, offset),
+            conflict_probability,
+            on_conflict,
+            recency,
+            use_create=use_create,
+        )
         return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, target, docs.target_type)
 
 
-def create_readers(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size, id_conflicts,
-                   conflict_probability, on_conflict, recency, create_reader):
+def create_readers(
+    num_clients,
+    start_client_index,
+    end_client_index,
+    corpora,
+    batch_size,
+    bulk_size,
+    id_conflicts,
+    conflict_probability,
+    on_conflict,
+    recency,
+    create_reader,
+):
     logger = logging.getLogger(__name__)
     readers = []
     for corpus in corpora:
         for docs in corpus.documents:
-            offset, num_docs, num_lines = bounds(docs.number_of_documents, start_client_index, end_client_index,
-                                                 num_clients, docs.includes_action_and_meta_data)
+            offset, num_docs, num_lines = bounds(
+                docs.number_of_documents, start_client_index, end_client_index, num_clients, docs.includes_action_and_meta_data
+            )
             if num_docs > 0:
                 target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
                 if docs.target_data_stream:
                     target = docs.target_data_stream
-                logger.info("Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
-                            "from corpus [%s].", start_client_index, end_client_index, num_docs, offset,
-                            target, corpus.name)
-                readers.append(create_reader(docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts,
-                                             conflict_probability, on_conflict, recency))
+                logger.info(
+                    "Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
+                    "from corpus [%s].",
+                    start_client_index,
+                    end_client_index,
+                    num_docs,
+                    offset,
+                    target,
+                    corpus.name,
+                )
+                readers.append(
+                    create_reader(
+                        docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
+                    )
+                )
             else:
-                logger.info("Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
-                            start_client_index, end_client_index, corpus.name)
+                logger.info(
+                    "Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
+                    start_client_index,
+                    end_client_index,
+                    corpus.name,
+                )
     return readers
 
 
@@ -925,7 +1003,7 @@ def bulk_generator(readers, pipeline, original_params):
                 "body": bulk,
                 # This is not always equal to the bulk_size we get as parameter. The last bulk may be less than the bulk size.
                 "bulk-size": docs_in_bulk,
-                "unit": "docs"
+                "unit": "docs",
             }
             if pipeline:
                 bulk_params["pipeline"] = pipeline
@@ -935,8 +1013,21 @@ def bulk_generator(readers, pipeline, original_params):
             yield params
 
 
-def bulk_data_based(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size, id_conflicts,
-                    conflict_probability, on_conflict, recency, pipeline, original_params, create_reader=create_default_reader):
+def bulk_data_based(
+    num_clients,
+    start_client_index,
+    end_client_index,
+    corpora,
+    batch_size,
+    bulk_size,
+    id_conflicts,
+    conflict_probability,
+    on_conflict,
+    recency,
+    pipeline,
+    original_params,
+    create_reader=create_default_reader,
+):
     """
     Calculates the necessary schedule for bulk operations.
 
@@ -957,21 +1048,41 @@ def bulk_data_based(num_clients, start_client_index, end_client_index, corpora, 
                       intended for testing only.
     :return: A generator for the bulk operations of the given client.
     """
-    readers = create_readers(num_clients, start_client_index, end_client_index, corpora, batch_size, bulk_size,
-                             id_conflicts, conflict_probability, on_conflict, recency, create_reader)
+    readers = create_readers(
+        num_clients,
+        start_client_index,
+        end_client_index,
+        corpora,
+        batch_size,
+        bulk_size,
+        id_conflicts,
+        conflict_probability,
+        on_conflict,
+        recency,
+        create_reader,
+    )
     return bulk_generator(chain(*readers), pipeline, original_params)
 
 
 class GenerateActionMetaData:
     RECENCY_SLOPE = 30
 
-    def __init__(self, index_name, type_name, conflicting_ids=None, conflict_probability=None, on_conflict=None, recency=None,
-                 rand=random.random, randint=random.randint, randexp=random.expovariate, use_create=False):
+    def __init__(
+        self,
+        index_name,
+        type_name,
+        conflicting_ids=None,
+        conflict_probability=None,
+        on_conflict=None,
+        recency=None,
+        rand=random.random,
+        randint=random.randint,
+        randexp=random.expovariate,
+        use_create=False,
+    ):
         if type_name:
-            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % \
-                                           (index_name, type_name, "%s")
-            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % \
-                                            (index_name, type_name, "%s")
+            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % (index_name, type_name, "%s")
+            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % (index_name, type_name, "%s")
             self.meta_data_index_no_id = '{"index": {"_index": "%s", "_type": "%s"}}\n' % (index_name, type_name)
         else:
             self.meta_data_index_with_id = '{"index": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
@@ -1053,8 +1164,13 @@ class Slice:
     def open(self, file_name, mode, bulk_size):
         self.bulk_size = bulk_size
         self.source = self.source_class(file_name, mode).open()
-        self.logger.info("Will read [%d] lines from [%s] starting from line [%d] with bulk size [%d].",
-                         self.number_of_lines, file_name, self.offset, self.bulk_size)
+        self.logger.info(
+            "Will read [%d] lines from [%s] starting from line [%d] with bulk size [%d].",
+            self.number_of_lines,
+            file_name,
+            self.offset,
+            self.bulk_size,
+        )
         start = time.perf_counter()
         io.skip_lines(file_name, self.source, self.offset)
         end = time.perf_counter()
@@ -1177,7 +1293,7 @@ class MetadataIndexDataReader(IndexDataReader):
                 if action_type == "update":
                     # remove the trailing "\n" as the doc needs to fit on one line
                     doc = doc.strip()
-                    current_bulk.append(b"{\"doc\":%s}\n" % doc)
+                    current_bulk.append(b'{"doc":%s}\n' % doc)
                 else:
                     current_bulk.append(doc)
             else:

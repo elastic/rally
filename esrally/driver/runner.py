@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -20,17 +20,17 @@ import contextvars
 import json
 import logging
 import random
+import re
 import sys
 import time
 import types
-import re
 from collections import Counter, OrderedDict
 from copy import deepcopy
 from enum import Enum
 from functools import total_ordering
+from io import BytesIO
 from os.path import commonprefix
 from typing import List, Optional
-from io import BytesIO
 
 import ijson
 
@@ -121,7 +121,8 @@ def register_runner(operation_type, runner, **kwargs):
 
     if not async_runner:
         raise exceptions.RallyAssertionError(
-            "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner)))
+            "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner))
+        )
 
     if getattr(runner, "multi_cluster", False):
         if "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
@@ -191,7 +192,7 @@ class Runner:
             "params": "request-params",
             "request_timeout": "request-timeout",
         }
-        full_result =  {k: params.get(v) for (k, v) in kw_dict.items()}
+        full_result = {k: params.get(v) for (k, v) in kw_dict.items()}
         # filter Nones
         return dict(filter(lambda kv: kv[1] is not None, full_result.items()))
 
@@ -211,6 +212,7 @@ class Delegator:
     """
     Mixin to unify delegate handling
     """
+
     def __init__(self, delegate, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.delegate = delegate
@@ -387,8 +389,7 @@ class AssertingRunner(Runner, Delegator):
                 for assertion in params["assertions"]:
                     self.check_assertion(op_name, assertion, return_value)
             else:
-                self.logger.debug("Skipping assertion check in [%s] as [%s] does not return a dict.",
-                                  op_name, repr(self.delegate))
+                self.logger.debug("Skipping assertion check in [%s] as [%s] does not return a dict.", op_name, repr(self.delegate))
         return return_value
 
     def __repr__(self, *args, **kwargs):
@@ -408,14 +409,15 @@ def mandatory(params, key, op):
     except KeyError:
         raise exceptions.DataError(
             f"Parameter source for operation '{str(op)}' did not provide the mandatory parameter '{key}'. "
-            f"Add it to your parameter source and try again.")
+            f"Add it to your parameter source and try again."
+        )
 
 
 # TODO: remove and use https://docs.python.org/3/library/stdtypes.html#str.removeprefix
 #  once Python 3.9 becomes the minimum version
 def remove_prefix(string, prefix):
     if string.startswith(prefix):
-        return string[len(prefix):]
+        return string[len(prefix) :]
     return string
 
 
@@ -521,7 +523,7 @@ class BulkIndex(Runner):
             raise exceptions.DataError("bulk body is neither string nor list")
 
         for line_number, data in enumerate(bulk_lines):
-            line_size = len(data.encode('utf-8'))
+            line_size = len(data.encode("utf-8"))
             if with_action_metadata:
                 if line_number % 2 == 1:
                     total_document_size_bytes += line_size
@@ -543,10 +545,7 @@ class BulkIndex(Runner):
                 s = data["_shards"]
                 sk = "%d-%d-%d" % (s["total"], s["successful"], s["failed"])
                 if sk not in shards_histogram:
-                    shards_histogram[sk] = {
-                        "item-count": 0,
-                        "shards": s
-                    }
+                    shards_histogram[sk] = {"item-count": 0, "shards": s}
                 shards_histogram[sk]["item-count"] += 1
             if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                 bulk_error_count += 1
@@ -561,7 +560,7 @@ class BulkIndex(Runner):
             "ops": ops,
             "shards_histogram": list(shards_histogram.values()),
             "bulk-request-size-bytes": bulk_request_size_bytes,
-            "total-document-size-bytes": total_document_size_bytes
+            "total-document-size-bytes": total_document_size_bytes,
         }
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
@@ -585,7 +584,7 @@ class BulkIndex(Runner):
             parsed_response = json.loads(response.getvalue())
             for item in parsed_response["items"]:
                 data = next(iter(item.values()))
-                if data["status"] > 299 or ('_shards' in data and data["_shards"]["failed"] > 0):
+                if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1
                     self.extract_error_details(error_details, data)
                 else:
@@ -594,7 +593,7 @@ class BulkIndex(Runner):
             "took": props.get("took"),
             "success": bulk_error_count == 0,
             "success-count": bulk_success_count,
-            "error-count": bulk_error_count
+            "error-count": bulk_error_count,
         }
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
@@ -630,6 +629,7 @@ class ForceMerge(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         max_num_segments = params.get("max-num-segments")
         mode = params.get("mode")
         merge_params = self._default_kw_params(params)
@@ -687,16 +687,16 @@ class IndicesStats(Runner):
                     "path": path,
                     # avoid mapping issues in the ES metrics store by always rendering values as strings
                     "actual-value": self._safe_string(actual_value),
-                    "expected-value": self._safe_string(expected_value)
+                    "expected-value": self._safe_string(expected_value),
                 },
                 # currently we only support "==" as a predicate but that might change in the future
-                "success": actual_value == expected_value
+                "success": actual_value == expected_value,
             }
         else:
             return {
                 "weight": 1,
                 "unit": "ops",
-                "success": True
+                "success": True,
             }
 
     def __repr__(self, *args, **kwargs):
@@ -834,7 +834,7 @@ class Query(Runner):
                 "unit": "pages",
                 "success": True,
                 "timed_out": False,
-                "took": 0
+                "took": 0,
             }
             if pit_op:
                 # these are disallowed as they are encoded in the pit_id
@@ -846,8 +846,7 @@ class Query(Runner):
             for page in range(1, total_pages + 1):
                 if pit_op:
                     pit_id = CompositeContext.get(pit_op)
-                    body["pit"] = {"id": pit_id,
-                                   "keep_alive": "1m" }
+                    body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
                 parsed, last_sort = self._extractor(response, bool(pit_op), results.get("hits"))
@@ -893,13 +892,13 @@ class Query(Runner):
                     "hits": hits_total,
                     "hits_relation": hits_relation,
                     "timed_out": timed_out,
-                    "took": took
+                    "took": took,
                 }
             else:
                 return {
                     "weight": 1,
                     "unit": "ops",
-                    "success": True
+                    "success": True,
                 }
 
         async def _scroll_query(es, params):
@@ -923,8 +922,9 @@ class Query(Runner):
                         params["size"] = size
                         r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
 
-                        props = parse(r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation",
-                                          "timed_out", "took"], ["hits.hits"])
+                        props = parse(
+                            r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"]
+                        )
                         scroll_id = props.get("_scroll_id")
                         hits = props.get("hits.total.value", props.get("hits.total", 0))
                         hits_relation = props.get("hits.total.relation", "eq")
@@ -932,16 +932,15 @@ class Query(Runner):
                         took = props.get("took", 0)
                         all_results_collected = (size is not None and hits < size) or hits == 0
                     else:
-                        r = await es.transport.perform_request("GET", "/_search/scroll",
-                                                               body={"scroll_id": scroll_id, "scroll": "10s"},
-                                                               params=request_params,
-                                                               headers=headers)
+                        r = await es.transport.perform_request(
+                            "GET", "/_search/scroll", body={"scroll_id": scroll_id, "scroll": "10s"}, params=request_params, headers=headers
+                        )
                         props = parse(r, ["timed_out", "took"], ["hits.hits"])
                         timed_out = timed_out or props.get("timed_out", False)
                         took += props.get("took", 0)
                         # is the list of hits empty?
                         all_results_collected = props.get("hits.hits", False)
-                    retrieved_pages +=1
+                    retrieved_pages += 1
                     if all_results_collected:
                         break
             finally:
@@ -950,8 +949,11 @@ class Query(Runner):
                     try:
                         await es.clear_scroll(body={"scroll_id": [scroll_id]})
                     except BaseException:
-                        self.logger.exception("Could not clear scroll [%s]. This will lead to excessive resource usage in "
-                                              "Elasticsearch and will skew your benchmark results.", scroll_id)
+                        self.logger.exception(
+                            "Could not clear scroll [%s]. This will lead to excessive resource usage in "
+                            "Elasticsearch and will skew your benchmark results.",
+                            scroll_id,
+                        )
 
             return {
                 "weight": retrieved_pages,
@@ -960,7 +962,7 @@ class Query(Runner):
                 "hits_relation": hits_relation,
                 "unit": "pages",
                 "timed_out": timed_out,
-                "took": took
+                "took": took,
             }
 
         search_method = params.get("operation-type")
@@ -969,8 +971,10 @@ class Query(Runner):
         elif search_method == "scroll-search":
             return await _scroll_query(es, params)
         elif "pages" in params:
-            logging.getLogger(__name__).warning("Invoking a scroll search with the 'search' operation is deprecated "
-                                                "and will be removed in a future release. Use 'scroll-search' instead.")
+            logging.getLogger(__name__).warning(
+                "Invoking a scroll search with the 'search' operation is deprecated "
+                "and will be removed in a future release. Use 'scroll-search' instead."
+            )
             return await _scroll_query(es, params)
         else:
             return await _request_body_query(es, params)
@@ -1013,8 +1017,7 @@ class SearchAfterExtractor:
         parsed = parse(response, properties)
 
         if get_point_in_time and not parsed.get("pit_id"):
-            raise exceptions.RallyAssertionError("Paginated query failure: "
-                                                 "pit_id was expected but not found in the response.")
+            raise exceptions.RallyAssertionError("Paginated query failure: pit_id was expected but not found in the response.")
         # standardize these before returning...
         parsed["hits.total.value"] = parsed.pop("hits.total.value", parsed.pop("hits.total", hits_total))
         parsed["hits.total.relation"] = parsed.get("hits.total.relation", "eq")
@@ -1078,10 +1081,16 @@ class ClusterHealth(Runner):
             "unit": "ops",
             "success": status(cluster_status) >= status(expected_cluster_status) and relocating_shards <= expected_relocating_shards,
             "cluster-status": cluster_status,
-            "relocating-shards": relocating_shards
+            "relocating-shards": relocating_shards,
         }
-        self.logger.info("%s: expected status=[%s], actual status=[%s], relocating shards=[%d], success=[%s].",
-                         repr(self), expected_cluster_status, cluster_status, relocating_shards, result["success"])
+        self.logger.info(
+            "%s: expected status=[%s], actual status=[%s], relocating shards=[%d], success=[%s].",
+            repr(self),
+            expected_cluster_status,
+            cluster_status,
+            relocating_shards,
+            result["success"],
+        )
         return result
 
     def __repr__(self, *args, **kwargs):
@@ -1094,11 +1103,12 @@ class PutPipeline(Runner):
     """
 
     async def __call__(self, es, params):
-        await es.ingest.put_pipeline(id=mandatory(params, "id", self),
-                                     body=mandatory(params, "body", self),
-                                     master_timeout=params.get("master-timeout"),
-                                     timeout=params.get("timeout"),
-                                     )
+        await es.ingest.put_pipeline(
+            id=mandatory(params, "id", self),
+            body=mandatory(params, "body", self),
+            master_timeout=params.get("master-timeout"),
+            timeout=params.get("timeout"),
+        )
 
     def __repr__(self, *args, **kwargs):
         return "put-pipeline"
@@ -1132,7 +1142,7 @@ class CreateIndex(Runner):
         return {
             "weight": len(indices),
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1152,7 +1162,7 @@ class CreateDataStream(Runner):
         return {
             "weight": len(data_streams),
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1169,8 +1179,8 @@ async def set_destructive_requires_name(es, value):
     prior_value = all_settings.get("transient").get("action.destructive_requires_name")
     settings_body = {
         "transient": {
-            "action.destructive_requires_name": value
-        }
+            "action.destructive_requires_name": value,
+        },
     }
     await es.cluster.put_settings(body=settings_body)
     return prior_value
@@ -1202,7 +1212,7 @@ class DeleteIndex(Runner):
         return {
             "weight": ops,
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1233,7 +1243,7 @@ class DeleteDataStream(Runner):
         return {
             "weight": ops,
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1250,12 +1260,11 @@ class CreateComponentTemplate(Runner):
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
         for template, body in templates:
-            await es.cluster.put_component_template(name=template, body=body,
-                                                    params=request_params)
+            await es.cluster.put_component_template(name=template, body=body, params=request_params)
         return {
             "weight": len(templates),
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1276,10 +1285,9 @@ class DeleteComponentTemplate(Runner):
         async def _exists(name):
             # pylint: disable=import-outside-toplevel
             from elasticsearch.client import _make_path
+
             # currently not supported by client and hence custom request
-            return await es.transport.perform_request(
-                "HEAD", _make_path("_component_template", name)
-            )
+            return await es.transport.perform_request("HEAD", _make_path("_component_template", name))
 
         ops_count = 0
         for template_name in template_names:
@@ -1293,9 +1301,8 @@ class DeleteComponentTemplate(Runner):
         return {
             "weight": ops_count,
             "unit": "ops",
-            "success": True
+            "success": True,
         }
-
 
     def __repr__(self, *args, **kwargs):
         return "delete-component-template"
@@ -1315,7 +1322,7 @@ class CreateComposableTemplate(Runner):
         return {
             "weight": len(templates),
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1349,7 +1356,7 @@ class DeleteComposableTemplate(Runner):
         return {
             "weight": ops_count,
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1365,13 +1372,11 @@ class CreateIndexTemplate(Runner):
         templates = mandatory(params, "templates", self)
         request_params = params.get("request-params", {})
         for template, body in templates:
-            await es.indices.put_template(name=template,
-                                          body=body,
-                                          params=request_params)
+            await es.indices.put_template(name=template, body=body, params=request_params)
         return {
             "weight": len(templates),
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1406,7 +1411,7 @@ class DeleteIndexTemplate(Runner):
         return {
             "weight": ops_count,
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1427,13 +1432,9 @@ class ShrinkIndex(Runner):
     async def _wait_for(self, es, idx, description):
         # wait a little bit before the first check
         await asyncio.sleep(3)
-        result = await self.cluster_health(es, params={
-            "index": idx,
-            "retries": sys.maxsize,
-            "request-params": {
-                "wait_for_no_relocating_shards": "true"
-            }
-        })
+        result = await self.cluster_health(
+            es, params={"index": idx, "retries": sys.maxsize, "request-params": {"wait_for_no_relocating_shards": "true"}}
+        )
         if not result["success"]:
             raise exceptions.RallyAssertionError("Failed to wait for [{}].".format(description))
 
@@ -1467,14 +1468,11 @@ class ShrinkIndex(Runner):
             self.logger.info("Preparing [%s] for shrinking.", source_index)
 
             # prepare index for shrinking
-            await es.indices.put_settings(index=source_index,
-                                          body={
-                                              "settings": {
-                                                  "index.routing.allocation.require._name": shrink_node,
-                                                  "index.blocks.write": "true"
-                                              }
-                                          },
-                                          preserve_existing=True)
+            await es.indices.put_settings(
+                index=source_index,
+                body={"settings": {"index.routing.allocation.require._name": shrink_node, "index.blocks.write": "true"}},
+                preserve_existing=True,
+            )
 
             self.logger.info("Waiting for relocation to finish for index [%s] ...", source_index)
             await self._wait_for(es, source_index, f"shard relocation for index [{source_index}]")
@@ -1485,7 +1483,7 @@ class ShrinkIndex(Runner):
             target_body["settings"]["index.blocks.write"] = None
             # kick off the shrink operation
             index_suffix = remove_prefix(source_index, source_indices_stem)
-            final_target_index = target_index if len(index_suffix) == 0 else target_index+index_suffix
+            final_target_index = target_index if len(index_suffix) == 0 else target_index + index_suffix
             await es.indices.shrink(index=source_index, target=final_target_index, body=target_body)
 
             self.logger.info("Waiting for shrink to finish for index [%s] ...", source_index)
@@ -1495,7 +1493,7 @@ class ShrinkIndex(Runner):
         return {
             "weight": len(source_indices),
             "unit": "ops",
-            "success": True
+            "success": True,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1510,6 +1508,7 @@ class CreateMlDatafeed(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
         try:
@@ -1537,6 +1536,7 @@ class DeleteMlDatafeed(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
         try:
@@ -1548,10 +1548,7 @@ class DeleteMlDatafeed(Runner):
                 await es.transport.perform_request(
                     "DELETE",
                     f"/_xpack/ml/datafeeds/{datafeed_id}",
-                    params={
-                        "force": escape(force),
-                        "ignore": 404
-                    },
+                    params={"force": escape(force), "ignore": 404},
                 )
             else:
                 raise e
@@ -1568,6 +1565,7 @@ class StartMlDatafeed(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = params.get("body")
         start = params.get("start")
@@ -1598,6 +1596,7 @@ class StopMlDatafeed(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
@@ -1611,11 +1610,7 @@ class StopMlDatafeed(Runner):
                 }
                 if timeout:
                     request_params["timeout"] = escape(timeout)
-                await es.transport.perform_request(
-                    "POST",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
-                    params=request_params
-                )
+                await es.transport.perform_request("POST", f"/_xpack/ml/datafeeds/{datafeed_id}/_stop", params=request_params)
             else:
                 raise e
 
@@ -1631,6 +1626,7 @@ class CreateMlJob(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         job_id = mandatory(params, "job-id", self)
         body = mandatory(params, "body", self)
         try:
@@ -1658,6 +1654,7 @@ class DeleteMlJob(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
         # we don't want to fail if a job does not exist, thus we ignore 404s.
@@ -1669,10 +1666,7 @@ class DeleteMlJob(Runner):
                 await es.transport.perform_request(
                     "DELETE",
                     f"/_xpack/ml/anomaly_detectors/{job_id}",
-                    params={
-                        "force": escape(force),
-                        "ignore": 404
-                    },
+                    params={"force": escape(force), "ignore": 404},
                 )
             else:
                 raise e
@@ -1689,6 +1683,7 @@ class OpenMlJob(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         job_id = mandatory(params, "job-id", self)
         try:
             await es.xpack.ml.open_job(job_id=job_id)
@@ -1714,6 +1709,7 @@ class CloseMlJob(Runner):
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
@@ -1750,14 +1746,12 @@ class RawRequest(Runner):
             self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
             raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
         if not bool(headers):
-            #counter-intuitive, but preserves prior behavior
+            # counter-intuitive, but preserves prior behavior
             headers = None
 
-        await es.transport.perform_request(method=params.get("method", "GET"),
-                                           url=path,
-                                           headers=headers,
-                                           body=params.get("body"),
-                                           params=request_params)
+        await es.transport.perform_request(
+            method=params.get("method", "GET"), url=path, headers=headers, body=params.get("body"), params=request_params
+        )
 
     def __repr__(self, *args, **kwargs):
         return "raw-request"
@@ -1783,6 +1777,7 @@ class DeleteSnapshotRepository(Runner):
     """
     Deletes a snapshot repository
     """
+
     async def __call__(self, es, params):
         await es.snapshot.delete_repository(repository=mandatory(params, "repository", repr(self)))
 
@@ -1794,11 +1789,12 @@ class CreateSnapshotRepository(Runner):
     """
     Creates a new snapshot repository
     """
+
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
-        await es.snapshot.create_repository(repository=mandatory(params, "repository", repr(self)),
-                                            body=mandatory(params, "body", repr(self)),
-                                            params=request_params)
+        await es.snapshot.create_repository(
+            repository=mandatory(params, "repository", repr(self)), body=mandatory(params, "body", repr(self)), params=request_params
+        )
 
     def __repr__(self, *args, **kwargs):
         return "create-snapshot-repository"
@@ -1808,6 +1804,7 @@ class CreateSnapshot(Runner):
     """
     Creates a new snapshot repository
     """
+
     async def __call__(self, es, params):
         wait_for_completion = params.get("wait-for-completion", False)
         repository = mandatory(params, "repository", repr(self))
@@ -1815,10 +1812,7 @@ class CreateSnapshot(Runner):
         # just assert, gets set in _default_kw_params
         mandatory(params, "body", repr(self))
         api_kwargs = self._default_kw_params(params)
-        await es.snapshot.create(repository=repository,
-                                 snapshot=snapshot,
-                                 wait_for_completion=wait_for_completion,
-                                 **api_kwargs)
+        await es.snapshot.create(repository=repository, snapshot=snapshot, wait_for_completion=wait_for_completion, **api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "create-snapshot"
@@ -1834,9 +1828,7 @@ class WaitForSnapshotCreate(Runner):
         stats = {}
 
         while not snapshot_done:
-            response = await es.snapshot.status(repository=repository,
-                                                snapshot=snapshot,
-                                                ignore_unavailable=True)
+            response = await es.snapshot.status(repository=repository, snapshot=snapshot, ignore_unavailable=True)
 
             if "snapshots" in response:
                 response_state = response["snapshots"][0]["state"]
@@ -1865,7 +1857,7 @@ class WaitForSnapshotCreate(Runner):
             "start_time_millis": start_time_in_millis,
             "stop_time_millis": start_time_in_millis + duration_in_millis,
             "duration": duration_in_millis,
-            "file_count": file_count
+            "file_count": file_count,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1876,12 +1868,15 @@ class RestoreSnapshot(Runner):
     """
     Restores a snapshot from an already registered repository
     """
+
     async def __call__(self, es, params):
         api_kwargs = self._default_kw_params(params)
-        await es.snapshot.restore(repository=mandatory(params, "repository", repr(self)),
-                                  snapshot=mandatory(params, "snapshot", repr(self)),
-                                  wait_for_completion=params.get("wait-for-completion", False),
-                                  **api_kwargs)
+        await es.snapshot.restore(
+            repository=mandatory(params, "repository", repr(self)),
+            snapshot=mandatory(params, "snapshot", repr(self)),
+            wait_for_completion=params.get("wait-for-completion", False),
+            **api_kwargs,
+        )
 
     def __repr__(self, *args, **kwargs):
         return "restore-snapshot"
@@ -1933,7 +1928,7 @@ class IndicesRecovery(Runner):
             "success": True,
             "throughput": total_recovered / response_time_in_seconds,
             "start_time_millis": total_start_millis,
-            "stop_time_millis": total_end_millis
+            "stop_time_millis": total_end_millis,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -1945,6 +1940,7 @@ class PutSettings(Runner):
     Updates cluster settings with the
     `cluster settings API <http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html>_.
     """
+
     async def __call__(self, es, params):
         await es.cluster.put_settings(body=mandatory(params, "body", repr(self)))
 
@@ -2037,11 +2033,9 @@ class WaitForTransform(Runner):
 
         if not self._start_time:
             self._start_time = time.monotonic()
-            await es.transform.stop_transform(transform_id=transform_id,
-                                              force=force,
-                                              timeout=timeout,
-                                              wait_for_completion=False,
-                                              wait_for_checkpoint=wait_for_checkpoint)
+            await es.transform.stop_transform(
+                transform_id=transform_id, force=force, timeout=timeout, wait_for_completion=False, wait_for_checkpoint=wait_for_checkpoint
+            )
 
         while True:
             stats_response = await es.transform.get_transform_stats(transform_id=transform_id)
@@ -2051,18 +2045,24 @@ class WaitForTransform(Runner):
             if (time.monotonic() - self._start_time) > transform_timeout:
                 raise exceptions.RallyAssertionError(
                     f"Transform [{transform_id}] timed out after [{transform_timeout}] seconds. "
-                    "Please consider increasing the timeout in the track.")
+                    "Please consider increasing the timeout in the track."
+                )
 
             if state == "failed":
                 failure_reason = stats_response["transforms"][0].get("reason", "unknown")
-                raise exceptions.RallyAssertionError(
-                    f"Transform [{transform_id}] failed with [{failure_reason}].")
+                raise exceptions.RallyAssertionError(f"Transform [{transform_id}] failed with [{failure_reason}].")
             elif state == "stopped" or wait_for_completion is False:
                 self._completed = True
                 self._percent_completed = 1.0
             else:
-                self._percent_completed = stats_response["transforms"][0].get("checkpointing", {}).get("next", {}).get(
-                    "checkpoint_progress", {}).get("percent_complete", 0.0) / 100.0
+                self._percent_completed = (
+                    stats_response["transforms"][0]
+                    .get("checkpointing", {})
+                    .get("next", {})
+                    .get("checkpoint_progress", {})
+                    .get("percent_complete", 0.0)
+                    / 100.0
+                )
 
             documents_processed = transform_stats.get("documents_processed", 0)
             processing_time = transform_stats.get("search_time_in_ms", 0)
@@ -2077,7 +2077,7 @@ class WaitForTransform(Runner):
                     "transform-id": transform_id,
                     "weight": transform_stats.get("documents_processed", 0),
                     "unit": "docs",
-                    "success": True
+                    "success": True,
                 }
 
                 throughput = 0
@@ -2151,16 +2151,16 @@ class TransformStats(Runner):
                     "path": path,
                     # avoid mapping issues in the ES metrics store by always rendering values as strings
                     "actual-value": self._safe_string(actual_value),
-                    "expected-value": self._safe_string(expected_value)
+                    "expected-value": self._safe_string(expected_value),
                 },
                 # currently we only support "==" as a predicate but that might change in the future
-                "success": actual_value == expected_value
+                "success": actual_value == expected_value,
             }
         else:
             return {
                 "weight": 1,
                 "unit": "ops",
-                "success": True
+                "success": True,
             }
 
     def __repr__(self, *args, **kwargs):
@@ -2170,9 +2170,7 @@ class TransformStats(Runner):
 class SubmitAsyncSearch(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
-        response = await es.async_search.submit(body=mandatory(params, "body", self),
-                                                index=params.get("index"),
-                                                params=request_params)
+        response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
         # id may be None if the operation has already returned
@@ -2199,8 +2197,7 @@ class GetAsyncSearch(Runner):
         request_params = params.get("request-params", {})
         stats = {}
         for search_id, search in async_search_ids(searches):
-            response = await es.async_search.get(id=search_id,
-                                                 params=request_params)
+            response = await es.async_search.get(id=search_id, params=request_params)
             is_running = response["is_running"]
             success = success and not is_running
             if not is_running:
@@ -2208,7 +2205,7 @@ class GetAsyncSearch(Runner):
                     "hits": response["response"]["hits"]["total"]["value"],
                     "hits_relation": response["response"]["hits"]["total"]["relation"],
                     "timed_out": response["response"]["timed_out"],
-                    "took": response["response"]["took"]
+                    "took": response["response"]["took"],
                 }
 
         return {
@@ -2216,7 +2213,7 @@ class GetAsyncSearch(Runner):
             "weight": len(stats),
             "unit": "ops",
             "success": success,
-            "stats": stats
+            "stats": stats,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -2239,9 +2236,7 @@ class OpenPointInTime(Runner):
         op_name = mandatory(params, "name", self)
         index = mandatory(params, "index", self)
         keep_alive = params.get("keep-alive", "1m")
-        response = await es.open_point_in_time(index=index,
-                                         params=params.get("request-params"),
-                                         keep_alive=keep_alive)
+        response = await es.open_point_in_time(index=index, params=params.get("request-params"), keep_alive=keep_alive)
         id = response.get("id")
         CompositeContext.put(op_name, id)
 
@@ -2285,16 +2280,18 @@ class CompositeContext:
         try:
             return CompositeContext._ctx()[key]
         except KeyError:
-            raise KeyError(f"Unknown property [{key}]. Currently recognized "
-                           f"properties are [{', '.join(CompositeContext._ctx().keys())}].") from None
+            raise KeyError(
+                f"Unknown property [{key}]. Currently recognized properties are [{', '.join(CompositeContext._ctx().keys())}]."
+            ) from None
 
     @staticmethod
     def remove(key):
         try:
             CompositeContext._ctx().pop(key)
         except KeyError:
-            raise KeyError(f"Unknown property [{key}]. Currently recognized "
-                           f"properties are [{', '.join(CompositeContext._ctx().keys())}].") from None
+            raise KeyError(
+                f"Unknown property [{key}]. Currently recognized properties are [{', '.join(CompositeContext._ctx().keys())}]."
+            ) from None
 
     @staticmethod
     def _ctx():
@@ -2308,6 +2305,7 @@ class Composite(Runner):
     """
     Executes a complex request structure which is measured by Rally as one composite operation.
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.supported_op_types = [
@@ -2318,7 +2316,7 @@ class Composite(Runner):
             "sleep",
             "submit-async-search",
             "get-async-search",
-            "delete-async-search"
+            "delete-async-search",
         ]
 
     async def run_stream(self, es, stream, connection_limit):
@@ -2338,7 +2336,8 @@ class Composite(Runner):
                     op_type = item["operation-type"]
                     if op_type not in self.supported_op_types:
                         raise exceptions.RallyAssertionError(
-                            f"Unsupported operation-type [{op_type}]. Use one of [{', '.join(self.supported_op_types)}].")
+                            f"Unsupported operation-type [{op_type}]. Use one of [{', '.join(self.supported_op_types)}]."
+                        )
                     runner = RequestTiming(runner_for(op_type))
                     async with connection_limit:
                         async with runner:
@@ -2371,7 +2370,7 @@ class Composite(Runner):
         return {
             "weight": 1,
             "unit": "ops",
-            "dependent_timing": response
+            "dependent_timing": response,
         }
 
     def __repr__(self, *args, **kwargs):
@@ -2395,7 +2394,7 @@ class RequestTiming(Runner, Delegator):
                 result = {
                     "weight": total_ops,
                     "unit": total_ops_unit,
-                    "success": True
+                    "success": True,
                 }
             elif isinstance(return_value, dict):
                 result = return_value
@@ -2403,7 +2402,7 @@ class RequestTiming(Runner, Delegator):
                 result = {
                     "weight": 1,
                     "unit": "ops",
-                    "success": True
+                    "success": True,
                 }
 
             start = request_context.request_start
@@ -2414,7 +2413,7 @@ class RequestTiming(Runner, Delegator):
                 "absolute_time": absolute_time,
                 "request_start": start,
                 "request_end": end,
-                "service_time": end - start
+                "service_time": end - start,
             }
         return result
 
@@ -2449,8 +2448,9 @@ class Retry(Runner, Delegator):
 
     async def __call__(self, es, params):
         # pylint: disable=import-outside-toplevel
-        import elasticsearch
         import socket
+
+        import elasticsearch
 
         retry_until_success = params.get("retry-until-success", self.retry_until_success)
         if retry_until_success:
@@ -2474,8 +2474,12 @@ class Retry(Runner, Delegator):
                         self.logger.debug("%s has returned successfully", repr(self.delegate))
                         return return_value
                     else:
-                        self.logger.info("[%s] has returned with an error: %s. Retrying in [%.2f] seconds.",
-                                         repr(self.delegate), return_value, sleep_time)
+                        self.logger.info(
+                            "[%s] has returned with an error: %s. Retrying in [%.2f] seconds.",
+                            repr(self.delegate),
+                            return_value,
+                            sleep_time,
+                        )
                         await asyncio.sleep(sleep_time)
                 else:
                     return return_value

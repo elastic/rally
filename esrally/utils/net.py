@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -19,7 +19,7 @@ import logging
 import os
 import socket
 import urllib.error
-from urllib.parse import quote, parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 
 import certifi
 import urllib3
@@ -36,16 +36,17 @@ def init():
     proxy_url = os.getenv("http_proxy")
     if proxy_url and len(proxy_url) > 0:
         parsed_url = urllib3.util.parse_url(proxy_url)
-        logger.info("Connecting via proxy URL [%s] to the Internet (picked up from the env variable [http_proxy]).",
-                    proxy_url)
-        __HTTP = urllib3.ProxyManager(proxy_url,
-                                      cert_reqs='CERT_REQUIRED',
-                                      ca_certs=certifi.where(),
-                                      # appropriate headers will only be set if there is auth info
-                                      proxy_headers=urllib3.make_headers(proxy_basic_auth=parsed_url.auth))
+        logger.info("Connecting via proxy URL [%s] to the Internet (picked up from the env variable [http_proxy]).", proxy_url)
+        __HTTP = urllib3.ProxyManager(
+            proxy_url,
+            cert_reqs="CERT_REQUIRED",
+            ca_certs=certifi.where(),
+            # appropriate headers will only be set if there is auth info
+            proxy_headers=urllib3.make_headers(proxy_basic_auth=parsed_url.auth),
+        )
     else:
         logger.info("Connecting directly to the Internet (no proxy support).")
-        __HTTP = urllib3.PoolManager(cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
+        __HTTP = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
 
 
 class Progress:
@@ -86,7 +87,6 @@ def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size
         console.error("S3 support is optional. Install it with `python -m pip install esrally[s3]`")
         raise
 
-
     class S3ProgressAdapter:
         def __init__(self, size, progress):
             self._expected_size_in_bytes = size
@@ -102,38 +102,41 @@ def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size
     if expected_size_in_bytes is None:
         expected_size_in_bytes = bucket.Object(bucket_path).content_length
     progress_callback = S3ProgressAdapter(expected_size_in_bytes, progress_indicator) if progress_indicator else None
-    bucket.download_file(bucket_path, local_path,
-                         Callback=progress_callback,
-                         Config=boto3.s3.transfer.TransferConfig(use_threads=False))
+    bucket.download_file(bucket_path, local_path, Callback=progress_callback, Config=boto3.s3.transfer.TransferConfig(use_threads=False))
 
 
 def _build_gcs_object_url(bucket_name, bucket_path):
     # / and other special characters must be urlencoded in bucket and object names
     # ref: https://cloud.google.com/storage/docs/request-endpoints#encoding
 
-    return functools.reduce(urllib.parse.urljoin, [
-        "https://storage.googleapis.com/storage/v1/b/",
-        f"{quote(bucket_name.strip('/'), safe='')}/",
-        "o/",
-        f"{quote(bucket_path.strip('/'), safe='')}",
-        "?alt=media"
-    ])
+    return functools.reduce(
+        urllib.parse.urljoin,
+        [
+            "https://storage.googleapis.com/storage/v1/b/",
+            f"{quote(bucket_name.strip('/'), safe='')}/",
+            "o/",
+            f"{quote(bucket_path.strip('/'), safe='')}",
+            "?alt=media",
+        ],
+    )
 
 
 def _download_from_gcs_bucket(bucket_name, bucket_path, local_path, expected_size_in_bytes=None, progress_indicator=None):
     # pylint: disable=import-outside-toplevel
     # lazily initialize Google Cloud Storage support - we might not need it
-    import google.oauth2.credentials
-    import google.auth.transport.requests as tr_requests
     import google.auth
+    import google.auth.transport.requests as tr_requests
+    import google.oauth2.credentials
+
     # Using Google Resumable Media as the standard storage library doesn't support progress
     # (https://github.com/googleapis/python-storage/issues/27)
     from google.resumable_media.requests import ChunkedDownload
+
     ro_scope = "https://www.googleapis.com/auth/devstorage.read_only"
 
     access_token = os.environ.get("GOOGLE_AUTH_TOKEN")
     if access_token:
-        credentials = google.oauth2.credentials.Credentials(token=access_token, scopes=(ro_scope, ))
+        credentials = google.oauth2.credentials.Credentials(token=access_token, scopes=(ro_scope,))
     else:
         # https://google-auth.readthedocs.io/en/latest/user-guide.html
         credentials, _ = google.auth.default(scopes=(ro_scope,))
@@ -162,7 +165,7 @@ def download_from_bucket(blobstore, url, local_path, expected_size_in_bytes=None
     bucket_end_index = bucket_and_path.find("/")
     bucket = bucket_and_path[:bucket_end_index]
     # we need to remove the leading "/"
-    bucket_path = bucket_and_path[bucket_end_index + 1:]
+    bucket_path = bucket_and_path[bucket_end_index + 1 :]
 
     logger.info("Downloading from [%s] bucket [%s] and path [%s] to [%s].", blobstore, bucket, bucket_path, local_path)
     blob_downloader[blobstore](bucket, bucket_path, local_path, expected_size_in_bytes, progress_indicator)
@@ -171,8 +174,9 @@ def download_from_bucket(blobstore, url, local_path, expected_size_in_bytes=None
 
 
 def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
-    with __http().request("GET", url, preload_content=False, retries=10,
-                          timeout=urllib3.Timeout(connect=45, read=240)) as r, open(local_path, "wb") as out_file:
+    with __http().request("GET", url, preload_content=False, retries=10, timeout=urllib3.Timeout(connect=45, read=240)) as r, open(
+        local_path, "wb"
+    ) as out_file:
         if r.status > 299:
             raise urllib.error.HTTPError(url, r.status, "", None, None)
         # noinspection PyBroadException
@@ -206,8 +210,9 @@ def _add_url_param(url, params):
     url_parsed = urlparse(url)
     query = parse_qs(url_parsed.query)
     query.update(params)
-    return urlunparse((url_parsed.scheme, url_parsed.netloc, url_parsed.path, url_parsed.params,
-                       urlencode(query, doseq=True), url_parsed.fragment))
+    return urlunparse(
+        (url_parsed.scheme, url_parsed.netloc, url_parsed.path, url_parsed.params, urlencode(query, doseq=True), url_parsed.fragment)
+    )
 
 
 def download(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
@@ -237,8 +242,10 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
         if expected_size_in_bytes is not None and download_size != expected_size_in_bytes:
             if os.path.isfile(tmp_data_set_path):
                 os.remove(tmp_data_set_path)
-            raise exceptions.DataError("Download of [%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected. Please retry." %
-                                       (local_path, download_size, expected_size_in_bytes))
+            raise exceptions.DataError(
+                "Download of [%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected. Please retry."
+                % (local_path, download_size, expected_size_in_bytes)
+            )
         os.rename(tmp_data_set_path, local_path)
 
 

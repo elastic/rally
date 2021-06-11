@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -28,7 +28,7 @@ import elasticsearch
 import psutil
 
 from esrally import config, exceptions, telemetry
-from esrally.mechanic import launcher, cluster
+from esrally.mechanic import cluster, launcher
 from esrally.mechanic.provisioner import NodeConfiguration
 from esrally.metrics import InMemoryMetricsStore
 
@@ -44,39 +44,30 @@ class MockClientFactory:
 class MockClient:
     def __init__(self, client_options):
         self.client_options = client_options
-        self.cluster = SubClient({
-            "cluster_name": "rally-benchmark-cluster",
-            "nodes": {
-                "FCFjozkeTiOpN-SI88YEcg": {
-                    "name": "Nefarius",
-                    "host": "127.0.0.1"
-                }
-            }
-        })
-        self.nodes = SubClient({
-            "nodes": {
-                "FCFjozkeTiOpN-SI88YEcg": {
-                    "name": "Nefarius",
-                    "host": "127.0.0.1",
-                    "os": {
-                        "name": "Mac OS X",
-                        "version": "10.11.4",
-                        "available_processors": 8
+        self.cluster = SubClient(
+            {
+                "cluster_name": "rally-benchmark-cluster",
+                "nodes": {
+                    "FCFjozkeTiOpN-SI88YEcg": {
+                        "name": "Nefarius",
+                        "host": "127.0.0.1",
                     },
-                    "jvm": {
-                        "version": "1.8.0_74",
-                        "vm_vendor": "Oracle Corporation"
+                },
+            }
+        )
+        self.nodes = SubClient(
+            {
+                "nodes": {
+                    "FCFjozkeTiOpN-SI88YEcg": {
+                        "name": "Nefarius",
+                        "host": "127.0.0.1",
+                        "os": {"name": "Mac OS X", "version": "10.11.4", "available_processors": 8},
+                        "jvm": {"version": "1.8.0_74", "vm_vendor": "Oracle Corporation"},
                     }
                 }
             }
-        })
-        self._info = {
-            "version":
-                {
-                    "number": "5.0.0",
-                    "build_hash": "abc123"
-                }
-        }
+        )
+        self._info = {"version": {"number": "5.0.0", "build_hash": "abc123"}}
 
     def info(self):
         if self.client_options.get("raise-error-on-info", False):
@@ -147,11 +138,7 @@ class TerminatedProcess:
 
 def get_metrics_store(cfg):
     ms = InMemoryMetricsStore(cfg)
-    ms.open(race_id=str(uuid.uuid4()),
-            race_timestamp=datetime.now(),
-            track_name="test",
-            challenge_name="test",
-            car_name="test")
+    ms.open(race_id=str(uuid.uuid4()), race_timestamp=datetime.now(), track_name="test", challenge_name="test", car_name="test")
     return ms
 
 
@@ -159,13 +146,13 @@ MOCK_PID_VALUE = 1234
 
 
 class ProcessLauncherTests(TestCase):
-    @mock.patch('subprocess.Popen', new=MockPopen)
-    @mock.patch('esrally.mechanic.java_resolver.java_home', return_value=(12, "/java_home/"))
-    @mock.patch('esrally.utils.jvm.supports_option', return_value=True)
-    @mock.patch('esrally.utils.io.get_size')
-    @mock.patch('os.chdir')
-    @mock.patch('esrally.mechanic.launcher.wait_for_pidfile', return_value=MOCK_PID_VALUE)
-    @mock.patch('psutil.Process', new=MockProcess)
+    @mock.patch("subprocess.Popen", new=MockPopen)
+    @mock.patch("esrally.mechanic.java_resolver.java_home", return_value=(12, "/java_home/"))
+    @mock.patch("esrally.utils.jvm.supports_option", return_value=True)
+    @mock.patch("esrally.utils.io.get_size")
+    @mock.patch("os.chdir")
+    @mock.patch("esrally.mechanic.launcher.wait_for_pidfile", return_value=MOCK_PID_VALUE)
+    @mock.patch("psutil.Process", new=MockProcess)
     def test_daemon_start_stop(self, wait_for_pidfile, chdir, get_size, supports, java_home):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
@@ -179,9 +166,18 @@ class ProcessLauncherTests(TestCase):
 
         node_configs = []
         for node in range(2):
-            node_configs.append(NodeConfiguration(build_type="tar", car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
-                                                  ip="127.0.0.1", node_name="testnode-{}".format(node),
-                                                  node_root_path="/tmp", binary_path="/tmp", data_paths="/tmp"))
+            node_configs.append(
+                NodeConfiguration(
+                    build_type="tar",
+                    car_runtime_jdks="12,11",
+                    car_provides_bundled_jdk=True,
+                    ip="127.0.0.1",
+                    node_name="testnode-{}".format(node),
+                    node_root_path="/tmp",
+                    binary_path="/tmp",
+                    data_paths="/tmp",
+                )
+            )
 
         nodes = proc_launcher.start(node_configs)
         self.assertEqual(len(nodes), 2)
@@ -191,7 +187,7 @@ class ProcessLauncherTests(TestCase):
         # all nodes should be stopped
         self.assertEqual(nodes, stopped_nodes)
 
-    @mock.patch('psutil.Process', new=TerminatedProcess)
+    @mock.patch("psutil.Process", new=TerminatedProcess)
     def test_daemon_stop_with_already_terminated_process(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "node", "root.dir", "test")
@@ -202,13 +198,7 @@ class ProcessLauncherTests(TestCase):
         ms = get_metrics_store(cfg)
         proc_launcher = launcher.ProcessLauncher(cfg)
 
-        nodes = [
-            cluster.Node(pid=-1,
-                         binary_path="/bin",
-                         host_name="localhost",
-                         node_name="rally-0",
-                         telemetry=telemetry.Telemetry())
-        ]
+        nodes = [cluster.Node(pid=-1, binary_path="/bin", host_name="localhost", node_name="rally-0", telemetry=telemetry.Telemetry())]
 
         stopped_nodes = proc_launcher.stop(nodes, ms)
         # no nodes should have been stopped (they were already stopped)
@@ -222,17 +212,18 @@ class ProcessLauncherTests(TestCase):
 
         proc_launcher = launcher.ProcessLauncher(cfg)
 
-        node_telemetry = [
-            telemetry.FlightRecorder(telemetry_params={}, log_root="/tmp/telemetry", java_major_version=8)
-        ]
+        node_telemetry = [telemetry.FlightRecorder(telemetry_params={}, log_root="/tmp/telemetry", java_major_version=8)]
         t = telemetry.Telemetry(["jfr"], devices=node_telemetry)
         env = proc_launcher._prepare_env(node_name="node0", java_home="/java_home", t=t)
 
         self.assertEqual("/java_home/bin" + os.pathsep + os.environ["PATH"], env["PATH"])
-        self.assertEqual("-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
-                         "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
-                         "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr " # pylint: disable=line-too-long
-                         "-XX:StartFlightRecording=defaultrecording=true", env["ES_JAVA_OPTS"])
+        self.assertEqual(
+            "-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
+            "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
+            "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr "  # pylint: disable=line-too-long
+            "-XX:StartFlightRecording=defaultrecording=true",
+            env["ES_JAVA_OPTS"],
+        )
 
     def test_bundled_jdk_not_in_path(self):
         cfg = config.Config()
@@ -313,6 +304,7 @@ class ProcessLauncherTests(TestCase):
                     return ""
                 else:
                     return old_read_se(*args, *kwargs)
+
             handle.read.side_effect = _stub_first_read
             return mo
 
@@ -360,9 +352,16 @@ class DockerLauncherTests(TestCase):
         cfg = config.Config()
         docker = launcher.DockerLauncher(cfg)
 
-        node_config = NodeConfiguration(build_type="docker", car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
-                                        ip="127.0.0.1", node_name="testnode", node_root_path="/tmp", binary_path="/bin",
-                                        data_paths="/tmp")
+        node_config = NodeConfiguration(
+            build_type="docker",
+            car_runtime_jdks="12,11",
+            car_provides_bundled_jdk=True,
+            ip="127.0.0.1",
+            node_name="testnode",
+            node_root_path="/tmp",
+            binary_path="/bin",
+            data_paths="/tmp",
+        )
 
         nodes = docker.start([node_config])
         self.assertEqual(1, len(nodes))
@@ -375,10 +374,12 @@ class DockerLauncherTests(TestCase):
         self.assertIsNotNone(node.telemetry)
 
         run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml up -d")
-        run_subprocess_with_output.assert_has_calls([
-            mock.call("docker-compose -f /bin/docker-compose.yml ps -q"),
-            mock.call('docker ps -a --filter "id=de604d0d" --filter "status=running" --filter "health=healthy" -q')
-        ])
+        run_subprocess_with_output.assert_has_calls(
+            [
+                mock.call("docker-compose -f /bin/docker-compose.yml ps -q"),
+                mock.call('docker ps -a --filter "id=de604d0d" --filter "status=running" --filter "health=healthy" -q'),
+            ]
+        )
 
     @mock.patch("esrally.time.sleep")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -392,9 +393,16 @@ class DockerLauncherTests(TestCase):
         stop_watch = IterationBasedStopWatch(max_iterations=2)
         docker = launcher.DockerLauncher(cfg, clock=TestClock(stop_watch=stop_watch))
 
-        node_config = NodeConfiguration(build_type="docker", car_runtime_jdks="12,11", car_provides_bundled_jdk=True,
-                                        ip="127.0.0.1", node_name="testnode", node_root_path="/tmp", binary_path="/bin",
-                                        data_paths="/tmp")
+        node_config = NodeConfiguration(
+            build_type="docker",
+            car_runtime_jdks="12,11",
+            car_provides_bundled_jdk=True,
+            ip="127.0.0.1",
+            node_name="testnode",
+            node_root_path="/tmp",
+            binary_path="/bin",
+            data_paths="/tmp",
+        )
 
         with self.assertRaisesRegex(exceptions.LaunchError, "No healthy running container after 600 seconds!"):
             docker.start([node_config])

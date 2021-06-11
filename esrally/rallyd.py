@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -20,7 +20,16 @@ import logging
 import sys
 import time
 
-from esrally import actor, version, exceptions, doc_link, BANNER, PROGRAM_NAME, check_python_version, log
+from esrally import (
+    BANNER,
+    PROGRAM_NAME,
+    actor,
+    check_python_version,
+    doc_link,
+    exceptions,
+    log,
+    version,
+)
 from esrally.utils import console
 
 
@@ -73,30 +82,22 @@ def main():
     log.configure_logging()
     console.init(assume_tty=False)
 
-    parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
-                                     description=BANNER + "\n\n Rally daemon to support remote benchmarks",
-                                     epilog="Find out more about Rally at {}".format(console.format.link(doc_link())),
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
+    parser = argparse.ArgumentParser(
+        prog=PROGRAM_NAME,
+        description=BANNER + "\n\n Rally daemon to support remote benchmarks",
+        epilog="Find out more about Rally at {}".format(console.format.link(doc_link())),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--version", action="version", version="%(prog)s " + version.version())
 
-    subparsers = parser.add_subparsers(
-        title="subcommands",
-        dest="subcommand",
-        help="")
+    subparsers = parser.add_subparsers(title="subcommands", dest="subcommand", help="")
     subparsers.required = True
 
     start_command = subparsers.add_parser("start", help="Starts the Rally daemon")
     restart_command = subparsers.add_parser("restart", help="Restarts the Rally daemon")
     for p in [start_command, restart_command]:
-        p.add_argument(
-            "--node-ip",
-            required=True,
-            help="The IP of this node.")
-        p.add_argument(
-            "--coordinator-ip",
-            required=True,
-            help="The IP of the coordinator node."
-        )
+        p.add_argument("--node-ip", required=True, help="The IP of this node.")
+        p.add_argument("--coordinator-ip", required=True, help="The IP of the coordinator node.")
     subparsers.add_parser("stop", help="Stops the Rally daemon")
     subparsers.add_parser("status", help="Shows the current status of the local Rally daemon")
 
@@ -115,5 +116,5 @@ def main():
         raise exceptions.RallyError("Unknown subcommand [%s]" % args.subcommand)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

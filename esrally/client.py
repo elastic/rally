@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -22,7 +22,7 @@ import time
 import certifi
 import urllib3
 
-from esrally import exceptions, doc_link
+from esrally import doc_link, exceptions
 from esrally.utils import console, convert
 
 
@@ -32,6 +32,7 @@ class RequestContextManager:
     This means that we can span a top-level request context, open sub-request contexts that can be used to measure
     individual timings and still measure the proper total time on the top-level request context.
     """
+
     def __init__(self, request_context_holder):
         self.ctx_holder = request_context_holder
         self.ctx = None
@@ -66,6 +67,7 @@ class RequestContextHolder:
     """
     Holds request context variables. This class is only meant to be used together with RequestContextManager.
     """
+
     request_context = contextvars.ContextVar("rally_request_context")
 
     def new_request_context(self):
@@ -111,6 +113,7 @@ class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
+
     def __init__(self, hosts, client_options):
         self.hosts = hosts
         self.client_options = dict(client_options)
@@ -128,13 +131,15 @@ class EsClientFactory:
         if self.client_options.pop("use_ssl", False):
             # pylint: disable=import-outside-toplevel
             import ssl
+
             self.logger.info("SSL support: on")
             self.client_options["scheme"] = "https"
 
             # ssl.Purpose.CLIENT_AUTH allows presenting client certs and can only be enabled during instantiation
             # but can be disabled via the verify_mode property later on.
-            self.ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH,
-                                                          cafile=self.client_options.pop("ca_certs", certifi.where()))
+            self.ssl_context = ssl.create_default_context(
+                ssl.Purpose.CLIENT_AUTH, cafile=self.client_options.pop("ca_certs", certifi.where())
+            )
 
             if not self.client_options.pop("verify_certs", True):
                 self.logger.info("SSL certificate verification: off")
@@ -142,14 +147,16 @@ class EsClientFactory:
                 self.ssl_context.verify_mode = ssl.CERT_NONE
                 self.ssl_context.check_hostname = False
 
-                self.logger.warning("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a "
-                                    "benchmark. Disabling urllib warnings now to avoid a logging storm. "
-                                    "See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings for details.")
+                self.logger.warning(
+                    "User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a "
+                    "benchmark. Disabling urllib warnings now to avoid a logging storm. "
+                    "See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings for details."
+                )
                 # disable:  "InsecureRequestWarning: Unverified HTTPS request is being made. Adding certificate verification is strongly \
                 # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
                 urllib3.disable_warnings()
             else:
-                self.ssl_context.verify_mode=ssl.CERT_REQUIRED
+                self.ssl_context.verify_mode = ssl.CERT_REQUIRED
                 self.ssl_context.check_hostname = True
                 self.logger.info("SSL certificate verification: on")
 
@@ -160,9 +167,7 @@ class EsClientFactory:
             if not client_cert and not client_key:
                 self.logger.info("SSL client authentication: off")
             elif bool(client_cert) != bool(client_key):
-                self.logger.error(
-                    "Supplied client-options contain only one of client_cert/client_key. "
-                )
+                self.logger.error("Supplied client-options contain only one of client_cert/client_key. ")
                 defined_client_ssl_option = "client_key" if client_key else "client_cert"
                 missing_client_ssl_option = "client_cert" if client_key else "client_key"
                 console.println(
@@ -171,16 +176,17 @@ class EsClientFactory:
                     "Read the documentation at {}\n".format(
                         missing_client_ssl_option,
                         defined_client_ssl_option,
-                        console.format.link(doc_link("command_line_reference.html#client-options")))
+                        console.format.link(doc_link("command_line_reference.html#client-options")),
+                    )
                 )
                 raise exceptions.SystemSetupError(
                     "Cannot specify '{}' without also specifying '{}' in client-options.".format(
-                        defined_client_ssl_option,
-                        missing_client_ssl_option))
+                        defined_client_ssl_option, missing_client_ssl_option
+                    )
+                )
             elif client_cert and client_key:
                 self.logger.info("SSL client authentication: on")
-                self.ssl_context.load_cert_chain(certfile=client_cert,
-                                                 keyfile=client_key)
+                self.ssl_context.load_cert_chain(certfile=client_cert, keyfile=client_key)
         else:
             self.logger.info("SSL support: off")
             self.client_options["scheme"] = "http"
@@ -212,16 +218,18 @@ class EsClientFactory:
     def create(self):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
     def create_async(self):
         # pylint: disable=import-outside-toplevel
-        import elasticsearch
-        import esrally.async_connection
         import io
-        import aiohttp
 
+        import aiohttp
+        import elasticsearch
         from elasticsearch.serializer import JSONSerializer
+
+        import esrally.async_connection
 
         class LazyJSONSerializer(JSONSerializer):
             def loads(self, s):
@@ -250,10 +258,12 @@ class EsClientFactory:
         class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
             pass
 
-        return RallyAsyncElasticsearch(hosts=self.hosts,
-                                       connection_class=esrally.async_connection.AIOHttpConnection,
-                                       ssl_context=self.ssl_context,
-                                       **self.client_options)
+        return RallyAsyncElasticsearch(
+            hosts=self.hosts,
+            connection_class=esrally.async_connection.AIOHttpConnection,
+            ssl_context=self.ssl_context,
+            **self.client_options,
+        )
 
 
 def wait_for_rest_layer(es, max_attempts=40):
@@ -273,6 +283,7 @@ def wait_for_rest_layer(es, max_attempts=40):
         logger.debug("REST API is available after %s attempts", attempt)
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         try:
             # see also WaitForHttpResource in Elasticsearch tests. Contrary to the ES tests we consider the API also
             # available when the cluster status is RED (as long as all required nodes are present)

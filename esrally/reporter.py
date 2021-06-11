@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -15,16 +15,17 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from functools import partial
 import csv
 import io
 import logging
 import sys
+from functools import partial
 
 import tabulate
 
-from esrally import metrics, exceptions
-from esrally.utils import convert, io as rio, console
+from esrally import exceptions, metrics
+from esrally.utils import console, convert
+from esrally.utils import io as rio
 
 FINAL_SCORE = r"""
 ------------------------------------------------------
@@ -45,9 +46,7 @@ def compare(cfg, baseline_id, contender_id):
     if not baseline_id or not contender_id:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
-    ComparisonReporter(cfg).report(
-        race_store.find_by_race_id(baseline_id),
-        race_store.find_by_race_id(contender_id))
+    ComparisonReporter(cfg).report(race_store.find_by_race_id(baseline_id), race_store.find_by_race_id(contender_id))
 
 
 def print_internal(message):
@@ -94,13 +93,11 @@ class SummaryReporter:
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
-        self.numbers_align = config.opts("reporting", "numbers.align",
-                                         mandatory=False, default_value="right")
+        self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="right")
         reporting_values = config.opts("reporting", "values")
         self.report_all_values = reporting_values == "all"
         self.report_all_percentile_values = reporting_values == "all-percentiles"
-        self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime",
-                                                                mandatory=False, default_value=False))
+        self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime", mandatory=False, default_value=False))
         self.cwd = config.opts("node", "rally.cwd")
 
     def report(self):
@@ -144,16 +141,23 @@ class SummaryReporter:
         if values["throughput"]["median"] is None:
             error_rate = values["error_rate"]
             if error_rate:
-                warnings.append("No throughput metrics available for [%s]. Likely cause: Error rate is %.1f%%. Please check the logs."
-                                % (op, error_rate * 100))
+                warnings.append(
+                    "No throughput metrics available for [%s]. Likely cause: Error rate is %.1f%%. Please check the logs."
+                    % (op, error_rate * 100)
+                )
             else:
                 warnings.append("No throughput metrics available for [%s]. Likely cause: The benchmark ended already during warmup." % op)
 
     def write_report(self, metrics_table):
-        write_single_report(self.report_file, self.report_format, self.cwd, self.numbers_align,
-                            headers=["Metric", "Task", "Value", "Unit"],
-                            data_plain=metrics_table,
-                            data_rich=metrics_table)
+        write_single_report(
+            self.report_file,
+            self.report_format,
+            self.cwd,
+            self.numbers_align,
+            headers=["Metric", "Task", "Value", "Unit"],
+            data_plain=metrics_table,
+            data_rich=metrics_table,
+        )
 
     def _report_throughput(self, values, task):
         throughput = values["throughput"]
@@ -163,7 +167,7 @@ class SummaryReporter:
             self._line("Min Throughput", task, throughput["min"], unit, lambda v: "%.2f" % v),
             self._line("Mean Throughput", task, throughput["mean"], unit, lambda v: "%.2f" % v),
             self._line("Median Throughput", task, throughput["median"], unit, lambda v: "%.2f" % v),
-            self._line("Max Throughput", task, throughput["max"], unit, lambda v: "%.2f" % v)
+            self._line("Max Throughput", task, throughput["max"], unit, lambda v: "%.2f" % v),
         )
 
     def _report_latency(self, values, task):
@@ -180,15 +184,14 @@ class SummaryReporter:
         if value:
             for percentile in metrics.percentiles_for_sample_size(sys.maxsize):
                 percentile_value = value.get(metrics.encode_float_key(percentile))
-                a_line = self._line("%sth percentile %s" % (percentile, name), task, percentile_value, "ms",
-                                    force=self.report_all_percentile_values)
+                a_line = self._line(
+                    "%sth percentile %s" % (percentile, name), task, percentile_value, "ms", force=self.report_all_percentile_values
+                )
                 self._append_non_empty(lines, a_line)
         return lines
 
     def _report_error_rate(self, values, task):
-        return self._join(
-            self._line("error rate", task, values["error_rate"], "%", lambda v: "%.2f" % (v * 100.0))
-        )
+        return self._join(self._line("error rate", task, values["error_rate"], "%", lambda v: "%.2f" % (v * 100.0)))
 
     def _report_totals(self, stats):
         lines = []
@@ -218,12 +221,19 @@ class SummaryReporter:
     def _report_total_time_per_shard(self, name, total_time_per_shard):
         unit = "min"
         return self._join(
-            self._line("Min cumulative {} across primary shards".format(name), "", total_time_per_shard.get("min"), unit,
-                       convert.ms_to_minutes),
-            self._line("Median cumulative {} across primary shards".format(name), "", total_time_per_shard.get("median"),
-                       unit, convert.ms_to_minutes),
-            self._line("Max cumulative {} across primary shards".format(name), "", total_time_per_shard.get("max"), unit,
-                       convert.ms_to_minutes),
+            self._line(
+                "Min cumulative {} across primary shards".format(name), "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes
+            ),
+            self._line(
+                "Median cumulative {} across primary shards".format(name),
+                "",
+                total_time_per_shard.get("median"),
+                unit,
+                convert.ms_to_minutes,
+            ),
+            self._line(
+                "Max cumulative {} across primary shards".format(name), "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes
+            ),
         )
 
     def _report_total_count(self, name, total_count):
@@ -247,7 +257,7 @@ class SummaryReporter:
             self._line("Total Young Gen GC time", "", stats.young_gc_time, "s", convert.ms_to_seconds),
             self._line("Total Young Gen GC count", "", stats.young_gc_count, ""),
             self._line("Total Old Gen GC time", "", stats.old_gc_time, "s", convert.ms_to_seconds),
-            self._line("Total Old Gen GC count", "", stats.old_gc_count, "")
+            self._line("Total Old Gen GC count", "", stats.old_gc_count, ""),
         )
 
     def _report_disk_usage(self, stats):
@@ -264,29 +274,22 @@ class SummaryReporter:
             self._line("Heap used for terms", "", stats.memory_terms, unit, convert.bytes_to_mb),
             self._line("Heap used for norms", "", stats.memory_norms, unit, convert.bytes_to_mb),
             self._line("Heap used for points", "", stats.memory_points, unit, convert.bytes_to_mb),
-            self._line("Heap used for stored fields", "", stats.memory_stored_fields, unit, convert.bytes_to_mb)
+            self._line("Heap used for stored fields", "", stats.memory_stored_fields, unit, convert.bytes_to_mb),
         )
 
     def _report_segment_counts(self, stats):
-        return self._join(
-            self._line("Segment count", "", stats.segment_count, "")
-        )
+        return self._join(self._line("Segment count", "", stats.segment_count, ""))
 
     def _report_transform_stats(self, stats):
         lines = []
         for processing_time in stats.total_transform_processing_times:
-            lines.append(
-                self._line("Transform processing time", processing_time["id"], processing_time["mean"],
-                           processing_time["unit"]))
+            lines.append(self._line("Transform processing time", processing_time["id"], processing_time["mean"], processing_time["unit"]))
         for index_time in stats.total_transform_index_times:
-            lines.append(
-                self._line("Transform indexing time", index_time["id"], index_time["mean"], index_time["unit"]))
+            lines.append(self._line("Transform indexing time", index_time["id"], index_time["mean"], index_time["unit"]))
         for search_time in stats.total_transform_search_times:
-            lines.append(
-                self._line("Transform search time", search_time["id"], search_time["mean"], search_time["unit"]))
+            lines.append(self._line("Transform search time", search_time["id"], search_time["mean"], search_time["unit"]))
         for throughput in stats.total_transform_throughput:
-            lines.append(
-                self._line("Transform throughput", throughput["id"], throughput["mean"], throughput["unit"]))
+            lines.append(self._line("Transform throughput", throughput["id"], throughput["mean"], throughput["unit"]))
 
         return lines
 
@@ -312,11 +315,9 @@ class ComparisonReporter:
     def __init__(self, config):
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
-        self.numbers_align = config.opts("reporting", "numbers.align",
-                                         mandatory=False, default_value="right")
+        self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="right")
         self.cwd = config.opts("node", "rally.cwd")
-        self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime",
-                                                                mandatory=False, default_value=False))
+        self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime", mandatory=False, default_value=False))
         self.plain = False
 
     def report(self, r1, r2):
@@ -373,9 +374,15 @@ class ComparisonReporter:
         return metrics_table
 
     def _write_report(self, metrics_table, metrics_table_console):
-        write_single_report(self.report_file, self.report_format, self.cwd, self.numbers_align,
-                            headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
-                            data_plain=metrics_table, data_rich=metrics_table_console)
+        write_single_report(
+            self.report_file,
+            self.report_format,
+            self.cwd,
+            self.numbers_align,
+            headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
+            data_plain=metrics_table,
+            data_rich=metrics_table_console,
+        )
 
     def _report_throughput(self, baseline_stats, contender_stats, task):
         b_min = baseline_stats.metrics(task)["throughput"]["min"]
@@ -393,7 +400,7 @@ class ComparisonReporter:
             self._line("Min Throughput", b_min, c_min, task, b_unit, treat_increase_as_improvement=True),
             self._line("Mean Throughput", b_mean, c_mean, task, b_unit, treat_increase_as_improvement=True),
             self._line("Median Throughput", b_median, c_median, task, b_unit, treat_increase_as_improvement=True),
-            self._line("Max Throughput", b_max, c_max, task, b_unit, treat_increase_as_improvement=True)
+            self._line("Max Throughput", b_max, c_max, task, b_unit, treat_increase_as_improvement=True),
         )
 
     def _report_latency(self, baseline_stats, contender_stats, task):
@@ -416,17 +423,32 @@ class ComparisonReporter:
         for percentile in metrics.percentiles_for_sample_size(sys.maxsize):
             baseline_value = baseline_values.get(metrics.encode_float_key(percentile))
             contender_value = contender_values.get(metrics.encode_float_key(percentile))
-            self._append_non_empty(lines, self._line("%sth percentile %s" % (percentile, name),
-                                                     baseline_value, contender_value, task, "ms",
-                                                     treat_increase_as_improvement=False))
+            self._append_non_empty(
+                lines,
+                self._line(
+                    "%sth percentile %s" % (percentile, name),
+                    baseline_value,
+                    contender_value,
+                    task,
+                    "ms",
+                    treat_increase_as_improvement=False,
+                ),
+            )
         return lines
 
     def _report_error_rate(self, baseline_stats, contender_stats, task):
         baseline_error_rate = baseline_stats.metrics(task)["error_rate"]
         contender_error_rate = contender_stats.metrics(task)["error_rate"]
         return self._join(
-            self._line("error rate", baseline_error_rate, contender_error_rate, task, "%",
-                       treat_increase_as_improvement=False, formatter=convert.factor(100.0))
+            self._line(
+                "error rate",
+                baseline_error_rate,
+                contender_error_rate,
+                task,
+                "%",
+                treat_increase_as_improvement=False,
+                formatter=convert.factor(100.0),
+            )
         )
 
     def _report_ml_processing_times(self, baseline_stats, contender_stats):
@@ -437,14 +459,36 @@ class ComparisonReporter:
             # O(n^2) but we assume here only a *very* limited number of jobs (usually just one)
             for contender in contender_stats.ml_processing_time:
                 if contender["job"] == job_name:
-                    lines.append(self._line("Min ML processing time", baseline["min"], contender["min"],
-                                            job_name, unit, treat_increase_as_improvement=False))
-                    lines.append(self._line("Mean ML processing time", baseline["mean"], contender["mean"],
-                                            job_name, unit, treat_increase_as_improvement=False))
-                    lines.append(self._line("Median ML processing time", baseline["median"], contender["median"],
-                                            job_name, unit, treat_increase_as_improvement=False))
-                    lines.append(self._line("Max ML processing time", baseline["max"], contender["max"],
-                                            job_name, unit, treat_increase_as_improvement=False))
+                    lines.append(
+                        self._line(
+                            "Min ML processing time", baseline["min"], contender["min"], job_name, unit, treat_increase_as_improvement=False
+                        )
+                    )
+                    lines.append(
+                        self._line(
+                            "Mean ML processing time",
+                            baseline["mean"],
+                            contender["mean"],
+                            job_name,
+                            unit,
+                            treat_increase_as_improvement=False,
+                        )
+                    )
+                    lines.append(
+                        self._line(
+                            "Median ML processing time",
+                            baseline["median"],
+                            contender["median"],
+                            job_name,
+                            unit,
+                            treat_increase_as_improvement=False,
+                        )
+                    )
+                    lines.append(
+                        self._line(
+                            "Max ML processing time", baseline["max"], contender["max"], job_name, unit, treat_increase_as_improvement=False
+                        )
+                    )
         return lines
 
     def _report_transform_processing_times(self, baseline_stats, contender_stats):
@@ -456,164 +500,349 @@ class ComparisonReporter:
             for contender in contender_stats.total_transform_processing_times:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self._line("Transform processing time", baseline["mean"], contender["mean"],
-                                   transform_id, baseline["unit"], treat_increase_as_improvement=False))
+                        self._line(
+                            "Transform processing time",
+                            baseline["mean"],
+                            contender["mean"],
+                            transform_id,
+                            baseline["unit"],
+                            treat_increase_as_improvement=False,
+                        )
+                    )
         for baseline in baseline_stats.total_transform_index_times:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_index_times:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self._line("Transform indexing time", baseline["mean"], contender["mean"],
-                                   transform_id, baseline["unit"], treat_increase_as_improvement=False))
+                        self._line(
+                            "Transform indexing time",
+                            baseline["mean"],
+                            contender["mean"],
+                            transform_id,
+                            baseline["unit"],
+                            treat_increase_as_improvement=False,
+                        )
+                    )
         for baseline in baseline_stats.total_transform_search_times:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_search_times:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self._line("Transform search time", baseline["mean"], contender["mean"],
-                                   transform_id, baseline["unit"], treat_increase_as_improvement=False))
+                        self._line(
+                            "Transform search time",
+                            baseline["mean"],
+                            contender["mean"],
+                            transform_id,
+                            baseline["unit"],
+                            treat_increase_as_improvement=False,
+                        )
+                    )
         for baseline in baseline_stats.total_transform_throughput:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_throughput:
                 if contender["id"] == transform_id:
                     lines.append(
-                        self._line("Transform throughput", baseline["mean"], contender["mean"],
-                                   transform_id, baseline["unit"], treat_increase_as_improvement=True))
+                        self._line(
+                            "Transform throughput",
+                            baseline["mean"],
+                            contender["mean"],
+                            transform_id,
+                            baseline["unit"],
+                            treat_increase_as_improvement=True,
+                        )
+                    )
         return lines
 
     def _report_total_times(self, baseline_stats, contender_stats):
         lines = []
-        lines.extend(self._report_total_time(
-            "indexing time",
-            baseline_stats.total_time, contender_stats.total_time
-        ))
-        lines.extend(self._report_total_time_per_shard(
-            "indexing time",
-            baseline_stats.total_time_per_shard, contender_stats.total_time_per_shard
-        ))
-        lines.extend(self._report_total_time(
-            "indexing throttle time",
-            baseline_stats.indexing_throttle_time, contender_stats.indexing_throttle_time
-        ))
-        lines.extend(self._report_total_time_per_shard(
-            "indexing throttle time",
-            baseline_stats.indexing_throttle_time_per_shard,
-            contender_stats.indexing_throttle_time_per_shard
-        ))
-        lines.extend(self._report_total_time(
-            "merge time",
-            baseline_stats.merge_time, contender_stats.merge_time,
-        ))
-        lines.extend(self._report_total_count(
-            "merge count",
-            baseline_stats.merge_count, contender_stats.merge_count
-        ))
-        lines.extend(self._report_total_time_per_shard(
-            "merge time",
-            baseline_stats.merge_time_per_shard,
-            contender_stats.merge_time_per_shard
-        ))
-        lines.extend(self._report_total_time(
-            "merge throttle time",
-            baseline_stats.merge_throttle_time,
-            contender_stats.merge_throttle_time
-        ))
-        lines.extend(self._report_total_time_per_shard(
-            "merge throttle time",
-            baseline_stats.merge_throttle_time_per_shard,
-            contender_stats.merge_throttle_time_per_shard
-        ))
-        lines.extend(self._report_total_time(
-            "refresh time",
-            baseline_stats.refresh_time, contender_stats.refresh_time
-        ))
-        lines.extend(self._report_total_count(
-            "refresh count",
-            baseline_stats.refresh_count, contender_stats.refresh_count
-        ))
-        lines.extend(self._report_total_time_per_shard(
-            "refresh time",
-            baseline_stats.refresh_time_per_shard,
-            contender_stats.refresh_time_per_shard
-        ))
-        lines.extend(self._report_total_time(
-            "flush time",
-            baseline_stats.flush_time, contender_stats.flush_time
-        ))
-        lines.extend(self._report_total_count(
-            "flush count",
-            baseline_stats.flush_count, contender_stats.flush_count
-        ))
-        lines.extend(self._report_total_time_per_shard(
-            "flush time",
-            baseline_stats.flush_time_per_shard, contender_stats.flush_time_per_shard
-        ))
+        lines.extend(
+            self._report_total_time(
+                "indexing time",
+                baseline_stats.total_time,
+                contender_stats.total_time,
+            )
+        )
+        lines.extend(
+            self._report_total_time_per_shard(
+                "indexing time",
+                baseline_stats.total_time_per_shard,
+                contender_stats.total_time_per_shard,
+            )
+        )
+        lines.extend(
+            self._report_total_time(
+                "indexing throttle time",
+                baseline_stats.indexing_throttle_time,
+                contender_stats.indexing_throttle_time,
+            )
+        )
+        lines.extend(
+            self._report_total_time_per_shard(
+                "indexing throttle time",
+                baseline_stats.indexing_throttle_time_per_shard,
+                contender_stats.indexing_throttle_time_per_shard,
+            )
+        )
+        lines.extend(
+            self._report_total_time(
+                "merge time",
+                baseline_stats.merge_time,
+                contender_stats.merge_time,
+            )
+        )
+        lines.extend(
+            self._report_total_count(
+                "merge count",
+                baseline_stats.merge_count,
+                contender_stats.merge_count,
+            )
+        )
+        lines.extend(
+            self._report_total_time_per_shard(
+                "merge time",
+                baseline_stats.merge_time_per_shard,
+                contender_stats.merge_time_per_shard,
+            )
+        )
+        lines.extend(
+            self._report_total_time(
+                "merge throttle time",
+                baseline_stats.merge_throttle_time,
+                contender_stats.merge_throttle_time,
+            )
+        )
+        lines.extend(
+            self._report_total_time_per_shard(
+                "merge throttle time",
+                baseline_stats.merge_throttle_time_per_shard,
+                contender_stats.merge_throttle_time_per_shard,
+            )
+        )
+        lines.extend(
+            self._report_total_time(
+                "refresh time",
+                baseline_stats.refresh_time,
+                contender_stats.refresh_time,
+            )
+        )
+        lines.extend(
+            self._report_total_count(
+                "refresh count",
+                baseline_stats.refresh_count,
+                contender_stats.refresh_count,
+            )
+        )
+        lines.extend(
+            self._report_total_time_per_shard(
+                "refresh time",
+                baseline_stats.refresh_time_per_shard,
+                contender_stats.refresh_time_per_shard,
+            )
+        )
+        lines.extend(
+            self._report_total_time(
+                "flush time",
+                baseline_stats.flush_time,
+                contender_stats.flush_time,
+            )
+        )
+        lines.extend(
+            self._report_total_count(
+                "flush count",
+                baseline_stats.flush_count,
+                contender_stats.flush_count,
+            )
+        )
+        lines.extend(
+            self._report_total_time_per_shard(
+                "flush time",
+                baseline_stats.flush_time_per_shard,
+                contender_stats.flush_time_per_shard,
+            )
+        )
         return lines
 
     def _report_total_time(self, name, baseline_total, contender_total):
         unit = "min"
         return self._join(
-            self._line("Cumulative {} of primary shards".format(name), baseline_total, contender_total, "", unit,
-                       treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+            self._line(
+                "Cumulative {} of primary shards".format(name),
+                baseline_total,
+                contender_total,
+                "",
+                unit,
+                treat_increase_as_improvement=False,
+                formatter=convert.ms_to_minutes,
+            ),
         )
 
     def _report_total_time_per_shard(self, name, baseline_per_shard, contender_per_shard):
         unit = "min"
         return self._join(
-            self._line("Min cumulative {} across primary shard".format(name), baseline_per_shard.get("min"),
-                       contender_per_shard.get("min"), "", unit, treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self._line("Median cumulative {} across primary shard".format(name), baseline_per_shard.get("median"),
-                       contender_per_shard.get("median"), "", unit, treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
-            self._line("Max cumulative {} across primary shard".format(name), baseline_per_shard.get("max"), contender_per_shard.get("max"),
-                      "", unit, treat_increase_as_improvement=False, formatter=convert.ms_to_minutes),
+            self._line(
+                "Min cumulative {} across primary shard".format(name),
+                baseline_per_shard.get("min"),
+                contender_per_shard.get("min"),
+                "",
+                unit,
+                treat_increase_as_improvement=False,
+                formatter=convert.ms_to_minutes,
+            ),
+            self._line(
+                "Median cumulative {} across primary shard".format(name),
+                baseline_per_shard.get("median"),
+                contender_per_shard.get("median"),
+                "",
+                unit,
+                treat_increase_as_improvement=False,
+                formatter=convert.ms_to_minutes,
+            ),
+            self._line(
+                "Max cumulative {} across primary shard".format(name),
+                baseline_per_shard.get("max"),
+                contender_per_shard.get("max"),
+                "",
+                unit,
+                treat_increase_as_improvement=False,
+                formatter=convert.ms_to_minutes,
+            ),
         )
 
     def _report_total_count(self, name, baseline_total, contender_total):
         return self._join(
-            self._line("Cumulative {} of primary shards".format(name), baseline_total, contender_total, "", "",
-                       treat_increase_as_improvement=False)
+            self._line(
+                "Cumulative {} of primary shards".format(name), baseline_total, contender_total, "", "", treat_increase_as_improvement=False
+            )
         )
 
     def _report_gc_metrics(self, baseline_stats, contender_stats):
         return self._join(
-            self._line("Total Young Gen GC time", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
-                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
-            self._line("Total Young Gen GC count", baseline_stats.young_gc_count, contender_stats.young_gc_count, "", "",
-                       treat_increase_as_improvement=False),
-            self._line("Total Old Gen GC time", baseline_stats.old_gc_time, contender_stats.old_gc_time, "", "s",
-                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
-            self._line("Total Old Gen GC count", baseline_stats.old_gc_count, contender_stats.old_gc_count, "", "",
-                       treat_increase_as_improvement=False)
+            self._line(
+                "Total Young Gen GC time",
+                baseline_stats.young_gc_time,
+                contender_stats.young_gc_time,
+                "",
+                "s",
+                treat_increase_as_improvement=False,
+                formatter=convert.ms_to_seconds,
+            ),
+            self._line(
+                "Total Young Gen GC count",
+                baseline_stats.young_gc_count,
+                contender_stats.young_gc_count,
+                "",
+                "",
+                treat_increase_as_improvement=False,
+            ),
+            self._line(
+                "Total Old Gen GC time",
+                baseline_stats.old_gc_time,
+                contender_stats.old_gc_time,
+                "",
+                "s",
+                treat_increase_as_improvement=False,
+                formatter=convert.ms_to_seconds,
+            ),
+            self._line(
+                "Total Old Gen GC count",
+                baseline_stats.old_gc_count,
+                contender_stats.old_gc_count,
+                "",
+                "",
+                treat_increase_as_improvement=False,
+            ),
         )
 
     def _report_disk_usage(self, baseline_stats, contender_stats):
         return self._join(
-            self._line("Store size", baseline_stats.store_size, contender_stats.store_size, "", "GB",
-                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
-            self._line("Translog size", baseline_stats.translog_size, contender_stats.translog_size, "", "GB",
-                       treat_increase_as_improvement=False, formatter=convert.bytes_to_gb),
+            self._line(
+                "Store size",
+                baseline_stats.store_size,
+                contender_stats.store_size,
+                "",
+                "GB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_gb,
+            ),
+            self._line(
+                "Translog size",
+                baseline_stats.translog_size,
+                contender_stats.translog_size,
+                "",
+                "GB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_gb,
+            ),
         )
 
     def _report_segment_memory(self, baseline_stats, contender_stats):
         return self._join(
-            self._line("Heap used for segments", baseline_stats.memory_segments, contender_stats.memory_segments, "", "MB",
-                       treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-            self._line("Heap used for doc values", baseline_stats.memory_doc_values, contender_stats.memory_doc_values, "", "MB",
-                       treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-            self._line("Heap used for terms", baseline_stats.memory_terms, contender_stats.memory_terms, "", "MB",
-                       treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-            self._line("Heap used for norms", baseline_stats.memory_norms, contender_stats.memory_norms, "", "MB",
-                       treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-            self._line("Heap used for points", baseline_stats.memory_points, contender_stats.memory_points, "", "MB",
-                       treat_increase_as_improvement=False, formatter=convert.bytes_to_mb),
-            self._line("Heap used for stored fields", baseline_stats.memory_stored_fields, contender_stats.memory_stored_fields, "",
-                       "MB", treat_increase_as_improvement=False, formatter=convert.bytes_to_mb)
-            )
+            self._line(
+                "Heap used for segments",
+                baseline_stats.memory_segments,
+                contender_stats.memory_segments,
+                "",
+                "MB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_mb,
+            ),
+            self._line(
+                "Heap used for doc values",
+                baseline_stats.memory_doc_values,
+                contender_stats.memory_doc_values,
+                "",
+                "MB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_mb,
+            ),
+            self._line(
+                "Heap used for terms",
+                baseline_stats.memory_terms,
+                contender_stats.memory_terms,
+                "",
+                "MB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_mb,
+            ),
+            self._line(
+                "Heap used for norms",
+                baseline_stats.memory_norms,
+                contender_stats.memory_norms,
+                "",
+                "MB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_mb,
+            ),
+            self._line(
+                "Heap used for points",
+                baseline_stats.memory_points,
+                contender_stats.memory_points,
+                "",
+                "MB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_mb,
+            ),
+            self._line(
+                "Heap used for stored fields",
+                baseline_stats.memory_stored_fields,
+                contender_stats.memory_stored_fields,
+                "",
+                "MB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_mb,
+            ),
+        )
 
     def _report_segment_counts(self, baseline_stats, contender_stats):
         return self._join(
-            self._line("Segment count", baseline_stats.segment_count, contender_stats.segment_count,
-                       "", "", treat_increase_as_improvement=False)
+            self._line(
+                "Segment count",
+                baseline_stats.segment_count,
+                contender_stats.segment_count,
+                "",
+                "",
+                treat_increase_as_improvement=False,
+            )
         )
 
     def _join(self, *args):
@@ -628,8 +857,14 @@ class ComparisonReporter:
 
     def _line(self, metric, baseline, contender, task, unit, treat_increase_as_improvement, formatter=lambda x: x):
         if baseline is not None and contender is not None:
-            return [metric, str(task), formatter(baseline), formatter(contender),
-                    self._diff(baseline, contender, treat_increase_as_improvement, formatter), unit]
+            return [
+                metric,
+                str(task),
+                formatter(baseline),
+                formatter(contender),
+                self._diff(baseline, contender, treat_increase_as_improvement, formatter),
+                unit,
+            ]
         else:
             return []
 

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -73,16 +73,18 @@ class JvmTests(TestCase):
         # JAVA8_HOME, JAVA_HOME
         getenv.side_effect = [None, "/opt/jdks/jdk/1.7"]
 
-        with self.assertRaisesRegex(expected_exception=exceptions.SystemSetupError,
-                                    expected_regex="JAVA_HOME points to JDK 7 but it should point to JDK 8."):
+        with self.assertRaisesRegex(
+            expected_exception=exceptions.SystemSetupError, expected_regex="JAVA_HOME points to JDK 7 but it should point to JDK 8."
+        ):
             jvm.resolve_path(majors=8, sysprop_reader=self.path_based_prop_version_reader)
 
     @mock.patch("os.getenv")
     def test_resolve_path_for_one_version_no_env_vars_defined(self, getenv):
         getenv.return_value = None
 
-        with self.assertRaisesRegex(expected_exception=exceptions.SystemSetupError,
-                                    expected_regex="Neither JAVA8_HOME nor JAVA_HOME point to a JDK 8 installation."):
+        with self.assertRaisesRegex(
+            expected_exception=exceptions.SystemSetupError, expected_regex="Neither JAVA8_HOME nor JAVA_HOME point to a JDK 8 installation."
+        ):
             jvm.resolve_path(majors=8, sysprop_reader=self.path_based_prop_version_reader)
 
     @mock.patch("os.getenv")
