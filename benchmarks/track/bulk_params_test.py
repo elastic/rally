@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -68,13 +68,15 @@ def create_reader(bulk_size):
     metadata = params.GenerateActionMetaData(index_name="test-idx", type_name=None)
 
     source = params.Slice(StaticSource, 0, sys.maxsize)
-    reader = params.MetadataIndexDataReader(data_file="bogus",
-                                            batch_size=bulk_size,
-                                            bulk_size=bulk_size,
-                                            file_source=source,
-                                            action_metadata=metadata,
-                                            index_name="test-idx",
-                                            type_name=None)
+    reader = params.MetadataIndexDataReader(
+        data_file="bogus",
+        batch_size=bulk_size,
+        bulk_size=bulk_size,
+        file_source=source,
+        action_metadata=metadata,
+        index_name="test-idx",
+        type_name=None,
+    )
     return reader
 
 

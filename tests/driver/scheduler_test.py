@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -40,10 +40,16 @@ class SchedulerTestCase(TestCase):
         expected_lower_bound = (1.0 - relative_delta) * expected_average_rate
         expected_upper_bound = (1.0 + relative_delta) * expected_average_rate
 
-        self.assertGreaterEqual(actual_average_rate, expected_lower_bound,
-                                f"{msg}: expected target rate to be >= [{expected_lower_bound}] but was [{actual_average_rate}].")
-        self.assertLessEqual(actual_average_rate, expected_upper_bound,
-                             f"{msg}: expected target rate to be <= [{expected_upper_bound}] but was [{actual_average_rate}].")
+        self.assertGreaterEqual(
+            actual_average_rate,
+            expected_lower_bound,
+            f"{msg}: expected target rate to be >= [{expected_lower_bound}] but was [{actual_average_rate}].",
+        )
+        self.assertLessEqual(
+            actual_average_rate,
+            expected_upper_bound,
+            f"{msg}: expected target rate to be <= [{expected_upper_bound}] but was [{actual_average_rate}].",
+        )
 
 
 class DeterministicSchedulerTests(SchedulerTestCase):
@@ -65,30 +71,28 @@ class PoissonSchedulerTests(SchedulerTestCase):
 
 class UnitAwareSchedulerTests(TestCase):
     def test_scheduler_rejects_differing_throughput_units(self):
-        task = track.Task(name="bulk-index",
-                          operation=track.Operation(
-                              name="bulk-index",
-                              operation_type=track.OperationType.Bulk.to_hyphenated_string()),
-                          clients=4,
-                          params={
-                              "target-throughput": "5000 MB/s"
-                          })
+        task = track.Task(
+            name="bulk-index",
+            operation=track.Operation(name="bulk-index", operation_type=track.OperationType.Bulk.to_hyphenated_string()),
+            clients=4,
+            params={"target-throughput": "5000 MB/s"},
+        )
 
         s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
         with self.assertRaises(exceptions.RallyAssertionError) as ex:
             s.after_request(now=None, weight=1000, unit="docs", request_meta_data=None)
-        self.assertEqual("Target throughput for [bulk-index] is specified in [MB/s] but the task throughput "
-                         "is measured in [docs/s].", ex.exception.args[0])
+        self.assertEqual(
+            "Target throughput for [bulk-index] is specified in [MB/s] but the task throughput is measured in [docs/s].",
+            ex.exception.args[0],
+        )
 
     def test_scheduler_adapts_to_changed_weights(self):
-        task = track.Task(name="bulk-index",
-                          operation=track.Operation(
-                              name="bulk-index",
-                              operation_type=track.OperationType.Bulk.to_hyphenated_string()),
-                          clients=4,
-                          params={
-                              "target-throughput": "5000 docs/s"
-                          })
+        task = track.Task(
+            name="bulk-index",
+            operation=track.Operation(name="bulk-index", operation_type=track.OperationType.Bulk.to_hyphenated_string()),
+            clients=4,
+            params={"target-throughput": "5000 docs/s"},
+        )
 
         s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
         # first request is unthrottled
@@ -108,15 +112,15 @@ class UnitAwareSchedulerTests(TestCase):
         self.assertEqual(2 * task.clients, s.next(0))
 
     def test_scheduler_accepts_differing_units_pages_and_ops(self):
-        task = track.Task(name="scroll-query",
-                          operation=track.Operation(
-                              name="scroll-query",
-                              operation_type=track.OperationType.Search.to_hyphenated_string()),
-                          clients=1,
-                          params={
-                              # implicitly: ops/s
-                              "target-throughput": 10
-                          })
+        task = track.Task(
+            name="scroll-query",
+            operation=track.Operation(name="scroll-query", operation_type=track.OperationType.Search.to_hyphenated_string()),
+            clients=1,
+            params={
+                # implicitly: ops/s
+                "target-throughput": 10
+            },
+        )
 
         s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
         # first request is unthrottled
@@ -131,15 +135,15 @@ class UnitAwareSchedulerTests(TestCase):
         self.assertEqual(0.1 * task.clients, s.next(0))
 
     def test_scheduler_does_not_change_throughput_for_empty_requests(self):
-        task = track.Task(name="match-all-query",
-                          operation=track.Operation(
-                              name="query",
-                              operation_type=track.OperationType.Search.to_hyphenated_string()),
-                          clients=1,
-                          params={
-                              # implicitly: ops/s
-                              "target-throughput": 10
-                          })
+        task = track.Task(
+            name="match-all-query",
+            operation=track.Operation(name="query", operation_type=track.OperationType.Search.to_hyphenated_string()),
+            clients=1,
+            params={
+                # implicitly: ops/s
+                "target-throughput": 10
+            },
+        )
 
         s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
         # first request is unthrottled...
@@ -230,12 +234,12 @@ class LegacyWrappingSchedulerTests(TestCase):
         scheduler.remove_scheduler("simple")
 
     def test_legacy_scheduler(self):
-        task = track.Task(name="raw-request",
-                          operation=track.Operation(
-                              name="raw",
-                              operation_type=track.OperationType.RawRequest.to_hyphenated_string()),
-                          clients=1,
-                          schedule="simple")
+        task = track.Task(
+            name="raw-request",
+            operation=track.Operation(name="raw", operation_type=track.OperationType.RawRequest.to_hyphenated_string()),
+            clients=1,
+            schedule="simple",
+        )
 
         s = scheduler.scheduler_for(task)
 

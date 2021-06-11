@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -32,13 +32,14 @@ HttpProxy = collections.namedtuple("HttpProxy", ["authenticated_url", "anonymous
 def http_proxy():
     config_dir = os.path.join(os.path.dirname(__file__), "resources", "squid")
 
-    lines = process.run_subprocess_with_output(f"docker run --rm --name squid -d "
-                                               f"-v {config_dir}/squidpasswords:/etc/squid/squidpasswords "
-                                               f"-v {config_dir}/squid.conf:/etc/squid/squid.conf "
-                                               f"-p 3128:3128 datadog/squid")
+    lines = process.run_subprocess_with_output(
+        f"docker run --rm --name squid -d "
+        f"-v {config_dir}/squidpasswords:/etc/squid/squidpasswords "
+        f"-v {config_dir}/squid.conf:/etc/squid/squid.conf "
+        f"-p 3128:3128 datadog/squid"
+    )
     proxy_container_id = lines[0].strip()
-    proxy = HttpProxy(authenticated_url="http://testuser:testuser@127.0.0.1:3128",
-                      anonymous_url="http://127.0.0.1:3128")
+    proxy = HttpProxy(authenticated_url="http://testuser:testuser@127.0.0.1:3128", anonymous_url="http://127.0.0.1:3128")
     yield proxy
     process.run_subprocess(f"docker stop {proxy_container_id}")
 
@@ -88,7 +89,6 @@ def test_authenticated_proxy_user_can_connect(cfg, http_proxy, fresh_log_file):
     env = dict(os.environ)
     env["http_proxy"] = http_proxy.authenticated_url
     assert process.run_subprocess_with_logging(it.esrally_command_line_for(cfg, "list tracks"), env=env) == 0
-    assert_log_line_present(fresh_log_file,
-                            f"Connecting via proxy URL [{http_proxy.authenticated_url}] to the Internet")
+    assert_log_line_present(fresh_log_file, f"Connecting via proxy URL [{http_proxy.authenticated_url}] to the Internet")
     # authenticated proxy access is allowed
     assert_log_line_present(fresh_log_file, "Detected a working Internet connection")

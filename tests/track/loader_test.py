@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -23,7 +23,7 @@ import unittest.mock as mock
 import urllib.error
 from unittest import TestCase
 
-from esrally import exceptions, config
+from esrally import config, exceptions
 from esrally.track import loader, track
 from esrally.utils import io
 
@@ -147,17 +147,21 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 2000
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
-        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                            document_file="docs.json",
-                                                            document_archive="docs.json.bz2",
-                                                            number_of_documents=5,
-                                                            compressed_size_in_bytes=200,
-                                                            uncompressed_size_in_bytes=2000),
-                               data_root="/tmp")
+        p.prepare_document_set(
+            document_set=track.Documents(
+                source_format=track.Documents.SOURCE_FORMAT_BULK,
+                document_file="docs.json",
+                document_archive="docs.json.bz2",
+                number_of_documents=5,
+                compressed_size_in_bytes=200,
+                uncompressed_size_in_bytes=2000,
+            ),
+            data_root="/tmp",
+        )
 
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -169,17 +173,21 @@ class TrackPreparationTests(TestCase):
         get_size.return_value = 2000
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
-        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                            document_file="docs.json",
-                                                            document_archive="docs.json.bz2",
-                                                            number_of_documents=5,
-                                                            compressed_size_in_bytes=200,
-                                                            uncompressed_size_in_bytes=2000),
-                               data_root="/tmp")
+        p.prepare_document_set(
+            document_set=track.Documents(
+                source_format=track.Documents.SOURCE_FORMAT_BULK,
+                document_file="docs.json",
+                document_archive="docs.json.bz2",
+                number_of_documents=5,
+                compressed_size_in_bytes=200,
+                uncompressed_size_in_bytes=2000,
+            ),
+            data_root="/tmp",
+        )
 
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
@@ -195,18 +203,22 @@ class TrackPreparationTests(TestCase):
         # uncompressed is corrupt, only 1 byte available
         get_size.side_effect = [200, 1]
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                document_file="docs.json",
-                                                                document_archive="docs.json.bz2",
-                                                                number_of_documents=5,
-                                                                compressed_size_in_bytes=200,
-                                                                uncompressed_size_in_bytes=2000),
-                                   data_root="/tmp")
+            p.prepare_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    document_file="docs.json",
+                    document_archive="docs.json.bz2",
+                    number_of_documents=5,
+                    compressed_size_in_bytes=200,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root="/tmp",
+            )
         self.assertEqual("[/tmp/docs.json] is corrupt. Extracted [1] bytes but [2000] bytes are expected.", ctx.exception.args[0])
 
         decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
@@ -222,21 +234,28 @@ class TrackPreparationTests(TestCase):
         # compressed file size is 200
         get_size.return_value = 200
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                document_file="docs.json",
-                                                                document_archive="docs.json.bz2",
-                                                                number_of_documents=5,
-                                                                compressed_size_in_bytes=200,
-                                                                uncompressed_size_in_bytes=2000),
-                                   data_root="/tmp")
-        self.assertEqual("Decompressing [/tmp/docs.json.bz2] did not create [/tmp/docs.json]. Please check with the track author if the "
-                         "compressed archive has been created correctly.", ctx.exception.args[0])
+            p.prepare_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                    document_file="docs.json",
+                    document_archive="docs.json.bz2",
+                    number_of_documents=5,
+                    compressed_size_in_bytes=200,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root="/tmp",
+            )
+        self.assertEqual(
+            "Decompressing [/tmp/docs.json.bz2] did not create [/tmp/docs.json]. Please check with the track author if the "
+            "compressed archive has been created correctly.",
+            ctx.exception.args[0],
+        )
 
         decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
 
@@ -246,8 +265,9 @@ class TrackPreparationTests(TestCase):
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.getsize")
     @mock.patch("os.path.isfile")
-    def test_download_document_archive_if_no_file_available(self, is_file, get_size, ensure_dir, download, decompress,
-                                                            prepare_file_offset_table):
+    def test_download_document_archive_if_no_file_available(
+        self, is_file, get_size, ensure_dir, download, decompress, prepare_file_offset_table
+    ):
         # uncompressed file does not exist
         # compressed file does not exist
         # after download compressed file exists
@@ -263,23 +283,28 @@ class TrackPreparationTests(TestCase):
 
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
-        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                            base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                            document_file="docs.json",
-                                                            document_archive="docs.json.bz2",
-                                                            number_of_documents=5,
-                                                            compressed_size_in_bytes=200,
-                                                            uncompressed_size_in_bytes=2000),
-                               data_root="/tmp")
+        p.prepare_document_set(
+            document_set=track.Documents(
+                source_format=track.Documents.SOURCE_FORMAT_BULK,
+                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                document_file="docs.json",
+                document_archive="docs.json.bz2",
+                number_of_documents=5,
+                compressed_size_in_bytes=200,
+                uncompressed_size_in_bytes=2000,
+            ),
+            data_root="/tmp",
+        )
 
         ensure_dir.assert_called_with("/tmp")
         decompress.assert_called_with("/tmp/docs.json.bz2", "/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json.bz2",
-                                    "/tmp/docs.json.bz2", 200, progress_indicator=mock.ANY)
+        download.assert_called_with(
+            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json.bz2", "/tmp/docs.json.bz2", 200, progress_indicator=mock.ANY
+        )
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
@@ -288,8 +313,9 @@ class TrackPreparationTests(TestCase):
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("os.path.getsize")
     @mock.patch("os.path.isfile")
-    def test_download_document_with_trailing_baseurl_slash(self, is_file, get_size, ensure_dir, download, decompress,
-                                                           prepare_file_offset_table):
+    def test_download_document_with_trailing_baseurl_slash(
+        self, is_file, get_size, ensure_dir, download, decompress, prepare_file_offset_table
+    ):
         # uncompressed file does not exist
         # after download uncompressed file exists
         # after download uncompressed file exists (main loop)
@@ -300,23 +326,28 @@ class TrackPreparationTests(TestCase):
 
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
-        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                            base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
-                                                            document_file="docs.json",
-                                                            # --> We don't provide a document archive here <--
-                                                            document_archive=None,
-                                                            number_of_documents=5,
-                                                            compressed_size_in_bytes=200,
-                                                            uncompressed_size_in_bytes=2000),
-                               data_root="/tmp")
+        p.prepare_document_set(
+            document_set=track.Documents(
+                source_format=track.Documents.SOURCE_FORMAT_BULK,
+                base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
+                document_file="docs.json",
+                # --> We don't provide a document archive here <--
+                document_archive=None,
+                number_of_documents=5,
+                compressed_size_in_bytes=200,
+                uncompressed_size_in_bytes=2000,
+            ),
+            data_root="/tmp",
+        )
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with(f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
-                                    "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
+        download.assert_called_with(
+            f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
+        )
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
@@ -334,23 +365,28 @@ class TrackPreparationTests(TestCase):
 
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
-        p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                            base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                            document_file="docs.json",
-                                                            # --> We don't provide a document archive here <--
-                                                            document_archive=None,
-                                                            number_of_documents=5,
-                                                            compressed_size_in_bytes=200,
-                                                            uncompressed_size_in_bytes=2000),
-                               data_root="/tmp")
+        p.prepare_document_set(
+            document_set=track.Documents(
+                source_format=track.Documents.SOURCE_FORMAT_BULK,
+                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                document_file="docs.json",
+                # --> We don't provide a document archive here <--
+                document_archive=None,
+                number_of_documents=5,
+                compressed_size_in_bytes=200,
+                uncompressed_size_in_bytes=2000,
+            ),
+            data_root="/tmp",
+        )
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
-                                    "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
+        download.assert_called_with(
+            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
+        )
         prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.net.download")
@@ -360,17 +396,21 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=True, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=True, test_mode=False), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
-            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                document_file="docs.json",
-                                                                number_of_documents=5,
-                                                                uncompressed_size_in_bytes=2000),
-                                   data_root="/tmp")
+            p.prepare_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                    document_file="docs.json",
+                    number_of_documents=5,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root="/tmp",
+            )
 
         self.assertEqual("Cannot find [/tmp/docs.json]. Please disable offline mode and retry.", ctx.exception.args[0])
 
@@ -384,18 +424,22 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                base_url=None,
-                                                                document_file="docs.json",
-                                                                document_archive=None,
-                                                                number_of_documents=5,
-                                                                uncompressed_size_in_bytes=2000),
-                                   data_root="/tmp")
+            p.prepare_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    base_url=None,
+                    document_file="docs.json",
+                    document_archive=None,
+                    number_of_documents=5,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root="/tmp",
+            )
 
         self.assertEqual("Cannot download data because no base URL is provided.", ctx.exception.args[0])
 
@@ -412,19 +456,26 @@ class TrackPreparationTests(TestCase):
         # but it's size is wrong
         get_size.return_value = 100
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                document_file="docs.json",
-                                                                number_of_documents=5,
-                                                                uncompressed_size_in_bytes=2000),
-                                   data_root="/tmp")
+            p.prepare_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    document_file="docs.json",
+                    number_of_documents=5,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root="/tmp",
+            )
 
-        self.assertEqual("[/tmp/docs.json] is present but does not have the expected size of [2000] bytes and it "
-                         "cannot be downloaded because no base URL is provided.", ctx.exception.args[0])
+        self.assertEqual(
+            "[/tmp/docs.json] is present but does not have the expected size of [2000] bytes and it "
+            "cannot be downloaded because no base URL is provided.",
+            ctx.exception.args[0],
+        )
 
         self.assertEqual(0, ensure_dir.call_count)
         self.assertEqual(0, download.call_count)
@@ -436,27 +487,35 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
-        download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
-                                                      404, "", None, None)
+        download.side_effect = urllib.error.HTTPError(
+            "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json", 404, "", None, None
+        )
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=True),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=True), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                document_file="docs-1k.json",
-                                                                number_of_documents=5,
-                                                                uncompressed_size_in_bytes=None),
-                                   data_root="/tmp")
+            p.prepare_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                    document_file="docs-1k.json",
+                    number_of_documents=5,
+                    uncompressed_size_in_bytes=None,
+                ),
+                data_root="/tmp",
+            )
 
-        self.assertEqual("This track does not support test mode. Ask the track author to add it or disable "
-                         "test mode and retry.", ctx.exception.args[0])
+        self.assertEqual(
+            "This track does not support test mode. Ask the track author to add it or disable test mode and retry.",
+            ctx.exception.args[0],
+        )
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs-1k.json",
-                                    "/tmp/docs-1k.json", None, progress_indicator=mock.ANY)
+        download.assert_called_with(
+            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs-1k.json", "/tmp/docs-1k.json", None, progress_indicator=mock.ANY
+        )
 
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -465,27 +524,36 @@ class TrackPreparationTests(TestCase):
         # uncompressed file does not exist
         is_file.return_value = False
 
-        download.side_effect = urllib.error.HTTPError("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
-                                                      500, "Internal Server Error", None, None)
+        download.side_effect = urllib.error.HTTPError(
+            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", 500, "Internal Server Error", None, None
+        )
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            p.prepare_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
-                                                                document_file="docs.json",
-                                                                number_of_documents=5,
-                                                                uncompressed_size_in_bytes=2000),
-                                   data_root="/tmp")
+            p.prepare_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                    document_file="docs.json",
+                    number_of_documents=5,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root="/tmp",
+            )
 
-        self.assertEqual("Could not download [http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json] "
-                         "to [/tmp/docs.json] (HTTP status: 500, reason: Internal Server Error)", ctx.exception.args[0])
+        self.assertEqual(
+            "Could not download [http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json] "
+            "to [/tmp/docs.json] (HTTP status: 500, reason: Internal Server Error)",
+            ctx.exception.args[0],
+        )
 
         ensure_dir.assert_called_with("/tmp")
-        download.assert_called_with("http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
-                                    "/tmp/docs.json", 2000, progress_indicator=mock.ANY)
+        download.assert_called_with(
+            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
+        )
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -497,17 +565,23 @@ class TrackPreparationTests(TestCase):
         get_size.side_effect = [2000]
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
-        self.assertTrue(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                                    document_file="docs.json",
-                                                                                    document_archive="docs.json.bz2",
-                                                                                    number_of_documents=5,
-                                                                                    compressed_size_in_bytes=200,
-                                                                                    uncompressed_size_in_bytes=2000),
-                                                       data_root="."))
+        self.assertTrue(
+            p.prepare_bundled_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    document_file="docs.json",
+                    document_archive="docs.json.bz2",
+                    number_of_documents=5,
+                    compressed_size_in_bytes=200,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root=".",
+            )
+        )
 
         prepare_file_offset_table.assert_called_with("./docs.json")
 
@@ -519,17 +593,23 @@ class TrackPreparationTests(TestCase):
         # no files present
         is_file.return_value = False
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
-        self.assertFalse(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                                     document_file="docs.json",
-                                                                                     document_archive="docs.json.bz2",
-                                                                                     number_of_documents=5,
-                                                                                     compressed_size_in_bytes=200,
-                                                                                     uncompressed_size_in_bytes=2000),
-                                                        data_root="."))
+        self.assertFalse(
+            p.prepare_bundled_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    document_file="docs.json",
+                    document_archive="docs.json.bz2",
+                    number_of_documents=5,
+                    compressed_size_in_bytes=200,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root=".",
+            )
+        )
 
         self.assertEqual(0, decompress.call_count)
         self.assertEqual(0, prepare_file_offset_table.call_count)
@@ -552,23 +632,23 @@ class TrackPreparationTests(TestCase):
                             "source-file": "documents-181998.unparsed.json.bz2",
                             "document-count": 2708746,
                             "compressed-bytes": 13064317,
-                            "uncompressed-bytes": 303920342
+                            "uncompressed-bytes": 303920342,
                         },
                         {
                             "target-index": "logs-191998",
                             "source-file": "documents-191998.unparsed.json.bz2",
                             "document-count": 9697882,
                             "compressed-bytes": 47211781,
-                            "uncompressed-bytes": 1088378738
+                            "uncompressed-bytes": 1088378738,
                         },
                         {
                             "target-index": "logs-201998",
                             "source-file": "documents-201998.unparsed.json.bz2",
                             "document-count": 13053463,
                             "compressed-bytes": 63174979,
-                            "uncompressed-bytes": 1456836090
-                        }
-                    ]
+                            "uncompressed-bytes": 1456836090,
+                        },
+                    ],
                 },
                 {
                     "name": "http_logs",
@@ -579,24 +659,24 @@ class TrackPreparationTests(TestCase):
                             "source-file": "documents-181998.json.bz2",
                             "document-count": 2708746,
                             "compressed-bytes": 13815456,
-                            "uncompressed-bytes": 363512754
+                            "uncompressed-bytes": 363512754,
                         },
                         {
                             "target-index": "logs-191998",
                             "source-file": "documents-191998.json.bz2",
                             "document-count": 9697882,
                             "compressed-bytes": 49439633,
-                            "uncompressed-bytes": 1301732149
+                            "uncompressed-bytes": 1301732149,
                         },
                         {
                             "target-index": "logs-201998",
                             "source-file": "documents-201998.json.bz2",
                             "document-count": 13053463,
                             "compressed-bytes": 65623436,
-                            "uncompressed-bytes": 1744012279
-                        }
-                    ]
-                }
+                            "uncompressed-bytes": 1744012279,
+                        },
+                    ],
+                },
             ],
             "operations": [
                 {
@@ -604,26 +684,23 @@ class TrackPreparationTests(TestCase):
                     "operation-type": "bulk",
                     "corpora": ["http_logs"],
                     "indices": ["logs-181998"],
-                    "bulk-size": 500
+                    "bulk-size": 500,
                 },
                 {
                     "name": "bulk-index-2",
                     "operation-type": "bulk",
                     "corpora": ["http_logs"],
                     "indices": ["logs-191998"],
-                    "bulk-size": 500
+                    "bulk-size": 500,
                 },
                 {
                     "name": "bulk-index-3",
                     "operation-type": "bulk",
                     "corpora": ["http_logs_unparsed"],
                     "indices": ["logs-201998"],
-                    "bulk-size": 500
+                    "bulk-size": 500,
                 },
-                {
-                    "name": "node-stats",
-                    "operation-type": "node-stats"
-                },
+                {"name": "node-stats", "operation-type": "node-stats"},
             ],
             "challenges": [
                 {
@@ -647,12 +724,10 @@ class TrackPreparationTests(TestCase):
                                 ]
                             }
                         },
-                        {
-                            "operation": "node-stats"
-                        }
-                    ]
+                        {"operation": "node-stats"},
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader(selected_challenge="default-challenge")
         full_track = reader("unittest", track_specification, "/mappings")
@@ -660,8 +735,9 @@ class TrackPreparationTests(TestCase):
         self.assertEqual(2, len(used_corpora))
         self.assertEqual("http_logs", used_corpora[0].name)
         # each bulk operation requires a different data file but they should have been merged properly.
-        self.assertEqual({"documents-181998.json.bz2", "documents-191998.json.bz2"},
-                         {d.document_archive for d in used_corpora[0].documents})
+        self.assertEqual(
+            {"documents-181998.json.bz2", "documents-191998.json.bz2"}, {d.document_archive for d in used_corpora[0].documents}
+        )
 
         self.assertEqual("http_logs_unparsed", used_corpora[1].name)
         self.assertEqual({"documents-201998.unparsed.json.bz2"}, {d.document_archive for d in used_corpora[1].documents})
@@ -682,17 +758,23 @@ class TrackPreparationTests(TestCase):
         get_size.side_effect = [200, 2000, 2000]
         prepare_file_offset_table.return_value = 5
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
-        self.assertTrue(p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                                    document_file="docs.json",
-                                                                                    document_archive="docs.json.bz2",
-                                                                                    number_of_documents=5,
-                                                                                    compressed_size_in_bytes=200,
-                                                                                    uncompressed_size_in_bytes=2000),
-                                                       data_root="."))
+        self.assertTrue(
+            p.prepare_bundled_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    document_file="docs.json",
+                    document_archive="docs.json.bz2",
+                    number_of_documents=5,
+                    compressed_size_in_bytes=200,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root=".",
+            )
+        )
 
         prepare_file_offset_table.assert_called_with("./docs.json")
 
@@ -705,21 +787,24 @@ class TrackPreparationTests(TestCase):
         # compressed has wrong size
         get_size.side_effect = [150]
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                        document_file="docs.json",
-                                                                        document_archive="docs.json.bz2",
-                                                                        number_of_documents=5,
-                                                                        compressed_size_in_bytes=200,
-                                                                        uncompressed_size_in_bytes=2000),
-                                           data_root=".")
+            p.prepare_bundled_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    document_file="docs.json",
+                    document_archive="docs.json.bz2",
+                    number_of_documents=5,
+                    compressed_size_in_bytes=200,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root=".",
+            )
 
-        self.assertEqual("[./docs.json.bz2] is present but does not have the expected size of [200] bytes.",
-                         ctx.exception.args[0])
+        self.assertEqual("[./docs.json.bz2] is present but does not have the expected size of [200] bytes.", ctx.exception.args[0])
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -731,20 +816,23 @@ class TrackPreparationTests(TestCase):
         # uncompressed
         get_size.side_effect = [1500]
 
-        p = loader.DocumentSetPreparator(track_name="unit-test",
-                                         downloader=loader.Downloader(offline=False, test_mode=False),
-                                         decompressor=loader.Decompressor())
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
+        )
 
         with self.assertRaises(exceptions.DataError) as ctx:
-            p.prepare_bundled_document_set(document_set=track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                                        document_file="docs.json",
-                                                                        document_archive="docs.json.bz2",
-                                                                        number_of_documents=5,
-                                                                        compressed_size_in_bytes=200,
-                                                                        uncompressed_size_in_bytes=2000),
-                                           data_root=".")
-        self.assertEqual("[./docs.json] is present but does not have the expected size of [2000] bytes.",
-                         ctx.exception.args[0])
+            p.prepare_bundled_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    document_file="docs.json",
+                    document_archive="docs.json.bz2",
+                    number_of_documents=5,
+                    compressed_size_in_bytes=200,
+                    uncompressed_size_in_bytes=2000,
+                ),
+                data_root=".",
+            )
+        self.assertEqual("[./docs.json] is present but does not have the expected size of [2000] bytes.", ctx.exception.args[0])
 
         self.assertEqual(0, prepare_file_offset_table.call_count)
 
@@ -753,7 +841,8 @@ class TemplateSource(TestCase):
     @mock.patch("esrally.utils.io.dirname")
     @mock.patch.object(loader.TemplateSource, "read_glob_files")
     def test_entrypoint_of_replace_includes(self, patched_read_glob, patched_dirname):
-        track = textwrap.dedent("""
+        track = textwrap.dedent(
+            """
         {% import "rally.helpers" as rally with context %}
         {
           "version": 2,
@@ -786,10 +875,11 @@ class TemplateSource(TestCase):
             {{ rally.collect(parts="challenges/*.json") }}
           ]
         }
-        """)
+        """
+        )
 
         def dummy_read_glob(c):
-            return "{{\"replaced {}\": \"true\"}}".format(c)
+            return '{{"replaced {}": "true"}}'.format(c)
 
         patched_read_glob.side_effect = dummy_read_glob
 
@@ -797,7 +887,8 @@ class TemplateSource(TestCase):
         template_file_name = "track.json"
         tmpl_src = loader.TemplateSource(base_path, template_file_name)
         # pylint: disable=trailing-whitespace
-        expected_response = textwrap.dedent("""                                
+        expected_response = textwrap.dedent(
+            """                                
             {% import "rally.helpers" as rally with context %}
             {
               "version": 2,
@@ -830,12 +921,10 @@ class TemplateSource(TestCase):
                 {"replaced ~/.rally/benchmarks/tracks/default/geonames/challenges/*.json": "true"}
               ]
             }
-            """)
-
-        self.assertEqual(
-            expected_response,
-            tmpl_src.replace_includes(base_path, track)
+            """
         )
+
+        self.assertEqual(expected_response, tmpl_src.replace_includes(base_path, track))
 
     def test_read_glob_files(self):
         tmpl_obj = loader.TemplateSource(
@@ -843,8 +932,8 @@ class TemplateSource(TestCase):
             template_file_name="track.json",
             fileglobber=lambda pat: [
                 os.path.join(os.path.dirname(__file__), "resources", "track_fragment_1.json"),
-                os.path.join(os.path.dirname(__file__), "resources", "track_fragment_2.json")
-            ]
+                os.path.join(os.path.dirname(__file__), "resources", "track_fragment_2.json"),
+            ],
         )
         response = tmpl_obj.read_glob_files("*track_fragment_*.json")
         expected_response = '{\n  "item1": "value1"\n}\n,\n{\n  "item2": "value2"\n}\n'
@@ -881,8 +970,9 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        rendered = loader.render_template(template, template_vars={"greeting": "Hi"},
-                                          template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
+        rendered = loader.render_template(
+            template, template_vars={"greeting": "Hi"}, template_internal_vars=TemplateRenderTests.unittest_template_internal_vars
+        )
 
         expected = """
         {
@@ -912,24 +1002,20 @@ class TemplateRenderTests(TestCase):
         }
         """
 
-        source = io.DictStringFileSourceFactory({
-            "dynamic-key-1": [
-                textwrap.dedent('"dkey1": "value1"')
-            ],
-            "dynamic-key-2": [
-                textwrap.dedent('"dkey2": "value2"')
-            ],
-            "dynamic-key-3": [
-                textwrap.dedent('"dkey3": "value3"')
-            ]
-        })
+        source = io.DictStringFileSourceFactory(
+            {
+                "dynamic-key-1": [textwrap.dedent('"dkey1": "value1"')],
+                "dynamic-key-2": [textwrap.dedent('"dkey2": "value2"')],
+                "dynamic-key-3": [textwrap.dedent('"dkey3": "value3"')],
+            }
+        )
 
         template_source = loader.TemplateSource("", "track.json", source=source, fileglobber=key_globber)
         template_source.load_template_from_string(template)
 
         rendered = loader.render_template(
-            template_source.assembled_source,
-            template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
+            template_source.assembled_source, template_internal_vars=TemplateRenderTests.unittest_template_internal_vars
+        )
 
         expected = """
         {
@@ -954,9 +1040,8 @@ class TemplateRenderTests(TestCase):
         }
         """
         rendered = loader.render_template(
-            template,
-            template_vars={"clients": 8},
-            template_internal_vars=TemplateRenderTests.unittest_template_internal_vars)
+            template, template_vars={"clients": 8}, template_internal_vars=TemplateRenderTests.unittest_template_internal_vars
+        )
 
         expected = """
         {
@@ -972,72 +1057,63 @@ class TemplateRenderTests(TestCase):
 
 
 class CompleteTrackParamsTests(TestCase):
-    assembled_source = textwrap.dedent("""{% import "rally.helpers" as rally with context %}
+    assembled_source = textwrap.dedent(
+        """{% import "rally.helpers" as rally with context %}
         "key1": "value1",
         "key2": {{ value2 | default(3) }},
         "key3": {{ value3 | default("default_value3") }}
         "key4": {{ value2 | default(3) }}
-    """)
+    """
+    )
 
     def test_check_complete_track_params_contains_all_track_params(self):
         complete_track_params = loader.CompleteTrackParams()
         loader.register_all_params_in_track(CompleteTrackParamsTests.assembled_source, complete_track_params)
 
-        self.assertEqual(
-            ["value2", "value3"],
-            complete_track_params.sorted_track_defined_params
-        )
+        self.assertEqual(["value2", "value3"], complete_track_params.sorted_track_defined_params)
 
     def test_check_complete_track_params_does_not_fail_with_no_track_params(self):
         complete_track_params = loader.CompleteTrackParams()
-        loader.register_all_params_in_track('{}', complete_track_params)
+        loader.register_all_params_in_track("{}", complete_track_params)
 
-        self.assertEqual(
-            [],
-            complete_track_params.sorted_track_defined_params
-        )
+        self.assertEqual([], complete_track_params.sorted_track_defined_params)
 
     def test_unused_user_defined_track_params(self):
-        track_params = {
-            "number_of_repliacs": 1,  # deliberate typo
-            "enable_source": True,  # unknown parameter
-            "number_of_shards": 5
-        }
+        track_params = {"number_of_repliacs": 1, "enable_source": True, "number_of_shards": 5}  # deliberate typo  # unknown parameter
 
         complete_track_params = loader.CompleteTrackParams(user_specified_track_params=track_params)
-        complete_track_params.populate_track_defined_params(list_of_track_params=[
-            "bulk_indexing_clients",
-            "bulk_indexing_iterations",
-            "bulk_size",
-            "cluster_health",
-            "number_of_replicas",
-            "number_of_shards"]
+        complete_track_params.populate_track_defined_params(
+            list_of_track_params=[
+                "bulk_indexing_clients",
+                "bulk_indexing_iterations",
+                "bulk_size",
+                "cluster_health",
+                "number_of_replicas",
+                "number_of_shards",
+            ]
         )
 
-        self.assertEqual(
-            ["enable_source", "number_of_repliacs"],
-            sorted(complete_track_params.unused_user_defined_track_params())
-        )
+        self.assertEqual(["enable_source", "number_of_repliacs"], sorted(complete_track_params.unused_user_defined_track_params()))
 
     def test_unused_user_defined_track_params_doesnt_fail_with_detaults(self):
         complete_track_params = loader.CompleteTrackParams()
-        complete_track_params.populate_track_defined_params(list_of_track_params=[
-            "bulk_indexing_clients",
-            "bulk_indexing_iterations",
-            "bulk_size",
-            "cluster_health",
-            "number_of_replicas",
-            "number_of_shards"]
+        complete_track_params.populate_track_defined_params(
+            list_of_track_params=[
+                "bulk_indexing_clients",
+                "bulk_indexing_iterations",
+                "bulk_size",
+                "cluster_health",
+                "number_of_replicas",
+                "number_of_shards",
+            ]
         )
 
-        self.assertEqual(
-            [],
-            sorted(complete_track_params.unused_user_defined_track_params())
-        )
+        self.assertEqual([], sorted(complete_track_params.unused_user_defined_track_params()))
 
 
 class TrackPostProcessingTests(TestCase):
-    track_with_params_as_string = textwrap.dedent("""{
+    track_with_params_as_string = textwrap.dedent(
+        """{
         "indices": [
             {
                 "name": "test-index",
@@ -1111,7 +1187,8 @@ class TrackPostProcessingTests(TestCase):
                 ]
             }
         ]
-    }""")
+    }"""
+    )
 
     def test_post_processes_track_spec(self):
         track_specification = {
@@ -1119,8 +1196,10 @@ class TrackPostProcessingTests(TestCase):
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": ["test-type"]
-                }
+                    "types": [
+                        "test-type",
+                    ],
+                },
             ],
             "corpora": [
                 {
@@ -1130,21 +1209,21 @@ class TrackPostProcessingTests(TestCase):
                             "source-file": "documents.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
+                            "uncompressed-bytes": 10000,
                         }
-                    ]
+                    ],
                 }
             ],
             "operations": [
                 {
                     "name": "index-append",
                     "operation-type": "bulk",
-                    "bulk-size": 5000
+                    "bulk-size": 5000,
                 },
                 {
                     "name": "search",
-                    "operation-type": "search"
-                }
+                    "operation-type": "search",
+                },
             ],
             "challenges": [
                 {
@@ -1166,7 +1245,7 @@ class TrackPostProcessingTests(TestCase):
                                         "operation": "search",
                                         "warmup-iterations": 1000,
                                         "iterations": 2000,
-                                        "target-interval": 30
+                                        "target-interval": 30,
                                     },
                                     {
                                         "name": "search #2",
@@ -1174,20 +1253,20 @@ class TrackPostProcessingTests(TestCase):
                                         "operation": "search",
                                         "warmup-iterations": 1000,
                                         "iterations": 2000,
-                                        "target-throughput": 200
+                                        "target-throughput": 200,
                                     },
                                     {
                                         "name": "search #3",
                                         "clients": 1,
                                         "operation": "search",
-                                        "iterations": 1
-                                    }
+                                        "iterations": 1,
+                                    },
                                 ]
                             }
-                        }
-                    ]
+                        },
+                    ],
                 }
-            ]
+            ],
         }
 
         expected_post_processed = {
@@ -1195,30 +1274,27 @@ class TrackPostProcessingTests(TestCase):
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": ["test-type"]
-                }
+                    "types": ["test-type"],
+                },
             ],
             "corpora": [
                 {
                     "name": "unittest",
                     "documents": [
-                        {
-                            "source-file": "documents-1k.json.bz2",
-                            "document-count": 1000
-                        }
-                    ]
-                }
+                        {"source-file": "documents-1k.json.bz2", "document-count": 1000},
+                    ],
+                },
             ],
             "operations": [
                 {
                     "name": "index-append",
                     "operation-type": "bulk",
-                    "bulk-size": 5000
+                    "bulk-size": 5000,
                 },
                 {
                     "name": "search",
-                    "operation-type": "search"
-                }
+                    "operation-type": "search",
+                },
             ],
             "challenges": [
                 {
@@ -1239,55 +1315,60 @@ class TrackPostProcessingTests(TestCase):
                                         "clients": 4,
                                         "operation": "search",
                                         "warmup-iterations": 4,
-                                        "iterations": 4
+                                        "iterations": 4,
                                     },
                                     {
                                         "name": "search #2",
                                         "clients": 1,
                                         "operation": "search",
                                         "warmup-iterations": 1,
-                                        "iterations": 1
+                                        "iterations": 1,
                                     },
                                     {
                                         "name": "search #3",
                                         "clients": 1,
                                         "operation": "search",
-                                        "iterations": 1
-                                    }
+                                        "iterations": 1,
+                                    },
                                 ]
                             }
-                        }
-                    ]
+                        },
+                    ],
                 }
-            ]
+            ],
         }
 
         complete_track_params = loader.CompleteTrackParams()
-        index_body = '{"settings": {"index.number_of_shards": {{ number_of_shards | default(5) }}, '\
-                     '"index.number_of_replicas": {{ number_of_replicas | default(0)}} }}'
+        index_body = (
+            '{"settings": {"index.number_of_shards": {{ number_of_shards | default(5) }}, '
+            '"index.number_of_replicas": {{ number_of_replicas | default(0)}} }}'
+        )
 
         cfg = config.Config()
         cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
 
         self.assertEqual(
-            self.as_track(expected_post_processed, complete_track_params=complete_track_params, index_body=index_body),
+            self.as_track(
+                expected_post_processed,
+                complete_track_params=complete_track_params,
+                index_body=index_body,
+            ),
             loader.TestModeTrackProcessor(cfg).on_after_load_track(
-                self.as_track(track_specification, complete_track_params=complete_track_params, index_body=index_body)
-            )
+                self.as_track(
+                    track_specification,
+                    complete_track_params=complete_track_params,
+                    index_body=index_body,
+                )
+            ),
         )
 
-        self.assertEqual(
-            ["number_of_replicas", "number_of_shards"],
-            complete_track_params.sorted_track_defined_params
-        )
+        self.assertEqual(["number_of_replicas", "number_of_shards"], complete_track_params.sorted_track_defined_params)
 
     def as_track(self, track_specification, track_params=None, complete_track_params=None, index_body=None):
         reader = loader.TrackSpecificationReader(
             track_params=track_params,
             complete_track_params=complete_track_params,
-            source=io.DictStringFileSourceFactory({
-                "/mappings/test-index-body.json": [index_body]
-            })
+            source=io.DictStringFileSourceFactory({"/mappings/test-index-body.json": [index_body]}),
         )
         return reader("unittest", track_specification, "/mappings")
 
@@ -1300,19 +1381,29 @@ class TrackPathTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
 
-        default_challenge = track.Challenge("default", default=True, schedule=[
-            track.Task(name="index", operation=track.Operation("index", operation_type=track.OperationType.Bulk), clients=4)
-        ])
+        default_challenge = track.Challenge(
+            "default",
+            default=True,
+            schedule=[track.Task(name="index", operation=track.Operation("index", operation_type=track.OperationType.Bulk), clients=4)],
+        )
         another_challenge = track.Challenge("other", default=False)
-        t = track.Track(name="u", challenges=[another_challenge, default_challenge],
-                        corpora=[
-                            track.DocumentCorpus("unittest", documents=[
-                                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                                document_file="docs/documents.json",
-                                                document_archive="docs/documents.json.bz2")
-                            ])
-                        ],
-                        indices=[track.Index(name="test", types=["docs"])])
+        t = track.Track(
+            name="u",
+            challenges=[another_challenge, default_challenge],
+            corpora=[
+                track.DocumentCorpus(
+                    "unittest",
+                    documents=[
+                        track.Documents(
+                            source_format=track.Documents.SOURCE_FORMAT_BULK,
+                            document_file="docs/documents.json",
+                            document_archive="docs/documents.json.bz2",
+                        )
+                    ],
+                )
+            ],
+            indices=[track.Index(name="test", types=["docs"])],
+        )
 
         loader.set_absolute_data_path(cfg, t)
 
@@ -1337,8 +1428,7 @@ class TrackFilterTests(TestCase):
     def test_rejects_unknown_filter_type(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             self.filter(track_specification=None, include_tasks=["valid", "op-type:index"])
-        self.assertEqual("Invalid format for filtered tasks: [op-type:index]. Expected [type] but got [op-type].",
-                         ctx.exception.args[0])
+        self.assertEqual("Invalid format for filtered tasks: [op-type:index]. Expected [type] but got [op-type].", ctx.exception.args[0])
 
     def test_filters_tasks(self):
         track_specification = {
@@ -1347,28 +1437,28 @@ class TrackFilterTests(TestCase):
             "operations": [
                 {
                     "name": "create-index",
-                    "operation-type": "create-index"
+                    "operation-type": "create-index",
                 },
                 {
                     "name": "bulk-index",
-                    "operation-type": "bulk"
+                    "operation-type": "bulk",
                 },
                 {
                     "name": "node-stats",
-                    "operation-type": "node-stats"
+                    "operation-type": "node-stats",
                 },
                 {
                     "name": "cluster-stats",
-                    "operation-type": "custom-operation-type"
+                    "operation-type": "custom-operation-type",
                 },
                 {
                     "name": "match-all",
                     "operation-type": "search",
                     "body": {
                         "query": {
-                            "match_all": {}
-                        }
-                    }
+                            "match_all": {},
+                        },
+                    },
                 },
             ],
             "challenges": [
@@ -1376,7 +1466,7 @@ class TrackFilterTests(TestCase):
                     "name": "default-challenge",
                     "schedule": [
                         {
-                            "operation": "create-index"
+                            "operation": "create-index",
                         },
                         {
                             "parallel": {
@@ -1401,14 +1491,14 @@ class TrackFilterTests(TestCase):
                             }
                         },
                         {
-                            "operation": "node-stats"
+                            "operation": "node-stats",
                         },
                         {
                             "name": "match-all-serial",
-                            "operation": "match-all"
+                            "operation": "match-all",
                         },
                         {
-                            "operation": "cluster-stats"
+                            "operation": "cluster-stats",
                         },
                         {
                             "parallel": {
@@ -1426,28 +1516,33 @@ class TrackFilterTests(TestCase):
                                     {
                                         "name": "index-5",
                                         "operation": "bulk-index",
-                                    }
+                                    },
                                 ]
                             }
                         },
                         {
                             "name": "final-cluster-stats",
                             "operation": "cluster-stats",
-                            "tags": "include-me"
-                        }
-                    ]
+                            "tags": "include-me",
+                        },
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(7, len(full_track.challenges[0].schedule))
 
-        filtered = self.filter(full_track, include_tasks=["index-3",
-                                                          "type:search",
-                                                          # Filtering should also work for non-core operation types.
-                                                          "type:custom-operation-type",
-                                                          "tag:include-me"])
+        filtered = self.filter(
+            full_track,
+            include_tasks=[
+                "index-3",
+                "type:search",
+                # Filtering should also work for non-core operation types.
+                "type:custom-operation-type",
+                "tag:include-me",
+            ],
+        )
 
         schedule = filtered.challenges[0].schedule
         self.assertEqual(5, len(schedule))
@@ -1460,32 +1555,37 @@ class TrackFilterTests(TestCase):
     def test_filters_exclude_tasks(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [
+                {
+                    "name": "test-index",
+                    "auto-managed": False,
+                },
+            ],
             "operations": [
                 {
                     "name": "create-index",
-                    "operation-type": "create-index"
+                    "operation-type": "create-index",
                 },
                 {
                     "name": "bulk-index",
-                    "operation-type": "bulk"
+                    "operation-type": "bulk",
                 },
                 {
                     "name": "node-stats",
-                    "operation-type": "node-stats"
+                    "operation-type": "node-stats",
                 },
                 {
                     "name": "cluster-stats",
-                    "operation-type": "custom-operation-type"
+                    "operation-type": "custom-operation-type",
                 },
                 {
                     "name": "match-all",
                     "operation-type": "search",
                     "body": {
                         "query": {
-                            "match_all": {}
-                        }
-                    }
+                            "match_all": {},
+                        },
+                    },
                 },
             ],
             "challenges": [
@@ -1493,7 +1593,7 @@ class TrackFilterTests(TestCase):
                     "name": "default-challenge",
                     "schedule": [
                         {
-                            "operation": "create-index"
+                            "operation": "create-index",
                         },
                         {
                             "parallel": {
@@ -1518,18 +1618,18 @@ class TrackFilterTests(TestCase):
                             }
                         },
                         {
-                            "operation": "node-stats"
+                            "operation": "node-stats",
                         },
                         {
                             "name": "match-all-serial",
-                            "operation": "match-all"
+                            "operation": "match-all",
                         },
                         {
-                            "operation": "cluster-stats"
-                        }
-                    ]
+                            "operation": "cluster-stats",
+                        },
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", track_specification, "/mappings")
@@ -1546,32 +1646,37 @@ class TrackFilterTests(TestCase):
     def test_unmatched_exclude_runs_everything(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [
+                {
+                    "name": "test-index",
+                    "auto-managed": False,
+                },
+            ],
             "operations": [
                 {
                     "name": "create-index",
-                    "operation-type": "create-index"
+                    "operation-type": "create-index",
                 },
                 {
                     "name": "bulk-index",
-                    "operation-type": "bulk"
+                    "operation-type": "bulk",
                 },
                 {
                     "name": "node-stats",
-                    "operation-type": "node-stats"
+                    "operation-type": "node-stats",
                 },
                 {
                     "name": "cluster-stats",
-                    "operation-type": "custom-operation-type"
+                    "operation-type": "custom-operation-type",
                 },
                 {
                     "name": "match-all",
                     "operation-type": "search",
                     "body": {
                         "query": {
-                            "match_all": {}
-                        }
-                    }
+                            "match_all": {},
+                        },
+                    },
                 },
             ],
             "challenges": [
@@ -1579,24 +1684,24 @@ class TrackFilterTests(TestCase):
                     "name": "default-challenge",
                     "schedule": [
                         {
-                            "operation": "create-index"
+                            "operation": "create-index",
                         },
                         {
-                            "operation": "bulk-index"
+                            "operation": "bulk-index",
                         },
                         {
-                            "operation": "node-stats"
+                            "operation": "node-stats",
                         },
                         {
                             "name": "match-all-serial",
-                            "operation": "match-all"
+                            "operation": "match-all",
                         },
                         {
-                            "operation": "cluster-stats"
-                        }
-                    ]
+                            "operation": "cluster-stats",
+                        },
+                    ],
                 }
-            ]
+            ],
         }
 
         reader = loader.TrackSpecificationReader()
@@ -1612,32 +1717,37 @@ class TrackFilterTests(TestCase):
     def test_unmatched_include_runs_nothing(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "auto-managed": False}],
+            "indices": [
+                {
+                    "name": "test-index",
+                    "auto-managed": False,
+                },
+            ],
             "operations": [
                 {
                     "name": "create-index",
-                    "operation-type": "create-index"
+                    "operation-type": "create-index",
                 },
                 {
                     "name": "bulk-index",
-                    "operation-type": "bulk"
+                    "operation-type": "bulk",
                 },
                 {
                     "name": "node-stats",
-                    "operation-type": "node-stats"
+                    "operation-type": "node-stats",
                 },
                 {
                     "name": "cluster-stats",
-                    "operation-type": "custom-operation-type"
+                    "operation-type": "custom-operation-type",
                 },
                 {
                     "name": "match-all",
                     "operation-type": "search",
                     "body": {
                         "query": {
-                            "match_all": {}
-                        }
-                    }
+                            "match_all": {},
+                        },
+                    },
                 },
             ],
             "challenges": [
@@ -1645,24 +1755,24 @@ class TrackFilterTests(TestCase):
                     "name": "default-challenge",
                     "schedule": [
                         {
-                            "operation": "create-index"
+                            "operation": "create-index",
                         },
                         {
-                            "operation": "bulk-index"
+                            "operation": "bulk-index",
                         },
                         {
-                            "operation": "node-stats"
+                            "operation": "node-stats",
                         },
                         {
                             "name": "match-all-serial",
-                            "operation": "match-all"
+                            "operation": "match-all",
                         },
                         {
-                            "operation": "cluster-stats"
-                        }
-                    ]
+                            "operation": "cluster-stats",
+                        },
+                    ],
                 }
-            ]
+            ],
         }
 
         reader = loader.TrackSpecificationReader()
@@ -1692,11 +1802,16 @@ class TrackSpecificationReaderTests(TestCase):
     def test_can_read_track_info(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "types": ["test-type"]}],
+            "indices": [
+                {
+                    "name": "test-index",
+                    "types": ["test-type"],
+                },
+            ],
             "data-streams": [],
             "corpora": [],
             "operations": [],
-            "challenges": []
+            "challenges": [],
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -1706,15 +1821,22 @@ class TrackSpecificationReaderTests(TestCase):
     def test_document_count_mandatory_if_file_present(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "types": ["docs"]}],
+            "indices": [
+                {
+                    "name": "test-index",
+                    "types": ["docs"],
+                },
+            ],
             "corpora": [
                 {
                     "name": "test",
                     "base-url": "https://localhost/data",
-                    "documents": [{"source-file": "documents-main.json.bz2"}]
-                }
+                    "documents": [
+                        {"source-file": "documents-main.json.bz2"},
+                    ],
+                },
             ],
-            "challenges": []
+            "challenges": [],
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
@@ -1728,7 +1850,7 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"]
+                    "types": ["docs"],
                 }
             ],
             "corpora": [
@@ -1739,9 +1861,9 @@ class TrackSpecificationReaderTests(TestCase):
                             "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
+                            "uncompressed-bytes": 10000,
                         }
-                    ]
+                    ],
                 }
             ],
             "operations": [
@@ -1759,33 +1881,32 @@ class TrackSpecificationReaderTests(TestCase):
                             "clients": 8,
                             "operation": "index-append",
                             "warmup-iterations": 3,
-                            "time-period": 60
-                        }
-                    ]
+                            "time-period": 60,
+                        },
+                    ],
                 }
-
-            ]
+            ],
         }
 
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
-        }))
+        reader = loader.TrackSpecificationReader(
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
+                }
+            )
+        )
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines 3 warmup "
-                         "iterations and a time period of 60 seconds but mixing time periods and iterations is not allowed.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines 3 warmup "
+            "iterations and a time period of 60 seconds but mixing time periods and iterations is not allowed.",
+            ctx.exception.args[0],
+        )
 
     def test_parse_with_mixed_iterations_and_ramp_up(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [
-                {
-                    "name": "test-index",
-                    "body": "index.json",
-                    "types": ["docs"]
-                }
-            ],
+            "indices": [{"name": "test-index", "body": "index.json", "types": ["docs"]}],
             "corpora": [
                 {
                     "name": "test",
@@ -1794,9 +1915,9 @@ class TrackSpecificationReaderTests(TestCase):
                             "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
+                            "uncompressed-bytes": 10000,
                         }
-                    ]
+                    ],
                 }
             ],
             "operations": [
@@ -1815,23 +1936,28 @@ class TrackSpecificationReaderTests(TestCase):
                             "operation": "index-append",
                             "ramp-up-time-period": 120,
                             "warmup-iterations": 3,
-                            "iterations": 5
+                            "iterations": 5,
                         }
-                    ]
+                    ],
                 }
-
-            ]
+            ],
         }
 
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
-        }))
+        reader = loader.TrackSpecificationReader(
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
+                }
+            )
+        )
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' "
-                         "defines a ramp-up time period of 120 seconds as well as 3 warmup iterations and 5 iterations "
-                         "but mixing time periods and iterations is not allowed.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' "
+            "defines a ramp-up time period of 120 seconds as well as 3 warmup iterations and 5 iterations "
+            "but mixing time periods and iterations is not allowed.",
+            ctx.exception.args[0],
+        )
 
     def test_parse_missing_challenge_or_challenges(self):
         track_specification = {
@@ -1840,8 +1966,8 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"]
-                }
+                    "types": ["docs"],
+                },
             ],
             "corpora": [
                 {
@@ -1851,31 +1977,31 @@ class TrackSpecificationReaderTests(TestCase):
                             "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
+                            "uncompressed-bytes": 10000,
                         }
-                    ]
+                    ],
                 }
             ],
             # no challenge or challenges element
         }
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
-        }))
+        reader = loader.TrackSpecificationReader(
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
+                }
+            )
+        )
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. You must define 'challenge', 'challenges' or 'schedule' but none is specified.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. You must define 'challenge', 'challenges' or 'schedule' but none is specified.",
+            ctx.exception.args[0],
+        )
 
     def test_parse_challenge_and_challenges_are_defined(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [
-                {
-                    "name": "test-index",
-                    "body": "index.json",
-                    "types": ["docs"]
-                }
-            ],
+            "indices": [{"name": "test-index", "body": "index.json", "types": ["docs"]}],
             "corpora": [
                 {
                     "name": "test",
@@ -1884,22 +2010,29 @@ class TrackSpecificationReaderTests(TestCase):
                             "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
+                            "uncompressed-bytes": 10000,
                         }
-                    ]
+                    ],
                 }
             ],
             # We define both. Note that challenges without any properties would not pass JSON schema validation but we don't test this here.
             "challenge": {},
-            "challenges": []
+            "challenges": [],
         }
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
-        }))
+        reader = loader.TrackSpecificationReader(
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
+                }
+            )
+        )
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only "
-                         "one of them is allowed.", ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. Multiple out of 'challenge', 'challenges' or 'schedule' are defined but only "
+            "one of them is allowed.",
+            ctx.exception.args[0],
+        )
 
     def test_parse_with_mixed_warmup_time_period_and_iterations(self):
         track_specification = {
@@ -1908,8 +2041,8 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"]
-                }
+                    "types": ["docs"],
+                },
             ],
             "corpora": [
                 {
@@ -1919,9 +2052,9 @@ class TrackSpecificationReaderTests(TestCase):
                             "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
+                            "uncompressed-bytes": 10000,
                         }
-                    ]
+                    ],
                 }
             ],
             "operations": [
@@ -1939,22 +2072,27 @@ class TrackSpecificationReaderTests(TestCase):
                             "clients": 8,
                             "operation": "index-append",
                             "warmup-time-period": 20,
-                            "iterations": 1000
-                        }
-                    ]
+                            "iterations": 1000,
+                        },
+                    ],
                 }
-
-            ]
+            ],
         }
 
-        reader = loader.TrackSpecificationReader(source=io.DictStringFileSourceFactory({
-            "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
-        }))
+        reader = loader.TrackSpecificationReader(
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/index.json": ['{"mappings": {"docs": "empty-for-test"}}'],
+                }
+            )
+        )
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines a warmup time "
-                         "period of 20 seconds and 1000 iterations but mixing time periods and iterations is not allowed.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' defines a warmup time "
+            "period of 20 seconds and 1000 iterations but mixing time periods and iterations is not allowed.",
+            ctx.exception.args[0],
+        )
 
     def test_parse_duplicate_implicit_task_names(self):
         track_specification = {
@@ -1963,29 +2101,31 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "search",
                     "operation-type": "search",
-                    "index": "_all"
-                }
+                    "index": "_all",
+                },
             ],
             "challenge": {
                 "name": "default-challenge",
                 "schedule": [
                     {
                         "operation": "search",
-                        "clients": 1
+                        "clients": 1,
                     },
                     {
                         "operation": "search",
-                        "clients": 2
-                    }
-                ]
-            }
+                        "clients": 2,
+                    },
+                ],
+            },
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Challenge 'default-challenge' contains multiple tasks with the name 'search'. Please"
-                         " use the task's name property to assign a unique name for each task.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. Challenge 'default-challenge' contains multiple tasks with the name 'search'. Please"
+            " use the task's name property to assign a unique name for each task.",
+            ctx.exception.args[0],
+        )
 
     def test_parse_duplicate_explicit_task_names(self):
         track_specification = {
@@ -1994,8 +2134,8 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "search",
                     "operation-type": "search",
-                    "index": "_all"
-                }
+                    "index": "_all",
+                },
             ],
             "challenge": {
                 "name": "default-challenge",
@@ -2003,22 +2143,24 @@ class TrackSpecificationReaderTests(TestCase):
                     {
                         "name": "duplicate-task-name",
                         "operation": "search",
-                        "clients": 1
+                        "clients": 1,
                     },
                     {
                         "name": "duplicate-task-name",
                         "operation": "search",
-                        "clients": 2
-                    }
-                ]
-            }
+                        "clients": 2,
+                    },
+                ],
+            },
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Challenge 'default-challenge' contains multiple tasks with the name "
-                         "'duplicate-task-name'. Please use the task's name property to assign a unique name for each task.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. Challenge 'default-challenge' contains multiple tasks with the name "
+            "'duplicate-task-name'. Please use the task's name property to assign a unique name for each task.",
+            ctx.exception.args[0],
+        )
 
     def test_load_invalid_index_body(self):
         track_specification = {
@@ -2027,8 +2169,8 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "index-historical",
                     "body": "body.json",
-                    "types": ["_doc"]
-                }
+                    "types": ["_doc"],
+                },
             ],
             "corpora": [
                 {
@@ -2038,9 +2180,9 @@ class TrackSpecificationReaderTests(TestCase):
                             "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
+                            "uncompressed-bytes": 10000,
                         }
-                    ]
+                    ],
                 }
             ],
             "schedule": [
@@ -2049,15 +2191,17 @@ class TrackSpecificationReaderTests(TestCase):
                     "operation": {
                         "name": "index-append",
                         "operation-type": "index",
-                        "bulk-size": 5000
-                    }
-                }
-            ]
+                        "bulk-size": 5000,
+                    },
+                },
+            ],
         }
         reader = loader.TrackSpecificationReader(
             track_params={"number_of_shards": 3},
-            source=io.DictStringFileSourceFactory({
-                "/mappings/body.json": ["""
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/body.json": [
+                        """
             {
                 "settings": {
                     "number_of_shards": {{ number_of_shards }}
@@ -2066,8 +2210,11 @@ class TrackSpecificationReaderTests(TestCase):
                     "_doc": "no closing quotation mark!!,
                 }
             }
-            """]
-            }))
+            """
+                    ]
+                }
+            ),
+        )
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
         self.assertEqual("Could not load file template for 'definition for index index-historical in body.json'", ctx.exception.args[0])
@@ -2079,8 +2226,8 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "search",
                     "operation-type": "search",
-                    "index": "_all"
-                }
+                    "index": "_all",
+                },
             ],
             "challenge": {
                 "name": "default-challenge",
@@ -2088,15 +2235,15 @@ class TrackSpecificationReaderTests(TestCase):
                     {
                         "name": "search-one-client",
                         "operation": "search",
-                        "clients": 1
+                        "clients": 1,
                     },
                     {
                         "name": "search-two-clients",
                         "operation": "search",
-                        "clients": 2
-                    }
-                ]
-            }
+                        "clients": 2,
+                    },
+                ],
+            },
         }
         reader = loader.TrackSpecificationReader(selected_challenge="default-challenge")
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -2117,16 +2264,14 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "index-historical",
                     "body": "body.json",
-                    "types": ["main", "secondary"]
-                }
+                    "types": ["main", "secondary"],
+                },
             ],
             "corpora": [
                 {
                     "name": "test",
                     "base-url": "https://localhost/data",
-                    "meta": {
-                        "test-corpus": True
-                    },
+                    "meta": {"test-corpus": True},
                     "documents": [
                         {
                             "source-file": "documents-main.json.bz2",
@@ -2135,10 +2280,7 @@ class TrackSpecificationReaderTests(TestCase):
                             "uncompressed-bytes": 10000,
                             "target-index": "index-historical",
                             "target-type": "main",
-                            "meta": {
-                                "test-docs": True,
-                                "role": "main"
-                            }
+                            "meta": {"test-docs": True, "role": "main"},
                         },
                         {
                             "source-file": "documents-secondary.json.bz2",
@@ -2146,13 +2288,9 @@ class TrackSpecificationReaderTests(TestCase):
                             "document-count": 20,
                             "compressed-bytes": 200,
                             "uncompressed-bytes": 20000,
-                            "meta": {
-                                "test-docs": True,
-                                "role": "secondary"
-                            }
-
-                        }
-                    ]
+                            "meta": {"test-docs": True, "role": "secondary"},
+                        },
+                    ],
                 }
             ],
             "operations": [
@@ -2160,46 +2298,41 @@ class TrackSpecificationReaderTests(TestCase):
                     "name": "index-append",
                     "operation-type": "index",
                     "bulk-size": 5000,
-                    "meta": {
-                        "append": True
-                    }
+                    "meta": {"append": True},
                 },
                 {
                     "name": "search",
                     "operation-type": "search",
-                    "index": "index-historical"
-                }
+                    "index": "index-historical",
+                },
             ],
             "challenges": [
                 {
                     "name": "default-challenge",
                     "description": "Default challenge",
-                    "meta": {
-                        "mixed": True,
-                        "max-clients": 8
-                    },
+                    "meta": {"mixed": True, "max-clients": 8},
                     "schedule": [
                         {
                             "clients": 8,
                             "operation": "index-append",
-                            "meta": {
-                                "operation-index": 0
-                            }
+                            "meta": {"operation-index": 0},
                         },
                         {
                             "clients": 1,
-                            "operation": "search"
-                        }
-                    ]
+                            "operation": "search",
+                        },
+                    ],
                 }
-            ]
+            ],
         }
         complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             track_params={"number_of_shards": 3},
             complete_track_params=complete_track_params,
-            source=io.DictStringFileSourceFactory({
-                "/mappings/body.json": ["""
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/body.json": [
+                        """
             {
                 "settings": {
                     "number_of_shards": {{ number_of_shards }}
@@ -2209,29 +2342,31 @@ class TrackSpecificationReaderTests(TestCase):
                     "secondary": "empty-for-test"
                 }
             }
-            """]
-            }))
+            """
+                    ]
+                }
+            ),
+        )
         resulting_track = reader("unittest", track_specification, "/mappings")
         # j2 variables defined in the track -- used for checking mismatching user track params
-        self.assertEqual(
-            ["number_of_shards"],
-            complete_track_params.sorted_track_defined_params
-        )
+        self.assertEqual(["number_of_shards"], complete_track_params.sorted_track_defined_params)
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
         # indices
         self.assertEqual(1, len(resulting_track.indices))
         self.assertEqual("index-historical", resulting_track.indices[0].name)
-        self.assertDictEqual({
-            "settings": {
-                "number_of_shards": 3
-            },
-            "mappings":
-                {
+        self.assertDictEqual(
+            {
+                "settings": {
+                    "number_of_shards": 3,
+                },
+                "mappings": {
                     "main": "empty-for-test",
-                    "secondary": "empty-for-test"
-                }
-        }, resulting_track.indices[0].body)
+                    "secondary": "empty-for-test",
+                },
+            },
+            resulting_track.indices[0].body,
+        )
         self.assertEqual(2, len(resulting_track.indices[0].types))
         self.assertEqual("main", resulting_track.indices[0].types[0])
         self.assertEqual("secondary", resulting_track.indices[0].types[1])
@@ -2252,10 +2387,7 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual(10000, docs_primary.uncompressed_size_in_bytes)
         self.assertEqual("index-historical", docs_primary.target_index)
         self.assertEqual("main", docs_primary.target_type)
-        self.assertDictEqual({
-            "test-docs": True,
-            "role": "main"
-        }, docs_primary.meta_data)
+        self.assertDictEqual({"test-docs": True, "role": "main"}, docs_primary.meta_data)
 
         docs_secondary = resulting_track.corpora[0].documents[1]
         self.assertEqual(track.Documents.SOURCE_FORMAT_BULK, docs_secondary.source_format)
@@ -2269,10 +2401,7 @@ class TrackSpecificationReaderTests(TestCase):
         # This is defined by the action-and-meta-data line!
         self.assertIsNone(docs_secondary.target_index)
         self.assertIsNone(docs_secondary.target_type)
-        self.assertDictEqual({
-            "test-docs": True,
-            "role": "secondary"
-        }, docs_secondary.meta_data)
+        self.assertDictEqual({"test-docs": True, "role": "secondary"}, docs_secondary.meta_data)
 
         # challenges
         self.assertEqual(1, len(resulting_track.challenges))
@@ -2285,11 +2414,7 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parse_data_streams_valid_track_specification(self):
         track_specification = {
             "description": "description for unit test",
-            "data-streams": [
-                {
-                    "name": "data-stream-historical"
-                }
-            ],
+            "data-streams": [{"name": "data-stream-historical"}],
             "corpora": [
                 {
                     "name": "test",
@@ -2300,23 +2425,23 @@ class TrackSpecificationReaderTests(TestCase):
                             "document-count": 10,
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
-                            "target-data-stream": "data-stream-historical"
+                            "target-data-stream": "data-stream-historical",
                         },
                         {
                             "source-file": "documents-secondary.json.bz2",
                             "includes-action-and-meta-data": True,
                             "document-count": 20,
                             "compressed-bytes": 200,
-                            "uncompressed-bytes": 20000
+                            "uncompressed-bytes": 20000,
                         },
                         {
                             "source-file": "documents-main.json.bz2",
                             "document-count": 10,
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
-                            "target-data-stream": "data-stream-historical"
-                        }
-                    ]
+                            "target-data-stream": "data-stream-historical",
+                        },
+                    ],
                 }
             ],
             "operations": [
@@ -2324,15 +2449,13 @@ class TrackSpecificationReaderTests(TestCase):
                     "name": "index-append",
                     "operation-type": "index",
                     "bulk-size": 5000,
-                    "meta": {
-                        "append": True
-                    }
+                    "meta": {"append": True},
                 },
                 {
                     "name": "search",
                     "operation-type": "search",
-                    "data-stream": "data-stream-historical"
-                }
+                    "data-stream": "data-stream-historical",
+                },
             ],
             "challenges": [
                 {
@@ -2340,27 +2463,24 @@ class TrackSpecificationReaderTests(TestCase):
                     "description": "Default challenge",
                     "meta": {
                         "mixed": True,
-                        "max-clients": 8
+                        "max-clients": 8,
                     },
                     "schedule": [
                         {
                             "clients": 8,
                             "operation": "index-append",
-                            "meta": {
-                                "operation-index": 0
-                            }
+                            "meta": {"operation-index": 0},
                         },
                         {
                             "clients": 1,
-                            "operation": "search"
-                        }
-                    ]
+                            "operation": "search",
+                        },
+                    ],
                 }
-            ]
+            ],
         }
         complete_track_params = loader.CompleteTrackParams()
-        reader = loader.TrackSpecificationReader(
-            complete_track_params=complete_track_params)
+        reader = loader.TrackSpecificationReader(complete_track_params=complete_track_params)
         resulting_track = reader("unittest", track_specification, "/mappings")
         # j2 variables defined in the track -- used for checking mismatching user track params
         self.assertEqual("unittest", resulting_track.name)
@@ -2441,7 +2561,7 @@ class TrackSpecificationReaderTests(TestCase):
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
                         },
-                    ]
+                    ],
                 }
             ],
             "schedule": [
@@ -2450,33 +2570,41 @@ class TrackSpecificationReaderTests(TestCase):
                     "operation": {
                         "name": "index-append",
                         "operation-type": "bulk",
-                        "bulk-size": 5000
-                    }
-                }
-            ]
+                        "bulk-size": 5000,
+                    },
+                },
+            ],
         }
         reader = loader.TrackSpecificationReader(
             track_params={"number_of_shards": 3},
-            source=io.DictStringFileSourceFactory({
-                "/mappings/body.json": ["""
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/body.json": [
+                        """
             {
                 "settings": {
                     "number_of_shards": {{ number_of_shards }}
                 }
             }
-            """]
-            }))
+            """
+                    ]
+                }
+            ),
+        )
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
         # indices
         self.assertEqual(1, len(resulting_track.indices))
         self.assertEqual("index-historical", resulting_track.indices[0].name)
-        self.assertDictEqual({
-            "settings": {
-                "number_of_shards": 3
-            }
-        }, resulting_track.indices[0].body)
+        self.assertDictEqual(
+            {
+                "settings": {
+                    "number_of_shards": 3,
+                },
+            },
+            resulting_track.indices[0].body,
+        )
         self.assertEqual(0, len(resulting_track.indices[0].types))
         # corpora
         self.assertEqual(1, len(resulting_track.corpora))
@@ -2510,8 +2638,8 @@ class TrackSpecificationReaderTests(TestCase):
             ],
             "data-streams": [
                 {
-                    "name": "historical-data-stream"
-                }
+                    "name": "historical-data-stream",
+                },
             ],
             "corpora": [
                 {
@@ -2524,7 +2652,7 @@ class TrackSpecificationReaderTests(TestCase):
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
                         },
-                    ]
+                    ],
                 }
             ],
             "schedule": [
@@ -2533,14 +2661,13 @@ class TrackSpecificationReaderTests(TestCase):
                     "operation": {
                         "name": "index-append",
                         "operation-type": "bulk",
-                        "bulk-size": 5000
-                    }
+                        "bulk-size": 5000,
+                    },
                 }
-            ]
+            ],
         }
         complete_track_params = loader.CompleteTrackParams()
-        reader = loader.TrackSpecificationReader(
-            complete_track_params=complete_track_params)
+        reader = loader.TrackSpecificationReader(complete_track_params=complete_track_params)
         with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
@@ -2549,8 +2676,8 @@ class TrackSpecificationReaderTests(TestCase):
             "description": "description for unit test",
             "data-streams": [
                 {
-                    "name": "historical-data-stream"
-                }
+                    "name": "historical-data-stream",
+                },
             ],
             "corpora": [
                 {
@@ -2564,7 +2691,7 @@ class TrackSpecificationReaderTests(TestCase):
                             "uncompressed-bytes": 10000,
                             "target-index": "historical-index",
                         },
-                    ]
+                    ],
                 }
             ],
             "schedule": [
@@ -2573,25 +2700,20 @@ class TrackSpecificationReaderTests(TestCase):
                     "operation": {
                         "name": "index-append",
                         "operation-type": "bulk",
-                        "bulk-size": 5000
-                    }
-                }
-            ]
+                        "bulk-size": 5000,
+                    },
+                },
+            ],
         }
         complete_track_params = loader.CompleteTrackParams()
-        reader = loader.TrackSpecificationReader(
-            complete_track_params=complete_track_params)
+        reader = loader.TrackSpecificationReader(complete_track_params=complete_track_params)
         with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
     def test_parse_invalid_data_streams_with_target_type(self):
         track_specification = {
             "description": "description for unit test",
-            "data-streams": [
-                {
-                    "name": "historical-data-stream"
-                }
-            ],
+            "data-streams": [{"name": "historical-data-stream"}],
             "corpora": [
                 {
                     "name": "test",
@@ -2604,7 +2726,7 @@ class TrackSpecificationReaderTests(TestCase):
                             "uncompressed-bytes": 10000,
                             "target-type": "_doc",
                         },
-                    ]
+                    ],
                 }
             ],
             "schedule": [
@@ -2613,14 +2735,13 @@ class TrackSpecificationReaderTests(TestCase):
                     "operation": {
                         "name": "index-append",
                         "operation-type": "bulk",
-                        "bulk-size": 5000
-                    }
-                }
-            ]
+                        "bulk-size": 5000,
+                    },
+                },
+            ],
         }
         complete_track_params = loader.CompleteTrackParams()
-        reader = loader.TrackSpecificationReader(
-            complete_track_params=complete_track_params)
+        reader = loader.TrackSpecificationReader(complete_track_params=complete_track_params)
         with self.assertRaises(loader.TrackSyntaxError):
             reader("unittest", track_specification, "/mapping")
 
@@ -2629,50 +2750,11 @@ class TrackSpecificationReaderTests(TestCase):
             "description": "description for unit test",
             "data-streams": [
                 {
-                    "name": "historical-data-stream"
+                    "name": "historical-data-stream",
                 },
                 {
-                    "name": "historical-data-stream-2"
-                }
-            ],
-            "corpora": [
-                {
-                    "name": "test",
-                    "base-url": "https://localhost/data",
-                    "documents": [
-                        {
-                            "source-file": "documents-main.json.bz2",
-                            "document-count": 10,
-                            "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000
-                        }
-                    ]
-                }
-            ],
-            "schedule": [
-                {
-                    "clients": 8,
-                    "operation": {
-                        "name": "index-append",
-                        "operation-type": "bulk",
-                        "bulk-size": 5000
-                    }
-                }
-            ]
-        }
-        complete_track_params = loader.CompleteTrackParams()
-        reader = loader.TrackSpecificationReader(
-            complete_track_params=complete_track_params)
-        with self.assertRaises(loader.TrackSyntaxError):
-            reader("unittest", track_specification, "/mapping")
-
-    def test_parse_valid_without_indices(self):
-        track_specification = {
-            "description": "description for unit test",
-            "data-streams": [
-                {
-                    "name": "historical-data-stream"
-                }
+                    "name": "historical-data-stream-2",
+                },
             ],
             "corpora": [
                 {
@@ -2684,8 +2766,8 @@ class TrackSpecificationReaderTests(TestCase):
                             "document-count": 10,
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
-                        },
-                    ]
+                        }
+                    ],
                 }
             ],
             "schedule": [
@@ -2694,22 +2776,61 @@ class TrackSpecificationReaderTests(TestCase):
                     "operation": {
                         "name": "index-append",
                         "operation-type": "bulk",
-                        "bulk-size": 5000
-                    }
+                        "bulk-size": 5000,
+                    },
+                },
+            ],
+        }
+        complete_track_params = loader.CompleteTrackParams()
+        reader = loader.TrackSpecificationReader(complete_track_params=complete_track_params)
+        with self.assertRaises(loader.TrackSyntaxError):
+            reader("unittest", track_specification, "/mapping")
+
+    def test_parse_valid_without_indices(self):
+        track_specification = {
+            "description": "description for unit test",
+            "data-streams": [{"name": "historical-data-stream"}],
+            "corpora": [
+                {
+                    "name": "test",
+                    "base-url": "https://localhost/data",
+                    "documents": [
+                        {
+                            "source-file": "documents-main.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                        },
+                    ],
                 }
-            ]
+            ],
+            "schedule": [
+                {
+                    "clients": 8,
+                    "operation": {
+                        "name": "index-append",
+                        "operation-type": "bulk",
+                        "bulk-size": 5000,
+                    },
+                },
+            ],
         }
         reader = loader.TrackSpecificationReader(
             track_params={"number_of_shards": 3},
-            source=io.DictStringFileSourceFactory({
-                "/mappings/body.json": ["""
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/body.json": [
+                        """
                 {
                     "settings": {
                         "number_of_shards": {{ number_of_shards }}
                     }
                 }
-                """]
-            }))
+                """
+                    ]
+                }
+            ),
+        )
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
@@ -2746,31 +2867,33 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "my-index-template",
                     "index-pattern": "*",
-                    "template": "default-template.json"
-                }
+                    "template": "default-template.json",
+                },
             ],
             "operations": [],
-            "challenges": []
+            "challenges": [],
         }
         complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             track_params={"index_pattern": "*"},
             complete_track_params=complete_track_params,
-            source=io.DictStringFileSourceFactory({
-                "/mappings/default-template.json": ["""
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/default-template.json": [
+                        """
                 {
                     "index_patterns": [ "{{index_pattern}}"],
                     "settings": {
                         "number_of_shards": {{ number_of_shards | default(1) }}
                     }
                 }
-                """],
-        }))
-        resulting_track = reader("unittest", track_specification, "/mappings")
-        self.assertEqual(
-            ["index_pattern", "number_of_shards"],
-            complete_track_params.sorted_track_defined_params
+                """
+                    ],
+                }
+            ),
         )
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(["index_pattern", "number_of_shards"], complete_track_params.sorted_track_defined_params)
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
         self.assertEqual(0, len(resulting_track.indices))
@@ -2781,9 +2904,11 @@ class TrackSpecificationReaderTests(TestCase):
             {
                 "index_patterns": ["*"],
                 "settings": {
-                    "number_of_shards": 1
-                }
-            }, resulting_track.templates[0].content)
+                    "number_of_shards": 1,
+                },
+            },
+            resulting_track.templates[0].content,
+        )
         self.assertEqual(0, len(resulting_track.challenges))
 
     def test_parse_valid_track_specification_with_composable_template(self):
@@ -2793,28 +2918,30 @@ class TrackSpecificationReaderTests(TestCase):
                 {
                     "name": "my-index-template",
                     "index-pattern": "*",
-                    "template": "default-template.json"
-                }
+                    "template": "default-template.json",
+                },
             ],
             "component-templates": [
                 {
                     "name": "my-component-template-1",
-                    "template": "component-template-1.json"
+                    "template": "component-template-1.json",
                 },
                 {
                     "name": "my-component-template-2",
-                    "template": "component-template-2.json"
-                }
+                    "template": "component-template-2.json",
+                },
             ],
             "operations": [],
-            "challenges": []
+            "challenges": [],
         }
         complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
             track_params={"index_pattern": "logs-*", "number_of_replicas": 1},
             complete_track_params=complete_track_params,
-            source=io.DictStringFileSourceFactory({
-                "/mappings/default-template.json": ["""
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/default-template.json": [
+                        """
                         {
                             "index_patterns": [ "{{index_pattern}}"],
                             "template": {
@@ -2824,8 +2951,10 @@ class TrackSpecificationReaderTests(TestCase):
                             },
                             "composed_of": ["my-component-template-1", "my-component-template-2"]
                         }
-                        """],
-                "/mappings/component-template-1.json": ["""
+                        """
+                    ],
+                    "/mappings/component-template-1.json": [
+                        """
                         {
                             "template": {
                                 "settings": {
@@ -2833,8 +2962,10 @@ class TrackSpecificationReaderTests(TestCase):
                                 }
                             }
                         }
-                        """],
-                "/mappings/component-template-2.json": ["""
+                        """
+                    ],
+                    "/mappings/component-template-2.json": [
+                        """
                         {
                             "template": {
                                 "settings": {
@@ -2849,13 +2980,13 @@ class TrackSpecificationReaderTests(TestCase):
                                 }
                               }
                         }
-                        """]
-            }))
-        resulting_track = reader("unittest", track_specification, "/mappings")
-        self.assertEqual(
-            ["index_pattern", "number_of_replicas", "number_of_shards"],
-            complete_track_params.sorted_track_defined_params
+                        """
+                    ],
+                }
+            ),
         )
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        self.assertEqual(["index_pattern", "number_of_replicas", "number_of_shards"], complete_track_params.sorted_track_defined_params)
         self.assertEqual("unittest", resulting_track.name)
         self.assertEqual("description for unit test", resulting_track.description)
         self.assertEqual(0, len(resulting_track.indices))
@@ -2870,34 +3001,39 @@ class TrackSpecificationReaderTests(TestCase):
                 "index_patterns": ["logs-*"],
                 "template": {
                     "settings": {
-                        "number_of_shards": 1
-                    }
-                },
-                "composed_of": ["my-component-template-1", "my-component-template-2"]
-            }, resulting_track.composable_templates[0].content)
-        self.assertDictEqual(
-            {
-                "template": {
-                    "settings": {
-                        "index.number_of_shards": 2
-                    }
-                }
-            }, resulting_track.component_templates[0].content)
-        self.assertDictEqual(
-            {
-                "template": {
-                    "settings": {
-                        "index.number_of_replicas": 1
+                        "number_of_shards": 1,
                     },
+                },
+                "composed_of": [
+                    "my-component-template-1",
+                    "my-component-template-2",
+                ],
+            },
+            resulting_track.composable_templates[0].content,
+        )
+        self.assertDictEqual(
+            {
+                "template": {
+                    "settings": {
+                        "index.number_of_shards": 2,
+                    },
+                },
+            },
+            resulting_track.component_templates[0].content,
+        )
+        self.assertDictEqual(
+            {
+                "template": {
+                    "settings": {"index.number_of_replicas": 1},
                     "mappings": {
                         "properties": {
-                            "@timestamp": {
-                                "type": "date"
-                            }
-                        }
-                    }
-                }
-            }, resulting_track.component_templates[1].content)
+                            "@timestamp": {"type": "date"},
+                        },
+                    },
+                },
+            },
+            resulting_track.component_templates[1].content,
+        )
         self.assertEqual(0, len(resulting_track.challenges))
 
     def test_parse_invalid_track_specification_with_composable_template(self):
@@ -2905,20 +3041,19 @@ class TrackSpecificationReaderTests(TestCase):
             "description": "description for unit test",
             "component-templates": [
                 {
-                    "name": "my-component-template-2"
-                }
+                    "name": "my-component-template-2",
+                },
             ],
             "operations": [],
-            "challenges": []
+            "challenges": [],
         }
         complete_track_params = loader.CompleteTrackParams()
         reader = loader.TrackSpecificationReader(
-            track_params={"index_pattern": "logs-*", "number_of_replicas": 1},
-            complete_track_params=complete_track_params)
+            track_params={"index_pattern": "logs-*", "number_of_replicas": 1}, complete_track_params=complete_track_params
+        )
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'template' is missing.",
-                         ctx.exception.args[0])
+        self.assertEqual("Track 'unittest' is invalid. Mandatory element 'template' is missing.", ctx.exception.args[0])
 
     def test_unique_challenge_names(self):
         track_specification = {
@@ -2927,31 +3062,22 @@ class TrackSpecificationReaderTests(TestCase):
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
                     "name": "test-challenge",
                     "description": "Some challenge",
                     "default": True,
-                    "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
+                    "schedule": [{"operation": "index-append"}],
                 },
                 {
                     "name": "test-challenge",
                     "description": "Another challenge with the same name",
-                    "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
-                }
-
-            ]
+                    "schedule": [{"operation": "index-append"}],
+                },
+            ],
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
@@ -2961,109 +3087,108 @@ class TrackSpecificationReaderTests(TestCase):
     def test_not_more_than_one_default_challenge_possible(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
                     "name": "default-challenge",
                     "description": "Default challenge",
                     "default": True,
-                    "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
+                    "schedule": [{"operation": "index-append"}],
                 },
                 {
                     "name": "another-challenge",
                     "description": "See if we can sneek it in as another default",
                     "default": True,
-                    "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
-                }
-
-            ]
+                    "schedule": [{"operation": "index-append"}],
+                },
+            ],
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Both 'default-challenge' and 'another-challenge' are defined as default challenges. "
-                         "Please define only one of them as default.", ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. Both 'default-challenge' and 'another-challenge' are defined as default challenges. "
+            "Please define only one of them as default.",
+            ctx.exception.args[0],
+        )
 
     def test_at_least_one_default_challenge(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
                     "name": "challenge",
                     "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
+                        {"operation": "index-append"},
+                    ],
                 },
                 {
                     "name": "another-challenge",
                     "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
-                }
-
-            ]
+                        {"operation": "index-append"},
+                    ],
+                },
+            ],
         }
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. No default challenge specified. Please edit the track and add \"default\": true "
-                         "to one of the challenges challenge, another-challenge.", ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. No default challenge specified. Please edit the track and add \"default\": true "
+            "to one of the challenges challenge, another-challenge.",
+            ctx.exception.args[0],
+        )
 
     def test_exactly_one_default_challenge(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
                     "name": "challenge",
                     "default": True,
                     "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
+                        {"operation": "index-append"},
+                    ],
                 },
                 {
                     "name": "another-challenge",
                     "schedule": [
-                        {
-                            "operation": "index-append"
-                        }
-                    ]
-                }
-
-            ]
+                        {"operation": "index-append"},
+                    ],
+                },
+            ],
         }
         reader = loader.TrackSpecificationReader(selected_challenge="another-challenge")
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3076,21 +3201,21 @@ class TrackSpecificationReaderTests(TestCase):
     def test_selects_sole_challenge_implicitly_as_default(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {"name": "test-index"},
+            ],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenge": {
                 "name": "challenge",
                 "schedule": [
-                    {
-                        "operation": "index-append"
-                    }
-                ]
-            }
+                    {"operation": "index-append"},
+                ],
+            },
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3102,18 +3227,20 @@ class TrackSpecificationReaderTests(TestCase):
     def test_auto_generates_challenge_from_schedule(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "schedule": [
-                {
-                    "operation": "index-append"
-                }
-            ]
+                {"operation": "index-append"},
+            ],
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3125,23 +3252,24 @@ class TrackSpecificationReaderTests(TestCase):
     def test_inline_operations(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "challenge": {
                 "name": "challenge",
                 "schedule": [
                     # an operation with parameters still needs to define a type
                     {
-                        "operation": {
-                            "operation-type": "bulk",
-                            "bulk-size": 5000
-                        }
+                        "operation": {"operation-type": "bulk", "bulk-size": 5000},
                     },
                     # a parameterless operation can just use the operation type as implicit reference to the operation
                     {
-                        "operation": "force-merge"
-                    }
-                ]
-            }
+                        "operation": "force-merge",
+                    },
+                ],
+            },
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3154,12 +3282,16 @@ class TrackSpecificationReaderTests(TestCase):
     def test_supports_target_throughput(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenge": {
                 "name": "default-challenge",
@@ -3168,10 +3300,10 @@ class TrackSpecificationReaderTests(TestCase):
                         "operation": "index-append",
                         "target-throughput": 10,
                         "warmup-time-period": 120,
-                        "ramp-up-time-period": 60
-                    }
-                ]
-            }
+                        "ramp-up-time-period": 60,
+                    },
+                ],
+            },
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3184,12 +3316,16 @@ class TrackSpecificationReaderTests(TestCase):
     def test_supports_target_interval(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
@@ -3199,9 +3335,9 @@ class TrackSpecificationReaderTests(TestCase):
                             "operation": "index-append",
                             "target-interval": 5,
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3210,41 +3346,16 @@ class TrackSpecificationReaderTests(TestCase):
     def test_ramp_up_but_no_warmup(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
-            "operations": [
+            "indices": [
                 {
-                    "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "name": "test-index",
+                },
             ],
-            "challenge": {
-                "name": "default-challenge",
-                "schedule": [
-                    {
-                        "operation": "index-append",
-                        "target-throughput": 10,
-                        "ramp-up-time-period": 60
-                    }
-                ]
-            }
-        }
-
-        reader = loader.TrackSpecificationReader()
-        with self.assertRaises(loader.TrackSyntaxError) as ctx:
-            reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' "
-                         "defines a ramp-up time period of 60 seconds but no warmup-time-period.",
-                         ctx.exception.args[0])
-
-    def test_warmup_shorter_than_ramp_up(self):
-        track_specification = {
-            "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenge": {
                 "name": "default-challenge",
@@ -3253,38 +3364,65 @@ class TrackSpecificationReaderTests(TestCase):
                         "operation": "index-append",
                         "target-throughput": 10,
                         "ramp-up-time-period": 60,
-                        "warmup-time-period": 59
-                    }
-                ]
-            }
+                    },
+                ],
+            },
         }
 
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. The warmup-time-period of operation 'index-append' in "
-                         "challenge 'default-challenge' is 59 seconds but must be greater than or equal to the "
-                         "ramp-up-time-period of 60 seconds.", ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. Operation 'index-append' in challenge 'default-challenge' "
+            "defines a ramp-up time period of 60 seconds but no warmup-time-period.",
+            ctx.exception.args[0],
+        )
 
+    def test_warmup_shorter_than_ramp_up(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
+            "operations": [
+                {
+                    "name": "index-append",
+                    "operation-type": "bulk",
+                },
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "index-append",
+                        "target-throughput": 10,
+                        "ramp-up-time-period": 60,
+                        "warmup-time-period": 59,
+                    },
+                ],
+            },
+        }
 
+        reader = loader.TrackSpecificationReader()
+        with self.assertRaises(loader.TrackSyntaxError) as ctx:
+            reader("unittest", track_specification, "/mappings")
+        self.assertEqual(
+            "Track 'unittest' is invalid. The warmup-time-period of operation 'index-append' in "
+            "challenge 'default-challenge' is 59 seconds but must be greater than or equal to the "
+            "ramp-up-time-period of 60 seconds.",
+            ctx.exception.args[0],
+        )
 
     def test_parallel_tasks_with_default_values(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [{"name": "test-index"}],
             "operations": [
-                {
-                    "name": "index-1",
-                    "operation-type": "bulk"
-                },
-                {
-                    "name": "index-2",
-                    "operation-type": "bulk"
-                },
-                {
-                    "name": "index-3",
-                    "operation-type": "bulk"
-                },
+                {"name": "index-1", "operation-type": "bulk"},
+                {"name": "index-2", "operation-type": "bulk"},
+                {"name": "index-3", "operation-type": "bulk"},
             ],
             "challenges": [
                 {
@@ -3299,24 +3437,24 @@ class TrackSpecificationReaderTests(TestCase):
                                     {
                                         "operation": "index-1",
                                         "warmup-time-period": 300,
-                                        "clients": 2
+                                        "clients": 2,
                                     },
                                     {
                                         "operation": "index-2",
                                         "time-period": 3600,
-                                        "clients": 4
+                                        "clients": 4,
                                     },
                                     {
                                         "operation": "index-3",
                                         "target-throughput": 10,
-                                        "clients": 16
+                                        "clients": 16,
                                     },
-                                ]
+                                ],
                             }
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3350,12 +3488,16 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_default_clients_does_not_propagate(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
@@ -3369,26 +3511,26 @@ class TrackSpecificationReaderTests(TestCase):
                                 "tasks": [
                                     {
                                         "name": "index-1-1",
-                                        "operation": "index-1"
+                                        "operation": "index-1",
                                     },
                                     {
                                         "name": "index-1-2",
-                                        "operation": "index-1"
+                                        "operation": "index-1",
                                     },
                                     {
                                         "name": "index-1-3",
-                                        "operation": "index-1"
+                                        "operation": "index-1",
                                     },
                                     {
                                         "name": "index-1-4",
-                                        "operation": "index-1"
-                                    }
-                                ]
+                                        "operation": "index-1",
+                                    },
+                                ],
                             }
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3404,16 +3546,20 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_completed_by_set(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "bulk"
+                    "operation-type": "bulk",
                 },
                 {
                     "name": "index-2",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
@@ -3425,18 +3571,14 @@ class TrackSpecificationReaderTests(TestCase):
                                 "time-period": 36000,
                                 "completed-by": "index-2",
                                 "tasks": [
-                                    {
-                                        "operation": "index-1"
-                                    },
-                                    {
-                                        "operation": "index-2"
-                                    }
-                                ]
+                                    {"operation": "index-1"},
+                                    {"operation": "index-2"},
+                                ],
                             }
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3456,16 +3598,20 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_named_task_completed_by_set(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "bulk"
+                    "operation-type": "bulk",
                 },
                 {
                     "name": "index-2",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
@@ -3479,18 +3625,18 @@ class TrackSpecificationReaderTests(TestCase):
                                 "tasks": [
                                     {
                                         "name": "name-index-1",
-                                        "operation": "index-1"
+                                        "operation": "index-1",
                                     },
                                     {
                                         "name": "name-index-2",
-                                        "operation": "index-2"
-                                    }
-                                ]
+                                        "operation": "index-2",
+                                    },
+                                ],
                             }
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
         resulting_track = reader("unittest", track_specification, "/mappings")
@@ -3510,16 +3656,20 @@ class TrackSpecificationReaderTests(TestCase):
     def test_parallel_tasks_with_completed_by_set_no_task_matches(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "bulk"
+                    "operation-type": "bulk",
                 },
                 {
                     "name": "index-2",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
@@ -3529,35 +3679,38 @@ class TrackSpecificationReaderTests(TestCase):
                             "parallel": {
                                 "completed-by": "non-existing-task",
                                 "tasks": [
-                                    {
-                                        "operation": "index-1"
-                                    },
-                                    {
-                                        "operation": "index-2"
-                                    }
-                                ]
-                            }
+                                    {"operation": "index-1"},
+                                    {"operation": "index-2"},
+                                ],
+                            },
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
 
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' is marked with 'completed-by' "
-                         "with task name 'non-existing-task' but no task with this name exists.", ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' is marked with 'completed-by' "
+            "with task name 'non-existing-task' but no task with this name exists.",
+            ctx.exception.args[0],
+        )
 
     def test_parallel_tasks_with_completed_by_set_multiple_tasks_match(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-1",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
@@ -3567,40 +3720,32 @@ class TrackSpecificationReaderTests(TestCase):
                             "parallel": {
                                 "completed-by": "index-1",
                                 "tasks": [
-                                    {
-                                        "operation": "index-1"
-                                    },
-                                    {
-                                        "operation": "index-1"
-                                    }
-                                ]
-                            }
-                        }
-                    ]
+                                    {"operation": "index-1"},
+                                    {"operation": "index-1"},
+                                ],
+                            },
+                        },
+                    ],
                 }
-            ]
+            ],
         }
         reader = loader.TrackSpecificationReader()
 
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' contains multiple tasks with "
-                         "the name 'index-1' marked with 'completed-by' but only task is allowed to match.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. 'parallel' element for challenge 'default-challenge' contains multiple tasks with "
+            "the name 'index-1' marked with 'completed-by' but only task is allowed to match.",
+            ctx.exception.args[0],
+        )
 
     def test_parallel_tasks_ramp_up_cannot_be_overridden(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [{"name": "test-index"}],
             "operations": [
-                {
-                    "name": "index-1",
-                    "operation-type": "bulk"
-                },
-                {
-                    "name": "index-2",
-                    "operation-type": "bulk"
-                }
+                {"name": "index-1", "operation-type": "bulk"},
+                {"name": "index-2", "operation-type": "bulk"},
             ],
             "challenges": [
                 {
@@ -3619,37 +3764,30 @@ class TrackSpecificationReaderTests(TestCase):
                                     },
                                     {
                                         "name": "name-index-2",
-                                        "operation": "index-2"
-                                    }
-                                ]
+                                        "operation": "index-2",
+                                    },
+                                ],
                             }
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
 
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. task 'name-index-1' specifies a different ramp-up-time-period "
-                         "than its enclosing 'parallel' element in challenge 'default-challenge'.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. task 'name-index-1' specifies a different ramp-up-time-period "
+            "than its enclosing 'parallel' element in challenge 'default-challenge'.",
+            ctx.exception.args[0],
+        )
 
     def test_parallel_tasks_ramp_up_only_on_parallel(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [{"name": "test-index"}],
-            "operations": [
-                {
-                    "name": "index-1",
-                    "operation-type": "bulk"
-                },
-                {
-                    "name": "index-2",
-                    "operation-type": "bulk"
-                }
-            ],
+            "operations": [{"name": "index-1", "operation-type": "bulk"}, {"name": "index-2", "operation-type": "bulk"}],
             "challenges": [
                 {
                     "name": "default-challenge",
@@ -3664,39 +3802,42 @@ class TrackSpecificationReaderTests(TestCase):
                                         "operation": "index-1",
                                         "ramp-up-time-period": 500,
                                     },
-                                    {
-                                        "name": "name-index-2",
-                                        "operation": "index-2"
-                                    }
-                                ]
+                                    {"name": "name-index-2", "operation": "index-2"},
+                                ],
                             }
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
 
         reader = loader.TrackSpecificationReader()
         with self.assertRaises(loader.TrackSyntaxError) as ctx:
             reader("unittest", track_specification, "/mappings")
-        self.assertEqual("Track 'unittest' is invalid. task 'name-index-1' in 'parallel' element of challenge "
-                         "'default-challenge' specifies a ramp-up-time-period but it is only allowed on the 'parallel' "
-                         "element.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Track 'unittest' is invalid. task 'name-index-1' in 'parallel' element of challenge "
+            "'default-challenge' specifies a ramp-up-time-period but it is only allowed on the 'parallel' "
+            "element.",
+            ctx.exception.args[0],
+        )
 
     def test_propagate_parameters_to_challenge_level(self):
         track_specification = {
             "description": "description for unit test",
             "parameters": {
                 "level": "track",
-                "value": 7
+                "value": 7,
             },
-            "indices": [{"name": "test-index"}],
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
             "operations": [
                 {
                     "name": "index-append",
-                    "operation-type": "bulk"
-                }
+                    "operation-type": "bulk",
+                },
             ],
             "challenges": [
                 {
@@ -3704,42 +3845,47 @@ class TrackSpecificationReaderTests(TestCase):
                     "default": True,
                     "parameters": {
                         "level": "challenge",
-                        "another-value": 17
+                        "another-value": 17,
                     },
                     "schedule": [
                         {
-                            "operation": "index-append"
-                        }
-                    ]
+                            "operation": "index-append",
+                        },
+                    ],
                 },
                 {
                     "name": "another-challenge",
                     "schedule": [
                         {
-                            "operation": "index-append"
-                        }
-                    ]
-                }
-
-            ]
+                            "operation": "index-append",
+                        },
+                    ],
+                },
+            ],
         }
         reader = loader.TrackSpecificationReader(selected_challenge="another-challenge")
         resulting_track = reader("unittest", track_specification, "/mappings")
         self.assertEqual(2, len(resulting_track.challenges))
         self.assertEqual("challenge", resulting_track.challenges[0].name)
         self.assertTrue(resulting_track.challenges[0].default)
-        self.assertDictEqual({
-            "level": "challenge",
-            "value": 7,
-            "another-value": 17
-        }, resulting_track.challenges[0].parameters)
+        self.assertDictEqual(
+            {
+                "level": "challenge",
+                "value": 7,
+                "another-value": 17,
+            },
+            resulting_track.challenges[0].parameters,
+        )
 
         self.assertFalse(resulting_track.challenges[1].default)
         self.assertTrue(resulting_track.challenges[1].selected)
-        self.assertDictEqual({
-            "level": "track",
-            "value": 7
-        }, resulting_track.challenges[1].parameters)
+        self.assertDictEqual(
+            {
+                "level": "track",
+                "value": 7,
+            },
+            resulting_track.challenges[1].parameters,
+        )
 
 
 class MyMockTrackProcessor(loader.TrackProcessor):
@@ -3751,11 +3897,7 @@ class TrackProcessorRegistryTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "offline.mode", False)
         tpr = loader.TrackProcessorRegistry(cfg)
-        expected_defaults = [
-            loader.TaskFilterTrackProcessor,
-            loader.TestModeTrackProcessor,
-            loader.DefaultTrackPreparator
-        ]
+        expected_defaults = [loader.TaskFilterTrackProcessor, loader.TestModeTrackProcessor, loader.DefaultTrackPreparator]
         actual_defaults = [proc.__class__ for proc in tpr.processors]
         self.assertCountEqual(expected_defaults, actual_defaults)
 
@@ -3764,13 +3906,9 @@ class TrackProcessorRegistryTests(TestCase):
         cfg.add(config.Scope.application, "system", "offline.mode", False)
         tpr = loader.TrackProcessorRegistry(cfg)
         # call this once beforehand to make sure we don't "harden" the default in case calls are made out of order
-        tpr.processors # pylint: disable=pointless-statement
+        tpr.processors  # pylint: disable=pointless-statement
         tpr.register_track_processor(MyMockTrackProcessor())
-        expected_processors = [
-            loader.TaskFilterTrackProcessor,
-            loader.TestModeTrackProcessor,
-            MyMockTrackProcessor
-        ]
+        expected_processors = [loader.TaskFilterTrackProcessor, loader.TestModeTrackProcessor, MyMockTrackProcessor]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         self.assertCountEqual(expected_processors, actual_processors)
 
@@ -3780,13 +3918,13 @@ class TrackProcessorRegistryTests(TestCase):
         tpr = loader.TrackProcessorRegistry(cfg)
         tpr.register_track_processor(MyMockTrackProcessor())
         # should be idempotent now that we have a custom config
-        tpr.processors # pylint: disable=pointless-statement
+        tpr.processors  # pylint: disable=pointless-statement
         tpr.register_track_processor(loader.DefaultTrackPreparator())
         expected_processors = [
             loader.TaskFilterTrackProcessor,
             loader.TestModeTrackProcessor,
             MyMockTrackProcessor,
-            loader.DefaultTrackPreparator
+            loader.DefaultTrackPreparator,
         ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         self.assertCountEqual(expected_processors, actual_processors)

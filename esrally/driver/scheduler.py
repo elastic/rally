@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -187,6 +187,7 @@ class DelegatingScheduler(SimpleScheduler):
     """
     Delegates to a scheduler function and acts as an adapter to the rest of the system.
     """
+
     def __init__(self, delegate):
         super().__init__()
         self.delegate = delegate
@@ -200,6 +201,7 @@ class LegacyWrappingScheduler(Scheduler):
     """
     Wraps legacy implementations to stay backwards-compatible with older scheduler implementations.
     """
+
     def __init__(self, task, legacy_scheduler_class):
         super().__init__()
         # the legacy API was based on parameters so only provide these
@@ -213,6 +215,7 @@ class Unthrottled(Scheduler):
     """
     Rally-internal scheduler to handle unthrottled tasks.
     """
+
     def next(self, current):
         return 0
 
@@ -225,6 +228,7 @@ class DeterministicScheduler(SimpleScheduler):
     Schedules the next execution according to a
     `deterministic distribution <https://en.wikipedia.org/wiki/Degenerate_distribution>`_.
     """
+
     name = "deterministic"
 
     # pylint: disable=unused-variable
@@ -248,6 +252,7 @@ class PoissonScheduler(SimpleScheduler):
 
     See also http://preshing.com/20111007/how-to-generate-random-timings-for-a-poisson-process/
     """
+
     name = "poisson"
 
     # pylint: disable=unused-variable
@@ -268,6 +273,7 @@ class UnitAwareScheduler(Scheduler):
     scheduling to the scheduler provided by the user in the track.
 
     """
+
     def __init__(self, task, scheduler_class):
         super().__init__()
         self.task = task
@@ -288,18 +294,24 @@ class UnitAwareScheduler(Scheduler):
                 if expected_unit == "ops/s":
                     weight = 1
                     if self.first_request:
-                        logging.getLogger(__name__).warning("Task [%s] throttles based on [%s] but reports [%s]. "
-                                                            "Please specify the target throughput in [%s] instead.",
-                                                            self.task, expected_unit, actual_unit, actual_unit)
+                        logging.getLogger(__name__).warning(
+                            "Task [%s] throttles based on [%s] but reports [%s]. Please specify the target throughput in [%s] instead.",
+                            self.task,
+                            expected_unit,
+                            actual_unit,
+                            actual_unit,
+                        )
                 else:
-                    raise exceptions.RallyAssertionError(f"Target throughput for [{self.task}] is specified in "
-                                                         f"[{expected_unit}] but the task throughput is measured "
-                                                         f"in [{actual_unit}].")
+                    raise exceptions.RallyAssertionError(
+                        f"Target throughput for [{self.task}] is specified in "
+                        f"[{expected_unit}] but the task throughput is measured "
+                        f"in [{actual_unit}]."
+                    )
 
             self.first_request = False
             self.current_weight = weight
             # throughput in requests/s for this client
-            target_throughput = (self.task.target_throughput.value / self.task.clients / self.current_weight)
+            target_throughput = self.task.target_throughput.value / self.task.clients / self.current_weight
             self.scheduler = self.scheduler_class(self.task, target_throughput)
 
     def next(self, current):

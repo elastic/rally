@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -20,8 +20,8 @@ import json
 import logging
 import uuid
 
-from esrally import track, config, exceptions
-from esrally.utils import io, console
+from esrally import config, exceptions, track
+from esrally.utils import console, io
 
 color_scheme_rgba = [
     # #00BFB3
@@ -55,12 +55,8 @@ def index_label(race_config):
 
 class BarCharts:
     UI_STATE_JSON = json.dumps(
-        {
-            "vis": {
-                "colors": dict(
-                    zip(["bare-oss", "bare-basic", "bare-trial-security", "docker-basic", "ear-basic"], color_scheme_rgba))
-            }
-        })
+        {"vis": {"colors": dict(zip(["bare-oss", "bare-basic", "bare-trial-security", "docker-basic", "ear-basic"], color_scheme_rgba))}}
+    )
 
     @staticmethod
     # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
@@ -75,10 +71,12 @@ class BarCharts:
     @staticmethod
     def filter_string(environment, race_config):
         if race_config.name:
-            return f"environment:\"{environment}\" AND active:true AND user-tags.name:\"{race_config.name}\""
+            return f'environment:"{environment}" AND active:true AND user-tags.name:"{race_config.name}"'
         else:
-            return f"environment:\"{environment}\" AND active:true AND track:\"{race_config.track}\""\
-                   f" AND challenge:\"{race_config.challenge}\" AND car:\"{race_config.car}\" AND node-count:{race_config.node_count}"
+            return (
+                f'environment:"{environment}" AND active:true AND track:"{race_config.track}"'
+                f' AND challenge:"{race_config.challenge}" AND car:"{race_config.car}" AND node-count:{race_config.node_count}'
+            )
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -92,46 +90,31 @@ class BarCharts:
                 "categoryAxes": [
                     {
                         "id": "CategoryAxis-1",
-                        "labels": {
-                            "show": True,
-                            "truncate": 100
-                        },
+                        "labels": {"show": True, "truncate": 100},
                         "position": "bottom",
-                        "scale": {
-                            "type": "linear"
-                        },
+                        "scale": {"type": "linear"},
                         "show": True,
                         "style": {},
-                        "title": {
-                            "text": "filters"
-                        },
-                        "type": "category"
+                        "title": {"text": "filters"},
+                        "type": "category",
                     }
                 ],
                 "defaultYExtents": False,
                 "drawLinesBetweenPoints": True,
-                "grid": {
-                    "categoryLines": False,
-                    "style": {
-                        "color": "#eee"
-                    }
-                },
+                "grid": {"categoryLines": False, "style": {"color": "#eee"}},
                 "interpolate": "linear",
                 "legendPosition": "right",
                 "radiusRatio": 9,
                 "scale": "linear",
                 "seriesParams": [
                     {
-                        "data": {
-                            "id": "1",
-                            "label": "Total GC Duration [ms]"
-                        },
+                        "data": {"id": "1", "label": "Total GC Duration [ms]"},
                         "drawLinesBetweenPoints": True,
                         "mode": "normal",
                         "show": "True",
                         "showCircles": True,
                         "type": "histogram",
-                        "valueAxis": "ValueAxis-1"
+                        "valueAxis": "ValueAxis-1",
                     }
                 ],
                 "setYExtents": False,
@@ -140,26 +123,16 @@ class BarCharts:
                 "valueAxes": [
                     {
                         "id": "ValueAxis-1",
-                        "labels": {
-                            "filter": False,
-                            "rotate": 0,
-                            "show": True,
-                            "truncate": 100
-                        },
+                        "labels": {"filter": False, "rotate": 0, "show": True, "truncate": 100},
                         "name": "LeftAxis-1",
                         "position": "left",
-                        "scale": {
-                            "mode": "normal",
-                            "type": "linear"
-                        },
+                        "scale": {"mode": "normal", "type": "linear"},
                         "show": True,
                         "style": {},
-                        "title": {
-                            "text": "Total GC Duration [ms]"
-                        },
-                        "type": "value"
+                        "title": {"text": "Total GC Duration [ms]"},
+                        "type": "value",
                     }
-                ]
+                ],
             },
             "aggs": [
                 {
@@ -167,13 +140,7 @@ class BarCharts:
                     "enabled": True,
                     "type": "median",
                     "schema": "metric",
-                    "params": {
-                        "field": "value.single",
-                        "percents": [
-                            50
-                        ],
-                        "customLabel": "Total GC Duration [ms]"
-                    }
+                    "params": {"field": "value.single", "percents": [50], "customLabel": "Total GC Duration [ms]"},
                 },
                 {
                     "id": "2",
@@ -183,68 +150,38 @@ class BarCharts:
                     "params": {
                         "filters": [
                             {
-                                "input": {
-                                    "query": {
-                                        "query_string": {
-                                            "query": "name:young_gc_time",
-                                            "analyze_wildcard": True
-                                        }
-                                    }
-                                },
-                                "label": "Young GC"
+                                "input": {"query": {"query_string": {"query": "name:young_gc_time", "analyze_wildcard": True}}},
+                                "label": "Young GC",
                             },
                             {
-                                "input": {
-                                    "query": {
-                                        "query_string": {
-                                            "query": "name:old_gc_time",
-                                            "analyze_wildcard": True
-                                        }
-                                    }
-                                },
-                                "label": "Old GC"
-                            }
+                                "input": {"query": {"query_string": {"query": "name:old_gc_time", "analyze_wildcard": True}}},
+                                "label": "Old GC",
+                            },
                         ]
-                    }
+                    },
                 },
                 {
                     "id": "3",
                     "enabled": True,
                     "type": "terms",
                     "schema": "split",
-                    "params": {
-                        "field": "distribution-version",
-                        "size": 10,
-                        "order": "asc",
-                        "orderBy": "_term",
-                        "row": False
-                    }
+                    "params": {"field": "distribution-version", "size": 10, "order": "asc", "orderBy": "_term", "row": False},
                 },
                 {
                     "id": "4",
                     "enabled": True,
                     "type": "terms",
                     "schema": "group",
-                    "params": {
-                        "field": "user-tags.setup",
-                        "size": 5,
-                        "order": "desc",
-                        "orderBy": "_term"
-                    }
-                }
+                    "params": {"field": "user-tags.setup", "size": 5, "order": "desc", "orderBy": "_term"},
+                },
             ],
-            "listeners": {}
+            "listeners": {},
         }
 
         search_source = {
             "index": "rally-results-*",
-            "query": {
-                "query_string": {
-                    "query": BarCharts.filter_string(environment, race_config),
-                    "analyze_wildcard": True
-                }
-            },
-            "filter": []
+            "query": {"query_string": {"query": BarCharts.filter_string(environment, race_config), "analyze_wildcard": True}},
+            "filter": [],
         }
 
         return {
@@ -256,10 +193,8 @@ class BarCharts:
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "gc",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": json.dumps(search_source)
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps(search_source)},
+            },
         }
 
     @staticmethod
@@ -274,46 +209,31 @@ class BarCharts:
                 "categoryAxes": [
                     {
                         "id": "CategoryAxis-1",
-                        "labels": {
-                            "show": True,
-                            "truncate": 100
-                        },
+                        "labels": {"show": True, "truncate": 100},
                         "position": "bottom",
-                        "scale": {
-                            "type": "linear"
-                        },
+                        "scale": {"type": "linear"},
                         "show": True,
                         "style": {},
-                        "title": {
-                            "text": "filters"
-                        },
-                        "type": "category"
+                        "title": {"text": "filters"},
+                        "type": "category",
                     }
                 ],
                 "defaultYExtents": False,
                 "drawLinesBetweenPoints": True,
-                "grid": {
-                    "categoryLines": False,
-                    "style": {
-                        "color": "#eee"
-                    }
-                },
+                "grid": {"categoryLines": False, "style": {"color": "#eee"}},
                 "interpolate": "linear",
                 "legendPosition": "right",
                 "radiusRatio": 9,
                 "scale": "linear",
                 "seriesParams": [
                     {
-                        "data": {
-                            "id": "1",
-                            "label": "[Bytes]"
-                        },
+                        "data": {"id": "1", "label": "[Bytes]"},
                         "drawLinesBetweenPoints": True,
                         "mode": "normal",
                         "show": "True",
                         "showCircles": True,
                         "type": "histogram",
-                        "valueAxis": "ValueAxis-1"
+                        "valueAxis": "ValueAxis-1",
                     }
                 ],
                 "setYExtents": False,
@@ -322,26 +242,16 @@ class BarCharts:
                 "valueAxes": [
                     {
                         "id": "ValueAxis-1",
-                        "labels": {
-                            "filter": False,
-                            "rotate": 0,
-                            "show": True,
-                            "truncate": 100
-                        },
+                        "labels": {"filter": False, "rotate": 0, "show": True, "truncate": 100},
                         "name": "LeftAxis-1",
                         "position": "left",
-                        "scale": {
-                            "mode": "normal",
-                            "type": "linear"
-                        },
+                        "scale": {"mode": "normal", "type": "linear"},
                         "show": True,
                         "style": {},
-                        "title": {
-                            "text": "[Bytes]"
-                        },
-                        "type": "value"
+                        "title": {"text": "[Bytes]"},
+                        "type": "value",
                     }
-                ]
+                ],
             },
             "aggs": [
                 {
@@ -349,10 +259,7 @@ class BarCharts:
                     "enabled": True,
                     "type": "sum",
                     "schema": "metric",
-                    "params": {
-                        "field": "value.single",
-                        "customLabel": "[Bytes]"
-                    }
+                    "params": {"field": "value.single", "customLabel": "[Bytes]"},
                 },
                 {
                     "id": "2",
@@ -362,68 +269,38 @@ class BarCharts:
                     "params": {
                         "filters": [
                             {
-                                "input": {
-                                    "query": {
-                                        "query_string": {
-                                            "analyze_wildcard": True,
-                                            "query": "name:index_size"
-                                        }
-                                    }
-                                },
-                                "label": "Index size"
+                                "input": {"query": {"query_string": {"analyze_wildcard": True, "query": "name:index_size"}}},
+                                "label": "Index size",
                             },
                             {
-                                "input": {
-                                    "query": {
-                                        "query_string": {
-                                            "analyze_wildcard": True,
-                                            "query": "name:bytes_written"
-                                        }
-                                    }
-                                },
-                                "label": "Bytes written"
-                            }
+                                "input": {"query": {"query_string": {"analyze_wildcard": True, "query": "name:bytes_written"}}},
+                                "label": "Bytes written",
+                            },
                         ]
-                    }
+                    },
                 },
                 {
                     "id": "3",
                     "enabled": True,
                     "type": "terms",
                     "schema": "split",
-                    "params": {
-                        "field": "distribution-version",
-                        "size": 10,
-                        "order": "asc",
-                        "orderBy": "_term",
-                        "row": False
-                    }
+                    "params": {"field": "distribution-version", "size": 10, "order": "asc", "orderBy": "_term", "row": False},
                 },
                 {
                     "id": "4",
                     "enabled": True,
                     "type": "terms",
                     "schema": "group",
-                    "params": {
-                        "field": "user-tags.setup",
-                        "size": 5,
-                        "order": "desc",
-                        "orderBy": "_term"
-                    }
-                }
+                    "params": {"field": "user-tags.setup", "size": 5, "order": "desc", "orderBy": "_term"},
+                },
             ],
-            "listeners": {}
+            "listeners": {},
         }
 
         search_source = {
             "index": "rally-results-*",
-            "query": {
-                "query_string": {
-                    "query": BarCharts.filter_string(environment, race_config),
-                    "analyze_wildcard": True
-                }
-            },
-            "filter": []
+            "query": {"query_string": {"query": BarCharts.filter_string(environment, race_config), "analyze_wildcard": True}},
+            "filter": [],
         }
 
         return {
@@ -435,10 +312,8 @@ class BarCharts:
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "io",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": json.dumps(search_source)
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps(search_source)},
+            },
         }
 
     @staticmethod
@@ -458,10 +333,10 @@ class BarCharts:
         metric = "service_time"
         if iterations < 100:
             prefix = "p90"
-            field= "value.90_0"
+            field = "value.90_0"
         else:
             prefix = "p99"
-            field= "value.99_0"
+            field = "value.99_0"
 
         title = BarCharts.format_title(environment, race_config.track, suffix=f"{race_config.label}-{q}-{prefix}-{metric}")
         label = "Query Service Time [ms]"
@@ -476,46 +351,31 @@ class BarCharts:
                 "categoryAxes": [
                     {
                         "id": "CategoryAxis-1",
-                        "labels": {
-                            "show": True,
-                            "truncate": 100
-                        },
+                        "labels": {"show": True, "truncate": 100},
                         "position": "bottom",
-                        "scale": {
-                            "type": "linear"
-                        },
+                        "scale": {"type": "linear"},
                         "show": True,
                         "style": {},
-                        "title": {
-                            "text": "distribution-version: Ascending"
-                        },
-                        "type": "category"
+                        "title": {"text": "distribution-version: Ascending"},
+                        "type": "category",
                     }
                 ],
                 "defaultYExtents": False,
                 "drawLinesBetweenPoints": True,
-                "grid": {
-                    "categoryLines": False,
-                    "style": {
-                        "color": "#eee"
-                    }
-                },
+                "grid": {"categoryLines": False, "style": {"color": "#eee"}},
                 "interpolate": "linear",
                 "legendPosition": "right",
                 "radiusRatio": 9,
                 "scale": "linear",
                 "seriesParams": [
                     {
-                        "data": {
-                            "id": "1",
-                            "label": label
-                        },
+                        "data": {"id": "1", "label": label},
                         "drawLinesBetweenPoints": True,
                         "mode": "normal",
                         "show": "True",
                         "showCircles": True,
                         "type": "histogram",
-                        "valueAxis": "ValueAxis-1"
+                        "valueAxis": "ValueAxis-1",
                     }
                 ],
                 "setYExtents": False,
@@ -524,26 +384,16 @@ class BarCharts:
                 "valueAxes": [
                     {
                         "id": "ValueAxis-1",
-                        "labels": {
-                            "filter": False,
-                            "rotate": 0,
-                            "show": True,
-                            "truncate": 100
-                        },
+                        "labels": {"filter": False, "rotate": 0, "show": True, "truncate": 100},
                         "name": "LeftAxis-1",
                         "position": "left",
-                        "scale": {
-                            "mode": "normal",
-                            "type": "linear"
-                        },
+                        "scale": {"mode": "normal", "type": "linear"},
                         "show": True,
                         "style": {},
-                        "title": {
-                            "text": label
-                        },
-                        "type": "value"
+                        "title": {"text": label},
+                        "type": "value",
                     }
-                ]
+                ],
             },
             "aggs": [
                 {
@@ -551,51 +401,35 @@ class BarCharts:
                     "enabled": True,
                     "type": "median",
                     "schema": "metric",
-                    "params": {
-                        "field": field,
-                        "percents": [
-                            50
-                        ],
-                        "customLabel": label
-                    }
+                    "params": {"field": field, "percents": [50], "customLabel": label},
                 },
                 {
                     "id": "2",
                     "enabled": True,
                     "type": "terms",
                     "schema": "segment",
-                    "params": {
-                        "field": "distribution-version",
-                        "size": 10,
-                        "order": "asc",
-                        "orderBy": "_term"
-                    }
+                    "params": {"field": "distribution-version", "size": 10, "order": "asc", "orderBy": "_term"},
                 },
                 {
                     "id": "3",
                     "enabled": True,
                     "type": "terms",
                     "schema": "group",
-                    "params": {
-                        "field": "user-tags.setup",
-                        "size": 10,
-                        "order": "desc",
-                        "orderBy": "_term"
-                    }
-                }
+                    "params": {"field": "user-tags.setup", "size": 10, "order": "desc", "orderBy": "_term"},
+                },
             ],
-            "listeners": {}
+            "listeners": {},
         }
 
         search_source = {
             "index": "rally-results-*",
             "query": {
                 "query_string": {
-                    "query": "name:\"%s\" AND task:\"%s\" AND %s" % (metric, q, BarCharts.filter_string(environment, race_config)),
-                    "analyze_wildcard": True
+                    "query": 'name:"%s" AND task:"%s" AND %s' % (metric, q, BarCharts.filter_string(environment, race_config)),
+                    "analyze_wildcard": True,
                 }
             },
-            "filter": []
+            "filter": [],
         }
 
         return {
@@ -607,10 +441,8 @@ class BarCharts:
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "query",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": json.dumps(search_source)
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps(search_source)},
+            },
         }
 
     @staticmethod
@@ -620,66 +452,44 @@ class BarCharts:
             label = index_label(race_config)
             # the assumption is that we only have one bulk task
             for bulk_task in race_config.bulk_tasks:
-                filters.append({
-                    "input": {
-                        "query": {
-                            "query_string": {
-                                "analyze_wildcard": True,
-                                "query": "task:\"%s\" AND %s" % (bulk_task, BarCharts.filter_string(environment, race_config))
+                filters.append(
+                    {
+                        "input": {
+                            "query": {
+                                "query_string": {
+                                    "analyze_wildcard": True,
+                                    "query": 'task:"%s" AND %s' % (bulk_task, BarCharts.filter_string(environment, race_config)),
+                                }
                             }
-                        }
-                    },
-                    "label": label
-                })
+                        },
+                        "label": label,
+                    }
+                )
 
         vis_state = {
             "aggs": [
                 {
                     "enabled": True,
                     "id": "1",
-                    "params": {
-                        "customLabel": "Median Indexing Throughput [docs/s]",
-                        "field": "value.median",
-                        "percents": [
-                            50
-                        ]
-                    },
+                    "params": {"customLabel": "Median Indexing Throughput [docs/s]", "field": "value.median", "percents": [50]},
                     "schema": "metric",
-                    "type": "median"
+                    "type": "median",
                 },
                 {
                     "enabled": True,
                     "id": "2",
-                    "params": {
-                        "field": "distribution-version",
-                        "order": "asc",
-                        "orderBy": "_term",
-                        "size": 10
-                    },
+                    "params": {"field": "distribution-version", "order": "asc", "orderBy": "_term", "size": 10},
                     "schema": "segment",
-                    "type": "terms"
+                    "type": "terms",
                 },
                 {
                     "enabled": True,
                     "id": "3",
-                    "params": {
-                        "field": "user-tags.setup",
-                        "order": "desc",
-                        "orderBy": "_term",
-                        "size": 10
-                    },
+                    "params": {"field": "user-tags.setup", "order": "desc", "orderBy": "_term", "size": 10},
                     "schema": "group",
-                    "type": "terms"
+                    "type": "terms",
                 },
-                {
-                    "enabled": True,
-                    "id": "4",
-                    "params": {
-                        "filters": filters
-                    },
-                    "schema": "split",
-                    "type": "filters"
-                }
+                {"enabled": True, "id": "4", "params": {"filters": filters}, "schema": "split", "type": "filters"},
             ],
             "listeners": {},
             "params": {
@@ -689,46 +499,31 @@ class BarCharts:
                 "categoryAxes": [
                     {
                         "id": "CategoryAxis-1",
-                        "labels": {
-                            "show": True,
-                            "truncate": 100
-                        },
+                        "labels": {"show": True, "truncate": 100},
                         "position": "bottom",
-                        "scale": {
-                            "type": "linear"
-                        },
+                        "scale": {"type": "linear"},
                         "show": True,
                         "style": {},
-                        "title": {
-                            "text": "distribution-version: Ascending"
-                        },
-                        "type": "category"
+                        "title": {"text": "distribution-version: Ascending"},
+                        "type": "category",
                     }
                 ],
                 "defaultYExtents": False,
                 "drawLinesBetweenPoints": True,
-                "grid": {
-                    "categoryLines": False,
-                    "style": {
-                        "color": "#eee"
-                    }
-                },
+                "grid": {"categoryLines": False, "style": {"color": "#eee"}},
                 "interpolate": "linear",
                 "legendPosition": "right",
                 "radiusRatio": 9,
                 "scale": "linear",
                 "seriesParams": [
                     {
-                        "data": {
-                            "id": "1",
-                            "label": "Median Indexing Throughput [docs/s]"
-                        },
+                        "data": {"id": "1", "label": "Median Indexing Throughput [docs/s]"},
                         "drawLinesBetweenPoints": True,
                         "mode": "normal",
                         "show": "True",
                         "showCircles": True,
                         "type": "histogram",
-                        "valueAxis": "ValueAxis-1"
+                        "valueAxis": "ValueAxis-1",
                     }
                 ],
                 "setYExtents": False,
@@ -737,41 +532,28 @@ class BarCharts:
                 "valueAxes": [
                     {
                         "id": "ValueAxis-1",
-                        "labels": {
-                            "filter": False,
-                            "rotate": 0,
-                            "show": True,
-                            "truncate": 100
-                        },
+                        "labels": {"filter": False, "rotate": 0, "show": True, "truncate": 100},
                         "name": "LeftAxis-1",
                         "position": "left",
-                        "scale": {
-                            "mode": "normal",
-                            "type": "linear"
-                        },
+                        "scale": {"mode": "normal", "type": "linear"},
                         "show": True,
                         "style": {},
-                        "title": {
-                            "text": "Median Indexing Throughput [docs/s]"
-                        },
-                        "type": "value"
+                        "title": {"text": "Median Indexing Throughput [docs/s]"},
+                        "type": "value",
                     }
                 ],
-                "row": True
+                "row": True,
             },
             "title": title,
-            "type": "histogram"
+            "type": "histogram",
         }
 
         search_source = {
             "index": "rally-results-*",
             "query": {
-                "query_string": {
-                    "analyze_wildcard": True,
-                    "query": "environment:\"%s\" AND active:true AND name:\"throughput\"" % environment
-                }
+                "query_string": {"analyze_wildcard": True, "query": 'environment:"%s" AND active:true AND name:"throughput"' % environment}
             },
-            "filter": []
+            "filter": [],
         }
 
         return {
@@ -783,10 +565,8 @@ class BarCharts:
                 "uiStateJSON": BarCharts.UI_STATE_JSON,
                 "description": "index",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": json.dumps(search_source)
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps(search_source)},
+            },
         }
 
 
@@ -798,8 +578,7 @@ class TimeSeriesCharts:
         elif es_license:
             title = [environment, es_license, str(track_name)]
         elif flavor and es_license:
-            raise exceptions.RallyAssertionError(
-                f"Specify either flavor [{flavor}] or license [{es_license}] but not both")
+            raise exceptions.RallyAssertionError(f"Specify either flavor [{flavor}] or license [{es_license}] but not both")
         else:
             title = [environment, str(track_name)]
         if suffix:
@@ -812,12 +591,14 @@ class TimeSeriesCharts:
         nightly_extra_filter = ""
         if race_config.es_license:
             # Time series charts need to support different licenses and produce customized titles.
-            nightly_extra_filter = f" AND user-tags.license:\"{race_config.es_license}\""
+            nightly_extra_filter = f' AND user-tags.license:"{race_config.es_license}"'
         if race_config.name:
-            return f"environment:\"{environment}\" AND active:true AND user-tags.name:\"{race_config.name}\"{nightly_extra_filter}"
+            return f'environment:"{environment}" AND active:true AND user-tags.name:"{race_config.name}"{nightly_extra_filter}'
         else:
-            return f"environment:\"{environment}\" AND active:true AND track:\"{race_config.track}\""\
-                   f" AND challenge:\"{race_config.challenge}\" AND car:\"{race_config.car}\" AND node-count:{race_config.node_count}"
+            return (
+                f'environment:"{environment}" AND active:true AND track:"{race_config.track}"'
+                f' AND challenge:"{race_config.challenge}" AND car:"{race_config.car}" AND node-count:{race_config.node_count}'
+            )
 
     @staticmethod
     def gc(title, environment, race_config):
@@ -839,13 +620,7 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.single"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.single"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
@@ -856,18 +631,18 @@ class TimeSeriesCharts:
                                 "filter": "young_gc_time",
                                 "label": "Young Gen GC time",
                                 "color": "rgba(0,191,179,1)",
-                                "id": str(uuid.uuid4())
+                                "id": str(uuid.uuid4()),
                             },
                             {
                                 "filter": "old_gc_time",
                                 "label": "Old Gen GC time",
                                 "color": "rgba(254,209,10,1)",
-                                "id": str(uuid.uuid4())
-                            }
+                                "id": str(uuid.uuid4()),
+                            },
                         ],
                         "label": "GC Times",
                         "value_template": "{{value}} ms",
-                        "steps": 0
+                        "steps": 0,
                     }
                 ],
                 "show_legend": 1,
@@ -881,19 +656,19 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") AND ((NOT _exists_:chart) OR chart:gc) "
-                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") AND ((NOT _exists_:chart) OR chart:gc) '
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
                         "icon": "fa-tag",
-                        "ignore_panel_filters": 1
+                        "ignore_panel_filters": 1,
                     }
                 ],
-                "axis_min": "0"
+                "axis_min": "0",
             },
             "aggs": [],
-            "listeners": {}
+            "listeners": {},
         }
 
         return {
@@ -905,10 +680,8 @@ class TimeSeriesCharts:
                 "uiStateJSON": "{}",
                 "description": "gc",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
         }
 
     @staticmethod
@@ -931,13 +704,7 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.single"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.single"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
@@ -948,18 +715,18 @@ class TimeSeriesCharts:
                                 "filter": "merge_time",
                                 "label": "Cumulative merge time",
                                 "color": "rgba(0,191,179,1)",
-                                "id": str(uuid.uuid4())
+                                "id": str(uuid.uuid4()),
                             },
                             {
                                 "filter": "merge_throttle_time",
                                 "label": "Cumulative merge throttle time",
                                 "color": "rgba(254,209,10,1)",
-                                "id": str(uuid.uuid4())
-                            }
+                                "id": str(uuid.uuid4()),
+                            },
                         ],
                         "label": "Merge Times",
                         "value_template": "{{value}} ms",
-                        "steps": 0
+                        "steps": 0,
                     }
                 ],
                 "show_legend": 1,
@@ -973,20 +740,20 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
-                                        f"AND ((NOT _exists_:chart) OR chart:merge_times) "
-                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") '
+                        f"AND ((NOT _exists_:chart) OR chart:merge_times) "
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
                         "icon": "fa-tag",
-                        "ignore_panel_filters": 1
+                        "ignore_panel_filters": 1,
                     }
                 ],
-                "axis_min": "0"
+                "axis_min": "0",
             },
             "aggs": [],
-            "listeners": {}
+            "listeners": {},
         }
 
         return {
@@ -998,10 +765,8 @@ class TimeSeriesCharts:
                 "uiStateJSON": "{}",
                 "description": "merge_times",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
         }
 
     @staticmethod
@@ -1024,13 +789,7 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.single"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.single"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
@@ -1041,12 +800,12 @@ class TimeSeriesCharts:
                                 "filter": "merge_count",
                                 "label": "Cumulative merge count",
                                 "color": "rgba(0,191,179,1)",
-                                "id": str(uuid.uuid4())
+                                "id": str(uuid.uuid4()),
                             }
                         ],
                         "label": "Merge Count",
                         "value_template": "{{value}}",
-                        "steps": 0
+                        "steps": 0,
                     }
                 ],
                 "show_legend": 1,
@@ -1060,20 +819,20 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
-                                        f"AND ((NOT _exists_:chart) OR chart:merge_count) "
-                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") '
+                        f"AND ((NOT _exists_:chart) OR chart:merge_count) "
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
                         "icon": "fa-tag",
-                        "ignore_panel_filters": 1
+                        "ignore_panel_filters": 1,
                     }
                 ],
-                "axis_min": "0"
+                "axis_min": "0",
             },
             "aggs": [],
-            "listeners": {}
+            "listeners": {},
         }
 
         return {
@@ -1085,10 +844,8 @@ class TimeSeriesCharts:
                 "uiStateJSON": "{}",
                 "description": "merge_count",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
         }
 
     @staticmethod
@@ -1111,13 +868,7 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.max"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.max"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
@@ -1128,12 +879,12 @@ class TimeSeriesCharts:
                                 "filter": "ml_processing_time",
                                 "label": "Maximum ML processing time",
                                 "color": "rgba(0,191,179,1)",
-                                "id": str(uuid.uuid4())
+                                "id": str(uuid.uuid4()),
                             }
                         ],
                         "label": "ML Time",
                         "value_template": "{{value}}",
-                        "steps": 0
+                        "steps": 0,
                     }
                 ],
                 "show_legend": 1,
@@ -1147,20 +898,20 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
-                                        f"AND ((NOT _exists_:chart) OR chart:ml_processing_time) "
-                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") '
+                        f"AND ((NOT _exists_:chart) OR chart:ml_processing_time) "
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
                         "icon": "fa-tag",
-                        "ignore_panel_filters": 1
+                        "ignore_panel_filters": 1,
                     }
                 ],
-                "axis_min": "0"
+                "axis_min": "0",
             },
             "aggs": [],
-            "listeners": {}
+            "listeners": {},
         }
 
         return {
@@ -1172,10 +923,8 @@ class TimeSeriesCharts:
                 "uiStateJSON": "{}",
                 "description": "ml_processing_time",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
         }
 
     @staticmethod
@@ -1198,13 +947,7 @@ class TimeSeriesCharts:
                         "formatter": "bytes",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "sum",
-                                "field": "value.single"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "sum", "field": "value.single"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
@@ -1215,18 +958,18 @@ class TimeSeriesCharts:
                                 "filter": "name:index_size",
                                 "label": "Index Size",
                                 "color": "rgba(0,191,179,1)",
-                                "id": str(uuid.uuid4())
+                                "id": str(uuid.uuid4()),
                             },
                             {
                                 "filter": "name:bytes_written",
                                 "label": "Written",
                                 "color": "rgba(254,209,10,1)",
-                                "id": str(uuid.uuid4())
-                            }
+                                "id": str(uuid.uuid4()),
+                            },
                         ],
                         "label": "Disk IO",
                         "value_template": "{{value}}",
-                        "steps": 0
+                        "steps": 0,
                     }
                 ],
                 "show_legend": 1,
@@ -1240,19 +983,19 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") AND ((NOT _exists_:chart) OR chart:io) "
-                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") AND ((NOT _exists_:chart) OR chart:io) '
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
                         "icon": "fa-tag",
-                        "ignore_panel_filters": 1
+                        "ignore_panel_filters": 1,
                     }
                 ],
-                "axis_min": "0"
+                "axis_min": "0",
             },
             "aggs": [],
-            "listeners": {}
+            "listeners": {},
         }
 
         return {
@@ -1264,17 +1007,16 @@ class TimeSeriesCharts:
                 "uiStateJSON": "{}",
                 "description": "io",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
         }
 
     @staticmethod
     def query(environment, race_config, q, iterations):
         metric = "latency"
-        title = TimeSeriesCharts.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                              suffix="%s-%s-%s" % (race_config.label, q, metric))
+        title = TimeSeriesCharts.format_title(
+            environment, race_config.track, es_license=race_config.es_license, suffix="%s-%s-%s" % (race_config.label, q, metric)
+        )
 
         vis_state = {
             "title": title,
@@ -1288,13 +1030,7 @@ class TimeSeriesCharts:
                         "color": color_scheme_rgba[0],
                         "split_mode": "everything",
                         "label": "50th percentile",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.50_0"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.50_0"}],
                         "seperate_axis": 0,
                         "axis_position": "right",
                         "formatter": "number",
@@ -1312,13 +1048,7 @@ class TimeSeriesCharts:
                         "color": color_scheme_rgba[1],
                         "split_mode": "everything",
                         "label": "90th percentile",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.90_0"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.90_0"}],
                         "seperate_axis": 0,
                         "axis_position": "right",
                         "formatter": "number",
@@ -1336,13 +1066,7 @@ class TimeSeriesCharts:
                         "color": color_scheme_rgba[2],
                         "split_mode": "everything",
                         "label": "99th percentile",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.99_0"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.99_0"}],
                         "seperate_axis": 0,
                         "axis_position": "right",
                         "formatter": "number",
@@ -1360,13 +1084,7 @@ class TimeSeriesCharts:
                         "color": color_scheme_rgba[3],
                         "split_mode": "everything",
                         "label": "100th percentile",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.100_0"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.100_0"}],
                         "seperate_axis": 0,
                         "axis_position": "right",
                         "formatter": "number",
@@ -1378,7 +1096,7 @@ class TimeSeriesCharts:
                         "split_color_mode": "gradient",
                         "series_drop_last_bucket": 0,
                         "value_template": "{{value}} ms",
-                    }
+                    },
                 ],
                 "time_field": "race-timestamp",
                 "index_pattern": "rally-results-*",
@@ -1388,31 +1106,26 @@ class TimeSeriesCharts:
                 "show_legend": 1,
                 "show_grid": 1,
                 "drop_last_bucket": 0,
-                "background_color_rules": [
-                    {
-                        "id": str(uuid.uuid4())
-                    }
-                ],
-                "filter": "task:\"%s\" AND name:\"%s\" AND %s" % (q, metric, TimeSeriesCharts.filter_string(
-                    environment, race_config)),
+                "background_color_rules": [{"id": str(uuid.uuid4())}],
+                "filter": 'task:"%s" AND name:"%s" AND %s' % (q, metric, TimeSeriesCharts.filter_string(environment, race_config)),
                 "annotations": [
                     {
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f"((NOT _exists_:track) OR track:\"{race_config.track}\") "
-                                        f"AND ((NOT _exists_:chart) OR chart:query) "
-                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") '
+                        f"AND ((NOT _exists_:chart) OR chart:query) "
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
                         "icon": "fa-tag",
-                        "ignore_panel_filters": 1
+                        "ignore_panel_filters": 1,
                     }
-                ]
+                ],
             },
             "aggs": [],
-            "listeners": {}
+            "listeners": {},
         }
 
         return {
@@ -1424,10 +1137,8 @@ class TimeSeriesCharts:
                 "uiStateJSON": "{}",
                 "description": "query",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
         }
 
     @staticmethod
@@ -1440,10 +1151,10 @@ class TimeSeriesCharts:
             for bulk_task in race_config.bulk_tasks:
                 filters.append(
                     {
-                        "filter": "task:\"%s\" AND %s" % (bulk_task, TimeSeriesCharts.filter_string(environment, race_config)),
+                        "filter": 'task:"%s" AND %s' % (bulk_task, TimeSeriesCharts.filter_string(environment, race_config)),
                         "label": label,
                         "color": color_scheme_rgba[idx % len(color_scheme_rgba)],
-                        "id": str(uuid.uuid4())
+                        "id": str(uuid.uuid4()),
                     }
                 )
 
@@ -1465,22 +1176,16 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "type": "avg",
-                                "field": "value.median"
-                            }
-                        ],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.median"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
                         "stacked": "none",
-                        "filter": "environment:\"%s\" AND track:\"%s\"" % (environment, t),
+                        "filter": 'environment:"%s" AND track:"%s"' % (environment, t),
                         "split_filters": filters,
                         "label": "Indexing Throughput",
                         "value_template": "{{value}} docs/s",
-                        "steps": 0
+                        "steps": 0,
                     }
                 ],
                 "show_legend": 1,
@@ -1488,26 +1193,26 @@ class TimeSeriesCharts:
                 "drop_last_bucket": 0,
                 "time_field": "race-timestamp",
                 "type": "timeseries",
-                "filter": "environment:\"%s\" AND track:\"%s\" AND name:\"throughput\" AND active:true" % (environment, t),
+                "filter": 'environment:"%s" AND track:"%s" AND name:"throughput" AND active:true' % (environment, t),
                 "annotations": [
                     {
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f"((NOT _exists_:track) OR track:\"{t}\") "
-                                        f"AND ((NOT _exists_:chart) OR chart:indexing) "
-                                        f"AND ((NOT _exists_:chart-name) OR chart-name:\"{title}\") AND environment:\"{environment}\"",
+                        "query_string": f'((NOT _exists_:track) OR track:"{t}") '
+                        f"AND ((NOT _exists_:chart) OR chart:indexing) "
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
                         "icon": "fa-tag",
-                        "ignore_panel_filters": 1
+                        "ignore_panel_filters": 1,
                     }
                 ],
-                "axis_min": "0"
+                "axis_min": "0",
             },
             "aggs": [],
-            "listeners": {}
+            "listeners": {},
         }
         return {
             "id": str(uuid.uuid4()),
@@ -1518,10 +1223,8 @@ class TimeSeriesCharts:
                 "uiStateJSON": "{}",
                 "description": "index",
                 "version": 1,
-                "kibanaSavedObjectMeta": {
-                    "searchSourceJSON": "{\"query\":\"*\",\"filter\":[]}"
-                }
-            }
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
         }
 
 
@@ -1556,8 +1259,13 @@ class RaceConfigTrack:
 def generate_index_ops(chart_type, race_configs, environment, logger):
     idx_race_configs = list(filter(lambda c: "indexing" in c.charts, race_configs))
     for race_conf in idx_race_configs:
-        logger.debug("Gen index visualization for race config with name:[%s] / label:[%s] / flavor: [%s] / license: [%s]",
-                     race_conf.name, race_conf.label, race_conf.flavor, race_conf.es_license)
+        logger.debug(
+            "Gen index visualization for race config with name:[%s] / label:[%s] / flavor: [%s] / license: [%s]",
+            race_conf.name,
+            race_conf.label,
+            race_conf.flavor,
+            race_conf.es_license,
+        )
     charts = []
 
     if idx_race_configs:
@@ -1573,7 +1281,7 @@ def generate_queries(chart_type, race_configs, environment):
     for race_config in race_configs:
         if "query" in race_config.charts:
             for q in race_config.throttled_tasks:
-                structures.append(chart_type.query(environment, race_config, q.name, q.params.get('iterations', 100)))
+                structures.append(chart_type.query(environment, race_config, q.name, q.params.get("iterations", 100)))
     return structures
 
 
@@ -1582,8 +1290,9 @@ def generate_io(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "io" in race_config.charts:
-            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                            suffix="%s-io" % race_config.label)
+            title = chart_type.format_title(
+                environment, race_config.track, es_license=race_config.es_license, suffix="%s-io" % race_config.label
+            )
             structures.append(chart_type.io(title, environment, race_config))
 
     return structures
@@ -1593,8 +1302,9 @@ def generate_gc(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "gc" in race_config.charts:
-            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                            suffix="%s-gc" % race_config.label)
+            title = chart_type.format_title(
+                environment, race_config.track, es_license=race_config.es_license, suffix="%s-gc" % race_config.label
+            )
             structures.append(chart_type.gc(title, environment, race_config))
 
     return structures
@@ -1606,8 +1316,9 @@ def generate_merge_time(chart_type, race_configs, environment):
         return structures
     for race_config in race_configs:
         if "merge_times" in race_config.charts:
-            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                            suffix=f"{race_config.label}-merge-times")
+            title = chart_type.format_title(
+                environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-merge-times"
+            )
             chart = chart_type.merge_time(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
@@ -1619,8 +1330,9 @@ def generate_ml_processing_time(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "ml_processing_time" in race_config.charts:
-            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                            suffix=f"{race_config.label}-ml-processing-time")
+            title = chart_type.format_title(
+                environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-ml-processing-time"
+            )
             chart = chart_type.ml_processing_time(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
@@ -1632,8 +1344,9 @@ def generate_merge_count(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "merge_count" in race_config.charts:
-            title = chart_type.format_title(environment, race_config.track, es_license=race_config.es_license,
-                                            suffix=f"{race_config.label}-merge-count")
+            title = chart_type.format_title(
+                environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-merge-count"
+            )
             chart = chart_type.merge_count(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
@@ -1665,15 +1378,9 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
         panel = {
             "id": chart["id"],
             "panelIndex": panelIndex,
-            "gridData": {
-                "x": (col * chart_width),
-                "y": (row * height),
-                "w": chart_width,
-                "h": height,
-                "i": str(panelIndex)
-            },
+            "gridData": {"x": (col * chart_width), "y": (row * height), "w": chart_width, "h": height, "i": str(panelIndex)},
             "type": "visualization",
-            "version": "7.10.2"
+            "version": "7.10.2",
         }
         panels.append(panel)
         col = next_col
@@ -1688,29 +1395,20 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
             "hits": 0,
             "description": "",
             "panelsJSON": json.dumps(panels),
-            "optionsJSON": "{\"darkTheme\":false}",
+            "optionsJSON": '{"darkTheme":false}',
             "uiStateJSON": "{}",
             "version": 1,
             "timeRestore": False,
             "kibanaSavedObjectMeta": {
                 "searchSourceJSON": json.dumps(
                     {
-                        "filter": [
-                            {
-                                "query": {
-                                    "query_string": {
-                                        "analyze_wildcard": True,
-                                        "query": "*"
-                                    }
-                                }
-                            }
-                        ],
+                        "filter": [{"query": {"query_string": {"analyze_wildcard": True, "query": "*"}}}],
                         "highlightAll": True,
-                        "version": True
+                        "version": True,
                     }
                 )
-            }
-        }
+            },
+        },
     }
 
 
@@ -1722,12 +1420,7 @@ class RaceConfig:
             self.configuration["flavor"] = flavor
             self.configuration["es_license"] = es_license
         else:
-            self.configuration = {
-                "charts": charts,
-                "challenge": challenge,
-                "car": car,
-                "node-count": node_count
-            }
+            self.configuration = {"charts": charts, "challenge": challenge, "car": car, "node-count": node_count}
 
     @property
     def name(self):
@@ -1775,8 +1468,11 @@ class RaceConfig:
                 # Doing a lenient match to allow for that.
                 if track.OperationType.Bulk.to_hyphenated_string() in sub_task.operation.type:
                     if track.OperationType.Bulk.to_hyphenated_string() != sub_task.operation.type:
-                        console.info(f"Found [{sub_task.name}] of type [{sub_task.operation.type}] in "\
-                                     f"[{self.challenge}], adding it to indexing dashboard.\n", flush=True)
+                        console.info(
+                            f"Found [{sub_task.name}] of type [{sub_task.operation.type}] in "
+                            f"[{self.challenge}], adding it to indexing dashboard.\n",
+                            flush=True,
+                        )
                     task_names.append(sub_task.name)
         return task_names
 
@@ -1793,8 +1489,11 @@ class RaceConfig:
                 #
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
                 # which tasks / or types of operations should be used for which chart types.
-                if sub_task.operation.type in ["search", "composite", "eql", "paginated-search", "scroll-search"]\
-                    or "target-throughput" in sub_task.params or "target-interval" in sub_task.params:
+                if (
+                    sub_task.operation.type in ["search", "composite", "eql", "paginated-search", "scroll-search"]
+                    or "target-throughput" in sub_task.params
+                    or "target-interval" in sub_task.params
+                ):
                     task_names.append(sub_task)
         return task_names
 
@@ -1807,12 +1506,14 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
             if "exclude-tasks" in race_config:
                 excluded_tasks = race_config.get("exclude-tasks").split(",")
             configs_per_lic.append(
-                RaceConfig(track=race_config_track.get_track(cfg, name=track_name,
-                                                             params=race_config.get("track-params", {}),
-                                                             excluded_tasks=excluded_tasks),
-                           cfg=race_config,
-                           flavor=flavor_name,
-                           es_license=lic)
+                RaceConfig(
+                    track=race_config_track.get_track(
+                        cfg, name=track_name, params=race_config.get("track-params", {}), excluded_tasks=excluded_tasks
+                    ),
+                    cfg=race_config,
+                    flavor=flavor_name,
+                    es_license=lic,
+                )
             )
         return configs_per_lic
 
@@ -1824,10 +1525,7 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
                 race_configs_per_track.extend(add_configs(_lic_conf[0], track_name=track_name))
         else:
             for lic_config in license_configs:
-                race_configs_per_track.extend(add_configs(lic_config["configurations"],
-                                                          flavor_name,
-                                                          lic_config["name"],
-                                                          track_name))
+                race_configs_per_track.extend(add_configs(lic_config["configurations"], flavor_name, lic_config["name"], track_name))
 
     race_configs = {"oss": [], "default": []}
     if chart_type == BarCharts:
@@ -1855,13 +1553,15 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
 
 
 def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, logger=None):
-    charts = generate_index_ops(chart_type, race_configs, env, logger) + \
-             generate_io(chart_type, race_configs, env) + \
-             generate_gc(chart_type, race_configs, env) + \
-             generate_merge_time(chart_type, race_configs, env) + \
-             generate_merge_count(chart_type, race_configs, env) + \
-             generate_ml_processing_time(chart_type, race_configs, env) + \
-             generate_queries(chart_type, race_configs, env)
+    charts = (
+        generate_index_ops(chart_type, race_configs, env, logger)
+        + generate_io(chart_type, race_configs, env)
+        + generate_gc(chart_type, race_configs, env)
+        + generate_merge_time(chart_type, race_configs, env)
+        + generate_merge_count(chart_type, race_configs, env)
+        + generate_ml_processing_time(chart_type, race_configs, env)
+        + generate_queries(chart_type, race_configs, env)
+    )
 
     dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)
 
@@ -1882,8 +1582,7 @@ def gen_charts_from_track_combinations(race_configs, chart_type, env, logger):
     structures = []
     for flavor, race_configs_per_flavor in race_configs.items():
         for race_configs_per_track in race_configs_per_flavor:
-            logger.debug("Generating charts for race_configs with name:[%s]/flavor:[%s]",
-                         race_configs_per_track[0].name, flavor)
+            logger.debug("Generating charts for race_configs with name:[%s]/flavor:[%s]", race_configs_per_track[0].name, flavor)
             charts, dashboard = gen_charts_per_track_configs(race_configs_per_track, chart_type, env, flavor, logger)
 
             structures.extend(charts)

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -25,7 +25,7 @@ import uuid
 import jinja2
 
 from esrally import exceptions
-from esrally.mechanic import team, java_resolver
+from esrally.mechanic import java_resolver, team
 from esrally.utils import console, convert, io, process, versions
 
 
@@ -54,8 +54,7 @@ def docker(cfg, car, ip, http_port, target_root, node_name):
 
 
 class NodeConfiguration:
-    def __init__(self, build_type, car_runtime_jdks, car_provides_bundled_jdk, ip, node_name, node_root_path,
-                 binary_path, data_paths):
+    def __init__(self, build_type, car_runtime_jdks, car_provides_bundled_jdk, ip, node_name, node_root_path, binary_path, data_paths):
         self.build_type = build_type
         self.car_runtime_jdks = car_runtime_jdks
         self.car_provides_bundled_jdk = car_provides_bundled_jdk
@@ -74,13 +73,21 @@ class NodeConfiguration:
             "node-name": self.node_name,
             "node-root-path": self.node_root_path,
             "binary-path": self.binary_path,
-            "data-paths": self.data_paths
+            "data-paths": self.data_paths,
         }
 
     @staticmethod
     def from_dict(d):
-        return NodeConfiguration(d["build-type"], d["car-runtime-jdks"], d["car-provides-bundled-jdk"], d["ip"],
-                                 d["node-name"], d["node-root-path"], d["binary-path"], d["data-paths"])
+        return NodeConfiguration(
+            d["build-type"],
+            d["car-runtime-jdks"],
+            d["car-provides-bundled-jdk"],
+            d["ip"],
+            d["node-name"],
+            d["node-root-path"],
+            d["binary-path"],
+            d["data-paths"],
+        )
 
 
 def save_node_configuration(path, n):
@@ -142,7 +149,7 @@ def _apply_config(source_root_path, target_root_path, config_vars):
     for root, _, files in os.walk(source_root_path):
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
 
-        relative_root = root[len(source_root_path) + 1:]
+        relative_root = root[len(source_root_path) + 1 :]
         absolute_target_root = os.path.join(target_root_path, relative_root)
         io.ensure_dir(absolute_target_root)
 
@@ -193,11 +200,16 @@ class BareProvisioner:
         for installer in self.plugin_installers:
             installer.invoke_install_hook(team.BootstrapPhase.post_install, provisioner_vars.copy())
 
-        return NodeConfiguration("tar", self.es_installer.car.mandatory_var("runtime.jdk"),
-                                 convert.to_bool(self.es_installer.car.mandatory_var("runtime.jdk.bundled")),
-                                 self.es_installer.node_ip, self.es_installer.node_name,
-                                 self.es_installer.node_root_dir, self.es_installer.es_home_path,
-                                 self.es_installer.data_paths)
+        return NodeConfiguration(
+            "tar",
+            self.es_installer.car.mandatory_var("runtime.jdk"),
+            convert.to_bool(self.es_installer.car.mandatory_var("runtime.jdk.bundled")),
+            self.es_installer.node_ip,
+            self.es_installer.node_name,
+            self.es_installer.node_root_dir,
+            self.es_installer.es_home_path,
+            self.es_installer.data_paths,
+        )
 
     def _provisioner_variables(self):
         plugin_variables = {}
@@ -233,8 +245,18 @@ class BareProvisioner:
 
 
 class ElasticsearchInstaller:
-    def __init__(self, car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port,
-                 hook_handler_class=team.BootstrapHookHandler):
+    def __init__(
+        self,
+        car,
+        java_home,
+        node_name,
+        node_root_dir,
+        all_node_ips,
+        all_node_names,
+        ip,
+        http_port,
+        hook_handler_class=team.BootstrapHookHandler,
+    ):
         self.car = car
         self.java_home = java_home
         self.node_name = node_name
@@ -293,11 +315,11 @@ class ElasticsearchInstaller:
             "network_host": network_host,
             "http_port": str(self.http_port),
             "transport_port": str(self.http_port + 100),
-            "all_node_ips": "[\"%s\"]" % "\",\"".join(self.all_node_ips),
-            "all_node_names": "[\"%s\"]" % "\",\"".join(self.all_node_names),
+            "all_node_ips": '["%s"]' % '","'.join(self.all_node_ips),
+            "all_node_names": '["%s"]' % '","'.join(self.all_node_names),
             # at the moment we are strict and enforce that all nodes are master eligible nodes
             "minimum_master_nodes": len(self.all_node_ips),
-            "install_root_path": self.es_home_path
+            "install_root_path": self.es_home_path,
         }
         variables = {}
         variables.update(self.car.variables)
@@ -349,8 +371,10 @@ class PluginInstaller:
         elif return_code == 74:
             raise exceptions.SupplyError("I/O error while trying to install [%s]" % self.plugin_name)
         else:
-            raise exceptions.RallyError("Unknown error while trying to install [%s] (installer return code [%s]). Please check the logs." %
-                                        (self.plugin_name, str(return_code)))
+            raise exceptions.RallyError(
+                "Unknown error while trying to install [%s] (installer return code [%s]). Please check the logs."
+                % (self.plugin_name, str(return_code))
+            )
 
     def invoke_install_hook(self, phase, variables):
         self.hook_handler.invoke(phase.name, variables=variables, env=self.env())
@@ -408,7 +432,7 @@ class DockerProvisioner:
             "discovery_type": "single-node",
             "http_port": str(self.http_port),
             "transport_port": str(self.http_port + 100),
-            "cluster_settings": {}
+            "cluster_settings": {},
         }
 
         self.config_vars = {}
@@ -435,7 +459,7 @@ class DockerProvisioner:
             for root, _, files in os.walk(car_config_path):
                 env = jinja2.Environment(loader=jinja2.FileSystemLoader(root))
 
-                relative_root = root[len(car_config_path) + 1:]
+                relative_root = root[len(car_config_path) + 1 :]
                 absolute_target_root = os.path.join(self.binary_path, relative_root)
                 io.ensure_dir(absolute_target_root)
 
@@ -457,9 +481,16 @@ class DockerProvisioner:
         with open(os.path.join(self.binary_path, "docker-compose.yml"), mode="wt", encoding="utf-8") as f:
             f.write(docker_cfg)
 
-        return NodeConfiguration("docker", self.car.mandatory_var("runtime.jdk"),
-                                 convert.to_bool(self.car.mandatory_var("runtime.jdk.bundled")), self.node_ip,
-                                 self.node_name, self.node_root_dir, self.binary_path, self.data_paths)
+        return NodeConfiguration(
+            "docker",
+            self.car.mandatory_var("runtime.jdk"),
+            convert.to_bool(self.car.mandatory_var("runtime.jdk.bundled")),
+            self.node_ip,
+            self.node_name,
+            self.node_root_dir,
+            self.binary_path,
+            self.data_paths,
+        )
 
     def docker_vars(self, mounts):
         v = {
@@ -469,7 +500,7 @@ class DockerProvisioner:
             "es_data_dir": self.data_paths[0],
             "es_log_dir": self.node_log_dir,
             "es_heap_dump_dir": self.heap_dump_dir,
-            "mounts": mounts
+            "mounts": mounts,
         }
         self._add_if_defined_for_car(v, "docker_mem_limit")
         self._add_if_defined_for_car(v, "docker_cpu_count")
@@ -494,6 +525,6 @@ class DockerProvisioner:
 
     def _render_template_from_file(self, variables):
         compose_file = os.path.join(self.rally_root, "resources", "docker-compose.yml.j2")
-        return self._render_template(loader=jinja2.FileSystemLoader(io.dirname(compose_file)),
-                                     template_name=io.basename(compose_file),
-                                     variables=variables)
+        return self._render_template(
+            loader=jinja2.FileSystemLoader(io.dirname(compose_file)), template_name=io.basename(compose_file), variables=variables
+        )

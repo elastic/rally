@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -28,20 +28,15 @@ def serialize_doc(doc):
 @mock.patch("builtins.open", new_callable=mock.mock_open)
 @mock.patch("elasticsearch.Elasticsearch")
 def test_extract(client, mo):
-    doc = {
-        "field1": "stuff",
-        "field2": "things"
-    }
+    doc = {"field1": "stuff", "field2": "things"}
     doc_data = serialize_doc(doc)
-    client.count.return_value = {
-        "count": 1001
-    }
+    client.count.return_value = {"count": 1001}
     client.search.return_value = {
         "_scroll_id": "uohialjrknf",
         "_shards": {
             "successful": 1,
             "total": 1,
-            "skipped": 0
+            "skipped": 0,
         },
         "hits": {
             "hits": [
@@ -49,10 +44,10 @@ def test_extract(client, mo):
                     "_index": "test",
                     "_id": "0",
                     "_score": 0,
-                    "_source": doc
-                }
-            ]
-        }
+                    "_source": doc,
+                },
+            ],
+        },
     }
 
     def set_corp_size(*args, **kwargs):
@@ -73,11 +68,15 @@ def test_extract(client, mo):
         osstat.side_effect = set_corp_size
         res = corpus.extract(client, outdir, index)
     assert mo.call_count == 4
-    mo.assert_has_calls([call("/abs/outpath/to/tracks/test-documents.json", "wb"),
-                         call("/abs/outpath/to/tracks/test-documents.json.bz2", "wb"),
-                         call("/abs/outpath/to/tracks/test-documents-1k.json", "wb"),
-                         call("/abs/outpath/to/tracks/test-documents-1k.json.bz2", "wb")
-                         ], any_order=True)
+    mo.assert_has_calls(
+        [
+            call("/abs/outpath/to/tracks/test-documents.json", "wb"),
+            call("/abs/outpath/to/tracks/test-documents.json.bz2", "wb"),
+            call("/abs/outpath/to/tracks/test-documents-1k.json", "wb"),
+            call("/abs/outpath/to/tracks/test-documents-1k.json.bz2", "wb"),
+        ],
+        any_order=True,
+    )
 
     assert res == {
         "filename": "test-documents.json.bz2",
@@ -85,7 +84,7 @@ def test_extract(client, mo):
         "compressed_bytes": 500,
         "index_name": "test",
         "doc_count": 1001,
-        "uncompressed_bytes": 1000
+        "uncompressed_bytes": 1000,
     }
 
     file_mock = mo.return_value

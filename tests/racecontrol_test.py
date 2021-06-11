@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -52,8 +52,7 @@ def unittest_pipeline():
 def test_finds_available_pipelines():
     expected = [
         ["from-sources", "Builds and provisions Elasticsearch, runs a benchmark and reports results."],
-        ["from-distribution",
-         "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results."],
+        ["from-distribution", "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results."],
         ["benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results"],
     ]
 
@@ -67,8 +66,8 @@ def test_prevents_running_an_unknown_pipeline():
     cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "5.0.0")
 
     with pytest.raises(
-            exceptions.SystemSetupError,
-            match=r"Unknown pipeline \[invalid]. List the available pipelines with [\S]+? list pipelines."):
+        exceptions.SystemSetupError, match=r"Unknown pipeline \[invalid]. List the available pipelines with [\S]+? list pipelines."
+    ):
         racecontrol.run(cfg)
 
 
@@ -88,13 +87,14 @@ def test_fails_without_benchmark_only_pipeline_in_docker(running_in_docker, unit
     cfg.add(config.Scope.benchmark, "race", "pipeline", "unit-test-pipeline")
 
     with pytest.raises(
-            exceptions.SystemSetupError,
-            match=re.escape(
-                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
-                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-                "For more details read the docs for the benchmark-only pipeline in "
-                "https://esrally.readthedocs.io/en/latest/pipelines.html#benchmark-only\n"
-            )):
+        exceptions.SystemSetupError,
+        match=re.escape(
+            "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+            "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
+            "For more details read the docs for the benchmark-only pipeline in "
+            "https://esrally.readthedocs.io/en/latest/pipelines.html#benchmark-only\n"
+        ),
+    ):
         racecontrol.run(cfg)
 
 

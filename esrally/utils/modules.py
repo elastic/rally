@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -33,6 +33,7 @@ class ComponentLoader:
     install hooks. A component may also consist of multiple Python modules.
 
     """
+
     def __init__(self, root_path, component_entry_point, recurse=True):
         """
         Creates a new component loader.
@@ -52,7 +53,7 @@ class ComponentLoader:
             for filename in os.listdir(path):
                 name, ext = os.path.splitext(filename)
                 if ext.endswith(".py"):
-                    root_relative_path = os.path.join(path, name)[len(self.root_path) + len(os.path.sep):]
+                    root_relative_path = os.path.join(path, name)[len(self.root_path) + len(os.path.sep) :]
                     module_name = "%s.%s" % (component_name, root_relative_path.replace(os.path.sep, "."))
                     yield module_name
 

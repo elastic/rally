@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -21,7 +21,7 @@ import datetime
 import unittest.mock as mock
 from unittest import TestCase
 
-from esrally import exceptions, config
+from esrally import config, exceptions
 from esrally.mechanic import supplier, team
 
 
@@ -29,12 +29,16 @@ class RevisionExtractorTests(TestCase):
     def test_single_revision(self):
         self.assertDictEqual({"elasticsearch": "67c2f42", "all": "67c2f42"}, supplier._extract_revisions("67c2f42"))
         self.assertDictEqual({"elasticsearch": "current", "all": "current"}, supplier._extract_revisions("current"))
-        self.assertDictEqual({"elasticsearch": "@2015-01-01-01:00:00", "all": "@2015-01-01-01:00:00"},
-                             supplier._extract_revisions("@2015-01-01-01:00:00"))
+        self.assertDictEqual(
+            {"elasticsearch": "@2015-01-01-01:00:00", "all": "@2015-01-01-01:00:00"},
+            supplier._extract_revisions("@2015-01-01-01:00:00"),
+        )
 
     def test_multiple_revisions(self):
-        self.assertDictEqual({"elasticsearch": "67c2f42", "x-pack": "@2015-01-01-01:00:00", "some-plugin": "current"},
-                             supplier._extract_revisions("elasticsearch:67c2f42,x-pack:@2015-01-01-01:00:00,some-plugin:current"))
+        self.assertDictEqual(
+            {"elasticsearch": "67c2f42", "x-pack": "@2015-01-01-01:00:00", "some-plugin": "current"},
+            supplier._extract_revisions("elasticsearch:67c2f42,x-pack:@2015-01-01-01:00:00,some-plugin:current"),
+        )
 
     def test_invalid_revisions(self):
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
@@ -74,8 +78,7 @@ class SourceRepositoryTests(TestCase):
         mock_is_working_copy.assert_called_with("/src")
         self.assertEqual(0, mock_clone.call_count)
         self.assertEqual(0, mock_pull.call_count)
-        mock_head_revision.assert_called_with("/src")\
-
+        mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
     @mock.patch("esrally.utils.git.checkout")
@@ -174,15 +177,19 @@ class BuilderTests(TestCase):
 class TemplateRendererTests(TestCase):
     def test_uses_provided_values(self):
         renderer = supplier.TemplateRenderer(version="1.2.3", os_name="Windows", arch="arm7")
-        self.assertEqual("This is version 1.2.3 on Windows with a arm7 CPU.",
-                         renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."))
+        self.assertEqual(
+            "This is version 1.2.3 on Windows with a arm7 CPU.",
+            renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."),
+        )
 
     @mock.patch("esrally.utils.sysstats.os_name", return_value="Linux")
     @mock.patch("esrally.utils.sysstats.cpu_arch", return_value="X86_64")
     def test_uses_derived_values(self, os_name, cpu_arch):
         renderer = supplier.TemplateRenderer(version="1.2.3")
-        self.assertEqual("This is version 1.2.3 on linux with a x86_64 CPU.",
-                         renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."))
+        self.assertEqual(
+            "This is version 1.2.3 on linux with a x86_64 CPU.",
+            renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."),
+        )
 
 
 class CachedElasticsearchSourceSupplierTests(TestCase):
@@ -201,15 +208,10 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
 
         dist_cfg = {
             "runtime.jdk.bundled": "true",
-            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
         }
-        file_resolver = supplier.ElasticsearchFileNameResolver(
-            distribution_config=dist_cfg,
-            template_renderer=renderer
-        )
-        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
-                                                        source_supplier=es,
-                                                        file_resolver=file_resolver)
+        file_resolver = supplier.ElasticsearchFileNameResolver(distribution_config=dist_cfg, template_renderer=renderer)
+        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp", source_supplier=es, file_resolver=file_resolver)
 
         cached_supplier.fetch()
         cached_supplier.prepare()
@@ -232,15 +234,10 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
 
         dist_cfg = {
             "runtime.jdk.bundled": "true",
-            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
         }
-        file_resolver = supplier.ElasticsearchFileNameResolver(
-            distribution_config=dist_cfg,
-            template_renderer=renderer
-        )
-        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
-                                                        source_supplier=es,
-                                                        file_resolver=file_resolver)
+        file_resolver = supplier.ElasticsearchFileNameResolver(distribution_config=dist_cfg, template_renderer=renderer)
+        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp", source_supplier=es, file_resolver=file_resolver)
 
         cached_supplier.fetch()
         cached_supplier.prepare()
@@ -273,15 +270,14 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
 
         dist_cfg = {
             "runtime.jdk.bundled": "true",
-            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
         }
 
-        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
-                                                        source_supplier=es,
-                                                        file_resolver=supplier.ElasticsearchFileNameResolver(
-                                                            distribution_config=dist_cfg,
-                                                            template_renderer=renderer
-                                                        ))
+        cached_supplier = supplier.CachedSourceSupplier(
+            distributions_root="/tmp",
+            source_supplier=es,
+            file_resolver=supplier.ElasticsearchFileNameResolver(distribution_config=dist_cfg, template_renderer=renderer),
+        )
         cached_supplier.fetch()
         cached_supplier.prepare()
 
@@ -326,15 +322,14 @@ class CachedElasticsearchSourceSupplierTests(TestCase):
 
         dist_cfg = {
             "runtime.jdk.bundled": "true",
-            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
         }
 
-        cached_supplier = supplier.CachedSourceSupplier(distributions_root="/tmp",
-                                                        source_supplier=es,
-                                                        file_resolver=supplier.ElasticsearchFileNameResolver(
-                                                            distribution_config=dist_cfg,
-                                                            template_renderer=renderer
-                                                        ))
+        cached_supplier = supplier.CachedSourceSupplier(
+            distributions_root="/tmp",
+            source_supplier=es,
+            file_resolver=supplier.ElasticsearchFileNameResolver(distribution_config=dist_cfg, template_renderer=renderer),
+        )
         cached_supplier.fetch()
         cached_supplier.prepare()
 
@@ -357,13 +352,10 @@ class ElasticsearchFileNameResolverTests(TestCase):
 
         dist_cfg = {
             "runtime.jdk.bundled": "true",
-            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+            "jdk.bundled.release_url": "https://elstc.co/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
         }
 
-        self.resolver = supplier.ElasticsearchFileNameResolver(
-            distribution_config=dist_cfg,
-            template_renderer=renderer
-        )
+        self.resolver = supplier.ElasticsearchFileNameResolver(distribution_config=dist_cfg, template_renderer=renderer)
 
     def test_resolve(self):
         self.resolver.revision = "abc123"
@@ -435,7 +427,7 @@ class PruneTests(TestCase):
             # elasticsearch-6.8.0.tar.gz
             PruneTests.LStat(st_ctime=int(ten_days_ago.timestamp())),
             # elasticsearch-7.3.0-darwin-x86_64.tar.gz
-            PruneTests.LStat(st_ctime=int(one_day_ago.timestamp()))
+            PruneTests.LStat(st_ctime=int(one_day_ago.timestamp())),
         ]
 
         supplier._prune(root_path="/tmp/test", max_age_days=7)
@@ -445,70 +437,71 @@ class PruneTests(TestCase):
 
 class ElasticsearchSourceSupplierTests(TestCase):
     def test_no_build(self):
-        car = team.Car("default", root_path=None, config_paths=[], variables={
-            "clean_command": "./gradlew clean",
-            "system.build_command": "./gradlew assemble"
-        })
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "system.build_command": "./gradlew assemble"},
+        )
         renderer = supplier.TemplateRenderer(version=None)
-        es = supplier.ElasticsearchSourceSupplier(revision="abc",
-                                                  es_src_dir="/src",
-                                                  remote_url="",
-                                                  car=car,
-                                                  builder=None,
-                                                  template_renderer=renderer)
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None, template_renderer=renderer
+        )
         es.prepare()
         # nothing has happened (intentionally) because there is no builder
 
     def test_build(self):
-        car = team.Car("default", root_path=None, config_paths=[], variables={
-            "clean_command": "./gradlew clean",
-            "system.build_command": "./gradlew assemble"
-        })
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "system.build_command": "./gradlew assemble"},
+        )
         builder = mock.create_autospec(supplier.Builder)
         renderer = supplier.TemplateRenderer(version="abc")
-        es = supplier.ElasticsearchSourceSupplier(revision="abc",
-                                                  es_src_dir="/src",
-                                                  remote_url="",
-                                                  car=car,
-                                                  builder=builder,
-                                                  template_renderer=renderer)
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
+        )
         es.prepare()
 
         builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
 
     def test_raises_error_on_missing_car_variable(self):
-        car = team.Car("default", root_path=None, config_paths=[], variables={
-            "clean_command": "./gradlew clean",
-            # system.build_command is not defined
-        })
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={
+                "clean_command": "./gradlew clean",
+                # system.build_command is not defined
+            },
+        )
         renderer = supplier.TemplateRenderer(version="abc")
         builder = mock.create_autospec(supplier.Builder)
-        es = supplier.ElasticsearchSourceSupplier(revision="abc",
-                                                  es_src_dir="/src",
-                                                  remote_url="",
-                                                  car=car,
-                                                  builder=builder,
-                                                  template_renderer=renderer)
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "Car \"default\" requires config key \"system.build_command\""):
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
+        )
+        with self.assertRaisesRegex(exceptions.SystemSetupError, 'Car "default" requires config key "system.build_command"'):
             es.prepare()
 
         self.assertEqual(0, builder.build.call_count)
 
     @mock.patch("glob.glob", lambda p: ["elasticsearch.tar.gz"])
     def test_add_elasticsearch_binary(self):
-        car = team.Car("default", root_path=None, config_paths=[], variables={
-            "clean_command": "./gradlew clean",
-            "system.build_command": "./gradlew assemble",
-            "system.artifact_path_pattern": "distribution/archives/tar/build/distributions/*.tar.gz"
-        })
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={
+                "clean_command": "./gradlew clean",
+                "system.build_command": "./gradlew assemble",
+                "system.artifact_path_pattern": "distribution/archives/tar/build/distributions/*.tar.gz",
+            },
+        )
         renderer = supplier.TemplateRenderer(version="abc")
-        es = supplier.ElasticsearchSourceSupplier(revision="abc",
-                                                  es_src_dir="/src",
-                                                  remote_url="",
-                                                  car=car,
-                                                  builder=None,
-                                                  template_renderer=renderer)
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None, template_renderer=renderer
+        )
         binaries = {}
         es.add(binaries=binaries)
         self.assertEqual(binaries, {"elasticsearch": "elasticsearch.tar.gz"})
@@ -521,52 +514,64 @@ class ExternalPluginSourceSupplierTests(TestCase):
         self.standalone = None
 
     def setUp(self):
-        self.along_es = supplier.ExternalPluginSourceSupplier(plugin=team.PluginDescriptor("some-plugin", core_plugin=False),
-                                                              revision="abc",
-                                                              # built along-side ES
-                                                              src_dir="/src",
-                                                              src_config={
-                                                                  "plugin.some-plugin.src.subdir": "elasticsearch-extra/some-plugin",
-                                                                  "plugin.some-plugin.build.artifact.subdir": "plugin/build/distributions"
-                                                              },
-                                                              builder=None)
+        self.along_es = supplier.ExternalPluginSourceSupplier(
+            plugin=team.PluginDescriptor("some-plugin", core_plugin=False),
+            revision="abc",
+            # built along-side ES
+            src_dir="/src",
+            src_config={
+                "plugin.some-plugin.src.subdir": "elasticsearch-extra/some-plugin",
+                "plugin.some-plugin.build.artifact.subdir": "plugin/build/distributions",
+            },
+            builder=None,
+        )
 
-        self.standalone = supplier.ExternalPluginSourceSupplier(plugin=team.PluginDescriptor("some-plugin", core_plugin=False),
-                                                                revision="abc",
-                                                                # built separately
-                                                                src_dir=None,
-                                                                src_config={
-                                                                    "plugin.some-plugin.src.dir": "/Projects/src/some-plugin",
-                                                                    "plugin.some-plugin.build.artifact.subdir": "build/distributions"
-                                                                },
-                                                                builder=None)
+        self.standalone = supplier.ExternalPluginSourceSupplier(
+            plugin=team.PluginDescriptor("some-plugin", core_plugin=False),
+            revision="abc",
+            # built separately
+            src_dir=None,
+            src_config={
+                "plugin.some-plugin.src.dir": "/Projects/src/some-plugin",
+                "plugin.some-plugin.build.artifact.subdir": "build/distributions",
+            },
+            builder=None,
+        )
 
     def test_invalid_config_no_source(self):
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "Neither plugin.some-plugin.src.dir nor plugin.some-plugin.src.subdir are set for plugin some-plugin."):
-            supplier.ExternalPluginSourceSupplier(plugin=team.PluginDescriptor("some-plugin", core_plugin=False),
-                                                  revision="abc",
-                                                  # built separately
-                                                  src_dir=None,
-                                                  src_config={
-                                                      # but no source config
-                                                      # "plugin.some-plugin.src.dir": "/Projects/src/some-plugin",
-                                                      "plugin.some-plugin.build.artifact.subdir": "build/distributions"
-                                                  },
-                                                  builder=None)
+        with self.assertRaisesRegex(
+            exceptions.SystemSetupError,
+            "Neither plugin.some-plugin.src.dir nor plugin.some-plugin.src.subdir are set for plugin some-plugin.",
+        ):
+            supplier.ExternalPluginSourceSupplier(
+                plugin=team.PluginDescriptor("some-plugin", core_plugin=False),
+                revision="abc",
+                # built separately
+                src_dir=None,
+                src_config={
+                    # but no source config
+                    # "plugin.some-plugin.src.dir": "/Projects/src/some-plugin",
+                    "plugin.some-plugin.build.artifact.subdir": "build/distributions"
+                },
+                builder=None,
+            )
 
     def test_invalid_config_duplicate_source(self):
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    "Can only specify one of plugin.duplicate.src.dir and plugin.duplicate.src.subdir but both are set."):
-            supplier.ExternalPluginSourceSupplier(plugin=team.PluginDescriptor("duplicate", core_plugin=False),
-                                                  revision="abc",
-                                                  src_dir=None,
-                                                  src_config={
-                                                      "plugin.duplicate.src.subdir": "elasticsearch-extra/some-plugin",
-                                                      "plugin.duplicate.src.dir": "/Projects/src/some-plugin",
-                                                      "plugin.duplicate.build.artifact.subdir": "build/distributions"
-                                                  },
-                                                  builder=None)
+        with self.assertRaisesRegex(
+            exceptions.SystemSetupError,
+            "Can only specify one of plugin.duplicate.src.dir and plugin.duplicate.src.subdir but both are set.",
+        ):
+            supplier.ExternalPluginSourceSupplier(
+                plugin=team.PluginDescriptor("duplicate", core_plugin=False),
+                revision="abc",
+                src_dir=None,
+                src_config={
+                    "plugin.duplicate.src.subdir": "elasticsearch-extra/some-plugin",
+                    "plugin.duplicate.src.dir": "/Projects/src/some-plugin",
+                    "plugin.duplicate.build.artifact.subdir": "build/distributions",
+                },
+                builder=None,
+            )
 
     def test_standalone_plugin_overrides_build_dir(self):
         self.assertEqual("/Projects/src/some-plugin", self.standalone.override_build_dir)
@@ -578,24 +583,26 @@ class ExternalPluginSourceSupplierTests(TestCase):
     def test_add_binary_built_along_elasticsearch(self):
         binaries = {}
         self.along_es.add(binaries)
-        self.assertDictEqual(binaries,
-                             {"some-plugin": "file:///src/elasticsearch-extra/some-plugin/plugin/build/distributions/some-plugin.zip"})
+        self.assertDictEqual(
+            binaries, {"some-plugin": "file:///src/elasticsearch-extra/some-plugin/plugin/build/distributions/some-plugin.zip"}
+        )
 
     @mock.patch("glob.glob", lambda p: ["/Projects/src/some-plugin/build/distributions/some-plugin.zip"])
     def test_resolve_plugin_binary_built_standalone(self):
         binaries = {}
         self.along_es.add(binaries)
-        self.assertDictEqual(binaries,
-                             {"some-plugin": "file:///Projects/src/some-plugin/build/distributions/some-plugin.zip"})
+        self.assertDictEqual(binaries, {"some-plugin": "file:///Projects/src/some-plugin/build/distributions/some-plugin.zip"})
 
 
 class CorePluginSourceSupplierTests(TestCase):
     @mock.patch("glob.glob", lambda p: ["/src/elasticsearch/core-plugin/build/distributions/core-plugin.zip"])
     def test_resolve_plugin_binary(self):
-        s = supplier.CorePluginSourceSupplier(plugin=team.PluginDescriptor("core-plugin", core_plugin=True),
-                                              # built separately
-                                              es_src_dir="/src/elasticsearch",
-                                              builder=None)
+        s = supplier.CorePluginSourceSupplier(
+            plugin=team.PluginDescriptor("core-plugin", core_plugin=True),
+            # built separately
+            es_src_dir="/src/elasticsearch",
+            builder=None,
+        )
         binaries = {}
         s.add(binaries)
         self.assertDictEqual(binaries, {"core-plugin": "file:///src/elasticsearch/core-plugin/build/distributions/core-plugin.zip"})
@@ -605,10 +612,10 @@ class PluginDistributionSupplierTests(TestCase):
     def test_resolve_plugin_url(self):
         v = {"plugin_custom-analyzer_release_url": "http://example.org/elasticearch/custom-analyzer-{{VERSION}}.zip"}
         renderer = supplier.TemplateRenderer(version="6.3.0")
-        s = supplier.PluginDistributionSupplier(repo=supplier.DistributionRepository(name="release",
-                                                                                     distribution_config=v,
-                                                                                     template_renderer=renderer),
-                                                plugin=team.PluginDescriptor("custom-analyzer"))
+        s = supplier.PluginDistributionSupplier(
+            repo=supplier.DistributionRepository(name="release", distribution_config=v, template_renderer=renderer),
+            plugin=team.PluginDescriptor("custom-analyzer"),
+        )
         binaries = {}
         s.add(binaries)
         self.assertDictEqual(binaries, {"custom-analyzer": "http://example.org/elasticearch/custom-analyzer-6.3.0.zip"})
@@ -618,13 +625,15 @@ class CreateSupplierTests(TestCase):
     def test_derive_supply_requirements_es_source_build(self):
         # corresponds to --revision="abc"
         requirements = supplier._supply_requirements(
-            sources=True, distribution=False, plugins=[], revisions={"elasticsearch": "abc"}, distribution_version=None)
+            sources=True, distribution=False, plugins=[], revisions={"elasticsearch": "abc"}, distribution_version=None
+        )
         self.assertDictEqual({"elasticsearch": ("source", "abc", True)}, requirements)
 
     def test_derive_supply_requirements_es_distribution(self):
         # corresponds to --distribution-version=6.0.0
         requirements = supplier._supply_requirements(
-            sources=False, distribution=True, plugins=[], revisions={}, distribution_version="6.0.0")
+            sources=False, distribution=True, plugins=[], revisions={}, distribution_version="6.0.0"
+        )
         self.assertDictEqual({"elasticsearch": ("distribution", "6.0.0", False)}, requirements)
 
     def test_derive_supply_requirements_es_and_plugin_source_build(self):
@@ -632,31 +641,45 @@ class CreateSupplierTests(TestCase):
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
-        requirements = supplier._supply_requirements(sources=True, distribution=False, plugins=[core_plugin, external_plugin],
-                                                     revisions={"elasticsearch": "abc", "all": "abc", "community-plugin": "effab"},
-                                                     distribution_version=None)
-        self.assertDictEqual({
-            "elasticsearch": ("source", "abc", True),
-            # core plugin configuration is forced to be derived from ES
-            "analysis-icu": ("source", "abc", True),
-            "community-plugin": ("source", "effab", True),
-        }, requirements)
+        requirements = supplier._supply_requirements(
+            sources=True,
+            distribution=False,
+            plugins=[core_plugin, external_plugin],
+            revisions={"elasticsearch": "abc", "all": "abc", "community-plugin": "effab"},
+            distribution_version=None,
+        )
+        self.assertDictEqual(
+            {
+                "elasticsearch": ("source", "abc", True),
+                # core plugin configuration is forced to be derived from ES
+                "analysis-icu": ("source", "abc", True),
+                "community-plugin": ("source", "effab", True),
+            },
+            requirements,
+        )
 
     def test_derive_supply_requirements_es_distribution_and_plugin_source_build(self):
         # corresponds to --revision="community-plugin:effab" --distribution-version="6.0.0"
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
-        requirements = supplier._supply_requirements(sources=False, distribution=True, plugins=[core_plugin, external_plugin],
-                                                     revisions={"community-plugin": "effab"},
-                                                     distribution_version="6.0.0")
+        requirements = supplier._supply_requirements(
+            sources=False,
+            distribution=True,
+            plugins=[core_plugin, external_plugin],
+            revisions={"community-plugin": "effab"},
+            distribution_version="6.0.0",
+        )
         # core plugin is not contained, its configured is forced to be derived by ES
-        self.assertDictEqual({
-            "elasticsearch": ("distribution", "6.0.0", False),
-            # core plugin configuration is forced to be derived from ES
-            "analysis-icu": ("distribution", "6.0.0", False),
-            "community-plugin": ("source", "effab", True),
-        }, requirements)
+        self.assertDictEqual(
+            {
+                "elasticsearch": ("distribution", "6.0.0", False),
+                # core plugin configuration is forced to be derived from ES
+                "analysis-icu": ("distribution", "6.0.0", False),
+                "community-plugin": ("source", "effab", True),
+            },
+            requirements,
+        )
 
     def test_create_suppliers_for_es_only_config(self):
         cfg = config.Config()
@@ -664,8 +687,12 @@ class CreateSupplierTests(TestCase):
         # default value from command line
         cfg.add(config.Scope.application, "mechanic", "source.revision", "current")
         cfg.add(config.Scope.application, "mechanic", "distribution.repository", "release")
-        cfg.add(config.Scope.application, "distributions", "release.url",
-                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
+        cfg.add(
+            config.Scope.application,
+            "distributions",
+            "release.url",
+            "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+        )
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
 
@@ -683,8 +710,12 @@ class CreateSupplierTests(TestCase):
         # default value from command line
         cfg.add(config.Scope.application, "mechanic", "source.revision", "community-plugin:current")
         cfg.add(config.Scope.application, "mechanic", "distribution.repository", "release")
-        cfg.add(config.Scope.application, "distributions", "release.url",
-                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
+        cfg.add(
+            config.Scope.application,
+            "distributions",
+            "release.url",
+            "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+        )
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
@@ -696,10 +727,7 @@ class CreateSupplierTests(TestCase):
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --revision="community-plugin:effab" --distribution-version="6.0.0"
-        composite_supplier = supplier.create(cfg, sources=False, distribution=True, car=car, plugins=[
-            core_plugin,
-            external_plugin
-        ])
+        composite_supplier = supplier.create(cfg, sources=False, distribution=True, car=car, plugins=[core_plugin, external_plugin])
 
         self.assertEqual(3, len(composite_supplier.suppliers))
         self.assertIsInstance(composite_supplier.suppliers[0], supplier.ElasticsearchDistributionSupplier)
@@ -714,8 +742,12 @@ class CreateSupplierTests(TestCase):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "source.revision", "elasticsearch:abc,community-plugin:current")
         cfg.add(config.Scope.application, "mechanic", "distribution.repository", "release")
-        cfg.add(config.Scope.application, "distributions", "release.url",
-                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz")
+        cfg.add(
+            config.Scope.application,
+            "distributions",
+            "release.url",
+            "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+        )
         cfg.add(config.Scope.application, "distributions", "release.cache", True)
         cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
         cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
@@ -723,19 +755,17 @@ class CreateSupplierTests(TestCase):
         cfg.add(config.Scope.application, "source", "remote.repo.url", "https://github.com/elastic/elasticsearch.git")
         cfg.add(config.Scope.application, "source", "plugin.community-plugin.src.subdir", "elasticsearch-extra/community-plugin")
 
-        car = team.Car("default", root_path=None, config_paths=[], variables={
-            "clean_command": "./gradlew clean",
-            "build_command": "./gradlew assemble",
-            "build.jdk": "11"
-        })
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "build_command": "./gradlew assemble", "build.jdk": "11"},
+        )
         core_plugin = team.PluginDescriptor("analysis-icu", core_plugin=True)
         external_plugin = team.PluginDescriptor("community-plugin", core_plugin=False)
 
         # --revision="elasticsearch:abc,community-plugin:effab"
-        composite_supplier = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=[
-            core_plugin,
-            external_plugin
-        ])
+        composite_supplier = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=[core_plugin, external_plugin])
 
         self.assertEqual(3, len(composite_supplier.suppliers))
         self.assertIsInstance(composite_supplier.suppliers[0].source_supplier, supplier.ElasticsearchSourceSupplier)
@@ -751,36 +781,49 @@ class DistributionRepositoryTests(TestCase):
     @mock.patch("esrally.utils.sysstats.cpu_arch", return_value="X86_64")
     def test_release_repo_config_with_default_url(self, os_name, cpu_arch):
         renderer = supplier.TemplateRenderer(version="7.3.2")
-        repo = supplier.DistributionRepository(name="release", distribution_config={
-            "runtime.jdk.bundled": "true",
-            "jdk.bundled.release_url":
-                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz",
-            "release.cache": "true"
-        }, template_renderer=renderer)
+        repo = supplier.DistributionRepository(
+            name="release",
+            distribution_config={
+                "runtime.jdk.bundled": "true",
+                "jdk.bundled.release_url": (
+                    "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}-{{OSNAME}}-{{ARCH}}.tar.gz"
+                ),
+                "release.cache": "true",
+            },
+            template_renderer=renderer,
+        )
         self.assertEqual("https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.download_url)
         self.assertEqual("elasticsearch-7.3.2-linux-x86_64.tar.gz", repo.file_name)
         self.assertTrue(repo.cache)
 
     def test_release_repo_config_with_user_url(self):
         renderer = supplier.TemplateRenderer(version="2.4.3")
-        repo = supplier.DistributionRepository(name="release", distribution_config={
-            "jdk.unbundled.release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-            "runtime.jdk.bundled": "false",
-            # user override
-            "release.url": "https://es-mirror.example.org/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-            "release.cache": "false"
-        }, template_renderer=renderer)
+        repo = supplier.DistributionRepository(
+            name="release",
+            distribution_config={
+                "jdk.unbundled.release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                "runtime.jdk.bundled": "false",
+                # user override
+                "release.url": "https://es-mirror.example.org/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                "release.cache": "false",
+            },
+            template_renderer=renderer,
+        )
         self.assertEqual("https://es-mirror.example.org/downloads/elasticsearch/elasticsearch-2.4.3.tar.gz", repo.download_url)
         self.assertEqual("elasticsearch-2.4.3.tar.gz", repo.file_name)
         self.assertFalse(repo.cache)
 
     def test_missing_url(self):
         renderer = supplier.TemplateRenderer(version="2.4.3")
-        repo = supplier.DistributionRepository(name="miss", distribution_config={
-            "jdk.unbundled.release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-            "runtime.jdk.bundled": "false",
-            "release.cache": "true"
-        }, template_renderer=renderer)
+        repo = supplier.DistributionRepository(
+            name="miss",
+            distribution_config={
+                "jdk.unbundled.release_url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                "runtime.jdk.bundled": "false",
+                "release.cache": "true",
+            },
+            template_renderer=renderer,
+        )
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             # pylint: disable=pointless-statement
             # noinspection PyStatementEffect
@@ -789,10 +832,14 @@ class DistributionRepositoryTests(TestCase):
 
     def test_missing_cache(self):
         renderer = supplier.TemplateRenderer(version="2.4.3")
-        repo = supplier.DistributionRepository(name="release", distribution_config={
-            "jdk.unbundled.release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-            "runtime.jdk.bundled": "false"
-        }, template_renderer=renderer)
+        repo = supplier.DistributionRepository(
+            name="release",
+            distribution_config={
+                "jdk.unbundled.release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                "runtime.jdk.bundled": "false",
+            },
+            template_renderer=renderer,
+        )
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             # pylint: disable=pointless-statement
             # noinspection PyStatementEffect
@@ -801,11 +848,15 @@ class DistributionRepositoryTests(TestCase):
 
     def test_invalid_cache_value(self):
         renderer = supplier.TemplateRenderer(version="2.4.3")
-        repo = supplier.DistributionRepository(name="release", distribution_config={
-            "jdk.unbundled.release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
-            "runtime.jdk.bundled": "false",
-            "release.cache": "Invalid"
-        }, template_renderer=renderer)
+        repo = supplier.DistributionRepository(
+            name="release",
+            distribution_config={
+                "jdk.unbundled.release.url": "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{VERSION}}.tar.gz",
+                "runtime.jdk.bundled": "false",
+                "release.cache": "Invalid",
+            },
+            template_renderer=renderer,
+        )
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             # pylint: disable=pointless-statement
             # noinspection PyStatementEffect
@@ -814,25 +865,37 @@ class DistributionRepositoryTests(TestCase):
 
     def test_plugin_config_with_default_url(self):
         renderer = supplier.TemplateRenderer(version="5.5.0")
-        repo = supplier.DistributionRepository(name="release", distribution_config={
-            "runtime.jdk.bundled": "false",
-            "plugin_example_release_url": "https://artifacts.example.org/downloads/plugins/example-{{VERSION}}.zip"
-        }, template_renderer=renderer)
+        repo = supplier.DistributionRepository(
+            name="release",
+            distribution_config={
+                "runtime.jdk.bundled": "false",
+                "plugin_example_release_url": "https://artifacts.example.org/downloads/plugins/example-{{VERSION}}.zip",
+            },
+            template_renderer=renderer,
+        )
         self.assertEqual("https://artifacts.example.org/downloads/plugins/example-5.5.0.zip", repo.plugin_download_url("example"))
 
     def test_plugin_config_with_user_url(self):
         renderer = supplier.TemplateRenderer(version="5.5.0")
-        repo = supplier.DistributionRepository(name="release", distribution_config={
-            "runtime.jdk.bundled": "false",
-            "plugin_example_release_url": "https://artifacts.example.org/downloads/plugins/example-{{VERSION}}.zip",
-            # user override
-            "plugin.example.release.url": "https://mirror.example.org/downloads/plugins/example-{{VERSION}}.zip"
-        }, template_renderer=renderer)
+        repo = supplier.DistributionRepository(
+            name="release",
+            distribution_config={
+                "runtime.jdk.bundled": "false",
+                "plugin_example_release_url": "https://artifacts.example.org/downloads/plugins/example-{{VERSION}}.zip",
+                # user override
+                "plugin.example.release.url": "https://mirror.example.org/downloads/plugins/example-{{VERSION}}.zip",
+            },
+            template_renderer=renderer,
+        )
         self.assertEqual("https://mirror.example.org/downloads/plugins/example-5.5.0.zip", repo.plugin_download_url("example"))
 
     def test_missing_plugin_config(self):
         renderer = supplier.TemplateRenderer(version="5.5.0")
-        repo = supplier.DistributionRepository(name="release", distribution_config={
-            "runtime.jdk.bundled": "false",
-        }, template_renderer=renderer)
+        repo = supplier.DistributionRepository(
+            name="release",
+            distribution_config={
+                "runtime.jdk.bundled": "false",
+            },
+            template_renderer=renderer,
+        )
         self.assertIsNone(repo.plugin_download_url("not existing"))

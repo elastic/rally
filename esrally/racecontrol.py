@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -23,9 +23,20 @@ import sys
 import tabulate
 import thespian.actors
 
-from esrally import actor, config, doc_link, driver, exceptions, mechanic, metrics, reporter, track, version, PROGRAM_NAME
+from esrally import (
+    PROGRAM_NAME,
+    actor,
+    config,
+    doc_link,
+    driver,
+    exceptions,
+    mechanic,
+    metrics,
+    reporter,
+    track,
+    version,
+)
 from esrally.utils import console, opts, versions
-
 
 pipelines = collections.OrderedDict()
 
@@ -99,12 +110,12 @@ class BenchmarkActor(actor.RallyActor):
         self.coordinator.setup(sources=msg.sources)
         self.logger.info("Asking mechanic to start the engine.")
         self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
-        self.send(self.mechanic, mechanic.StartEngine(self.cfg,
-                                                      self.coordinator.metrics_store.open_context,
-                                                      msg.sources,
-                                                      msg.distribution,
-                                                      msg.external,
-                                                      msg.docker))
+        self.send(
+            self.mechanic,
+            mechanic.StartEngine(
+                self.cfg, self.coordinator.metrics_store.open_context, msg.sources, msg.distribution, msg.external, msg.docker
+            ),
+        )
 
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_EngineStarted(self, msg, sender):
@@ -187,16 +198,15 @@ class BenchmarkCoordinator:
         if self.current_challenge is None:
             raise exceptions.SystemSetupError(
                 "Track [{}] does not provide challenge [{}]. List the available tracks with {} list tracks.".format(
-                    self.current_track.name, challenge_name, PROGRAM_NAME))
+                    self.current_track.name, challenge_name, PROGRAM_NAME
+                )
+            )
         if self.current_challenge.user_info:
             console.info(self.current_challenge.user_info)
         self.race = metrics.create_race(self.cfg, self.current_track, self.current_challenge, self.track_revision)
 
         self.metrics_store = metrics.metrics_store(
-            self.cfg,
-            track=self.race.track_name,
-            challenge=self.race.challenge_name,
-            read_only=False
+            self.cfg, track=self.race.track_name, challenge=self.race.challenge_name, read_only=False
         )
         self.race_store = metrics.race_store(self.cfg)
 
@@ -207,11 +217,17 @@ class BenchmarkCoordinator:
         # store race initially (without any results) so other components can retrieve full metadata
         self.race_store.store_race(self.race)
         if self.race.challenge.auto_generated:
-            console.info("Racing on track [{}] and car {} with version [{}].\n"
-                         .format(self.race.track_name, self.race.car, self.race.distribution_version))
+            console.info(
+                "Racing on track [{}] and car {} with version [{}].\n".format(
+                    self.race.track_name, self.race.car, self.race.distribution_version
+                )
+            )
         else:
-            console.info("Racing on track [{}], challenge [{}] and car {} with version [{}].\n"
-                         .format(self.race.track_name, self.race.challenge_name, self.race.car, self.race.distribution_version))
+            console.info(
+                "Racing on track [{}], challenge [{}] and car {} with version [{}].\n".format(
+                    self.race.track_name, self.race.challenge_name, self.race.car, self.race.distribution_version
+                )
+            )
 
     def on_task_finished(self, new_metrics):
         self.logger.info("Task has finished.")
@@ -268,7 +284,7 @@ def set_default_hosts(cfg, host="127.0.0.1", port=9200):
         logger.info("Using configured hosts %s", configured_hosts.default)
     else:
         logger.info("Setting default host to [%s:%d]", host, port)
-        default_host_object = opts.TargetHosts("{}:{}".format(host,port))
+        default_host_object = opts.TargetHosts("{}:{}".format(host, port))
         cfg.add(config.Scope.benchmark, "client", "hosts", default_host_object)
 
 
@@ -297,18 +313,16 @@ def docker(cfg):
     return race(cfg, docker=True)
 
 
-Pipeline("from-sources",
-         "Builds and provisions Elasticsearch, runs a benchmark and reports results.", from_sources)
+Pipeline("from-sources", "Builds and provisions Elasticsearch, runs a benchmark and reports results.", from_sources)
 
-Pipeline("from-distribution",
-         "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.", from_distribution)
+Pipeline(
+    "from-distribution", "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.", from_distribution
+)
 
-Pipeline("benchmark-only",
-         "Assumes an already running Elasticsearch instance, runs a benchmark and reports results", benchmark_only)
+Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results", benchmark_only)
 
 # Very experimental Docker pipeline. Should only be used with great care and is also not supported on all platforms.
-Pipeline("docker",
-         "Runs a benchmark against the official Elasticsearch Docker container and reports results", docker, stable=False)
+Pipeline("docker", "Runs a benchmark against the official Elasticsearch Docker container and reports results", docker, stable=False)
 
 
 def available_pipelines():
@@ -342,14 +356,15 @@ def run(cfg):
             raise exceptions.SystemSetupError(
                 "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
                 "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-                "For more details read the docs for the benchmark-only pipeline in {}\n".format(
-                    doc_link("pipelines.html#benchmark-only")))
+                "For more details read the docs for the benchmark-only pipeline in {}\n".format(doc_link("pipelines.html#benchmark-only"))
+            )
 
     try:
         pipeline = pipelines[name]
     except KeyError:
         raise exceptions.SystemSetupError(
-            "Unknown pipeline [%s]. List the available pipelines with %s list pipelines." % (name, PROGRAM_NAME))
+            "Unknown pipeline [%s]. List the available pipelines with %s list pipelines." % (name, PROGRAM_NAME)
+        )
     try:
         pipeline(cfg)
     except exceptions.RallyError as e:

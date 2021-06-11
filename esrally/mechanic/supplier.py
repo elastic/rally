@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -23,9 +23,9 @@ import re
 import shutil
 import urllib.error
 
-from esrally import exceptions, paths, PROGRAM_NAME
+from esrally import PROGRAM_NAME, exceptions, paths
 from esrally.exceptions import BuildError, SystemSetupError
-from esrally.utils import git, io, process, net, jvm, convert, sysstats
+from esrally.utils import convert, git, io, jvm, net, process, sysstats
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"
@@ -85,26 +85,26 @@ def create(cfg, sources, distribution, car, plugins=None):
     if es_supplier_type == "source":
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
 
-        source_supplier = ElasticsearchSourceSupplier(es_version,
-                                                      es_src_dir,
-                                                      remote_url=cfg.opts("source", "remote.repo.url"),
-                                                      car=car,
-                                                      builder=builder,
-                                                      template_renderer=template_renderer)
+        source_supplier = ElasticsearchSourceSupplier(
+            es_version,
+            es_src_dir,
+            remote_url=cfg.opts("source", "remote.repo.url"),
+            car=car,
+            builder=builder,
+            template_renderer=template_renderer,
+        )
 
         if caching_enabled:
             es_file_resolver = ElasticsearchFileNameResolver(dist_cfg, template_renderer)
-            source_supplier = CachedSourceSupplier(source_distributions_root,
-                                                   source_supplier,
-                                                   es_file_resolver)
+            source_supplier = CachedSourceSupplier(source_distributions_root, source_supplier, es_file_resolver)
 
         suppliers.append(source_supplier)
         repo = None
     else:
         es_src_dir = None
-        repo = DistributionRepository(name=cfg.opts("mechanic", "distribution.repository"),
-                                      distribution_config=dist_cfg,
-                                      template_renderer=template_renderer)
+        repo = DistributionRepository(
+            name=cfg.opts("mechanic", "distribution.repository"), distribution_config=dist_cfg, template_renderer=template_renderer
+        )
         suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))
 
     for plugin in plugins:
@@ -119,14 +119,14 @@ def create(cfg, sources, distribution, car, plugins=None):
                 logger.info("Adding external plugin source supplier for [%s].", plugin.name)
                 plugin_supplier = ExternalPluginSourceSupplier(plugin, plugin_version, _src_dir(cfg, mandatory=False), src_config, builder)
             else:
-                raise exceptions.RallyError("Plugin %s can neither be treated as core nor as external plugin. Requirements: %s" %
-                                            (plugin.name, supply_requirements[plugin.name]))
+                raise exceptions.RallyError(
+                    "Plugin %s can neither be treated as core nor as external plugin. Requirements: %s"
+                    % (plugin.name, supply_requirements[plugin.name])
+                )
 
             if caching_enabled:
                 plugin_file_resolver = PluginFileNameResolver(plugin.name, plugin_version)
-                plugin_supplier = CachedSourceSupplier(source_distributions_root,
-                                                       plugin_supplier,
-                                                       plugin_file_resolver)
+                plugin_supplier = CachedSourceSupplier(source_distributions_root, plugin_supplier, plugin_file_resolver)
             suppliers.append(plugin_supplier)
         else:
             logger.info("Adding plugin distribution supplier for [%s].", plugin.name)
@@ -138,8 +138,10 @@ def create(cfg, sources, distribution, car, plugins=None):
 
 def _required_version(version):
     if not version or version.strip() == "":
-        raise exceptions.SystemSetupError("Could not determine version. Please specify the Elasticsearch distribution "
-                                          "to download with the command line parameter --distribution-version.")
+        raise exceptions.SystemSetupError(
+            "Could not determine version. Please specify the Elasticsearch distribution "
+            "to download with the command line parameter --distribution-version."
+        )
     else:
         return version
 
@@ -182,8 +184,9 @@ def _supply_requirements(sources, distribution, plugins, revisions, distribution
                     if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
                         raise exceptions.SystemSetupError("No revision specified for plugin [%s]." % plugin.name)
                     else:
-                        logging.getLogger(__name__).info("Revision for [%s] is not explicitly defined. Using catch-all revision [%s].",
-                                                         plugin.name, plugin_revision)
+                        logging.getLogger(__name__).info(
+                            "Revision for [%s] is not explicitly defined. Using catch-all revision [%s].", plugin.name, plugin_revision
+                        )
                 supply_requirements[plugin.name] = ("source", plugin_revision, True)
             else:
                 supply_requirements[plugin.name] = (distribution, _required_version(distribution_version), False)
@@ -195,8 +198,10 @@ def _src_dir(cfg, mandatory=True):
     try:
         return cfg.opts("node", "src.root.dir", mandatory=mandatory)
     except exceptions.ConfigError:
-        raise exceptions.SystemSetupError("You cannot benchmark Elasticsearch from sources. Did you install Gradle? Please install"
-                                          " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME)
+        raise exceptions.SystemSetupError(
+            "You cannot benchmark Elasticsearch from sources. Did you install Gradle? Please install"
+            " all prerequisites and reconfigure Rally with %s configure" % PROGRAM_NAME
+        )
 
 
 def _prune(root_path, max_age_days):
@@ -241,11 +246,7 @@ class TemplateRenderer:
             self.arch = sysstats.cpu_arch().lower()
 
     def render(self, template):
-        substitutions = {
-            "{{VERSION}}": self.version,
-            "{{OSNAME}}": self.os,
-            "{{ARCH}}": self.arch
-        }
+        substitutions = {"{{VERSION}}": self.version, "{{OSNAME}}": self.os, "{{ARCH}}": self.arch}
         r = template
         for key, replacement in substitutions.items():
             r = r.replace(key, str(replacement))
@@ -288,7 +289,7 @@ class ElasticsearchFileNameResolver:
         else:
             url_key = "jdk.unbundled.release_url"
         url = self.template_renderer.render(self.cfg[url_key])
-        return url[url.rfind("/") + 1:]
+        return url[url.rfind("/") + 1 :]
 
     @property
     def artifact_key(self):
@@ -371,18 +372,19 @@ class ElasticsearchSourceSupplier:
 
     def prepare(self):
         if self.builder:
-            self.builder.build([
-                self.template_renderer.render(self.car.mandatory_var("clean_command")),
-                self.template_renderer.render(self.car.mandatory_var("system.build_command"))
-            ])
+            self.builder.build(
+                [
+                    self.template_renderer.render(self.car.mandatory_var("clean_command")),
+                    self.template_renderer.render(self.car.mandatory_var("system.build_command")),
+                ]
+            )
 
     def add(self, binaries):
         binaries["elasticsearch"] = self.resolve_binary()
 
     def resolve_binary(self):
         try:
-            path = os.path.join(self.src_dir,
-                                self.template_renderer.render(self.car.mandatory_var("system.artifact_path_pattern")))
+            path = os.path.join(self.src_dir, self.template_renderer.render(self.car.mandatory_var("system.artifact_path_pattern")))
             return glob.glob(path)[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources'.")
@@ -405,7 +407,7 @@ class PluginFileNameResolver:
         return f"file://{file_system_path}"
 
     def to_file_system_path(self, artifact_path):
-        return artifact_path[len("file://"):]
+        return artifact_path[len("file://") :]
 
 
 class ExternalPluginSourceSupplier:
@@ -454,8 +456,9 @@ class ExternalPluginSourceSupplier:
             name = glob.glob("%s/%s/*.zip" % (self.plugin_src_dir, artifact_path))[0]
             return "file://%s" % name
         except IndexError:
-            raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources'." %
-                                   self.plugin.name)
+            raise SystemSetupError(
+                "Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources'." % self.plugin.name
+            )
 
 
 class CorePluginSourceSupplier:
@@ -485,8 +488,9 @@ class CorePluginSourceSupplier:
             name = glob.glob("%s/plugins/%s/build/distributions/*.zip" % (self.es_src_dir, self.plugin.name))[0]
             return "file://%s" % name
         except IndexError:
-            raise SystemSetupError("Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources'." %
-                                   self.plugin.name)
+            raise SystemSetupError(
+                "Couldn't find a plugin zip file for [%s]. Please run Rally with the pipeline 'from-sources'." % self.plugin.name
+            )
 
 
 class ElasticsearchDistributionSupplier:
@@ -512,8 +516,10 @@ class ElasticsearchDistributionSupplier:
                 self.logger.info("Successfully downloaded Elasticsearch [%s].", self.version)
             except urllib.error.HTTPError:
                 self.logger.exception("Cannot download Elasticsearch distribution for version [%s] from [%s].", self.version, download_url)
-                raise exceptions.SystemSetupError("Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
-                                                  "version [%s] is correct." % (download_url, self.version))
+                raise exceptions.SystemSetupError(
+                    "Cannot download Elasticsearch distribution from [%s]. Please check that the specified "
+                    "version [%s] is correct." % (download_url, self.version)
+                )
         else:
             self.logger.info("Skipping download for version [%s]. Found an existing binary at [%s].", self.version, distribution_path)
 
@@ -549,8 +555,9 @@ def _config_value(src_config, key):
     try:
         return src_config[key]
     except KeyError:
-        raise exceptions.SystemSetupError("Mandatory config key [%s] is undefined. Please add it in the [source] section of the "
-                                          "config file." % key)
+        raise exceptions.SystemSetupError(
+            "Mandatory config key [%s] is undefined. Please add it in the [source] section of the config file." % key
+        )
 
 
 def _extract_revisions(revision):
@@ -558,18 +565,16 @@ def _extract_revisions(revision):
     if len(revisions) == 1:
         r = revisions[0]
         if r.startswith("elasticsearch:"):
-            r = r[len("elasticsearch:"):]
+            r = r[len("elasticsearch:") :]
         # may as well be just a single plugin
         m = re.match(REVISION_PATTERN, r)
         if m:
-            return {
-                m.group(1): m.group(2)
-            }
+            return {m.group(1): m.group(2)}
         else:
             return {
                 "elasticsearch": r,
                 # use a catch-all value
-                "all": r
+                "all": r,
             }
     else:
         results = {}
@@ -708,7 +713,7 @@ class DistributionRepository:
     @property
     def file_name(self):
         url = self.download_url
-        return url[url.rfind("/") + 1:]
+        return url[url.rfind("/") + 1 :]
 
     def plugin_download_url(self, plugin_name):
         # team repo

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -29,7 +29,7 @@ class FormatterTests(TestCase):
         self.metrics_data = [
             ["Min Throughput", "index", "17300", "18000", "700", "ops/s"],
             ["Median Throughput", "index", "17500", "18500", "1000", "ops/s"],
-            ["Max Throughput", "index", "17700", "19000", "1300", "ops/s"]
+            ["Max Throughput", "index", "17700", "19000", "1300", "ops/s"],
         ]
         self.numbers_align = "right"
 

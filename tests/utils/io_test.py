@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -32,7 +32,7 @@ def mock_debian(args, fallback=None):
             "/usr/lib/jvm/java-7-openjdk-amd64/jre/bin/java",
             "/usr/lib/jvm/java-7-oracle/jre/bin/java",
             "/usr/lib/jvm/java-8-oracle/jre/bin/java",
-            "/usr/lib/jvm/java-9-openjdk-amd64/bin/java"
+            "/usr/lib/jvm/java-9-openjdk-amd64/bin/java",
         ]
     else:
         return fallback
@@ -76,10 +76,12 @@ class TestDecompression:
 
             io.decompress(archive_path, target_directory=tmp_dir)
 
-            assert os.path.exists(decompressed_path) is True,\
-                f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file does not exist)"
-            assert self.read(decompressed_path) == "Sample text for DecompressionTests\n",\
-                f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
+            assert (
+                os.path.exists(decompressed_path) is True
+            ), f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file does not exist)"
+            assert (
+                self.read(decompressed_path) == "Sample text for DecompressionTests\n"
+            ), f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
 
     @mock.patch.object(io, "is_executable", return_value=False)
     def test_decompresses_supported_file_formats_with_lib_as_failover(self, mocked_is_executable):
@@ -92,10 +94,12 @@ class TestDecompression:
             with mock.patch.object(logger, "warning") as mocked_console_warn:
                 io.decompress(archive_path, target_directory=tmp_dir)
 
-                assert os.path.exists(decompressed_path) is True,\
-                    f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file does not exist)"
-                assert self.read(decompressed_path) == "Sample text for DecompressionTests\n",\
-                    f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
+                assert (
+                    os.path.exists(decompressed_path) is True
+                ), f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file does not exist)"
+                assert (
+                    self.read(decompressed_path) == "Sample text for DecompressionTests\n"
+                ), f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
 
             if ext in ["bz2", "gz"]:
                 assert "not found in PATH. Using standard library, decompression will take longer." in mocked_console_warn.call_args[0][0]
@@ -119,5 +123,5 @@ class TestDecompression:
         assert result is False
 
     def read(self, f):
-        with open(f, 'r') as content_file:
+        with open(f, "r") as content_file:
             return content_file.read()

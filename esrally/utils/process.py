@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -81,13 +81,15 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, s
         logger.info(header)
 
     # pylint: disable=subprocess-popen-preexec-fn
-    with subprocess.Popen(command_line_args,
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT,
-                          universal_newlines=True,
-                          env=env,
-                          stdin=stdin if stdin else None,
-                          preexec_fn=pre_exec) as command_line_process:
+    with subprocess.Popen(
+        command_line_args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        env=env,
+        stdin=stdin if stdin else None,
+        preexec_fn=pre_exec,
+    ) as command_line_process:
         stdout, _ = command_line_process.communicate()
         if stdout:
             logger.log(level=level, msg=stdout)
@@ -97,11 +99,15 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, s
 
 
 def is_rally_process(p):
-    return p.name() == "esrally" or \
-           p.name() == "rally" or \
-           (p.name().lower().startswith("python")
+    return (
+        p.name() == "esrally"
+        or p.name() == "rally"
+        or (
+            p.name().lower().startswith("python")
             and any("esrally" in e for e in p.cmdline())
-            and not any("esrallyd" in e for e in p.cmdline()))
+            and not any("esrallyd" in e for e in p.cmdline())
+        )
+    )
 
 
 def find_all_other_rally_processes():
@@ -139,10 +145,14 @@ def for_all_other_processes(predicate, action):
 
 def kill_running_rally_instances():
     def rally_process(p):
-        return p.name() == "esrally" or \
-               p.name() == "rally" or \
-               (p.name().lower().startswith("python")
+        return (
+            p.name() == "esrally"
+            or p.name() == "rally"
+            or (
+                p.name().lower().startswith("python")
                 and any("esrally" in e for e in p.cmdline())
-                and not any("esrallyd" in e for e in p.cmdline()))
+                and not any("esrallyd" in e for e in p.cmdline())
+            )
+        )
 
     kill_all(rally_process)
