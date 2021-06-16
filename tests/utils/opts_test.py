@@ -276,16 +276,23 @@ class TestClientOptions(TestCase):
             opts.ClientOptions(client_options_string,
                                  target_hosts=target_hosts).default)
 
-    def test_amends_with_max_connections(self):
+    def test_default_client_ops_with_max_connections(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = opts.TargetHosts('{"default": ["10.17.0.5:9200"], "remote": ["88.33.22.15:9200"]}')
         self.assertEqual(
-            {"default": {"timeout": 60, "max_connections": 128}, "remote": {"timeout": 60, "max_connections": 128}},
-            opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(128))
+            {"default": {"timeout": 60, "max_connections": 256}, "remote": {"timeout": 60, "max_connections": 256}},
+            opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(256))
 
-    def test_keeps_already_specified_max_connections(self):
+    def test_sets_minimum_max_connections(self):
         client_options_string = '{"default": {"timeout":60,"max_connections":5}, "remote": {"timeout":60}}'
         target_hosts = opts.TargetHosts('{"default": ["10.17.0.5:9200"], "remote": ["88.33.22.15:9200"]}')
         self.assertEqual(
-            {"default": {"timeout": 60, "max_connections": 5}, "remote": {"timeout": 60, "max_connections": 32}},
+            {"default": {"timeout": 60, "max_connections": 256}, "remote": {"timeout": 60, "max_connections": 256}},
+            opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(5))
+
+    def test_keeps_greater_than_minimum_max_connections(self):
+        client_options_string = '{"default": {"timeout":60,"max_connections":512}, "remote": {"timeout":60,"max_connections":1024}}'
+        target_hosts = opts.TargetHosts('{"default": ["10.17.0.5:9200"], "remote": ["88.33.22.15:9200"]}')
+        self.assertEqual(
+            {"default": {"timeout": 60, "max_connections": 512}, "remote": {"timeout": 60, "max_connections": 1024}},
             opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(32))
