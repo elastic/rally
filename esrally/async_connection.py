@@ -168,7 +168,7 @@ class AIOHttpConnection(elasticsearch.AIOHttpConnection):
                          ssl_assert_fingerprint=ssl_assert_fingerprint,
                          # provided to the base class via `maxsize` to keep base class state consistent despite Rally
                          # calling the attribute differently.
-                         maxsize=max(256, kwargs.get("max_connections", 0)),
+                         maxsize=kwargs.get("max_connections", 0),
                          headers=headers,
                          ssl_context=ssl_context,
                          http_compress=http_compress,

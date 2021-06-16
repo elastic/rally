@@ -211,7 +211,6 @@ class ClientOptions(ConnectOptions):
         final_client_options = {}
         for cluster, original_opts in self.all_client_options.items():
             amended_opts = dict(original_opts)
-            if "max_connections" not in amended_opts:
-                amended_opts["max_connections"] = max_connections
+            amended_opts["max_connections"] = max(256, amended_opts.get("max_connections", max_connections))
             final_client_options[cluster] = amended_opts
         return final_client_options
