@@ -627,7 +627,7 @@ def race(cfg, kill_running_processes=False):
         try:
             process.kill_running_rally_instances()
         except KeyboardInterrupt:
-            raise exceptions.UserInterrupted(f"User has cancelled whilst terminating Rally instances.") from None
+            raise exceptions.UserInterrupted(f"User has cancelled the benchmark whilst terminating Rally instances.") from None
         except BaseException:
             logger.exception(
                 "Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
