@@ -21,6 +21,7 @@ import pytest
 
 import it
 
+from esrally.utils import process
 
 @it.random_rally_config
 def test_tar_distributions(cfg):
@@ -49,6 +50,18 @@ def test_does_not_benchmark_unsupported_distribution(cfg):
     it.wait_until_port_is_free(port_number=port)
     assert it.race(cfg, f"--distribution-version=\"1.7.6\" --track=\"{it.TRACKS[0]}\" "
                         f"--target-hosts=127.0.0.1:{port} --test-mode --car=4gheap") != 0
+
+
+@it.random_rally_config
+def test_interrupt(cfg):
+    port = 19200
+    dist = it.DISTRIBUTIONS[-1]
+    # simulate a user cancelling a benchmark
+    cmd = it.esrally_command_line_for(cfg, f"race --distribution-version=\"{dist}\" --track=\"geonames\" "
+                                           f"--kill-running-processes --target-hosts=127.0.0.1:{port} --test-mode "
+                                           f"--car=4gheap")
+    output = process.run_subprocess_and_interrupt(cmd)
+    assert output == 130
 
 
 @pytest.fixture(scope="module")
