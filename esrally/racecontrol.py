@@ -256,6 +256,7 @@ def race(cfg, sources=False, distribution=False, external=False, docker=False):
         # notify the coordinator so it can properly handle this state. Do it blocking so we don't have a race between this message
         # and the actor exit request.
         actor_system.ask(benchmark_actor, actor.BenchmarkCancelled())
+        raise exceptions.UserInterrupted(f"User has cancelled the benchmark (detected by race control).") from None
     finally:
         logger.info("Telling benchmark actor to exit.")
         actor_system.tell(benchmark_actor, thespian.actors.ActorExitRequest())

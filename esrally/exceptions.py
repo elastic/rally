@@ -92,3 +92,9 @@ class TrackConfigError(RallyError):
 
 class NotFound(RallyError):
     pass
+
+
+class UserInterrupted(RallyError):
+    """
+    Thrown when a user cancels a benchmark via a SIGINT, e.g. CTRL + C
+    """

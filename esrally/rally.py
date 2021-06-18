@@ -23,6 +23,7 @@ import platform
 import sys
 import time
 import uuid
+from enum import Enum
 
 import thespian.actors
 
@@ -33,6 +34,11 @@ from esrally.mechanic import team, mechanic
 from esrally.tracker import tracker
 from esrally.utils import io, convert, process, console, net, opts, versions
 
+
+class ExitStatus(Enum):
+    SUCCESSFUL = 0
+    ERROR = 64
+    INTERRUPTED = 130
 
 def create_arg_parser():
     def positive_number(v):
@@ -620,6 +626,8 @@ def race(cfg, kill_running_processes=False):
         # noinspection PyBroadException
         try:
             process.kill_running_rally_instances()
+        except KeyboardInterrupt:
+            raise exceptions.UserInterrupted(f"User has cancelled whilst terminating Rally instances.") from None
         except BaseException:
             logger.exception(
                 "Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
@@ -650,6 +658,8 @@ def with_actor_system(runnable, cfg):
         logger.info("Falling back to offline actor system.")
         actor.use_offline_actor_system()
         actors = actor.bootstrap_actor_system(try_join=True)
+    except KeyboardInterrupt:
+        raise exceptions.UserInterrupted(f"User has cancelled the benchmark (detected whilst bootstrapping actor system).") from None
     except Exception as e:
         logger.exception("Could not bootstrap actor system.")
         if str(e) == "Unable to determine valid external socket address.":
@@ -667,10 +677,10 @@ def with_actor_system(runnable, cfg):
         if not already_running:
             shutdown_complete = False
             times_interrupted = 0
-            # give some time for any outstanding messages to be delivered to the actor system
-            time.sleep(3)
             while not shutdown_complete and times_interrupted < 2:
                 try:
+                    # give some time for any outstanding messages to be delivered to the actor system
+                    time.sleep(3)
                     logger.info("Attempting to shutdown internal actor system.")
                     actors.shutdown()
                     # note that this check will only evaluate to True for a TCP-based actor system.
@@ -699,6 +709,8 @@ def with_actor_system(runnable, cfg):
                 console.println("")
                 console.println(SKULL)
                 console.println("")
+                raise exceptions.UserInterrupted(f"User has cancelled the benchmark (shutdown not complete as user interrupted "
+                                                 f"{times_interrupted} times).") from None
             elif not shutdown_complete:
                 console.warn("Could not terminate all internal processes within timeout. Please check and force-terminate "
                              "all Rally processes.")
@@ -850,7 +862,6 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", convert.to_bool(args.skip_rest_api_check))
 
             configure_reporting_params(args, cfg)
-
             race(cfg, args.kill_running_processes)
         elif sub_command == "generate":
             cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
@@ -869,7 +880,12 @@ def dispatch_sub_command(arg_parser, args, cfg):
             track.track_info(cfg)
         else:
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
-        return True
+        return ExitStatus.SUCCESSFUL
+    except exceptions.UserInterrupted as e:
+        logging.getLogger(__name__).exception("User has cancelled the benchmark, [%s].", sub_command)
+        console.error("Cannot %s. %s." % (sub_command, e))
+        print_help_on_errors()
+        return ExitStatus.INTERRUPTED
     except exceptions.RallyError as e:
         logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
         msg = str(e.message)
@@ -885,13 +901,13 @@ def dispatch_sub_command(arg_parser, args, cfg):
         console.error("Cannot %s. %s" % (sub_command, msg))
         console.println("")
         print_help_on_errors()
-        return False
+        return ExitStatus.ERROR
     except BaseException as e:
         logging.getLogger(__name__).exception("A fatal error occurred while running subcommand [%s].", sub_command)
         console.error("Cannot %s. %s." % (sub_command, e))
         console.println("")
         print_help_on_errors()
-        return False
+        return ExitStatus.ERROR
 
 
 def main():
@@ -934,16 +950,20 @@ def main():
         else:
             logger.info("Detected a working Internet connection.")
 
-    success = dispatch_sub_command(arg_parser, args, cfg)
+    result = dispatch_sub_command(arg_parser, args, cfg)
 
     end = time.time()
-    if success:
+    if result == ExitStatus.SUCCESSFUL:
         console.println("")
         console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
-    else:
+    elif result == ExitStatus.INTERRUPTED:
         console.println("")
         console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
-        sys.exit(64)
+        sys.exit(result.value)
+    elif result == ExitStatus.ERROR:
+        console.println("")
+        console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
+        sys.exit(result.value)
 
 
 if __name__ == "__main__":
