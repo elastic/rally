@@ -958,7 +958,7 @@ def main():
         console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
     elif result == ExitStatus.INTERRUPTED:
         console.println("")
-        console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
+        console.info("ABORTED (took %d seconds)" % (end - start), overline="-", underline="-")
         sys.exit(result.value)
     elif result == ExitStatus.ERROR:
         console.println("")
