@@ -20,9 +20,9 @@ import os
 import shlex
 import subprocess
 import time
-import psutil
 import signal
 import random
+import psutil
 
 
 def run_subprocess(command_line):

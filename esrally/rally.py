@@ -627,7 +627,7 @@ def race(cfg, kill_running_processes=False):
         try:
             process.kill_running_rally_instances()
         except KeyboardInterrupt:
-            raise exceptions.UserInterrupted(f"User has cancelled the benchmark whilst terminating Rally instances.") from None
+            raise exceptions.UserInterrupted("User has cancelled the benchmark whilst terminating Rally instances.") from None
         except BaseException:
             logger.exception(
                 "Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
@@ -659,7 +659,7 @@ def with_actor_system(runnable, cfg):
         actor.use_offline_actor_system()
         actors = actor.bootstrap_actor_system(try_join=True)
     except KeyboardInterrupt:
-        raise exceptions.UserInterrupted(f"User has cancelled the benchmark (detected whilst bootstrapping actor system).") from None
+        raise exceptions.UserInterrupted("User has cancelled the benchmark (detected whilst bootstrapping actor system).") from None
     except Exception as e:
         logger.exception("Could not bootstrap actor system.")
         if str(e) == "Unable to determine valid external socket address.":
