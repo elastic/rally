@@ -457,21 +457,21 @@ class ComparisonReporter:
                 if contender["id"] == transform_id:
                     lines.append(
                         self._line("Transform processing time", baseline["mean"], contender["mean"],
-                                   transform_id, baseline["unit"], treat_increase_as_improvement=True))
+                                   transform_id, baseline["unit"], treat_increase_as_improvement=False))
         for baseline in baseline_stats.total_transform_index_times:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_index_times:
                 if contender["id"] == transform_id:
                     lines.append(
                         self._line("Transform indexing time", baseline["mean"], contender["mean"],
-                                   transform_id, baseline["unit"], treat_increase_as_improvement=True))
+                                   transform_id, baseline["unit"], treat_increase_as_improvement=False))
         for baseline in baseline_stats.total_transform_search_times:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_search_times:
                 if contender["id"] == transform_id:
                     lines.append(
                         self._line("Transform search time", baseline["mean"], contender["mean"],
-                                   transform_id, baseline["unit"], treat_increase_as_improvement=True))
+                                   transform_id, baseline["unit"], treat_increase_as_improvement=False))
         for baseline in baseline_stats.total_transform_throughput:
             transform_id = baseline["id"]
             for contender in contender_stats.total_transform_throughput:
