@@ -20,8 +20,7 @@ import os
 import shlex
 import subprocess
 import time
-import signal
-import random
+
 import psutil
 
 
@@ -43,18 +42,6 @@ def run_subprocess_with_output(command_line):
             else:
                 has_output = False
     return lines
-
-
-def run_subprocess_and_interrupt(command_line):
-    logger = logging.getLogger(__name__)
-    logger.debug("Running subprocess [%s] to interrupt.", command_line)
-    command_line_args = shlex.split(command_line)
-    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as command_line_process:
-        time.sleep(random.randrange(2, 15))
-        command_line_process.send_signal(signal.SIGINT)
-        command_line_process.wait()
-
-    return command_line_process.returncode
 
 
 def exit_status_as_bool(runnable, quiet=False):

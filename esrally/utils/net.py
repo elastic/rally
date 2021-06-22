@@ -253,6 +253,8 @@ def has_internet_connection(probing_url):
         status = response.status
         logger.debug("Probing result is HTTP status [%s]", str(status))
         return status == 200
+    except KeyboardInterrupt:
+        raise
     except BaseException:
         logger.debug("Could not detect a working Internet connection", exc_info=True)
         return False

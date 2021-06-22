@@ -358,6 +358,7 @@ def run(cfg):
         raise e
     except KeyboardInterrupt:
         logger.info("User has cancelled the benchmark.")
+        raise exceptions.UserInterrupted("User has cancelled the benchmark (detected by race control).") from None
     except BaseException:
         tb = sys.exc_info()[2]
         raise exceptions.RallyError("This race ended with a fatal crash.").with_traceback(tb)

@@ -36,9 +36,9 @@ from esrally.utils import io, convert, process, console, net, opts, versions
 
 
 class ExitStatus(Enum):
-    SUCCESSFUL = 0
-    ERROR = 64
-    INTERRUPTED = 130
+    SUCCESSFUL = 1
+    ERROR = 2
+    INTERRUPTED = 3
 
 def create_arg_parser():
     def positive_number(v):
@@ -881,10 +881,9 @@ def dispatch_sub_command(arg_parser, args, cfg):
         else:
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return ExitStatus.SUCCESSFUL
-    except exceptions.UserInterrupted as e:
-        logging.getLogger(__name__).exception("User has cancelled the benchmark, [%s].", sub_command)
-        console.error("Cannot %s. %s." % (sub_command, e))
-        print_help_on_errors()
+    except (exceptions.UserInterrupted, KeyboardInterrupt) as e:
+        logging.getLogger(__name__).info("User has cancelled the subcommand [%s].", sub_command, exc_info=e)
+        console.info("Aborted %s. %s" % (sub_command, e))
         return ExitStatus.INTERRUPTED
     except exceptions.RallyError as e:
         logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
@@ -959,11 +958,11 @@ def main():
     elif result == ExitStatus.INTERRUPTED:
         console.println("")
         console.info("ABORTED (took %d seconds)" % (end - start), overline="-", underline="-")
-        sys.exit(result.value)
+        sys.exit(130)
     elif result == ExitStatus.ERROR:
         console.println("")
         console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
-        sys.exit(result.value)
+        sys.exit(64)
 
 
 if __name__ == "__main__":
