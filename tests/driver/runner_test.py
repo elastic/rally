@@ -4709,7 +4709,7 @@ class TransformStatsRunnerTests(TestCase):
             "transform-id": transform_id,
             "condition": {
                 "path": "checkpointing.operations_behind",
-                "expected-value": 0
+                "expected-value": None
             }
         })
         self.assertEqual(1, result["weight"])
@@ -4718,7 +4718,7 @@ class TransformStatsRunnerTests(TestCase):
         self.assertDictEqual({
             "path": "checkpointing.operations_behind",
             "actual-value": "10000",
-            "expected-value": "0"
+            "expected-value": None
         }, result["condition"])
 
         es.transform.get_transform_stats.assert_called_once_with(transform_id=transform_id)
@@ -4735,8 +4735,7 @@ class TransformStatsRunnerTests(TestCase):
                     "state": "started",
                     "stats": {},
                     "checkpointing": {
-                        "last": {},
-                        "operations_behind": 0
+                        "last": {}
                     }
                 }
             ]
@@ -4748,7 +4747,7 @@ class TransformStatsRunnerTests(TestCase):
             "transform-id": transform_id,
             "condition": {
                 "path": "checkpointing.operations_behind",
-                "expected-value": 0
+                "expected-value": None
             }
         })
         self.assertEqual(1, result["weight"])
@@ -4756,8 +4755,8 @@ class TransformStatsRunnerTests(TestCase):
         self.assertTrue(result["success"])
         self.assertDictEqual({
             "path": "checkpointing.operations_behind",
-            "actual-value": "0",
-            "expected-value": "0"
+            "actual-value": None,
+            "expected-value": None
         }, result["condition"])
 
         es.transform.get_transform_stats.assert_called_once_with(transform_id=transform_id)
@@ -4774,8 +4773,7 @@ class TransformStatsRunnerTests(TestCase):
                     "state": "started",
                     "stats": {},
                     "checkpointing": {
-                        "last": {},
-                        "operations_behind": 0
+                        "last": {}
                     }
                 }
             ]
