@@ -4664,6 +4664,144 @@ class DeleteTransformTests(TestCase):
                                                               ignore=[404])
 
 
+class TransformStatsRunnerTests(TestCase):
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_transform_stats_with_timeout_and_headers(self, es):
+        es.transform.get_transform_stats.return_value = as_future({})
+        transform_stats = runner.TransformStats()
+        transform_id = "a-transform"
+        result = await transform_stats(es, params={"transform-id": transform_id,
+                                                   "request-timeout": 3.0,
+                                                   "headers": {"header1": "value1"},
+                                                   "opaque-id": "test-id1"})
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+
+        es.transform.get_transform_stats.assert_called_once_with(transform_id=transform_id,
+                                                                 headers={"header1": "value1"},
+                                                                 opaque_id="test-id1",
+                                                                 request_timeout=3.0)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_transform_stats_with_failed_condition(self, es):
+        transform_id = "a-transform"
+        es.transform.get_transform_stats.return_value = as_future({
+            "count": 3,
+            "transforms": [
+                {
+                    "id": transform_id,
+                    "state": "started",
+                    "stats": {},
+                    "checkpointing": {
+                        "last": {},
+                        "operations_behind": 10000
+                    }
+                }
+            ]
+        })
+
+        transform_stats = runner.TransformStats()
+
+        result = await transform_stats(es, params={
+            "transform-id": transform_id,
+            "condition": {
+                "path": "checkpointing.operations_behind",
+                "expected-value": 0
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertFalse(result["success"])
+        self.assertDictEqual({
+            "path": "checkpointing.operations_behind",
+            "actual-value": "10000",
+            "expected-value": "0"
+        }, result["condition"])
+
+        es.transform.get_transform_stats.assert_called_once_with(transform_id=transform_id)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_transform_stats_with_successful_condition(self, es):
+        transform_id = "a-transform"
+        es.transform.get_transform_stats.return_value = as_future({
+            "count": 3,
+            "transforms": [
+                {
+                    "id": transform_id,
+                    "state": "started",
+                    "stats": {},
+                    "checkpointing": {
+                        "last": {},
+                        "operations_behind": 0
+                    }
+                }
+            ]
+        })
+
+        transform_stats = runner.TransformStats()
+
+        result = await transform_stats(es, params={
+            "transform-id": transform_id,
+            "condition": {
+                "path": "checkpointing.operations_behind",
+                "expected-value": 0
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+        self.assertDictEqual({
+            "path": "checkpointing.operations_behind",
+            "actual-value": "0",
+            "expected-value": "0"
+        }, result["condition"])
+
+        es.transform.get_transform_stats.assert_called_once_with(transform_id=transform_id)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_transform_stats_with_non_existing_path(self, es):
+        transform_id = "a-transform"
+        es.transform.get_transform_stats.return_value = as_future({
+            "count": 3,
+            "transforms": [
+                {
+                    "id": transform_id,
+                    "state": "started",
+                    "stats": {},
+                    "checkpointing": {
+                        "last": {},
+                        "operations_behind": 0
+                    }
+                }
+            ]
+        })
+
+        transform_stats = runner.TransformStats()
+
+        result = await transform_stats(es, params={
+            "transform-id": transform_id,
+            "condition": {
+                "path": "checkpointing.last.checkpoint",
+                "expected-value": 42
+            }
+        })
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertFalse(result["success"])
+        self.assertDictEqual({
+            "path": "checkpointing.last.checkpoint",
+            "actual-value": None,
+            "expected-value": "42"
+        }, result["condition"])
+
+        es.transform.get_transform_stats.assert_called_once_with(transform_id=transform_id)
+
+
 class SubmitAsyncSearchTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
