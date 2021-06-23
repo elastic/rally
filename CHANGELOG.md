@@ -1,3 +1,33 @@
+### 2.2.1
+
+#### Enhancements
+
+* [#1273](https://github.com/elastic/rally/pull/1273): Re-introduce relative-time property
+* [#1268](https://github.com/elastic/rally/pull/1268): Fix error for shard-stats
+* [#1266](https://github.com/elastic/rally/pull/1266): Support gradual ramp-up
+* [#1258](https://github.com/elastic/rally/pull/1258): Record shard allocation
+* [#1254](https://github.com/elastic/rally/pull/1254): assert developers have block storage dependencies installed
+* [#1252](https://github.com/elastic/rally/pull/1252): Make S3 support optional
+* [#1243](https://github.com/elastic/rally/pull/1243): Ensure destructive actions work regardless of wildcard input
+
+#### Bug Fixes
+
+* [#1287](https://github.com/elastic/rally/pull/1287): Do not treat increase in transform processing/indexing/search time as improvement
+* [#1284](https://github.com/elastic/rally/pull/1284): Ensure max_connections value is logged correctly
+* [#1270](https://github.com/elastic/rally/pull/1270): Include requests when installing google-resumable-media
+* [#1268](https://github.com/elastic/rally/pull/1268): Fix error for shard-stats
+* [#1263](https://github.com/elastic/rally/pull/1263): Add pyenv shims to PATH
+
+#### Doc Changes
+
+* [#1274](https://github.com/elastic/rally/pull/1274): Add example for raw-request
+* [#1267](https://github.com/elastic/rally/pull/1267): Consider new API calls in static response example
+* [#1265](https://github.com/elastic/rally/pull/1265): Consolidate and improve track/team repo revision logic docs
+
+#### Miscellaneous Changes
+
+* [#1283](https://github.com/elastic/rally/pull/1283): Set daemon attribute directly instead of using deprecated setter
+
 ### 2.2.0
 
 #### Enhancements
