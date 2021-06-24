@@ -72,7 +72,7 @@ class TestNetUtils:
 
     def test_add_url_param_elastic_no_kpi(self):
         url = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz"
-        assert net._add_url_param_elastic_no_kpi(url) == \
+        assert net.add_url_param_elastic_no_kpi(url) == \
                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz?x-elastic-no-kpi=true"
 
     def test_add_url_param_encoding_and_update(self):
