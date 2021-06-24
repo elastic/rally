@@ -223,7 +223,8 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
         if scheme in ["s3", "gs"]:
             expected_size_in_bytes = download_from_bucket(scheme, url, tmp_data_set_path, expected_size_in_bytes, progress_indicator)
         else:
-            expected_size_in_bytes = download_http(_add_url_param_elastic_no_kpi(url), tmp_data_set_path, expected_size_in_bytes, progress_indicator)
+            expected_size_in_bytes = download_http(_add_url_param_elastic_no_kpi(url), tmp_data_set_path,
+                                                   expected_size_in_bytes, progress_indicator)
     except BaseException:
         if os.path.isfile(tmp_data_set_path):
             os.remove(tmp_data_set_path)
