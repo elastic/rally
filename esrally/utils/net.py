@@ -193,8 +193,13 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
                 progress_indicator(bytes_read, size_from_content_header)
         return expected_size_in_bytes
 
+
 def add_url_param_elastic_no_kpi(url):
-    return _add_url_param(url, {"x-elastic-no-kpi": "true"})
+    scheme = urllib3.util.parse_url(url).scheme
+    if scheme.startswith("http"):
+        return _add_url_param(url, {"x-elastic-no-kpi": "true"})
+    else:
+        return url
 
 
 def _add_url_param(url, params):
