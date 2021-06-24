@@ -2327,14 +2327,14 @@ Meta-data
 This operation returns no meta-data.
 
 transform-stats
-~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 
-With the operation type ``transform-stats`` you can call the `transform stats API https://www.elastic.co/guide/en/elasticsearch/reference/current/get-transform-stats.html`_.
+With the operation type ``transform-stats`` you can call the `transform stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/get-transform-stats.html>`_.
 
 Properties
 """"""""""
 
-* ``transform_id`` (mandatory): The id of the transform.
+* ``transform-id`` (mandatory): The id of the transform.
 * ``condition`` (optional, defaults to no condition): A structured object with the properties ``path`` and ``expected-value``. If the actual value returned by transform stats API is equal to the expected value at the provided path, this operation will return successfully. See below for an example how this can be used.
 
 In the following example the ``transform-stats`` operation will wait until all data has been processed::
@@ -2349,7 +2349,7 @@ In the following example the ``transform-stats`` operation will wait until all d
         "retry-until-success": true
     }
 
-Throughput will be reported as number of completed `transform-stats` operations per second.
+Throughput will be reported as number of completed ``transform-stats`` operations per second.
 
 This operation is :ref:`retryable <track_operations>`.
 

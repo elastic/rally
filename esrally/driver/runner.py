@@ -2154,15 +2154,13 @@ class TransformStats(Runner):
                     "expected-value": self._safe_string(expected_value)
                 },
                 # currently we only support "==" as a predicate but that might change in the future
-                "success": actual_value == expected_value,
-                "transform-stats": transform_stats
+                "success": actual_value == expected_value
             }
         else:
             return {
                 "weight": 1,
                 "unit": "ops",
-                "success": True,
-                "transform-stats": transform_stats
+                "success": True
             }
 
     def __repr__(self, *args, **kwargs):
