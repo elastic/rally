@@ -72,6 +72,7 @@ class TestNetUtils:
 
     def test_add_url_param_elastic_no_kpi(self):
         url = "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz"
+        # pylint: disable=protected-access
         assert net._add_url_param_elastic_no_kpi(url) == \
                "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.2.0.tar.gz?x-elastic-no-kpi=true"
 
