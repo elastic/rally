@@ -2359,7 +2359,6 @@ Meta-data
 * ``weight``: Always 1.
 * ``unit``: Always "ops".
 * ``success``: A boolean indicating whether the operation has succeeded.
-* ``transform-stats``: The stats for the given transform id.
 
 composite
 ~~~~~~~~~
