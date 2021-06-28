@@ -4645,7 +4645,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
                     {"timestamp": "asc", "tie_breaker_id": "asc"},
                 ],
                 "query": {
-                    "match-all": {},
+                    "match_all": {},
                 },
             },
         }
@@ -4696,7 +4696,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
                     params={},
                     body={
                         "query": {
-                            "match-all": {},
+                            "match_all": {},
                         },
                         "sort": [
                             {
@@ -4718,7 +4718,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
                     params={},
                     body={
                         "query": {
-                            "match-all": {},
+                            "match_all": {},
                         },
                         "sort": [
                             {
@@ -4750,7 +4750,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
             "body": {
                 "sort": [{"timestamp": "asc", "tie_breaker_id": "asc"}],
                 "query": {
-                    "match-all": {},
+                    "match_all": {},
                 },
             },
         }
@@ -4798,7 +4798,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
                     params={},
                     body={
                         "query": {
-                            "match-all": {},
+                            "match_all": {},
                         },
                         "sort": [
                             {"timestamp": "asc", "tie_breaker_id": "asc"},
@@ -4813,7 +4813,7 @@ class QueryWithSearchAfterScrollTests(TestCase):
                     params={},
                     body={
                         "query": {
-                            "match-all": {},
+                            "match_all": {},
                         },
                         "sort": [
                             {"timestamp": "asc", "tie_breaker_id": "asc"},
