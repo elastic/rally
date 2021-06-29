@@ -2895,7 +2895,7 @@ class CreateComposableTemplateRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_create_index_templates(self, es):
-        es.cluster.put_index_template.return_value = as_future()
+        es.indices.put_index_template.return_value = as_future()
         r = runner.CreateComposableTemplate()
         params = {
             "templates": [
@@ -2915,7 +2915,7 @@ class CreateComposableTemplateRunnerTests(TestCase):
             "unit": "ops",
             "success": True
         }, result)
-        es.cluster.put_index_template.assert_has_calls([
+        es.indices.put_index_template.assert_has_calls([
             mock.call(name="templateA", body={"index_patterns":["logs-*"],"template":{"settings":{"index.number_of_shards":3}},
                                               "composed_of":["ct1","ct2"]}, params=params["request-params"]),
             mock.call(name="templateB", body={"index_patterns":["metrics-*"],"template":{"settings":{"index.number_of_shards":2}},
@@ -2925,7 +2925,7 @@ class CreateComposableTemplateRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_param_templates_mandatory(self, es):
-        es.cluster.put_index_template.return_value = as_future()
+        es.indices.put_index_template.return_value = as_future()
 
         r = runner.CreateComposableTemplate()
 
@@ -2935,7 +2935,7 @@ class CreateComposableTemplateRunnerTests(TestCase):
                                     "'templates'. Add it to your parameter source and try again."):
             await r(es, params)
 
-        self.assertEqual(0, es.cluster.put_index_template.call_count)
+        self.assertEqual(0, es.indices.put_index_template.call_count)
 
 
 class DeleteComposableTemplateRunnerTests(TestCase):
