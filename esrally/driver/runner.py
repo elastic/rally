@@ -1309,7 +1309,7 @@ class CreateComposableTemplate(Runner):
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
         for template, body in templates:
-            await es.cluster.put_index_template(name=template, body=body, params=request_params)
+            await es.indices.put_index_template(name=template, body=body, params=request_params)
 
         return {
             "weight": len(templates),
