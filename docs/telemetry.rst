@@ -210,12 +210,14 @@ Example of recorded documents given two data streams in the cluster::
       "total_store_size_bytes": 878336
    },
    {
+     "name": "data-stream-stats",
      "data_stream": "my-data-stream-1",
      "backing_indices": 1,
      "store_size_bytes": 439137,
      "maximum_timestamp": 1579936446448
    },
    {
+     "name": "data-stream-stats",
      "data_stream": "my-data-stream-2",
      "backing_indices": 1,
      "store_size_bytes": 439199,
