@@ -45,6 +45,7 @@ def list_telemetry():
             TransformStats,
             SearchableSnapshotsStats,
             ShardStats,
+            DataStreamStats,
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -1265,6 +1266,128 @@ class SearchableSnapshotsStatsRecorder:
             if fnmatch.fnmatch(idx, index_param):
                 return True
         return False
+
+
+class DataStreamStats(TelemetryDevice):
+    """
+    Collects and pushes data stream stats for the specified cluster to the metric store.
+    """
+
+    internal = False
+    command = "data-stream-stats"
+    human_name = "Data Stream Stats"
+    help = "Regularly samples data stream stats"
+
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May optionally specify:
+            ``data-stream-stats-sample-interval``: An integer controlling the interval, in seconds, between collecting samples. Default: 1s.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.specified_cluster_names = self.clients.keys()
+        self.sample_interval = telemetry_params.get("data-stream-stats-sample-interval", 1)
+        if self.sample_interval < 0:
+            raise exceptions.SystemSetupError(
+                f"The telemetry parameter 'data-stream-stats-sample-interval' must be greater than zero " f"but was {self.sample_interval}."
+            )
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def on_benchmark_start(self):
+        for cluster_name in self.specified_cluster_names:
+            recorder = DataStreamStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval)
+            client_info = self.clients[cluster_name].info()
+            distribution_version = client_info["version"]["number"]
+            distribution_flavor = client_info["version"].get("build_flavor", "oss")
+            major, minor = components(distribution_version)[:2]
+            if major < 7 or (major == 7 and minor < 9):
+                raise exceptions.SystemSetupError(
+                    "The data-stream-stats telemetry device can only be used with clusters from version 7.9 onwards"
+                )
+            if distribution_flavor == "oss":
+                raise exceptions.SystemSetupError(
+                    "The data-stream-stats telemetry device cannot be used with an OSS distribution of Elasticsearch"
+                )
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.daemon = True
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+
+
+class DataStreamStatsRecorder:
+    """
+    Collects and pushes data stream stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: An integer controlling the interval, in seconds, between collecting samples.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return "data stream stats"
+
+    def record(self):
+        """
+        Collect _data_stream/stats and push to metrics store.
+        """
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            sample = self.client.indices.data_streams_stats(name="")
+        except elasticsearch.TransportError:
+            msg = f"A transport error occurred while collecting data stream stats on cluster [{self.cluster_name}]"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        data_stream_metadata = {"cluster": self.cluster_name}
+
+        doc = {
+            "data_stream": "_all",
+            "name": "data-stream-stats",
+            "shards": {
+                "total": sample["_shards"]["total"],
+                "successful_shards": sample["_shards"]["successful"],
+                "failed_shards": sample["_shards"]["failed"],
+            },
+            "data_stream_count": sample["data_stream_count"],
+            "backing_indices": sample["backing_indices"],
+            "total_store_size_bytes": sample["total_store_size_bytes"],
+        }
+
+        self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=data_stream_metadata)
+
+        for ds in sample["data_streams"]:
+            doc = {
+                "name": "data-stream-stats",
+                "data_stream": ds["data_stream"],
+                "backing_indices": ds["backing_indices"],
+                "store_size_bytes": ds["store_size_bytes"],
+                "maximum_timestamp": ds["maximum_timestamp"],
+            }
+            self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=data_stream_metadata)
 
 
 class StartupTime(InternalTelemetryDevice):

@@ -29,6 +29,7 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    transform-stats             Transform Stats             Regularly samples transform stats
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
+   data-stream-stats           Data Streams Stats         Regularly samples data streams stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -188,3 +189,39 @@ Example of a recorded document::
 Supported telemetry parameters:
 
 * ``shard-stats-sample-interval`` (default 60): A positive number greater than zero denoting the sampling interval in seconds.
+
+data-stream-stats
+-----------------
+
+The data-stream-stats telemetry device regularly calls the `data stream stats API <https://https://www.elastic.co/guide/en/elasticsearch/reference/master/data-stream-stats-api.html>`_ and records one metrics document for cluster level stats (``_all``), and one metrics document per data stream.
+
+Example of recorded documents given two data streams in the cluster::
+
+   {
+      "data_stream": "_all",
+      "name": "data-stream-stats",
+      "shards": {
+        "total": 4,
+        "successful_shards": 2,
+        "failed_shards": 0
+      },
+      "data_stream_count": 2,
+      "backing_indices": 2,
+      "total_store_size_bytes": 878336
+   },
+   {
+     "data_stream": "my-data-stream-1",
+     "backing_indices": 1,
+     "store_size_bytes": 439137,
+     "maximum_timestamp": 1579936446448
+   },
+   {
+     "data_stream": "my-data-stream-2",
+     "backing_indices": 1,
+     "store_size_bytes": 439199,
+     "maximum_timestamp": 1579936446448
+   }
+
+Supported telemetry parameters:
+
+* ``data-stream-stats-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
