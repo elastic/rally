@@ -607,6 +607,7 @@ class OperationType(Enum):
     DeleteComposableTemplate = 1031
     CreateComponentTemplate = 1032
     DeleteComponentTemplate = 1033
+    TransformStats = 1034
 
     @property
     def admin_op(self):
@@ -704,6 +705,8 @@ class OperationType(Enum):
             return OperationType.WaitForTransform
         elif v == "delete-transform":
             return OperationType.DeleteTransform
+        elif v == "transform-stats":
+            return OperationType.TransformStats
         elif v == "create-data-stream":
             return OperationType.CreateDataStream
         elif v == "delete-data-stream":

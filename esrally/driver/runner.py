@@ -94,6 +94,7 @@ def register_default_runners():
     register_runner(track.OperationType.StartTransform, Retry(StartTransform()), async_runner=True)
     register_runner(track.OperationType.WaitForTransform, Retry(WaitForTransform()), async_runner=True)
     register_runner(track.OperationType.DeleteTransform, Retry(DeleteTransform()), async_runner=True)
+    register_runner(track.OperationType.TransformStats, Retry(TransformStats()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -2114,6 +2115,56 @@ class DeleteTransform(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-transform"
+
+
+class TransformStats(Runner):
+    """
+    Gather index stats for one or all transforms.
+    """
+
+    def _get(self, v, path):
+        if v is None:
+            return None
+        elif len(path) == 1:
+            return v.get(path[0])
+        else:
+            return self._get(v.get(path[0]), path[1:])
+
+    def _safe_string(self, v):
+        return str(v) if v is not None else None
+
+    async def __call__(self, es, params):
+        api_kwargs = self._default_kw_params(params)
+        transform_id = mandatory(params, "transform-id", self)
+        condition = params.get("condition")
+        response = await es.transform.get_transform_stats(transform_id=transform_id, **api_kwargs)
+        transforms = response.get("transforms", [])
+        transform_stats = transforms[0] if len(transforms) > 0 else {}
+        if condition:
+            path = mandatory(condition, "path", repr(self))
+            expected_value = mandatory(condition, "expected-value", repr(self))
+            actual_value = self._get(transform_stats, path.split("."))
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "condition": {
+                    "path": path,
+                    # avoid mapping issues in the ES metrics store by always rendering values as strings
+                    "actual-value": self._safe_string(actual_value),
+                    "expected-value": self._safe_string(expected_value)
+                },
+                # currently we only support "==" as a predicate but that might change in the future
+                "success": actual_value == expected_value
+            }
+        else:
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "success": True
+            }
+
+    def __repr__(self, *args, **kwargs):
+        return "transform-stats"
 
 
 class SubmitAsyncSearch(Runner):
