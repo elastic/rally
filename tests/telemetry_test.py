@@ -1041,12 +1041,14 @@ class DataStreamStatsRecorderTests(TestCase):
                 "total_store_size_bytes": 878336
             }, level=MetaInfoScope.cluster, meta_data=data_stream_metadata),
             mock.call({
+                "name": "data-stream-stats",
                 "data_stream": "my-data-stream-1",
                 "backing_indices": 1,
                 "store_size_bytes": 439137,
                 "maximum_timestamp": 1579936446448
             }, level=MetaInfoScope.cluster, meta_data=data_stream_metadata),
             mock.call({
+                "name": "data-stream-stats",
                 "data_stream": "my-data-stream-2",
                 "backing_indices": 1,
                 "store_size_bytes": 439199,
