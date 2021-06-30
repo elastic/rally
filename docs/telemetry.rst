@@ -29,7 +29,7 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    transform-stats             Transform Stats             Regularly samples transform stats
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
-   data-stream-stats           Data Streams Stats         Regularly samples data streams stats
+   data-stream-stats           Data Streams Stats          Regularly samples data streams stats
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
