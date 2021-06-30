@@ -947,7 +947,7 @@ class RecoveryStatsTests(TestCase):
 
 class DataStreamStatsTests(TestCase):
 
-    def test_failure_if_data_streams_feature_not_available(self):
+    def test_failure_if_feature_not_implemented_in_version(self):
         # Data Streams aren't available prior to 7.9
         clients = {"default": Client(info={"version": {"number": "7.6.0"}})}
         cfg = create_config()
@@ -958,6 +958,19 @@ class DataStreamStatsTests(TestCase):
         t = telemetry.DataStreamStats(telemetry_params, clients, metrics_store)
         with self.assertRaisesRegex(exceptions.SystemSetupError,
                                     r"The data-stream-stats telemetry device can only be used with clusters from version 7.9 onwards"):
+            t.on_benchmark_start()
+
+    def test_failure_if_feature_not_implemented_in_distribution(self):
+        # Data Streams aren't available with the OSS distribution
+        clients = {"default": Client(info={"version": {"number": "7.9.0", "build_flavor": "oss"}})}
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {
+            "data-stream-stats-sample-interval": random.randint(1, 100)
+        }
+        t = telemetry.DataStreamStats(telemetry_params, clients, metrics_store)
+        with self.assertRaisesRegex(exceptions.SystemSetupError,
+                                    r"The data-stream-stats telemetry device cannot be used with an OSS distribution of Elasticsearch"):
             t.on_benchmark_start()
 
     def test_negative_sample_interval_forbidden(self):
@@ -1006,8 +1019,8 @@ class DataStreamStatsRecorderTests(TestCase):
         recorder = telemetry.DataStreamStatsRecorder(cluster_name="remote",
                                                       client=client,
                                                       metrics_store=metrics_store,
-                                                      sample_interval=1 * random.randint(1, 100),
-                                                      target_data_streams="_all")
+                                                      sample_interval=1 * random.randint(1, 100)
+                                                     )
         recorder.record()
 
         data_stream_metadata = {
@@ -1042,7 +1055,7 @@ class DataStreamStatsRecorderTests(TestCase):
         ], any_order=True)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    def test_empty_data_stream_stats(self, metrics_store_put_doc):
+    def test_empty_data_streams_list(self, metrics_store_put_doc):
         response = {
             "_shards" : {
                 "total" : 0,
@@ -1061,13 +1074,9 @@ class DataStreamStatsRecorderTests(TestCase):
         recorder = telemetry.DataStreamStatsRecorder(cluster_name="default",
                                                      client=client,
                                                      metrics_store=metrics_store,
-                                                     sample_interval=1 * random.randint(1, 100),
-                                                     target_data_streams="_all")
+                                                     sample_interval=1 * random.randint(1, 100)
+                                                     )
         recorder.record()
-
-        data_stream_metadata = {
-            "cluster": "default"
-        }
 
         # Given an empty list of 'data_streams' we should only be
         # sending a total of one metric document containing both the `_shards` and overall stats
