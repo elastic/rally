@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -34,8 +34,7 @@ def supports_option(java_home, option):
     :param option: The JVM option or combination of JVM options (separated by spaces) to check.
     :return: True iff the provided ``option`` is supported on this JVM.
     """
-    return process.exit_status_as_bool(
-        lambda: process.run_subprocess_with_logging("{} {} -version".format(_java(java_home), option)))
+    return process.exit_status_as_bool(lambda: process.run_subprocess_with_logging("{} {} -version".format(_java(java_home), option)))
 
 
 def system_property(java_home, system_property_name):
@@ -119,8 +118,9 @@ def resolve_path(majors, sysprop_reader=system_property):
             java_home = _resolve_single_path(major, mandatory=False, sysprop_reader=sysprop_reader)
             if java_home:
                 return major, java_home
-        raise exceptions.SystemSetupError("Install a JDK with one of the versions {} and point to it with one of {}."
-                                          .format(majors, _checked_env_vars(majors)))
+        raise exceptions.SystemSetupError(
+            "Install a JDK with one of the versions {} and point to it with one of {}.".format(majors, _checked_env_vars(majors))
+        )
 
 
 def _resolve_single_path(major, mandatory=True, sysprop_reader=system_property):
@@ -133,6 +133,7 @@ def _resolve_single_path(major, mandatory=True, sysprop_reader=system_property):
     :param sysprop_reader: (Optional) only relevant for testing.
     :return: The resolved path to the JDK or ``None`` if ``mandatory`` is ``False`` and no appropriate JDK has been found.
     """
+
     def do_resolve(env_var, major):
         java_v_home = os.getenv(env_var)
         if java_v_home:
@@ -157,8 +158,9 @@ def _resolve_single_path(major, mandatory=True, sysprop_reader=system_property):
         if java_home:
             return java_home
         elif mandatory:
-            raise exceptions.SystemSetupError("Neither {} nor {} point to a JDK {} installation.".
-                                              format(specific_env_var, generic_env_var, major))
+            raise exceptions.SystemSetupError(
+                "Neither {} nor {} point to a JDK {} installation.".format(specific_env_var, generic_env_var, major)
+            )
         else:
             return None
 

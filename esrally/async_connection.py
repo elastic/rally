@@ -1,14 +1,14 @@
 import asyncio
 import json
 import logging
-from typing import Optional, List
+from typing import List, Optional
 
 import aiohttp
 import elasticsearch
-from aiohttp import RequestInfo, BaseConnector
+from aiohttp import BaseConnector, RequestInfo
 from aiohttp.client_proto import ResponseHandler
 from aiohttp.helpers import BaseTimerContext
-from multidict import CIMultiDictProxy, CIMultiDict
+from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
 from esrally.utils import io
@@ -26,8 +26,7 @@ class StaticTransport:
 
 
 class StaticConnector(BaseConnector):
-    async def _create_connection(self, req: "ClientRequest", traces: List["Trace"],
-                                 timeout: "ClientTimeout") -> ResponseHandler:
+    async def _create_connection(self, req: "ClientRequest", traces: List["Trace"], timeout: "ClientTimeout") -> ResponseHandler:
         handler = ResponseHandler(self._loop)
         handler.transport = StaticTransport()
         handler.protocol = ""
@@ -55,11 +54,30 @@ class StaticRequest(aiohttp.ClientRequest):
 
 
 class StaticResponse(aiohttp.ClientResponse):
-    def __init__(self, method: str, url: URL, *, writer: "asyncio.Task[None]",
-                 continue100: Optional["asyncio.Future[bool]"], timer: BaseTimerContext, request_info: RequestInfo,
-                 traces: List["Trace"], loop: asyncio.AbstractEventLoop, session: "ClientSession") -> None:
-        super().__init__(method, url, writer=writer, continue100=continue100, timer=timer, request_info=request_info,
-                         traces=traces, loop=loop, session=session)
+    def __init__(
+        self,
+        method: str,
+        url: URL,
+        *,
+        writer: "asyncio.Task[None]",
+        continue100: Optional["asyncio.Future[bool]"],
+        timer: BaseTimerContext,
+        request_info: RequestInfo,
+        traces: List["Trace"],
+        loop: asyncio.AbstractEventLoop,
+        session: "ClientSession",
+    ) -> None:
+        super().__init__(
+            method,
+            url,
+            writer=writer,
+            continue100=continue100,
+            timer=timer,
+            request_info=request_info,
+            traces=traces,
+            loop=loop,
+            session=session,
+        )
         self.static_body = None
 
     async def start(self, connection: "Connection") -> "ClientResponse":
@@ -78,6 +96,7 @@ class RawClientResponse(aiohttp.ClientResponse):
     """
     Returns the body as bytes object (instead of a str) to avoid decoding overhead.
     """
+
     async def text(self, encoding=None, errors="strict"):
         """Read response payload and decode."""
         if self._body is None:
@@ -118,24 +137,28 @@ class ResponseMatcher:
         # pylint: disable=unused-variable
         def f(p):
             return True
+
         return f
 
     @staticmethod
     def startswith(path_pattern):
         def f(p):
             return p.startswith(path_pattern)
+
         return f
 
     @staticmethod
     def endswith(path_pattern):
         def f(p):
             return p.endswith(path_pattern)
+
         return f
 
     @staticmethod
     def equals(path_pattern):
         def f(p):
             return p == path_pattern
+
         return f
 
     def response(self, path):
@@ -146,37 +169,41 @@ class ResponseMatcher:
 
 
 class AIOHttpConnection(elasticsearch.AIOHttpConnection):
-    def __init__(self,
-                 host="localhost",
-                 port=None,
-                 http_auth=None,
-                 use_ssl=False,
-                 ssl_assert_fingerprint=None,
-                 headers=None,
-                 ssl_context=None,
-                 http_compress=None,
-                 cloud_id=None,
-                 api_key=None,
-                 opaque_id=None,
-                 loop=None,
-                 trace_config=None,
-                 **kwargs,):
-        super().__init__(host=host,
-                         port=port,
-                         http_auth=http_auth,
-                         use_ssl=use_ssl,
-                         ssl_assert_fingerprint=ssl_assert_fingerprint,
-                         # provided to the base class via `maxsize` to keep base class state consistent despite Rally
-                         # calling the attribute differently.
-                         maxsize=kwargs.get("max_connections", 0),
-                         headers=headers,
-                         ssl_context=ssl_context,
-                         http_compress=http_compress,
-                         cloud_id=cloud_id,
-                         api_key=api_key,
-                         opaque_id=opaque_id,
-                         loop=loop,
-                         **kwargs,)
+    def __init__(
+        self,
+        host="localhost",
+        port=None,
+        http_auth=None,
+        use_ssl=False,
+        ssl_assert_fingerprint=None,
+        headers=None,
+        ssl_context=None,
+        http_compress=None,
+        cloud_id=None,
+        api_key=None,
+        opaque_id=None,
+        loop=None,
+        trace_config=None,
+        **kwargs,
+    ):
+        super().__init__(
+            host=host,
+            port=port,
+            http_auth=http_auth,
+            use_ssl=use_ssl,
+            ssl_assert_fingerprint=ssl_assert_fingerprint,
+            # provided to the base class via `maxsize` to keep base class state consistent despite Rally
+            # calling the attribute differently.
+            maxsize=kwargs.get("max_connections", 0),
+            headers=headers,
+            ssl_context=ssl_context,
+            http_compress=http_compress,
+            cloud_id=cloud_id,
+            api_key=api_key,
+            opaque_id=opaque_id,
+            loop=loop,
+            **kwargs,
+        )
 
         self._trace_configs = [trace_config] if trace_config else None
         self._enable_cleanup_closed = kwargs.get("enable_cleanup_closed", False)
@@ -204,10 +231,7 @@ class AIOHttpConnection(elasticsearch.AIOHttpConnection):
             connector = StaticConnector(limit=self._limit, enable_cleanup_closed=self._enable_cleanup_closed)
         else:
             connector = aiohttp.TCPConnector(
-                limit=self._limit,
-                use_dns_cache=True,
-                ssl_context=self._ssl_context,
-                enable_cleanup_closed=self._enable_cleanup_closed
+                limit=self._limit, use_dns_cache=True, ssl_context=self._ssl_context, enable_cleanup_closed=self._enable_cleanup_closed
             )
 
         self.session = aiohttp.ClientSession(

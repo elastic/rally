@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -37,8 +37,7 @@ def test_list_elasticsearch_plugins(cfg):
 def test_list_tracks(cfg):
     assert it.esrally(cfg, "list tracks") == 0
     assert it.esrally(cfg, "list tracks --track-repository=eventdata") == 0
-    assert it.esrally(cfg, "list tracks --track-repository=default "
-                           "--track-revision=4080dc9850d07e23b6fc7cfcdc7cf57b14e5168d") == 0
+    assert it.esrally(cfg, "list tracks --track-repository=default --track-revision=4080dc9850d07e23b6fc7cfcdc7cf57b14e5168d") == 0
 
 
 @it.rally_in_mem

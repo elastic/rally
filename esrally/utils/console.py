@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -114,7 +114,7 @@ def init(quiet=False, assume_tty=True):
     except (KeyError, ValueError):
         # noinspection PyBroadException
         try:
-            os.environ['COLUMNS'] = str(shutil.get_terminal_size().columns)
+            os.environ["COLUMNS"] = str(shutil.get_terminal_size().columns)
         except BaseException:
             # don't fail if anything goes wrong here
             pass
@@ -132,18 +132,42 @@ def set_assume_tty(assume_tty):
 
 
 def info(msg, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
-    println(msg, console_prefix="[INFO]", end=end, flush=flush, force=force, overline=overline, underline=underline,
-            logger=logger.info if logger else None)
+    println(
+        msg,
+        console_prefix="[INFO]",
+        end=end,
+        flush=flush,
+        force=force,
+        overline=overline,
+        underline=underline,
+        logger=logger.info if logger else None,
+    )
 
 
 def warn(msg, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
-    println(msg, console_prefix="[WARNING]", end=end, flush=flush, force=force, overline=overline, underline=underline
-            , logger=logger.warning if logger else None)
+    println(
+        msg,
+        console_prefix="[WARNING]",
+        end=end,
+        flush=flush,
+        force=force,
+        overline=overline,
+        underline=underline,
+        logger=logger.warning if logger else None,
+    )
 
 
 def error(msg, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
-    println(msg, console_prefix="[ERROR]", end=end, flush=flush, force=force, overline=overline, underline=underline
-            , logger=logger.error if logger else None)
+    println(
+        msg,
+        console_prefix="[ERROR]",
+        end=end,
+        flush=flush,
+        force=force,
+        overline=overline,
+        underline=underline,
+        logger=logger.error if logger else None,
+    )
 
 
 def println(msg, console_prefix=None, end="\n", flush=False, force=False, logger=None, overline=None, underline=None):
@@ -207,7 +231,7 @@ class CmdLineProgressReporter:
         if len(text) <= max_length:
             return text
         else:
-            return "%s%s" % (text[0:max_length - len(omission) - 5], omission)
+            return "%s%s" % (text[0 : max_length - len(omission) - 5], omission)
 
     def finish(self):
         if QUIET or (not RALLY_RUNNING_IN_DOCKER and not ASSUME_TTY and not sys.stdout.isatty()):

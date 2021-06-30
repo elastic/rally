@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -90,7 +90,7 @@ def bulleted_list_of(src_list):
 
 
 def double_quoted_list_of(src_list):
-    return ["\"{}\"".format(param) for param in src_list]
+    return ['"{}"'.format(param) for param in src_list]
 
 
 def make_list_of_close_matches(word_list, all_possibilities):
@@ -153,6 +153,7 @@ class TargetHosts(ConnectOptions):
             """
             # pylint: disable=import-outside-toplevel
             from elasticsearch.client import _normalize_hosts
+
             return {TargetHosts.DEFAULT: _normalize_hosts(arg)}
 
         self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
@@ -193,8 +194,9 @@ class ClientOptions(ConnectOptions):
 
         if self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts is not None:
             # --client-options unset but multi-clusters used in --target-hosts? apply options defaults for all cluster names.
-            self.parsed_options = {cluster_name: kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS])
-                                   for cluster_name in self.target_hosts.all_hosts.keys()}
+            self.parsed_options = {
+                cluster_name: kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS]) for cluster_name in self.target_hosts.all_hosts.keys()
+            }
         else:
             self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
 

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -25,18 +25,27 @@ import math
 import multiprocessing
 import queue
 import threading
-from dataclasses import dataclass
-from typing import Callable
-
 import time
+from dataclasses import dataclass
 from enum import Enum
+from typing import Callable
 
 import thespian.actors
 
-from esrally import actor, config, exceptions, metrics, track, client, paths, PROGRAM_NAME, telemetry
+from esrally import (
+    PROGRAM_NAME,
+    actor,
+    client,
+    config,
+    exceptions,
+    metrics,
+    paths,
+    telemetry,
+    track,
+)
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
-from esrally.utils import convert, console, net
+from esrally.utils import console, convert, net
 
 
 ##################################
@@ -67,6 +76,7 @@ class PrepareTrack:
     Initiates preparation of a track.
 
     """
+
     def __init__(self, cfg, track):
         """
         :param cfg: Rally internal configuration object.
@@ -97,6 +107,7 @@ class WorkerTask:
     """
     Unit of work that should be completed by the low-level TaskExecutionActor
     """
+
     func: Callable
     params: dict
 
@@ -258,8 +269,9 @@ class DriverActor(actor.RallyActor):
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_TrackPrepared(self, msg, sender):
-        self.transition_when_all_children_responded(sender, msg,
-                                                    expected_status=None, new_status=None, transition=self._after_track_prepared)
+        self.transition_when_all_children_responded(
+            sender, msg, expected_status=None, new_status=None, transition=self._after_track_prepared
+        )
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_JoinPointReached(self, msg, sender):
@@ -324,25 +336,33 @@ class DriverActor(actor.RallyActor):
         for child in self.children:
             self.send(child, thespian.actors.ActorExitRequest())
         self.children = []
-        self.send(self.start_sender, PreparationComplete(
-            # older versions (pre 6.3.0) don't expose build_flavor because the only (implicit) flavor was "oss"
-            cluster_version.get("build_flavor", "oss"),
-            cluster_version.get("number"),
-            cluster_version.get("build_hash")
-        ))
+        self.send(
+            self.start_sender,
+            PreparationComplete(
+                # older versions (pre 6.3.0) don't expose build_flavor because the only (implicit) flavor was "oss"
+                cluster_version.get("build_flavor", "oss"),
+                cluster_version.get("number"),
+                cluster_version.get("build_hash"),
+            ),
+        )
 
     def on_benchmark_complete(self, metrics):
         self.send(self.start_sender, BenchmarkComplete(metrics))
 
 
 def load_local_config(coordinator_config):
-    cfg = config.auto_load_local_config(coordinator_config, additional_sections=[
-        # only copy the relevant bits
-        "track", "driver", "client",
-        # due to distribution version...
-        "mechanic",
-        "telemetry"
-    ])
+    cfg = config.auto_load_local_config(
+        coordinator_config,
+        additional_sections=[
+            # only copy the relevant bits
+            "track",
+            "driver",
+            "client",
+            # due to distribution version...
+            "mechanic",
+            "telemetry",
+        ],
+    )
     # set root path (normally done by the main entry point)
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
     return cfg
@@ -352,6 +372,7 @@ class TaskExecutionActor(actor.RallyActor):
     """
     This class should be used for long-running tasks, as it ensures they do not block the actor's messaging system
     """
+
     def __init__(self):
         super().__init__()
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -376,8 +397,7 @@ class TaskExecutionActor(actor.RallyActor):
     def receiveMsg_DoTask(self, msg, sender):
         # actor can arbitrarily execute code based on these messages. if anyone besides our parent sends a task, ignore
         if sender != self.parent:
-            msg = f"TaskExecutionActor expected message from [{self.parent}] but the received the following from " \
-                  f"[{sender}]: {vars(msg)}"
+            msg = f"TaskExecutionActor expected message from [{self.parent}] but the received the following from [{sender}]: {vars(msg)}"
             raise exceptions.RallyError(msg)
         task = msg.task
         if self.executor_future is not None:
@@ -409,6 +429,7 @@ class TaskExecutionActor(actor.RallyActor):
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our no_retry infrastructure; forward to master
         self.send(self.parent, msg)
+
 
 class TrackPreparationActor(actor.RallyActor):
     class Status(Enum):
@@ -456,27 +477,27 @@ class TrackPreparationActor(actor.RallyActor):
         # the track might have been loaded on a different machine (the coordinator machine) so we force a track
         # update to ensure we use the latest version of plugins.
         load_track(self.cfg)
-        load_track_plugins(self.cfg, self.track.name, register_track_processor=tpr.register_track_processor,
-                           force_update=True)
+        load_track_plugins(self.cfg, self.track.name, register_track_processor=tpr.register_track_processor, force_update=True)
         # we expect on_prepare_track can take a long time. seed a queue of tasks and delegate to child workers
         self.children = [self._create_task_executor() for _ in range(num_cores(self.cfg))]
         for processor in tpr.processors:
             self.processors.put(processor)
         self._seed_tasks(self.processors.get())
-        self.send_to_children_and_transition(self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING,
-                                             self.Status.PROCESSOR_RUNNING)
+        self.send_to_children_and_transition(
+            self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING, self.Status.PROCESSOR_RUNNING
+        )
 
     def resume(self):
         if not self.processors.empty():
             self._seed_tasks(self.processors.get())
-            self.send_to_children_and_transition(self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE,
-                                                 self.Status.PROCESSOR_RUNNING)
+            self.send_to_children_and_transition(
+                self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING
+            )
         else:
             self.send(self.original_sender, TrackPrepared())
 
     def _seed_tasks(self, processor):
-        self.tasks = list(WorkerTask(func, params) for func, params in
-                          processor.on_prepare_track(self.track, self.data_root_dir))
+        self.tasks = list(WorkerTask(func, params) for func, params in processor.on_prepare_track(self.track, self.data_root_dir))
 
     def _create_task_executor(self):
         return self.createActor(TaskExecutionActor)
@@ -493,13 +514,11 @@ class TrackPreparationActor(actor.RallyActor):
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WorkerIdle(self, msg, sender):
-        self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING,
-                                                    self.Status.PROCESSOR_COMPLETE, self.resume)
+        self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING, self.Status.PROCESSOR_COMPLETE, self.resume)
 
 
 def num_cores(cfg):
-    return int(cfg.opts("system", "available.cores", mandatory=False,
-                         default_value=multiprocessing.cpu_count()))
+    return int(cfg.opts("system", "available.cores", mandatory=False, default_value=multiprocessing.cpu_count()))
 
 
 class Driver:
@@ -572,7 +591,7 @@ class Driver:
                 telemetry.RecoveryStats(telemetry_params, es, self.metrics_store),
                 telemetry.ShardStats(telemetry_params, es, self.metrics_store),
                 telemetry.TransformStats(telemetry_params, es, self.metrics_store),
-                telemetry.SearchableSnapshotsStats(telemetry_params, es, self.metrics_store)
+                telemetry.SearchableSnapshotsStats(telemetry_params, es, self.metrics_store),
             ]
         else:
             devices = []
@@ -599,15 +618,11 @@ class Driver:
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         downsample_factor = int(self.config.opts("reporting", "metrics.request.downsample.factor", mandatory=False, default_value=1))
-        self.metrics_store = metrics.metrics_store(cfg=self.config,
-                                                   track=self.track.name,
-                                                   challenge=self.challenge.name,
-                                                   read_only=False)
+        self.metrics_store = metrics.metrics_store(cfg=self.config, track=self.track.name, challenge=self.challenge.name, read_only=False)
 
-        self.sample_post_processor = SamplePostprocessor(self.metrics_store,
-                                                         downsample_factor,
-                                                         self.track.meta_data,
-                                                         self.challenge.meta_data)
+        self.sample_post_processor = SamplePostprocessor(
+            self.metrics_store, downsample_factor, self.track.meta_data, self.challenge.meta_data
+        )
 
         es_clients = self.create_es_clients()
 
@@ -652,8 +667,7 @@ class Driver:
         self.number_of_steps = len(allocator.join_points) - 1
         self.tasks_per_join_point = allocator.tasks_per_joinpoint
 
-        self.logger.info("Benchmark consists of [%d] steps executed by [%d] clients.",
-                         self.number_of_steps, len(self.allocations))
+        self.logger.info("Benchmark consists of [%d] steps executed by [%d] clients.", self.number_of_steps, len(self.allocations))
         # avoid flooding the log if there are too many clients
         if allocator.clients < 128:
             self.logger.info("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
@@ -681,8 +695,13 @@ class Driver:
     def joinpoint_reached(self, worker_id, worker_local_timestamp, task_allocations):
         self.currently_completed += 1
         self.workers_completed_current_step[worker_id] = (worker_local_timestamp, time.perf_counter())
-        self.logger.info("[%d/%d] workers reached join point [%d/%d].",
-                         self.currently_completed, len(self.workers), self.current_step + 1, self.number_of_steps)
+        self.logger.info(
+            "[%d/%d] workers reached join point [%d/%d].",
+            self.currently_completed,
+            len(self.workers),
+            self.current_step + 1,
+            self.number_of_steps,
+        )
         if self.currently_completed == len(self.workers):
             self.logger.info("All workers completed their tasks until join point [%d/%d].", self.current_step + 1, self.number_of_steps)
             # we can go on to the next step
@@ -735,8 +754,12 @@ class Driver:
         for worker_id, worker in enumerate(self.workers):
             worker_ended_task_at, master_received_msg_at = workers_curr_step[worker_id]
             worker_start_timestamp = worker_ended_task_at + (start_next_task - master_received_msg_at)
-            self.logger.info("Scheduling next task for worker id [%d] at their timestamp [%f] (master timestamp [%f])",
-                             worker_id, worker_start_timestamp, start_next_task)
+            self.logger.info(
+                "Scheduling next task for worker id [%d] at their timestamp [%f] (master timestamp [%f])",
+                worker_id,
+                worker_start_timestamp,
+                start_next_task,
+            )
             self.target.drive_at(worker, worker_start_timestamp)
 
     def may_complete_current_task(self, task_allocations):
@@ -746,9 +769,12 @@ class Driver:
             # while this list could contain multiple items, it should always be the same task (but multiple
             # different clients) so any item is sufficient.
             current_join_point = joinpoints_completing_parent[0].task
-            self.logger.info("Tasks before join point [%s] are able to complete the parent structure. Checking "
-                             "if all [%d] clients have finished yet.",
-                             current_join_point, len(current_join_point.clients_executing_completing_task))
+            self.logger.info(
+                "Tasks before join point [%s] are able to complete the parent structure. Checking "
+                "if all [%d] clients have finished yet.",
+                current_join_point,
+                len(current_join_point.clients_executing_completing_task),
+            )
 
             pending_client_ids = []
             for client_id in current_join_point.clients_executing_completing_task:
@@ -800,8 +826,9 @@ class Driver:
                 # we only count clients which actually contribute to progress. If clients are executing tasks eternally in a parallel
                 # structure, we should not count them. The reason is that progress depends entirely on the client(s) that execute the
                 # task that is completing the parallel structure.
-                progress_per_client = [s.percent_completed
-                                       for s in self.most_recent_sample_per_client.values() if s.percent_completed is not None]
+                progress_per_client = [
+                    s.percent_completed for s in self.most_recent_sample_per_client.values() if s.percent_completed is not None
+                ]
 
                 num_clients = max(len(progress_per_client), 1)
                 total_progress = sum(progress_per_client) / num_clients
@@ -840,32 +867,61 @@ class SamplePostprocessor:
                     self.challenge_meta_data,
                     sample.operation_meta_data,
                     sample.task.meta_data,
-                    sample.request_meta_data)
+                    sample.request_meta_data,
+                )
 
-                self.metrics_store.put_value_cluster_level(name="latency", value=convert.seconds_to_ms(sample.latency),
-                                                           unit="ms", task=sample.task.name,
-                                                           operation=sample.operation_name, operation_type=sample.operation_type,
-                                                           sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                           relative_time=sample.relative_time, meta_data=meta_data)
+                self.metrics_store.put_value_cluster_level(
+                    name="latency",
+                    value=convert.seconds_to_ms(sample.latency),
+                    unit="ms",
+                    task=sample.task.name,
+                    operation=sample.operation_name,
+                    operation_type=sample.operation_type,
+                    sample_type=sample.sample_type,
+                    absolute_time=sample.absolute_time,
+                    relative_time=sample.relative_time,
+                    meta_data=meta_data,
+                )
 
-                self.metrics_store.put_value_cluster_level(name="service_time", value=convert.seconds_to_ms(sample.service_time),
-                                                           unit="ms", task=sample.task.name,
-                                                           operation=sample.operation_name, operation_type=sample.operation_type,
-                                                           sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                           relative_time=sample.relative_time, meta_data=meta_data)
+                self.metrics_store.put_value_cluster_level(
+                    name="service_time",
+                    value=convert.seconds_to_ms(sample.service_time),
+                    unit="ms",
+                    task=sample.task.name,
+                    operation=sample.operation_name,
+                    operation_type=sample.operation_type,
+                    sample_type=sample.sample_type,
+                    absolute_time=sample.absolute_time,
+                    relative_time=sample.relative_time,
+                    meta_data=meta_data,
+                )
 
-                self.metrics_store.put_value_cluster_level(name="processing_time", value=convert.seconds_to_ms(sample.processing_time),
-                                                           unit="ms", task=sample.task.name,
-                                                           operation=sample.operation_name, operation_type=sample.operation_type,
-                                                           sample_type=sample.sample_type, absolute_time=sample.absolute_time,
-                                                           relative_time=sample.relative_time, meta_data=meta_data)
+                self.metrics_store.put_value_cluster_level(
+                    name="processing_time",
+                    value=convert.seconds_to_ms(sample.processing_time),
+                    unit="ms",
+                    task=sample.task.name,
+                    operation=sample.operation_name,
+                    operation_type=sample.operation_type,
+                    sample_type=sample.sample_type,
+                    absolute_time=sample.absolute_time,
+                    relative_time=sample.relative_time,
+                    meta_data=meta_data,
+                )
 
                 for timing in sample.dependent_timings:
-                    self.metrics_store.put_value_cluster_level(name="service_time", value=convert.seconds_to_ms(timing.service_time),
-                                                               unit="ms", task=timing.task.name,
-                                                               operation=timing.operation_name, operation_type=timing.operation_type,
-                                                               sample_type=timing.sample_type, absolute_time=timing.absolute_time,
-                                                               relative_time=timing.relative_time, meta_data=meta_data)
+                    self.metrics_store.put_value_cluster_level(
+                        name="service_time",
+                        value=convert.seconds_to_ms(timing.service_time),
+                        unit="ms",
+                        task=timing.task.name,
+                        operation=timing.operation_name,
+                        operation_type=timing.operation_type,
+                        sample_type=timing.sample_type,
+                        absolute_time=timing.absolute_time,
+                        relative_time=timing.relative_time,
+                        meta_data=meta_data,
+                    )
 
         end = time.perf_counter()
         self.logger.debug("Storing latency and service time took [%f] seconds.", (end - start))
@@ -875,17 +931,20 @@ class SamplePostprocessor:
         self.logger.debug("Calculating throughput took [%f] seconds.", (end - start))
         start = end
         for task, samples in aggregates.items():
-            meta_data = self.merge(
-                self.track_meta_data,
-                self.challenge_meta_data,
-                task.operation.meta_data,
-                task.meta_data
-            )
+            meta_data = self.merge(self.track_meta_data, self.challenge_meta_data, task.operation.meta_data, task.meta_data)
             for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
-                self.metrics_store.put_value_cluster_level(name="throughput", value=throughput, unit=throughput_unit, task=task.name,
-                                                           operation=task.operation.name, operation_type=task.operation.type,
-                                                           sample_type=sample_type, absolute_time=absolute_time,
-                                                           relative_time=relative_time, meta_data=meta_data)
+                self.metrics_store.put_value_cluster_level(
+                    name="throughput",
+                    value=throughput,
+                    unit=throughput_unit,
+                    task=task.name,
+                    operation=task.operation.name,
+                    operation_type=task.operation.type,
+                    sample_type=sample_type,
+                    absolute_time=absolute_time,
+                    relative_time=relative_time,
+                    meta_data=meta_data,
+                )
         end = time.perf_counter()
         self.logger.debug("Storing throughput took [%f] seconds.", (end - start))
         start = end
@@ -898,8 +957,12 @@ class SamplePostprocessor:
         self.metrics_store.flush(refresh=False)
         end = time.perf_counter()
         self.logger.debug("Flushing the metrics store took [%f] seconds.", (end - start))
-        self.logger.debug("Postprocessing [%d] raw samples (downsampled to [%d] samples) took [%f] seconds in total.",
-                          len(raw_samples), final_sample_count, (end - total_start))
+        self.logger.debug(
+            "Postprocessing [%d] raw samples (downsampled to [%d] samples) took [%f] seconds in total.",
+            len(raw_samples),
+            final_sample_count,
+            (end - total_start),
+        )
 
     def merge(self, *args):
         result = {}
@@ -964,10 +1027,7 @@ class ClientAllocations:
         self.allocations = []
 
     def add(self, client_id, tasks):
-        self.allocations.append({
-            "client_id": client_id,
-            "tasks": tasks
-        })
+        self.allocations.append({"client_id": client_id, "tasks": tasks})
 
     def is_joinpoint(self, task_index):
         return all(isinstance(t.task, JoinPoint) for t in self.tasks(task_index))
@@ -1036,8 +1096,13 @@ class Worker(actor.RallyActor):
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Drive(self, msg, sender):
         sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
-        self.logger.info("Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
-                         self.worker_id, self.current_task_index, msg.client_start_timestamp, sleep_time)
+        self.logger.info(
+            "Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
+            self.worker_id,
+            self.current_task_index,
+            msg.client_start_timestamp,
+            sleep_time,
+        )
         self.start_driving = True
         self.wakeupAfter(sleep_time)
 
@@ -1046,11 +1111,15 @@ class Worker(actor.RallyActor):
         # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
         # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
         if self.at_joinpoint():
-            self.logger.info("Worker[%s] has received CompleteCurrentTask but is currently at join point at index [%d]. Ignoring.",
-                             str(self.worker_id), self.current_task_index)
+            self.logger.info(
+                "Worker[%s] has received CompleteCurrentTask but is currently at join point at index [%d]. Ignoring.",
+                str(self.worker_id),
+                self.current_task_index,
+            )
         else:
-            self.logger.info("Worker[%s] has received CompleteCurrentTask. Completing tasks at index [%d].",
-                             str(self.worker_id), self.current_task_index)
+            self.logger.info(
+                "Worker[%s] has received CompleteCurrentTask. Completing tasks at index [%d].", str(self.worker_id), self.current_task_index
+            )
             self.complete.set()
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
@@ -1062,14 +1131,14 @@ class Worker(actor.RallyActor):
         else:
             current_samples = self.send_samples()
             if self.cancel.is_set():
-                self.logger.info("Worker[%s] has detected that benchmark has been cancelled. Notifying master...",
-                                 str(self.worker_id))
+                self.logger.info("Worker[%s] has detected that benchmark has been cancelled. Notifying master...", str(self.worker_id))
                 self.send(self.master, actor.BenchmarkCancelled())
             elif self.executor_future is not None and self.executor_future.done():
                 e = self.executor_future.exception(timeout=0)
                 if e:
-                    self.logger.exception("Worker[%s] has detected a benchmark failure. Notifying master...",
-                                          str(self.worker_id), exc_info=e)
+                    self.logger.exception(
+                        "Worker[%s] has detected a benchmark failure. Notifying master...", str(self.worker_id), exc_info=e
+                    )
                     # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
                     # deserialized on the receiver so we convert it here to a plain string.
                     self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.worker_id), str(e)))
@@ -1081,12 +1150,17 @@ class Worker(actor.RallyActor):
                 if current_samples and len(current_samples) > 0:
                     most_recent_sample = current_samples[-1]
                     if most_recent_sample.percent_completed is not None:
-                        self.logger.debug("Worker[%s] is executing [%s] (%.2f%% complete).",
-                                          str(self.worker_id), most_recent_sample.task, most_recent_sample.percent_completed * 100.0)
+                        self.logger.debug(
+                            "Worker[%s] is executing [%s] (%.2f%% complete).",
+                            str(self.worker_id),
+                            most_recent_sample.task,
+                            most_recent_sample.percent_completed * 100.0,
+                        )
                     else:
                         # TODO: This could be misleading given that one worker could execute more than one task...
-                        self.logger.debug("Worker[%s] is executing [%s] (dependent eternal task).",
-                                          str(self.worker_id), most_recent_sample.task)
+                        self.logger.debug(
+                            "Worker[%s] is executing [%s] (dependent eternal task).", str(self.worker_id), most_recent_sample.task
+                        )
                 else:
                     self.logger.debug("Worker[%s] is executing (no samples).", str(self.worker_id))
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
@@ -1126,13 +1200,17 @@ class Worker(actor.RallyActor):
             # There may be a situation where there are more (parallel) tasks than workers. If we were asked to complete all tasks, we not
             # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
             if self.complete.is_set():
-                self.logger.info("Worker[%d] skips tasks at index [%d] because it has been asked to complete all "
-                                 "tasks until next join point.", self.worker_id, self.current_task_index)
+                self.logger.info(
+                    "Worker[%d] skips tasks at index [%d] because it has been asked to complete all tasks until next join point.",
+                    self.worker_id,
+                    self.current_task_index,
+                )
             else:
                 self.logger.info("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
                 self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=self.sample_queue_size)
-                executor = AsyncIoAdapter(self.config, self.track, task_allocations, self.sampler,
-                                          self.cancel, self.complete, self.on_error)
+                executor = AsyncIoAdapter(
+                    self.config, self.track, task_allocations, self.sampler, self.cancel, self.complete, self.on_error
+                )
 
                 self.executor_future = self.pool.submit(executor)
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
@@ -1166,13 +1244,45 @@ class Sampler:
         self.q = queue.Queue(maxsize=buffer_size)
         self.logger = logging.getLogger(__name__)
 
-    def add(self, task, client_id, sample_type, meta_data, absolute_time, request_start, latency, service_time,
-            processing_time, throughput, ops, ops_unit, time_period, percent_completed, dependent_timing=None):
+    def add(
+        self,
+        task,
+        client_id,
+        sample_type,
+        meta_data,
+        absolute_time,
+        request_start,
+        latency,
+        service_time,
+        processing_time,
+        throughput,
+        ops,
+        ops_unit,
+        time_period,
+        percent_completed,
+        dependent_timing=None,
+    ):
         try:
             self.q.put_nowait(
-                Sample(client_id, absolute_time, request_start, self.start_timestamp, task, sample_type, meta_data,
-                       latency, service_time, processing_time, throughput, ops, ops_unit, time_period,
-                       percent_completed, dependent_timing))
+                Sample(
+                    client_id,
+                    absolute_time,
+                    request_start,
+                    self.start_timestamp,
+                    task,
+                    sample_type,
+                    meta_data,
+                    latency,
+                    service_time,
+                    processing_time,
+                    throughput,
+                    ops,
+                    ops_unit,
+                    time_period,
+                    percent_completed,
+                    dependent_timing,
+                )
+            )
         except queue.Full:
             self.logger.warning("Dropping sample for [%s] due to a full sampling queue.", task.operation.name)
 
@@ -1188,9 +1298,27 @@ class Sampler:
 
 
 class Sample:
-    def __init__(self, client_id, absolute_time, request_start, task_start, task, sample_type, request_meta_data, latency,
-                 service_time, processing_time, throughput, total_ops, total_ops_unit, time_period,
-                 percent_completed, dependent_timing=None, operation_name=None, operation_type=None):
+    def __init__(
+        self,
+        client_id,
+        absolute_time,
+        request_start,
+        task_start,
+        task,
+        sample_type,
+        request_meta_data,
+        latency,
+        service_time,
+        processing_time,
+        throughput,
+        total_ops,
+        total_ops_unit,
+        time_period,
+        percent_completed,
+        dependent_timing=None,
+        operation_name=None,
+        operation_type=None,
+    ):
         self.client_id = client_id
         self.absolute_time = absolute_time
         self.request_start = request_start
@@ -1231,15 +1359,33 @@ class Sample:
     def dependent_timings(self):
         if self._dependent_timing:
             for t in self._dependent_timing:
-                yield Sample(self.client_id, t["absolute_time"], t["request_start"], self.task_start, self.task,
-                             self.sample_type, self.request_meta_data, 0, t["service_time"], 0, 0, self.total_ops,
-                             self.total_ops_unit, self.time_period, self.percent_completed, None,
-                             t["operation"], t["operation-type"])
+                yield Sample(
+                    self.client_id,
+                    t["absolute_time"],
+                    t["request_start"],
+                    self.task_start,
+                    self.task,
+                    self.sample_type,
+                    self.request_meta_data,
+                    0,
+                    t["service_time"],
+                    0,
+                    0,
+                    self.total_ops,
+                    self.total_ops_unit,
+                    self.time_period,
+                    self.percent_completed,
+                    None,
+                    t["operation"],
+                    t["operation-type"],
+                )
 
     def __repr__(self, *args, **kwargs):
-        return f"[{self.absolute_time}; {self.relative_time}] [client [{self.client_id}]] [{self.task}] " \
-               f"[{self.sample_type}]: [{self.latency}s] request latency, [{self.service_time}s] service time, " \
-               f"[{self.total_ops} {self.total_ops_unit}]"
+        return (
+            f"[{self.absolute_time}; {self.relative_time}] [client [{self.client_id}]] [{self.task}] "
+            f"[{self.sample_type}]: [{self.latency}s] request latency, [{self.service_time}s] service time, "
+            f"[{self.total_ops} {self.total_ops_unit}]"
+        )
 
 
 def select_challenge(config, t):
@@ -1247,8 +1393,10 @@ def select_challenge(config, t):
     selected_challenge = t.find_challenge_or_default(challenge_name)
 
     if not selected_challenge:
-        raise exceptions.SystemSetupError("Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
-                                          "challenges with %s list tracks." % (challenge_name, t.name, PROGRAM_NAME))
+        raise exceptions.SystemSetupError(
+            "Unknown challenge [%s] for track [%s]. You can list the available tracks and their "
+            "challenges with %s list tracks." % (challenge_name, t.name, PROGRAM_NAME)
+        )
     return selected_challenge
 
 
@@ -1257,6 +1405,7 @@ class ThroughputCalculator:
         """
         Stores per task numbers needed for throughput calculation in between multiple calculations.
         """
+
         def __init__(self, bucket_interval, sample_type, start_time):
             self.unprocessed = []
             self.total_count = 0
@@ -1343,9 +1492,11 @@ class ThroughputCalculator:
 
         if task not in self.task_stats:
             first_sample = current_samples[0]
-            self.task_stats[task] = ThroughputCalculator.TaskStats(bucket_interval=bucket_interval_secs,
-                                                                   sample_type=first_sample.sample_type,
-                                                                   start_time=first_sample.absolute_time - first_sample.time_period)
+            self.task_stats[task] = ThroughputCalculator.TaskStats(
+                bucket_interval=bucket_interval_secs,
+                sample_type=first_sample.sample_type,
+                start_time=first_sample.absolute_time - first_sample.time_period,
+            )
         current = self.task_stats[task]
         count = current.total_count
         last_sample = None
@@ -1366,12 +1517,16 @@ class ThroughputCalculator:
 
             if current.can_calculate_throughput():
                 current.finish_bucket(count)
-                task_throughput.append((sample.absolute_time,
-                                        sample.relative_time,
-                                        current.sample_type,
-                                        current.throughput,
-                                        # we calculate throughput per second
-                                        f"{sample.total_ops_unit}/s"))
+                task_throughput.append(
+                    (
+                        sample.absolute_time,
+                        sample.relative_time,
+                        current.sample_type,
+                        current.throughput,
+                        # we calculate throughput per second
+                        f"{sample.total_ops_unit}/s",
+                    )
+                )
             else:
                 current.unprocessed.append(sample)
 
@@ -1379,22 +1534,30 @@ class ThroughputCalculator:
         # interval (mainly needed to ensure we show throughput data in test mode)
         if last_sample is not None and current.can_add_final_throughput_sample():
             current.finish_bucket(count)
-            task_throughput.append((last_sample.absolute_time,
-                                    last_sample.relative_time,
-                                    current.sample_type,
-                                    current.throughput,
-                                    f"{last_sample.total_ops_unit}/s"))
+            task_throughput.append(
+                (
+                    last_sample.absolute_time,
+                    last_sample.relative_time,
+                    current.sample_type,
+                    current.throughput,
+                    f"{last_sample.total_ops_unit}/s",
+                )
+            )
 
         return task_throughput
 
     def map_task_throughput(self, current_samples):
         throughput = []
         for sample in current_samples:
-            throughput.append((sample.absolute_time,
-                               sample.relative_time,
-                               sample.sample_type,
-                               sample.throughput,
-                               f"{sample.total_ops_unit}/s"))
+            throughput.append(
+                (
+                    sample.absolute_time,
+                    sample.relative_time,
+                    sample.sample_type,
+                    sample.throughput,
+                    f"{sample.total_ops_unit}/s",
+                )
+            )
         return throughput
 
 
@@ -1441,8 +1604,7 @@ class AsyncIoAdapter:
         # Properly size the internal connection pool to match the number of expected clients but allow the user
         # to override it if needed.
         client_count = len(self.task_allocations)
-        es = es_clients(self.cfg.opts("client", "hosts").all_hosts,
-                        self.cfg.opts("client", "options").with_max_connections(client_count))
+        es = es_clients(self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options").with_max_connections(client_count))
 
         self.logger.info("Task assertions enabled: %s", str(self.assertions_enabled))
         runner.enable_assertions(self.assertions_enabled)
@@ -1457,8 +1619,8 @@ class AsyncIoAdapter:
                 params_per_task[task] = param_source
             schedule = schedule_for(task_allocation, params_per_task[task])
             async_executor = AsyncExecutor(
-                client_id, task, schedule, es, self.sampler, self.cancel, self.complete,
-                task.error_behavior(self.abort_on_error))
+                client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.abort_on_error)
+            )
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
             aws.append(final_executor())
         run_start = time.perf_counter()
@@ -1487,21 +1649,19 @@ class AsyncProfiler:
     async def __call__(self, *args, **kwargs):
         # initialize lazily, we don't need it in the majority of cases
         # pylint: disable=import-outside-toplevel
-        import yappi
         import io as python_io
+
+        import yappi
+
         yappi.start()
         try:
             return await self.target(*args, **kwargs)
         finally:
             yappi.stop()
             s = python_io.StringIO()
-            yappi.get_func_stats().print_all(out=s, columns={
-                0: ("name", 140),
-                1: ("ncall", 8),
-                2: ("tsub", 8),
-                3: ("ttot", 8),
-                4: ("tavg", 8)
-            })
+            yappi.get_func_stats().print_all(
+                out=s, columns={0: ("name", 140), 1: ("ncall", 8), 2: ("tsub", 8), 3: ("ttot", 8), 4: ("tavg", 8)}
+            )
 
             profile = "\n=== Profile START ===\n"
             profile += s.getvalue()
@@ -1603,10 +1763,23 @@ class AsyncExecutor:
                 else:
                     progress = percent_completed
 
-                self.sampler.add(self.task, self.client_id, sample_type, request_meta_data,
-                                 absolute_processing_start, request_start,
-                                 latency, service_time, processing_time, throughput, total_ops, total_ops_unit,
-                                 time_period, progress, request_meta_data.pop("dependent_timing", None))
+                self.sampler.add(
+                    self.task,
+                    self.client_id,
+                    sample_type,
+                    request_meta_data,
+                    absolute_processing_start,
+                    request_start,
+                    latency,
+                    service_time,
+                    processing_time,
+                    throughput,
+                    total_ops,
+                    total_ops_unit,
+                    time_period,
+                    progress,
+                    request_meta_data.pop("dependent_timing", None),
+                )
 
                 if completed:
                     self.logger.info("Task [%s] is considered completed due to external event.", self.task)
@@ -1617,8 +1790,9 @@ class AsyncExecutor:
         finally:
             # Actively set it if this task completes its parent
             if task_completes_parent:
-                self.logger.info("Task [%s] completes parent. Client id [%s] is finished executing it and signals completion.",
-                                 self.task, self.client_id)
+                self.logger.info(
+                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion.", self.task, self.client_id
+                )
                 self.complete.set()
 
 
@@ -1630,6 +1804,7 @@ async def execute_single(runner, es, params, on_error):
     """
     # pylint: disable=import-outside-toplevel
     import elasticsearch
+
     fatal_error = False
     try:
         async with runner:
@@ -1655,10 +1830,7 @@ async def execute_single(runner, es, params, on_error):
 
         total_ops = 0
         total_ops_unit = "ops"
-        request_meta_data = {
-            "success": False,
-            "error-type": "transport"
-        }
+        request_meta_data = {"success": False, "error-type": "transport"}
         # The ES client will sometimes return string like "N/A" or "TIMEOUT" for connection errors.
         if isinstance(e.status_code, int):
             request_meta_data["http-status"] = e.status_code
@@ -1735,8 +1907,10 @@ class TaskAllocation:
         return isinstance(other, type(self)) and self.task == other.task and self.global_client_index == other.global_client_index
 
     def __repr__(self, *args, **kwargs):
-        return f"TaskAllocation [{self.client_index_in_task}/{self.task.clients}] for {self.task} " \
-               f"and [{self.global_client_index}/{self.total_clients}] in total"
+        return (
+            f"TaskAllocation [{self.client_index_in_task}/{self.task.clients}] for {self.task} "
+            f"and [{self.global_client_index}/{self.total_clients}] in total"
+        )
 
 
 class Allocator:
@@ -1783,12 +1957,14 @@ class Allocator:
                     if sub_task.completes_parent:
                         clients_executing_completing_task.append(physical_client_index)
 
-                    ta = TaskAllocation(task=sub_task,
-                                        client_index_in_task=client_index - start_client_index,
-                                        global_client_index=client_index,
-                                        # if task represents a parallel structure this is the total number of clients
-                                        # executing sub-tasks concurrently.
-                                        total_clients=task.clients)
+                    ta = TaskAllocation(
+                        task=sub_task,
+                        client_index_in_task=client_index - start_client_index,
+                        global_client_index=client_index,
+                        # if task represents a parallel structure this is the total number of clients
+                        # executing sub-tasks concurrently.
+                        total_clients=task.clients,
+                    )
                     allocations[physical_client_index].append(ta)
                 start_client_index += sub_task.clients
 
@@ -1904,9 +2080,14 @@ def schedule_for(task_allocation, parameter_source):
     if requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
         if client_index == 0:
-            logger.info("Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] "
-                        "seconds and a time period of [%s] seconds.", task.schedule, task.name,
-                        str(warmup_time_period), str(task.time_period))
+            logger.info(
+                "Creating time-period based schedule with [%s] distribution for [%s] with a warmup period of [%s] "
+                "seconds and a time period of [%s] seconds.",
+                task.schedule,
+                task.name,
+                str(warmup_time_period),
+                str(task.time_period),
+            )
         loop_control = TimePeriodBased(warmup_time_period, task.time_period)
     else:
         warmup_iterations = task.warmup_iterations if task.warmup_iterations else 0
@@ -1918,8 +2099,14 @@ def schedule_for(task_allocation, parameter_source):
         else:
             iterations = None
         if client_index == 0:
-            logger.info("Creating iteration-count based schedule with [%s] distribution for [%s] with [%s] warmup "
-                        "iterations and [%s] iterations.", task.schedule, task.name, str(warmup_iterations), str(iterations))
+            logger.info(
+                "Creating iteration-count based schedule with [%s] distribution for [%s] with [%s] warmup "
+                "iterations and [%s] iterations.",
+                task.schedule,
+                task.name,
+                str(warmup_iterations),
+                str(iterations),
+            )
         loop_control = IterationBased(warmup_iterations, iterations)
 
     if client_index == 0:
@@ -1962,10 +2149,10 @@ class ScheduleHandle:
         self.runner = runner
         self.params = params
         # TODO: Can we offload the parameter source execution to a different thread / process? Is this too heavy-weight?
-        #from concurrent.futures import ThreadPoolExecutor
-        #import asyncio
-        #self.io_pool_exc = ThreadPoolExecutor(max_workers=1)
-        #self.loop = asyncio.get_event_loop()
+        # from concurrent.futures import ThreadPoolExecutor
+        # import asyncio
+        # self.io_pool_exc = ThreadPoolExecutor(max_workers=1)
+        # self.loop = asyncio.get_event_loop()
 
     @property
     def ramp_up_wait_time(self):
@@ -1996,9 +2183,8 @@ class ScheduleHandle:
                     next_scheduled = self.sched.next(next_scheduled)
                     # does not contribute at all to completion. Hence, we cannot define completion.
                     percent_completed = self.params.percent_completed if param_source_knows_progress else None
-                    #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
-                    yield (next_scheduled, self.task_progress_control.sample_type, percent_completed, self.runner,
-                           self.params.params())
+                    # current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
+                    yield (next_scheduled, self.task_progress_control.sample_type, percent_completed, self.runner, self.params.params())
                     self.task_progress_control.next()
                 except StopIteration:
                     return
@@ -2006,12 +2192,14 @@ class ScheduleHandle:
             while not self.task_progress_control.completed:
                 try:
                     next_scheduled = self.sched.next(next_scheduled)
-                    #current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
-                    yield (next_scheduled,
-                           self.task_progress_control.sample_type,
-                           self.task_progress_control.percent_completed,
-                           self.runner,
-                           self.params.params())
+                    # current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
+                    yield (
+                        next_scheduled,
+                        self.task_progress_control.sample_type,
+                        self.task_progress_control.percent_completed,
+                        self.runner,
+                        self.params.params(),
+                    )
                     self.task_progress_control.next()
                 except StopIteration:
                     return

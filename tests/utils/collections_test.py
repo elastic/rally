@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -44,13 +44,8 @@ class TestMergeDicts:
         d1 = {
             "params": {
                 "car": "4gheap",
-                "car-params": {
-                    "additional_cluster_settings": {
-                        "indices.queries.cache.size": "5%",
-                        "transport.tcp.compress": True
-                    }
-                },
-                "unique-param": "foobar"
+                "car-params": {"additional_cluster_settings": {"indices.queries.cache.size": "5%", "transport.tcp.compress": True}},
+                "unique-param": "foobar",
             }
         }
 
@@ -59,53 +54,30 @@ class TestMergeDicts:
         assert dict(collections.merge_dicts(d1, d2)) == {
             "params": {
                 "car-params": {
-                    "additional_cluster_settings": {
-                        "indices.queries.cache.size": "5%",
-                        "transport.tcp.compress": True
-                    },
-                    "data_paths": "/mnt/local_ssd"},
+                    "additional_cluster_settings": {"indices.queries.cache.size": "5%", "transport.tcp.compress": True},
+                    "data_paths": "/mnt/local_ssd",
+                },
                 "car": "4gheap",
-                "unique-param": "foobar"
+                "unique-param": "foobar",
             }
         }
 
     def test_can_merge_nested_lists_in_dicts(self):
-        d1 = {
-            "params": {
-                "foo": [1, 2, 3]
-            }
-        }
+        d1 = {"params": {"foo": [1, 2, 3]}}
 
-        d2 = {
-            "params": {
-                "foo": [3, 4, 5]
-            }
-        }
+        d2 = {"params": {"foo": [3, 4, 5]}}
 
-        assert dict(collections.merge_dicts(d1, d2)) == {
-            "params": {
-                "foo": [1, 2, 3, 4, 5]
-            }
-        }
+        assert dict(collections.merge_dicts(d1, d2)) == {"params": {"foo": [1, 2, 3, 4, 5]}}
 
     def test_can_merge_nested_booleans_in_dicts(self):
-        d1 = {
-            "params": {
-                "foo": True,
-                "other": [1, 2, 3]
-            }
-        }
+        d1 = {"params": {"foo": True, "other": [1, 2, 3]}}
 
-        d2 = {
-            "params": {
-                "foo": False
-            }
-        }
+        d2 = {"params": {"foo": False}}
 
         assert dict(collections.merge_dicts(d1, d2)) == {
             "params": {
                 # d2 wins
                 "foo": False,
-                "other": [1, 2, 3]
+                "other": [1, 2, 3],
             }
         }

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -20,7 +20,7 @@ import os
 import sys
 
 from esrally import exceptions
-from esrally.utils import io, git, console, versions
+from esrally.utils import console, git, io, versions
 
 
 class RallyRepository:
@@ -49,11 +49,13 @@ class RallyRepository:
         else:
             if not git.is_working_copy(self.repo_dir):
                 if io.exists(self.repo_dir):
-                    raise exceptions.SystemSetupError("[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init"
-                                                      .format(src=self.repo_dir))
+                    raise exceptions.SystemSetupError(
+                        "[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init".format(src=self.repo_dir)
+                    )
                 else:
-                    raise exceptions.SystemSetupError("Expected a git repository at [{src}] but the directory does not exist."
-                                                      .format(src=self.repo_dir))
+                    raise exceptions.SystemSetupError(
+                        "Expected a git repository at [{src}] but the directory does not exist.".format(src=self.repo_dir)
+                    )
 
     def update(self, distribution_version):
         try:
@@ -62,7 +64,8 @@ class RallyRepository:
                 if branch:
                     # Allow uncommitted changes iff we do not have to change the branch
                     self.logger.info(
-                        "Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
+                        "Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version
+                    )
                     git.checkout(self.repo_dir, branch=branch)
                     self.logger.info("Rebasing on [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
                     try:
@@ -71,32 +74,40 @@ class RallyRepository:
                     except exceptions.SupplyError:
                         self.logger.exception("Cannot rebase due to local changes in [%s]", self.repo_dir)
                         console.warn(
-                            "Local changes in [%s] prevent %s update from remote. Please commit your changes." %
-                            (self.repo_dir, self.resource_name))
+                            "Local changes in [%s] prevent %s update from remote. Please commit your changes."
+                            % (self.repo_dir, self.resource_name)
+                        )
                     return
                 else:
-                    msg = "Could not find %s remotely for distribution version [%s]. Trying to find %s locally." % \
-                          (self.resource_name, distribution_version, self.resource_name)
+                    msg = "Could not find %s remotely for distribution version [%s]. Trying to find %s locally." % (
+                        self.resource_name,
+                        distribution_version,
+                        self.resource_name,
+                    )
                     self.logger.warning(msg)
             branch = versions.best_match(git.branches(self.repo_dir, remote=False), distribution_version)
             if branch:
                 if git.current_branch(self.repo_dir) != branch:
-                    self.logger.info("Checking out [%s] in [%s] for distribution version [%s].",
-                                     branch, self.repo_dir, distribution_version)
+                    self.logger.info(
+                        "Checking out [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version
+                    )
                     git.checkout(self.repo_dir, branch=branch)
                     self.revision = git.head_revision(self.repo_dir)
             else:
-                self.logger.info("No local branch found for distribution version [%s] in [%s]. Checking tags.",
-                                 distribution_version, self.repo_dir)
+                self.logger.info(
+                    "No local branch found for distribution version [%s] in [%s]. Checking tags.", distribution_version, self.repo_dir
+                )
                 tag = self._find_matching_tag(distribution_version)
                 if tag:
-                    self.logger.info("Checking out tag [%s] in [%s] for distribution version [%s].",
-                                     tag, self.repo_dir, distribution_version)
+                    self.logger.info(
+                        "Checking out tag [%s] in [%s] for distribution version [%s].", tag, self.repo_dir, distribution_version
+                    )
                     git.checkout(self.repo_dir, branch=tag)
                     self.revision = git.head_revision(self.repo_dir)
                 else:
-                    raise exceptions.SystemSetupError("Cannot find %s for distribution version %s"
-                                                      % (self.resource_name, distribution_version))
+                    raise exceptions.SystemSetupError(
+                        "Cannot find %s for distribution version %s" % (self.resource_name, distribution_version)
+                    )
         except exceptions.SupplyError as e:
             tb = sys.exc_info()[2]
             raise exceptions.DataError("Cannot update %s in [%s] (%s)." % (self.resource_name, self.repo_dir, e.message)).with_traceback(tb)

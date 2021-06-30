@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -29,6 +29,7 @@ class BenchmarkFailure:
     """
     Indicates a failure in the benchmark execution due to an exception
     """
+
     def __init__(self, message, cause=None):
         self.message = message
         self.cause = cause
@@ -47,10 +48,13 @@ def parametrized(decorator):
 
     :param decorator: The decorator that should accept parameters.
     """
+
     def inner(*args, **kwargs):
         def g(f):
             return decorator(f, *args, **kwargs)
+
         return g
+
     return inner
 
 
@@ -80,6 +84,7 @@ def no_retry(f, actor_name):
     :param f: The message handler. Does not need to passed directly, this is handled by the decorator infrastructure.
     :param actor_name: A human readable name of the current actor that should be used in the exception message.
     """
+
     def guard(self, msg, sender):
         try:
             return f(self, msg, sender)
@@ -90,6 +95,7 @@ def no_retry(f, actor_name):
             # don't forward the exception as is because the main process might not have this class available on the load path
             # and will fail then while deserializing the cause.
             self.send(sender, BenchmarkFailure("{} ({})".format(msg, str(e))))
+
     return guard
 
 
@@ -133,22 +139,30 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             response_count = len(self.received_responses)
             expected_count = len(self.children)
 
-            self.logger.debug("[%d] of [%d] child actors have responded for transition from [%s] to [%s].",
-                              response_count, expected_count, self.status, new_status)
+            self.logger.debug(
+                "[%d] of [%d] child actors have responded for transition from [%s] to [%s].",
+                response_count,
+                expected_count,
+                self.status,
+                new_status,
+            )
             if response_count == expected_count:
-                self.logger.debug("All [%d] child actors have responded. Transitioning now from [%s] to [%s].",
-                                  expected_count, self.status, new_status)
+                self.logger.debug(
+                    "All [%d] child actors have responded. Transitioning now from [%s] to [%s].", expected_count, self.status, new_status
+                )
                 # all nodes have responded, change status
                 self.status = new_status
                 self.received_responses = []
                 transition()
             elif response_count > expected_count:
                 raise exceptions.RallyAssertionError(
-                    "Received [%d] responses but only [%d] were expected to transition from [%s] to [%s]. The responses are: %s" %
-                    (response_count, expected_count, self.status, new_status, self.received_responses))
+                    "Received [%d] responses but only [%d] were expected to transition from [%s] to [%s]. The responses are: %s"
+                    % (response_count, expected_count, self.status, new_status, self.received_responses)
+                )
         else:
-            raise exceptions.RallyAssertionError("Received [%s] from [%s] but we are in status [%s] instead of [%s]." %
-                                                 (type(msg), sender, self.status, expected_status))
+            raise exceptions.RallyAssertionError(
+                "Received [%s] from [%s] but we are in status [%s] instead of [%s]." % (type(msg), sender, self.status, expected_status)
+            )
 
     def send_to_children_and_transition(self, sender, msg, expected_status, new_status):
         """
@@ -166,8 +180,9 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             for m in filter(None, self.children):
                 self.send(m, msg)
         else:
-            raise exceptions.RallyAssertionError("Received [%s] from [%s] but we are in status [%s] instead of [%s]." %
-                                                 (type(msg), sender, self.status, expected_status))
+            raise exceptions.RallyAssertionError(
+                "Received [%s] from [%s] but we are in status [%s] instead of [%s]." % (type(msg), sender, self.status, expected_status)
+            )
 
     def is_current_status_expected(self, expected_status):
         # if we don't expect anything, we're always in the right status
@@ -244,9 +259,7 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
             # Make the coordinator node the convention leader
             capabilities["Convention Address.IPv4"] = "%s:1900" % coordinator_ip
         logger.info("Starting actor system with system base [%s] and capabilities [%s].", system_base, capabilities)
-        return thespian.actors.ActorSystem(system_base,
-                                           logDefs=log.load_configuration(),
-                                           capabilities=capabilities)
+        return thespian.actors.ActorSystem(system_base, logDefs=log.load_configuration(), capabilities=capabilities)
     except thespian.actors.ActorSystemException:
         logger.exception("Could not initialize internal actor system.")
         raise

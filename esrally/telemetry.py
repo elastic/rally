@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -16,25 +16,37 @@
 # under the License.
 
 import collections
-import logging
 import fnmatch
+import logging
 import os
 import threading
 
 import tabulate
 
-from esrally import metrics, time, exceptions
+from esrally import exceptions, metrics, time
 from esrally.metrics import MetaInfoScope
-from esrally.utils import io, sysstats, console, opts, process
+from esrally.utils import console, io, opts, process, sysstats
 from esrally.utils.versions import components
 
 
 def list_telemetry():
     console.println("Available telemetry devices:\n")
-    devices = [[device.command, device.human_name, device.help] for device in [JitCompiler, Gc, FlightRecorder,
-                                                                               Heapdump, NodeStats, RecoveryStats,
-                                                                               CcrStats, SegmentStats, TransformStats,
-                                                                               SearchableSnapshotsStats, ShardStats]]
+    devices = [
+        [device.command, device.human_name, device.help]
+        for device in [
+            JitCompiler,
+            Gc,
+            FlightRecorder,
+            Heapdump,
+            NodeStats,
+            RecoveryStats,
+            CcrStats,
+            SegmentStats,
+            TransformStats,
+            SearchableSnapshotsStats,
+            ShardStats,
+        ]
+    ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
     console.println("\nKeep in mind that each telemetry device may incur a runtime overhead which can skew results.")
 
@@ -96,6 +108,7 @@ class Telemetry:
 # Telemetry devices
 #
 ########################################################################################
+
 
 class TelemetryDevice:
     def __init__(self):
@@ -179,7 +192,7 @@ class FlightRecorder(TelemetryDevice):
             console.println("You are using Java flight recorder which requires that you comply with\nthe licensing terms stated in:\n")
             console.println(console.format.link("http://www.oracle.com/technetwork/java/javase/terms/license/index.html"))
             console.println("\nBy using this feature you confirm that you comply with these license terms.\n")
-            console.println("Otherwise, please abort and rerun Rally without the \"jfr\" telemetry device.")
+            console.println('Otherwise, please abort and rerun Rally without the "jfr" telemetry device.')
             console.println("\n***************************************************************************\n")
 
             time.sleep(3)
@@ -232,8 +245,13 @@ class JitCompiler(TelemetryDevice):
         io.ensure_dir(self.log_root)
         log_file = os.path.join(self.log_root, "jit.log")
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=self.logger)
-        return ["-XX:+UnlockDiagnosticVMOptions", "-XX:+TraceClassLoading", "-XX:+LogCompilation",
-                "-XX:LogFile={}".format(log_file), "-XX:+PrintAssembly"]
+        return [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+TraceClassLoading",
+            "-XX:+LogCompilation",
+            "-XX:LogFile={}".format(log_file),
+            "-XX:+PrintAssembly",
+        ]
 
 
 class Gc(TelemetryDevice):
@@ -256,9 +274,15 @@ class Gc(TelemetryDevice):
 
     def java_opts(self, log_file):
         if self.java_major_version < 9:
-            return ["-Xloggc:{}".format(log_file), "-XX:+PrintGCDetails", "-XX:+PrintGCDateStamps", "-XX:+PrintGCTimeStamps",
-                    "-XX:+PrintGCApplicationStoppedTime", "-XX:+PrintGCApplicationConcurrentTime",
-                    "-XX:+PrintTenuringDistribution"]
+            return [
+                "-Xloggc:{}".format(log_file),
+                "-XX:+PrintGCDetails",
+                "-XX:+PrintGCDateStamps",
+                "-XX:+PrintGCTimeStamps",
+                "-XX:+PrintGCApplicationStoppedTime",
+                "-XX:+PrintGCApplicationConcurrentTime",
+                "-XX:+PrintTenuringDistribution",
+            ]
         else:
             log_config = self.telemetry_params.get("gc-log-config", "gc*=info,safepoint=info,age*=trace")
             # see https://docs.oracle.com/javase/9/tools/java.htm#JSWOR-GUID-BE93ABDC-999C-4CB5-A88B-1994AAAC74D5
@@ -336,7 +360,8 @@ class CcrStats(TelemetryDevice):
         self.sample_interval = telemetry_params.get("ccr-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                "The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval))
+                "The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval)
+            )
         self.specified_cluster_names = self.clients.keys()
         self.indices_per_cluster = self.telemetry_params.get("ccr-stats-indices", False)
         if self.indices_per_cluster:
@@ -345,7 +370,8 @@ class CcrStats(TelemetryDevice):
                     raise exceptions.SystemSetupError(
                         "The telemetry parameter 'ccr-stats-indices' must be a JSON Object with keys matching "
                         "the cluster names [{}] specified in --target-hosts "
-                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name))
+                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name)
+                    )
             self.specified_cluster_names = self.indices_per_cluster.keys()
 
         self.metrics_store = metrics_store
@@ -354,8 +380,13 @@ class CcrStats(TelemetryDevice):
     def on_benchmark_start(self):
         recorder = []
         for cluster_name in self.specified_cluster_names:
-            recorder = CcrStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
-                                        self.indices_per_cluster[cluster_name] if self.indices_per_cluster else None)
+            recorder = CcrStatsRecorder(
+                cluster_name,
+                self.clients[cluster_name],
+                self.metrics_store,
+                self.sample_interval,
+                self.indices_per_cluster[cluster_name] if self.indices_per_cluster else None,
+            )
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
             sampler.daemon = True
@@ -385,7 +416,7 @@ class CcrStatsRecorder:
         self.cluster_name = cluster_name
         self.client = client
         self.metrics_store = metrics_store
-        self.sample_interval= sample_interval
+        self.sample_interval = sample_interval
         self.indices = indices
         self.logger = logging.getLogger(__name__)
 
@@ -405,11 +436,13 @@ class CcrStatsRecorder:
         try:
             ccr_stats_api_endpoint = "/_ccr/stats"
             filter_path = "follow_stats"
-            stats = self.client.transport.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false",
-                                                                                                 "filter_path": filter_path})
+            stats = self.client.transport.perform_request(
+                "GET", ccr_stats_api_endpoint, params={"human": "false", "filter_path": filter_path}
+            )
         except elasticsearch.TransportError:
-            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on " \
-                  "cluster [{}]".format(ccr_stats_api_endpoint, filter_path, self.cluster_name)
+            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on cluster [{}]".format(
+                ccr_stats_api_endpoint, filter_path, self.cluster_name
+            )
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
@@ -423,7 +456,9 @@ class CcrStatsRecorder:
                 except KeyError:
                     self.logger.warning(
                         "The 'indices' key in %s does not contain an 'index' or 'shards' key "
-                        "Maybe the output format of the %s endpoint has changed. Skipping.", ccr_stats_api_endpoint, ccr_stats_api_endpoint
+                        "Maybe the output format of the %s endpoint has changed. Skipping.",
+                        ccr_stats_api_endpoint,
+                        ccr_stats_api_endpoint,
                     )
 
     def record_stats_per_index(self, name, stats):
@@ -434,14 +469,8 @@ class CcrStatsRecorder:
 
         for shard_stats in stats:
             if "shard_id" in shard_stats:
-                doc = {
-                    "name": "ccr-stats",
-                    "shard": shard_stats
-                }
-                shard_metadata = {
-                    "cluster": self.cluster_name,
-                    "index": name
-                }
+                doc = {"name": "ccr-stats", "shard": shard_stats}
+                shard_metadata = {"cluster": self.cluster_name, "index": name}
 
                 self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
@@ -477,8 +506,10 @@ class RecoveryStats(TelemetryDevice):
         self.sample_interval = telemetry_params.get("recovery-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                "The telemetry parameter 'recovery-stats-sample-interval' must be greater than zero but was {}."
-                    .format(self.sample_interval))
+                "The telemetry parameter 'recovery-stats-sample-interval' must be greater than zero but was {}.".format(
+                    self.sample_interval
+                )
+            )
         self.specified_cluster_names = self.clients.keys()
         indices_per_cluster = self.telemetry_params.get("recovery-stats-indices", False)
         # allow the user to specify either an index pattern as string or as a JSON object
@@ -493,7 +524,8 @@ class RecoveryStats(TelemetryDevice):
                     raise exceptions.SystemSetupError(
                         "The telemetry parameter 'recovery-stats-indices' must be a JSON Object with keys matching "
                         "the cluster names [{}] specified in --target-hosts "
-                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name))
+                        "but it had [{}].".format(",".join(sorted(clients.keys())), cluster_name)
+                    )
             self.specified_cluster_names = self.indices_per_cluster.keys()
 
         self.metrics_store = metrics_store
@@ -501,9 +533,13 @@ class RecoveryStats(TelemetryDevice):
 
     def on_benchmark_start(self):
         for cluster_name in self.specified_cluster_names:
-            recorder = RecoveryStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
-                                             self.sample_interval,
-                                             self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "")
+            recorder = RecoveryStatsRecorder(
+                cluster_name,
+                self.clients[cluster_name],
+                self.metrics_store,
+                self.sample_interval,
+                self.indices_per_cluster[cluster_name] if self.indices_per_cluster else "",
+            )
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
             sampler.daemon = True
@@ -556,15 +592,8 @@ class RecoveryStatsRecorder:
 
         for idx, idx_stats in stats.items():
             for shard in idx_stats["shards"]:
-                doc = {
-                    "name": "recovery-stats",
-                    "shard": shard
-                }
-                shard_metadata = {
-                    "cluster": self.cluster_name,
-                    "index": idx,
-                    "shard": shard["id"]
-                }
+                doc = {"name": "recovery-stats", "shard": shard}
+                shard_metadata = {"cluster": self.cluster_name, "index": idx, "shard": shard["id"]}
                 self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
 
@@ -572,6 +601,7 @@ class ShardStats(TelemetryDevice):
     """
     Collects and pushes shard stats for the specified cluster to the metric store.
     """
+
     internal = False
     command = "shard-stats"
     human_name = "Shard Stats"
@@ -593,7 +623,8 @@ class ShardStats(TelemetryDevice):
         self.sample_interval = telemetry_params.get("shard-stats-sample-interval", 60)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                f"The telemetry parameter 'shard-stats-sample-interval' must be greater than zero but was {self.sample_interval}.")
+                f"The telemetry parameter 'shard-stats-sample-interval' must be greater than zero but was {self.sample_interval}."
+            )
 
         self.metrics_store = metrics_store
         self.samplers = []
@@ -641,6 +672,7 @@ class ShardStatsRecorder:
         """
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         try:
             sample = self.client.nodes.stats(metric="_all", level="shards")
         except elasticsearch.TransportError:
@@ -648,9 +680,7 @@ class ShardStatsRecorder:
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        shard_metadata = {
-                "cluster": self.cluster_name
-            }
+        shard_metadata = {"cluster": self.cluster_name}
 
         for node_stats in sample["nodes"].values():
             node_name = node_stats["name"]
@@ -668,8 +698,8 @@ class ShardStatsRecorder:
                             "primary": curr_stats.get("routing", {}).get("primary"),
                             "docs": curr_stats.get("docs", {}).get("count", -1),
                             "store": curr_stats.get("store", {}).get("size_in_bytes", -1),
-                            "segments-count":  curr_stats.get("segments", {}).get("count", -1),
-                            "node": node_name
+                            "segments-count": curr_stats.get("segments", {}).get("count", -1),
+                            "node": node_name,
                         }
                         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=shard_metadata)
 
@@ -722,7 +752,8 @@ class NodeStatsRecorder:
         self.sample_interval = telemetry_params.get("node-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                "The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval))
+                "The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval)
+            )
 
         self.include_indices = telemetry_params.get("node-stats-include-indices", False)
         self.include_indices_metrics = telemetry_params.get("node-stats-include-indices-metrics", False)
@@ -734,11 +765,22 @@ class NodeStatsRecorder:
                 # we don't validate the allowable metrics as they may change across ES versions
                 raise exceptions.SystemSetupError(
                     "The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string but was {}".format(
-                        type(self.include_indices_metrics))
+                        type(self.include_indices_metrics)
                     )
+                )
         else:
-            self.include_indices_metrics_list = ["docs", "store", "indexing", "search", "merges", "query_cache",
-                                                 "fielddata", "segments", "translog", "request_cache"]
+            self.include_indices_metrics_list = [
+                "docs",
+                "store",
+                "indexing",
+                "search",
+                "merges",
+                "query_cache",
+                "fielddata",
+                "segments",
+                "translog",
+                "request_cache",
+            ]
 
         self.include_thread_pools = telemetry_params.get("node-stats-include-thread-pools", True)
         self.include_buffer_pools = telemetry_params.get("node-stats-include-buffer-pools", True)
@@ -759,16 +801,12 @@ class NodeStatsRecorder:
         current_sample = self.sample()
         for node_stats in current_sample:
             node_name = node_stats["name"]
-            metrics_store_meta_data = {
-                "cluster": self.cluster_name,
-                "node_name": node_name
-            }
+            metrics_store_meta_data = {"cluster": self.cluster_name, "node_name": node_name}
             collected_node_stats = collections.OrderedDict()
             collected_node_stats["name"] = "node-stats"
 
             if self.include_indices or self.include_indices_metrics:
-                collected_node_stats.update(
-                    self.indices_stats(node_name, node_stats, include=self.include_indices_metrics_list))
+                collected_node_stats.update(self.indices_stats(node_name, node_stats, include=self.include_indices_metrics_list))
             if self.include_thread_pools:
                 collected_node_stats.update(self.thread_pool_stats(node_name, node_stats))
             if self.include_breakers:
@@ -786,10 +824,9 @@ class NodeStatsRecorder:
             if self.include_indexing_pressure:
                 collected_node_stats.update(self.indexing_pressure(node_name, node_stats))
 
-            self.metrics_store.put_doc(dict(collected_node_stats),
-                                       level=MetaInfoScope.node,
-                                       node_name=node_name,
-                                       meta_data=metrics_store_meta_data)
+            self.metrics_store.put_doc(
+                dict(collected_node_stats), level=MetaInfoScope.node, node_name=node_name, meta_data=metrics_store_meta_data
+            )
 
     def flatten_stats_fields(self, prefix=None, stats=None):
         """
@@ -852,6 +889,7 @@ class NodeStatsRecorder:
     def sample(self):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         try:
             stats = self.client.nodes.stats(metric="_all")
         except elasticsearch.TransportError:
@@ -883,8 +921,8 @@ class TransformStats(TelemetryDevice):
         self.sample_interval = telemetry_params.get("transform-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                f"The telemetry parameter 'transform-stats-sample-interval' must be greater than zero "
-                f"but was [{self.sample_interval}].")
+                f"The telemetry parameter 'transform-stats-sample-interval' must be greater than zero but was [{self.sample_interval}]."
+            )
         self.specified_cluster_names = self.clients.keys()
         self.transforms_per_cluster = self.telemetry_params.get("transform-stats-transforms", False)
         if self.transforms_per_cluster:
@@ -893,7 +931,8 @@ class TransformStats(TelemetryDevice):
                     raise exceptions.SystemSetupError(
                         f"The telemetry parameter 'transform-stats-transforms' must be a JSON Object with keys "
                         f"matching the cluster names [{','.join(sorted(clients.keys()))}] specified in --target-hosts "
-                        f"but it had [{cluster_name}].")
+                        f"but it had [{cluster_name}]."
+                    )
             self.specified_cluster_names = self.transforms_per_cluster.keys()
 
         self.metrics_store = metrics_store
@@ -901,10 +940,13 @@ class TransformStats(TelemetryDevice):
 
     def on_benchmark_start(self):
         for cluster_name in self.specified_cluster_names:
-            recorder = TransformStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store,
-                                              self.sample_interval,
-                                              self.transforms_per_cluster[
-                                                  cluster_name] if self.transforms_per_cluster else None)
+            recorder = TransformStatsRecorder(
+                cluster_name,
+                self.clients[cluster_name],
+                self.metrics_store,
+                self.sample_interval,
+                self.transforms_per_cluster[cluster_name] if self.transforms_per_cluster else None,
+            )
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
             sampler.daemon = True
@@ -969,8 +1011,7 @@ class TransformStatsRecorder:
             stats = self.client.transform.get_transform_stats("_all")
 
         except elasticsearch.TransportError:
-            msg = f"A transport error occurred while collecting transform stats on " \
-                  f"cluster [{self.cluster_name}]"
+            msg = f"A transport error occurred while collecting transform stats on cluster [{self.cluster_name}]"
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
@@ -984,8 +1025,7 @@ class TransformStatsRecorder:
 
             except KeyError:
                 self.logger.warning(
-                    "The 'transform' key does not contain a 'transform' or 'stats' key "
-                    "Maybe the output format has changed. Skipping."
+                    "The 'transform' key does not contain a 'transform' or 'stats' key Maybe the output format has changed. Skipping."
                 )
 
     def record_stats_per_transform(self, transform_id, stats, prefix=""):
@@ -995,41 +1035,36 @@ class TransformStatsRecorder:
         :param prefix: A prefix for the counters/values, e.g. for total runtimes
         """
 
-        meta_data = {
-            "transform_id": transform_id
-        }
+        meta_data = {"transform_id": transform_id}
 
-        self.metrics_store.put_value_cluster_level(prefix + "transform_pages_processed",
-                                                   stats.get("pages_processed", 0),
-                                                   meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_documents_processed",
-                                                   stats.get("documents_processed", 0),
-                                                   meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_documents_indexed",
-                                                   stats.get("documents_indexed", 0),
-                                                   meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_index_total", stats.get("index_total", 0),
-                                                   meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_index_failures", stats.get("index_failures", 0),
-                                                   meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_search_total", stats.get("search_total", 0),
-                                                   meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_search_failures",
-                                                   stats.get("search_failures", 0),
-                                                   meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_processing_total",
-                                                   stats.get("processing_total", 0),
-                                                   meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level(
+            prefix + "transform_pages_processed", stats.get("pages_processed", 0), meta_data=meta_data
+        )
+        self.metrics_store.put_value_cluster_level(
+            prefix + "transform_documents_processed", stats.get("documents_processed", 0), meta_data=meta_data
+        )
+        self.metrics_store.put_value_cluster_level(
+            prefix + "transform_documents_indexed", stats.get("documents_indexed", 0), meta_data=meta_data
+        )
+        self.metrics_store.put_value_cluster_level(prefix + "transform_index_total", stats.get("index_total", 0), meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level(prefix + "transform_index_failures", stats.get("index_failures", 0), meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level(prefix + "transform_search_total", stats.get("search_total", 0), meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level(
+            prefix + "transform_search_failures", stats.get("search_failures", 0), meta_data=meta_data
+        )
+        self.metrics_store.put_value_cluster_level(
+            prefix + "transform_processing_total", stats.get("processing_total", 0), meta_data=meta_data
+        )
 
-        self.metrics_store.put_value_cluster_level(prefix + "transform_search_time",
-                                                   stats.get("search_time_in_ms", 0),
-                                                   "ms", meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_index_time",
-                                                   stats.get("index_time_in_ms", 0), "ms",
-                                                   meta_data=meta_data)
-        self.metrics_store.put_value_cluster_level(prefix + "transform_processing_time",
-                                                   stats.get("processing_time_in_ms", 0), "ms",
-                                                   meta_data=meta_data)
+        self.metrics_store.put_value_cluster_level(
+            prefix + "transform_search_time", stats.get("search_time_in_ms", 0), "ms", meta_data=meta_data
+        )
+        self.metrics_store.put_value_cluster_level(
+            prefix + "transform_index_time", stats.get("index_time_in_ms", 0), "ms", meta_data=meta_data
+        )
+        self.metrics_store.put_value_cluster_level(
+            prefix + "transform_processing_time", stats.get("processing_time_in_ms", 0), "ms", meta_data=meta_data
+        )
 
         documents_processed = stats.get("documents_processed", 0)
         processing_time = stats.get("search_time_in_ms", 0)
@@ -1038,8 +1073,7 @@ class TransformStatsRecorder:
 
         if processing_time > 0:
             throughput = documents_processed / processing_time * 1000
-            self.metrics_store.put_value_cluster_level(prefix + "transform_throughput", throughput,
-                                                       "docs/s", meta_data=meta_data)
+            self.metrics_store.put_value_cluster_level(prefix + "transform_throughput", throughput, "docs/s", meta_data=meta_data)
 
 
 class SearchableSnapshotsStats(TelemetryDevice):
@@ -1051,6 +1085,7 @@ class SearchableSnapshotsStats(TelemetryDevice):
     """
     Gathers searchable snapshots stats on a cluster level
     """
+
     def __init__(self, telemetry_params, clients, metrics_store):
         """
         :param telemetry_params: The configuration object for telemetry_params.
@@ -1094,7 +1129,8 @@ class SearchableSnapshotsStats(TelemetryDevice):
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
                 f"The telemetry parameter 'searchable-snapshots-stats-sample-interval' must be greater than zero "
-                f"but was {self.sample_interval}.")
+                f"but was {self.sample_interval}."
+            )
         self.specified_cluster_names = self.clients.keys()
         indices_per_cluster = self.telemetry_params.get("searchable-snapshots-stats-indices", None)
         # allow the user to specify either an index pattern as string or as a JSON object
@@ -1109,7 +1145,8 @@ class SearchableSnapshotsStats(TelemetryDevice):
                     raise exceptions.SystemSetupError(
                         f"The telemetry parameter 'searchable-snapshots-stats-indices' must be a JSON Object "
                         f"with keys matching the cluster names [{','.join(sorted(clients.keys()))}] specified in "
-                        f"--target-hosts but it had [{cluster_name}].")
+                        f"--target-hosts but it had [{cluster_name}]."
+                    )
             self.specified_cluster_names = self.indices_per_cluster.keys()
 
         self.metrics_store = metrics_store
@@ -1118,8 +1155,12 @@ class SearchableSnapshotsStats(TelemetryDevice):
     def on_benchmark_start(self):
         for cluster_name in self.specified_cluster_names:
             recorder = SearchableSnapshotsStatsRecorder(
-                cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval,
-                self.indices_per_cluster[cluster_name] if self.indices_per_cluster else None)
+                cluster_name,
+                self.clients[cluster_name],
+                self.metrics_store,
+                self.sample_interval,
+                self.indices_per_cluster[cluster_name] if self.indices_per_cluster else None,
+            )
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
             sampler.daemon = True
@@ -1174,14 +1215,14 @@ class SearchableSnapshotsStatsRecorder:
         except elasticsearch.NotFoundError as e:
             if "No searchable snapshots indices found" in e.info.get("error").get("reason"):
                 self.logger.info(
-                    "Unable to find valid indices while collecting searchable snapshots stats "
-                    "on cluster [%s]", self.cluster_name)
+                    "Unable to find valid indices while collecting searchable snapshots stats on cluster [%s]", self.cluster_name
+                )
                 # allow collection, indices might be mounted later on
                 return
         except elasticsearch.TransportError:
             raise exceptions.RallyError(
-                f"A transport error occurred while collecting searchable snapshots stats on cluster "
-                f"[{self.cluster_name}]") from None
+                f"A transport error occurred while collecting searchable snapshots stats on cluster [{self.cluster_name}]"
+            ) from None
 
         total_stats = stats.get("total", [])
         for lucene_file_stats in total_stats:
@@ -1206,10 +1247,7 @@ class SearchableSnapshotsStatsRecorder:
         if index:
             doc["index"] = index
 
-        meta_data = {
-            "cluster": self.cluster_name,
-            "level": level
-        }
+        meta_data = {"cluster": self.cluster_name, "level": level}
 
         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=meta_data)
 
@@ -1227,6 +1265,7 @@ class SearchableSnapshotsStatsRecorder:
             if fnmatch.fnmatch(idx, index_param):
                 return True
         return False
+
 
 class StartupTime(InternalTelemetryDevice):
     def __init__(self, stopwatch=time.StopWatch):
@@ -1247,6 +1286,7 @@ class DiskIo(InternalTelemetryDevice):
     """
     Gathers disk I/O stats.
     """
+
     def __init__(self, node_count_on_host):
         super().__init__()
         self.node_count_on_host = node_count_on_host
@@ -1266,8 +1306,9 @@ class DiskIo(InternalTelemetryDevice):
                 disk_start = sysstats.disk_io_counters()
                 self.read_bytes = disk_start.read_bytes
                 self.write_bytes = disk_start.write_bytes
-                self.logger.warning("Process I/O counters are not supported on this platform. Falling back to less "
-                                    "accurate disk I/O counters.")
+                self.logger.warning(
+                    "Process I/O counters are not supported on this platform. Falling back to less accurate disk I/O counters."
+                )
             except BaseException:
                 self.logger.exception("Could not determine I/O stats at benchmark start.")
 
@@ -1286,9 +1327,13 @@ class DiskIo(InternalTelemetryDevice):
                 else:
                     disk_end = sysstats.disk_io_counters()
                     if self.node_count_on_host > 1:
-                        self.logger.info("There are [%d] nodes on this host and Rally fell back to disk I/O counters. "
-                                         "Attributing [1/%d] of total I/O to [%s].",
-                                         self.node_count_on_host, self.node_count_on_host, node.node_name)
+                        self.logger.info(
+                            "There are [%d] nodes on this host and Rally fell back to disk I/O counters. "
+                            "Attributing [1/%d] of total I/O to [%s].",
+                            self.node_count_on_host,
+                            self.node_count_on_host,
+                            node.node_name,
+                        )
 
                     self.read_bytes = (disk_end.read_bytes - self.read_bytes) // self.node_count_on_host
                     self.write_bytes = (disk_end.write_bytes - self.write_bytes) // self.node_count_on_host
@@ -1358,6 +1403,7 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information on a cluster level (e.g. version numbers).
     """
+
     def __init__(self, client, metrics_store):
         super().__init__()
         self.metrics_store = metrics_store
@@ -1408,6 +1454,7 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information for externally provisioned clusters.
     """
+
     def __init__(self, client, metrics_store):
         super().__init__()
         self.metrics_store = metrics_store
@@ -1451,6 +1498,7 @@ class JvmStatsSummary(InternalTelemetryDevice):
     """
     Gathers a summary of various JVM statistics during the whole race.
     """
+
     def __init__(self, client, metrics_store):
         super().__init__()
         self.metrics_store = metrics_store
@@ -1486,14 +1534,9 @@ class JvmStatsSummary(InternalTelemetryDevice):
                 self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
                 self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_count", old_gc_count)
 
-                all_pool_stats = {
-                    "name": "jvm_memory_pool_stats"
-                }
+                all_pool_stats = {"name": "jvm_memory_pool_stats"}
                 for pool_name, pool_stats in jvm_stats_end["pools"].items():
-                    all_pool_stats[pool_name] = {
-                        "peak_usage": pool_stats["peak"],
-                        "unit": "byte"
-                    }
+                    all_pool_stats[pool_name] = {"peak_usage": pool_stats["peak"], "unit": "byte"}
                 self.metrics_store.put_doc(all_pool_stats, level=MetaInfoScope.node, node_name=node_name)
 
             else:
@@ -1511,6 +1554,7 @@ class JvmStatsSummary(InternalTelemetryDevice):
         jvm_stats = {}
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         try:
             stats = self.client.nodes.stats(metric="_all")
         except elasticsearch.TransportError:
@@ -1529,13 +1573,11 @@ class JvmStatsSummary(InternalTelemetryDevice):
                 "young_gc_count": young_gen_collection_count,
                 "old_gc_time": old_gen_collection_time,
                 "old_gc_count": old_gen_collection_count,
-                "pools": {}
+                "pools": {},
             }
             pool_usage = node["jvm"]["mem"]["pools"]
             for pool_name, pool_stats in pool_usage.items():
-                jvm_stats[node_name]["pools"][pool_name] = {
-                    "peak": pool_stats["peak_used_in_bytes"]
-                }
+                jvm_stats[node_name]["pools"][pool_name] = {"peak": pool_stats["peak_used_in_bytes"]}
         return jvm_stats
 
 
@@ -1543,6 +1585,7 @@ class IndexStats(InternalTelemetryDevice):
     """
     Gathers statistics via the Elasticsearch index stats API
     """
+
     def __init__(self, client, metrics_store):
         super().__init__()
         self.client = client
@@ -1560,8 +1603,11 @@ class IndexStats(InternalTelemetryDevice):
                 n = t["name"]
                 v = t["value"]
                 if t["value"] > threshold:
-                    console.warn("%s is %d ms indicating that the cluster is not in a defined clean state. Recorded index time "
-                                 "metrics may be misleading." % (n, v), logger=self.logger)
+                    console.warn(
+                        "%s is %d ms indicating that the cluster is not in a defined clean state. Recorded index time "
+                        "metrics may be misleading." % (n, v),
+                        logger=self.logger,
+                    )
             self.first_time = False
 
     def on_benchmark_stop(self):
@@ -1583,8 +1629,9 @@ class IndexStats(InternalTelemetryDevice):
             self.metrics_store.put_doc(doc=ct, level=metrics.MetaInfoScope.cluster)
 
         self.add_metrics(self.extract_value(p, ["segments", "doc_values_memory_in_bytes"]), "segments_doc_values_memory_in_bytes", "byte")
-        self.add_metrics(self.extract_value(p, ["segments", "stored_fields_memory_in_bytes"]), "segments_stored_fields_memory_in_bytes",
-                                            "byte")
+        self.add_metrics(
+            self.extract_value(p, ["segments", "stored_fields_memory_in_bytes"]), "segments_stored_fields_memory_in_bytes", "byte"
+        )
         self.add_metrics(self.extract_value(p, ["segments", "terms_memory_in_bytes"]), "segments_terms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "norms_memory_in_bytes"]), "segments_norms_memory_in_bytes", "byte")
         self.add_metrics(self.extract_value(p, ["segments", "points_memory_in_bytes"]), "segments_points_memory_in_bytes", "byte")
@@ -1633,10 +1680,7 @@ class IndexStats(InternalTelemetryDevice):
         primary_total_stats = self.extract_value(stats, ["_all", "primaries"], default_value={})
         value = self.extract_value(primary_total_stats, path)
         if value is not None:
-            doc = {
-                "name": name,
-                "value": value
-            }
+            doc = {"name": name, "value": value}
             values.append(doc)
 
     def primary_shard_stats(self, stats, path):
@@ -1678,38 +1722,44 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
     def on_benchmark_stop(self):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         try:
-            results = self.client.search(index=".ml-anomalies-*", body={
-                "size": 0,
-                "query": {
-                    "bool": {
-                        "must": [
-                            {"term": {"result_type": "bucket"}}
-                        ]
-                    }
-                },
-                "aggs": {
-                    "jobs": {
-                        "terms": {
-                            "field": "job_id"
+            results = self.client.search(
+                index=".ml-anomalies-*",
+                body={
+                    "size": 0,
+                    "query": {
+                        "bool": {
+                            "must": [
+                                {
+                                    "term": {"result_type": "bucket"},
+                                },
+                            ],
                         },
-                        "aggs": {
-                            "min_pt": {
-                                "min": {"field": "processing_time_ms"}
+                    },
+                    "aggs": {
+                        "jobs": {
+                            "terms": {
+                                "field": "job_id",
                             },
-                            "max_pt": {
-                                "max": {"field": "processing_time_ms"}
+                            "aggs": {
+                                "min_pt": {
+                                    "min": {"field": "processing_time_ms"},
+                                },
+                                "max_pt": {
+                                    "max": {"field": "processing_time_ms"},
+                                },
+                                "mean_pt": {
+                                    "avg": {"field": "processing_time_ms"},
+                                },
+                                "median_pt": {
+                                    "percentiles": {"field": "processing_time_ms", "percents": [50]},
+                                },
                             },
-                            "mean_pt": {
-                                "avg": {"field": "processing_time_ms"}
-                            },
-                            "median_pt": {
-                                "percentiles": {"field": "processing_time_ms", "percents": [50]}
-                            }
                         }
-                    }
-                }
-            })
+                    },
+                },
+            )
         except elasticsearch.TransportError:
             self.logger.exception("Could not retrieve ML bucket processing time.")
             return
@@ -1733,6 +1783,7 @@ class IndexSize(InternalTelemetryDevice):
     """
     Measures the final size of the index
     """
+
     def __init__(self, data_paths):
         super().__init__()
         self.data_paths = data_paths

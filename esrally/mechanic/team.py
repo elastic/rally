@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -22,8 +22,8 @@ from enum import Enum
 
 import tabulate
 
-from esrally import exceptions, PROGRAM_NAME, config
-from esrally.utils import console, repo, io, modules
+from esrally import PROGRAM_NAME, config, exceptions
+from esrally.utils import console, io, modules, repo
 
 TEAM_FORMAT_VERSION = 1
 
@@ -152,6 +152,7 @@ class CarLoader:
         def __is_car(path):
             _, extension = io.splitext(path)
             return extension == ".ini"
+
         return map(__car_name, filter(__is_car, os.listdir(self.cars_dir)))
 
     def _car_file(self, name):
@@ -256,7 +257,7 @@ class Car:
         try:
             return self.variables[name]
         except KeyError:
-            raise exceptions.SystemSetupError("Car \"{}\" requires config key \"{}\"".format(self.name, name))
+            raise exceptions.SystemSetupError('Car "{}" requires config key "{}"'.format(self.name, name))
 
     @property
     def name(self):
@@ -343,18 +344,19 @@ class PluginLoader:
         if not config_names:
             # maybe we only have a config folder but nothing else (e.g. if there is only an install hook)
             if io.exists(root_path):
-                return PluginDescriptor(name=name,
-                                        core_plugin=core_plugin is not None,
-                                        config=config_names,
-                                        root_path=root_path,
-                                        variables=plugin_params)
+                return PluginDescriptor(
+                    name=name, core_plugin=core_plugin is not None, config=config_names, root_path=root_path, variables=plugin_params
+                )
             else:
                 if core_plugin:
                     return core_plugin
                 # If we just have a plugin name then we assume that this is a community plugin and the user has specified a download URL
                 else:
-                    self.logger.info("The plugin [%s] is neither a configured nor an official plugin. Assuming that this is a community "
-                                     "plugin not requiring any configuration and you have set a proper download URL.", name)
+                    self.logger.info(
+                        "The plugin [%s] is neither a configured nor an official plugin. Assuming that this is a community "
+                        "plugin not requiring any configuration and you have set a proper download URL.",
+                        name,
+                    )
                     return PluginDescriptor(name, variables=plugin_params)
         else:
             variables = {}
@@ -367,12 +369,16 @@ class PluginLoader:
                 # Do we have an explicit configuration for this plugin?
                 if not io.exists(config_file):
                     if core_plugin:
-                        raise exceptions.SystemSetupError("Plugin [%s] does not provide configuration [%s]. List the available plugins "
-                                                          "and configurations with %s list elasticsearch-plugins "
-                                                          "--distribution-version=VERSION." % (name, config_name, PROGRAM_NAME))
+                        raise exceptions.SystemSetupError(
+                            "Plugin [%s] does not provide configuration [%s]. List the available plugins "
+                            "and configurations with %s list elasticsearch-plugins "
+                            "--distribution-version=VERSION." % (name, config_name, PROGRAM_NAME)
+                        )
                     else:
-                        raise exceptions.SystemSetupError("Unknown plugin [%s]. List the available plugins with %s list "
-                                                          "elasticsearch-plugins --distribution-version=VERSION." % (name, PROGRAM_NAME))
+                        raise exceptions.SystemSetupError(
+                            "Unknown plugin [%s]. List the available plugins with %s list "
+                            "elasticsearch-plugins --distribution-version=VERSION." % (name, PROGRAM_NAME)
+                        )
 
                 config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
                 # Do not modify the case of option keys but read them as is
@@ -395,8 +401,14 @@ class PluginLoader:
             # maybe one of the configs is really just for providing variables. However, we still require one config base overall.
             if len(config_paths) == 0:
                 raise exceptions.SystemSetupError("At least one config base is required for plugin [%s]" % name)
-            return PluginDescriptor(name=name, core_plugin=core_plugin is not None, config=config_names, root_path=root_path,
-                                    config_paths=config_paths, variables=variables)
+            return PluginDescriptor(
+                name=name,
+                core_plugin=core_plugin is not None,
+                config=config_names,
+                root_path=root_path,
+                config_paths=config_paths,
+                variables=variables,
+            )
 
 
 class PluginDescriptor:
@@ -450,6 +462,7 @@ class BootstrapHookHandler:
     """
     Responsible for loading and executing component-specific intitialization code.
     """
+
     def __init__(self, component, loader_class=modules.ComponentLoader):
         """
         Creates a new BootstrapHookHandler.
@@ -496,5 +509,6 @@ class BootstrapHookHandler:
                 # hooks should only take keyword arguments to be forwards compatible with Rally!
                 hook(config_names=self.component.config, **kwargs)
         else:
-            self.logger.debug("Component [%s] in config [%s] has no hook registered for phase [%s].",
-                         self.component.name, self.component.config, phase)
+            self.logger.debug(
+                "Component [%s] in config [%s] has no hook registered for phase [%s].", self.component.name, self.component.config, phase
+            )

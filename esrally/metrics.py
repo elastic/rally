@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -32,8 +32,8 @@ from http.client import responses
 
 import tabulate
 
-from esrally import client, time, exceptions, config, version, paths
-from esrally.utils import convert, console, io, versions
+from esrally import client, config, exceptions, paths, time, version
+from esrally.utils import console, convert, io, versions
 
 
 class EsClient:
@@ -59,21 +59,26 @@ class EsClient:
     def put_template(self, name, template):
         # TODO #653: Remove version-specific support for metrics stores before 7.0.0 (also adjust template)
         if self._cluster_version[0] > 6:
-            return self.guarded(self._client.indices.put_template, name=name, body=template, params={
-                # allows to include the type name although it is not allowed anymore by default
-                "include_type_name": "true"
-            })
+            return self.guarded(
+                self._client.indices.put_template,
+                name=name,
+                body=template,
+                params={
+                    # allows to include the type name although it is not allowed anymore by default
+                    "include_type_name": "true"
+                },
+            )
         else:
             return self.guarded(self._client.indices.put_template, name=name, body=template)
 
     def template_exists(self, name):
         return self.guarded(self._client.indices.exists_template, name)
 
-    def delete_template(self,  name):
+    def delete_template(self, name):
         self.guarded(self._client.indices.delete_template, name)
 
     def get_index(self, name):
-        return self.guarded(self._client.indices.get,  name)
+        return self.guarded(self._client.indices.get, name)
 
     def create_index(self, index):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
@@ -89,15 +94,14 @@ class EsClient:
         # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
+
         if self._cluster_version[0] > 6:
             self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
         else:
             self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type, chunk_size=5000)
 
     def index(self, index, doc_type, item, id=None):
-        doc = {
-            "_source": item
-        }
+        doc = {"_source": item}
         if id:
             doc["_id"] = id
         self.bulk_index(index, doc_type, [doc])
@@ -108,6 +112,7 @@ class EsClient:
     def guarded(self, target, *args, **kwargs):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+
         max_execution_count = 11
         execution_count = 0
 
@@ -120,17 +125,20 @@ class EsClient:
             except elasticsearch.exceptions.AuthenticationException:
                 # we know that it is just one host (see EsClientFactory)
                 node = self._client.transport.hosts[0]
-                msg = "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at " \
-                      "port [%s] (wrong password?). Please fix the configuration in [%s]." % \
-                      (node["host"], node["port"], config.ConfigFile().location)
+                msg = (
+                    "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at "
+                    "port [%s] (wrong password?). Please fix the configuration in [%s]."
+                    % (node["host"], node["port"], config.ConfigFile().location)
+                )
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.exceptions.AuthorizationException:
                 node = self._client.transport.hosts[0]
-                msg = "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics " \
-                      "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough " \
-                      "privileges in the configuration in [%s]." % \
-                      (target.__name__, node["host"], node["port"], config.ConfigFile().location)
+                msg = (
+                    "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics "
+                    "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough "
+                    "privileges in the configuration in [%s]." % (target.__name__, node["host"], node["port"], config.ConfigFile().location)
+                )
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.exceptions.ConnectionTimeout:
@@ -141,31 +149,45 @@ class EsClient:
                     operation = target.__name__
                     self.logger.exception("Connection timeout while running [%s] (retried %d times).", operation, max_execution_count)
                     node = self._client.transport.hosts[0]
-                    msg = "A connection timeout occurred while running the operation [%s] against your Elasticsearch metrics store on " \
-                          "host [%s] at port [%s]." % (operation, node["host"], node["port"])
+                    msg = (
+                        "A connection timeout occurred while running the operation [%s] against your Elasticsearch metrics store on "
+                        "host [%s] at port [%s]." % (operation, node["host"], node["port"])
+                    )
                     raise exceptions.RallyError(msg)
             except elasticsearch.exceptions.ConnectionError:
                 node = self._client.transport.hosts[0]
-                msg = "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]" \
-                      " or fix the configuration in [%s]." % (node["host"], node["port"], config.ConfigFile().location)
+                msg = (
+                    "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]"
+                    " or fix the configuration in [%s]." % (node["host"], node["port"], config.ConfigFile().location)
+                )
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.TransportError as e:
                 if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
-                    self.logger.debug("%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
-                                      responses[e.status_code], e.status_code, execution_count, max_execution_count, time_to_sleep)
+                    self.logger.debug(
+                        "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                        responses[e.status_code],
+                        e.status_code,
+                        execution_count,
+                        max_execution_count,
+                        time_to_sleep,
+                    )
                     time.sleep(time_to_sleep)
                 else:
                     node = self._client.transport.hosts[0]
-                    msg = "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on " \
-                          "host [%s] at port [%s]." % (target.__name__, node["host"], node["port"])
+                    msg = (
+                        "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on "
+                        "host [%s] at port [%s]." % (target.__name__, node["host"], node["port"])
+                    )
                     self.logger.exception(msg)
                     raise exceptions.RallyError(msg)
 
             except elasticsearch.exceptions.ElasticsearchException:
                 node = self._client.transport.hosts[0]
-                msg = "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] " \
-                      "at port [%s]." % (target.__name__, node["host"], node["port"])
+                msg = (
+                    "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
+                    "at port [%s]." % (target.__name__, node["host"], node["port"])
+                )
                 self.logger.exception(msg)
                 # this does not necessarily mean it's a system setup problem...
                 raise exceptions.RallyError(msg)
@@ -191,7 +213,7 @@ class EsClientFactory:
         client_options = {
             "use_ssl": secure,
             "verify_certs": verify,
-            "timeout": 120
+            "timeout": 120,
         }
         if ca_path:
             client_options["ca_certs"] = ca_path
@@ -236,6 +258,7 @@ class MetaInfoScope(Enum):
     Defines the scope of a meta-information. Meta-information provides more context for a metric, for example the concrete version
     of Elasticsearch that has been benchmarked or environment information like CPU model or OS.
     """
+
     cluster = 1
     """
     Cluster level meta-information is valid for all nodes in the cluster (e.g. the benchmarked Elasticsearch version)
@@ -385,8 +408,13 @@ class MetricsStore:
 
         self._car_name = "+".join(self._car) if isinstance(self._car, list) else self._car
 
-        self.logger.info("Opening metrics store for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s]",
-                         self._race_timestamp, self._track, self._challenge, self._car)
+        self.logger.info(
+            "Opening metrics store for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s]",
+            self._race_timestamp,
+            self._track,
+            self._challenge,
+            self._car,
+        )
 
         user_tags = extract_user_tags_from_config(self._config)
         for k, v in user_tags.items():
@@ -443,10 +471,7 @@ class MetricsStore:
         """
         Clears all internally stored meta-info. This is considered Rally internal API and not intended for normal client consumption.
         """
-        self._meta_info = {
-            MetaInfoScope.cluster: {},
-            MetaInfoScope.node: {}
-        }
+        self._meta_info = {MetaInfoScope.cluster: {}, MetaInfoScope.node: {}}
 
     @property
     def open_context(self):
@@ -455,11 +480,22 @@ class MetricsStore:
             "race-timestamp": self._race_timestamp,
             "track": self._track,
             "challenge": self._challenge,
-            "car": self._car
+            "car": self._car,
         }
 
-    def put_value_cluster_level(self, name, value, unit=None, task=None, operation=None, operation_type=None, sample_type=SampleType.Normal,
-                                absolute_time=None, relative_time=None, meta_data=None):
+    def put_value_cluster_level(
+        self,
+        name,
+        value,
+        unit=None,
+        task=None,
+        operation=None,
+        operation_type=None,
+        sample_type=SampleType.Normal,
+        absolute_time=None,
+        relative_time=None,
+        meta_data=None,
+    ):
         """
         Adds a new cluster level value metric.
 
@@ -476,11 +512,35 @@ class MetricsStore:
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put_metric(MetaInfoScope.cluster, None, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
-                         relative_time, meta_data)
+        self._put_metric(
+            MetaInfoScope.cluster,
+            None,
+            name,
+            value,
+            unit,
+            task,
+            operation,
+            operation_type,
+            sample_type,
+            absolute_time,
+            relative_time,
+            meta_data,
+        )
 
-    def put_value_node_level(self, node_name, name, value, unit=None, task=None, operation=None, operation_type=None,
-                             sample_type=SampleType.Normal, absolute_time=None, relative_time=None, meta_data=None):
+    def put_value_node_level(
+        self,
+        node_name,
+        name,
+        value,
+        unit=None,
+        task=None,
+        operation=None,
+        operation_type=None,
+        sample_type=SampleType.Normal,
+        absolute_time=None,
+        relative_time=None,
+        meta_data=None,
+    ):
         """
         Adds a new node level value metric.
 
@@ -498,11 +558,36 @@ class MetricsStore:
                Defaults to None. The metrics store will derive the timestamp automatically.
         :param meta_data: A dict, containing additional key-value pairs. Defaults to None.
         """
-        self._put_metric(MetaInfoScope.node, node_name, name, value, unit, task, operation, operation_type, sample_type, absolute_time,
-                         relative_time, meta_data)
+        self._put_metric(
+            MetaInfoScope.node,
+            node_name,
+            name,
+            value,
+            unit,
+            task,
+            operation,
+            operation_type,
+            sample_type,
+            absolute_time,
+            relative_time,
+            meta_data,
+        )
 
-    def _put_metric(self, level, level_key, name, value, unit, task, operation, operation_type, sample_type, absolute_time=None,
-                    relative_time=None, meta_data=None):
+    def _put_metric(
+        self,
+        level,
+        level_key,
+        name,
+        value,
+        unit,
+        task,
+        operation,
+        operation_type,
+        sample_type,
+        absolute_time=None,
+        relative_time=None,
+        meta_data=None,
+    ):
         if level == MetaInfoScope.cluster:
             meta = self._meta_info[MetaInfoScope.cluster].copy()
         elif level == MetaInfoScope.node:
@@ -532,7 +617,7 @@ class MetricsStore:
             "value": value,
             "unit": unit,
             "sample-type": sample_type.name.lower(),
-            "meta": meta
+            "meta": meta,
         }
         if task:
             doc["task"] = task
@@ -576,17 +661,18 @@ class MetricsStore:
         if relative_time is None:
             relative_time = self._stop_watch.split_time()
 
-        doc.update({
-            "@timestamp": time.to_epoch_millis(absolute_time),
-            "relative-time": convert.seconds_to_ms(relative_time),
-            "race-id": self._race_id,
-            "race-timestamp": self._race_timestamp,
-            "environment": self._environment_name,
-            "track": self._track,
-            "challenge": self._challenge,
-            "car": self._car_name,
-
-        })
+        doc.update(
+            {
+                "@timestamp": time.to_epoch_millis(absolute_time),
+                "relative-time": convert.seconds_to_ms(relative_time),
+                "race-id": self._race_id,
+                "race-timestamp": self._race_timestamp,
+                "environment": self._environment_name,
+                "track": self._track,
+                "challenge": self._challenge,
+                "car": self._car_name,
+            }
+        )
         if meta:
             doc["meta"] = meta
         if self._track_params:
@@ -616,8 +702,9 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
-                sort_key=None, sort_reverse=False):
+    def get_one(
+        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+    ):
         """
         Gets one value for the given metric name (even if there should be more than one).
 
@@ -749,13 +836,17 @@ class EsMetricsStore(MetricsStore):
     """
     A metrics store backed by Elasticsearch.
     """
+
     METRICS_DOC_TYPE = "_doc"
 
-    def __init__(self,
-                 cfg,
-                 client_factory_class=EsClientFactory,
-                 index_template_provider_class=IndexTemplateProvider,
-                 clock=time.Clock, meta_info=None):
+    def __init__(
+        self,
+        cfg,
+        client_factory_class=EsClientFactory,
+        index_template_provider_class=IndexTemplateProvider,
+        clock=time.Clock,
+        meta_info=None,
+    ):
         """
         Creates a new metrics store.
 
@@ -808,9 +899,15 @@ class EsMetricsStore(MetricsStore):
             sw.start()
             self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
             sw.stop()
-            self.logger.info("Successfully added %d metrics documents for race timestamp=[%s], track=[%s], "
-                             "challenge=[%s], car=[%s] in [%f] seconds.", len(self._docs), self._race_timestamp,
-                             self._track, self._challenge, self._car, sw.total_time())
+            self.logger.info(
+                "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
+                len(self._docs),
+                self._race_timestamp,
+                self._track,
+                self._challenge,
+                self._car,
+                sw.total_time(),
+            )
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
@@ -820,20 +917,19 @@ class EsMetricsStore(MetricsStore):
         self._docs.append(doc)
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
-        query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, node_name)
-        }
+        query = {"query": self._query_by_name(name, task, operation_type, sample_type, node_name)}
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
         result = self._client.search(index=self._index, body=query)
         self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
-    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
-                sort_key=None, sort_reverse=False):
+    def get_one(
+        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+    ):
         order = "desc" if sort_reverse else "asc"
         query = {
             "query": self._query_by_name(name, task, None, sample_type, node_name),
-            "size": 1
+            "size": 1,
         }
         if sort_key:
             query["sort"] = [{sort_key: {"order": order}}]
@@ -856,10 +952,10 @@ class EsMetricsStore(MetricsStore):
             "aggs": {
                 "error_rate": {
                     "terms": {
-                        "field": "meta.success"
-                    }
-                }
-            }
+                        "field": "meta.success",
+                    },
+                },
+            },
         }
         self.logger.debug("Issuing get_error_rate against index=[%s], query=[%s]", self._index, query)
         result = self._client.search(index=self._index, body=query)
@@ -898,10 +994,10 @@ class EsMetricsStore(MetricsStore):
             "aggs": {
                 "metric_stats": {
                     "stats": {
-                        "field": "value"
-                    }
-                }
-            }
+                        "field": "value",
+                    },
+                },
+            },
         }
         self.logger.debug("Issuing get_stats against index=[%s], query=[%s]", self._index, query)
         result = self._client.search(index=self._index, body=query)
@@ -917,10 +1013,10 @@ class EsMetricsStore(MetricsStore):
                 "percentile_stats": {
                     "percentiles": {
                         "field": "value",
-                        "percents": percentiles
-                    }
-                }
-            }
+                        "percents": percentiles,
+                    },
+                },
+            },
         }
         self.logger.debug("Issuing get_percentiles against index=[%s], query=[%s]", self._index, query)
         result = self._client.search(index=self._index, body=query)
@@ -941,41 +1037,49 @@ class EsMetricsStore(MetricsStore):
                 "filter": [
                     {
                         "term": {
-                            "race-id": self._race_id
-                        }
+                            "race-id": self._race_id,
+                        },
                     },
                     {
                         "term": {
-                            "name": name
-                        }
-                    }
-                ]
-            }
+                            "name": name,
+                        },
+                    },
+                ],
+            },
         }
         if task:
-            q["bool"]["filter"].append({
-                "term": {
-                    "task": task
-                }
-            })
+            q["bool"]["filter"].append(
+                {
+                    "term": {
+                        "task": task,
+                    },
+                },
+            )
         if operation_type:
-            q["bool"]["filter"].append({
-                "term": {
-                    "operation-type": operation_type
-                }
-            })
+            q["bool"]["filter"].append(
+                {
+                    "term": {
+                        "operation-type": operation_type,
+                    },
+                },
+            )
         if sample_type:
-            q["bool"]["filter"].append({
-                "term": {
-                    "sample-type": sample_type.name.lower()
-                }
-            })
+            q["bool"]["filter"].append(
+                {
+                    "term": {
+                        "sample-type": sample_type.name.lower(),
+                    },
+                },
+            )
         if node_name:
-            q["bool"]["filter"].append({
-                "term": {
-                    "meta.node_name": node_name
-                }
-            })
+            q["bool"]["filter"].append(
+                {
+                    "term": {
+                        "meta.node_name": node_name,
+                    },
+                },
+            )
         return q
 
     def to_externalizable(self, clear=False):
@@ -1016,8 +1120,9 @@ class InMemoryMetricsStore(MetricsStore):
         if clear:
             self.docs = []
         compressed = zlib.compress(pickle.dumps(docs))
-        self.logger.debug("Compression changed size of metric store from [%d] bytes to [%d] bytes",
-                         sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1))
+        self.logger.debug(
+            "Compression changed size of metric store from [%d] bytes to [%d] bytes", sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1)
+        )
         return compressed
 
     def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
@@ -1058,9 +1163,12 @@ class InMemoryMetricsStore(MetricsStore):
         total_count = 0
         for doc in self.docs:
             # we can use any request metrics record (i.e. service time or latency)
-            if doc["name"] == "service_time" and doc["task"] == task and \
-                    (operation_type is None or doc["operation-type"] == operation_type) and \
-                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()):
+            if (
+                doc["name"] == "service_time"
+                and doc["task"] == task
+                and (operation_type is None or doc["operation-type"] == operation_type)
+                and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+            ):
                 total_count += 1
                 if doc["meta"]["success"] is False:
                     error += 1
@@ -1078,31 +1186,36 @@ class InMemoryMetricsStore(MetricsStore):
                 "min": sorted_values[0],
                 "max": sorted_values[-1],
                 "avg": statistics.mean(sorted_values),
-                "sum": sum(sorted_values)
+                "sum": sum(sorted_values),
             }
         else:
             return None
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
-        return [mapper(doc)
-                for doc in self.docs
-                if doc["name"] == name and
-                (task is None or doc["task"] == task) and
-                (operation_type is None or doc["operation-type"] == operation_type) and
-                (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
-                (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
-                ]
+        return [
+            mapper(doc)
+            for doc in self.docs
+            if doc["name"] == name
+            and (task is None or doc["task"] == task)
+            and (operation_type is None or doc["operation-type"] == operation_type)
+            and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+            and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
+        ]
 
-    def get_one(self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"],
-                sort_key=None, sort_reverse=False):
+    def get_one(
+        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+    ):
         if sort_key:
             docs = sorted(self.docs, key=lambda k: k[sort_key], reverse=sort_reverse)
         else:
             docs = self.docs
         for doc in docs:
-            if (doc["name"] == name and (task is None or doc["task"] == task) and
-                    (sample_type is None or doc["sample-type"] == sample_type.name.lower()) and
-                    (node_name is None or doc.get("meta", {}).get("node_name") == node_name)):
+            if (
+                doc["name"] == name
+                and (task is None or doc["task"] == task)
+                and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+                and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
+            ):
                 return mapper(doc)
         return None
 
@@ -1143,20 +1256,45 @@ def results_store(cfg):
 def list_races(cfg):
     def format_dict(d):
         if d:
-            items=sorted(d.items())
+            items = sorted(d.items())
             return ", ".join(["%s=%s" % (k, v) for k, v in items])
         else:
             return None
 
     races = []
     for race in race_store(cfg).list():
-        races.append([race.race_id, time.to_iso8601(race.race_timestamp), race.track, format_dict(race.track_params), race.challenge_name,
-                      race.car_name, format_dict(race.user_tags), race.track_revision, race.team_revision])
+        races.append(
+            [
+                race.race_id,
+                time.to_iso8601(race.race_timestamp),
+                race.track,
+                format_dict(race.track_params),
+                race.challenge_name,
+                race.car_name,
+                format_dict(race.user_tags),
+                race.track_revision,
+                race.team_revision,
+            ]
+        )
 
     if len(races) > 0:
         console.println("\nRecent races:\n")
-        console.println(tabulate.tabulate(races, headers=["Race ID", "Race Timestamp", "Track", "Track Parameters", "Challenge", "Car",
-                                                          "User Tags", "Track Revision", "Team Revision"]))
+        console.println(
+            tabulate.tabulate(
+                races,
+                headers=[
+                    "Race ID",
+                    "Race Timestamp",
+                    "Track",
+                    "Track Parameters",
+                    "Challenge",
+                    "Car",
+                    "User Tags",
+                    "Track Revision",
+                    "Team Revision",
+                ],
+            )
+        )
     else:
         console.println("")
         console.println("No recent races found.")
@@ -1175,14 +1313,48 @@ def create_race(cfg, track, challenge, track_revision=None):
     rally_version = version.version()
     rally_revision = version.revision()
 
-    return Race(rally_version, rally_revision, environment, race_id, race_timestamp, pipeline, user_tags, track,
-                track_params, challenge, car, car_params, plugin_params, track_revision)
+    return Race(
+        rally_version,
+        rally_revision,
+        environment,
+        race_id,
+        race_timestamp,
+        pipeline,
+        user_tags,
+        track,
+        track_params,
+        challenge,
+        car,
+        car_params,
+        plugin_params,
+        track_revision,
+    )
 
 
 class Race:
-    def __init__(self, rally_version, rally_revision, environment_name, race_id, race_timestamp, pipeline, user_tags,
-                 track, track_params, challenge, car, car_params, plugin_params, track_revision=None, team_revision=None,
-                 distribution_version=None, distribution_flavor=None, revision=None, results=None, meta_data=None):
+    def __init__(
+        self,
+        rally_version,
+        rally_revision,
+        environment_name,
+        race_id,
+        race_timestamp,
+        pipeline,
+        user_tags,
+        track,
+        track_params,
+        challenge,
+        car,
+        car_params,
+        plugin_params,
+        track_revision=None,
+        team_revision=None,
+        distribution_version=None,
+        distribution_flavor=None,
+        revision=None,
+        results=None,
+        meta_data=None,
+    ):
         if results is None:
             results = {}
         # this happens when the race is created initially
@@ -1247,7 +1419,7 @@ class Race:
                 "distribution-version": self.distribution_version,
                 "distribution-flavor": self.distribution_flavor,
                 "team-revision": self.team_revision,
-            }
+            },
         }
         if self.results:
             d["results"] = self.results.as_dict()
@@ -1280,7 +1452,7 @@ class Race:
             "challenge": self.challenge_name,
             "car": self.car_name,
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result
-            "active": True
+            "active": True,
         }
         if self.distribution_version:
             result_template["distribution-major-version"] = versions.major_version(self.distribution_version)
@@ -1311,13 +1483,28 @@ class Race:
         user_tags = d.get("user-tags", {})
         # TODO: cluster is optional for BWC. This can be removed after some grace period.
         cluster = d.get("cluster", {})
-        return Race(d["rally-version"], d.get("rally-revision"), d["environment"], d["race-id"],
-                    time.from_is8601(d["race-timestamp"]), d["pipeline"], user_tags, d["track"], d.get("track-params"),
-                    d.get("challenge"), d["car"], d.get("car-params"), d.get("plugin-params"),
-                    track_revision=d.get("track-revision"), team_revision=cluster.get("team-revision"),
-                    distribution_version=cluster.get("distribution-version"),
-                    distribution_flavor=cluster.get("distribution-flavor"),
-                    revision=cluster.get("revision"), results=d.get("results"), meta_data=d.get("meta", {}))
+        return Race(
+            d["rally-version"],
+            d.get("rally-revision"),
+            d["environment"],
+            d["race-id"],
+            time.from_is8601(d["race-timestamp"]),
+            d["pipeline"],
+            user_tags,
+            d["track"],
+            d.get("track-params"),
+            d.get("challenge"),
+            d["car"],
+            d.get("car-params"),
+            d.get("plugin-params"),
+            track_revision=d.get("track-revision"),
+            team_revision=cluster.get("team-revision"),
+            distribution_version=cluster.get("distribution-version"),
+            distribution_flavor=cluster.get("distribution-flavor"),
+            revision=cluster.get("revision"),
+            results=d.get("results"),
+            meta_data=d.get("meta", {}),
+        )
 
 
 class RaceStore:
@@ -1345,6 +1532,7 @@ class CompositeRaceStore:
 
     It provides the same API as RaceStore. It delegates writes to all stores and all read operations only the Elasticsearch race store.
     """
+
     def __init__(self, es_store, file_store):
         self.es_store = es_store
         self.file_store = file_store
@@ -1374,7 +1562,7 @@ class FileRaceStore(RaceStore):
     def list(self):
         results = glob.glob(self._race_file(race_id="*"))
         all_races = self._to_races(results)
-        return all_races[:self._max_results()]
+        return all_races[: self._max_results()]
 
     def find_by_race_id(self, race_id):
         race_file = self._race_file(race_id=race_id)
@@ -1423,26 +1611,28 @@ class EsRaceStore(RaceStore):
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
     def list(self):
-        filters = [{
-            "term": {
-                "environment": self.environment_name
+        filters = [
+            {
+                "term": {
+                    "environment": self.environment_name,
+                },
             }
-        }]
+        ]
 
         query = {
             "query": {
                 "bool": {
-                    "filter": filters
-                }
+                    "filter": filters,
+                },
             },
             "size": self._max_results(),
             "sort": [
                 {
                     "race-timestamp": {
-                        "order": "desc"
-                    }
-                }
-            ]
+                        "order": "desc",
+                    },
+                },
+            ],
         }
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
@@ -1461,12 +1651,12 @@ class EsRaceStore(RaceStore):
                     "filter": [
                         {
                             "term": {
-                                "race-id": race_id
-                            }
-                        }
-                    ]
-                }
-            }
+                                "race-id": race_id,
+                            },
+                        },
+                    ],
+                },
+            },
         }
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
@@ -1477,7 +1667,8 @@ class EsRaceStore(RaceStore):
             return Race.from_dict(result["hits"]["hits"][0]["_source"])
         elif hits > 1:
             raise exceptions.RallyAssertionError(
-                "Expected exactly one race to match race id [{}] but there were [{}] matches.".format(race_id, hits))
+                "Expected exactly one race to match race id [{}] but there were [{}] matches.".format(race_id, hits)
+            )
         else:
             raise exceptions.NotFound("No race with race id [{}]".format(race_id))
 
@@ -1486,6 +1677,7 @@ class EsResultsStore:
     """
     Stores the results of a race in a format that is better suited for reporting with Kibana.
     """
+
     INDEX_PREFIX = "rally-results-"
     RESULTS_DOC_TYPE = "_doc"
 
@@ -1504,9 +1696,7 @@ class EsResultsStore:
     def store_results(self, race):
         # always update the mapping to the latest version
         self.client.put_template("rally-results", self.index_template_provider.results_template())
-        self.client.bulk_index(index=self.index_name(race),
-                               doc_type=EsResultsStore.RESULTS_DOC_TYPE,
-                               items=race.to_result_dicts())
+        self.client.bulk_index(index=self.index_name(race), doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
 
     def index_name(self, race):
         race_timestamp = race.race_timestamp
@@ -1517,6 +1707,7 @@ class NoopResultsStore:
     """
     Does not store any results separately as these are stored as part of the race on the file system.
     """
+
     def store_results(self, race):
         pass
 
@@ -1572,11 +1763,7 @@ class GlobalStatsCalculator:
                         self.single_latency(t, op_type, metric_name="processing_time"),
                         error_rate,
                         duration,
-                        self.merge(
-                            self.track.meta_data,
-                            self.challenge.meta_data,
-                            task.operation.meta_data,
-                            task.meta_data)
+                        self.merge(self.track.meta_data, self.challenge.meta_data, task.operation.meta_data, task.meta_data),
                     )
         self.logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")
@@ -1655,7 +1842,7 @@ class GlobalStatsCalculator:
                 "mean": mean,
                 "median": median,
                 "max": stats["max"],
-                "unit": unit
+                "unit": unit,
             }
         else:
             return {
@@ -1663,7 +1850,7 @@ class GlobalStatsCalculator:
                 "mean": None,
                 "median": None,
                 "max": None,
-                "unit": unit
+                "unit": unit,
             }
 
     def shard_stats(self, metric_name):
@@ -1675,7 +1862,7 @@ class GlobalStatsCalculator:
                 "min": min(flat_values),
                 "median": statistics.median(flat_values),
                 "max": max(flat_values),
-                "unit": unit
+                "unit": unit,
             }
         else:
             return {}
@@ -1685,14 +1872,9 @@ class GlobalStatsCalculator:
         result = []
         if values:
             for v in values:
-                result.append({
-                    "job": v["job"],
-                    "min": v["min"],
-                    "mean": v["mean"],
-                    "median": v["median"],
-                    "max": v["max"],
-                    "unit": v["unit"]
-                })
+                result.append(
+                    {"job": v["job"], "min": v["min"], "mean": v["mean"], "median": v["median"], "max": v["max"], "unit": v["unit"]}
+                )
         return result
 
     def total_transform_metric(self, metric_name):
@@ -1702,19 +1884,16 @@ class GlobalStatsCalculator:
             for v in values:
                 transform_id = v.get("meta", {}).get("transform_id")
                 if transform_id is not None:
-                    result.append({
-                        "id": transform_id,
-                        "mean": v["value"],
-                        "unit": v["unit"]
-                    })
+                    result.append({"id": transform_id, "mean": v["value"], "unit": v["unit"]})
         return result
 
     def error_rate(self, task_name, operation_type):
         return self.store.get_error_rate(task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
 
     def duration(self, task_name):
-        return self.store.get_one("service_time", task=task_name, mapper=lambda doc: doc["relative-time"],
-                                  sort_key="relative-time", sort_reverse=True)
+        return self.store.get_one(
+            "service_time", task=task_name, mapper=lambda doc: doc["relative-time"], sort_key="relative-time", sort_reverse=True
+        )
 
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
         return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
@@ -1724,15 +1903,14 @@ class GlobalStatsCalculator:
         stats = self.store.get_stats(metric_name, task=task, operation_type=operation_type, sample_type=sample_type)
         sample_size = stats["count"] if stats else 0
         if sample_size > 0:
-            percentiles = self.store.get_percentiles(metric_name,
-                                                     task=task,
-                                                     operation_type=operation_type,
-                                                     sample_type=sample_type,
-                                                     percentiles=percentiles_for_sample_size(sample_size))
-            mean = self.store.get_mean(metric_name,
-                                       task=task,
-                                       operation_type=operation_type,
-                                       sample_type=sample_type)
+            percentiles = self.store.get_percentiles(
+                metric_name,
+                task=task,
+                operation_type=operation_type,
+                sample_type=sample_type,
+                percentiles=percentiles_for_sample_size(sample_size),
+            )
+            mean = self.store.get_mean(metric_name, task=task, operation_type=operation_type, sample_type=sample_type)
             unit = self.store.get_unit(metric_name, task=task, operation_type=operation_type)
             stats = collections.OrderedDict()
             for k, v in percentiles.items():
@@ -1790,13 +1968,9 @@ class GlobalStats:
 
     def as_flat_list(self):
         def op_metrics(op_item, key, single_value=False):
-            doc = {
-                "task": op_item["task"],
-                "operation": op_item["operation"],
-                "name": key
-            }
+            doc = {"task": op_item["task"], "operation": op_item["operation"], "name": key}
             if single_value:
-                doc["value"] = {"single":  op_item[key]}
+                doc["value"] = {"single": op_item[key]}
             else:
                 doc["value"] = op_item[key]
             if "meta" in op_item:
@@ -1821,35 +1995,21 @@ class GlobalStats:
                         all_results.append(op_metrics(item, "duration", single_value=True))
             elif metric == "ml_processing_time":
                 for item in value:
-                    all_results.append({
-                        "job": item["job"],
-                        "name": "ml_processing_time",
-                        "value": {
-                            "min": item["min"],
-                            "mean": item["mean"],
-                            "median": item["median"],
-                            "max": item["max"]
+                    all_results.append(
+                        {
+                            "job": item["job"],
+                            "name": "ml_processing_time",
+                            "value": {"min": item["min"], "mean": item["mean"], "median": item["median"], "max": item["max"]},
                         }
-                    })
+                    )
             elif metric.startswith("total_transform_") and value is not None:
                 for item in value:
-                    all_results.append({
-                        "id": item["id"],
-                        "name": metric,
-                        "value": {
-                            "single": item["mean"]
-                        }
-                    })
+                    all_results.append({"id": item["id"], "name": metric, "value": {"single": item["mean"]}})
             elif metric.endswith("_time_per_shard"):
                 if value:
                     all_results.append({"name": metric, "value": value})
             elif value is not None:
-                result = {
-                    "name": metric,
-                    "value": {
-                        "single": value
-                    }
-                }
+                result = {"name": metric, "value": {"single": value}}
                 all_results.append(result)
         # sorting is just necessary to have a stable order for tests. As we just have a small number of metrics, the overhead is neglible.
         return sorted(all_results, key=lambda m: m["name"])
@@ -1866,7 +2026,7 @@ class GlobalStats:
             "service_time": service_time,
             "processing_time": processing_time,
             "error_rate": error_rate,
-            "duration": duration
+            "duration": duration,
         }
         if meta:
             doc["meta"] = meta
@@ -1918,11 +2078,7 @@ class SystemStats:
         return d.get(k, default) if d else default
 
     def add_node_metrics(self, node, name, value, unit):
-        metric = {
-            "node": node,
-            "name": name,
-            "value": value
-        }
+        metric = {"node": node, "name": name, "value": value}
         if unit:
             metric["unit"] = unit
         self.node_metrics.append(metric)

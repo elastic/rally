@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -244,7 +244,6 @@ class Config:
             (Scope.application, "provisioning", "node.http.port"): 39200,
             (Scope.application, "mechanic", "team.repository.dir"): "teams",
             (Scope.application, "mechanic", "team.default.repository"): "default",
-
         }
 
     def _fill_from_config_file(self, config):
@@ -284,14 +283,18 @@ def migrate(config_file, current_version, target_version, out=print, i=input):
         logger.info("Config file is already at version [%s]. Skipping migration.", target_version)
         return
     if current_version < Config.EARLIEST_SUPPORTED_VERSION:
-        raise exceptions.ConfigError(f"The config file in {config_file.location} is too old. Please delete it "
-                                     f"and reconfigure Rally from scratch with {PROGRAM_NAME} configure.")
+        raise exceptions.ConfigError(
+            f"The config file in {config_file.location} is too old. Please delete it "
+            f"and reconfigure Rally from scratch with {PROGRAM_NAME} configure."
+        )
 
     logger.info("Upgrading configuration from version [%s] to [%s].", current_version, target_version)
     # Something is really fishy. We don't want to downgrade the configuration.
     if current_version >= target_version:
-        raise exceptions.ConfigError(f"The existing config file is available in a later version already. "
-                                     f"Expected version <= [{target_version}] but found [{current_version}]")
+        raise exceptions.ConfigError(
+            f"The existing config file is available in a later version already. "
+            f"Expected version <= [{target_version}] but found [{current_version}]"
+        )
     # but first a backup...
     config_file.backup()
     config = config_file.load()

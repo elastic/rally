@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -59,7 +59,7 @@ class SliceTests(TestCase):
             '{"key": "value7"}',
             '{"key": "value8"}',
             '{"key": "value9"}',
-            '{"key": "value10"}'
+            '{"key": "value10"}',
         ]
 
         source.open(data, "r", 5)
@@ -89,74 +89,73 @@ class ConflictingIdsBuilderTests(TestCase):
     def test_sequential_conflicts(self):
         self.assertEqual(
             [
-                '0000000000',
-                '0000000001',
-                '0000000002',
-                '0000000003',
-                '0000000004',
-                '0000000005',
-                '0000000006',
-                '0000000007',
-                '0000000008',
-                '0000000009',
-                '0000000010'
+                "0000000000",
+                "0000000001",
+                "0000000002",
+                "0000000003",
+                "0000000004",
+                "0000000005",
+                "0000000006",
+                "0000000007",
+                "0000000008",
+                "0000000009",
+                "0000000010",
             ],
-            params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 0)
+            params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 0),
         )
 
         self.assertEqual(
             [
-                '0000000005',
-                '0000000006',
-                '0000000007',
-                '0000000008',
-                '0000000009',
-                '0000000010',
-                '0000000011',
-                '0000000012',
-                '0000000013',
-                '0000000014',
-                '0000000015'
+                "0000000005",
+                "0000000006",
+                "0000000007",
+                "0000000008",
+                "0000000009",
+                "0000000010",
+                "0000000011",
+                "0000000012",
+                "0000000013",
+                "0000000014",
+                "0000000015",
             ],
-            params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 5)
+            params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 11, 5),
         )
 
     def test_random_conflicts(self):
         predictable_shuffle = list.reverse
 
         self.assertEqual(
-            [
-                '0000000002', '0000000001', '0000000000'
-            ],
-            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0, shuffle=predictable_shuffle)
+            ["0000000002", "0000000001", "0000000000"],
+            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0, shuffle=predictable_shuffle),
         )
 
         self.assertEqual(
-            [
-                '0000000007', '0000000006', '0000000005'
-            ],
-            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 5, shuffle=predictable_shuffle)
+            ["0000000007", "0000000006", "0000000005"],
+            params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 5, shuffle=predictable_shuffle),
         )
 
 
 class ActionMetaDataTests(TestCase):
     def test_generate_action_meta_data_without_id_conflicts(self):
-        self.assertEqual(("index", '{"index": {"_index": "test_index", "_type": "test_type"}}\n'),
-                         next(params.GenerateActionMetaData("test_index", "test_type")))
+        self.assertEqual(
+            ("index", '{"index": {"_index": "test_index", "_type": "test_type"}}\n'),
+            next(params.GenerateActionMetaData("test_index", "test_type")),
+        )
 
     def test_generate_action_meta_data_create(self):
-        self.assertEqual(("create", '{"create": {"_index": "test_index"}}\n'),
-                         next(params.GenerateActionMetaData("test_index", None, use_create=True)))
+        self.assertEqual(
+            ("create", '{"create": {"_index": "test_index"}}\n'), next(params.GenerateActionMetaData("test_index", None, use_create=True))
+        )
 
     def test_generate_action_meta_data_create_with_conflicts(self):
         with self.assertRaises(exceptions.RallyError) as ctx:
             params.GenerateActionMetaData("test_index", None, conflicting_ids=[100, 200, 300, 400], use_create=True)
-        self.assertEqual("Index mode '_create' cannot be used with conflicting ids",
-                         ctx.exception.args[0])
+        self.assertEqual("Index mode '_create' cannot be used with conflicting ids", ctx.exception.args[0])
 
     def test_generate_action_meta_data_typeless(self):
-        self.assertEqual(("index", '{"index": {"_index": "test_index"}}\n'),
-                         next(params.GenerateActionMetaData("test_index", type_name=None)))
+        self.assertEqual(
+            ("index", '{"index": {"_index": "test_index"}}\n'), next(params.GenerateActionMetaData("test_index", type_name=None))
+        )
 
     def test_generate_action_meta_data_with_id_conflicts(self):
         def idx(id):
@@ -165,32 +164,40 @@ class ActionMetaDataTests(TestCase):
         def conflict(action, id):
             return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % (action, id)
 
-        pseudo_random_conflicts = iter([
-            # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
-            0.2,
-            0.25,
-            0.2,
-            # no conflict
-            0.3,
-            # conflict again
-            0.0
-        ])
+        pseudo_random_conflicts = iter(
+            [
+                # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
+                0.2,
+                0.25,
+                0.2,
+                # no conflict
+                0.3,
+                # conflict again
+                0.0,
+            ]
+        )
 
-        chosen_index_of_conflicting_ids = iter([
-            # the "random" index of the id in the array `conflicting_ids` that will produce a conflict
-            1,
-            3,
-            2,
-            0])
+        chosen_index_of_conflicting_ids = iter(
+            [
+                # the "random" index of the id in the array `conflicting_ids` that will produce a conflict
+                1,
+                3,
+                2,
+                0,
+            ]
+        )
 
         conflict_action = random.choice(["index", "update"])
 
-        generator = params.GenerateActionMetaData("test_index", "test_type",
-                                                  conflicting_ids=[100, 200, 300, 400],
-                                                  conflict_probability=25,
-                                                  on_conflict=conflict_action,
-                                                  rand=lambda: next(pseudo_random_conflicts),
-                                                  randint=lambda x, y: next(chosen_index_of_conflicting_ids))
+        generator = params.GenerateActionMetaData(
+            "test_index",
+            "test_type",
+            conflicting_ids=[100, 200, 300, 400],
+            conflict_probability=25,
+            on_conflict=conflict_action,
+            rand=lambda: next(pseudo_random_conflicts),
+            randint=lambda x, y: next(chosen_index_of_conflicting_ids),
+        )
 
         # first one is always *not* drawn from a random index
         self.assertEqual(idx("100"), next(generator))
@@ -216,52 +223,58 @@ class ActionMetaDataTests(TestCase):
             else:
                 return action, '{"%s": {"_index": "test_index", "_id": "%s"}}\n' % (action, id)
 
-        pseudo_random_conflicts = iter([
-            # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
-            0.2,
-            0.25,
-            0.2,
-            # no conflict
-            0.3,
-            0.4,
-            0.35,
-            # conflict again
-            0.0,
-            0.2,
-            0.15
-        ])
+        pseudo_random_conflicts = iter(
+            [
+                # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
+                0.2,
+                0.25,
+                0.2,
+                # no conflict
+                0.3,
+                0.4,
+                0.35,
+                # conflict again
+                0.0,
+                0.2,
+                0.15,
+            ]
+        )
 
         # we use this value as `idx_range` in the calculation: idx = round((self.id_up_to - 1) * (1 - idx_range))
-        pseudo_exponential_distribution = iter([
-            # id_up_to = 1 -> idx = 0
-            0.013375248172714948,
-            # id_up_to = 1 -> idx = 0
-            0.042495604491024914,
-            # id_up_to = 1 -> idx = 0
-            0.005491072642023834,
-            # no conflict: id_up_to = 2
-            # no conflict: id_up_to = 3
-            # no conflict: id_up_to = 4
-            # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.028557879547255083)) = 3
-            0.028557879547255083,
-            # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.209771474243926352)) = 2
-            0.209771474243926352
-        ])
+        pseudo_exponential_distribution = iter(
+            [
+                # id_up_to = 1 -> idx = 0
+                0.013375248172714948,
+                # id_up_to = 1 -> idx = 0
+                0.042495604491024914,
+                # id_up_to = 1 -> idx = 0
+                0.005491072642023834,
+                # no conflict: id_up_to = 2
+                # no conflict: id_up_to = 3
+                # no conflict: id_up_to = 4
+                # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.028557879547255083)) = 3
+                0.028557879547255083,
+                # id_up_to = 4 -> idx = round((4 - 1) * (1 - 0.209771474243926352)) = 2
+                0.209771474243926352,
+            ]
+        )
 
         conflict_action = random.choice(["index", "update"])
         type_name = random.choice([None, "test_type"])
 
-        generator = params.GenerateActionMetaData("test_index", type_name=type_name,
-                                                  conflicting_ids=[100, 200, 300, 400, 500, 600],
-                                                  conflict_probability=25,
-                                                  # heavily biased towards recent ids
-                                                  recency=1.0,
-                                                  on_conflict=conflict_action,
-                                                  rand=lambda: next(pseudo_random_conflicts),
-                                                  # we don't use this one here because recency is > 0.
-                                                  # randint=lambda x, y: next(chosen_index_of_conflicting_ids),
-                                                  randexp=lambda lmbda: next(pseudo_exponential_distribution)
-                                                  )
+        generator = params.GenerateActionMetaData(
+            "test_index",
+            type_name=type_name,
+            conflicting_ids=[100, 200, 300, 400, 500, 600],
+            conflict_probability=25,
+            # heavily biased towards recent ids
+            recency=1.0,
+            on_conflict=conflict_action,
+            rand=lambda: next(pseudo_random_conflicts),
+            # we don't use this one here because recency is > 0.
+            # randint=lambda x, y: next(chosen_index_of_conflicting_ids),
+            randexp=lambda lmbda: next(pseudo_exponential_distribution),
+        )
 
         # first one is always *not* drawn from a random index
         self.assertEqual(idx(type_name, "100"), next(generator))
@@ -283,34 +296,28 @@ class ActionMetaDataTests(TestCase):
 
         test_ids = [100, 200, 300, 400]
 
-        generator = params.GenerateActionMetaData("test_index", "test_type",
-                                                  conflicting_ids=test_ids,
-                                                  conflict_probability=0)
+        generator = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=test_ids, conflict_probability=0)
 
         self.assertListEqual([idx(id) for id in test_ids], list(generator))
 
 
 class IndexDataReaderTests(TestCase):
     def test_read_bulk_larger_than_number_of_docs(self):
-        data = [
-            b'{"key": "value1"}\n',
-            b'{"key": "value2"}\n',
-            b'{"key": "value3"}\n',
-            b'{"key": "value4"}\n',
-            b'{"key": "value5"}\n'
-        ]
+        data = [b'{"key": "value1"}\n', b'{"key": "value2"}\n', b'{"key": "value3"}\n', b'{"key": "value4"}\n', b'{"key": "value5"}\n']
         bulk_size = 50
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
-        reader = params.MetadataIndexDataReader(data,
-                                                batch_size=bulk_size,
-                                                bulk_size=bulk_size,
-                                                file_source=source,
-                                                action_metadata=am_handler,
-                                                index_name="test_index",
-                                                type_name="test_type")
+        reader = params.MetadataIndexDataReader(
+            data,
+            batch_size=bulk_size,
+            bulk_size=bulk_size,
+            file_source=source,
+            action_metadata=am_handler,
+            index_name="test_index",
+            type_name="test_type",
+        )
 
         expected_bulk_sizes = [len(data)]
         # lines should include meta-data
@@ -318,25 +325,21 @@ class IndexDataReaderTests(TestCase):
         self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)
 
     def test_read_bulk_with_offset(self):
-        data = [
-            b'{"key": "value1"}\n',
-            b'{"key": "value2"}\n',
-            b'{"key": "value3"}\n',
-            b'{"key": "value4"}\n',
-            b'{"key": "value5"}\n'
-        ]
+        data = [b'{"key": "value1"}\n', b'{"key": "value2"}\n', b'{"key": "value3"}\n', b'{"key": "value4"}\n', b'{"key": "value5"}\n']
         bulk_size = 50
 
         source = params.Slice(io.StringAsFileSource, 3, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
-        reader = params.MetadataIndexDataReader(data,
-                                                batch_size=bulk_size,
-                                                bulk_size=bulk_size,
-                                                file_source=source,
-                                                action_metadata=am_handler,
-                                                index_name="test_index",
-                                                type_name="test_type")
+        reader = params.MetadataIndexDataReader(
+            data,
+            batch_size=bulk_size,
+            bulk_size=bulk_size,
+            file_source=source,
+            action_metadata=am_handler,
+            index_name="test_index",
+            type_name="test_type",
+        )
 
         expected_bulk_sizes = [(len(data) - 3)]
         # lines should include meta-data
@@ -358,13 +361,15 @@ class IndexDataReaderTests(TestCase):
         source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
-        reader = params.MetadataIndexDataReader(data,
-                                                batch_size=bulk_size,
-                                                bulk_size=bulk_size,
-                                                file_source=source,
-                                                action_metadata=am_handler,
-                                                index_name="test_index",
-                                                type_name="test_type")
+        reader = params.MetadataIndexDataReader(
+            data,
+            batch_size=bulk_size,
+            bulk_size=bulk_size,
+            file_source=source,
+            action_metadata=am_handler,
+            index_name="test_index",
+            type_name="test_type",
+        )
 
         expected_bulk_sizes = [3, 3, 1]
         # lines should include meta-data
@@ -387,13 +392,15 @@ class IndexDataReaderTests(TestCase):
         source = params.Slice(io.StringAsFileSource, 0, 5)
         am_handler = params.GenerateActionMetaData("test_index", "test_type")
 
-        reader = params.MetadataIndexDataReader(data,
-                                                batch_size=bulk_size,
-                                                bulk_size=bulk_size,
-                                                file_source=source,
-                                                action_metadata=am_handler,
-                                                index_name="test_index",
-                                                type_name="test_type")
+        reader = params.MetadataIndexDataReader(
+            data,
+            batch_size=bulk_size,
+            bulk_size=bulk_size,
+            file_source=source,
+            action_metadata=am_handler,
+            index_name="test_index",
+            type_name="test_type",
+        )
 
         expected_bulk_sizes = [3, 2]
         # lines should include meta-data
@@ -415,18 +422,15 @@ class IndexDataReaderTests(TestCase):
             b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
             b'{"key": "value6"}\n',
             b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
-            b'{"key": "value7"}\n'
+            b'{"key": "value7"}\n',
         ]
         bulk_size = 3
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
 
-        reader = params.SourceOnlyIndexDataReader(data,
-                                                  batch_size=bulk_size,
-                                                  bulk_size=bulk_size,
-                                                  file_source=source,
-                                                  index_name="test_index",
-                                                  type_name="test_type")
+        reader = params.SourceOnlyIndexDataReader(
+            data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, index_name="test_index", type_name="test_type"
+        )
 
         expected_bulk_sizes = [3, 3, 1]
         # lines should include meta-data
@@ -434,45 +438,49 @@ class IndexDataReaderTests(TestCase):
         self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)
 
     def test_read_bulk_with_id_conflicts(self):
-        pseudo_random_conflicts = iter([
-            # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
-            0.2,
-            0.25,
-            0.2,
-            # no conflict
-            0.3
-        ])
+        pseudo_random_conflicts = iter(
+            [
+                # if this value is <= our chosen threshold of 0.25 (see conflict_probability) we produce a conflict.
+                0.2,
+                0.25,
+                0.2,
+                # no conflict
+                0.3,
+            ]
+        )
 
-        chosen_index_of_conflicting_ids = iter([
-            # the "random" index of the id in the array `conflicting_ids` that will produce a conflict
-            1,
-            3,
-            2])
+        chosen_index_of_conflicting_ids = iter(
+            [
+                # the "random" index of the id in the array `conflicting_ids` that will produce a conflict
+                1,
+                3,
+                2,
+            ]
+        )
 
-        data = [
-            b'{"key": "value1"}\n',
-            b'{"key": "value2"}\n',
-            b'{"key": "value3"}\n',
-            b'{"key": "value4"}\n',
-            b'{"key": "value5"}\n'
-        ]
+        data = [b'{"key": "value1"}\n', b'{"key": "value2"}\n', b'{"key": "value3"}\n', b'{"key": "value4"}\n', b'{"key": "value5"}\n']
         bulk_size = 2
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type",
-                                                   conflicting_ids=[100, 200, 300, 400],
-                                                   conflict_probability=25,
-                                                   on_conflict="update",
-                                                   rand=lambda: next(pseudo_random_conflicts),
-                                                   randint=lambda x, y: next(chosen_index_of_conflicting_ids))
+        am_handler = params.GenerateActionMetaData(
+            "test_index",
+            "test_type",
+            conflicting_ids=[100, 200, 300, 400],
+            conflict_probability=25,
+            on_conflict="update",
+            rand=lambda: next(pseudo_random_conflicts),
+            randint=lambda x, y: next(chosen_index_of_conflicting_ids),
+        )
 
-        reader = params.MetadataIndexDataReader(data,
-                                                batch_size=bulk_size,
-                                                bulk_size=bulk_size,
-                                                file_source=source,
-                                                action_metadata=am_handler,
-                                                index_name="test_index",
-                                                type_name="test_type")
+        reader = params.MetadataIndexDataReader(
+            data,
+            batch_size=bulk_size,
+            bulk_size=bulk_size,
+            file_source=source,
+            action_metadata=am_handler,
+            index_name="test_index",
+            type_name="test_type",
+        )
 
         # consume all bulks
         bulks = []
@@ -481,40 +489,37 @@ class IndexDataReaderTests(TestCase):
                 for bulk_size, bulk in batch:
                     bulks.append(bulk)
 
-        self.assertEqual([
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
-            b'{"key": "value1"}\n' +
-            b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-            b'{"doc":{"key": "value2"}}\n',
-            b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
-            b'{"doc":{"key": "value3"}}\n' +
-            b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
-            b'{"doc":{"key": "value4"}}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-            b'{"key": "value5"}\n'
-        ], bulks)
+        self.assertEqual(
+            [
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n'
+                + b'{"key": "value1"}\n'
+                + b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n'
+                + b'{"doc":{"key": "value2"}}\n',
+                b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n'
+                + b'{"doc":{"key": "value3"}}\n'
+                + b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n'
+                + b'{"doc":{"key": "value4"}}\n',
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' + b'{"key": "value5"}\n',
+            ],
+            bulks,
+        )
 
     def test_read_bulk_with_external_id_and_zero_conflict_probability(self):
-        data = [
-            b'{"key": "value1"}\n',
-            b'{"key": "value2"}\n',
-            b'{"key": "value3"}\n',
-            b'{"key": "value4"}\n'
-        ]
+        data = [b'{"key": "value1"}\n', b'{"key": "value2"}\n', b'{"key": "value3"}\n', b'{"key": "value4"}\n']
         bulk_size = 2
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type",
-                                                   conflicting_ids=[100, 200, 300, 400],
-                                                   conflict_probability=0)
+        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=[100, 200, 300, 400], conflict_probability=0)
 
-        reader = params.MetadataIndexDataReader(data,
-                                                batch_size=bulk_size,
-                                                bulk_size=bulk_size,
-                                                file_source=source,
-                                                action_metadata=am_handler,
-                                                index_name="test_index",
-                                                type_name="test_type")
+        reader = params.MetadataIndexDataReader(
+            data,
+            batch_size=bulk_size,
+            bulk_size=bulk_size,
+            file_source=source,
+            action_metadata=am_handler,
+            index_name="test_index",
+            type_name="test_type",
+        )
 
         # consume all bulks
         bulks = []
@@ -523,17 +528,19 @@ class IndexDataReaderTests(TestCase):
                 for bulk_size, bulk in batch:
                     bulks.append(bulk)
 
-        self.assertEqual([
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n' +
-            b'{"key": "value1"}\n' +
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' +
-            b'{"key": "value2"}\n',
-
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n' +
-            b'{"key": "value3"}\n' +
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n' +
-            b'{"key": "value4"}\n'
-        ], bulks)
+        self.assertEqual(
+            [
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n'
+                + b'{"key": "value1"}\n'
+                + b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n'
+                + b'{"key": "value2"}\n',
+                b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n'
+                + b'{"key": "value3"}\n'
+                + b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n'
+                + b'{"key": "value4"}\n',
+            ],
+            bulks,
+        )
 
     def assert_bulks_sized(self, reader, expected_bulk_sizes, expected_line_sizes):
         self.assertEqual(len(expected_bulk_sizes), len(expected_line_sizes), "Bulk sizes and line sizes must be equal")
@@ -667,18 +674,46 @@ class InvocationGeneratorTests(TestCase):
 
         self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 0, 1, 1))
         self.assertEqual(1, self.number_of_bulks([self.corpus("a", [docs1])], 0, 0, 1, 2))
-        self.assertEqual(20, self.number_of_bulks(
-            [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 1))
-        self.assertEqual(11, self.number_of_bulks(
-            [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 2))
-        self.assertEqual(11, self.number_of_bulks(
-            [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 3))
-        self.assertEqual(11, self.number_of_bulks(
-            [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]),
-             self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])], 0, 0, 1, 100))
+        self.assertEqual(
+            20,
+            self.number_of_bulks(
+                [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]), self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])],
+                0,
+                0,
+                1,
+                1,
+            ),
+        )
+        self.assertEqual(
+            11,
+            self.number_of_bulks(
+                [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]), self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])],
+                0,
+                0,
+                1,
+                2,
+            ),
+        )
+        self.assertEqual(
+            11,
+            self.number_of_bulks(
+                [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]), self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])],
+                0,
+                0,
+                1,
+                3,
+            ),
+        )
+        self.assertEqual(
+            11,
+            self.number_of_bulks(
+                [self.corpus("a", [docs2, docs2, docs2, docs2, docs1]), self.corpus("b", [docs2, docs2, docs2, docs2, docs2, docs1])],
+                0,
+                0,
+                1,
+                100,
+            ),
+        )
 
         self.assertEqual(2, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 0, 3, 250))
         self.assertEqual(1, self.number_of_bulks([self.corpus("a", [self.docs(800)])], 0, 0, 3, 267))
@@ -701,8 +736,9 @@ class InvocationGeneratorTests(TestCase):
 
     def test_build_conflicting_ids(self):
         self.assertIsNone(params.build_conflicting_ids(params.IndexIdConflict.NoConflicts, 3, 0))
-        self.assertEqual(["0000000000", "0000000001", "0000000002"],
-                         params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 3, 0))
+        self.assertEqual(
+            ["0000000000", "0000000001", "0000000002"], params.build_conflicting_ids(params.IndexIdConflict.SequentialConflicts, 3, 0)
+        )
         # we cannot tell anything specific about the contents...
         self.assertEqual(3, len(params.build_conflicting_ids(params.IndexIdConflict.RandomConflicts, 3, 0)))
 
@@ -710,210 +746,318 @@ class InvocationGeneratorTests(TestCase):
 # pylint: disable=too-many-public-methods
 class BulkIndexParamSourceTests(TestCase):
     def test_create_without_params(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={})
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={},
+            )
 
         self.assertEqual("Mandatory parameter 'bulk-size' is missing", ctx.exception.args[0])
 
     def test_create_without_corpora_definition(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={})
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test"),
+                params={},
+            )
 
-        self.assertEqual("There is no document corpus definition for track unit-test. "
-                         "You must add at least one before making bulk requests to Elasticsearch.", ctx.exception.args[0])
+        self.assertEqual(
+            "There is no document corpus definition for track unit-test. "
+            "You must add at least one before making bulk requests to Elasticsearch.",
+            ctx.exception.args[0],
+        )
 
     def test_create_with_non_numeric_bulk_size(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-                "bulk-size": "Three"
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": "Three",
+                },
+            )
 
         self.assertEqual("'bulk-size' must be numeric", ctx.exception.args[0])
 
     def test_create_with_negative_bulk_size(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-                "bulk-size": -5
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": -5,
+                },
+            )
 
         self.assertEqual("'bulk-size' must be positive but was -5", ctx.exception.args[0])
 
     def test_create_with_fraction_smaller_batch_size(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-                "bulk-size": 5,
-                "batch-size": 3
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5,
+                    "batch-size": 3,
+                },
+            )
 
         self.assertEqual("'batch-size' must be greater than or equal to 'bulk-size'", ctx.exception.args[0])
 
     def test_create_with_fraction_larger_batch_size(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-                "bulk-size": 5,
-                "batch-size": 8
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5,
+                    "batch-size": 8,
+                },
+            )
 
         self.assertEqual("'batch-size' must be a multiple of 'bulk-size'", ctx.exception.args[0])
 
     def test_create_with_metadata_in_source_file_but_conflicts(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            document_archive="docs.json.bz2",
-                            document_file="docs.json",
-                            number_of_documents=10,
-                            includes_action_and_meta_data=True)
-        ])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    document_archive="docs.json.bz2",
+                    document_file="docs.json",
+                    number_of_documents=10,
+                    includes_action_and_meta_data=True,
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-                "conflicts": "random"
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "conflicts": "random",
+                },
+            )
 
-        self.assertEqual("Cannot generate id conflicts [random] as [docs.json.bz2] in document corpus [default] already contains "
-                         "an action and meta-data line.", ctx.exception.args[0])
+        self.assertEqual(
+            "Cannot generate id conflicts [random] as [docs.json.bz2] in document corpus [default] already contains "
+            "an action and meta-data line.",
+            ctx.exception.args[0],
+        )
 
     def test_create_with_unknown_id_conflicts(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
-                "conflicts": "crazy"
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test"),
+                params={
+                    "conflicts": "crazy",
+                },
+            )
 
         self.assertEqual("Unknown 'conflicts' setting [crazy]", ctx.exception.args[0])
 
     def test_create_with_unknown_on_conflict_setting(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
-                "conflicts": "sequential",
-                "on-conflict": "delete"
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test"),
+                params={
+                    "conflicts": "sequential",
+                    "on-conflict": "delete",
+                },
+            )
 
         self.assertEqual("Unknown 'on-conflict' setting [delete]", ctx.exception.args[0])
 
     def test_create_with_conflicts_and_data_streams(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
-                "data-streams": ["test-data-stream-1", "test-data-stream-2"],
-                "conflicts": "sequential"
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test"),
+                params={
+                    "data-streams": ["test-data-stream-1", "test-data-stream-2"],
+                    "conflicts": "sequential",
+                },
+            )
 
         self.assertEqual("'conflicts' cannot be used with 'data-streams'", ctx.exception.args[0])
 
     def test_create_with_ingest_percentage_too_low(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-                "bulk-size": 5000,
-                "ingest-percentage": 0.0
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5000,
+                    "ingest-percentage": 0.0,
+                },
+            )
 
         self.assertEqual("'ingest-percentage' must be in the range (0.0, 100.0] but was 0.0", ctx.exception.args[0])
 
     def test_create_with_ingest_percentage_too_high(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-                "bulk-size": 5000,
-                "ingest-percentage": 100.1
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5000,
+                    "ingest-percentage": 100.1,
+                },
+            )
 
         self.assertEqual("'ingest-percentage' must be in the range (0.0, 100.0] but was 100.1", ctx.exception.args[0])
 
     def test_create_with_ingest_percentage_not_numeric(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-                "bulk-size": 5000,
-                "ingest-percentage": "100 percent"
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5000,
+                    "ingest-percentage": "100 percent",
+                },
+            )
 
         self.assertEqual("'ingest-percentage' must be numeric", ctx.exception.args[0])
 
     def test_create_valid_param_source(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
-        self.assertIsNotNone(params.BulkIndexParamSource(track.Track(name="unit-test", corpora=[corpus]), params={
-            "conflicts": "random",
-            "bulk-size": 5000,
-            "batch-size": 20000,
-            "ingest-percentage": 20.5,
-            "pipeline": "test-pipeline"
-        }))
+        self.assertIsNotNone(
+            params.BulkIndexParamSource(
+                track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "conflicts": "random",
+                    "bulk-size": 5000,
+                    "batch-size": 20000,
+                    "ingest-percentage": 20.5,
+                    "pipeline": "test-pipeline",
+                },
+            )
+        )
 
     def test_passes_all_corpora_by_default(self):
         corpora = [
-            track.DocumentCorpus(name="default", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=10,
-                                target_index="test-idx",
-                                target_type="test-type"
-                                )
-            ]),
-            track.DocumentCorpus(name="special", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=100,
-                                target_index="test-idx2",
-                                target_type="type"
-                                )
-            ]),
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=10,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=100,
+                        target_index="test-idx2",
+                        target_type="type",
+                    )
+                ],
+            ),
         ]
 
         source = params.BulkIndexParamSource(
@@ -922,28 +1066,37 @@ class BulkIndexParamSourceTests(TestCase):
                 "conflicts": "random",
                 "bulk-size": 5000,
                 "batch-size": 20000,
-                "pipeline": "test-pipeline"
-            })
+                "pipeline": "test-pipeline",
+            },
+        )
 
         partition = source.partition(0, 1)
         self.assertEqual(partition.corpora, corpora)
 
     def test_filters_corpora(self):
         corpora = [
-            track.DocumentCorpus(name="default", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=10,
-                                target_index="test-idx",
-                                target_type="test-type"
-                                )
-            ]),
-            track.DocumentCorpus(name="special", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=100,
-                                target_index="test-idx2",
-                                target_type="type"
-                                )
-            ]),
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=10,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=100,
+                        target_index="test-idx2",
+                        target_type="type",
+                    )
+                ],
+            ),
         ]
 
         source = params.BulkIndexParamSource(
@@ -953,33 +1106,42 @@ class BulkIndexParamSourceTests(TestCase):
                 "conflicts": "random",
                 "bulk-size": 5000,
                 "batch-size": 20000,
-                "pipeline": "test-pipeline"
-            })
+                "pipeline": "test-pipeline",
+            },
+        )
 
         partition = source.partition(0, 1)
         self.assertEqual(partition.corpora, [corpora[1]])
 
     def test_filters_corpora_by_data_stream(self):
         corpora = [
-            track.DocumentCorpus(name="default", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=10,
-                                target_data_stream="test-data-stream-1"
-                                )
-            ]),
-            track.DocumentCorpus(name="special", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=100,
-                                target_index="test-idx2",
-                                target_type="type"
-                                )
-            ]),
-            track.DocumentCorpus(name="special-2", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=10,
-                                target_data_stream="test-data-stream-2"
-                                )
-            ])
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=10, target_data_stream="test-data-stream-1"
+                    )
+                ],
+            ),
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=100,
+                        target_index="test-idx2",
+                        target_type="type",
+                    )
+                ],
+            ),
+            track.DocumentCorpus(
+                name="special-2",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=10, target_data_stream="test-data-stream-2"
+                    )
+                ],
+            ),
         ]
 
         source = params.BulkIndexParamSource(
@@ -988,19 +1150,25 @@ class BulkIndexParamSourceTests(TestCase):
                 "data-streams": ["test-data-stream-1", "test-data-stream-2"],
                 "bulk-size": 5000,
                 "batch-size": 20000,
-                "pipeline": "test-pipeline"
-            })
+                "pipeline": "test-pipeline",
+            },
+        )
 
         partition = source.partition(0, 1)
         self.assertEqual(partition.corpora, [corpora[0], corpora[2]])
 
     def test_raises_exception_if_no_corpus_matches(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             params.BulkIndexParamSource(
@@ -1010,34 +1178,44 @@ class BulkIndexParamSourceTests(TestCase):
                     "conflicts": "random",
                     "bulk-size": 5000,
                     "batch-size": 20000,
-                    "pipeline": "test-pipeline"
-                })
+                    "pipeline": "test-pipeline",
+                },
+            )
 
         self.assertEqual("The provided corpus ['does_not_exist'] does not match any of the corpora ['default'].", ctx.exception.args[0])
 
     def test_ingests_all_documents_by_default(self):
         corpora = [
-            track.DocumentCorpus(name="default", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=300000,
-                                target_index="test-idx",
-                                target_type="test-type"
-                                )
-            ]),
-            track.DocumentCorpus(name="special", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=700000,
-                                target_index="test-idx2",
-                                target_type="type"
-                                )
-            ]),
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=300000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=700000,
+                        target_index="test-idx2",
+                        target_type="type",
+                    )
+                ],
+            ),
         ]
 
         source = params.BulkIndexParamSource(
             track=track.Track(name="unit-test", corpora=corpora),
             params={
-                "bulk-size": 10000
-            })
+                "bulk-size": 10000,
+            },
+        )
 
         partition = source.partition(0, 1)
         partition._init_internal_params()
@@ -1046,18 +1224,22 @@ class BulkIndexParamSourceTests(TestCase):
 
     def test_restricts_number_of_bulks_if_required(self):
         def create_unit_test_reader(*args):
-            return StaticBulkReader("idx", "doc", bulks=[
-                ['{"location" : [-0.1485188, 51.5250666]}'],
-                ['{"location" : [-0.1479949, 51.5252071]}'],
-                ['{"location" : [-0.1458559, 51.5289059]}'],
-                ['{"location" : [-0.1498551, 51.5282564]}'],
-                ['{"location" : [-0.1487043, 51.5254843]}'],
-                ['{"location" : [-0.1533367, 51.5261779]}'],
-                ['{"location" : [-0.1543018, 51.5262398]}'],
-                ['{"location" : [-0.1522118, 51.5266564]}'],
-                ['{"location" : [-0.1529092, 51.5263360]}'],
-                ['{"location" : [-0.1537008, 51.5265365]}'],
-            ])
+            return StaticBulkReader(
+                "idx",
+                "doc",
+                bulks=[
+                    ['{"location" : [-0.1485188, 51.5250666]}'],
+                    ['{"location" : [-0.1479949, 51.5252071]}'],
+                    ['{"location" : [-0.1458559, 51.5289059]}'],
+                    ['{"location" : [-0.1498551, 51.5282564]}'],
+                    ['{"location" : [-0.1487043, 51.5254843]}'],
+                    ['{"location" : [-0.1533367, 51.5261779]}'],
+                    ['{"location" : [-0.1543018, 51.5262398]}'],
+                    ['{"location" : [-0.1522118, 51.5266564]}'],
+                    ['{"location" : [-0.1529092, 51.5263360]}'],
+                    ['{"location" : [-0.1537008, 51.5265365]}'],
+                ],
+            )
 
         def schedule(param_source):
             while True:
@@ -1067,20 +1249,28 @@ class BulkIndexParamSourceTests(TestCase):
                     return
 
         corpora = [
-            track.DocumentCorpus(name="default", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=300000,
-                                target_index="test-idx",
-                                target_type="test-type"
-                                )
-            ]),
-            track.DocumentCorpus(name="special", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=700000,
-                                target_index="test-idx2",
-                                target_type="type"
-                                )
-            ]),
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=300000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=700000,
+                        target_index="test-idx2",
+                        target_type="type",
+                    )
+                ],
+            ),
         ]
 
         source = params.BulkIndexParamSource(
@@ -1088,8 +1278,9 @@ class BulkIndexParamSourceTests(TestCase):
             params={
                 "bulk-size": 10000,
                 "ingest-percentage": 2.5,
-                "__create_reader": create_unit_test_reader
-            })
+                "__create_reader": create_unit_test_reader,
+            },
+        )
 
         partition = source.partition(0, 1)
         partition._init_internal_params()
@@ -1098,52 +1289,50 @@ class BulkIndexParamSourceTests(TestCase):
         self.assertEqual(3, len(list(schedule(partition))))
 
     def test_create_with_conflict_probability_zero(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
-        params.BulkIndexParamSource(track=track.Track(name="unit-test", corpora=[corpus]), params={
-            "bulk-size": 5000,
-            "conflicts": "sequential",
-            "conflict-probability": 0
-        })
+        params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=[corpus]),
+            params={"bulk-size": 5000, "conflicts": "sequential", "conflict-probability": 0},
+        )
 
     def test_create_with_conflict_probability_too_low(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
-                "bulk-size": 5000,
-                "conflicts": "sequential",
-                "conflict-probability": -0.1
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test"), params={"bulk-size": 5000, "conflicts": "sequential", "conflict-probability": -0.1}
+            )
 
         self.assertEqual("'conflict-probability' must be in the range [0.0, 100.0] but was -0.1", ctx.exception.args[0])
 
     def test_create_with_conflict_probability_too_high(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
-                "bulk-size": 5000,
-                "conflicts": "sequential",
-                "conflict-probability": 100.1
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test"), params={"bulk-size": 5000, "conflicts": "sequential", "conflict-probability": 100.1}
+            )
 
         self.assertEqual("'conflict-probability' must be in the range [0.0, 100.0] but was 100.1", ctx.exception.args[0])
 
     def test_create_with_conflict_probability_not_numeric(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.BulkIndexParamSource(track=track.Track(name="unit-test"), params={
-                "bulk-size": 5000,
-                "conflicts": "sequential",
-                "conflict-probability": "100 percent"
-            })
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test"),
+                params={"bulk-size": 5000, "conflicts": "sequential", "conflict-probability": "100 percent"},
+            )
 
         self.assertEqual("'conflict-probability' must be numeric", ctx.exception.args[0])
 
 
 class BulkDataGeneratorTests(TestCase):
-
     @classmethod
     def create_test_reader(cls, batches):
         def inner_create_test_reader(docs, *args):
@@ -1152,160 +1341,207 @@ class BulkDataGeneratorTests(TestCase):
         return inner_create_test_reader
 
     def test_generate_two_bulks(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=10,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )
-        ])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
-        bulks = params.bulk_data_based(num_clients=1, start_client_index=0, end_client_index=0, corpora=[corpus],
-                                       batch_size=5, bulk_size=5,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
-                                       recency=None, pipeline=None,
-                                       original_params={
-                                           "my-custom-parameter": "foo",
-                                           "my-custom-parameter-2": True
-                                       }, create_reader=BulkDataGeneratorTests.
-                                       create_test_reader([["1", "2", "3", "4", "5"], ["6", "7", "8"]]))
+        bulks = params.bulk_data_based(
+            num_clients=1,
+            start_client_index=0,
+            end_client_index=0,
+            corpora=[corpus],
+            batch_size=5,
+            bulk_size=5,
+            id_conflicts=params.IndexIdConflict.NoConflicts,
+            conflict_probability=None,
+            on_conflict=None,
+            recency=None,
+            pipeline=None,
+            original_params={"my-custom-parameter": "foo", "my-custom-parameter-2": True},
+            create_reader=BulkDataGeneratorTests.create_test_reader([["1", "2", "3", "4", "5"], ["6", "7", "8"]]),
+        )
         all_bulks = list(bulks)
         self.assertEqual(2, len(all_bulks))
-        self.assertEqual({
-            "action-metadata-present": True,
-            "body": ["1", "2", "3", "4", "5"],
-            "bulk-size": 5,
-            "unit": "docs",
-            "index": "test-idx",
-            "type": "test-type",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True
-        }, all_bulks[0])
+        self.assertEqual(
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3", "4", "5"],
+                "bulk-size": 5,
+                "unit": "docs",
+                "index": "test-idx",
+                "type": "test-type",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+            all_bulks[0],
+        )
 
-        self.assertEqual({
-            "action-metadata-present": True,
-            "body": ["6", "7", "8"],
-            "bulk-size": 3,
-            "unit": "docs",
-            "index": "test-idx",
-            "type": "test-type",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True
-        }, all_bulks[1])
+        self.assertEqual(
+            {
+                "action-metadata-present": True,
+                "body": ["6", "7", "8"],
+                "bulk-size": 3,
+                "unit": "docs",
+                "index": "test-idx",
+                "type": "test-type",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+            all_bulks[1],
+        )
 
     def test_generate_bulks_from_multiple_corpora(self):
         corpora = [
-            track.DocumentCorpus(name="default", documents=[
-                        track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                        number_of_documents=5,
-                                        target_index="logs-2018-01",
-                                        target_type="docs"
-                                        ),
-                        track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                        number_of_documents=5,
-                                        target_index="logs-2018-02",
-                                        target_type="docs"
-                                        ),
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2018-01",
+                        target_type="docs",
+                    ),
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2018-02",
+                        target_type="docs",
+                    ),
+                ],
+            ),
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2017-01",
+                        target_type="docs",
+                    )
+                ],
+            ),
+        ]
 
-                    ]),
-            track.DocumentCorpus(name="special", documents=[
-                track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                                number_of_documents=5,
-                                target_index="logs-2017-01",
-                                target_type="docs"
-                                )
-            ])
-
-            ]
-
-        bulks = params.bulk_data_based(num_clients=1, start_client_index=0, end_client_index=0, corpora=corpora,
-                                       batch_size=5, bulk_size=5,
-                                       id_conflicts=params.IndexIdConflict.NoConflicts, conflict_probability=None, on_conflict=None,
-                                       recency=None, pipeline=None,
-                                       original_params={
-                                           "my-custom-parameter": "foo",
-                                           "my-custom-parameter-2": True
-                                       }, create_reader=BulkDataGeneratorTests.
-                                       create_test_reader([["1", "2", "3", "4", "5"]]))
+        bulks = params.bulk_data_based(
+            num_clients=1,
+            start_client_index=0,
+            end_client_index=0,
+            corpora=corpora,
+            batch_size=5,
+            bulk_size=5,
+            id_conflicts=params.IndexIdConflict.NoConflicts,
+            conflict_probability=None,
+            on_conflict=None,
+            recency=None,
+            pipeline=None,
+            original_params={"my-custom-parameter": "foo", "my-custom-parameter-2": True},
+            create_reader=BulkDataGeneratorTests.create_test_reader([["1", "2", "3", "4", "5"]]),
+        )
         all_bulks = list(bulks)
         self.assertEqual(3, len(all_bulks))
-        self.assertEqual({
-            "action-metadata-present": True,
-            "body": ["1", "2", "3", "4", "5"],
-            "bulk-size": 5,
-            "unit": "docs",
-            "index": "logs-2018-01",
-            "type": "docs",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True
-        }, all_bulks[0])
+        self.assertEqual(
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3", "4", "5"],
+                "bulk-size": 5,
+                "unit": "docs",
+                "index": "logs-2018-01",
+                "type": "docs",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+            all_bulks[0],
+        )
 
-        self.assertEqual({
-            "action-metadata-present": True,
-            "body": ["1", "2", "3", "4", "5"],
-            "bulk-size": 5,
-            "unit": "docs",
-            "index": "logs-2018-02",
-            "type": "docs",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True
-        }, all_bulks[1])
+        self.assertEqual(
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3", "4", "5"],
+                "bulk-size": 5,
+                "unit": "docs",
+                "index": "logs-2018-02",
+                "type": "docs",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+            all_bulks[1],
+        )
 
-        self.assertEqual({
-            "action-metadata-present": True,
-            "body": ["1", "2", "3", "4", "5"],
-            "bulk-size": 5,
-            "unit": "docs",
-            "index": "logs-2017-01",
-            "type": "docs",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True
-        }, all_bulks[2])
+        self.assertEqual(
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3", "4", "5"],
+                "bulk-size": 5,
+                "unit": "docs",
+                "index": "logs-2017-01",
+                "type": "docs",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+            all_bulks[2],
+        )
 
     def test_internal_params_take_precedence(self):
-        corpus = track.DocumentCorpus(name="default", documents=[
-            track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK,
-                            number_of_documents=3,
-                            target_index="test-idx",
-                            target_type="test-type"
-                            )
-        ])
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=3,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
 
-        bulks = params.bulk_data_based(num_clients=1, start_client_index=0, end_client_index=0, corpora=[corpus],
-                                       batch_size=3, bulk_size=3, id_conflicts=params.IndexIdConflict.NoConflicts,
-                                       conflict_probability=None, on_conflict=None,
-                                       recency=None, pipeline=None,
-                                       original_params={
-                                           "body": "foo",
-                                           "custom-param": "bar"
-                                       }, create_reader=BulkDataGeneratorTests.
-                                       create_test_reader([["1", "2", "3"]]))
+        bulks = params.bulk_data_based(
+            num_clients=1,
+            start_client_index=0,
+            end_client_index=0,
+            corpora=[corpus],
+            batch_size=3,
+            bulk_size=3,
+            id_conflicts=params.IndexIdConflict.NoConflicts,
+            conflict_probability=None,
+            on_conflict=None,
+            recency=None,
+            pipeline=None,
+            original_params={"body": "foo", "custom-param": "bar"},
+            create_reader=BulkDataGeneratorTests.create_test_reader([["1", "2", "3"]]),
+        )
         all_bulks = list(bulks)
         self.assertEqual(1, len(all_bulks))
         # body must not contain 'foo'!
-        self.assertEqual({
-            "action-metadata-present": True,
-            "body": ["1", "2", "3"],
-            "bulk-size": 3,
-            "unit": "docs",
-            "index": "test-idx",
-            "type": "test-type",
-            "custom-param": "bar"
-        }, all_bulks[0])
+        self.assertEqual(
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3"],
+                "bulk-size": 3,
+                "unit": "docs",
+                "index": "test-idx",
+                "type": "test-type",
+                "custom-param": "bar",
+            },
+            all_bulks[0],
+        )
 
 
 class ParamsRegistrationTests(TestCase):
     @staticmethod
     def param_source_legacy_function(indices, params):
-        return {
-            "key": params["parameter"]
-        }
+        return {"key": params["parameter"]}
 
     @staticmethod
     def param_source_function(track, params, **kwargs):
-        return {
-            "key": params["parameter"]
-        }
+        return {"key": params["parameter"]}
 
     class ParamSourceLegacyClass:
         def __init__(self, indices=None, params=None):
@@ -1319,9 +1555,7 @@ class ParamsRegistrationTests(TestCase):
             return 1
 
         def params(self):
-            return {
-                "class-key": self._params["parameter"]
-            }
+            return {"class-key": self._params["parameter"]}
 
     class ParamSourceClass:
         def __init__(self, track=None, params=None, **kwargs):
@@ -1335,9 +1569,7 @@ class ParamsRegistrationTests(TestCase):
             return 1
 
         def params(self):
-            return {
-                "class-key": self._params["parameter"]
-            }
+            return {"class-key": self._params["parameter"]}
 
         def __str__(self):
             return "test param source"
@@ -1381,8 +1613,9 @@ class ParamsRegistrationTests(TestCase):
     def test_cannot_register_an_instance_as_param_source(self):
         source_name = "params-test-class-param-source"
         # we create an instance, instead of passing the class
-        with self.assertRaisesRegex(exceptions.RallyAssertionError,
-                                    "Parameter source \\[test param source\\] must be either a function or a class\\."):
+        with self.assertRaisesRegex(
+            exceptions.RallyAssertionError, "Parameter source \\[test param source\\] must be either a function or a class\\."
+        ):
             params.register_param_source_for_name(source_name, ParamsRegistrationTests.ParamSourceClass())
 
 
@@ -1392,13 +1625,11 @@ class SleepParamSourceTests(TestCase):
             params.SleepParamSource(track.Track(name="unit-test"), params={})
 
     def test_duration_parameter_wrong_type(self):
-        with self.assertRaisesRegex(exceptions.InvalidSyntax,
-                                    "parameter 'duration' for sleep operation must be a number"):
+        with self.assertRaisesRegex(exceptions.InvalidSyntax, "parameter 'duration' for sleep operation must be a number"):
             params.SleepParamSource(track.Track(name="unit-test"), params={"duration": "this is a string"})
 
     def test_duration_parameter_negative_number(self):
-        with self.assertRaisesRegex(exceptions.InvalidSyntax,
-                                    "parameter 'duration' must be non-negative but was -1.0"):
+        with self.assertRaisesRegex(exceptions.InvalidSyntax, "parameter 'duration' must be non-negative but was -1.0"):
             params.SleepParamSource(track.Track(name="unit-test"), params={"duration": -1.0})
 
     def test_param_source_passes_all_parameters(self):
@@ -1408,23 +1639,26 @@ class SleepParamSourceTests(TestCase):
 
 class CreateIndexParamSourceTests(TestCase):
     def test_create_index_inline_with_body(self):
-        source = params.CreateIndexParamSource(track.Track(name="unit-test"), params={
-            "index": "test",
-            "body": {
-                "settings": {
-                    "index.number_of_replicas": 0
-                },
-                "mappings": {
-                    "doc": {
-                        "properties": {
-                            "name": {
-                                "type": "keyword",
+        source = params.CreateIndexParamSource(
+            track.Track(name="unit-test"),
+            params={
+                "index": "test",
+                "body": {
+                    "settings": {
+                        "index.number_of_replicas": 0,
+                    },
+                    "mappings": {
+                        "doc": {
+                            "properties": {
+                                "name": {
+                                    "type": "keyword",
+                                }
                             }
                         }
-                    }
-                }
-            }
-        })
+                    },
+                },
+            },
+        )
 
         p = source.params()
         self.assertEqual(1, len(p["indices"]))
@@ -1434,45 +1668,48 @@ class CreateIndexParamSourceTests(TestCase):
         self.assertEqual({}, p["request-params"])
 
     def test_create_index_inline_without_body(self):
-        source = params.CreateIndexParamSource(track.Track(name="unit-test"), params={
-            "index": "test",
-            "request-params": {
-                "wait_for_active_shards": True
-            }
-        })
+        source = params.CreateIndexParamSource(
+            track.Track(name="unit-test"),
+            params={"index": "test", "request-params": {"wait_for_active_shards": True}},
+        )
 
         p = source.params()
         self.assertEqual(1, len(p["indices"]))
         index, body = p["indices"][0]
         self.assertEqual("test", index)
         self.assertIsNone(body)
-        self.assertDictEqual({
-            "wait_for_active_shards": True
-        }, p["request-params"])
+        self.assertDictEqual({"wait_for_active_shards": True}, p["request-params"])
 
     def test_create_index_from_track_with_settings(self):
         index1 = track.Index(name="index1", types=["type1"])
-        index2 = track.Index(name="index2", types=["type1"], body={
-            "settings": {
-                "index.number_of_replicas": 0,
-                "index.number_of_shards": 3
-            },
-            "mappings": {
-                "type1": {
-                    "properties": {
-                        "name": {
-                            "type": "keyword",
+        index2 = track.Index(
+            name="index2",
+            types=["type1"],
+            body={
+                "settings": {
+                    "index.number_of_replicas": 0,
+                    "index.number_of_shards": 3,
+                },
+                "mappings": {
+                    "type1": {
+                        "properties": {
+                            "name": {
+                                "type": "keyword",
+                            }
                         }
                     }
-                }
-            }
-        })
+                },
+            },
+        )
 
-        source = params.CreateIndexParamSource(track.Track(name="unit-test", indices=[index1, index2]), params={
-            "settings": {
-                "index.number_of_replicas": 1
-            }
-        })
+        source = params.CreateIndexParamSource(
+            track.Track(name="unit-test", indices=[index1, index2]),
+            params={
+                "settings": {
+                    "index.number_of_replicas": 1,
+                },
+            },
+        )
 
         p = source.params()
         self.assertEqual(2, len(p["indices"]))
@@ -1480,52 +1717,58 @@ class CreateIndexParamSourceTests(TestCase):
         index, body = p["indices"][0]
         self.assertEqual("index1", index)
         # index did not specify any body
-        self.assertDictEqual({
-            "settings": {
-                "index.number_of_replicas": 1
-            }
-        }, body)
+        self.assertDictEqual({"settings": {"index.number_of_replicas": 1}}, body)
 
         index, body = p["indices"][1]
         self.assertEqual("index2", index)
         # index specified a body + we need to merge settings
-        self.assertDictEqual({
-            "settings": {
-                # we have properly merged (overridden) an existing setting
-                "index.number_of_replicas": 1,
-                # and we have preserved one that was specified in the original index body
-                "index.number_of_shards": 3
-            },
-            "mappings": {
-                "type1": {
-                    "properties": {
-                        "name": {
-                            "type": "keyword",
+        self.assertDictEqual(
+            {
+                "settings": {
+                    # we have properly merged (overridden) an existing setting
+                    "index.number_of_replicas": 1,
+                    # and we have preserved one that was specified in the original index body
+                    "index.number_of_shards": 3,
+                },
+                "mappings": {
+                    "type1": {
+                        "properties": {
+                            "name": {
+                                "type": "keyword",
+                            }
                         }
                     }
-                }
-            }
-        }, body)
+                },
+            },
+            body,
+        )
 
     def test_create_index_from_track_without_settings(self):
         index1 = track.Index(name="index1", types=["type1"])
-        index2 = track.Index(name="index2", types=["type1"], body={
-            "settings": {
-                "index.number_of_replicas": 0,
-                "index.number_of_shards": 3
-            },
-            "mappings": {
-                "type1": {
-                    "properties": {
-                        "name": {
-                            "type": "keyword",
+        index2 = track.Index(
+            name="index2",
+            types=["type1"],
+            body={
+                "settings": {
+                    "index.number_of_replicas": 0,
+                    "index.number_of_shards": 3,
+                },
+                "mappings": {
+                    "type1": {
+                        "properties": {
+                            "name": {
+                                "type": "keyword",
+                            }
                         }
                     }
-                }
-            }
-        })
+                },
+            },
+        )
 
-        source = params.CreateIndexParamSource(track.Track(name="unit-test", indices=[index1, index2]), params={})
+        source = params.CreateIndexParamSource(
+            track.Track(name="unit-test", indices=[index1, index2]),
+            params={},
+        )
 
         p = source.params()
         self.assertEqual(2, len(p["indices"]))
@@ -1538,30 +1781,34 @@ class CreateIndexParamSourceTests(TestCase):
         index, body = p["indices"][1]
         self.assertEqual("index2", index)
         # index specified a body
-        self.assertDictEqual({
-            "settings": {
-                "index.number_of_replicas": 0,
-                "index.number_of_shards": 3
-            },
-            "mappings": {
-                "type1": {
-                    "properties": {
-                        "name": {
-                            "type": "keyword",
+        self.assertDictEqual(
+            {
+                "settings": {
+                    "index.number_of_replicas": 0,
+                    "index.number_of_shards": 3,
+                },
+                "mappings": {
+                    "type1": {
+                        "properties": {
+                            "name": {
+                                "type": "keyword",
+                            }
                         }
                     }
-                }
-            }
-        }, body)
+                },
+            },
+            body,
+        )
 
     def test_filter_index(self):
         index1 = track.Index(name="index1", types=["type1"])
         index2 = track.Index(name="index2", types=["type1"])
         index3 = track.Index(name="index3", types=["type1"])
 
-        source = params.CreateIndexParamSource(track.Track(name="unit-test", indices=[index1, index2, index3]), params={
-            "index": "index2"
-        })
+        source = params.CreateIndexParamSource(
+            track.Track(name="unit-test", indices=[index1, index2, index3]),
+            params={"index": "index2"},
+        )
 
         p = source.params()
         self.assertEqual(1, len(p["indices"]))
@@ -1572,9 +1819,10 @@ class CreateIndexParamSourceTests(TestCase):
 
 class CreateDataStreamParamSourceTests(TestCase):
     def test_create_data_stream(self):
-        source = params.CreateDataStreamParamSource(track.Track(name="unit-test"), params={
-            "data-stream": "test-data-stream"
-        })
+        source = params.CreateDataStreamParamSource(
+            track.Track(name="unit-test"),
+            params={"data-stream": "test-data-stream"},
+        )
         p = source.params()
         self.assertEqual(1, len(p["data-streams"]))
         ds = p["data-streams"][0]
@@ -1582,27 +1830,32 @@ class CreateDataStreamParamSourceTests(TestCase):
         self.assertEqual({}, p["request-params"])
 
     def test_create_data_stream_inline_without_body(self):
-        source = params.CreateDataStreamParamSource(track.Track(name="unit-test"), params={
-            "data-stream": "test-data-stream",
-            "request-params": {
-                "wait_for_active_shards": True
-            }
-        })
+        source = params.CreateDataStreamParamSource(
+            track.Track(name="unit-test"),
+            params={
+                "data-stream": "test-data-stream",
+                "request-params": {"wait_for_active_shards": True},
+            },
+        )
 
         p = source.params()
         self.assertEqual(1, len(p["data-streams"]))
         ds = p["data-streams"][0]
         self.assertEqual("test-data-stream", ds)
-        self.assertDictEqual({
-            "wait_for_active_shards": True
-        }, p["request-params"])
+        self.assertDictEqual({"wait_for_active_shards": True}, p["request-params"])
 
     def test_filter_data_stream(self):
         source = params.CreateDataStreamParamSource(
-            track.Track(name="unit-test", data_streams=[track.DataStream(name="data-stream-1"),
-                                                        track.DataStream(name="data-stream-2"),
-                                                        track.DataStream(name="data-stream-3")]),
-            params={"data-stream": "data-stream-2"})
+            track.Track(
+                name="unit-test",
+                data_streams=[
+                    track.DataStream(name="data-stream-1"),
+                    track.DataStream(name="data-stream-2"),
+                    track.DataStream(name="data-stream-3"),
+                ],
+            ),
+            params={"data-stream": "data-stream-2"},
+        )
 
         p = source.params()
         self.assertEqual(1, len(p["data-streams"]))
@@ -1613,11 +1866,17 @@ class CreateDataStreamParamSourceTests(TestCase):
 
 class DeleteIndexParamSourceTests(TestCase):
     def test_delete_index_from_track(self):
-        source = params.DeleteIndexParamSource(track.Track(name="unit-test", indices=[
-            track.Index(name="index1"),
-            track.Index(name="index2"),
-            track.Index(name="index3")
-        ]), params={})
+        source = params.DeleteIndexParamSource(
+            track.Track(
+                name="unit-test",
+                indices=[
+                    track.Index(name="index1"),
+                    track.Index(name="index2"),
+                    track.Index(name="index3"),
+                ],
+            ),
+            params={},
+        )
 
         p = source.params()
 
@@ -1626,11 +1885,21 @@ class DeleteIndexParamSourceTests(TestCase):
         self.assertTrue(p["only-if-exists"])
 
     def test_filter_index_from_track(self):
-        source = params.DeleteIndexParamSource(track.Track(name="unit-test", indices=[
-            track.Index(name="index1"),
-            track.Index(name="index2"),
-            track.Index(name="index3")
-        ]), params={"index": "index2", "only-if-exists": False, "request-params": {"allow_no_indices": True}})
+        source = params.DeleteIndexParamSource(
+            track.Track(
+                name="unit-test",
+                indices=[
+                    track.Index(name="index1"),
+                    track.Index(name="index2"),
+                    track.Index(name="index3"),
+                ],
+            ),
+            params={
+                "index": "index2",
+                "only-if-exists": False,
+                "request-params": {"allow_no_indices": True},
+            },
+        )
 
         p = source.params()
 
@@ -1653,11 +1922,17 @@ class DeleteIndexParamSourceTests(TestCase):
 
 class DeleteDataStreamParamSourceTests(TestCase):
     def test_delete_data_stream_from_track(self):
-        source = params.DeleteDataStreamParamSource(track.Track(name="unit-test", data_streams=[
-            track.DataStream(name="data-stream-1"),
-            track.DataStream(name="data-stream-2"),
-            track.DataStream(name="data-stream-3")
-        ]), params={})
+        source = params.DeleteDataStreamParamSource(
+            track.Track(
+                name="unit-test",
+                data_streams=[
+                    track.DataStream(name="data-stream-1"),
+                    track.DataStream(name="data-stream-2"),
+                    track.DataStream(name="data-stream-3"),
+                ],
+            ),
+            params={},
+        )
 
         p = source.params()
 
@@ -1666,12 +1941,21 @@ class DeleteDataStreamParamSourceTests(TestCase):
         self.assertTrue(p["only-if-exists"])
 
     def test_filter_data_stream_from_track(self):
-        source = params.DeleteDataStreamParamSource(track.Track(name="unit-test", data_streams=[
-            track.DataStream(name="data-stream-1"),
-            track.DataStream(name="data-stream-2"),
-            track.DataStream(name="data-stream-3")
-        ]), params={"data-stream": "data-stream-2", "only-if-exists": False,
-                    "request-params": {"allow_no_indices": True}})
+        source = params.DeleteDataStreamParamSource(
+            track.Track(
+                name="unit-test",
+                data_streams=[
+                    track.DataStream(name="data-stream-1"),
+                    track.DataStream(name="data-stream-2"),
+                    track.DataStream(name="data-stream-3"),
+                ],
+            ),
+            params={
+                "data-stream": "data-stream-2",
+                "only-if-exists": False,
+                "request-params": {"allow_no_indices": True},
+            },
+        )
 
         p = source.params()
 
@@ -1680,8 +1964,7 @@ class DeleteDataStreamParamSourceTests(TestCase):
         self.assertFalse(p["only-if-exists"])
 
     def test_delete_data_stream_by_name(self):
-        source = params.DeleteDataStreamParamSource(track.Track(name="unit-test"),
-                                                    params={"data-stream": "data-stream-2"})
+        source = params.DeleteDataStreamParamSource(track.Track(name="unit-test"), params={"data-stream": "data-stream-2"})
 
         p = source.params()
 
@@ -1695,22 +1978,17 @@ class DeleteDataStreamParamSourceTests(TestCase):
 
 class CreateIndexTemplateParamSourceTests(TestCase):
     def test_create_index_template_inline(self):
-        source = params.CreateIndexTemplateParamSource(track=track.Track(name="unit-test"), params={
-            "template": "test",
-            "body": {
-                "index_patterns": ["*"],
-                "settings": {
-                    "index.number_of_shards": 3
+        source = params.CreateIndexTemplateParamSource(
+            track=track.Track(name="unit-test"),
+            params={
+                "template": "test",
+                "body": {
+                    "index_patterns": ["*"],
+                    "settings": {"index.number_of_shards": 3},
+                    "mappings": {"docs": {"_source": {"enabled": False}}},
                 },
-                "mappings": {
-                    "docs": {
-                        "_source": {
-                            "enabled": False
-                        }
-                    }
-                }
-            }
-        })
+            },
+        )
 
         p = source.params()
 
@@ -1718,40 +1996,42 @@ class CreateIndexTemplateParamSourceTests(TestCase):
         self.assertDictEqual({}, p["request-params"])
         template, body = p["templates"][0]
         self.assertEqual("test", template)
-        self.assertDictEqual({
-            "index_patterns": ["*"],
-            "settings": {
-                "index.number_of_shards": 3
+        self.assertDictEqual(
+            {
+                "index_patterns": ["*"],
+                "settings": {"index.number_of_shards": 3},
+                "mappings": {
+                    "docs": {
+                        "_source": {"enabled": False},
+                    },
+                },
             },
-            "mappings": {
-                "docs": {
-                    "_source": {
-                        "enabled": False
-                    }
-                }
-            }
-        }, body)
+            body,
+        )
 
     def test_create_index_template_from_track(self):
-        tpl = track.IndexTemplate(name="default", pattern="*", content={
-            "index_patterns": ["*"],
-            "settings": {
-                "index.number_of_shards": 3
+        tpl = track.IndexTemplate(
+            name="default",
+            pattern="*",
+            content={
+                "index_patterns": ["*"],
+                "settings": {"index.number_of_shards": 3},
+                "mappings": {
+                    "docs": {
+                        "_source": {"enabled": False},
+                    },
+                },
             },
-            "mappings": {
-                "docs": {
-                    "_source": {
-                        "enabled": False
-                    }
-                }
-            }
-        })
+        )
 
-        source = params.CreateIndexTemplateParamSource(track=track.Track(name="unit-test", templates=[tpl]), params={
-            "settings": {
-                "index.number_of_replicas": 1
-            }
-        })
+        source = params.CreateIndexTemplateParamSource(
+            track=track.Track(name="unit-test", templates=[tpl]),
+            params={
+                "settings": {
+                    "index.number_of_replicas": 1,
+                }
+            },
+        )
 
         p = source.params()
 
@@ -1759,20 +2039,14 @@ class CreateIndexTemplateParamSourceTests(TestCase):
         self.assertDictEqual({}, p["request-params"])
         template, body = p["templates"][0]
         self.assertEqual("default", template)
-        self.assertDictEqual({
-            "index_patterns": ["*"],
-            "settings": {
-                "index.number_of_shards": 3,
-                "index.number_of_replicas": 1
+        self.assertDictEqual(
+            {
+                "index_patterns": ["*"],
+                "settings": {"index.number_of_shards": 3, "index.number_of_replicas": 1},
+                "mappings": {"docs": {"_source": {"enabled": False}}},
             },
-            "mappings": {
-                "docs": {
-                    "_source": {
-                        "enabled": False
-                    }
-                }
-            }
-        }, body)
+            body,
+        )
 
 
 class DeleteIndexTemplateParamSourceTests(TestCase):
@@ -1787,12 +2061,14 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
         self.assertDictEqual({}, p["request-params"])
 
     def test_delete_index_template_by_name_and_matching_indices(self):
-        source = params.DeleteIndexTemplateParamSource(track.Track(name="unit-test"),
-                                                       params={
-                                                           "template": "default",
-                                                           "delete-matching-indices": True,
-                                                           "index-pattern": "logs-*"
-                                                       })
+        source = params.DeleteIndexTemplateParamSource(
+            track.Track(name="unit-test"),
+            params={
+                "template": "default",
+                "delete-matching-indices": True,
+                "index-pattern": "logs-*",
+            },
+        )
 
         p = source.params()
 
@@ -1803,32 +2079,40 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
 
     def test_delete_index_template_by_name_and_matching_indices_missing_index_pattern(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.DeleteIndexTemplateParamSource(track.Track(name="unit-test"),
-                                                  params={
-                                                      "template": "default",
-                                                      "delete-matching-indices": True
-                                                  })
-        self.assertEqual("The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true.",
-                         ctx.exception.args[0])
+            params.DeleteIndexTemplateParamSource(
+                track.Track(name="unit-test"), params={"template": "default", "delete-matching-indices": True}
+            )
+        self.assertEqual(
+            "The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true.",
+            ctx.exception.args[0],
+        )
 
     def test_delete_index_template_from_track(self):
-        tpl1 = track.IndexTemplate(name="metrics", pattern="metrics-*", delete_matching_indices=True, content={
-            "index_patterns": ["metrics-*"],
-            "settings": {},
-            "mappings": {}
-        })
-        tpl2 = track.IndexTemplate(name="logs", pattern="logs-*", delete_matching_indices=False, content={
-            "index_patterns": ["logs-*"],
-            "settings": {},
-            "mappings": {}
-        })
-
-        source = params.DeleteIndexTemplateParamSource(track.Track(name="unit-test", templates=[tpl1, tpl2]), params={
-            "request-params": {
-                "master_timeout": 20
+        tpl1 = track.IndexTemplate(
+            name="metrics",
+            pattern="metrics-*",
+            delete_matching_indices=True,
+            content={
+                "index_patterns": ["metrics-*"],
+                "settings": {},
+                "mappings": {},
             },
-            "only-if-exists": False
-        })
+        )
+        tpl2 = track.IndexTemplate(
+            name="logs",
+            pattern="logs-*",
+            delete_matching_indices=False,
+            content={
+                "index_patterns": ["logs-*"],
+                "settings": {},
+                "mappings": {},
+            },
+        )
+
+        source = params.DeleteIndexTemplateParamSource(
+            track.Track(name="unit-test", templates=[tpl1, tpl2]),
+            params={"request-params": {"master_timeout": 20}, "only-if-exists": False},
+        )
 
         p = source.params()
 
@@ -1841,18 +2125,17 @@ class DeleteIndexTemplateParamSourceTests(TestCase):
 
 class CreateComposableTemplateParamSourceTests(TestCase):
     def test_create_index_template_inline(self):
-        source = params.CreateComposableTemplateParamSource(track=track.Track(name="unit-test"), params={
-            "template": "test",
-            "body": {
-              "index_patterns": ["my*"],
-              "template": {
-                "settings" : {
-                    "index.number_of_shards" : 3
-                }
-              },
-              "composed_of": ["ct1", "ct2"]
-            }
-        })
+        source = params.CreateComposableTemplateParamSource(
+            track=track.Track(name="unit-test"),
+            params={
+                "template": "test",
+                "body": {
+                    "index_patterns": ["my*"],
+                    "template": {"settings": {"index.number_of_shards": 3}},
+                    "composed_of": ["ct1", "ct2"],
+                },
+            },
+        )
 
         p = source.params()
 
@@ -1860,32 +2143,32 @@ class CreateComposableTemplateParamSourceTests(TestCase):
         self.assertDictEqual({}, p["request-params"])
         template, body = p["templates"][0]
         self.assertEqual("test", template)
-        self.assertDictEqual({
-              "index_patterns": ["my*"],
-              "template": {
-                "settings" : {
-                    "index.number_of_shards" : 3
-                }
-              },
-              "composed_of": ["ct1", "ct2"]
-            }, body)
+        self.assertDictEqual(
+            {
+                "index_patterns": ["my*"],
+                "template": {"settings": {"index.number_of_shards": 3}},
+                "composed_of": ["ct1", "ct2"],
+            },
+            body,
+        )
 
     def test_create_composable_index_template_from_track(self):
-        tpl = track.IndexTemplate(name="default", pattern="*", content={
-              "index_patterns": ["my*"],
-              "template": {
-                "settings" : {
-                    "index.number_of_shards" : 3
-                }
-              },
-              "composed_of": ["ct1", "ct2"]
-            })
+        tpl = track.IndexTemplate(
+            name="default",
+            pattern="*",
+            content={
+                "index_patterns": ["my*"],
+                "template": {"settings": {"index.number_of_shards": 3}},
+                "composed_of": ["ct1", "ct2"],
+            },
+        )
 
-        source = params.CreateComposableTemplateParamSource(track=track.Track(name="unit-test", composable_templates=[tpl]), params={
-            "settings": {
-                "index.number_of_replicas": 1
-            }
-        })
+        source = params.CreateComposableTemplateParamSource(
+            track=track.Track(name="unit-test", composable_templates=[tpl]),
+            params={
+                "settings": {"index.number_of_replicas": 1},
+            },
+        )
 
         p = source.params()
 
@@ -1893,81 +2176,127 @@ class CreateComposableTemplateParamSourceTests(TestCase):
         self.assertDictEqual({}, p["request-params"])
         template, body = p["templates"][0]
         self.assertEqual("default", template)
-        self.assertDictEqual({
-              "index_patterns": ["my*"],
-              "template": {
-                "settings" : {
-                    "index.number_of_shards" : 3,
-                    "index.number_of_replicas": 1
-                }
-              },
-              "composed_of": ["ct1", "ct2"]
-            }, body)
+        self.assertDictEqual(
+            {
+                "index_patterns": ["my*"],
+                "template": {"settings": {"index.number_of_shards": 3, "index.number_of_replicas": 1}},
+                "composed_of": ["ct1", "ct2"],
+            },
+            body,
+        )
 
     def test_create_or_merge(self):
-        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {}}, ["parent", "child", "grandchild"],
-                                                       {"name": "Mike"})
-        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
-        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {"child": {}}}, ["parent", "child", "grandchild"],
-                                                       {"name": "Mike"})
-        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
-        content = params.CreateComposableTemplateParamSource._create_or_merge({"parent": {"child": {"grandchild": {}}}},
-                                                       ["parent", "child", "grandchild"], {"name": "Mike"})
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
+            {"parent": {}},
+            ["parent", "child", "grandchild"],
+            {
+                "name": "Mike",
+            },
+        )
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
         content = params.CreateComposableTemplateParamSource._create_or_merge(
-            {"parent": {"child": {"name": "Mary", "grandchild": {"name": "Dale", "age": 38}}}},
-            ["parent", "child", "grandchild"], {"name": "Mike"})
+            {"parent": {"child": {}}},
+            ["parent", "child", "grandchild"],
+            {
+                "name": "Mike",
+            },
+        )
+        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
+            {"parent": {"child": {"grandchild": {}}}},
+            ["parent", "child", "grandchild"],
+            {
+                "name": "Mike",
+            },
+        )
+        assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
+        content = params.CreateComposableTemplateParamSource._create_or_merge(
+            {
+                "parent": {
+                    "child": {
+                        "name": "Mary",
+                        "grandchild": {"name": "Dale", "age": 38},
+                    },
+                },
+            },
+            ["parent", "child", "grandchild"],
+            {"name": "Mike"},
+        )
         assert content["parent"]["child"]["name"] == "Mary"
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
         assert content["parent"]["child"]["grandchild"]["age"] == 38
         content = params.CreateComposableTemplateParamSource._create_or_merge(
-            {"parent": {
-                "child": {"name": "Mary", "grandchild": {"name": {"first": "Dale", "last": "Smith"}, "age": 38}}}},
-            ["parent", "child", "grandchild"], {"name": "Mike"})
+            {
+                "parent": {
+                    "child": {
+                        "name": "Mary",
+                        "grandchild": {"name": {"first": "Dale", "last": "Smith"}, "age": 38},
+                    },
+                },
+            },
+            ["parent", "child", "grandchild"],
+            {"name": "Mike"},
+        )
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
         assert content["parent"]["child"]["grandchild"]["age"] == 38
         content = params.CreateComposableTemplateParamSource._create_or_merge(
-            {"parent": {
-                "child": {"name": "Mary", "grandchild": {"name": {"first": "Dale", "last": "Smith"}, "age": 38}}}},
-            ["parent", "child", "grandchild"], {"name": {"first": "Mike"}})
+            {
+                "parent": {
+                    "child": {
+                        "name": "Mary",
+                        "grandchild": {"name": {"first": "Dale", "last": "Smith"}, "age": 38},
+                    },
+                },
+            },
+            ["parent", "child", "grandchild"],
+            {"name": {"first": "Mike"}},
+        )
         assert content["parent"]["child"]["grandchild"]["name"]["first"] == "Mike"
         assert content["parent"]["child"]["grandchild"]["name"]["last"] == "Smith"
 
     def test_no_templates_specified(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             params.CreateComposableTemplateParamSource(
-                track=track.Track(name="unit-test"), params={
+                track=track.Track(name="unit-test"),
+                params={
                     "settings": {
                         "index.number_of_shards": 1,
-                        "index.number_of_replicas": 1
+                        "index.number_of_replicas": 1,
                     },
-                    "operation-type": "create-composable-template"
-                })
-        self.assertEqual("Please set the properties 'template' and 'body' for the create-composable-template operation "
-                         "or declare composable and/or component templates in the track", ctx.exception.args[0])
+                    "operation-type": "create-composable-template",
+                },
+            )
+        self.assertEqual(
+            "Please set the properties 'template' and 'body' for the create-composable-template operation "
+            "or declare composable and/or component templates in the track",
+            ctx.exception.args[0],
+        )
 
 
 class CreateComponentTemplateParamSourceTests(TestCase):
     def test_create_component_index_template_from_track(self):
-        tpl = track.ComponentTemplate(name="default", content={
-          "template": {
-            "mappings": {
-              "properties": {
-                "@timestamp": {
-                  "type": "date"
-                }
-              }
-            }
-          }
-        })
+        tpl = track.ComponentTemplate(
+            name="default",
+            content={
+                "template": {
+                    "mappings": {
+                        "properties": {
+                            "@timestamp": {"type": "date"},
+                        },
+                    },
+                },
+            },
+        )
 
         source = params.CreateComponentTemplateParamSource(
-            track=track.Track(name="unit-test", component_templates=[tpl]), params={
+            track=track.Track(name="unit-test", component_templates=[tpl]),
+            params={
                 "settings": {
                     "index.number_of_shards": 1,
-                    "index.number_of_replicas": 1
-                }
-            })
+                    "index.number_of_replicas": 1,
+                },
+            },
+        )
 
         p = source.params()
 
@@ -1975,21 +2304,22 @@ class CreateComponentTemplateParamSourceTests(TestCase):
         self.assertDictEqual({}, p["request-params"])
         template, body = p["templates"][0]
         self.assertEqual("default", template)
-        self.assertDictEqual({
-          "template": {
-            "settings": {
-              "index.number_of_shards": 1,
-              "index.number_of_replicas": 1
-            },
-            "mappings": {
-              "properties": {
-                "@timestamp": {
-                  "type": "date"
+        self.assertDictEqual(
+            {
+                "template": {
+                    "settings": {
+                        "index.number_of_shards": 1,
+                        "index.number_of_replicas": 1,
+                    },
+                    "mappings": {
+                        "properties": {
+                            "@timestamp": {"type": "date"},
+                        },
+                    },
                 }
-              }
-            }
-          }
-        }, body)
+            },
+            body,
+        )
 
 
 class DeleteComponentTemplateParamSource(TestCase):
@@ -2003,37 +2333,37 @@ class DeleteComponentTemplateParamSource(TestCase):
 
     def test_delete_index_template_no_name(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"),
-                                                  params={"operation-type": "delete-component-template"})
-        self.assertEqual("Please set the property 'template' for the delete-component-template operation.",
-                         ctx.exception.args[0])
+            params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"), params={"operation-type": "delete-component-template"})
+        self.assertEqual("Please set the property 'template' for the delete-component-template operation.", ctx.exception.args[0])
 
     def test_delete_index_template_from_track(self):
-        tpl1 = track.ComponentTemplate(name="logs", content={
-          "template": {
-            "mappings": {
-              "properties": {
-                "@timestamp": {
-                  "type": "date"
-                }
-              }
-            }
-          }
-        })
-        tpl2 = track.ComponentTemplate(name="metrics", content={
-          "template": {
-            "settings": {
-              "index.number_of_shards": 1,
-              "index.number_of_replicas": 1
-            }
-          }
-        })
-        source = params.DeleteComponentTemplateParamSource(track.Track(name="unit-test", templates=[tpl1, tpl2]), params={
-            "request-params": {
-                "master_timeout": 20
+        tpl1 = track.ComponentTemplate(
+            name="logs",
+            content={
+                "template": {
+                    "mappings": {
+                        "properties": {
+                            "@timestamp": {"type": "date"},
+                        },
+                    },
+                },
             },
-            "only-if-exists": False
-        })
+        )
+        tpl2 = track.ComponentTemplate(
+            name="metrics",
+            content={
+                "template": {
+                    "settings": {
+                        "index.number_of_shards": 1,
+                        "index.number_of_replicas": 1,
+                    },
+                },
+            },
+        )
+        source = params.DeleteComponentTemplateParamSource(
+            track.Track(name="unit-test", templates=[tpl1, tpl2]),
+            params={"request-params": {"master_timeout": 20}, "only-if-exists": False},
+        )
 
         p = source.params()
 
@@ -2048,17 +2378,18 @@ class SearchParamSourceTests(TestCase):
     def test_passes_cache(self):
         index1 = track.Index(name="index1", types=["type1"])
 
-        source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
-            "body": {
-                "query": {
-                    "match_all": {}
-                }
+        source = params.SearchParamSource(
+            track=track.Track(name="unit-test", indices=[index1]),
+            params={
+                "body": {
+                    "query": {
+                        "match_all": {},
+                    },
+                },
+                "headers": {"header1": "value1"},
+                "cache": True,
             },
-            "headers": {
-                "header1": "value1"
-            },
-            "cache": True
-        })
+        )
         p = source.params()
 
         self.assertEqual(10, len(p))
@@ -2072,76 +2403,84 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual(True, p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
         self.assertEqual(False, p["detailed-results"])
-        self.assertEqual({
-            "query": {
-                "match_all": {}
-            }
-        }, p["body"])
+        self.assertEqual(
+            {
+                "query": {
+                    "match_all": {},
+                },
+            },
+            p["body"],
+        )
 
     def test_uses_data_stream(self):
         ds1 = track.DataStream(name="data-stream-1")
 
-        source = params.SearchParamSource(track=track.Track(name="unit-test", data_streams=[ds1]), params={
-            "body": {
-                "query": {
-                    "match_all": {}
-                }
+        source = params.SearchParamSource(
+            track=track.Track(name="unit-test", data_streams=[ds1]),
+            params={
+                "body": {
+                    "query": {
+                        "match_all": {},
+                    },
+                },
+                "request-timeout": 1.0,
+                "headers": {"header1": "value1", "header2": "value2"},
+                "opaque-id": "12345abcde",
+                "cache": True,
             },
-            "request-timeout": 1.0,
-            "headers": {
-                "header1": "value1",
-                "header2": "value2"
-            },
-            "opaque-id": "12345abcde",
-            "cache": True
-        })
+        )
         p = source.params()
 
         self.assertEqual(10, len(p))
         self.assertEqual("data-stream-1", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual(1.0, p["request-timeout"])
-        self.assertDictEqual({
-            "header1": "value1",
-            "header2": "value2"
-        }, p["headers"])
+        self.assertDictEqual({"header1": "value1", "header2": "value2"}, p["headers"])
         self.assertEqual("12345abcde", p["opaque-id"])
         self.assertEqual({}, p["request-params"])
         self.assertEqual(True, p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
         self.assertEqual(False, p["detailed-results"])
-        self.assertEqual({
-            "query": {
-                "match_all": {}
-            }
-        }, p["body"])
+        self.assertEqual(
+            {
+                "query": {
+                    "match_all": {},
+                },
+            },
+            p["body"],
+        )
 
     def test_create_without_index(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
-            params.SearchParamSource(track=track.Track(name="unit-test"), params={
-                "type": "type1",
-                "body": {
-                    "query": {
-                        "match_all": {}
-                    }
-                }
-            }, operation_name="test_operation")
+            params.SearchParamSource(
+                track=track.Track(name="unit-test"),
+                params={
+                    "type": "type1",
+                    "body": {
+                        "query": {
+                            "match_all": {},
+                        },
+                    },
+                },
+                operation_name="test_operation",
+            )
 
         self.assertEqual("'index' or 'data-stream' is mandatory and is missing for operation 'test_operation'", ctx.exception.args[0])
 
     def test_passes_request_parameters(self):
         index1 = track.Index(name="index1", types=["type1"])
 
-        source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
-            "request-params": {
-                "_source_include": "some_field"
+        source = params.SearchParamSource(
+            track=track.Track(name="unit-test", indices=[index1]),
+            params={
+                "request-params": {"_source_include": "some_field"},
+                "body": {
+                    "query": {
+                        "match_all": {},
+                    },
+                },
             },
-            "body": {
-                "query": {
-                    "match_all": {}
-                }
-            }
-        })
+        )
         p = source.params()
 
         self.assertEqual(10, len(p))
@@ -2150,34 +2489,38 @@ class SearchParamSourceTests(TestCase):
         self.assertIsNone(p["request-timeout"])
         self.assertIsNone(p["headers"])
         self.assertIsNone(p["opaque-id"])
-        self.assertEqual({
-            "_source_include": "some_field"
-        }, p["request-params"])
+        self.assertEqual({"_source_include": "some_field"}, p["request-params"])
         self.assertIsNone(p["cache"])
         self.assertEqual(True, p["response-compression-enabled"])
         self.assertEqual(False, p["detailed-results"])
-        self.assertEqual({
-            "query": {
-                "match_all": {}
-            }
-        }, p["body"])
+        self.assertEqual(
+            {
+                "query": {
+                    "match_all": {},
+                },
+            },
+            p["body"],
+        )
 
     def test_user_specified_overrides_defaults(self):
         index1 = track.Index(name="index1", types=["type1"])
 
-        source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
-            "index": "_all",
-            "type": "type1",
-            "cache": False,
-            "response-compression-enabled": False,
-            "detailed-results": True,
-            "opaque-id": "12345abcde",
-            "body": {
-                "query": {
-                    "match_all": {}
-                }
-            }
-        })
+        source = params.SearchParamSource(
+            track=track.Track(name="unit-test", indices=[index1]),
+            params={
+                "index": "_all",
+                "type": "type1",
+                "cache": False,
+                "response-compression-enabled": False,
+                "detailed-results": True,
+                "opaque-id": "12345abcde",
+                "body": {
+                    "query": {
+                        "match_all": {},
+                    },
+                },
+            },
+        )
         p = source.params()
 
         self.assertEqual(10, len(p))
@@ -2191,26 +2534,32 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual(False, p["cache"])
         self.assertEqual(False, p["response-compression-enabled"])
         self.assertEqual(True, p["detailed-results"])
-        self.assertEqual({
-            "query": {
-                "match_all": {}
-            }
-        }, p["body"])
+        self.assertEqual(
+            {
+                "query": {
+                    "match_all": {},
+                },
+            },
+            p["body"],
+        )
 
     def test_user_specified_data_stream_overrides_defaults(self):
         ds1 = track.DataStream(name="data-stream-1")
 
-        source = params.SearchParamSource(track=track.Track(name="unit-test", data_streams=[ds1]), params={
-            "data-stream": "data-stream-2",
-            "cache": False,
-            "response-compression-enabled": False,
-            "request-timeout": 1.0,
-            "body": {
-                "query": {
-                    "match_all": {}
-                }
-            }
-        })
+        source = params.SearchParamSource(
+            track=track.Track(name="unit-test", data_streams=[ds1]),
+            params={
+                "data-stream": "data-stream-2",
+                "cache": False,
+                "response-compression-enabled": False,
+                "request-timeout": 1.0,
+                "body": {
+                    "query": {
+                        "match_all": {},
+                    },
+                },
+            },
+        )
         p = source.params()
 
         self.assertEqual(10, len(p))
@@ -2224,59 +2573,64 @@ class SearchParamSourceTests(TestCase):
         self.assertEqual(False, p["cache"])
         self.assertEqual(False, p["response-compression-enabled"])
         self.assertEqual(False, p["detailed-results"])
-        self.assertEqual({
-            "query": {
-                "match_all": {}
-            }
-        }, p["body"])
+        self.assertEqual(
+            {
+                "query": {
+                    "match_all": {},
+                },
+            },
+            p["body"],
+        )
 
     def test_invalid_data_stream_with_type(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             ds1 = track.DataStream(name="data-stream-1")
 
-            params.SearchParamSource(track=track.Track(name="unit-test", data_streams=[ds1]), params={
-                "data-stream": "data-stream-2",
-                "type": "_doc",
-                "cache": False,
-                "response-compression-enabled": False,
-                "body": {
-                    "query": {
-                        "match_all": {}
-                    }
-                }
-            }, operation_name="test_operation")
+            params.SearchParamSource(
+                track=track.Track(name="unit-test", data_streams=[ds1]),
+                params={
+                    "data-stream": "data-stream-2",
+                    "type": "_doc",
+                    "cache": False,
+                    "response-compression-enabled": False,
+                    "body": {
+                        "query": {
+                            "match_all": {},
+                        },
+                    },
+                },
+                operation_name="test_operation",
+            )
 
-        self.assertEqual("'type' not supported with 'data-stream' for operation 'test_operation'",
-                         ctx.exception.args[0])
+        self.assertEqual("'type' not supported with 'data-stream' for operation 'test_operation'", ctx.exception.args[0])
 
     def test_assertions_without_detailed_results_are_invalid(self):
         index1 = track.Index(name="index1", types=["type1"])
-        with self.assertRaisesRegex(exceptions.InvalidSyntax,
-                                    r"The property \[detailed-results\] must be \[true\] if assertions are defined"):
-            params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={
-                "index": "_all",
-                # unset!
-                #"detailed-results": True,
-                "assertions": [{
-                    "property": "hits",
-                    "condition": ">",
-                    "value": 0
-                }],
-                "body": {
-                    "query": {
-                        "match_all": {}
-                    }
-                }
-            })
+        with self.assertRaisesRegex(
+            exceptions.InvalidSyntax, r"The property \[detailed-results\] must be \[true\] if assertions are defined"
+        ):
+            params.SearchParamSource(
+                track=track.Track(name="unit-test", indices=[index1]),
+                params={
+                    "index": "_all",
+                    # unset!
+                    # "detailed-results": True,
+                    "assertions": [{"property": "hits", "condition": ">", "value": 0}],
+                    "body": {
+                        "query": {
+                            "match_all": {},
+                        },
+                    },
+                },
+            )
 
 
 class ForceMergeParamSourceTests(TestCase):
     def test_force_merge_index_from_track(self):
-        source = params.ForceMergeParamSource(track.Track(name="unit-test", indices=[
-            track.Index(name="index1"),
-            track.Index(name="index2"),
-            track.Index(name="index3")
-        ]), params={})
+        source = params.ForceMergeParamSource(
+            track.Track(name="unit-test", indices=[track.Index(name="index1"), track.Index(name="index2"), track.Index(name="index3")]),
+            params={},
+        )
 
         p = source.params()
 
@@ -2284,11 +2638,17 @@ class ForceMergeParamSourceTests(TestCase):
         self.assertEqual("blocking", p["mode"])
 
     def test_force_merge_data_stream_from_track(self):
-        source = params.ForceMergeParamSource(track.Track(name="unit-test", data_streams=[
-            track.DataStream(name="data-stream-1"),
-            track.DataStream(name="data-stream-2"),
-            track.DataStream(name="data-stream-3")
-        ]), params={})
+        source = params.ForceMergeParamSource(
+            track.Track(
+                name="unit-test",
+                data_streams=[
+                    track.DataStream(name="data-stream-1"),
+                    track.DataStream(name="data-stream-2"),
+                    track.DataStream(name="data-stream-3"),
+                ],
+            ),
+            params={},
+        )
 
         p = source.params()
 
@@ -2320,11 +2680,10 @@ class ForceMergeParamSourceTests(TestCase):
         self.assertEqual("blocking", p["mode"])
 
     def test_force_merge_all_params(self):
-        source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2",
-                                                                                     "request-timeout": 30,
-                                                                                     "max-num-segments": 1,
-                                                                                     "polling-period": 20,
-                                                                                     "mode": "polling"})
+        source = params.ForceMergeParamSource(
+            track.Track(name="unit-test"),
+            params={"index": "index2", "request-timeout": 30, "max-num-segments": 1, "polling-period": 20, "mode": "polling"},
+        )
 
         p = source.params()
 

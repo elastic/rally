@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -16,7 +16,12 @@
 # under the License.
 
 from unittest import mock
-from esrally.tracker.index import filter_ephemeral_index_settings, extract_index_mapping_and_settings, update_index_setting_parameters
+
+from esrally.tracker.index import (
+    extract_index_mapping_and_settings,
+    filter_ephemeral_index_settings,
+    update_index_setting_parameters,
+)
 
 
 def test_index_setting_filter():
@@ -25,23 +30,15 @@ def test_index_setting_filter():
         "provided_name": "queries",
         "creation_date": "1579230289084",
         "requests": {
-            "cache": {
-                "enable": "false"
-            }
+            "cache": {"enable": "false"},
         },
         "number_of_replicas": "0",
         "queries": {
-            "cache": {
-                "enabled": "false"
-            }
+            "cache": {"enabled": "false"},
         },
         "uuid": "jdzVt-dDS1aRlqdZWK4pdA",
-        "version": {
-            "created": "7050099"
-        },
-        "store": {
-            "type": "fs"
-        }
+        "version": {"created": "7050099"},
+        "store": {"type": "fs"},
     }
     settings = filter_ephemeral_index_settings(unfiltered_index_settings)
     assert settings.keys() == {"number_of_shards", "number_of_replicas", "requests", "queries"}
@@ -53,9 +50,7 @@ def test_index_setting_parameters():
         "provided_name": "queries",
         "creation_date": "1579230289084",
         "requests": {
-            "cache": {
-                "enable": "false"
-            }
+            "cache": {"enable": "false"},
         },
         "number_of_replicas": "0",
     }
@@ -65,9 +60,7 @@ def test_index_setting_parameters():
         "provided_name": "queries",
         "creation_date": "1579230289084",
         "requests": {
-            "cache": {
-                "enable": "false"
-            }
+            "cache": {"enable": "false"},
         },
         "number_of_replicas": "{{number_of_replicas | default(0)}}",
     }
@@ -86,9 +79,9 @@ def test_extract_index_create(client):
                 "dynamic": "strict",
                 "properties": {
                     "location": {
-                        "type": "geo_point"
-                    }
-                }
+                        "type": "geo_point",
+                    },
+                },
             },
             "settings": {
                 "index": {
@@ -96,38 +89,32 @@ def test_extract_index_create(client):
                     "provided_name": "osmgeopoints",
                     "creation_date": "1579210032233",
                     "requests": {
-                        "cache": {
-                            "enable": "false"
-                        }
+                        "cache": {"enable": "false"},
                     },
                     "number_of_replicas": "2",
                     "uuid": "vOOsPNfxTJyQekkIo9TjPA",
-                    "version": {
-                        "created": "7050099"
-                    },
-                    "store": {
-                        "type": "fs"
-                    }
+                    "version": {"created": "7050099"},
+                    "store": {"type": "fs"},
                 }
-            }
+            },
         },
         # should be filtered
         ".security": {
             "mappings": {},
             "settings": {
                 "index": {
-                    "number_of_shards": "1"
-                }
-            }
+                    "number_of_shards": "1",
+                },
+            },
         },
         "geodata": {
             "mappings": {},
             "settings": {
                 "index": {
-                    "number_of_shards": "1"
-                }
-            }
-        }
+                    "number_of_shards": "1",
+                },
+            },
+        },
     }
     expected = {
         "osmgeopoints": {
@@ -135,30 +122,28 @@ def test_extract_index_create(client):
                 "dynamic": "strict",
                 "properties": {
                     "location": {
-                        "type": "geo_point"
-                    }
-                }
+                        "type": "geo_point",
+                    },
+                },
             },
             "settings": {
                 "index": {
                     "number_of_replicas": "{{number_of_replicas | default(2)}}",
                     "number_of_shards": "{{number_of_shards | default(3)}}",
                     "requests": {
-                        "cache": {
-                            "enable": "false"
-                        }
-                    }
+                        "cache": {"enable": "false"},
+                    },
                 }
-            }
+            },
         },
         "geodata": {
             "mappings": {},
             "settings": {
                 "index": {
-                    "number_of_shards": "{{number_of_shards | default(1)}}"
-                }
-            }
-        }
+                    "number_of_shards": "{{number_of_shards | default(1)}}",
+                },
+            },
+        },
     }
     res = extract_index_mapping_and_settings(client, "_all")
     assert res == expected

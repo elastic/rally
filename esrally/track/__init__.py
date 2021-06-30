@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -16,8 +16,14 @@
 # under the License.
 
 from .loader import (
-    list_tracks, track_info, load_track, load_track_plugins, track_repo, operation_parameters, set_absolute_data_path,
-    TrackProcessorRegistry
+    TrackProcessorRegistry,
+    list_tracks,
+    load_track,
+    load_track_plugins,
+    operation_parameters,
+    set_absolute_data_path,
+    track_info,
+    track_repo,
 )
 
 # expose the complete track API

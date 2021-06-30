@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -26,9 +26,9 @@ from collections import defaultdict
 
 import thespian.actors
 
-from esrally import actor, client, paths, config, metrics, exceptions, PROGRAM_NAME
-from esrally.mechanic import supplier, provisioner, launcher, team
-from esrally.utils import net, console
+from esrally import PROGRAM_NAME, actor, client, config, exceptions, metrics, paths
+from esrally.mechanic import launcher, provisioner, supplier, team
+from esrally.utils import console, net
 
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
@@ -57,14 +57,23 @@ def install(cfg):
 
     if build_type == "tar":
         binary_supplier = supplier.create(cfg, sources, distribution, car, plugins)
-        p = provisioner.local(cfg=cfg, car=car, plugins=plugins, ip=ip, http_port=http_port,
-                              all_node_ips=seed_hosts, all_node_names=master_nodes, target_root=root_path,
-                              node_name=node_name)
+        p = provisioner.local(
+            cfg=cfg,
+            car=car,
+            plugins=plugins,
+            ip=ip,
+            http_port=http_port,
+            all_node_ips=seed_hosts,
+            all_node_names=master_nodes,
+            target_root=root_path,
+            node_name=node_name,
+        )
         node_config = p.prepare(binary=binary_supplier())
     elif build_type == "docker":
         if len(plugins) > 0:
-            raise exceptions.SystemSetupError("You cannot specify any plugins for Docker clusters. Please remove "
-                                              "\"--elasticsearch-plugins\" and try again.")
+            raise exceptions.SystemSetupError(
+                "You cannot specify any plugins for Docker clusters. Please remove " '"--elasticsearch-plugins" and try again.'
+            )
         p = provisioner.docker(cfg=cfg, car=car, ip=ip, http_port=http_port, target_root=root_path, node_name=node_name)
         # there is no binary for Docker that can be downloaded / built upfront
         node_config = p.prepare(binary=None)
@@ -82,8 +91,10 @@ def start(cfg):
     with contextlib.suppress(FileNotFoundError):
         _load_node_file(root_path)
         install_id = cfg.opts("system", "install.id")
-        raise exceptions.SystemSetupError("A node with this installation id is already running. Please stop it first "
-                                          "with {} stop --installation-id={}".format(PROGRAM_NAME, install_id))
+        raise exceptions.SystemSetupError(
+            "A node with this installation id is already running. Please stop it first "
+            "with {} stop --installation-id={}".format(PROGRAM_NAME, install_id)
+        )
 
     node_config = provisioner.load_node_configuration(root_path)
 
@@ -119,7 +130,7 @@ def stop(cfg):
             race_id=current_race.race_id,
             race_timestamp=current_race.race_timestamp,
             track_name=current_race.track_name,
-            challenge_name=current_race.challenge_name
+            challenge_name=current_race.challenge_name,
         )
     except exceptions.NotFound:
         logging.getLogger(__name__).info("Could not find race [%s] and will thus not persist system metrics.", race_id)
@@ -140,9 +151,9 @@ def stop(cfg):
         metrics_store.close()
 
     # TODO: Do we need to expose this as a separate command as well?
-    provisioner.cleanup(preserve=cfg.opts("mechanic", "preserve.install"),
-                        install_dir=node_config.binary_path,
-                        data_paths=node_config.data_paths)
+    provisioner.cleanup(
+        preserve=cfg.opts("mechanic", "preserve.install"), install_dir=node_config.binary_path, data_paths=node_config.data_paths
+    )
 
 
 def _load_node_file(root_path):
@@ -163,9 +174,9 @@ def _delete_node_file(root_path):
 # Public Messages
 ##############################
 
+
 class StartEngine:
-    def __init__(self, cfg, open_metrics_context, sources, distribution, external, docker, ip=None, port=None,
-                 node_id=None):
+    def __init__(self, cfg, open_metrics_context, sources, distribution, external, docker, ip=None, port=None, node_id=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.sources = sources
@@ -188,8 +199,19 @@ class StartEngine:
         :param node_ids: A list of node id to set.
         :return: A corresponding ``StartNodes`` message with the specified IP, port number and node ids.
         """
-        return StartNodes(self.cfg, self.open_metrics_context, self.sources, self.distribution,
-                          self.external, self.docker, all_node_ips, all_node_ids, ip, port, node_ids)
+        return StartNodes(
+            self.cfg,
+            self.open_metrics_context,
+            self.sources,
+            self.distribution,
+            self.external,
+            self.docker,
+            all_node_ips,
+            all_node_ids,
+            ip,
+            port,
+            node_ids,
+        )
 
 
 class EngineStarted:
@@ -214,9 +236,9 @@ class ResetRelativeTime:
 # Mechanic internal messages
 ##############################
 
+
 class StartNodes:
-    def __init__(self, cfg, open_metrics_context, sources, distribution, external, docker,
-                 all_node_ips, all_node_ids, ip, port, node_ids):
+    def __init__(self, cfg, open_metrics_context, sources, distribution, external, docker, all_node_ips, all_node_ids, ip, port, node_ids):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.sources = sources
@@ -266,9 +288,11 @@ def to_ip_port(hosts):
         host_or_ip = host.pop("host")
         port = host.pop("port", 9200)
         if host:
-            raise exceptions.SystemSetupError("When specifying nodes to be managed by Rally you can only supply "
-                                              "hostname:port pairs (e.g. 'localhost:9200'), any additional options cannot "
-                                              "be supported.")
+            raise exceptions.SystemSetupError(
+                "When specifying nodes to be managed by Rally you can only supply "
+                "hostname:port pairs (e.g. 'localhost:9200'), any additional options cannot "
+                "be supported."
+            )
         ip = net.resolve(host_or_ip)
         ip_port_pairs.append((ip, port))
     return ip_port_pairs
@@ -426,17 +450,17 @@ class MechanicActor(actor.RallyActor):
         # do not self-terminate, let the parent actor handle this
 
 
-@thespian.actors.requireCapability('coordinator')
+@thespian.actors.requireCapability("coordinator")
 class Dispatcher(actor.RallyActor):
     """This Actor receives a copy of the startmsg (with the computed hosts
-       attached) and creates a NodeMechanicActor on each targeted
-       remote host.  It uses Thespian SystemRegistration to get
-       notification of when remote nodes are available.  As a special
-       case, if an IP address is localhost, the NodeMechanicActor is
-       immediately created locally.  Once All NodeMechanicActors are
-       started, it will send them all their startup message, with a
-       reply-to back to the actor that made the request of the
-       Dispatcher.
+    attached) and creates a NodeMechanicActor on each targeted
+    remote host.  It uses Thespian SystemRegistration to get
+    notification of when remote nodes are available.  As a special
+    case, if an IP address is localhost, the NodeMechanicActor is
+    immediately created locally.  Once All NodeMechanicActors are
+    started, it will send them all their startup message, with a
+    reply-to back to the actor that made the request of the
+    Dispatcher.
     """
 
     def __init__(self):
@@ -458,9 +482,8 @@ class Dispatcher(actor.RallyActor):
         for (ip, port), node in all_nodes_by_host.items():
             submsg = startmsg.for_nodes(all_node_ips, all_node_ids, ip, port, node)
             submsg.reply_to = sender
-            if ip == '127.0.0.1':
-                m = self.createActor(NodeMechanicActor,
-                                     targetActorRequirements={"coordinator": True})
+            if ip == "127.0.0.1":
+                m = self.createActor(NodeMechanicActor, targetActorRequirements={"coordinator": True})
                 self.pending.append((m, submsg))
             else:
                 self.remotes[ip].append(submsg)
@@ -480,13 +503,11 @@ class Dispatcher(actor.RallyActor):
             self.logger.warning("Remote Rally node [%s] exited during NodeMechanicActor startup process.", convmsg.remoteAdminAddress)
             self.start_sender(actor.BenchmarkFailure("Remote Rally node [%s] has been shutdown prematurely." % convmsg.remoteAdminAddress))
         else:
-            remote_ip = convmsg.remoteCapabilities.get('ip', None)
+            remote_ip = convmsg.remoteCapabilities.get("ip", None)
             self.logger.info("Remote Rally node [%s] has started.", remote_ip)
 
             for eachmsg in self.remotes[remote_ip]:
-                self.pending.append((self.createActor(NodeMechanicActor,
-                                                      targetActorRequirements={"ip": remote_ip}),
-                                     eachmsg))
+                self.pending.append((self.createActor(NodeMechanicActor, targetActorRequirements={"ip": remote_ip}), eachmsg))
             if remote_ip in self.remotes:
                 del self.remotes[remote_ip]
             if not self.remotes:
@@ -531,13 +552,19 @@ class NodeMechanicActor(actor.RallyActor):
                 self.logger.info("Starting node(s) %s on [%s].", msg.node_ids, msg.ip)
 
             # Load node-specific configuration
-            cfg = config.auto_load_local_config(msg.cfg, additional_sections=[
-                # only copy the relevant bits
-                "track", "mechanic", "client", "telemetry",
-                # allow metrics store to extract race meta-data
-                "race",
-                "source"
-            ])
+            cfg = config.auto_load_local_config(
+                msg.cfg,
+                additional_sections=[
+                    # only copy the relevant bits
+                    "track",
+                    "mechanic",
+                    "client",
+                    "telemetry",
+                    # allow metrics store to extract race meta-data
+                    "race",
+                    "source",
+                ],
+            )
             # set root path (normally done by the main entry point)
             cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
             if not msg.external:
@@ -548,8 +575,18 @@ class NodeMechanicActor(actor.RallyActor):
             metrics_store.open(ctx=msg.open_metrics_context)
             # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
 
-            self.mechanic = create(cfg, metrics_store, msg.ip, msg.port, msg.all_node_ips, msg.all_node_ids,
-                                   msg.sources, msg.distribution, msg.external, msg.docker)
+            self.mechanic = create(
+                cfg,
+                metrics_store,
+                msg.ip,
+                msg.port,
+                msg.all_node_ips,
+                msg.all_node_ids,
+                msg.sources,
+                msg.distribution,
+                msg.external,
+                msg.docker,
+            )
             self.mechanic.start_engine()
             self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
             self.send(getattr(msg, "reply_to", sender), NodesStarted())
@@ -594,6 +631,7 @@ class NodeMechanicActor(actor.RallyActor):
 # Internal API (only used by the actor and for tests)
 #####################################################
 
+
 def load_team(cfg, external):
     # externally provisioned clusters do not support cars / plugins
     if external:
@@ -602,14 +640,15 @@ def load_team(cfg, external):
     else:
         team_path = team.team_path(cfg)
         car = team.load_car(team_path, cfg.opts("mechanic", "car.names"), cfg.opts("mechanic", "car.params"))
-        plugins = team.load_plugins(team_path,
-                                    cfg.opts("mechanic", "car.plugins", mandatory=False),
-                                    cfg.opts("mechanic", "plugin.params", mandatory=False))
+        plugins = team.load_plugins(
+            team_path, cfg.opts("mechanic", "car.plugins", mandatory=False), cfg.opts("mechanic", "plugin.params", mandatory=False)
+        )
     return car, plugins
 
 
-def create(cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_ids, sources=False, distribution=False,
-           external=False, docker=False):
+def create(
+    cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_ids, sources=False, distribution=False, external=False, docker=False
+):
     race_root_path = paths.race_root(cfg)
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
     node_name_prefix = cfg.opts("provisioning", "node.name.prefix")
@@ -621,16 +660,15 @@ def create(cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_i
         all_node_names = ["%s-%s" % (node_name_prefix, n) for n in all_node_ids]
         for node_id in node_ids:
             node_name = "%s-%s" % (node_name_prefix, node_id)
-            p.append(
-                provisioner.local(cfg, car, plugins, node_ip, node_http_port, all_node_ips,
-                                  all_node_names, race_root_path, node_name))
+            p.append(provisioner.local(cfg, car, plugins, node_ip, node_http_port, all_node_ips, all_node_names, race_root_path, node_name))
         l = launcher.ProcessLauncher(cfg)
     elif external:
         raise exceptions.RallyAssertionError("Externally provisioned clusters should not need to be managed by Rally's mechanic")
     elif docker:
         if len(plugins) > 0:
-            raise exceptions.SystemSetupError("You cannot specify any plugins for Docker clusters. Please remove "
-                                              "\"--elasticsearch-plugins\" and try again.")
+            raise exceptions.SystemSetupError(
+                "You cannot specify any plugins for Docker clusters. Please remove " '"--elasticsearch-plugins" and try again.'
+            )
         s = lambda: None
         p = []
         for node_id in node_ids:
@@ -691,9 +729,7 @@ class Mechanic:
         self.metrics_store.close()
         self.nodes = []
         for node_config in self.node_configs:
-            provisioner.cleanup(preserve=self.preserve_install,
-                                install_dir=node_config.binary_path,
-                                data_paths=node_config.data_paths)
+            provisioner.cleanup(preserve=self.preserve_install, install_dir=node_config.binary_path, data_paths=node_config.data_paths)
         self.node_configs = []
 
     def _current_race(self):
