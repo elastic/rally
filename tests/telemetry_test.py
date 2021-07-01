@@ -946,18 +946,16 @@ class RecoveryStatsTests(TestCase):
 
 
 class DataStreamStatsTests(TestCase):
-
     def test_failure_if_feature_not_implemented_in_version(self):
         # Data Streams aren't available prior to 7.9
         clients = {"default": Client(info={"version": {"number": "7.6.0"}})}
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {
-            "data-stream-stats-sample-interval": random.randint(1, 100)
-        }
+        telemetry_params = {"data-stream-stats-sample-interval": random.randint(1, 100)}
         t = telemetry.DataStreamStats(telemetry_params, clients, metrics_store)
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    r"The data-stream-stats telemetry device can only be used with clusters from version 7.9 onwards"):
+        with self.assertRaisesRegex(
+            exceptions.SystemSetupError, r"The data-stream-stats telemetry device can only be used with clusters from version 7.9 onwards"
+        ):
             t.on_benchmark_start()
 
     def test_failure_if_feature_not_implemented_in_distribution(self):
@@ -965,50 +963,35 @@ class DataStreamStatsTests(TestCase):
         clients = {"default": Client(info={"version": {"number": "7.9.0", "build_flavor": "oss"}})}
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {
-            "data-stream-stats-sample-interval": random.randint(1, 100)
-        }
+        telemetry_params = {"data-stream-stats-sample-interval": random.randint(1, 100)}
         t = telemetry.DataStreamStats(telemetry_params, clients, metrics_store)
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    r"The data-stream-stats telemetry device cannot be used with an OSS distribution of Elasticsearch"):
+        with self.assertRaisesRegex(
+            exceptions.SystemSetupError, r"The data-stream-stats telemetry device cannot be used with an OSS distribution of Elasticsearch"
+        ):
             t.on_benchmark_start()
 
     def test_negative_sample_interval_forbidden(self):
         clients = {"default": Client(), "cluster_b": Client()}
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {
-            "data-stream-stats-sample-interval": -1 * random.random()
-        }
-        with self.assertRaisesRegex(exceptions.SystemSetupError,
-                                    r"The telemetry parameter 'data-stream-stats-sample-interval' must be greater than zero but was .*\."):
+        telemetry_params = {"data-stream-stats-sample-interval": -1 * random.random()}
+        with self.assertRaisesRegex(
+            exceptions.SystemSetupError,
+            r"The telemetry parameter 'data-stream-stats-sample-interval' must be greater than zero but was .*\.",
+        ):
             telemetry.DataStreamStats(telemetry_params, clients, metrics_store)
 
 
 class DataStreamStatsRecorderTests(TestCase):
     data_streams_stats_response = {
-        "_shards": {
-            "total": 4,
-            "successful": 2,
-            "failed": 0
-        },
+        "_shards": {"total": 4, "successful": 2, "failed": 0},
         "data_stream_count": 2,
         "backing_indices": 2,
         "total_store_size_bytes": 878336,
         "data_streams": [
-            {
-                "data_stream": "my-data-stream-1",
-                "backing_indices": 1,
-                "store_size_bytes": 439137,
-                "maximum_timestamp": 1579936446448
-            },
-            {
-                "data_stream": "my-data-stream-2",
-                "backing_indices": 1,
-                "store_size_bytes": 439199,
-                "maximum_timestamp": 1579936446448
-            }
-        ]
+            {"data_stream": "my-data-stream-1", "backing_indices": 1, "store_size_bytes": 439137, "maximum_timestamp": 1579936446448},
+            {"data_stream": "my-data-stream-2", "backing_indices": 1, "store_size_bytes": 439199, "maximum_timestamp": 1579936446448},
+        ],
     }
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
@@ -1016,68 +999,69 @@ class DataStreamStatsRecorderTests(TestCase):
         client = Client(indices=SubClient(data_streams_stats=self.data_streams_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        recorder = telemetry.DataStreamStatsRecorder(cluster_name="remote",
-                                                      client=client,
-                                                      metrics_store=metrics_store,
-                                                      sample_interval=1 * random.randint(1, 100)
-                                                     )
+        recorder = telemetry.DataStreamStatsRecorder(
+            cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1 * random.randint(1, 100)
+        )
         recorder.record()
 
-        data_stream_metadata = {
-            "cluster": "remote"
-        }
+        data_stream_metadata = {"cluster": "remote"}
 
-        metrics_store_put_doc.assert_has_calls([
-            mock.call({
-                "data_stream": "_all",
-                "name": "data-stream-stats",
-                "shards": {
-                    "total": 4,
-                    "successful_shards": 2,
-                    "failed_shards": 0
-                },
-                "data_stream_count": 2,
-                "backing_indices": 2,
-                "total_store_size_bytes": 878336
-            }, level=MetaInfoScope.cluster, meta_data=data_stream_metadata),
-            mock.call({
-                "name": "data-stream-stats",
-                "data_stream": "my-data-stream-1",
-                "backing_indices": 1,
-                "store_size_bytes": 439137,
-                "maximum_timestamp": 1579936446448
-            }, level=MetaInfoScope.cluster, meta_data=data_stream_metadata),
-            mock.call({
-                "name": "data-stream-stats",
-                "data_stream": "my-data-stream-2",
-                "backing_indices": 1,
-                "store_size_bytes": 439199,
-                "maximum_timestamp": 1579936446448
-            }, level=MetaInfoScope.cluster, meta_data=data_stream_metadata)
-        ], any_order=True)
+        metrics_store_put_doc.assert_has_calls(
+            [
+                mock.call(
+                    {
+                        "data_stream": "_all",
+                        "name": "data-stream-stats",
+                        "shards": {"total": 4, "successful_shards": 2, "failed_shards": 0},
+                        "data_stream_count": 2,
+                        "backing_indices": 2,
+                        "total_store_size_bytes": 878336,
+                    },
+                    level=MetaInfoScope.cluster,
+                    meta_data=data_stream_metadata,
+                ),
+                mock.call(
+                    {
+                        "name": "data-stream-stats",
+                        "data_stream": "my-data-stream-1",
+                        "backing_indices": 1,
+                        "store_size_bytes": 439137,
+                        "maximum_timestamp": 1579936446448,
+                    },
+                    level=MetaInfoScope.cluster,
+                    meta_data=data_stream_metadata,
+                ),
+                mock.call(
+                    {
+                        "name": "data-stream-stats",
+                        "data_stream": "my-data-stream-2",
+                        "backing_indices": 1,
+                        "store_size_bytes": 439199,
+                        "maximum_timestamp": 1579936446448,
+                    },
+                    level=MetaInfoScope.cluster,
+                    meta_data=data_stream_metadata,
+                ),
+            ],
+            any_order=True,
+        )
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_empty_data_streams_list(self, metrics_store_put_doc):
         response = {
-            "_shards" : {
-                "total" : 0,
-                "successful" : 0,
-                "failed" : 0
-            },
-            "data_stream_count" : 0,
-            "backing_indices" : 0,
-            "total_store_size_bytes" : 0,
-            "data_streams" : [ ]
+            "_shards": {"total": 0, "successful": 0, "failed": 0},
+            "data_stream_count": 0,
+            "backing_indices": 0,
+            "total_store_size_bytes": 0,
+            "data_streams": [],
         }
 
         client = Client(indices=SubClient(data_streams_stats=response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        recorder = telemetry.DataStreamStatsRecorder(cluster_name="default",
-                                                     client=client,
-                                                     metrics_store=metrics_store,
-                                                     sample_interval=1 * random.randint(1, 100)
-                                                     )
+        recorder = telemetry.DataStreamStatsRecorder(
+            cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1 * random.randint(1, 100)
+        )
         recorder.record()
 
         # Given an empty list of 'data_streams' we should only be
