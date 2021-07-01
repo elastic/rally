@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -36,10 +36,13 @@ class RallyRepositoryTests(TestCase):
                 root_dir="/rally-resources",
                 repo_name="unit-test",
                 resource_name="unittest-resources",
-                offline=True)
+                offline=True,
+            )
 
-        self.assertEqual("[/rally-resources/unit-test] must be a git repository.\n\n"
-                         "Please run:\ngit -C /rally-resources/unit-test init", ctx.exception.args[0])
+        self.assertEqual(
+            "[/rally-resources/unit-test] must be a git repository.\n\nPlease run:\ngit -C /rally-resources/unit-test init",
+            ctx.exception.args[0],
+        )
 
     @mock.patch("esrally.utils.io.exists", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
@@ -53,21 +56,24 @@ class RallyRepositoryTests(TestCase):
                 root_dir="/rally-resources",
                 repo_name="unit-test",
                 resource_name="unittest-resources",
-                offline=True)
+                offline=True,
+            )
 
-        self.assertEqual("Expected a git repository at [/rally-resources/unit-test] but the directory does not exist.",
-                         ctx.exception.args[0])
+        self.assertEqual(
+            "Expected a git repository at [/rally-resources/unit-test] but the directory does not exist.", ctx.exception.args[0]
+        )
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     def test_does_nothing_if_working_copy_present(self, is_working_copy):
         is_working_copy.return_value = True
 
         r = repo.RallyRepository(
-                remote_url=None,
-                root_dir="/rally-resources",
-                repo_name="unit-test",
-                resource_name="unittest-resources",
-                offline=True)
+            remote_url=None,
+            root_dir="/rally-resources",
+            repo_name="unit-test",
+            resource_name="unittest-resources",
+            offline=True,
+        )
 
         self.assertFalse(r.remote)
 
@@ -81,7 +87,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
 
         self.assertTrue(r.remote)
 
@@ -97,7 +104,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
 
         fetch.assert_called_with(src="/rally-resources/unit-test")
 
@@ -112,7 +120,8 @@ class RallyRepositoryTests(TestCase):
             repo_name="unit-test",
             resource_name="unittest-resources",
             offline=False,
-            fetch=False)
+            fetch=False,
+        )
 
         self.assertTrue(r.remote)
 
@@ -129,7 +138,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
         # no exception during the call - we reach this here
         self.assertTrue(r.remote)
 
@@ -151,7 +161,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=random.choice([True, False]))
+            offline=random.choice([True, False]),
+        )
 
         r.update(distribution_version="1.7.3")
 
@@ -177,7 +188,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
 
         r.update(distribution_version="6.0.0")
 
@@ -205,7 +217,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
 
         r.update(distribution_version="1.7.4")
 
@@ -230,7 +243,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
 
         self.assertTrue(r.remote)
 
@@ -259,8 +273,9 @@ class RallyRepositoryTests(TestCase):
     @mock.patch("esrally.utils.git.checkout", autospec=True)
     @mock.patch("esrally.utils.git.rebase")
     @mock.patch("esrally.utils.git.current_branch")
-    def test_does_not_update_unknown_branch_remotely_local_fallback(self, curr_branch, rebase, checkout, branches, tags,
-                                                                    fetch, is_working_copy, head_revision):
+    def test_does_not_update_unknown_branch_remotely_local_fallback(
+        self, curr_branch, rebase, checkout, branches, tags, fetch, is_working_copy, head_revision
+    ):
         curr_branch.return_value = "master"
         # we have only "master" remotely but a few more branches locally
         branches.side_effect = ["5", ["1", "2", "5", "master"]]
@@ -273,7 +288,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
 
         r.update(distribution_version="1.7.3")
 
@@ -305,7 +321,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
 
         with self.assertRaises(exceptions.SystemSetupError) as ctx:
             r.update(distribution_version="4.0.0")
@@ -327,7 +344,8 @@ class RallyRepositoryTests(TestCase):
             root_dir="/rally-resources",
             repo_name="unit-test",
             resource_name="unittest-resources",
-            offline=False)
+            offline=False,
+        )
 
         r.checkout("abcdef123")
 

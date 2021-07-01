@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -27,12 +27,29 @@ from enum import Enum
 
 import thespian.actors
 
-from esrally import PROGRAM_NAME, BANNER, FORUM_LINK, SKULL, check_python_version, doc_link, telemetry
-from esrally import version, actor, config, paths, racecontrol, reporter, metrics, track, chart_generator, exceptions, \
-    log
-from esrally.mechanic import team, mechanic
+from esrally import (
+    BANNER,
+    FORUM_LINK,
+    PROGRAM_NAME,
+    SKULL,
+    actor,
+    chart_generator,
+    check_python_version,
+    config,
+    doc_link,
+    exceptions,
+    log,
+    metrics,
+    paths,
+    racecontrol,
+    reporter,
+    telemetry,
+    track,
+    version,
+)
+from esrally.mechanic import mechanic, team
 from esrally.tracker import tracker
-from esrally.utils import io, convert, process, console, net, opts, versions
+from esrally.utils import console, convert, io, net, opts, process, versions
 
 
 class ExitStatus(Enum):
@@ -76,15 +93,17 @@ def create_arg_parser():
             "--track-repository",
             help="Define the repository from where Rally will load tracks (default: default).",
             # argparse is smart enough to use this default only if the user did not use --track-path and also did not specify anything
-            default="default"
+            default="default",
         )
         track_source_group.add_argument(
             "--track-path",
-            help="Define the path to a track.")
+            help="Define the path to a track.",
+        )
         subparser.add_argument(
             "--track-revision",
             help="Define a specific revision in the track repository that Rally should use.",
-            default=None)
+            default=None,
+        )
 
     # try to preload configurable defaults, but this does not work together with `--configuration-name` (which is undocumented anyway)
     cfg = config.Config()
@@ -94,16 +113,19 @@ def create_arg_parser():
     else:
         preserve_install = False
 
-    parser = argparse.ArgumentParser(prog=PROGRAM_NAME,
-                                     description=BANNER + "\n\n You Know, for Benchmarking Elasticsearch.",
-                                     epilog="Find out more about Rally at {}".format(console.format.link(doc_link())),
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--version', action='version', version="%(prog)s " + version.version())
+    parser = argparse.ArgumentParser(
+        prog=PROGRAM_NAME,
+        description=BANNER + "\n\n You Know, for Benchmarking Elasticsearch.",
+        epilog="Find out more about Rally at {}".format(console.format.link(doc_link())),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="%(prog)s " + version.version(),
+    )
 
-    subparsers = parser.add_subparsers(
-        title="subcommands",
-        dest="subcommand",
-        help="")
+    subparsers = parser.add_subparsers(title="subcommands", dest="subcommand", help="")
 
     race_parser = subparsers.add_parser("race", help="Run a benchmark")
     # change in favor of "list telemetry", "list tracks", "list pipelines"
@@ -112,8 +134,9 @@ def create_arg_parser():
         "configuration",
         metavar="configuration",
         help="The configuration for which Rally should show the available options. "
-             "Possible values are: telemetry, tracks, pipelines, races, cars, elasticsearch-plugins",
-        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins"])
+        "Possible values are: telemetry, tracks, pipelines, races, cars, elasticsearch-plugins",
+        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins"],
+    )
     list_parser.add_argument(
         "--limit",
         help="Limit the number of search results for recent races (default: 10).",
@@ -133,123 +156,146 @@ def create_arg_parser():
     info_parser.add_argument(
         "--track-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
-        default=""
+        default="",
     )
     info_parser.add_argument(
         "--challenge",
-        help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`."
+        help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.",
     )
     info_task_filter_group = info_parser.add_mutually_exclusive_group()
     info_task_filter_group.add_argument(
         "--include-tasks",
-        help="Defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
+        help="Defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.",
+    )
     info_task_filter_group.add_argument(
         "--exclude-tasks",
-        help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.")
+        help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.",
+    )
 
     create_track_parser = subparsers.add_parser("create-track", help="Create a Rally track from existing data")
     create_track_parser.add_argument(
         "--track",
         required=True,
-        help="Name of the generated track")
+        help="Name of the generated track",
+    )
     create_track_parser.add_argument(
         "--indices",
         type=non_empty_list,
         required=True,
-        help="Comma-separated list of indices to include in the track")
+        help="Comma-separated list of indices to include in the track",
+    )
     create_track_parser.add_argument(
         "--target-hosts",
         default="",
         required=True,
-        help="Comma-separated list of host:port pairs which should be targeted")
+        help="Comma-separated list of host:port pairs which should be targeted",
+    )
     create_track_parser.add_argument(
         "--client-options",
         default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS,
-        help=f"Comma-separated list of client options to use. (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS})")
+        help=f"Comma-separated list of client options to use. (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS})",
+    )
     create_track_parser.add_argument(
         "--output-path",
         default=os.path.join(os.getcwd(), "tracks"),
-        help="Track output directory (default: tracks/)")
+        help="Track output directory (default: tracks/)",
+    )
 
     generate_parser = subparsers.add_parser("generate", help="Generate artifacts")
     generate_parser.add_argument(
         "artifact",
         metavar="artifact",
         help="The artifact to create. Possible values are: charts",
-        choices=["charts"])
+        choices=["charts"],
+    )
     generate_parser.add_argument(
         "--chart-spec-path",
         required=True,
         help="Path to a JSON file(s) containing all combinations of charts to generate. Wildcard patterns can be used to specify "
-             "multiple files.")
+        "multiple files.",
+    )
     generate_parser.add_argument(
         "--chart-type",
         help="Chart type to generate (default: time-series).",
         choices=["time-series", "bar"],
-        default="time-series")
+        default="time-series",
+    )
     generate_parser.add_argument(
         "--output-path",
         help="Output file name (default: stdout).",
-        default=None)
+        default=None,
+    )
 
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
     compare_parser.add_argument(
         "--baseline",
         required=True,
-        help=f"Race ID of the baseline (see {PROGRAM_NAME} list races).")
+        help=f"Race ID of the baseline (see {PROGRAM_NAME} list races).",
+    )
     compare_parser.add_argument(
         "--contender",
         required=True,
-        help=f"Race ID of the contender (see {PROGRAM_NAME} list races).")
+        help=f"Race ID of the contender (see {PROGRAM_NAME} list races).",
+    )
     compare_parser.add_argument(
         "--report-format",
         help="Define the output format for the command line report (default: markdown).",
         choices=["markdown", "csv"],
-        default="markdown")
+        default="markdown",
+    )
     compare_parser.add_argument(
         "--report-numbers-align",
         help="Define the output column number alignment for the command line report (default: right).",
         choices=["right", "center", "left", "decimal"],
-        default="right")
+        default="right",
+    )
     compare_parser.add_argument(
         "--report-file",
         help="Write the command line report also to the provided file.",
-        default="")
+        default="",
+    )
     compare_parser.add_argument(
         "--show-in-report",
         help="Whether to include the comparison in the results file.",
-        default=True)
+        default=True,
+    )
 
     download_parser = subparsers.add_parser("download", help="Downloads an artifact")
     download_parser.add_argument(
         "--team-repository",
         help="Define the repository from where Rally will load teams and cars (default: default).",
-        default="default")
+        default="default",
+    )
     download_parser.add_argument(
         "--team-revision",
         help="Define a specific revision in the team repository that Rally should use.",
-        default=None)
+        default=None,
+    )
     download_parser.add_argument(
         "--team-path",
-        help="Define the path to the car and plugin configurations to use.")
+        help="Define the path to the car and plugin configurations to use.",
+    )
     download_parser.add_argument(
         "--distribution-version",
         type=supported_es_version,
         help="Define the version of the Elasticsearch distribution to download. "
-             "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
-        default="")
+        "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
+        default="",
+    )
     download_parser.add_argument(
         "--distribution-repository",
         help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
-        default="release")
+        default="release",
+    )
     download_parser.add_argument(
         "--car",
         help=f"Define the car to use. List possible cars with `{PROGRAM_NAME} list cars` (default: defaults).",
-        default="defaults")  # optimized for local usage
+        default="defaults",
+    )  # optimized for local usage
     download_parser.add_argument(
         "--car-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
-        default=""
+        default="",
     )
     download_parser.add_argument(
         "--target-os",
@@ -264,84 +310,94 @@ def create_arg_parser():
     install_parser.add_argument(
         "--revision",
         help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
-             " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
-             " The timestamp must be specified as: \"@ts\" where \"ts\" must be a valid ISO 8601 timestamp, "
-             "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
-        default="current")  # optimized for local usage, don't fetch sources
+        " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
+        ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
+        'e.g. "@2013-07-27T10:37:00Z" (default: current).',
+        default="current",
+    )  # optimized for local usage, don't fetch sources
     # Intentionally undocumented as we do not consider Docker a fully supported option.
     install_parser.add_argument(
         "--build-type",
         help=argparse.SUPPRESS,
         choices=["tar", "docker"],
-        default="tar")
+        default="tar",
+    )
     install_parser.add_argument(
         "--team-repository",
         help="Define the repository from where Rally will load teams and cars (default: default).",
-        default="default")
+        default="default",
+    )
     install_parser.add_argument(
         "--team-revision",
         help="Define a specific revision in the team repository that Rally should use.",
-        default=None)
+        default=None,
+    )
     install_parser.add_argument(
         "--team-path",
-        help="Define the path to the car and plugin configurations to use.")
+        help="Define the path to the car and plugin configurations to use.",
+    )
     install_parser.add_argument(
         "--runtime-jdk",
         type=runtime_jdk,
         help="The major version of the runtime JDK to use during installation.",
-        default=None)
+        default=None,
+    )
     install_parser.add_argument(
         "--distribution-repository",
         help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
-        default="release")
+        default="release",
+    )
     install_parser.add_argument(
         "--distribution-version",
         type=supported_es_version,
         help="Define the version of the Elasticsearch distribution to download. "
-             "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
-        default="")
+        "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
+        default="",
+    )
     install_parser.add_argument(
         "--car",
         help=f"Define the car to use. List possible cars with `{PROGRAM_NAME} list cars` (default: defaults).",
-        default="defaults")  # optimized for local usage
+        default="defaults",
+    )  # optimized for local usage
     install_parser.add_argument(
         "--car-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
-        default=""
+        default="",
     )
     install_parser.add_argument(
         "--elasticsearch-plugins",
         help="Define the Elasticsearch plugins to install. (default: install no plugins).",
-        default="")
+        default="",
+    )
     install_parser.add_argument(
         "--plugin-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables.",
-        default=""
+        default="",
     )
     install_parser.add_argument(
         "--network-host",
         help="The IP address to bind to and publish",
-        default="127.0.0.1"
+        default="127.0.0.1",
     )
     install_parser.add_argument(
         "--http-port",
         help="The port to expose for HTTP traffic",
-        default="39200"
+        default="39200",
     )
     install_parser.add_argument(
         "--node-name",
         help="The name of this Elasticsearch node",
-        default="rally-node-0"
+        default="rally-node-0",
     )
     install_parser.add_argument(
         "--master-nodes",
         help="A comma-separated list of the initial master node names",
-        default=""
+        default="",
     )
     install_parser.add_argument(
         "--seed-hosts",
         help="A comma-separated list of the initial seed host IPs",
-        default=""
+        default="",
     )
 
     start_parser = subparsers.add_parser("start", help="Starts an Elasticsearch node locally")
@@ -350,26 +406,30 @@ def create_arg_parser():
         required=True,
         help="The id of the installation to start",
         # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
-        default="")
+        default="",
+    )
     start_parser.add_argument(
         "--race-id",
         required=True,
         help="Define a unique id for this race.",
-        default="")
+        default="",
+    )
     start_parser.add_argument(
         "--runtime-jdk",
         type=runtime_jdk,
         help="The major version of the runtime JDK to use.",
-        default=None)
+        default=None,
+    )
     start_parser.add_argument(
         "--telemetry",
         help=f"Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry "
-             f"devices with `{PROGRAM_NAME} list telemetry`.",
-        default="")
+        f"devices with `{PROGRAM_NAME} list telemetry`.",
+        default="",
+    )
     start_parser.add_argument(
         "--telemetry-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to the telemetry devices as parameters.",
-        default=""
+        default="",
     )
 
     stop_parser = subparsers.add_parser("stop", help="Stops an Elasticsearch node locally")
@@ -378,173 +438,204 @@ def create_arg_parser():
         required=True,
         help="The id of the installation to stop",
         # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
-        default="")
+        default="",
+    )
     stop_parser.add_argument(
         "--preserve-install",
         help=f"Keep the benchmark candidate and its index. (default: {str(preserve_install).lower()}).",
         default=preserve_install,
-        action="store_true")
+        action="store_true",
+    )
 
     for p in [list_parser, race_parser]:
         p.add_argument(
             "--distribution-version",
             type=supported_es_version,
             help="Define the version of the Elasticsearch distribution to download. "
-                 "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
-            default="")
+            "Check https://www.elastic.co/downloads/elasticsearch for released versions.",
+            default="",
+        )
         p.add_argument(
             "--team-path",
-            help="Define the path to the car and plugin configurations to use.")
+            help="Define the path to the car and plugin configurations to use.",
+        )
         p.add_argument(
             "--team-repository",
             help="Define the repository from where Rally will load teams and cars (default: default).",
-            default="default")
+            default="default",
+        )
         p.add_argument(
             "--team-revision",
             help="Define a specific revision in the team repository that Rally should use.",
-            default=None)
+            default=None,
+        )
 
     race_parser.add_argument(
         "--race-id",
         help="Define a unique id for this race.",
-        default=str(uuid.uuid4()))
+        default=str(uuid.uuid4()),
+    )
     race_parser.add_argument(
         "--pipeline",
         help="Select the pipeline to run.",
         # the default will be dynamically derived by racecontrol based on the presence / absence of other command line options
-        default="")
+        default="",
+    )
     race_parser.add_argument(
         "--revision",
         help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
-             " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
-             " The timestamp must be specified as: \"@ts\" where \"ts\" must be a valid ISO 8601 timestamp, "
-             "e.g. \"@2013-07-27T10:37:00Z\" (default: current).",
-        default="current")  # optimized for local usage, don't fetch sources
+        " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
+        ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
+        'e.g. "@2013-07-27T10:37:00Z" (default: current).',
+        default="current",
+    )  # optimized for local usage, don't fetch sources
     add_track_source(race_parser)
     race_parser.add_argument(
         "--track",
-        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`."
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`.",
     )
     race_parser.add_argument(
         "--track-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
-        default=""
+        default="",
     )
     race_parser.add_argument(
         "--challenge",
-        help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.")
+        help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.",
+    )
     race_parser.add_argument(
         "--car",
         help=f"Define the car to use. List possible cars with `{PROGRAM_NAME} list cars` (default: defaults).",
-        default="defaults")  # optimized for local usage
+        default="defaults",
+    )  # optimized for local usage
     race_parser.add_argument(
         "--car-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
-        default=""
+        default="",
     )
     race_parser.add_argument(
         "--runtime-jdk",
         type=runtime_jdk,
         help="The major version of the runtime JDK to use.",
-        default=None)
+        default=None,
+    )
     race_parser.add_argument(
         "--elasticsearch-plugins",
         help="Define the Elasticsearch plugins to install. (default: install no plugins).",
-        default="")
+        default="",
+    )
     race_parser.add_argument(
         "--plugin-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables.",
-        default=""
+        default="",
     )
     race_parser.add_argument(
         "--target-hosts",
         help="Define a comma-separated list of host:port pairs which should be targeted if using the pipeline 'benchmark-only' "
-             "(default: localhost:9200).",
-        default="")  # actually the default is pipeline specific and it is set later
+        "(default: localhost:9200).",
+        default="",
+    )  # actually the default is pipeline specific and it is set later
     race_parser.add_argument(
         "--load-driver-hosts",
         help="Define a comma-separated list of hosts which should generate load (default: localhost).",
-        default="localhost")
+        default="localhost",
+    )
     race_parser.add_argument(
         "--client-options",
         help=f"Define a comma-separated list of client options to use. The options will be passed to the Elasticsearch "
-             f"Python client (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS}).",
-        default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS)
-    race_parser.add_argument("--on-error",
-                             choices=["continue", "abort"],
-                             help="Controls how Rally behaves on response errors (default: continue).",
-                             default="continue")
+        f"Python client (default: {opts.ClientOptions.DEFAULT_CLIENT_OPTIONS}).",
+        default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS,
+    )
+    race_parser.add_argument(
+        "--on-error",
+        choices=["continue", "abort"],
+        help="Controls how Rally behaves on response errors (default: continue).",
+        default="continue",
+    )
     race_parser.add_argument(
         "--telemetry",
         help=f"Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry "
-             f"devices with `{PROGRAM_NAME} list telemetry`.",
-        default="")
+        f"devices with `{PROGRAM_NAME} list telemetry`.",
+        default="",
+    )
     race_parser.add_argument(
         "--telemetry-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to the telemetry devices as parameters.",
-        default=""
+        default="",
     )
     race_parser.add_argument(
         "--distribution-repository",
         help="Define the repository from where the Elasticsearch distribution should be downloaded (default: release).",
-        default="release")
+        default="release",
+    )
 
     task_filter_group = race_parser.add_mutually_exclusive_group()
     task_filter_group.add_argument(
         "--include-tasks",
-        help="Defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.")
+        help="Defines a comma-separated list of tasks to run. By default all tasks of a challenge are run.",
+    )
     task_filter_group.add_argument(
         "--exclude-tasks",
-        help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.")
+        help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.",
+    )
     race_parser.add_argument(
         "--user-tag",
         help="Define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
-             "Example: intention:baseline-ticket-12345",
-        default="")
+        "Example: intention:baseline-ticket-12345",
+        default="",
+    )
     race_parser.add_argument(
         "--report-format",
         help="Define the output format for the command line report (default: markdown).",
         choices=["markdown", "csv"],
-        default="markdown")
+        default="markdown",
+    )
     race_parser.add_argument(
         "--report-numbers-align",
         help="Define the output column number alignment for the command line report (default: right).",
         choices=["right", "center", "left", "decimal"],
-        default="right")
+        default="right",
+    )
     race_parser.add_argument(
         "--show-in-report",
         help="Define which values are shown in the summary report (default: available).",
         choices=["available", "all-percentiles", "all"],
-        default="available")
+        default="available",
+    )
     race_parser.add_argument(
         "--report-file",
         help="Write the command line report also to the provided file.",
-        default="")
+        default="",
+    )
     race_parser.add_argument(
         "--preserve-install",
         help=f"Keep the benchmark candidate and its index. (default: {str(preserve_install).lower()}).",
         default=preserve_install,
-        action="store_true")
+        action="store_true",
+    )
     race_parser.add_argument(
         "--test-mode",
         help="Runs the given track in 'test mode'. Meant to check a track for errors but not for real benchmarks (default: false).",
         default=False,
-        action="store_true")
+        action="store_true",
+    )
     race_parser.add_argument(
         "--enable-driver-profiling",
         help="Enables a profiler for analyzing the performance of calls in Rally's driver (default: false).",
         default=False,
-        action="store_true")
+        action="store_true",
+    )
     race_parser.add_argument(
         "--enable-assertions",
         help="Enables assertion checks for tasks (default: false).",
         default=False,
-        action="store_true")
+        action="store_true",
+    )
     race_parser.add_argument(
         "--kill-running-processes",
         action="store_true",
         default=False,
-        help="If any processes is running, it is going to kill them and allow Rally to continue to run."
+        help="If any processes is running, it is going to kill them and allow Rally to continue to run.",
     )
 
     ###############################################################################
@@ -558,31 +649,46 @@ def create_arg_parser():
         "--effective-start-date",
         help=argparse.SUPPRESS,
         type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"),
-        default=None)
+        default=None,
+    )
     # Skips checking that the REST API is available before proceeding with the benchmark
     race_parser.add_argument(
         "--skip-rest-api-check",
         help=argparse.SUPPRESS,
         action="store_true",
-        default=False)
+        default=False,
+    )
 
-    for p in [list_parser, race_parser, compare_parser, download_parser, install_parser,
-              start_parser, stop_parser, info_parser, generate_parser, create_track_parser]:
+    for p in [
+        list_parser,
+        race_parser,
+        compare_parser,
+        download_parser,
+        install_parser,
+        start_parser,
+        stop_parser,
+        info_parser,
+        generate_parser,
+        create_track_parser,
+    ]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
             help=argparse.SUPPRESS,
-            default=None)
+            default=None,
+        )
         p.add_argument(
             "--quiet",
             help="Suppress as much as output as possible (default: false).",
             default=False,
-            action="store_true")
+            action="store_true",
+        )
         p.add_argument(
             "--offline",
             help="Assume that Rally has no connection to the Internet (default: false).",
             default=False,
-            action="store_true")
+            action="store_true",
+        )
 
     return parser
 
@@ -612,8 +718,10 @@ def print_help_on_errors():
     console.println(f"* Check the log files in {paths.logs()} for errors.")
     console.println(f"* Read the documentation at {console.format.link(doc_link())}.")
     console.println(f"* Ask a question on the forum at {console.format.link(FORUM_LINK)}.")
-    console.println(f"* Raise an issue at {console.format.link('https://github.com/elastic/rally/issues')} "
-                    f"and include the log files in {paths.logs()}.")
+    console.println(
+        f"* Raise an issue at {console.format.link('https://github.com/elastic/rally/issues')} "
+        f"and include the log files in {paths.logs()}."
+    )
 
 
 def race(cfg, kill_running_processes=False):
@@ -629,17 +737,18 @@ def race(cfg, kill_running_processes=False):
         except KeyboardInterrupt:
             raise exceptions.UserInterrupted("User has cancelled the benchmark whilst terminating Rally instances.") from None
         except BaseException:
-            logger.exception(
-                "Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
+            logger.exception("Could not terminate potentially running Rally instances correctly. Attempting to go on anyway.")
     else:
         other_rally_processes = process.find_all_other_rally_processes()
         if other_rally_processes:
             pids = [p.pid for p in other_rally_processes]
 
-            msg = f"There are other Rally processes running on this machine (PIDs: {pids}) but only one Rally " \
-                  f"benchmark is allowed to run at the same time.\n\nYou can use --kill-running-processes flag " \
-                  f"to kill running processes automatically and allow Rally to continue to run a new benchmark. " \
-                  f"Otherwise, you need to manually kill them."
+            msg = (
+                f"There are other Rally processes running on this machine (PIDs: {pids}) but only one Rally "
+                f"benchmark is allowed to run at the same time.\n\nYou can use --kill-running-processes flag "
+                f"to kill running processes automatically and allow Rally to continue to run a new benchmark. "
+                f"Otherwise, you need to manually kill them."
+            )
             raise exceptions.RallyError(msg)
 
     with_actor_system(racecontrol.run, cfg)
@@ -663,8 +772,9 @@ def with_actor_system(runnable, cfg):
     except Exception as e:
         logger.exception("Could not bootstrap actor system.")
         if str(e) == "Unable to determine valid external socket address.":
-            console.warn("Could not determine a socket address. Are you running without any network? Switching to degraded mode.",
-                         logger=logger)
+            console.warn(
+                "Could not determine a socket address. Are you running without any network? Switching to degraded mode.", logger=logger
+            )
             logger.info("Falling back to offline actor system.")
             actor.use_offline_actor_system()
             actors = actor.bootstrap_actor_system(try_join=True)
@@ -700,8 +810,7 @@ def with_actor_system(runnable, cfg):
                     logger.warning("User interrupted shutdown of internal actor system.")
                     console.info("Please wait a moment for Rally's internal components to shutdown.")
             if not shutdown_complete and times_interrupted > 0:
-                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.",
-                               times_interrupted)
+                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
                 console.println("")
                 console.warn("Terminating now at the risk of leaving child processes behind.")
                 console.println("")
@@ -712,8 +821,9 @@ def with_actor_system(runnable, cfg):
                 raise exceptions.UserInterrupted(f"User has cancelled the benchmark (shutdown not complete as user interrupted "
                                                  f"{times_interrupted} times).") from None
             elif not shutdown_complete:
-                console.warn("Could not terminate all internal processes within timeout. Please check and force-terminate "
-                             "all Rally processes.")
+                console.warn(
+                    "Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes."
+                )
 
 
 def generate(cfg):
@@ -943,8 +1053,7 @@ def main():
     if not args.offline:
         probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
         if not net.has_internet_connection(probing_url):
-            console.warn("No Internet connection detected. Automatic download of track data sets etc. is disabled.",
-                         logger=logger)
+            console.warn("No Internet connection detected. Automatic download of track data sets etc. is disabled.", logger=logger)
             cfg.add(config.Scope.applicationOverride, "system", "offline.mode", True)
         else:
             logger.info("Detected a working Internet connection.")

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -22,7 +22,6 @@ import os
 
 from esrally.utils import console
 
-
 DOCS_COMPRESSOR = bz2.BZ2Compressor
 COMP_EXT = ".bz2"
 
@@ -35,7 +34,7 @@ def template_vars(index_name, out_path, doc_count):
         "path": comp_outpath,
         "doc_count": doc_count,
         "uncompressed_bytes": os.path.getsize(out_path),
-        "compressed_bytes": os.path.getsize(comp_outpath)
+        "compressed_bytes": os.path.getsize(comp_outpath),
     }
 
 

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -18,14 +18,13 @@
 import bz2
 import gzip
 import logging
+import mmap
 import os
 import shutil
 import subprocess
 import tarfile
 import zipfile
 from contextlib import suppress
-
-import mmap
 
 from esrally.utils import console
 
@@ -34,6 +33,7 @@ class FileSource:
     """
     FileSource is a wrapper around a plain file which simplifies testing of file I/O calls.
     """
+
     def __init__(self, file_name, mode, encoding="utf-8"):
         self.file_name = file_name
         self.mode = mode
@@ -84,6 +84,7 @@ class MmapSource:
     """
     MmapSource is a wrapper around a memory-mapped file which simplifies testing of file I/O calls.
     """
+
     def __init__(self, file_name, mode, encoding="utf-8"):
         self.file_name = file_name
         self.mode = mode
@@ -144,6 +145,7 @@ class DictStringFileSourceFactory:
 
     It is intended for scenarios where multiple files may be read by client code.
     """
+
     def __init__(self, name_to_contents):
         self.name_to_contents = name_to_contents
 
@@ -156,6 +158,7 @@ class StringAsFileSource:
     Implementation of ``FileSource`` intended for tests. It's kept close to ``FileSource`` to simplify maintenance but it is not meant to
      be used in production code.
     """
+
     def __init__(self, contents, mode, encoding="utf-8"):
         """
         :param contents: The file contents as an array of strings. Each item in the array should correspond to one line.
@@ -233,7 +236,8 @@ def _zipdir(source_directory, archive):
         for file in files:
             archive.write(
                 filename=os.path.join(root, file),
-                arcname=os.path.relpath(os.path.join(root, file), os.path.join(source_directory, "..")))
+                arcname=os.path.relpath(os.path.join(root, file), os.path.join(source_directory, "..")),
+            )
 
 
 def is_archive(name):
@@ -308,8 +312,9 @@ def _do_decompress_manually(target_directory, filename, decompressor_args, decom
         if _do_decompress_manually_external(target_directory, filename, base_path_without_extension, decompressor_args):
             return
     else:
-        logging.getLogger(__name__).warning("%s not found in PATH. Using standard library, decompression will take longer.",
-                                            decompressor_bin)
+        logging.getLogger(__name__).warning(
+            "%s not found in PATH. Using standard library, decompression will take longer.", decompressor_bin
+        )
 
     _do_decompress_manually_with_lib(target_directory, filename, decompressor_lib(filename))
 
@@ -319,8 +324,9 @@ def _do_decompress_manually_external(target_directory, filename, base_path_witho
         try:
             subprocess.run(decompressor_args + [filename], stdout=new_file, stderr=subprocess.PIPE, check=True)
         except subprocess.CalledProcessError as err:
-            logging.getLogger(__name__).warning("Failed to decompress [%s] with [%s]. Error [%s]. Falling back to standard library.",
-                                                filename, err.cmd, err.stderr)
+            logging.getLogger(__name__).warning(
+                "Failed to decompress [%s] with [%s]. Error [%s]. Falling back to standard library.", filename, err.cmd, err.stderr
+            )
             return False
     return True
 
@@ -410,6 +416,7 @@ class FileOffsetTable:
     The FileOffsetTable represents a persistent mapping from lines in a data file to their offset in bytes in the
     data file. This helps bulk-indexing clients to advance quickly to a certain position in a large data file.
     """
+
     def __init__(self, data_file_path, offset_table_path, mode):
         """
         Creates a new FileOffsetTable instance. The constructor should not be called directly but instead the

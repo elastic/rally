@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -31,7 +31,7 @@ from esrally.utils import process
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["6.8.0", "7.6.0"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
 def all_rally_configs(t):
@@ -159,18 +159,21 @@ class TestCluster:
             output = process.run_subprocess_with_output(
                 "esrally install --configuration-name={cfg} --quiet --distribution-version={dist} --build-type=tar "
                 "--http-port={http_port} --node={node_name} --master-nodes={node_name} --car={car} "
-                "--seed-hosts=\"127.0.0.1:{transport_port}\"".format(cfg=self.cfg,
-                                                                     dist=distribution_version,
-                                                                     http_port=http_port,
-                                                                     node_name=node_name,
-                                                                     car=car,
-                                                                     transport_port=transport_port))
+                '--seed-hosts="127.0.0.1:{transport_port}"'.format(
+                    cfg=self.cfg,
+                    dist=distribution_version,
+                    http_port=http_port,
+                    node_name=node_name,
+                    car=car,
+                    transport_port=transport_port,
+                )
+            )
             self.installation_id = json.loads("".join(output))["installation-id"]
         except BaseException as e:
             raise AssertionError("Failed to install Elasticsearch {}.".format(distribution_version), e)
 
     def start(self, race_id):
-        cmd = "start --runtime-jdk=\"bundled\" --installation-id={} --race-id={}".format(self.installation_id, race_id)
+        cmd = 'start --runtime-jdk="bundled" --installation-id={} --race-id={}'.format(self.installation_id, race_id)
         if esrally(self.cfg, cmd) != 0:
             raise AssertionError("Failed to start Elasticsearch test cluster.")
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
@@ -192,10 +195,12 @@ class EsMetricsStore:
         self.cluster = TestCluster("in-memory-it")
 
     def start(self):
-        self.cluster.install(distribution_version=EsMetricsStore.VERSION,
-                             node_name="metrics-store",
-                             car="defaults",
-                             http_port=10200)
+        self.cluster.install(
+            distribution_version=EsMetricsStore.VERSION,
+            node_name="metrics-store",
+            car="defaults",
+            http_port=10200,
+        )
         self.cluster.start(race_id="metrics-store")
 
     def stop(self):
@@ -221,7 +226,7 @@ ES_METRICS_STORE = EsMetricsStore()
 
 
 def get_license():
-    with open(os.path.join(ROOT_DIR, 'LICENSE')) as license_file:
+    with open(os.path.join(ROOT_DIR, "LICENSE")) as license_file:
         return license_file.readlines()[1].strip()
 
 
@@ -229,11 +234,13 @@ def build_docker_image():
     rally_version = version.__version__
 
     env_variables = os.environ.copy()
-    env_variables['RALLY_VERSION'] = rally_version
-    env_variables['RALLY_LICENSE'] = get_license()
+    env_variables["RALLY_VERSION"] = rally_version
+    env_variables["RALLY_LICENSE"] = get_license()
 
-    command = f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE " \
-              f"-f {ROOT_DIR}/docker/Dockerfiles/Dockerfile-dev {ROOT_DIR}"
+    command = (
+        f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE "
+        f"-f {ROOT_DIR}/docker/Dockerfiles/Dockerfile-dev {ROOT_DIR}"
+    )
 
     if process.run_subprocess_with_logging(command, env=env_variables) != 0:
         raise AssertionError("It was not possible to build the docker image from Dockerfile-dev")

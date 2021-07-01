@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -103,10 +103,7 @@ class GitTests(TestCase):
     def test_rebase(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
         git.rebase("/src", remote="my-origin", branch="feature-branch")
-        calls = [
-            mock.call("git -C /src checkout feature-branch"),
-            mock.call("git -C /src rebase my-origin/feature-branch")
-        ]
+        calls = [mock.call("git -C /src checkout feature-branch"), mock.call("git -C /src rebase my-origin/feature-branch")]
         run_subprocess_with_logging.assert_has_calls(calls)
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -115,16 +112,16 @@ class GitTests(TestCase):
         git.pull("/src", remote="my-origin", branch="feature-branch")
         calls = [
             # pull
-            mock.call('git -C /src --version', level=logging.DEBUG),
+            mock.call("git -C /src --version", level=logging.DEBUG),
             # fetch
-            mock.call('git -C /src --version', level=logging.DEBUG),
+            mock.call("git -C /src --version", level=logging.DEBUG),
             mock.call("git -C /src fetch --prune --tags my-origin"),
             # rebase
-            mock.call('git -C /src --version', level=logging.DEBUG),
+            mock.call("git -C /src --version", level=logging.DEBUG),
             # checkout
-            mock.call('git -C /src --version', level=logging.DEBUG),
+            mock.call("git -C /src --version", level=logging.DEBUG),
             mock.call("git -C /src checkout feature-branch"),
-            mock.call("git -C /src rebase my-origin/feature-branch")
+            mock.call("git -C /src rebase my-origin/feature-branch"),
         ]
         run_subprocess_with_logging.assert_has_calls(calls)
 
@@ -137,12 +134,8 @@ class GitTests(TestCase):
         run_subprocess.side_effect = [False, False]
         git.pull_ts("/src", "20160101T110000Z")
 
-        run_subprocess_with_output.assert_called_with(
-            "git -C /src rev-list -n 1 --before=\"20160101T110000Z\" --date=iso8601 origin/master")
-        run_subprocess.has_calls([
-            mock.call("git -C /src fetch --prune --tags --quiet origin"),
-            mock.call("git -C /src checkout 3694a07")
-        ])
+        run_subprocess_with_output.assert_called_with('git -C /src rev-list -n 1 --before="20160101T110000Z" --date=iso8601 origin/master')
+        run_subprocess.has_calls([mock.call("git -C /src fetch --prune --tags --quiet origin"), mock.call("git -C /src checkout 3694a07")])
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -150,10 +143,12 @@ class GitTests(TestCase):
         run_subprocess_with_logging.return_value = 0
         run_subprocess.side_effect = [False, False]
         git.pull_revision("/src", "3694a07")
-        run_subprocess.has_calls([
-            mock.call("git -C /src fetch --prune --tags --quiet origin"),
-            mock.call("git -C /src checkout --quiet 3694a07"),
-        ])
+        run_subprocess.has_calls(
+            [
+                mock.call("git -C /src fetch --prune --tags --quiet origin"),
+                mock.call("git -C /src checkout --quiet 3694a07"),
+            ]
+        )
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -167,10 +162,12 @@ class GitTests(TestCase):
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_list_remote_branches(self, run_subprocess_with_logging, run_subprocess):
         run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = ["  origin/HEAD",
-                                       "  origin/master",
-                                       "  origin/5.0.0-alpha1",
-                                       "  origin/5"]
+        run_subprocess.return_value = [
+            "  origin/HEAD",
+            "  origin/master",
+            "  origin/5.0.0-alpha1",
+            "  origin/5",
+        ]
         self.assertEqual(["master", "5.0.0-alpha1", "5"], git.branches("/src", remote=True))
         run_subprocess.assert_called_with("git -C /src for-each-ref refs/remotes/ --format='%(refname:short)'")
 
@@ -178,10 +175,12 @@ class GitTests(TestCase):
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_list_local_branches(self, run_subprocess_with_logging, run_subprocess):
         run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = ["  HEAD",
-                                       "  master",
-                                       "  5.0.0-alpha1",
-                                       "  5"]
+        run_subprocess.return_value = [
+            "  HEAD",
+            "  master",
+            "  5.0.0-alpha1",
+            "  5",
+        ]
         self.assertEqual(["master", "5.0.0-alpha1", "5"], git.branches("/src", remote=False))
         run_subprocess.assert_called_with("git -C /src for-each-ref refs/heads/ --format='%(refname:short)'")
 
@@ -189,8 +188,10 @@ class GitTests(TestCase):
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_list_tags_with_tags_present(self, run_subprocess_with_logging, run_subprocess):
         run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = ["  v1",
-                                       "  v2"]
+        run_subprocess.return_value = [
+            "  v1",
+            "  v2",
+        ]
         self.assertEqual(["v1", "v2"], git.tags("/src"))
         run_subprocess.assert_called_with("git -C /src tag")
 

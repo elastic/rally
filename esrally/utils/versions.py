@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import re
 import functools
+import re
 
 from esrally import exceptions
 
@@ -74,6 +74,7 @@ class Version:
     Represents a version with components major, minor, patch and suffix (suffix is optional). Suffixes are not
     considered for version comparisons as its contents are opaque and a semantically correct order cannot be defined.
     """
+
     def __init__(self, major, minor, patch, suffix=None):
         self.major = major
         self.minor = minor
@@ -123,8 +124,7 @@ class VersionVariants:
         self.with_major = f"{int(self.major)}"
         self.with_minor = f"{int(self.major)}.{int(self.minor)}"
         self.with_patch = f"{int(self.major)}.{int(self.minor)}.{int(self.patch)}"
-        self.with_suffix = f"{int(self.major)}.{int(self.minor)}.{int(self.patch)}-{self.suffix}" if self.suffix \
-            else None
+        self.with_suffix = f"{int(self.major)}.{int(self.minor)}.{int(self.patch)}-{self.suffix}" if self.suffix else None
 
     @property
     def all_versions(self):
@@ -137,9 +137,13 @@ class VersionVariants:
         """
 
         versions = [(self.with_suffix, "with_suffix")] if self.suffix else []
-        versions.extend([(self.with_patch, "with_patch"),
-                         (self.with_minor, "with_minor"),
-                         (self.with_major, "with_major")])
+        versions.extend(
+            [
+                (self.with_patch, "with_patch"),
+                (self.with_minor, "with_minor"),
+                (self.with_major, "with_major"),
+            ]
+        )
 
         return versions
 

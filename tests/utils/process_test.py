@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -49,15 +49,39 @@ class ProcessTests(TestCase):
 
     @mock.patch("psutil.process_iter")
     def test_find_other_rally_processes(self, process_iter):
-        rally_es_5_process = ProcessTests.Process(100, "java",
-                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Enode.name=rally-node0",
-                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
-        rally_es_1_process = ProcessTests.Process(101, "java",
-                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Des.node.name=rally-node0",
-                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
-        metrics_store_process = ProcessTests.Process(102, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
-                                                                   "-Des.path.home=~/rally/metrics/",
-                                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
+        rally_es_5_process = ProcessTests.Process(
+            100,
+            "java",
+            [
+                "/usr/lib/jvm/java-8-oracle/bin/java",
+                "-Xms2g",
+                "-Xmx2g",
+                "-Enode.name=rally-node0",
+                "org.elasticsearch.bootstrap.Elasticsearch",
+            ],
+        )
+        rally_es_1_process = ProcessTests.Process(
+            101,
+            "java",
+            [
+                "/usr/lib/jvm/java-8-oracle/bin/java",
+                "-Xms2g",
+                "-Xmx2g",
+                "-Des.node.name=rally-node0",
+                "org.elasticsearch.bootstrap.Elasticsearch",
+            ],
+        )
+        metrics_store_process = ProcessTests.Process(
+            102,
+            "java",
+            [
+                "/usr/lib/jvm/java-8-oracle/bin/java",
+                "-Xms2g",
+                "-Xmx2g",
+                "-Des.path.home=~/rally/metrics/",
+                "org.elasticsearch.bootstrap.Elasticsearch",
+            ],
+        )
         random_python = ProcessTests.Process(103, "python3", ["/some/django/app"])
         other_process = ProcessTests.Process(104, "init", ["/usr/sbin/init"])
         rally_process_p = ProcessTests.Process(105, "python3", ["/usr/bin/python3", "~/.local/bin/esrally"])
@@ -82,31 +106,62 @@ class ProcessTests(TestCase):
             night_rally_process,
         ]
 
-        self.assertEqual([rally_process_p, rally_process_r, rally_process_e, rally_process_mac],
-                         process.find_all_other_rally_processes())
+        self.assertEqual([rally_process_p, rally_process_r, rally_process_e, rally_process_mac], process.find_all_other_rally_processes())
 
     @mock.patch("psutil.process_iter")
     def test_find_no_other_rally_process_running(self, process_iter):
-        metrics_store_process = ProcessTests.Process(102, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
-                                                                   "-Des.path.home=~/rally/metrics/",
-                                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
+        metrics_store_process = ProcessTests.Process(
+            102,
+            "java",
+            [
+                "/usr/lib/jvm/java-8-oracle/bin/java",
+                "-Xms2g",
+                "-Xmx2g",
+                "-Des.path.home=~/rally/metrics/",
+                "org.elasticsearch.bootstrap.Elasticsearch",
+            ],
+        )
         random_python = ProcessTests.Process(103, "python3", ["/some/django/app"])
 
-        process_iter.return_value = [ metrics_store_process, random_python]
+        process_iter.return_value = [metrics_store_process, random_python]
 
         self.assertEqual(0, len(process.find_all_other_rally_processes()))
 
     @mock.patch("psutil.process_iter")
     def test_kills_only_rally_processes(self, process_iter):
-        rally_es_5_process = ProcessTests.Process(100, "java",
-                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Enode.name=rally-node0",
-                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
-        rally_es_1_process = ProcessTests.Process(101, "java",
-                                                  ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g", "-Des.node.name=rally-node0",
-                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
-        metrics_store_process = ProcessTests.Process(102, "java", ["/usr/lib/jvm/java-8-oracle/bin/java", "-Xms2g", "-Xmx2g",
-                                                                   "-Des.path.home=~/rally/metrics/",
-                                                                   "org.elasticsearch.bootstrap.Elasticsearch"])
+        rally_es_5_process = ProcessTests.Process(
+            100,
+            "java",
+            [
+                "/usr/lib/jvm/java-8-oracle/bin/java",
+                "-Xms2g",
+                "-Xmx2g",
+                "-Enode.name=rally-node0",
+                "org.elasticsearch.bootstrap.Elasticsearch",
+            ],
+        )
+        rally_es_1_process = ProcessTests.Process(
+            101,
+            "java",
+            [
+                "/usr/lib/jvm/java-8-oracle/bin/java",
+                "-Xms2g",
+                "-Xmx2g",
+                "-Des.node.name=rally-node0",
+                "org.elasticsearch.bootstrap.Elasticsearch",
+            ],
+        )
+        metrics_store_process = ProcessTests.Process(
+            102,
+            "java",
+            [
+                "/usr/lib/jvm/java-8-oracle/bin/java",
+                "-Xms2g",
+                "-Xmx2g",
+                "-Des.path.home=~/rally/metrics/",
+                "org.elasticsearch.bootstrap.Elasticsearch",
+            ],
+        )
         random_python = ProcessTests.Process(103, "python3", ["/some/django/app"])
         other_process = ProcessTests.Process(104, "init", ["/usr/sbin/init"])
         rally_process_p = ProcessTests.Process(105, "python3", ["/usr/bin/python3", "~/.local/bin/esrally"])

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -33,14 +33,14 @@ def java_home(car_runtime_jdks, specified_runtime_jdk=None, provides_bundled_jdk
     try:
         allowed_runtime_jdks = [int(v) for v in car_runtime_jdks.split(",")]
     except ValueError:
-        raise exceptions.SystemSetupError(
-            "Car config key \"runtime.jdk\" is invalid: \"{}\" (must be int)".format(car_runtime_jdks))
+        raise exceptions.SystemSetupError('Car config key "runtime.jdk" is invalid: "{}" (must be int)'.format(car_runtime_jdks))
 
     runtime_jdk_versions = determine_runtime_jdks()
     if runtime_jdk_versions[0] == "bundled":
         if not provides_bundled_jdk:
-            raise exceptions.SystemSetupError("This Elasticsearch version does not contain a bundled JDK. "
-                                              "Please specify a different runtime JDK.")
+            raise exceptions.SystemSetupError(
+                "This Elasticsearch version does not contain a bundled JDK. Please specify a different runtime JDK."
+            )
         logger.info("Using JDK bundled with Elasticsearch.")
         # assume that the bundled JDK is the highest available; the path is irrelevant
         return allowed_runtime_jdks[0], None

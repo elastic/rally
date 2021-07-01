@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -23,26 +23,23 @@ from esrally.async_connection import ResponseMatcher
 
 class ResponseMatcherTests(TestCase):
     def test_matches(self):
-        matcher = ResponseMatcher(responses=[
-            {
-                "path": "*/_bulk",
-                "body": {
-                    "response-type": "bulk",
-                }
-            },
-            {
-                "path": "/_cluster/health*",
-                "body": {
-                    "response-type": "cluster-health",
-                }
-            },
-            {
-                "path": "*",
-                "body": {
-                    "response-type": "default"
-                }
-            }
-        ])
+        matcher = ResponseMatcher(
+            responses=[
+                {
+                    "path": "*/_bulk",
+                    "body": {
+                        "response-type": "bulk",
+                    },
+                },
+                {
+                    "path": "/_cluster/health*",
+                    "body": {
+                        "response-type": "cluster-health",
+                    },
+                },
+                {"path": "*", "body": {"response-type": "default"}},
+            ]
+        )
 
         self.assert_response_type(matcher, "/_cluster/health", "cluster-health")
         self.assert_response_type(matcher, "/_cluster/health/geonames", "cluster-health")
