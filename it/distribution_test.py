@@ -15,13 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import uuid
 import logging
+import random
 import shlex
+import signal
 import subprocess
 import time
-import signal
-import random
+import uuid
 
 import pytest
 
@@ -76,9 +76,12 @@ def test_interrupt(cfg):
     port = 19200
     dist = it.DISTRIBUTIONS[-1]
     # simulate a user cancelling a benchmark
-    cmd = it.esrally_command_line_for(cfg, f"race --distribution-version=\"{dist}\" --track=\"geonames\" "
-                                           f"--kill-running-processes --target-hosts=127.0.0.1:{port} --test-mode "
-                                           f"--car=4gheap")
+    cmd = it.esrally_command_line_for(
+        cfg,
+        f'race --distribution-version="{dist}" --track="geonames" '
+        f"--kill-running-processes --target-hosts=127.0.0.1:{port} --test-mode "
+        f"--car=4gheap",
+    )
     assert run_subprocess_and_interrupt(cmd, 2, 15) == 130
 
 

@@ -57,6 +57,7 @@ class ExitStatus(Enum):
     ERROR = 2
     INTERRUPTED = 3
 
+
 def create_arg_parser():
     def positive_number(v):
         value = int(v)
@@ -818,8 +819,9 @@ def with_actor_system(runnable, cfg):
                 console.println("")
                 console.println(SKULL)
                 console.println("")
-                raise exceptions.UserInterrupted(f"User has cancelled the benchmark (shutdown not complete as user interrupted "
-                                                 f"{times_interrupted} times).") from None
+                raise exceptions.UserInterrupted(
+                    f"User has cancelled the benchmark (shutdown not complete as user interrupted " f"{times_interrupted} times)."
+                ) from None
             elif not shutdown_complete:
                 console.warn(
                     "Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes."
