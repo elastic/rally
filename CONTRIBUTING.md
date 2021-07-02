@@ -50,15 +50,15 @@ In order to run tests within the IDE, ensure the `Python Integrated Tools` / `Te
 
 Once your changes and tests are ready to submit for review:
 
-1. Test your changes
+1. Format your changes
 
-    Run the test suite to make sure that nothing is broken: `python3 setup.py test`.
-
-2. Format your changes
-
-    Also make sure that lint is passing by running `make lint`. To format your code, run `make format`.
+    Make sure that lint is passing by running `make lint`. To format your code, run `make format`.
 
     Consider using editor integrations to do it automatically: you'll need to configure [black](https://black.readthedocs.io/en/stable/integrations/editors.html) and [isort](https://github.com/PyCQA/isort/wiki/isort-Plugins).
+
+2. Test your changes
+
+    Run the test suite to make sure that nothing is broken: `make test`. You can also run integration tests with `make it` (they're much slower, though). To run everything including lint, use `make check-all`.
 
 3. Sign the Contributor License Agreement
 
