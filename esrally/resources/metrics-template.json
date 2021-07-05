@@ -28,9 +28,6 @@
           "type": "date",
           "format": "epoch_millis"
         },
-        "relative-time-ms": {
-          "type": "float"
-        },
         "relative-time": {
           "type": "float"
         },
