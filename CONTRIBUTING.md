@@ -58,7 +58,9 @@ Once your changes and tests are ready to submit for review:
 
 2. Test your changes
 
-    Run the test suite to make sure that nothing is broken: `make test`. You can also run integration tests with `make it` (they're much slower, though). To run everything including lint, use `make check-all`.
+    Ensure that all tests pass by running `make check-all`. This runs sequentially lint checks, unit tests and integration tests. These can be executed in isolation using `make lint`, `make test` and `make it` respectively, in case you need to iterate over a subset of tests.
+
+    Note: Integration tests are much slower than unit tests.
 
 3. Sign the Contributor License Agreement
 
