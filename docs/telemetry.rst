@@ -226,4 +226,4 @@ Example of recorded documents given two data streams in the cluster::
 
 Supported telemetry parameters:
 
-* ``data-stream-stats-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+* ``data-stream-stats-sample-interval`` (default 10): A positive number greater than zero denoting the sampling interval in seconds.

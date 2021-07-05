@@ -26,7 +26,7 @@ import tabulate
 from esrally import exceptions, metrics, time
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console, io, opts, process, sysstats
-from esrally.utils.versions import components
+from esrally.utils.versions import Version, components
 
 
 def list_telemetry():
@@ -1282,7 +1282,7 @@ class DataStreamStats(TelemetryDevice):
         """
         :param telemetry_params: The configuration object for telemetry_params.
             May optionally specify:
-            ``data-stream-stats-sample-interval``: An integer controlling the interval, in seconds, between collecting samples. Default: 1s.
+            ``data-stream-stats-sample-interval``: An integer controlling the interval, in seconds, between collecting samples. Default: 10s.
         :param clients: A dict of clients to all clusters.
         :param metrics_store: The configured metrics store we write to.
         """
@@ -1291,8 +1291,8 @@ class DataStreamStats(TelemetryDevice):
         self.telemetry_params = telemetry_params
         self.clients = clients
         self.specified_cluster_names = self.clients.keys()
-        self.sample_interval = telemetry_params.get("data-stream-stats-sample-interval", 1)
-        if self.sample_interval < 0:
+        self.sample_interval = telemetry_params.get("data-stream-stats-sample-interval", 10)
+        if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
                 f"The telemetry parameter 'data-stream-stats-sample-interval' must be greater than zero " f"but was {self.sample_interval}."
             )
@@ -1305,8 +1305,7 @@ class DataStreamStats(TelemetryDevice):
             client_info = self.clients[cluster_name].info()
             distribution_version = client_info["version"]["number"]
             distribution_flavor = client_info["version"].get("build_flavor", "oss")
-            major, minor = components(distribution_version)[:2]
-            if major < 7 or (major == 7 and minor < 9):
+            if Version.from_string(distribution_version) < Version(major=7, minor=9, patch=0):
                 raise exceptions.SystemSetupError(
                     "The data-stream-stats telemetry device can only be used with clusters from version 7.9 onwards"
                 )
