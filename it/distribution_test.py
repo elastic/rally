@@ -15,6 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import logging
+import random
+import shlex
+import signal
+import subprocess
+import time
 import uuid
 
 import pytest
@@ -63,6 +69,20 @@ def test_does_not_benchmark_unsupported_distribution(cfg):
         )
         != 0
     )
+
+
+@it.random_rally_config
+def test_interrupt(cfg):
+    port = 19200
+    dist = it.DISTRIBUTIONS[-1]
+    # simulate a user cancelling a benchmark
+    cmd = it.esrally_command_line_for(
+        cfg,
+        f'race --distribution-version="{dist}" --track="geonames" '
+        f"--kill-running-processes --target-hosts=127.0.0.1:{port} --test-mode "
+        f"--car=4gheap",
+    )
+    assert run_subprocess_and_interrupt(cmd, 2, 15) == 130
 
 
 @pytest.fixture(scope="module")
@@ -124,3 +144,14 @@ def execute_eventdata(cfg, test_cluster, challenges, track_params):
             f"--challenge={challenge}"
         )
         assert it.race(cfg, cmd) == 0
+
+
+def run_subprocess_and_interrupt(command_line, min_sleep=2, max_sleep=15):
+    logger = logging.getLogger(__name__)
+    logger.debug("Running subprocess [%s] to interrupt.", command_line)
+    command_line_args = shlex.split(command_line)
+    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as command_line_process:
+        time.sleep(random.randrange(min_sleep, max_sleep))
+        command_line_process.send_signal(signal.SIGINT)
+        command_line_process.wait()
+    return command_line_process.returncode
