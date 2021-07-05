@@ -26,7 +26,7 @@ import tabulate
 from esrally import exceptions, metrics, time
 from esrally.metrics import MetaInfoScope
 from esrally.utils import console, io, opts, process, sysstats
-from esrally.utils.versions import Version, components
+from esrally.utils.versions import Version
 
 
 def list_telemetry():
@@ -729,9 +729,7 @@ class NodeStats(TelemetryDevice):
     def on_benchmark_start(self):
         default_client = self.clients["default"]
         distribution_version = default_client.info()["version"]["number"]
-        major, minor = components(distribution_version)[:2]
-
-        if major < 7 or (major == 7 and minor < 2):
+        if Version.from_string(distribution_version) < Version(major=7, minor=2, patch=0):
             console.warn(NodeStats.warning, logger=self.logger)
 
         for cluster_name in self.specified_cluster_names:
@@ -1282,7 +1280,8 @@ class DataStreamStats(TelemetryDevice):
         """
         :param telemetry_params: The configuration object for telemetry_params.
             May optionally specify:
-            ``data-stream-stats-sample-interval``: An integer controlling the interval, in seconds, between collecting samples. Default: 10s.
+            ``data-stream-stats-sample-interval``: An integer controlling the interval, in seconds,
+            between collecting samples. Default: 10s.
         :param clients: A dict of clients to all clusters.
         :param metrics_store: The configured metrics store we write to.
         """
