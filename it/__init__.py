@@ -198,7 +198,7 @@ class EsMetricsStore:
         self.cluster.install(
             distribution_version=EsMetricsStore.VERSION,
             node_name="metrics-store",
-            car="defaults",
+            car="defaults,basic-license",
             http_port=10200,
         )
         self.cluster.start(race_id="metrics-store")
