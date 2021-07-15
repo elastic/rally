@@ -708,6 +708,8 @@ class OperationType(Enum):
     CreateComponentTemplate = 1032
     DeleteComponentTemplate = 1033
     TransformStats = 1034
+    CreateIlmPolicy = 1035
+    DeleteIlmPolicy = 1036
 
     @property
     def admin_op(self):
@@ -823,6 +825,10 @@ class OperationType(Enum):
             return OperationType.OpenPointInTime
         elif v == "close-point-in-time":
             return OperationType.ClosePointInTime
+        elif v == "create-ilm-policy":
+            return OperationType.CreateIlmPolicy
+        elif v == "delete-ilm-policy":
+            return OperationType.DeleteIlmPolicy
         else:
             raise KeyError(f"No enum value for [{v}]")
 
