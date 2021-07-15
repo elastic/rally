@@ -159,7 +159,6 @@ class TestCluster:
             output = process.run_subprocess_with_output(
                 "esrally install --configuration-name={cfg} --quiet --distribution-version={dist} --build-type=tar "
                 "--http-port={http_port} --node={node_name} --master-nodes={node_name} --car={car} "
-                "--car-params=docker_image:docker.elastic.co/elasticsearch/elasticsearch "
                 '--seed-hosts="127.0.0.1:{transport_port}"'.format(
                     cfg=self.cfg,
                     dist=distribution_version,
