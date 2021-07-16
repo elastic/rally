@@ -638,6 +638,22 @@ class AllocatorTests(TestCase):
         self.assertEqual(1, final_join_point.num_clients_executing_completing_task)
         self.assertEqual([0], final_join_point.clients_executing_completing_task)
 
+    def test_any_task_completes_the_parallel_structure(self):
+        taskA = track.Task("index-completing", op("index", track.OperationType.Bulk), any_completes_parent=True)
+        taskB = track.Task("index-non-completing", op("index", track.OperationType.Bulk), any_completes_parent=True)
+
+        # Both tasks can complete the parent
+        allocator = driver.Allocator([track.Parallel([taskA, taskB])])
+        self.assertEqual(2, allocator.clients)
+        self.assertEqual(3, len(allocator.allocations[0]))
+        self.assertEqual(3, len(allocator.allocations[1]))
+        self.assertEqual(2, len(allocator.join_points))
+        self.assertEqual([{taskA, taskB}], allocator.tasks_per_joinpoint)
+        final_join_point = allocator.join_points[-1]
+        self.assertTrue(final_join_point.preceding_task_completes_parent)
+        self.assertEqual(2, final_join_point.num_clients_executing_completing_task)
+        self.assertEqual([0, 1], final_join_point.clients_executing_completing_task)
+
     def test_allocates_mixed_tasks(self):
         index = track.Task("index", op("index", track.OperationType.Bulk))
         stats = track.Task("stats", op("stats", track.OperationType.IndexStats))

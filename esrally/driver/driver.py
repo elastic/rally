@@ -1695,6 +1695,8 @@ class AsyncExecutor:
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self, *args, **kwargs):
+        # Is True if 'completed-by' param is set to 'any'
+        any_task_completes_parent = self.task.any_completes_parent
         task_completes_parent = self.task.completes_parent
         total_start = time.perf_counter()
         # lazily initialize the schedule
@@ -1752,6 +1754,18 @@ class AsyncExecutor:
                 # worker (process) could run multiple clients that execute the same task. We do not want all clients to
                 # finish this task as soon as the first of these clients has finished but rather continue until the last
                 # client has finished that task.
+                #
+                # Alternatively, if 'completed-by' is set to 'any' (any_task_completes_parent), then we *do* want to
+                # check for completion by another client and *not* wait until our own runner has completed. This way the
+                # 'parallel' task will exit on the completion of _any_ client for any task, i.e. given a contrived track
+                # with two tasks to execute inside a parallel block:
+                #   * parallel:
+                #     * check-cluster-health, with clients: 1
+                #     * bulk, with clients: 8
+                #
+                # 1. Both 'check-cluster-health' and 'bulk' begin executing in parallel
+                # 2. 'check-cluster-health' completes successfully, and signals to parent that it is complete
+                # 3. 'bulk' will now exit and _not_ wait for all 8 clients' runner to complete
                 if task_completes_parent:
                     completed = runner.completed
                 else:
@@ -1792,7 +1806,17 @@ class AsyncExecutor:
             # Actively set it if this task completes its parent
             if task_completes_parent:
                 self.logger.info(
-                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion.", self.task, self.client_id
+                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion.",
+                    self.task,
+                    self.client_id,
+                )
+                self.complete.set()
+            elif any_task_completes_parent:
+                self.logger.info(
+                    "Task [%s] was the first to complete parent. Client id [%s] is finished executing it and signals "
+                    "completion of its parent.",
+                    self.task,
+                    self.client_id,
                 )
                 self.complete.set()
 
@@ -1956,6 +1980,8 @@ class Allocator:
                     # more tasks than actually available clients)
                     physical_client_index = client_index % max_clients
                     if sub_task.completes_parent:
+                        clients_executing_completing_task.append(physical_client_index)
+                    elif sub_task.any_completes_parent:
                         clients_executing_completing_task.append(physical_client_index)
 
                     ta = TaskAllocation(

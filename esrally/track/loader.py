@@ -1489,17 +1489,15 @@ class TrackSpecificationReader:
         if completed_by:
             completion_task = None
             for task in tasks:
-                if task.completes_parent:
-                    if completed_by == "any":
-                        completion_task = "any"
-                    else:
-                        completion_task = task
-                    console.println(f"{task} has completion task: {completion_task}")
-                elif task.completes_parent and completion_task != "any":
+                if task.completes_parent and not completion_task:
+                    completion_task = task
+                elif task.completes_parent:
                     self._error(
                         f"'parallel' element for challenge '{challenge_name}' contains multiple tasks with the "
                         f"name '{completed_by}' marked with 'completed-by' but only task is allowed to match."
                     )
+                elif task.any_completes_parent:
+                    completion_task = "any"
             if not completion_task:
                 self._error(
                     f"'parallel' element for challenge '{challenge_name}' is marked with 'completed-by' with "
@@ -1547,12 +1545,12 @@ class TrackSpecificationReader:
                 task_spec, "ramp-up-time-period", error_ctx=op.name, mandatory=False, default_value=default_ramp_up_time_period
             ),
             clients=self._r(task_spec, "clients", error_ctx=op.name, mandatory=False, default_value=1),
-            completes_parent=(task_name == completed_by_name or completed_by_name == "any"),
+            completes_parent=(task_name == completed_by_name),
+            any_completes_parent=(completed_by_name == "any"),
             schedule=schedule,
             # this is to provide scheduler-specific parameters for custom schedulers.
             params=task_spec,
         )
-        console.println(f"In parse_task for {task.name}, completes parent = {task.completes_parent}")
         if task.warmup_iterations is not None and task.time_period is not None:
             self._error(
                 f"Operation '{op.name}' in challenge '{challenge_name}' defines {task.warmup_iterations} "
