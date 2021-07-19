@@ -2390,7 +2390,7 @@ class DeleteComposableTemplateParamSource(TestCase):
         source = params.DeleteComposableTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
         p = source.params()
         self.assertEqual(1, len(p["templates"]))
-        self.assertEqual("default", p["templates"][0])
+        self.assertEqual("default", p["templates"][0][0])
         self.assertTrue(p["only-if-exists"])
         self.assertDictEqual({}, p["request-params"])
 
@@ -2435,8 +2435,8 @@ class DeleteComposableTemplateParamSource(TestCase):
         p = source.params()
 
         self.assertEqual(2, len(p["templates"]))
-        self.assertEqual("logs", p["templates"][0])
-        self.assertEqual("metrics", p["templates"][1])
+        self.assertEqual("logs", p["templates"][0][0])
+        self.assertEqual("metrics", p["templates"][1][0])
         self.assertFalse(p["only-if-exists"])
         self.assertDictEqual({"master_timeout": 20}, p["request-params"])
 
@@ -2449,7 +2449,7 @@ class DeleteComposableTemplateParamSource(TestCase):
         p = source.params()
 
         self.assertEqual(1, len(p["templates"]))
-        self.assertEqual("logs", p["templates"][0])
+        self.assertEqual("logs", p["templates"][0][0])
 
 
 class SearchParamSourceTests(TestCase):

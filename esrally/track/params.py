@@ -355,15 +355,15 @@ class CreateIndexTemplateParamSource(ParamSource):
         return p
 
 
-class DeleteIndexTemplateParamSource(ParamSource):
-    def __init__(self, track, params, **kwargs):
+class DeleteTemplateParamSource(ABC, ParamSource):
+    def __init__(self, track, params, templates, **kwargs):
         super().__init__(track, params, **kwargs)
         self.only_if_exists = params.get("only-if-exists", True)
         self.request_params = params.get("request-params", {})
         self.template_definitions = []
-        if track.templates:
+        if templates:
             filter_template = params.get("template")
-            for template in track.templates:
+            for template in templates:
                 if not filter_template or template.name == filter_template:
                     self.template_definitions.append((template.name, template.delete_matching_indices, template.pattern))
         else:
@@ -395,15 +395,25 @@ class DeleteIndexTemplateParamSource(ParamSource):
         return p
 
 
-class DeleteTemplateParamSource(ABC, ParamSource):
-    def __init__(self, track, params, templates, **kwargs):
+class DeleteIndexTemplateParamSource(DeleteTemplateParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, track.templates, **kwargs)
+
+
+class DeleteComposableTemplateParamSource(DeleteTemplateParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, track.composable_templates, **kwargs)
+
+
+class DeleteComponentTemplateParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
         self.only_if_exists = params.get("only-if-exists", True)
         self.request_params = params.get("request-params", {})
         self.template_definitions = []
-        if templates:
+        if track.component_templates:
             filter_template = params.get("template")
-            for template in templates:
+            for template in track.component_templates:
                 if not filter_template or template.name == filter_template:
                     self.template_definitions.append(template.name)
         else:
@@ -419,16 +429,6 @@ class DeleteTemplateParamSource(ABC, ParamSource):
             "only-if-exists": self.only_if_exists,
             "request-params": self.request_params,
         }
-
-
-class DeleteComposableTemplateParamSource(DeleteTemplateParamSource):
-    def __init__(self, track, params, **kwargs):
-        super().__init__(track, params, track.composable_templates, **kwargs)
-
-
-class DeleteComponentTemplateParamSource(DeleteTemplateParamSource):
-    def __init__(self, track, params, **kwargs):
-        super().__init__(track, params, track.component_templates, **kwargs)
 
 
 class CreateTemplateParamSource(ABC, ParamSource):
