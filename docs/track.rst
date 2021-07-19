@@ -593,7 +593,7 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 * ``time-period`` (optional, no default value if not specified): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``warmup-iterations`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``iterations`` (optional, defaults to 1): Allows to define a default value for all tasks of the ``parallel`` element.
-* ``completed-by`` (optional): Allows to define the name of one task in the ``tasks`` list. As soon as this task has completed, the whole ``parallel`` task structure is considered completed. If this property is not explicitly defined, the ``parallel`` task structure is considered completed as soon as all its subtasks have completed. A task is completed if and only if all associated clients have completed execution.
+* ``completed-by`` (optional): Allows to define the name of one task in the ``tasks`` list, or the value ``any``. If a specific task name has been provided then as soon as the task has completed the whole ``parallel`` task structure is considered completed. If the value ``any`` is provided, then any task that is first to complete will render the ``parallel`` structure complete. If this property is not explicitly defined, the ``parallel`` task structure is considered completed as soon as all its subtasks have completed. A task is completed if and only if all associated clients have completed execution.
 * ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the following properties that have been defined above: ``clients``, ``warmup-time-period``, ``time-period``, ``warmup-iterations`` and ``iterations``.
 
 .. note::
@@ -603,6 +603,49 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 .. warning::
 
     Specify the number of clients on each task separately. If you specify this number on the ``parallel`` element instead, Rally will only use that many clients in total and you will only want to use this behavior in very rare cases (see examples)!
+
+.. warning::
+
+    If the value ``any`` is provided for the ``completed-by`` parameter, the first completion of a client task in the ``parallel`` block will cause all remaining clients and tasks within the ``parallel`` block to immediately exit without waiting for completion.
+
+    For example, given the below track:
+
+        1. Both ``bulk-task-1`` and ``bulk-task-2`` execute in parallel
+        2. ``bulk-task-1`` Client 1/8 is first to complete its assigned partition of work
+        3. ``bulk-task-1`` will now cause the ``parallel`` task to complete and **not** wait for either the remaining 7/8 ``bulk-task-1``'s clients to complete, or for any of ``bulk-task-2``'s clients to complete
+
+    ::
+
+        {
+          "name": "parallel-any",
+          "description": "Track completed-by property",
+          "schedule": [
+            {
+              "parallel": {
+                "completed-by": "any",
+                "tasks": [
+                  {
+                    "name": "bulk-task-1",
+                    "operation": {
+                      "operation-type": "bulk",
+                      "bulk-size": 1000
+                    },
+                  "clients": 8
+                  },
+                  {
+                    "name": "bulk-task-2",
+                    "operation": {
+                      "operation-type": "bulk",
+                      "bulk-size": 500
+                    },
+                    "clients": 8
+                  }
+                ]
+              }
+            }
+          ]
+        }
+
 
 .. _track_operations:
 
