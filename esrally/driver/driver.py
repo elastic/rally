@@ -777,11 +777,14 @@ class Driver:
         #
         # 1. Both 'bulk-1' and 'bulk-2' execute in parallel
         # 2. 'bulk-1' client[0]'s runner is first to complete and reach the next joinpoint successfully
-        # 3. 'bulk-1' will now cause the parent task to complete and _not_ wait for all 8 clients' runner to complete, or for 'bulk-2' at all
+        # 3. 'bulk-1' will now cause the parent task to complete and _not_ wait for all 8 clients' runner to complete,
+        # or for 'bulk-2' at all
 
-        if len(any_jointpoint_completing_parent) > 0 and not self.complete_current_task_sent :
-            self.logger.info(f"Any task before join point [{any_jointpoint_completing_parent[0].task}] is able to "
-                             f"complete the parent structure. Telling all clients to exit immediately.")
+        if len(any_jointpoint_completing_parent) > 0 and not self.complete_current_task_sent:
+            self.logger.info(
+                "Any task before join point [%s] is able to " "complete the parent structure. Telling all clients to exit immediately.",
+                any_jointpoint_completing_parent[0].task,
+            )
 
             self.complete_current_task_sent = True
             for worker in self.workers:
@@ -1904,7 +1907,6 @@ class JoinPoint:
         self.clients_executing_completing_task = clients_executing_completing_task
         self.num_clients_executing_completing_task = len(clients_executing_completing_task)
         self.preceding_task_completes_parent = self.num_clients_executing_completing_task > 0
-
 
     def __hash__(self):
         return hash(self.id)
