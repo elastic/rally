@@ -650,9 +650,8 @@ class AllocatorTests(TestCase):
         self.assertEqual(2, len(allocator.join_points))
         self.assertEqual([{taskA, taskB}], allocator.tasks_per_joinpoint)
         final_join_point = allocator.join_points[-1]
-        self.assertTrue(final_join_point.preceding_task_completes_parent)
-        self.assertEqual(2, final_join_point.num_clients_executing_completing_task)
-        self.assertEqual([0, 1], final_join_point.clients_executing_completing_task)
+        self.assertEqual(2, len(final_join_point.any_task_completes_parent))
+        self.assertEqual([0, 1], final_join_point.any_task_completes_parent)
 
     def test_allocates_mixed_tasks(self):
         index = track.Task("index", op("index", track.OperationType.Bulk))
