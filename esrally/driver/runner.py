@@ -1344,7 +1344,7 @@ class DeleteComposableTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_template(template_name):
+            elif only_if_exists and await es.indices.exists_index_template(template_name):
                 self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_index_template(name=template_name, params=request_params)
                 ops_count += 1

@@ -2323,7 +2323,7 @@ class CreateComponentTemplateParamSourceTests(TestCase):
 
 
 class DeleteComponentTemplateParamSource(TestCase):
-    def test_delete_index_template_by_name(self):
+    def test_delete_component_template_by_name(self):
         source = params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
         p = source.params()
         self.assertEqual(1, len(p["templates"]))
@@ -2331,12 +2331,12 @@ class DeleteComponentTemplateParamSource(TestCase):
         self.assertTrue(p["only-if-exists"])
         self.assertDictEqual({}, p["request-params"])
 
-    def test_delete_index_template_no_name(self):
+    def test_no_component_templates(self):
         with self.assertRaises(exceptions.InvalidSyntax) as ctx:
             params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"), params={"operation-type": "delete-component-template"})
         self.assertEqual("Please set the property 'template' for the delete-component-template operation.", ctx.exception.args[0])
 
-    def test_delete_index_template_from_track(self):
+    def test_delete_component_template_from_track(self):
         tpl1 = track.ComponentTemplate(
             name="logs",
             content={
@@ -2361,7 +2361,7 @@ class DeleteComponentTemplateParamSource(TestCase):
             },
         )
         source = params.DeleteComponentTemplateParamSource(
-            track.Track(name="unit-test", templates=[tpl1, tpl2]),
+            track.Track(name="unit-test", component_templates=[tpl1, tpl2]),
             params={"request-params": {"master_timeout": 20}, "only-if-exists": False},
         )
 
@@ -2372,6 +2372,84 @@ class DeleteComponentTemplateParamSource(TestCase):
         self.assertEqual("metrics", p["templates"][1])
         self.assertFalse(p["only-if-exists"])
         self.assertDictEqual({"master_timeout": 20}, p["request-params"])
+
+        # test filtering
+        source = params.DeleteComponentTemplateParamSource(
+            track.Track(name="unit-test", component_templates=[tpl1, tpl2]),
+            params={"template": "logs"},
+        )
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertEqual("logs", p["templates"][0])
+
+
+class DeleteComposableTemplateParamSource(TestCase):
+    def test_delete_composable_template_by_name(self):
+        source = params.DeleteComposableTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
+        p = source.params()
+        self.assertEqual(1, len(p["templates"]))
+        self.assertEqual("default", p["templates"][0][0])
+        self.assertTrue(p["only-if-exists"])
+        self.assertDictEqual({}, p["request-params"])
+
+    def test_no_composable_templates(self):
+        with self.assertRaises(exceptions.InvalidSyntax) as ctx:
+            params.DeleteComponentTemplateParamSource(
+                track.Track(name="unit-test"), params={"operation-type": "delete-composable-template"}
+            )
+        self.assertEqual("Please set the property 'template' for the delete-composable-template operation.", ctx.exception.args[0])
+
+    def test_delete_composable_template_from_track(self):
+        tpl1 = track.IndexTemplate(
+            name="logs",
+            pattern="logs-*",
+            content={
+                "template": {
+                    "mappings": {
+                        "properties": {
+                            "@timestamp": {"type": "date"},
+                        },
+                    },
+                },
+            },
+        )
+        tpl2 = track.IndexTemplate(
+            name="metrics",
+            pattern="metrics-*",
+            content={
+                "template": {
+                    "settings": {
+                        "index.number_of_shards": 1,
+                        "index.number_of_replicas": 1,
+                    },
+                },
+            },
+        )
+        source = params.DeleteComposableTemplateParamSource(
+            track.Track(name="unit-test", composable_templates=[tpl1, tpl2]),
+            params={"request-params": {"master_timeout": 20}, "only-if-exists": False},
+        )
+
+        p = source.params()
+
+        self.assertEqual(2, len(p["templates"]))
+        self.assertEqual("logs", p["templates"][0][0])
+        self.assertEqual("metrics", p["templates"][1][0])
+        self.assertFalse(p["only-if-exists"])
+        self.assertDictEqual({"master_timeout": 20}, p["request-params"])
+
+        # test filtering
+        source = params.DeleteComposableTemplateParamSource(
+            track.Track(name="unit-test", composable_templates=[tpl1, tpl2]),
+            params={"template": "logs"},
+        )
+
+        p = source.params()
+
+        self.assertEqual(1, len(p["templates"]))
+        self.assertEqual("logs", p["templates"][0][0])
 
 
 class SearchParamSourceTests(TestCase):
