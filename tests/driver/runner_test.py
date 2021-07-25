@@ -2794,7 +2794,7 @@ class DeleteComposableTemplateRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.exists_template.side_effect = [as_future(False), as_future(True)]
+        es.indices.exists_index_template.side_effect = [as_future(False), as_future(True)]
         es.indices.delete_index_template.return_value = as_future()
 
         r = runner.DeleteComposableTemplate()
