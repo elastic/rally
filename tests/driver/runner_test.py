@@ -16,9 +16,9 @@
 # under the License.
 
 import asyncio
+import copy
 import io
 import json
-import copy
 import random
 import unittest.mock as mock
 from unittest import TestCase
