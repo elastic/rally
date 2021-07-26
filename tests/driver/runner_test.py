@@ -16,6 +16,7 @@
 # under the License.
 
 import asyncio
+import copy
 import io
 import json
 import random
@@ -4487,6 +4488,78 @@ class TransformStatsRunnerTests(TestCase):
         )
 
         es.transform.get_transform_stats.assert_called_once_with(transform_id=transform_id)
+
+
+class CreateIlmPolicyRunner(TestCase):
+
+    params = {
+        "policy-name": "my-ilm-policy",
+        "request-params": {"master_timeout": "30s", "timeout": "30s"},
+        "body": {
+            "policy": {
+                "phases": {"hot": {"min_age": "0ms", "actions": {"rollover": {"max_age": "30d"}, "set_priority": {"priority": 100}}}}
+            }
+        },
+    }
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_create_ilm_policy_with_request_params(self, es):
+        es.ilm.put_lifecycle.return_value = as_future({})
+        create_ilm_policy = runner.CreateIlmPolicy()
+        result = await create_ilm_policy(es, params=self.params)
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+
+        es.ilm.put_lifecycle.assert_called_once_with(
+            policy=self.params["policy-name"], body=self.params["body"], params=self.params["request-params"]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_create_ilm_policy_without_request_params(self, es):
+        es.ilm.put_lifecycle.return_value = as_future({})
+        create_ilm_policy = runner.CreateIlmPolicy()
+        params = copy.deepcopy(self.params)
+        del params["request-params"]
+        result = await create_ilm_policy(es, params=params)
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+
+        es.ilm.put_lifecycle.assert_called_once_with(policy=params["policy-name"], body=params["body"], params={})
+
+
+class DeleteIlmPolicyRunner(TestCase):
+
+    params = {"policy-name": "my-ilm-policy", "request-params": {"master_timeout": "30s", "timeout": "30s"}}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_delete_ilm_policy_with_request_params(self, es):
+        es.ilm.delete_lifecycle.return_value = as_future({})
+        delete_ilm_policy = runner.DeleteIlmPolicy()
+        result = await delete_ilm_policy(es, params=self.params)
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+
+        es.ilm.delete_lifecycle.assert_called_once_with(policy=self.params["policy-name"], params=self.params["request-params"])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_delete_ilm_policy_without_request_params(self, es):
+        es.ilm.delete_lifecycle.return_value = as_future({})
+        delete_ilm_policy = runner.DeleteIlmPolicy()
+        params = copy.deepcopy(self.params)
+        del params["request-params"]
+        result = await delete_ilm_policy(es, params=params)
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+        self.assertTrue(result["success"])
+
+        es.ilm.delete_lifecycle.assert_called_once_with(policy=params["policy-name"], params={})
 
 
 class SubmitAsyncSearchTests(TestCase):

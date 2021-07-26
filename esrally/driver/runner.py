@@ -95,6 +95,8 @@ def register_default_runners():
     register_runner(track.OperationType.WaitForTransform, Retry(WaitForTransform()), async_runner=True)
     register_runner(track.OperationType.DeleteTransform, Retry(DeleteTransform()), async_runner=True)
     register_runner(track.OperationType.TransformStats, Retry(TransformStats()), async_runner=True)
+    register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
+    register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -2375,6 +2377,47 @@ class Composite(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "composite"
+
+
+class CreateIlmPolicy(Runner):
+    """
+    Execute the `PUT index lifecycle policy API
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/ilm-put-lifecycle.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        policy_name = mandatory(params, "policy-name", self)
+        body = mandatory(params, "body", self)
+        request_params = params.get("request-params", {})
+        await es.ilm.put_lifecycle(policy=policy_name, body=body, params=request_params)
+        return {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+        }
+
+    def __repr__(self, *args, **kwargs):
+        return "create-ilm-policy"
+
+
+class DeleteIlmPolicy(Runner):
+    """
+    Execute the `DELETE index lifecycle policy API
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/ilm-delete-lifecycle.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        policy_name = mandatory(params, "policy-name", self)
+        request_params = params.get("request-params", {})
+        await es.ilm.delete_lifecycle(policy=policy_name, params=request_params)
+        return {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+        }
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-ilm-policy"
 
 
 class RequestTiming(Runner, Delegator):
