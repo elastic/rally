@@ -18,6 +18,7 @@
 import asyncio
 import io
 import json
+import copy
 import random
 import unittest.mock as mock
 from unittest import TestCase
@@ -4520,7 +4521,7 @@ class CreateIlmPolicyRunner(TestCase):
     async def test_create_ilm_policy_without_request_params(self, es):
         es.ilm.put_lifecycle.return_value = as_future({})
         create_ilm_policy = runner.CreateIlmPolicy()
-        params = self.params
+        params = copy.deepcopy(self.params)
         del params["request-params"]
         result = await create_ilm_policy(es, params=params)
         self.assertEqual(1, result["weight"])
@@ -4551,7 +4552,7 @@ class DeleteIlmPolicyRunner(TestCase):
     async def test_delete_ilm_policy_without_request_params(self, es):
         es.ilm.delete_lifecycle.return_value = as_future({})
         delete_ilm_policy = runner.DeleteIlmPolicy()
-        params = self.params
+        params = copy.deepcopy(self.params)
         del params["request-params"]
         result = await delete_ilm_policy(es, params=params)
         self.assertEqual(1, result["weight"])
