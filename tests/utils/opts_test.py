@@ -235,32 +235,32 @@ class TestClientOptions(TestCase):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = None
 
-        self.assertEqual({"timeout": 60}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).default)
+        self.assertEqual({"timeout": 10}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).default)
 
         self.assertEqual(
-            {"default": {"timeout": 60}}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).all_client_options
+            {"default": {"timeout": 10}}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).all_client_options
         )
 
-        self.assertEqual({"timeout": 60}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).default)
+        self.assertEqual({"timeout": 10}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).default)
 
     def test_no_client_option_parses_to_default_with_multicluster(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = opts.TargetHosts('{"default": ["127.0.0.1:9200,10.17.0.5:19200"], "remote": ["88.33.22.15:19200"]}')
 
-        self.assertEqual({"timeout": 60}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).default)
+        self.assertEqual({"timeout": 10}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).default)
 
         self.assertEqual(
-            {"default": {"timeout": 60}, "remote": {"timeout": 60}},
+            {"default": {"timeout": 10}, "remote": {"timeout": 10}},
             opts.ClientOptions(client_options_string, target_hosts=target_hosts).all_client_options,
         )
 
-        self.assertEqual({"timeout": 60}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).default)
+        self.assertEqual({"timeout": 10}, opts.ClientOptions(client_options_string, target_hosts=target_hosts).default)
 
     def test_default_client_ops_with_max_connections(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = opts.TargetHosts('{"default": ["10.17.0.5:9200"], "remote": ["88.33.22.15:9200"]}')
         self.assertEqual(
-            {"default": {"timeout": 60, "max_connections": 256}, "remote": {"timeout": 60, "max_connections": 256}},
+            {"default": {"timeout": 10, "max_connections": 256}, "remote": {"timeout": 10, "max_connections": 256}},
             opts.ClientOptions(client_options_string, target_hosts=target_hosts).with_max_connections(256),
         )
 
