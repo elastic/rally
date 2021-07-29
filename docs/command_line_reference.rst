@@ -651,7 +651,7 @@ We support the following data types:
 * Numbers: There is nothing special about numbers. Example: ``sniffer_timeout:60``
 * Booleans: Specify either ``true`` or ``false``. Example: ``use_ssl:true``
 
-Default value: ``timeout:60``
+Default value: ``timeout:10``
 
 .. warning::
    If you provide your own client options, the default value will not be magically merged. You have to specify all client options explicitly. The only exceptions to this rule is ``ca_cert`` (see below).
@@ -931,7 +931,7 @@ Examples:
 ``client-options``
 ~~~~~~~~~~~~~~~~~~
 
-``client-options`` can optionally specify options for the Elasticsearch clients when multiple clusters have been defined with ``target-hosts``. If omitted, the default is ``timeout:60`` for all cluster connections.
+``client-options`` can optionally specify options for the Elasticsearch clients when multiple clusters have been defined with ``target-hosts``. If omitted, the default is ``timeout:10`` for all cluster connections.
 
 The format is similar to ``target-hosts``, supporting both filenames ending in ``.json`` or inline JSON, however, the parameters are a collection of name:value pairs, as opposed to arrays.
 

@@ -165,7 +165,7 @@ class TargetHosts(ConnectOptions):
 
 
 class ClientOptions(ConnectOptions):
-    DEFAULT_CLIENT_OPTIONS = "timeout:60"
+    DEFAULT_CLIENT_OPTIONS = "timeout:10"
 
     """
     Convert --client-options arg to a dict.
