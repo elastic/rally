@@ -2150,7 +2150,7 @@ In the following example we show how Rally can be used to benchmark a hypothetic
         {
           "name": "self-diagnostics",
           "operation": {
-            "operation-type": "raw",
+            "operation-type": "raw-request",
             "path": "/_my_custom_system_diag",
             "method": "GET",
             "body": {
