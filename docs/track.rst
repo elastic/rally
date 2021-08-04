@@ -593,7 +593,7 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 * ``time-period`` (optional, no default value if not specified): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``warmup-iterations`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``iterations`` (optional, defaults to 1): Allows to define a default value for all tasks of the ``parallel`` element.
-* ``completed-by`` (optional): Allows to define the name of one task in the ``tasks`` list, or the value ``any``. If a specific task name has been provided then as soon as the task has completed the whole ``parallel`` task structure is considered completed. If the value ``any`` is provided, then any task that is first to complete will render the ``parallel`` structure complete. If this property is not explicitly defined, the ``parallel`` task structure is considered completed as soon as all its subtasks have completed. A task is completed if and only if all associated clients have completed execution.
+* ``completed-by`` (optional): Allows to define the name of one task in the ``tasks`` list, or the value ``any``. If a specific task name has been provided then as soon as the named task has completed, the whole ``parallel`` task structure is considered completed. If the value ``any`` is provided, then any task that is first to complete will render the ``parallel`` structure complete. If this property is not explicitly defined, the ``parallel`` task structure is considered completed as soon as all its subtasks have completed (NOTE: this is _not_ true if ``any`` is specified, see below warning and example).
 * ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the following properties that have been defined above: ``clients``, ``warmup-time-period``, ``time-period``, ``warmup-iterations`` and ``iterations``.
 
 .. note::
@@ -630,7 +630,7 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
                       "operation-type": "bulk",
                       "bulk-size": 1000
                     },
-                  "clients": 8
+                    "clients": 8
                   },
                   {
                     "name": "bulk-task-2",
