@@ -888,7 +888,7 @@ def configure_connection_params(arg_parser, args, cfg):
     client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
     cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
     if "timeout" not in client_options.default:
-        console.info("You did not provide an explicit timeout in the client options. Assuming default of 10 seconds.")
+        console.info("You did not provide an explicit timeout in the client options. Assuming default of 60 seconds.")
     if list(target_hosts.all_hosts) != list(client_options.all_client_options):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
 

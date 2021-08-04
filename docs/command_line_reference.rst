@@ -651,10 +651,7 @@ We support the following data types:
 * Numbers: There is nothing special about numbers. Example: ``sniffer_timeout:60``
 * Booleans: Specify either ``true`` or ``false``. Example: ``use_ssl:true``
 
-Default value: ``timeout:10``
-
-.. warning::
-   If you provide your own client options, the default value will not be magically merged. You have to specify all client options explicitly. The only exceptions to this rule is ``ca_cert`` (see below).
+Default value: ``timeout:60`` (applies any time ``timeout`` is not specified)
 
 Rally recognizes the following client options in addition:
 
@@ -931,7 +928,7 @@ Examples:
 ``client-options``
 ~~~~~~~~~~~~~~~~~~
 
-``client-options`` can optionally specify options for the Elasticsearch clients when multiple clusters have been defined with ``target-hosts``. If omitted, the default is ``timeout:10`` for all cluster connections.
+``client-options`` can optionally specify options for the Elasticsearch clients when multiple clusters have been defined with ``target-hosts``. The default is ``timeout:60`` for all cluster connections.
 
 The format is similar to ``target-hosts``, supporting both filenames ending in ``.json`` or inline JSON, however, the parameters are a collection of name:value pairs, as opposed to arrays.
 
@@ -941,7 +938,7 @@ Examples, assuming that two clusters have been specified with ``--target-hosts``
 
     {
       "default": {
-        "timeout": 60
+        "timeout": 120
     },
       "remote": {
         "use_ssl": true,
@@ -952,7 +949,7 @@ Examples, assuming that two clusters have been specified with ``--target-hosts``
 
 * json inline string defining two clusters::
 
-    --client-options="{\"default\":{\"timeout\": 60}, \"remote\": {\"use_ssl\":true,\"verify_certs\":false,\"ca_certs\":\"/path/to/cacert.pem\"}}"
+    --client-options="{\"default\":{\"timeout\": 120}, \"remote\": {\"use_ssl\":true,\"verify_certs\":false,\"ca_certs\":\"/path/to/cacert.pem\"}}"
 
 .. WARNING::
    If you use ``client-options`` you must specify options for **every** cluster name defined with ``target-hosts``. Rally will raise an error if there is a mismatch.
