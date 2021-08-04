@@ -1127,8 +1127,8 @@ With the operation-type ``put-pipeline`` you can execute the `put pipeline API <
 Properties
 """"""""""
 
-* `id` (mandatory): Pipeline id.
-* `body` (mandatory): Pipeline definition.
+* ``id`` (mandatory): Pipeline id.
+* ``body`` (mandatory): Pipeline definition.
 
 In this example we setup a pipeline that adds location information to a ingested document as well as a pipeline failure block to change the index in which the document was supposed to be written. Note that we need to use the ``raw`` and ``endraw`` blocks to ensure that Rally does not attempt to resolve the Mustache template. See :ref:`template language <template_language>` for more information.
 
@@ -1385,6 +1385,101 @@ With the following snippet we will delete all ``logs-*`` indices::
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
 This operation is :ref:`retryable <track_operations>`.
+
+Meta-data
+"""""""""
+
+* ``weight``: The number of indices that have been deleted.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
+create-ilm-policy
+~~~~~~~~~~~~~~~~~~~
+
+With the ``create-ilm-policy`` operation you can create or update (if the policy already exists) an ILM policy.
+
+Properties
+""""""""""
+
+* ``policy-name`` (mandatory): The identifier for the policy.
+* ``body`` (mandatory): The ILM policy body.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create or update lifecycle policy API. Rally will not attempt to serialize the parameters and pass them as is.
+
+**Example**
+
+In this example, we create an ILM policy (``my-ilm-policy``) with specific ``request-params`` defined::
+
+    {
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "create-ilm-policy",
+            "policy-name": "my-ilm-policy",
+            "request-params": {
+              "master_timeout": "30s",
+              "timeout": "30s"
+            },
+            "body": {
+              "policy": {
+                "phases": {
+                  "warm": {
+                    "min_age": "10d",
+                    "actions": {
+                      "forcemerge": {
+                        "max_num_segments": 1
+                      }
+                    }
+                  },
+                  "delete": {
+                    "min_age": "30d",
+                    "actions": {
+                      "delete": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+
+Meta-data
+"""""""""
+
+* ``weight``: The number of indices that have been deleted.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
+delete-ilm-policy
+~~~~~~~~~~~~~~~~~~~
+
+With the ``delete-ilm-policy`` operation you can delete an ILM policy.
+
+Properties
+""""""""""
+
+* ``policy-name`` (mandatory): The identifier for the policy.
+* ``request-params`` (optional): A structure containing any request parameters that are allowed by the create or update lifecycle policy API. Rally will not attempt to serialize the parameters and pass them as is.
+
+**Example**
+
+In this example, we delete an ILM policy (``my-ilm-policy``) with specific ``request-params`` defined::
+
+    {
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "delete-ilm-policy",
+            "policy-name": "my-ilm-policy",
+            "request-params": {
+              "master_timeout": "30s",
+              "timeout": "30s"
+            }
+          }
+        }
+      ]
+    }
 
 Meta-data
 """""""""
@@ -2098,7 +2193,7 @@ In the following example we show how Rally can be used to benchmark a hypothetic
         {
           "name": "self-diagnostics",
           "operation": {
-            "operation-type": "raw",
+            "operation-type": "raw-request",
             "path": "/_my_custom_system_diag",
             "method": "GET",
             "body": {
