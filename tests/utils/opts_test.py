@@ -186,17 +186,17 @@ class TestClientOptions(TestCase):
 
         self.assertEqual(
             {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem", "timeout": 60},
-            opts.ClientOptions(client_options_string).default
+            opts.ClientOptions(client_options_string).default,
         )
 
         self.assertEqual(
             {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem", "timeout": 60},
-            opts.ClientOptions(client_options_string).default
+            opts.ClientOptions(client_options_string).default,
         )
 
         self.assertEqual(
             {"default": {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem", "timeout": 60}},
-            opts.ClientOptions(client_options_string).all_client_options
+            opts.ClientOptions(client_options_string).all_client_options,
         )
 
     def test_jsonstring_client_options_parses(self):
