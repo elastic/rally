@@ -181,18 +181,21 @@ class TestTargetHosts(TestCase):
 
 class TestClientOptions(TestCase):
     def test_csv_client_options_parses(self):
+        # "timeout": 60 should automatically get added to each configuration unless overridden
         client_options_string = "use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"
 
         self.assertEqual(
-            {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem"}, opts.ClientOptions(client_options_string).default
+            {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem", "timeout": 60},
+            opts.ClientOptions(client_options_string).default,
         )
 
         self.assertEqual(
-            {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem"}, opts.ClientOptions(client_options_string).default
+            {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem", "timeout": 60},
+            opts.ClientOptions(client_options_string).default,
         )
 
         self.assertEqual(
-            {"default": {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem"}},
+            {"default": {"use_ssl": True, "verify_certs": True, "ca_certs": "/path/to/cacert.pem", "timeout": 60}},
             opts.ClientOptions(client_options_string).all_client_options,
         )
 
