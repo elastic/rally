@@ -210,7 +210,7 @@ class Config:
 
     def config_present(self):
         """
-        :return: true iff a config file already exists.
+        :return: true if a config file already exists.
         """
         return self.config_file.present
 

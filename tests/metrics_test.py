@@ -18,6 +18,7 @@
 
 import collections
 import datetime
+import json
 import logging
 import os
 import random
@@ -2327,3 +2328,54 @@ class SystemStatsTests(TestCase):
             {"node": "rally-node-1", "name": "bytes_written", "value": {"single": 833 * 1024 * 1024}},
             select(metric_list, "bytes_written", node="rally-node-1"),
         )
+
+
+class IndexTemplateProviderTests(TestCase):
+
+    def setUp(self):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
+        self.cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
+        self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
+        self.cfg.add(config.Scope.application, "system", "time.start", FileRaceStoreTests.RACE_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "race.id", FileRaceStoreTests.RACE_ID)
+
+    def test_datastore_type_elasticsearch_index_template_update(self):
+        _datastore_type = "elasticsearch"
+        _datastore_number_of_shards = random.randint(1,100)
+        _datastore_number_of_replicas = random.randint(1,100)
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_replicas", _datastore_number_of_replicas)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        templates = [_index_template_provider.metrics_template(), _index_template_provider.races_template(),
+                     _index_template_provider.results_template()]
+
+        for template in templates:
+            t = json.loads(template)
+            assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+            assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+
+    def test_datastore_type_in_memory_index_template_update(self):
+        _datastore_type = "in-memory"
+        _datastore_number_of_shards = random.randint(1,100)
+        _datastore_number_of_replicas = random.randint(1,100)
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_replicas", _datastore_number_of_replicas)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        templates = [_index_template_provider.metrics_template(), _index_template_provider.races_template(),
+                     _index_template_provider.results_template()]
+
+        for template in templates:
+            t = json.loads(template)
+            assert t["settings"]["index"]["number_of_shards"] == 1
+            with self.assertRaises(KeyError):
+                t["settings"]["index"]["number_of_replicas"]
