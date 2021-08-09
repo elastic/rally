@@ -182,23 +182,25 @@ class ClientOptions(ConnectOptions):
         self.parse_options()
 
     def parse_options(self):
-        def normalize_to_dict(arg):
-            """
-            When --client-options is a non-json csv string (single cluster mode),
-            return parsed client options as dict with "default" key
-            This is needed to support single cluster use of --client-options when not
-            defined as a json string or file.
-            """
-
-            return {TargetHosts.DEFAULT: kv_to_map(arg)}
-
+        default_client_map = kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS])
         if self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts is not None:
             # --client-options unset but multi-clusters used in --target-hosts? apply options defaults for all cluster names.
-            self.parsed_options = {
-                cluster_name: kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS]) for cluster_name in self.target_hosts.all_hosts.keys()
-            }
+            self.parsed_options = {cluster_name: default_client_map for cluster_name in self.target_hosts.all_hosts.keys()}
         else:
-            self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
+            self.parsed_options = to_dict(self.argvalue, default_parser=ClientOptions.normalize_to_dict)
+
+    @staticmethod
+    def normalize_to_dict(arg):
+
+        """
+        When --client-options is a non-json csv string (single cluster mode),
+        return parsed client options as dict with "default" key
+        This is needed to support single cluster use of --client-options when not
+        defined as a json string or file.
+        """
+        default_client_map = kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS])
+
+        return {TargetHosts.DEFAULT: {**default_client_map, **kv_to_map(arg)}}
 
     @property
     def all_client_options(self):
