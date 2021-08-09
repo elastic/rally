@@ -69,7 +69,7 @@ The following settings are applicable only if ``datastore.type`` is set to "elas
 * ``datastore.user``: Sets the name of the Elasticsearch user for the metrics store.
 * ``datastore.password``: Sets the password of the Elasticsearch user for the metrics store.
 * ``datastore.probe.cluster_version`` (default: true): Enables automatic detection of the metric store's version.
-* ``datastore.number_of_shards`` (default: 1): The number of primary shards that the ```rally-*`` indices should have. Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices.
+* ``datastore.number_of_shards`` (default: 1): The number of primary shards that the ``rally-*`` indices should have. Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices.
 * ``datastore.number_of_replicas`` (default: 0): The number of replicas each primary shard has. Defaults to 0. Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices.
 
 **Examples**
