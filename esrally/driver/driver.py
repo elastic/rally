@@ -764,7 +764,7 @@ class Driver:
             self.target.drive_at(worker, worker_start_timestamp)
 
     def may_complete_current_task(self, task_allocations):
-        any_jointpoint_completing_parent = [a for a in task_allocations if a.task.any_task_completes_parent]
+        any_joinpoints_completing_parent = [a for a in task_allocations if a.task.any_task_completes_parent]
         joinpoints_completing_parent = [a for a in task_allocations if a.task.preceding_task_completes_parent]
 
         # If 'completed-by' is set to 'any', then we *do* want to check for completion by
@@ -779,11 +779,15 @@ class Driver:
         # 2. 'bulk-1' client[0]'s runner is first to complete and reach the next joinpoint successfully
         # 3. 'bulk-1' will now cause the parent task to complete and _not_ wait for all 8 clients' runner to complete,
         # or for 'bulk-2' at all
+        #
+        # The reasoning for the distinction between 'any_joinpoints_completing_parent' & 'joinpoints_completing_parent'
+        # is to simplify logic, otherwise we'd need to implement some form of state machine involving actor-to-actor
+        # communication.
 
-        if len(any_jointpoint_completing_parent) > 0 and not self.complete_current_task_sent:
+        if len(any_joinpoints_completing_parent) > 0 and not self.complete_current_task_sent:
             self.logger.info(
-                "Any task before join point [%s] is able to " "complete the parent structure. Telling all clients to exit immediately.",
-                any_jointpoint_completing_parent[0].task,
+                "Any task before join point [%s] is able to complete the parent structure. Telling all clients to exit immediately.",
+                any_joinpoints_completing_parent[0].task,
             )
 
             self.complete_current_task_sent = True
@@ -1720,7 +1724,6 @@ class AsyncExecutor:
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self, *args, **kwargs):
-        # Is True if 'completed-by' param is set to 'any'
         any_task_completes_parent = self.task.any_completes_parent
         task_completes_parent = self.task.completes_parent
         total_start = time.perf_counter()
@@ -1817,9 +1820,16 @@ class AsyncExecutor:
             raise exceptions.RallyError(f"Cannot run task [{self.task}]: {e}") from None
         finally:
             # Actively set it if this task completes its parent
-            if task_completes_parent or any_task_completes_parent:
+            if task_completes_parent:
                 self.logger.info(
                     "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion.",
+                    self.task,
+                    self.client_id,
+                )
+                self.complete.set()
+            elif any_task_completes_parent:
+                self.logger.info(
+                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion of all remaining clients, immediately.",
                     self.task,
                     self.client_id,
                 )

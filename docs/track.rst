@@ -612,7 +612,7 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 
         1. Both ``bulk-task-1`` and ``bulk-task-2`` execute in parallel
         2. ``bulk-task-1`` Client 1/8 is first to complete its assigned partition of work
-        3. ``bulk-task-1`` will now cause the ``parallel`` task to complete and **not** wait for either the remaining 7/8 ``bulk-task-1``'s clients to complete, or for any of ``bulk-task-2``'s clients to complete
+        3. ``bulk-task-1`` will now cause the ``parallel`` task to complete and **not** wait for either the remaining seven ``bulk-task-1``'s clients to complete, or for any of ``bulk-task-2``'s clients to complete
 
     ::
 
