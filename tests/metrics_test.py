@@ -2331,7 +2331,6 @@ class SystemStatsTests(TestCase):
 
 
 class IndexTemplateProviderTests(TestCase):
-
     def setUp(self):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
@@ -2343,8 +2342,8 @@ class IndexTemplateProviderTests(TestCase):
 
     def test_datastore_type_elasticsearch_index_template_update(self):
         _datastore_type = "elasticsearch"
-        _datastore_number_of_shards = random.randint(1,100)
-        _datastore_number_of_replicas = random.randint(1,100)
+        _datastore_number_of_shards = random.randint(1, 100)
+        _datastore_number_of_replicas = random.randint(1, 100)
 
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
@@ -2352,8 +2351,11 @@ class IndexTemplateProviderTests(TestCase):
 
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
-        templates = [_index_template_provider.metrics_template(), _index_template_provider.races_template(),
-                     _index_template_provider.results_template()]
+        templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
 
         for template in templates:
             t = json.loads(template)
@@ -2362,8 +2364,8 @@ class IndexTemplateProviderTests(TestCase):
 
     def test_datastore_type_in_memory_index_template_update(self):
         _datastore_type = "in-memory"
-        _datastore_number_of_shards = random.randint(1,100)
-        _datastore_number_of_replicas = random.randint(1,100)
+        _datastore_number_of_shards = random.randint(1, 100)
+        _datastore_number_of_replicas = random.randint(1, 100)
 
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
@@ -2371,11 +2373,15 @@ class IndexTemplateProviderTests(TestCase):
 
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
-        templates = [_index_template_provider.metrics_template(), _index_template_provider.races_template(),
-                     _index_template_provider.results_template()]
+        templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
 
         for template in templates:
             t = json.loads(template)
             assert t["settings"]["index"]["number_of_shards"] == 1
             with self.assertRaises(KeyError):
+                # pylint: disable=pointless-statement
                 t["settings"]["index"]["number_of_replicas"]
