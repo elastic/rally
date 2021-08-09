@@ -1829,7 +1829,8 @@ class AsyncExecutor:
                 self.complete.set()
             elif any_task_completes_parent:
                 self.logger.info(
-                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion of all remaining clients, immediately.",
+                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion of all "
+                    "remaining clients, immediately.",
                     self.task,
                     self.client_id,
                 )
