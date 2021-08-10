@@ -238,12 +238,8 @@ class IndexTemplateProvider:
 
     def __init__(self, cfg):
         self._config = cfg
-        self._number_of_shards = self._config.opts(
-            "reporting", "datastore.number_of_shards", default_value=1, mandatory=False
-        )
-        self._number_of_replicas = self._config.opts(
-            "reporting", "datastore.number_of_replicas", default_value=0, mandatory=False
-        )
+        self._number_of_shards = self._config.opts("reporting", "datastore.number_of_shards", default_value=1, mandatory=False)
+        self._number_of_replicas = self._config.opts("reporting", "datastore.number_of_replicas", default_value=0, mandatory=False)
         self.script_dir = self._config.opts("node", "rally.root")
 
     def metrics_template(self):
