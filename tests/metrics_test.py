@@ -2362,26 +2362,8 @@ class IndexTemplateProviderTests(TestCase):
             assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
             assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
 
-    def test_datastore_type_in_memory_index_template_update(self):
+    def test_datastore_type_in_memory_no_index_template_provider(self):
         _datastore_type = "in-memory"
-        _datastore_number_of_shards = random.randint(1, 100)
-        _datastore_number_of_replicas = random.randint(1, 100)
-
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
-        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
-        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_replicas", _datastore_number_of_replicas)
-
-        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
-
-        templates = [
-            _index_template_provider.metrics_template(),
-            _index_template_provider.races_template(),
-            _index_template_provider.results_template(),
-        ]
-
-        for template in templates:
-            t = json.loads(template)
-            assert t["settings"]["index"]["number_of_shards"] == 1
-            with self.assertRaises(KeyError):
-                # pylint: disable=pointless-statement
-                t["settings"]["index"]["number_of_replicas"]
+        cls = metrics.metrics_store_class(self.cfg)
+        self.assertFalse(hasattr(cls, "index_template_provider_class"))
