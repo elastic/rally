@@ -1487,18 +1487,18 @@ class TrackSpecificationReader:
                     )
 
         if completed_by:
-            completion_task = False
+            has_completion_task = False
             for task in tasks:
-                if task.completes_parent and not completion_task:
-                    completion_task = True
+                if task.completes_parent and not has_completion_task:
+                    has_completion_task = True
                 elif task.completes_parent:
                     self._error(
                         f"'parallel' element for challenge '{challenge_name}' contains multiple tasks with the "
                         f"name '{completed_by}' marked with 'completed-by' but only task is allowed to match."
                     )
                 elif task.any_completes_parent:
-                    completion_task = True
-            if not completion_task:
+                    has_completion_task = True
+            if not has_completion_task:
                 self._error(
                     f"'parallel' element for challenge '{challenge_name}' is marked with 'completed-by' with "
                     f"task name '{completed_by}' but no task with this name exists."
