@@ -1457,7 +1457,6 @@ class TrackSpecificationReader:
         default_ramp_up_time_period = self._r(ops_spec, "ramp-up-time-period", error_ctx="parallel", mandatory=False)
         clients = self._r(ops_spec, "clients", error_ctx="parallel", mandatory=False)
         completed_by = self._r(ops_spec, "completed-by", error_ctx="parallel", mandatory=False)
-
         # now descent to each operation
         tasks = []
         for task in self._r(ops_spec, "tasks", error_ctx="parallel"):
@@ -1488,16 +1487,18 @@ class TrackSpecificationReader:
                     )
 
         if completed_by:
-            completion_task = None
+            has_completion_task = False
             for task in tasks:
-                if task.completes_parent and not completion_task:
-                    completion_task = task
+                if task.completes_parent and not has_completion_task:
+                    has_completion_task = True
                 elif task.completes_parent:
                     self._error(
                         f"'parallel' element for challenge '{challenge_name}' contains multiple tasks with the "
                         f"name '{completed_by}' marked with 'completed-by' but only task is allowed to match."
                     )
-            if not completion_task:
+                elif task.any_completes_parent:
+                    has_completion_task = True
+            if not has_completion_task:
                 self._error(
                     f"'parallel' element for challenge '{challenge_name}' is marked with 'completed-by' with "
                     f"task name '{completed_by}' but no task with this name exists."
@@ -1545,6 +1546,7 @@ class TrackSpecificationReader:
             ),
             clients=self._r(task_spec, "clients", error_ctx=op.name, mandatory=False, default_value=1),
             completes_parent=(task_name == completed_by_name),
+            any_completes_parent=(completed_by_name == "any"),
             schedule=schedule,
             # this is to provide scheduler-specific parameters for custom schedulers.
             params=task_spec,

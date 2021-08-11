@@ -3653,6 +3653,67 @@ class TrackSpecificationReaderTests(TestCase):
         self.assertEqual("index-2", parallel_tasks[1].operation.name)
         self.assertTrue(parallel_tasks[1].completes_parent)
 
+    def test_parallel_tasks_with_any_task_completed_by_set(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [
+                {
+                    "name": "test-index",
+                },
+            ],
+            "operations": [
+                {
+                    "name": "index-1",
+                    "operation-type": "bulk",
+                },
+                {
+                    "name": "index-2",
+                    "operation-type": "bulk",
+                },
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {
+                            "parallel": {
+                                "warmup-time-period": 2400,
+                                "time-period": 36000,
+                                "completed-by": "any",
+                                "tasks": [
+                                    {
+                                        "name": "name-index-1",
+                                        "operation": "index-1",
+                                    },
+                                    {
+                                        "name": "name-index-2",
+                                        "operation": "index-2",
+                                    },
+                                ],
+                            }
+                        }
+                    ],
+                }
+            ],
+        }
+
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        parallel_element = resulting_track.challenges[0].schedule[0]
+        parallel_tasks = parallel_element.tasks
+
+        # we will only have two clients *in total*
+        self.assertEqual(2, parallel_element.clients)
+        self.assertEqual(2, len(parallel_tasks))
+
+        self.assertEqual("index-1", parallel_tasks[0].operation.name)
+        self.assertTrue(parallel_tasks[0].any_completes_parent)
+        self.assertFalse(parallel_tasks[0].completes_parent)
+
+        self.assertEqual("index-2", parallel_tasks[1].operation.name)
+        self.assertTrue(parallel_tasks[1].any_completes_parent)
+        self.assertFalse(parallel_tasks[1].completes_parent)
+
     def test_parallel_tasks_with_completed_by_set_no_task_matches(self):
         track_specification = {
             "description": "description for unit test",

@@ -959,6 +959,7 @@ class Task:
         ramp_up_time_period=None,
         clients=1,
         completes_parent=False,
+        any_completes_parent=False,
         schedule=None,
         params=None,
     ):
@@ -978,6 +979,7 @@ class Task:
         self.ramp_up_time_period = ramp_up_time_period
         self.clients = clients
         self.completes_parent = completes_parent
+        self.any_completes_parent = any_completes_parent
         self.schedule = schedule
         self.params = params if params else {}
         self.nested = False
@@ -1067,6 +1069,7 @@ class Task:
             ^ hash(self.clients)
             ^ hash(self.schedule)
             ^ hash(self.completes_parent)
+            ^ hash(self.any_completes_parent)
         )
 
     def __eq__(self, other):
@@ -1082,6 +1085,7 @@ class Task:
             self.clients,
             self.schedule,
             self.completes_parent,
+            self.any_completes_parent,
         ) == (
             other.name,
             other.operation,
@@ -1093,6 +1097,7 @@ class Task:
             other.clients,
             other.schedule,
             other.completes_parent,
+            other.any_completes_parent,
         )
 
     def __iter__(self):

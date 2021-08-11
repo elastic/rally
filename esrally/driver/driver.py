@@ -764,9 +764,39 @@ class Driver:
             self.target.drive_at(worker, worker_start_timestamp)
 
     def may_complete_current_task(self, task_allocations):
+        any_joinpoints_completing_parent = [a for a in task_allocations if a.task.any_task_completes_parent]
         joinpoints_completing_parent = [a for a in task_allocations if a.task.preceding_task_completes_parent]
-        # we need to actively send CompleteCurrentTask messages to all remaining workers.
-        if len(joinpoints_completing_parent) > 0 and not self.complete_current_task_sent:
+
+        # If 'completed-by' is set to 'any', then we *do* want to check for completion by
+        # any client and *not* wait until the remaining runner has completed. This way the 'parallel' task will exit
+        # on the completion of _any_ client for any task, i.e. given a contrived track with two tasks to execute inside
+        # a parallel block:
+        #   * parallel:
+        #     * bulk-1, with clients 8
+        #     * bulk-2, with clients: 8
+        #
+        # 1. Both 'bulk-1' and 'bulk-2' execute in parallel
+        # 2. 'bulk-1' client[0]'s runner is first to complete and reach the next joinpoint successfully
+        # 3. 'bulk-1' will now cause the parent task to complete and _not_ wait for all 8 clients' runner to complete,
+        # or for 'bulk-2' at all
+        #
+        # The reasoning for the distinction between 'any_joinpoints_completing_parent' & 'joinpoints_completing_parent'
+        # is to simplify logic, otherwise we'd need to implement some form of state machine involving actor-to-actor
+        # communication.
+
+        if len(any_joinpoints_completing_parent) > 0 and not self.complete_current_task_sent:
+            self.logger.info(
+                "Any task before join point [%s] is able to complete the parent structure. Telling all clients to exit immediately.",
+                any_joinpoints_completing_parent[0].task,
+            )
+
+            self.complete_current_task_sent = True
+            for worker in self.workers:
+                self.target.complete_current_task(worker)
+
+        # If we have a specific 'completed-by' task specified, then we want to make sure that all clients for that task
+        # are able to complete their runners as expected before completing the parent
+        elif len(joinpoints_completing_parent) > 0 and not self.complete_current_task_sent:
             # while this list could contain multiple items, it should always be the same task (but multiple
             # different clients) so any item is sufficient.
             current_join_point = joinpoints_completing_parent[0].task
@@ -776,7 +806,6 @@ class Driver:
                 current_join_point,
                 len(current_join_point.clients_executing_completing_task),
             )
-
             pending_client_ids = []
             for client_id in current_join_point.clients_executing_completing_task:
                 # We assume that all clients have finished if their corresponding worker has finished
@@ -1695,6 +1724,7 @@ class AsyncExecutor:
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self, *args, **kwargs):
+        any_task_completes_parent = self.task.any_completes_parent
         task_completes_parent = self.task.completes_parent
         total_start = time.perf_counter()
         # lazily initialize the schedule
@@ -1792,7 +1822,17 @@ class AsyncExecutor:
             # Actively set it if this task completes its parent
             if task_completes_parent:
                 self.logger.info(
-                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion.", self.task, self.client_id
+                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion.",
+                    self.task,
+                    self.client_id,
+                )
+                self.complete.set()
+            elif any_task_completes_parent:
+                self.logger.info(
+                    "Task [%s] completes parent. Client id [%s] is finished executing it and signals completion of all "
+                    "remaining clients, immediately.",
+                    self.task,
+                    self.client_id,
                 )
                 self.complete.set()
 
@@ -1862,7 +1902,7 @@ async def execute_single(runner, es, params, on_error):
 
 
 class JoinPoint:
-    def __init__(self, id, clients_executing_completing_task=None):
+    def __init__(self, id, clients_executing_completing_task=None, any_task_completes_parent=None):
         """
 
         :param id: The join point's id.
@@ -1871,7 +1911,10 @@ class JoinPoint:
         """
         if clients_executing_completing_task is None:
             clients_executing_completing_task = []
+        if any_task_completes_parent is None:
+            any_task_completes_parent = []
         self.id = id
+        self.any_task_completes_parent = any_task_completes_parent
         self.clients_executing_completing_task = clients_executing_completing_task
         self.num_clients_executing_completing_task = len(clients_executing_completing_task)
         self.preceding_task_completes_parent = self.num_clients_executing_completing_task > 0
@@ -1950,6 +1993,7 @@ class Allocator:
         for task in self.schedule:
             start_client_index = 0
             clients_executing_completing_task = []
+            any_task_completes_parent = []
             for sub_task in task:
                 for client_index in range(start_client_index, start_client_index + sub_task.clients):
                     # this is the actual client that will execute the task. It may differ from the logical one in case we over-commit (i.e.
@@ -1957,6 +2001,8 @@ class Allocator:
                     physical_client_index = client_index % max_clients
                     if sub_task.completes_parent:
                         clients_executing_completing_task.append(physical_client_index)
+                    elif sub_task.any_completes_parent:
+                        any_task_completes_parent.append(physical_client_index)
 
                     ta = TaskAllocation(
                         task=sub_task,
@@ -1968,7 +2014,6 @@ class Allocator:
                     )
                     allocations[physical_client_index].append(ta)
                 start_client_index += sub_task.clients
-
             # uneven distribution between tasks and clients, e.g. there are 5 (parallel) tasks but only 2 clients. Then, one of them
             # executes three tasks, the other one only two. So we need to fill in a `None` for the second one.
             if start_client_index % max_clients > 0:
@@ -1978,7 +2023,7 @@ class Allocator:
                     allocations[client_index].append(None)
 
             # let all clients join after each task, then we go on
-            next_join_point = JoinPoint(join_point_id, clients_executing_completing_task)
+            next_join_point = JoinPoint(join_point_id, clients_executing_completing_task, any_task_completes_parent)
             for client_index in range(max_clients):
                 allocations[client_index].append(next_join_point)
             join_point_id += 1
