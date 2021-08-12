@@ -13,6 +13,14 @@ Migrating to Rally 2.3.0
 
 The deprecated property ``relative-time-ms`` has been removed in Rally 2.3.0. Use the property ``relative-time`` instead to retrieve the same metric.
 
+Primary and replica shard counts are now configurable for persistent Elasticsearch metrics stores
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+     Primary and replica shard counts are only configurable for persistent metrics stores (``datastore.type = elasticsearch``).
+
+With this release, the number of primary and replica shards are now configurable for ``rally-*`` indices. These can be set via the ``datastore.number_of_shards`` and ``datastore.number_of_replicas`` options in ``rally.ini``.
 
 Migrating to Rally 2.2.1
 ------------------------

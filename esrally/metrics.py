@@ -237,7 +237,10 @@ class IndexTemplateProvider:
     """
 
     def __init__(self, cfg):
-        self.script_dir = cfg.opts("node", "rally.root")
+        self._config = cfg
+        self._number_of_shards = self._config.opts("reporting", "datastore.number_of_shards", default_value=1, mandatory=False)
+        self._number_of_replicas = self._config.opts("reporting", "datastore.number_of_replicas", default_value=0, mandatory=False)
+        self.script_dir = self._config.opts("node", "rally.root")
 
     def metrics_template(self):
         return self._read("metrics-template")
@@ -250,7 +253,10 @@ class IndexTemplateProvider:
 
     def _read(self, template_name):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
-            return f.read()
+            template = json.load(f)
+            template["settings"]["index"]["number_of_shards"] = self._number_of_shards
+            template["settings"]["index"]["number_of_replicas"] = self._number_of_replicas
+            return json.dumps(template)
 
 
 class MetaInfoScope(Enum):
