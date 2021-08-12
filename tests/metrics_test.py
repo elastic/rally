@@ -2361,9 +2361,3 @@ class IndexTemplateProviderTests(TestCase):
             t = json.loads(template)
             assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
             assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
-
-    def test_datastore_type_in_memory_no_index_template_provider(self):
-        _datastore_type = "in-memory"
-        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
-        cls = metrics.metrics_store_class(self.cfg)
-        self.assertFalse(hasattr(cls, "index_template_provider_class"))
