@@ -496,6 +496,7 @@ class DockerProvisioner:
         v = {
             "es_version": self.distribution_version,
             "docker_image": self.car.mandatory_var("docker_image"),
+            "node_ip": self.node_ip,
             "http_port": self.http_port,
             "es_data_dir": self.data_paths[0],
             "es_log_dir": self.node_log_dir,
