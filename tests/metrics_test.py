@@ -2343,7 +2343,7 @@ class IndexTemplateProviderTests(TestCase):
     def test_datastore_type_elasticsearch_index_template_update(self):
         _datastore_type = "elasticsearch"
         _datastore_number_of_shards = random.randint(1, 100)
-        _datastore_number_of_replicas = random.randint(1, 100)
+        _datastore_number_of_replicas = random.randint(0,100)
 
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
