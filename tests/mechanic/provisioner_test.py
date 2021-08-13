@@ -676,7 +676,7 @@ class DockerProvisionerTests(TestCase):
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
         self.assertEqual(
-            f"""version: '2.2'
+            f'''version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -705,7 +705,7 @@ services:
 networks:
   rally-es:
     driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "{node_ip}\"""",
+      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"''',
             docker_cfg,
         )
 
@@ -744,7 +744,7 @@ networks:
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
         self.assertEqual(
-            f"""version: '2.2'
+            f'''version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -775,7 +775,7 @@ services:
 networks:
   rally-es:
     driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "{node_ip}\"""",
+      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"''',
             docker_cfg,
         )
 
