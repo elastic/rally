@@ -2340,7 +2340,7 @@ class IndexTemplateProviderTests(TestCase):
         self.cfg.add(config.Scope.application, "system", "time.start", FileRaceStoreTests.RACE_TIMESTAMP)
         self.cfg.add(config.Scope.application, "system", "race.id", FileRaceStoreTests.RACE_ID)
 
-    def test_datastore_type_elasticsearch_index_template_update(self):
+    def test_primary_and_replica_shard_count_specified_index_template_update(self):
         _datastore_type = "elasticsearch"
         _datastore_number_of_shards = random.randint(1, 100)
         _datastore_number_of_replicas = random.randint(0, 100)
@@ -2361,3 +2361,47 @@ class IndexTemplateProviderTests(TestCase):
             t = json.loads(template)
             assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
             assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+
+    def test_primary_shard_count_specified_index_template_update(self):
+        _datastore_type = "elasticsearch"
+        _datastore_number_of_shards = random.randint(1, 100)
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in templates:
+            t = json.loads(template)
+            assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+            with self.assertRaises(KeyError):
+                # pylint: disable=unused-variable
+                number_of_replicas = t["settings"]["index"]["number_of_replicas"]
+
+    def test_replica_shard_count_specified_index_template_update(self):
+        _datastore_type = "elasticsearch"
+        _datastore_number_of_replicas = random.randint(1, 100)
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_replicas", _datastore_number_of_replicas)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in templates:
+            t = json.loads(template)
+            assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+            with self.assertRaises(KeyError):
+                # pylint: disable=unused-variable
+                number_of_shards = t["settings"]["index"]["number_of_shards"]

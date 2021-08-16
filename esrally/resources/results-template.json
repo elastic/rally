@@ -2,8 +2,6 @@
   "index_patterns": ["rally-results-*"],
   "settings": {
     "index": {
-      "refresh_interval": "5s",
-      "number_of_shards": 1
     }
   },
   "mappings": {
