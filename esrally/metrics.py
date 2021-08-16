@@ -258,7 +258,7 @@ class IndexTemplateProvider:
                 if int(self._number_of_shards) < 1:
                     raise exceptions.SystemSetupError(
                         f"The setting: datastore.number_of_shards must be >= 1. Please "
-                        f"check the configuration in {self._config.config_file.location}/rally.ini"
+                        f"check the configuration in {self._config.config_file.location}"
                     )
                 template["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:

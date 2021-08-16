@@ -2414,17 +2414,15 @@ class IndexTemplateProviderTests(TestCase):
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
-        with self.assertRaisesRegex(
-            expected_exception=exceptions.SystemSetupError,
-            expected_regex=f"The setting: datastore.number_of_shards must be >= 1. Please check the configuration in "
-            f"{_index_template_provider._config.config_file.location}/rally.ini",
-        ):
+        with self.assertRaises(exceptions.SystemSetupError) as ctx:
             # pylint: disable=unused-variable
             templates = [
                 _index_template_provider.metrics_template(),
                 _index_template_provider.races_template(),
                 _index_template_provider.results_template(),
             ]
+        self.assertEqual("The setting: datastore.number_of_shards must be >= 1. Please check the configuration in "
+                         f"{_index_template_provider._config.config_file.location}", ctx.exception.args[0])
 
     def test_primary_and_replica_shard_counts_passed_as_strings(self):
         _datastore_type = "elasticsearch"
