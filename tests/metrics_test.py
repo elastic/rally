@@ -2405,3 +2405,45 @@ class IndexTemplateProviderTests(TestCase):
             with self.assertRaises(KeyError):
                 # pylint: disable=unused-variable
                 number_of_shards = t["settings"]["index"]["number_of_shards"]
+
+    def test_primary_shard_count_less_than_one(self):
+        _datastore_type = "elasticsearch"
+        _datastore_number_of_shards = 0
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        with self.assertRaisesRegex(
+            expected_exception=exceptions.SystemSetupError,
+            expected_regex=f"The setting: datastore.number_of_shards must be >= 1. "
+            f"Please check the configuration in {paths.rally_confdir()}/rally.ini",
+        ):
+            # pylint: disable=unused-variable
+            templates = [
+                _index_template_provider.metrics_template(),
+                _index_template_provider.races_template(),
+                _index_template_provider.results_template(),
+            ]
+
+    def test_primary_and_replica_shard_counts_passed_as_strings(self):
+        _datastore_type = "elasticsearch"
+        _datastore_number_of_shards = "200"
+        _datastore_number_of_replicas = "1"
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_replicas", _datastore_number_of_replicas)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in templates:
+            t = json.loads(template)
+            assert t["settings"]["index"]["number_of_shards"] == 200
+            assert t["settings"]["index"]["number_of_replicas"] == 1

@@ -255,9 +255,14 @@ class IndexTemplateProvider:
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
             template = json.load(f)
             if self._number_of_shards is not None:
-                template["settings"]["index"]["number_of_shards"] = self._number_of_shards
+                if int(self._number_of_shards) < 1:
+                    raise exceptions.SystemSetupError(
+                        f"The setting: datastore.number_of_shards must be >= 1. Please "
+                        f"check the configuration in {paths.rally_confdir()}/rally.ini"
+                    )
+                template["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:
-                template["settings"]["index"]["number_of_replicas"] = self._number_of_replicas
+                template["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
             return json.dumps(template)
 
 
