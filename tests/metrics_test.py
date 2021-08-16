@@ -2421,8 +2421,11 @@ class IndexTemplateProviderTests(TestCase):
                 _index_template_provider.races_template(),
                 _index_template_provider.results_template(),
             ]
-        self.assertEqual("The setting: datastore.number_of_shards must be >= 1. Please check the configuration in "
-                         f"{_index_template_provider._config.config_file.location}", ctx.exception.args[0])
+        self.assertEqual(
+            "The setting: datastore.number_of_shards must be >= 1. Please check the configuration in "
+            f"{_index_template_provider._config.config_file.location}",
+            ctx.exception.args[0],
+        )
 
     def test_primary_and_replica_shard_counts_passed_as_strings(self):
         _datastore_type = "elasticsearch"
