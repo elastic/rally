@@ -31,3 +31,9 @@ services:
       interval: 5s
       timeout: 2s
       retries: 10
+    networks:
+      - rally-es
+networks:
+  rally-es:
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "{{node_ip}}"

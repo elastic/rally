@@ -614,6 +614,7 @@ class DockerProvisionerTests(TestCase):
     @mock.patch("uuid.uuid4")
     def test_provisioning_with_defaults(self, uuid4):
         uuid4.return_value = "9dbc682e-d32a-4669-8fbe-56fb77120dd4"
+        node_ip = "10.17.22.33"
         node_root_dir = tempfile.gettempdir()
         log_dir = os.path.join(node_root_dir, "logs", "server")
         heap_dump_dir = os.path.join(node_root_dir, "heapdump")
@@ -633,7 +634,7 @@ class DockerProvisionerTests(TestCase):
         docker = provisioner.DockerProvisioner(
             car=c,
             node_name="rally-node-0",
-            ip="10.17.22.33",
+            ip=node_ip,
             http_port=39200,
             node_root_dir=node_root_dir,
             distribution_version="6.3.0",
@@ -666,6 +667,7 @@ class DockerProvisionerTests(TestCase):
                 "es_version": "6.3.0",
                 "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss",
                 "http_port": 39200,
+                "node_ip": node_ip,
                 "mounts": {},
             },
             docker.docker_vars(mounts={}),
@@ -674,7 +676,7 @@ class DockerProvisionerTests(TestCase):
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
         self.assertEqual(
-            """version: '2.2'
+            f'''version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -690,15 +692,20 @@ services:
         soft: -1
         hard: -1
     volumes:
-      - %s:/usr/share/elasticsearch/data
-      - %s:/var/log/elasticsearch
-      - %s:/usr/share/elasticsearch/heapdump
+      - {data_dir}:/usr/share/elasticsearch/data
+      - {log_dir}:/var/log/elasticsearch
+      - {heap_dump_dir}:/usr/share/elasticsearch/heapdump
     healthcheck:
       test: nc -z 127.0.0.1 39200
       interval: 5s
       timeout: 2s
-      retries: 10"""
-            % (data_dir, log_dir, heap_dump_dir),
+      retries: 10
+    networks:
+      - rally-es
+networks:
+  rally-es:
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"''',
             docker_cfg,
         )
 
@@ -706,6 +713,7 @@ services:
     def test_provisioning_with_variables(self, uuid4):
         uuid4.return_value = "86f42ae0-5840-4b5b-918d-41e7907cb644"
         node_root_dir = tempfile.gettempdir()
+        node_ip = "10.17.22.33"
         log_dir = os.path.join(node_root_dir, "logs", "server")
         heap_dump_dir = os.path.join(node_root_dir, "heapdump")
         data_dir = os.path.join(node_root_dir, "data", "86f42ae0-5840-4b5b-918d-41e7907cb644")
@@ -726,7 +734,7 @@ services:
         docker = provisioner.DockerProvisioner(
             car=c,
             node_name="rally-node-0",
-            ip="10.17.22.33",
+            ip=node_ip,
             http_port=39200,
             node_root_dir=node_root_dir,
             distribution_version="6.3.0",
@@ -736,7 +744,7 @@ services:
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
         self.assertEqual(
-            """version: '2.2'
+            f'''version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -754,15 +762,20 @@ services:
         soft: -1
         hard: -1
     volumes:
-      - %s:/usr/share/elasticsearch/data
-      - %s:/var/log/elasticsearch
-      - %s:/usr/share/elasticsearch/heapdump
+      - {data_dir}:/usr/share/elasticsearch/data
+      - {log_dir}:/var/log/elasticsearch
+      - {heap_dump_dir}:/usr/share/elasticsearch/heapdump
     healthcheck:
       test: nc -z 127.0.0.1 39200
       interval: 5s
       timeout: 2s
-      retries: 10"""
-            % (data_dir, log_dir, heap_dump_dir),
+      retries: 10
+    networks:
+      - rally-es
+networks:
+  rally-es:
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"''',
             docker_cfg,
         )
 
