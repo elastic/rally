@@ -2417,7 +2417,7 @@ class IndexTemplateProviderTests(TestCase):
         with self.assertRaisesRegex(
             expected_exception=exceptions.SystemSetupError,
             expected_regex=f"The setting: datastore.number_of_shards must be >= 1. "
-            f"Please check the configuration in {paths.rally_confdir()}/rally.ini",
+            f"Please check the configuration in .*/rally.ini",
         ):
             # pylint: disable=unused-variable
             templates = [
