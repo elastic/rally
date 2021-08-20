@@ -135,10 +135,10 @@ class DriverTests(TestCase):
 
         target.create_client.assert_has_calls(
             calls=[
-                mock.call("10.5.5.1"),
-                mock.call("10.5.5.1"),
-                mock.call("10.5.5.2"),
-                mock.call("10.5.5.2"),
+                mock.call("10.5.5.1", d.config),
+                mock.call("10.5.5.1", d.config),
+                mock.call("10.5.5.2", d.config),
+                mock.call("10.5.5.2", d.config),
             ]
         )
 
@@ -157,10 +157,10 @@ class DriverTests(TestCase):
 
         target.create_client.assert_has_calls(
             calls=[
-                mock.call("localhost"),
-                mock.call("localhost"),
-                mock.call("localhost"),
-                mock.call("localhost"),
+                mock.call("localhost", d.config),
+                mock.call("localhost", d.config),
+                mock.call("localhost", d.config),
+                mock.call("localhost", d.config),
             ]
         )
 
