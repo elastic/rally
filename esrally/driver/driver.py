@@ -464,7 +464,6 @@ class TrackPreparationActor(actor.RallyActor):
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_RallyConfig(self, msg, sender):
-        self.logger.info(f"Track Preparator received config object {msg.config}")
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         load_track(self.cfg)
