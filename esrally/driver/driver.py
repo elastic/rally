@@ -141,12 +141,10 @@ class StartWorker:
     def __init__(self, worker_id, config, track, client_allocations):
         """
         :param worker_id: Unique (numeric) id of the worker.
-        :param config: Rally internal configuration object.
         :param track: The track to use.
         :param client_allocations: A structure describing which clients need to run which tasks.
         """
         self.worker_id = worker_id
-        self.config = config
         self.track = track
         self.client_allocations = client_allocations
 
@@ -303,6 +301,7 @@ class DriverActor(actor.RallyActor):
         return self.createActor(Worker, targetActorRequirements=self._requirements(host))
 
     def start_worker(self, driver, worker_id, cfg, track, allocations):
+        self.send(driver, RallyConfig(cfg))
         self.send(driver, StartWorker(worker_id, cfg, track, allocations))
 
     def drive_at(self, driver, client_start_timestamp):
@@ -1116,11 +1115,14 @@ class Worker(actor.RallyActor):
         self.sample_queue_size = None
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_RallyConfig(self, msg):
+        self.config = load_local_config(msg.config)
+
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
         self.logger.info("Worker[%d] is about to start.", msg.worker_id)
         self.master = sender
         self.worker_id = msg.worker_id
-        self.config = load_local_config(msg.config)
         self.on_error = self.config.opts("driver", "on.error")
         self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
         self.track = msg.track
