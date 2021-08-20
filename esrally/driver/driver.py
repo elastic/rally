@@ -75,6 +75,7 @@ class RallyConfig:
     """
     Prompts loading of a track
     """
+
     def __init__(self, cfg):
         self.config = cfg
 
