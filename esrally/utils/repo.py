@@ -124,3 +124,7 @@ class RallyRepository:
     def checkout(self, revision):
         self.logger.info("Checking out revision [%s] in [%s].", revision, self.repo_dir)
         git.checkout(self.repo_dir, revision)
+
+    def correct_revision(self, revision):
+        self.logger.debug(f"Checking whether [{self.repo_dir}] is on revision [{revision}]")
+        return git.current_branch(self.repo_dir) == revision
