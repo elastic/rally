@@ -1115,7 +1115,7 @@ class Worker(actor.RallyActor):
         self.sample_queue_size = None
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_RallyConfig(self, msg):
+    def receiveMsg_RallyConfig(self, msg, sender):
         self.config = load_local_config(msg.config)
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
