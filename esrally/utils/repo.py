@@ -126,6 +126,4 @@ class RallyRepository:
         git.checkout(self.repo_dir, revision)
 
     def correct_revision(self, revision):
-        self.logger.info(f"Checking whether [{self.repo_dir}] is on revision [{revision}]")
-        self.logger.info(f"{git.head_revision(self.repo_dir)} == {revision}")
         return git.head_revision(self.repo_dir) == revision
