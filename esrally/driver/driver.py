@@ -263,9 +263,7 @@ class DriverActor(actor.RallyActor):
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareBenchmark(self, msg, sender):
         self.start_sender = sender
-        self.config = load_local_config(msg.config)
-        load_track(self.config)
-        self.coordinator = Driver(self, self.config)
+        self.coordinator = Driver(self, msg.config)
         self.coordinator.prepare_benchmark(msg.track)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
@@ -1117,6 +1115,11 @@ class Worker(actor.RallyActor):
         self.start_driving = False
         self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
         self.sample_queue_size = None
+
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_RallyConfig(self, msg, sender):
+        self.config = load_local_config(msg.config)
+        load_track(self.config)
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
