@@ -300,6 +300,7 @@ class DriverActor(actor.RallyActor):
     def create_client(self, host, cfg):
         worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
         self.send(worker, RallyConfig(cfg))
+        return worker
 
     def start_worker(self, driver, worker_id, cfg, track, allocations):
         self.send(driver, StartWorker(worker_id, cfg, track, allocations))
