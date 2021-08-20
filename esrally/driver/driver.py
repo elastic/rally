@@ -297,11 +297,11 @@ class DriverActor(actor.RallyActor):
             self.coordinator.update_progress_message()
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    def create_client(self, host):
-        return self.createActor(Worker, targetActorRequirements=self._requirements(host))
+    def create_client(self, host, cfg):
+        worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
+        self.send(worker, RallyConfig(cfg))
 
     def start_worker(self, driver, worker_id, cfg, track, allocations):
-        self.send(driver, RallyConfig(cfg))
         self.send(driver, StartWorker(worker_id, cfg, track, allocations))
 
     def drive_at(self, driver, client_start_timestamp):
@@ -693,7 +693,7 @@ class Driver:
                 # don't assign workers without any clients
                 if len(clients) > 0:
                     self.logger.info("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
-                    worker = self.target.create_client(host)
+                    worker = self.target.create_client(host, self.config)
 
                     client_allocations = ClientAllocations()
                     for client_id in clients:
@@ -1117,6 +1117,7 @@ class Worker(actor.RallyActor):
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_RallyConfig(self, msg, sender):
         self.config = load_local_config(msg.config)
+        load_track(self.cfg)
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
