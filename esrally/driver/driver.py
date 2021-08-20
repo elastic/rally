@@ -145,6 +145,7 @@ class StartWorker:
         :param client_allocations: A structure describing which clients need to run which tasks.
         """
         self.worker_id = worker_id
+        self.config = config
         self.track = track
         self.client_allocations = client_allocations
 
@@ -1122,6 +1123,7 @@ class Worker(actor.RallyActor):
         self.logger.info("Worker[%d] is about to start.", msg.worker_id)
         self.master = sender
         self.worker_id = msg.worker_id
+        self.config = load_local_config(msg.config)
         self.on_error = self.config.opts("driver", "on.error")
         self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
         self.track = msg.track
