@@ -71,18 +71,24 @@ class StartBenchmark:
     pass
 
 
+class RallyConfig:
+    """
+    Prompts loading of a track
+    """
+    def __init__(self, cfg):
+        self.config = cfg
+
+
 class PrepareTrack:
     """
     Initiates preparation of a track.
 
     """
 
-    def __init__(self, cfg, track):
+    def __init__(self, track):
         """
-        :param cfg: Rally internal configuration object.
         :param track: The track to use.
         """
-        self.config = cfg
         self.track = track
 
 
@@ -324,7 +330,10 @@ class DriverActor(actor.RallyActor):
     def prepare_track(self, hosts, cfg, track):
         self.logger.info("Starting prepare track process on hosts [%s]", hosts)
         self.children = [self._create_track_preparator(h) for h in hosts]
-        msg = PrepareTrack(cfg, track)
+        msg = RallyConfig(cfg)
+        for child in self.children:
+            self.send(child, msg)
+        msg = PrepareTrack(track)
         for child in self.children:
             self.send(child, msg)
 
@@ -454,6 +463,13 @@ class TrackPreparationActor(actor.RallyActor):
         self.send(self.original_sender, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_RallyConfig(self, msg, sender):
+        self.logger.info(f"Track Preparator received config object {msg.config}")
+        # load node-specific config to have correct paths available
+        self.cfg = load_local_config(msg.config)
+        load_track(self.cfg)
+
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
         self.logger.info("ActorExitRequest received. Forwarding to children")
         for child in self.children:
@@ -467,8 +483,6 @@ class TrackPreparationActor(actor.RallyActor):
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
         self.original_sender = sender
-        # load node-specific config to have correct paths available
-        self.cfg = load_local_config(msg.config)
         self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
         tpr = TrackProcessorRegistry(self.cfg)
         self.track = msg.track
