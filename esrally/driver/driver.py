@@ -330,14 +330,16 @@ class DriverActor(actor.RallyActor):
         self.cluster_details = cluster_details
 
     def prepare_track(self, hosts, cfg, track):
+        self.track = track
         self.logger.info("Starting prepare track process on hosts [%s]", hosts)
         self.children = [self._create_track_preparator(h) for h in hosts]
         msg = RallyConfig(cfg)
         for child in self.children:
             self.send(child, msg)
-        msg = PrepareTrack(track)
-        for child in self.children:
-            self.send(child, msg)
+
+    def receiveMsg_ReadyForWork(self, msg, sender):
+        msg = PrepareTrack(self.track)
+        self.send(sender, msg)
 
     def _create_track_preparator(self, host):
         return self.createActor(TrackPreparationActor, targetActorRequirements=self._requirements(host))
@@ -469,6 +471,7 @@ class TrackPreparationActor(actor.RallyActor):
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         load_track(self.cfg)
+        self.send(sender, ReadyForWork())
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
