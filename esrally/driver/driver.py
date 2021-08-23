@@ -225,7 +225,7 @@ class DriverActor(actor.RallyActor):
         self.coordinator = None
         self.status = "init"
         self.post_process_timer = 0
-        self.cluster_details = None
+        self.cluster_details = {}
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
@@ -326,9 +326,6 @@ class DriverActor(actor.RallyActor):
         else:
             return {"ip": host}
 
-    def on_cluster_details_retrieved(self, cluster_details):
-        self.cluster_details = cluster_details
-
     def prepare_track(self, hosts, cfg, track):
         self.track = track
         self.logger.info("Starting prepare track process on hosts [%s]", hosts)
@@ -337,6 +334,7 @@ class DriverActor(actor.RallyActor):
         for child in self.children:
             self.send(child, msg)
 
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ReadyForWork(self, msg, sender):
         msg = PrepareTrack(self.track)
         self.send(sender, msg)
@@ -653,7 +651,7 @@ class Driver:
             self.logger.info("Skipping REST API check as static responses are used.")
         else:
             self.wait_for_rest_api(es_clients)
-            self.target.on_cluster_details_retrieved(self.retrieve_cluster_info(es_clients))
+            self.target.cluster_details = self.retrieve_cluster_info(es_clients)
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
