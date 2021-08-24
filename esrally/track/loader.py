@@ -320,7 +320,9 @@ class GitTrackRepository:
         self.repo = repo_class(remote_url, tracks_dir, repo_name, "tracks", offline, fetch)
         if update:
             if repo_revision:
-                self.repo.checkout(repo_revision)
+                # skip checkout if already on correct version.  this is helpful in case of multiple actors loading simultaneously.
+                if not self.repo.correct_revision(repo_revision):
+                    self.repo.checkout(repo_revision)
             else:
                 self.repo.update(distribution_version)
                 cfg.add(config.Scope.applicationOverride, "track", "repository.revision", self.repo.revision)

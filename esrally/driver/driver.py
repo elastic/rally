@@ -71,18 +71,25 @@ class StartBenchmark:
     pass
 
 
+class Bootstrap:
+    """
+    Prompts loading of track code on new actors
+    """
+
+    def __init__(self, cfg):
+        self.config = cfg
+
+
 class PrepareTrack:
     """
     Initiates preparation of a track.
 
     """
 
-    def __init__(self, cfg, track):
+    def __init__(self, track):
         """
-        :param cfg: Rally internal configuration object.
         :param track: The track to use.
         """
-        self.config = cfg
         self.track = track
 
 
@@ -219,7 +226,7 @@ class DriverActor(actor.RallyActor):
         self.coordinator = None
         self.status = "init"
         self.post_process_timer = 0
-        self.cluster_details = None
+        self.cluster_details = {}
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
@@ -293,8 +300,10 @@ class DriverActor(actor.RallyActor):
             self.coordinator.update_progress_message()
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    def create_client(self, host):
-        return self.createActor(Worker, targetActorRequirements=self._requirements(host))
+    def create_client(self, host, cfg):
+        worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
+        self.send(worker, Bootstrap(cfg))
+        return worker
 
     def start_worker(self, driver, worker_id, cfg, track, allocations):
         self.send(driver, StartWorker(worker_id, cfg, track, allocations))
@@ -318,15 +327,18 @@ class DriverActor(actor.RallyActor):
         else:
             return {"ip": host}
 
-    def on_cluster_details_retrieved(self, cluster_details):
-        self.cluster_details = cluster_details
-
     def prepare_track(self, hosts, cfg, track):
+        self.track = track
         self.logger.info("Starting prepare track process on hosts [%s]", hosts)
         self.children = [self._create_track_preparator(h) for h in hosts]
-        msg = PrepareTrack(cfg, track)
+        msg = Bootstrap(cfg)
         for child in self.children:
             self.send(child, msg)
+
+    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_ReadyForWork(self, msg, sender):
+        msg = PrepareTrack(self.track)
+        self.send(sender, msg)
 
     def _create_track_preparator(self, host):
         return self.createActor(TrackPreparationActor, targetActorRequirements=self._requirements(host))
@@ -454,6 +466,13 @@ class TrackPreparationActor(actor.RallyActor):
         self.send(self.original_sender, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_Bootstrap(self, msg, sender):
+        # load node-specific config to have correct paths available
+        self.cfg = load_local_config(msg.config)
+        load_track(self.cfg)
+        self.send(sender, ReadyForWork())
+
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
         self.logger.info("ActorExitRequest received. Forwarding to children")
         for child in self.children:
@@ -467,8 +486,6 @@ class TrackPreparationActor(actor.RallyActor):
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
         self.original_sender = sender
-        # load node-specific config to have correct paths available
-        self.cfg = load_local_config(msg.config)
         self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
         tpr = TrackProcessorRegistry(self.cfg)
         self.track = msg.track
@@ -635,7 +652,7 @@ class Driver:
             self.logger.info("Skipping REST API check as static responses are used.")
         else:
             self.wait_for_rest_api(es_clients)
-            self.target.on_cluster_details_retrieved(self.retrieve_cluster_info(es_clients))
+            self.target.cluster_details = self.retrieve_cluster_info(es_clients)
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
@@ -681,7 +698,7 @@ class Driver:
                 # don't assign workers without any clients
                 if len(clients) > 0:
                     self.logger.info("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
-                    worker = self.target.create_client(host)
+                    worker = self.target.create_client(host, self.config)
 
                     client_allocations = ClientAllocations()
                     for client_id in clients:
@@ -1101,6 +1118,11 @@ class Worker(actor.RallyActor):
         self.start_driving = False
         self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
         self.sample_queue_size = None
+
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_RallyConfig(self, msg, sender):
+        self.config = load_local_config(msg.config)
+        load_track(self.config)
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
