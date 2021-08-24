@@ -142,6 +142,7 @@ class StartWorker:
     def __init__(self, worker_id, config, track, client_allocations):
         """
         :param worker_id: Unique (numeric) id of the worker.
+        :param config: Rally internal configuration object.
         :param track: The track to use.
         :param client_allocations: A structure describing which clients need to run which tasks.
         """
