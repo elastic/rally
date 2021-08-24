@@ -71,9 +71,9 @@ class StartBenchmark:
     pass
 
 
-class RallyConfig:
+class Bootstrap:
     """
-    Prompts loading of a track
+    Prompts loading of track code on new actors
     """
 
     def __init__(self, cfg):
@@ -301,7 +301,7 @@ class DriverActor(actor.RallyActor):
 
     def create_client(self, host, cfg):
         worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
-        self.send(worker, RallyConfig(cfg))
+        self.send(worker, Bootstrap(cfg))
         return worker
 
     def start_worker(self, driver, worker_id, cfg, track, allocations):
@@ -330,7 +330,7 @@ class DriverActor(actor.RallyActor):
         self.track = track
         self.logger.info("Starting prepare track process on hosts [%s]", hosts)
         self.children = [self._create_track_preparator(h) for h in hosts]
-        msg = RallyConfig(cfg)
+        msg = Bootstrap(cfg)
         for child in self.children:
             self.send(child, msg)
 
@@ -465,7 +465,7 @@ class TrackPreparationActor(actor.RallyActor):
         self.send(self.original_sender, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_RallyConfig(self, msg, sender):
+    def receiveMsg_Bootstrap(self, msg, sender):
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         load_track(self.cfg)
