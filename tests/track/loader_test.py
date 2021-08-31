@@ -135,13 +135,16 @@ class GitRepositoryTests(TestCase):
             src/
                 utils.py
         """
-        walk.return_value = iter([("/tmp/tracks/default", ["unittest", "unittest2", "unittest3", "src"], []),
-                                  ("/tmp/tracks/default/unittest", [], ["track.json"]),
-                                  ("/tmp/tracks/default/unittest2", [], ["track.json"]),
-                                  ("/tmp/tracks/default/unittest3", ["nested"], ["track.json"]),
-                                  ("/tmp/tracks/default/unittest3/nested", [], ["track.json"]),
-                                  ("/tmp/tracks/src", [], ["utils.py"]),
-                                  ])
+        walk.return_value = iter(
+            [
+                ("/tmp/tracks/default", ["unittest", "unittest2", "unittest3", "src"], []),
+                ("/tmp/tracks/default/unittest", [], ["track.json"]),
+                ("/tmp/tracks/default/unittest2", [], ["track.json"]),
+                ("/tmp/tracks/default/unittest3", ["nested"], ["track.json"]),
+                ("/tmp/tracks/default/unittest3/nested", [], ["track.json"]),
+                ("/tmp/tracks/src", [], ["utils.py"]),
+            ]
+        )
         exists.return_value = True
         cfg = config.Config()
         cfg.add(config.Scope.application, "track", "track.name", "unittest")
