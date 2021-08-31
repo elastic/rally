@@ -121,7 +121,27 @@ class GitRepositoryTests(TestCase):
     @mock.patch("os.path.exists")
     @mock.patch("os.walk")
     def test_track_from_existing_repo(self, walk, exists):
-        walk.return_value = iter([(".", ["unittest", "unittest2", "unittest3"], [])])
+        """
+        simulates scanning track repositories with the following structure:
+        <root>/
+            unittest/
+                track.json
+            unittest2/
+                track.json
+            unittest3/
+                nested/
+                    track.json
+                track.json
+            src/
+                utils.py
+        """
+        walk.return_value = iter([("/tmp/tracks/default", ["unittest", "unittest2", "unittest3", "src"], []),
+                                  ("/tmp/tracks/default/unittest", [], ["track.json"]),
+                                  ("/tmp/tracks/default/unittest2", [], ["track.json"]),
+                                  ("/tmp/tracks/default/unittest3", ["nested"], ["track.json"]),
+                                  ("/tmp/tracks/default/unittest3/nested", [], ["track.json"]),
+                                  ("/tmp/tracks/src", [], ["utils.py"]),
+                                  ])
         exists.return_value = True
         cfg = config.Config()
         cfg.add(config.Scope.application, "track", "track.name", "unittest")
@@ -133,7 +153,7 @@ class GitRepositoryTests(TestCase):
         repo = loader.GitTrackRepository(cfg, fetch=False, update=False, repo_class=GitRepositoryTests.MockGitRepo)
 
         self.assertEqual("unittest", repo.track_name)
-        self.assertEqual(["unittest", "unittest2", "unittest3"], list(repo.track_names))
+        self.assertEqual(["unittest", "unittest2", "unittest3", "unittest3/nested"], list(repo.track_names))
         self.assertEqual("/tmp/tracks/default/unittest", repo.track_dir("unittest"))
         self.assertEqual("/tmp/tracks/default/unittest/track.json", repo.track_file("unittest"))
 
