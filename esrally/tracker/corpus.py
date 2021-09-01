@@ -81,7 +81,7 @@ def dump_documents(client, index, out_path, total_docs, progress_message_suffix=
             logger.info("Dumping corpus for index [%s] to [%s].", index, out_path)
             query = {"query": {"match_all": {}}}
             for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
-                if n > total_docs:
+                if n >= total_docs:
                     break
                 data = (json.dumps(doc["_source"], separators=(",", ":")) + "\n").encode("utf-8")
 
