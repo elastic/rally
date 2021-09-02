@@ -329,13 +329,7 @@ class GitTrackRepository:
 
     @property
     def track_names(self):
-        retval = []
-        # + 1 to capture trailing slash
-        fully_qualified_path_length = len(self.repo.repo_dir) + 1
-        for root_dir, _, files in os.walk(self.repo.repo_dir):
-            if "track.json" in files:
-                retval.append(root_dir[fully_qualified_path_length:])
-        return retval
+        return filter(lambda p: os.path.exists(self.track_file(p)), next(os.walk(self.repo.repo_dir))[1])
 
     def track_dir(self, track_name):
         return os.path.join(self.repo.repo_dir, track_name)
