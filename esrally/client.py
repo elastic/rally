@@ -255,11 +255,20 @@ class EsClientFactory:
         self.client_options["serializer"] = LazyJSONSerializer()
         self.client_options["trace_config"] = trace_config
 
+        class VerifiedAsyncTransport(elasticsearch.AsyncTransport):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                # skip verification at this point; we've already verified this earlier with the synchronous client.
+                # The async client is used in the hot code path and we use customized overrides (such as that we don't
+                # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
+                self._verified_elasticsearch = True
+
         class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
             pass
 
         return RallyAsyncElasticsearch(
             hosts=self.hosts,
+            transport_class=VerifiedAsyncTransport,
             connection_class=esrally.async_connection.AIOHttpConnection,
             ssl_context=self.ssl_context,
             **self.client_options,
