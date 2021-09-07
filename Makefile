@@ -56,7 +56,7 @@ check-venv:
 	fi
 
 install-user: venv-create
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip setuptools==58.0.1 wheel=0.37.0
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip setuptools==58.0.1 wheel==0.37.0
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 
 install: install-user
