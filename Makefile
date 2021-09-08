@@ -120,10 +120,6 @@ check-all: lint test it
 benchmark: check-venv
 	. $(VENV_ACTIVATE_FILE); pytest benchmarks/
 
-coverage: check-venv
-	. $(VENV_ACTIVATE_FILE); coverage run setup.py test
-	. $(VENV_ACTIVATE_FILE); coverage html
-
 release-checks: check-venv
 	. $(VENV_ACTIVATE_FILE); ./release-checks.sh $(release_version) $(next_version)
 
@@ -131,4 +127,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 benchmark coverage release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 benchmark release release-checks prereq venv-create check-env
