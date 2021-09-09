@@ -123,7 +123,7 @@ To further examine the contents we can bind mount it from another image e.g.::
 Specifics about the image
 -------------------------
 
-Rally runs as user ``1000`` and its files are installed with uid:gid ``1000:0`` (to support `Arbitrary User IDs <https://docs.openshift.com/container-platform/3.11/creating_images/guidelines.html>`_).
+Rally runs as user ``1000`` and its files are installed with uid:gid ``1000:0`` (to support `OpenShift arbitrary user IDs <https://docs.openshift.com/container-platform/4.8/openshift_images/create-images.html#use-uid_create-images>`_).
 
 Extending the Docker image
 --------------------------
