@@ -138,7 +138,7 @@ Whenever you want to use Rally, run the activation script (step 2 above) first. 
 Docker
 ------
 
-Docker images of Rally can be found in `DockerHub <https://hub.docker.com/r/elastic/rally>`_.
+Docker images of Rally can be found in `Docker Hub <https://hub.docker.com/r/elastic/rally>`_.
 
 Please refer to :doc:`Running Rally with Docker <docker/>` for detailed instructions.
 
