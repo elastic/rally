@@ -121,10 +121,10 @@ Installing Rally
 2. Ensure pip is the latest version: ``python3 -m pip install --user --upgrade pip``
 3. Install Rally: ``python3 -m pip install --user esrally``.
 
-VirtualEnv Install
-------------------
+Virtual environment Install
+---------------------------
 
-You can also use Virtualenv to install Rally into an isolated Python environment without sudo.
+You can also use virtualenv to install Rally into an isolated Python environment without sudo.
 
 1. Set up a new virtualenv environment in a directory with ``python3 -m venv .venv``
 2. Activate the environment with ``source /path/to/virtualenv/.venv/bin/activate``
