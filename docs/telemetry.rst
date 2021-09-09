@@ -4,7 +4,7 @@ Telemetry Devices
 You probably want to gain additional insights from a race. Therefore, we have added telemetry devices to Rally. If you invoke
 ``esrally list telemetry``, it will show which telemetry devices are available::
 
-   dm@io:Projects/rally ‹master*›$ esrally list telemetry
+   $ esrally list telemetry
 
        ____        ____
       / __ \____ _/ / /_  __

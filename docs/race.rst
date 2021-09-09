@@ -46,7 +46,7 @@ To start a race you have to define the track and challenge to run. For example::
 
 Rally will then start racing on this track. If you have never started Rally before, it should look similar to the following output::
 
-    dm@io:~ $ esrally race --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
+    $ esrally race --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
 
         ____        ____
        / __ \____ _/ / /_  __

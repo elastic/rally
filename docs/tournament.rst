@@ -15,7 +15,7 @@ Then we implement our changes and finally we want to run another benchmark to se
 
 After we've run both races, we want to know about the performance impact. With Rally we can analyze differences of two given races easily. First of all, we need to find two races to compare by issuing ``esrally list races``::
 
-    dm@io:~ $ esrally list races
+    $ esrally list races
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -34,7 +34,7 @@ After we've run both races, we want to know about the performance impact. With R
 
 We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race IDs in the next step::
 
-    dm@io:~ $ esrally compare --baseline=0bfd4542-3821-4c79-81a2-0858636068ce --contender=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7
+    $ esrally compare --baseline=0bfd4542-3821-4c79-81a2-0858636068ce --contender=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7
 
         ____        ____
        / __ \____ _/ / /_  __
