@@ -112,7 +112,7 @@ To find the JDK, Rally expects the environment variable ``JAVA_HOME`` to be set 
 Optional dependencies
 ---------------------
 
-S3 support is optional and can be installed using the ``s3`` extra. If you need S3 support, install ``esrally[s3]`` instead of just ``esrally``, but other than that follow the instructions below.
+S3 support is optional and can be installed using the ``esrally[s3]`` instead of just ``esrally``, but other than that follow the instructions below.
 
 Installing Rally
 ----------------
