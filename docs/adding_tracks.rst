@@ -224,7 +224,7 @@ The numbers under the ``documents`` property are needed to verify integrity and 
 
 The new track appears when you run ``esrally list tracks --track-path=~/rally-tracks/tutorial``::
 
-    dm@io:~ $ esrally list tracks --track-path=~/rally-tracks/tutorial
+    $ esrally list tracks --track-path=~/rally-tracks/tutorial
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -240,7 +240,7 @@ The new track appears when you run ``esrally list tracks --track-path=~/rally-tr
 
 You can also show details about your track with ``esrally info --track-path=~/rally-tracks/tutorial``::
 
-    dm@io:~ $ esrally info --track-path=~/rally-tracks/tutorial
+    $ esrally info --track-path=~/rally-tracks/tutorial
 
         ____        ____
        / __ \____ _/ / /_  __

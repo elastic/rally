@@ -9,7 +9,9 @@ This error occurs when Rally cannot build an Elasticsearch distribution from sou
 To see what's the problem, try building Elasticsearch yourself. First, find out where the source code is located (run ``grep src ~/.rally/rally.ini``). Then change to the directory (``src.root.dir`` + ``elasticsearch.src.subdir`` which is usually ``~/.rally/benchmarks/src/elasticsearch``) and run the following commands::
 
     ./gradlew clean
-    ./gradlew :distribution:tar:assemble
+    ./gradlew :distribution:archives:$OSNAME-tar:assemble
+
+Where ``$OSNAME`` can be either ``darwin`` (for macOS) or ``linux``.
 
 By that you are mimicking what Rally does. Fix any errors that show up here and then retry.
 

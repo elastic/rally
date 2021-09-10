@@ -35,7 +35,7 @@ with open(os.path.join(ROOT_DIR, _CI_VARS), "rt") as fp:
 
 
 def test_installs_inside_venv():
-    # as in the VirtualEnv Install section of install.rst
+    # as in the Virtual environment Install section of install.rst
     commands = (
         "cp -a /rally_ro /rally &&"
         "python3 -mvenv .venv &&"

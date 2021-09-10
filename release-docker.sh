@@ -19,7 +19,7 @@
 
 # Prerequisites for releasing:
 
-# Logged in on Docker hub (docker login)
+# Logged in on Docker Hub (docker login)
 
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu

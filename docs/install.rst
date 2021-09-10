@@ -121,10 +121,10 @@ Installing Rally
 2. Ensure pip is the latest version: ``python3 -m pip install --user --upgrade pip``
 3. Install Rally: ``python3 -m pip install --user esrally``.
 
-VirtualEnv Install
-------------------
+Virtual environment Install
+---------------------------
 
-You can also use Virtualenv to install Rally into an isolated Python environment without sudo.
+You can also use virtualenv to install Rally into an isolated Python environment without sudo.
 
 1. Set up a new virtualenv environment in a directory with ``python3 -m venv .venv``
 2. Activate the environment with ``source /path/to/virtualenv/.venv/bin/activate``
@@ -138,7 +138,7 @@ Whenever you want to use Rally, run the activation script (step 2 above) first. 
 Docker
 ------
 
-Docker images of Rally can be found in `DockerHub <https://hub.docker.com/r/elastic/rally>`_.
+Docker images of Rally can be found in `Docker Hub <https://hub.docker.com/r/elastic/rally>`_.
 
 Please refer to :doc:`Running Rally with Docker <docker/>` for detailed instructions.
 
