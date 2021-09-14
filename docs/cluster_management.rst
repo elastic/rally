@@ -36,7 +36,9 @@ This produces the following output (the value will vary for each invocation)::
     }
 
 
-We will need the installation id in the next steps to refer to our current installation.
+We will need the installation id in the next steps to refer to our current installation::
+
+   export INSTALLATION_ID=69ffcfee-6378-4090-9e93-87c9f8ee59a7
 
 .. note::
 
@@ -46,7 +48,7 @@ After installation, we can start the node. To tie all metrics of a benchmark tog
 
     # generate a unique race id (use the same id from now on)
     export RACE_ID=$(uuidgen)
-    esrally start --installation-id="69ffcfee-6378-4090-9e93-87c9f8ee59a7" --race-id="${RACE_ID}"
+    esrally start --installation-id="${INSTALLATION_ID}" --race-id="${RACE_ID}"
 
 After the Elasticsearch node has started, we can run a benchmark. Be sure to pass the same race id so you can match results later in your metrics store::
 
@@ -54,7 +56,7 @@ After the Elasticsearch node has started, we can run a benchmark. Be sure to pas
 
 When the benchmark has finished, we can stop the node again::
 
-    esrally stop --installation-id="69ffcfee-6378-4090-9e93-87c9f8ee59a7"
+    esrally stop --installation-id="${INSTALLATION_ID}"
 
 If you only want to shutdown the node but don't want to delete the node and the data, pass ``--preserve-install`` additionally.
 
