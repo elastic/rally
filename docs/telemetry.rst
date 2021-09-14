@@ -31,6 +31,8 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
    data-stream-stats           Data Streams Stats          Regularly samples data streams stats
 
+.. warning::
+
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
 All telemetry devices with a ``-stats`` suffix can be used even with a cluster that hasn't been provisioned by Rally (i.e. using ``--pipeline=benchmark-only``). They are collectively referred to as **runtime level** telemetry devices.
