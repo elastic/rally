@@ -11,7 +11,7 @@ Use an SSD on the load generator machine. If you run bulk-indexing benchmarks, R
 Prerequisites
 -------------
 
-Rally does not support Windows and is only actively tested on MacOS and Linux. Install the following packages first.
+Rally does not support Windows and is only actively tested on macOS and Linux. Install the following packages first.
 
 .. _install_python:
 
@@ -64,9 +64,9 @@ In all other cases, Rally requires ``git 1.9`` or better. Verify with ``git --ve
 
    If you use RHEL, install a recent version of git via the `Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/git19/>`_.
 
-**MacOS**
+**macOS**
 
-``git`` is already installed on MacOS.
+``git`` is already installed on macOS.
 
 pbzip2
 ~~~~~~
@@ -88,7 +88,7 @@ If you have created :doc:`custom tracks </adding_tracks>` using corpora compress
 
     sudo yum install pbzip2
 
-**MacOS**
+**macOS**
 
 Install via `Homebrew <https://brew.sh/>`_:
 
