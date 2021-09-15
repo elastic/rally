@@ -30,6 +30,7 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
    data-stream-stats           Data Streams Stats          Regularly samples data streams stats
+   master-node-stats           Master Node Stats           Regularly determines the current master node name
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -227,3 +228,19 @@ Example of recorded documents given two data streams in the cluster::
 Supported telemetry parameters:
 
 * ``data-stream-stats-sample-interval`` (default 10): A positive number greater than zero denoting the sampling interval in seconds.
+
+
+master-node-stats
+-----------------
+
+The master-node-stats telemetry device regularly reports the name of the master node by using:
+
+ 1. the `Cluster State API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-state.html>`_, specifically `/_cluster/state/master_node` to determine the id of the master node
+ 2. the `Nodes info API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-info.html>`_ to determine its name
+
+Example of recorded document::
+
+   {
+     "name": "master-node-stats",
+     "node": "rally-0"
+   }

@@ -46,6 +46,7 @@ def list_telemetry():
             SearchableSnapshotsStats,
             ShardStats,
             DataStreamStats,
+            MasterNodeStats,
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -1926,3 +1927,104 @@ class IndexSize(InternalTelemetryDevice):
     def store_system_metrics(self, node, metrics_store):
         if self.index_size_bytes:
             metrics_store.put_value_node_level(node.node_name, "final_index_size_bytes", self.index_size_bytes, "byte")
+
+
+class MasterNodeStats(TelemetryDevice):
+    """
+    Collects and pushes the current master node name to the metric store.
+    """
+
+    internal = False
+    command = "master-node-stats"
+    human_name = "Master Node Stats"
+    help = "Regularly samples master node name"
+
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May optionally specify:
+            ``master-node-stats-sample-interval``: An integer controlling the interval, in seconds,
+            between collecting samples. Default: 30s.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.specified_cluster_names = self.clients.keys()
+        self.sample_interval = telemetry_params.get("master-node-stats-sample-interval", 30)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                f"The telemetry parameter 'master-node-stats-sample-interval' must be greater than zero " f"but was {self.sample_interval}."
+            )
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def on_benchmark_start(self):
+        for cluster_name in self.specified_cluster_names:
+            recorder = MasterNodeStatsRecorder(
+                cluster_name,
+                self.clients[cluster_name],
+                self.metrics_store,
+                self.sample_interval,
+            )
+            recorder.record()
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.daemon = True
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.recorder.record()
+                sampler.finish()
+
+
+class MasterNodeStatsRecorder:
+    """
+    Collects and pushes the current master node name for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: An integer controlling the interval, in seconds, between collecting samples.
+        """
+
+        self.cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return "master node stats"
+
+    def record(self):
+        """
+        Collect master node name and push to metrics store.
+        """
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            state = self.client.cluster.state(metric="master_node")
+            info = self.client.nodes.info(node_id=state["master_node"], metric="os")
+        except elasticsearch.TransportError:
+            msg = f"A transport error occurred while collecting master node stats on cluster [{self.cluster_name}]"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        master_node_metadata = {"cluster": self.cluster_name}
+
+        doc = {
+            "name": "master-node-stats",
+            "node": info["nodes"][state["master_node"]]["name"],
+        }
+
+        self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=master_node_metadata)
