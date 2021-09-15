@@ -379,7 +379,7 @@ class ComparisonReporter:
             self.report_format,
             self.cwd,
             self.numbers_align,
-            headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
+            headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit", "Diff %"],
             data_plain=metrics_table,
             data_rich=metrics_table_console,
         )
@@ -864,15 +864,23 @@ class ComparisonReporter:
                 formatter(contender),
                 self._diff(baseline, contender, treat_increase_as_improvement, formatter),
                 unit,
+                self._diff(baseline, contender, treat_increase_as_improvement, formatter, as_percentage=True)
             ]
         else:
             return []
 
-    def _diff(self, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x):
+    def _diff(self, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x, as_percentage=False):
         def identity(x):
             return x
 
-        diff = formatter(contender - baseline)
+        def _safe_divide(n, d):
+            return n/d if d else 0
+
+        if as_percentage:
+            diff = formatter(_safe_divide((contender - baseline), baseline)*100)
+        else:
+            diff = formatter(contender - baseline)
+
         if self.plain:
             color_greater = identity
             color_smaller = identity
