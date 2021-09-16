@@ -2013,8 +2013,7 @@ class MasterNodeStatsRecorder:
         import elasticsearch
 
         try:
-            state = self.client.cluster.state(metric="master_node")
-            info = self.client.nodes.info(node_id=state["master_node"], metric="os")
+            info = self.client.cat.master(format="json")
         except elasticsearch.TransportError:
             msg = f"A transport error occurred while collecting master node stats on cluster [{self.cluster_name}]"
             self.logger.exception(msg)
@@ -2024,7 +2023,7 @@ class MasterNodeStatsRecorder:
 
         doc = {
             "name": "master-node-stats",
-            "node": info["nodes"][state["master_node"]]["name"],
+            "node": info[0]["node"],
         }
 
         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=master_node_metadata)
