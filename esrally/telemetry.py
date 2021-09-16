@@ -46,7 +46,6 @@ def list_telemetry():
             SearchableSnapshotsStats,
             ShardStats,
             DataStreamStats,
-            MasterNodeStats,
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -1929,12 +1928,11 @@ class IndexSize(InternalTelemetryDevice):
             metrics_store.put_value_node_level(node.node_name, "final_index_size_bytes", self.index_size_bytes, "byte")
 
 
-class MasterNodeStats(TelemetryDevice):
+class MasterNodeStats(InternalTelemetryDevice):
     """
     Collects and pushes the current master node name to the metric store.
     """
 
-    internal = False
     command = "master-node-stats"
     human_name = "Master Node Stats"
     help = "Regularly samples master node name"

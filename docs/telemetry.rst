@@ -30,7 +30,6 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
    data-stream-stats           Data Streams Stats          Regularly samples data streams stats
-   master-node-stats           Master Node Stats           Regularly determines the current master node name
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
