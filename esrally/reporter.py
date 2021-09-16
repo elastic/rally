@@ -863,7 +863,7 @@ class ComparisonReporter:
                 formatter(contender),
                 self._diff(baseline, contender, treat_increase_as_improvement, formatter),
                 unit,
-                self._diff(baseline, contender, treat_increase_as_improvement, formatter, as_percentage=True)
+                self._diff(baseline, contender, treat_increase_as_improvement, formatter, as_percentage=True),
             ]
         else:
             return []
@@ -873,7 +873,7 @@ class ComparisonReporter:
             return x
 
         def _safe_divide(n, d):
-            return n/d if d else 0
+            return n / d if d else 0
 
         if self.plain:
             color_greater = identity
@@ -893,11 +893,11 @@ class ComparisonReporter:
             percentage_diff = round(formatter(abs(_safe_divide(diff, baseline)) * 100.0), 2)
             # If the percentage difference cannot be rounded up to more than 0.00, then let's just color it neutral
             if percentage_diff == 0.00:
-                return color_neutral("%.2f" % percentage_diff+"%")
+                return color_neutral("%.2f" % percentage_diff + "%")
             elif diff > 0:
-                return color_greater("%.2f" % percentage_diff+"%")
+                return color_greater("%.2f" % percentage_diff + "%")
             elif diff < 0:
-                return color_smaller("-%.2f" % percentage_diff+"%")
+                return color_smaller("-%.2f" % percentage_diff + "%")
         else:
             diff = formatter(contender - baseline)
             if diff > 0:
