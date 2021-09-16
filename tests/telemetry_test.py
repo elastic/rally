@@ -3673,7 +3673,6 @@ class IndexSizeTests(TestCase):
 
 class MasterNodeStatsTests(TestCase):
     def test_negative_sample_interval_forbidden(self):
-        clients = {"default": Client(), "cluster_b": Client()}
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         telemetry_params = {"master-node-stats-sample-interval": -1}
@@ -3681,7 +3680,7 @@ class MasterNodeStatsTests(TestCase):
             exceptions.SystemSetupError,
             r"The telemetry parameter 'master-node-stats-sample-interval' must be greater than zero but was .*\.",
         ):
-            telemetry.MasterNodeStats(telemetry_params, clients, metrics_store)
+            telemetry.MasterNodeStats(telemetry_params, Client(), metrics_store)
 
 
 class MasterNodeStatsRecorderTests(TestCase):
@@ -3696,10 +3695,8 @@ class MasterNodeStatsRecorderTests(TestCase):
         client = Client(cat=SubClient(master=self.master_node_cat_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        recorder = telemetry.MasterNodeStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder = telemetry.MasterNodeStatsRecorder(client=client, metrics_store=metrics_store, sample_interval=1)
         recorder.record()
-
-        master_node_metadata = {"cluster": "remote"}
 
         metrics_store_put_doc.assert_has_calls(
             [
@@ -3709,7 +3706,6 @@ class MasterNodeStatsRecorderTests(TestCase):
                         "node": "rally-0",
                     },
                     level=MetaInfoScope.cluster,
-                    meta_data=master_node_metadata,
                 ),
             ],
         )

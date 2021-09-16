@@ -1939,46 +1939,41 @@ class MasterNodeStats(TelemetryDevice):
     human_name = "Master Node Stats"
     help = "Regularly samples master node name"
 
-    def __init__(self, telemetry_params, clients, metrics_store):
+    def __init__(self, telemetry_params, client, metrics_store):
         """
         :param telemetry_params: The configuration object for telemetry_params.
             May optionally specify:
             ``master-node-stats-sample-interval``: An integer controlling the interval, in seconds,
             between collecting samples. Default: 30s.
-        :param clients: A dict of clients to all clusters.
+        :param client: The default Elasticsearch client
         :param metrics_store: The configured metrics store we write to.
         """
         super().__init__()
 
         self.telemetry_params = telemetry_params
-        self.clients = clients
-        self.specified_cluster_names = self.clients.keys()
+        self.client = client
         self.sample_interval = telemetry_params.get("master-node-stats-sample-interval", 30)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
                 f"The telemetry parameter 'master-node-stats-sample-interval' must be greater than zero " f"but was {self.sample_interval}."
             )
         self.metrics_store = metrics_store
-        self.samplers = []
+        self.sampler = None
 
     def on_benchmark_start(self):
-        for cluster_name in self.specified_cluster_names:
-            recorder = MasterNodeStatsRecorder(
-                cluster_name,
-                self.clients[cluster_name],
-                self.metrics_store,
-                self.sample_interval,
-            )
-            sampler = SamplerThread(recorder)
-            self.samplers.append(sampler)
-            sampler.daemon = True
-            # we don't require starting recorders precisely at the same time
-            sampler.start()
+        recorder = MasterNodeStatsRecorder(
+            self.client,
+            self.metrics_store,
+            self.sample_interval,
+        )
+        self.sampler = SamplerThread(recorder)
+        self.sampler.daemon = True
+        # we don't require starting recorders precisely at the same time
+        self.sampler.start()
 
     def on_benchmark_stop(self):
-        if self.samplers:
-            for sampler in self.samplers:
-                sampler.finish()
+        if self.sampler:
+            self.sampler.finish()
 
 
 class MasterNodeStatsRecorder:
@@ -1986,15 +1981,13 @@ class MasterNodeStatsRecorder:
     Collects and pushes the current master node name for the specified cluster to the metric store.
     """
 
-    def __init__(self, cluster_name, client, metrics_store, sample_interval):
+    def __init__(self, client, metrics_store, sample_interval):
         """
-        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         :param sample_interval: An integer controlling the interval, in seconds, between collecting samples.
         """
 
-        self.cluster_name = cluster_name
         self.client = client
         self.metrics_store = metrics_store
         self.sample_interval = sample_interval
@@ -2017,11 +2010,9 @@ class MasterNodeStatsRecorder:
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        master_node_metadata = {"cluster": self.cluster_name}
-
         doc = {
             "name": "master-node-stats",
             "node": info[0]["node"],
         }
 
-        self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=master_node_metadata)
+        self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster)
