@@ -64,7 +64,6 @@ def write_single_report(report_file, report_format, cwd, numbers_align, headers,
         formatter = format_as_csv
     else:
         raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
-
     print_internal(formatter(headers, data_rich))
     if len(report_file) > 0:
         normalized_report_file = rio.normalize_path(report_file, cwd)
@@ -876,11 +875,6 @@ class ComparisonReporter:
         def _safe_divide(n, d):
             return n/d if d else 0
 
-        if as_percentage:
-            diff = formatter(_safe_divide((contender - baseline), baseline)*100)
-        else:
-            diff = formatter(contender - baseline)
-
         if self.plain:
             color_greater = identity
             color_smaller = identity
@@ -894,10 +888,22 @@ class ComparisonReporter:
             color_smaller = console.format.green
             color_neutral = console.format.neutral
 
-        if diff > 0:
-            return color_greater("+%.5f" % diff)
-        elif diff < 0:
-            return color_smaller("%.5f" % diff)
+        if as_percentage:
+            diff = contender - baseline
+            percentage_diff = round(formatter(abs(_safe_divide(diff, baseline)) * 100.0), 2)
+            # If the percentage difference cannot be rounded up to more than 0.00, then let's just color it neutral
+            if percentage_diff == 0.00:
+                return color_neutral("%.2f" % percentage_diff+"%")
+            elif diff > 0:
+                return color_greater("%.2f" % percentage_diff+"%")
+            elif diff < 0:
+                return color_smaller("-%.2f" % percentage_diff+"%")
         else:
-            # tabulate needs this to align all values correctly
-            return color_neutral("%.5f" % diff)
+            diff = formatter(contender - baseline)
+            if diff > 0:
+                return color_greater("+%.5f" % diff)
+            elif diff < 0:
+                return color_smaller("%.5f" % diff)
+            else:
+                # tabulate needs this to align all values correctly
+                return color_neutral("%.5f" % diff)
