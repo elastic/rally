@@ -1,8 +1,13 @@
 Telemetry Devices
 =================
 
-You probably want to gain additional insights from a race. Therefore, we have added telemetry devices to Rally. If you invoke
-``esrally list telemetry``, it will show which telemetry devices are available::
+You probably want to gain additional insights from a race. Therefore, we have added telemetry devices to Rally.
+
+.. warning::
+
+   Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
+
+If you invoke ``esrally list telemetry``, it will show which telemetry devices are available::
 
    $ esrally list telemetry
 
@@ -30,8 +35,6 @@ You probably want to gain additional insights from a race. Therefore, we have ad
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
    data-stream-stats           Data Streams Stats          Regularly samples data streams stats
-
-.. warning::
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
