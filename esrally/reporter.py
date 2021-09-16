@@ -349,7 +349,7 @@ class ComparisonReporter:
         metric_table_plain = self._metrics_table(baseline_stats, contender_stats, plain=True)
         metric_table_rich = self._metrics_table(baseline_stats, contender_stats, plain=False)
         # Writes metric_table_rich to console, writes metric_table_plain to file
-        self._write_report(metrics_table=metric_table_plain, metrics_table_console=metric_table_rich)
+        self._write_report(metric_table_plain, metric_table_rich)
 
     def _metrics_table(self, baseline_stats, contender_stats, plain):
         self.plain = plain
