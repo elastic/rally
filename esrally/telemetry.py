@@ -1969,7 +1969,6 @@ class MasterNodeStats(TelemetryDevice):
                 self.metrics_store,
                 self.sample_interval,
             )
-            recorder.record()
             sampler = SamplerThread(recorder)
             self.samplers.append(sampler)
             sampler.daemon = True
@@ -1979,7 +1978,6 @@ class MasterNodeStats(TelemetryDevice):
     def on_benchmark_stop(self):
         if self.samplers:
             for sampler in self.samplers:
-                sampler.recorder.record()
                 sampler.finish()
 
 

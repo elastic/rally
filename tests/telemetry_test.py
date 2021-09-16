@@ -3671,37 +3671,15 @@ class IndexSizeTests(TestCase):
         self.assertEqual(0, get_size.call_count)
 
 
-class TestMasterNodeStats:
-    @mock.patch("esrally.telemetry.SamplerThread.start")
-    @mock.patch("esrally.telemetry.SamplerThread.finish")
-    def test_record_start_and_end(self, start, finish, monkeypatch):
-        record_count = 0
-
-        def record(self):
-            nonlocal record_count
-            record_count += 1
-
-        monkeypatch.setattr(telemetry.MasterNodeStatsRecorder, "record", record)
-
-        clients = {"default": Client(), "cluster_b": Client()}
-        cfg = create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {"master-node-stats-sample-interval": 0.001}
-        t = telemetry.MasterNodeStats(telemetry_params, clients, metrics_store)
-        t.on_benchmark_start()
-        t.on_benchmark_stop()
-
-        # the two clients record start and stop
-        assert record_count == 4
-
+class MasterNodeStatsTests(TestCase):
     def test_negative_sample_interval_forbidden(self):
         clients = {"default": Client(), "cluster_b": Client()}
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         telemetry_params = {"master-node-stats-sample-interval": -1}
-        with pytest.raises(
+        with self.assertRaisesRegex(
             exceptions.SystemSetupError,
-            match=r"The telemetry parameter 'master-node-stats-sample-interval' must be greater than zero but was .*\.",
+            r"The telemetry parameter 'master-node-stats-sample-interval' must be greater than zero but was .*\.",
         ):
             telemetry.MasterNodeStats(telemetry_params, clients, metrics_store)
 
