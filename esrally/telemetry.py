@@ -164,9 +164,21 @@ class Sampler:
     def run(self):
         # noinspection PyBroadException
         try:
-            while not self.stop:
-                self.recorder.record()
-                self.sleep(self.recorder.sample_interval)
+            sleep_left = self.recorder.sample_interval
+            while True:
+                if sleep_left <= 0:
+                    self.recorder.record()
+                    sleep_left = self.recorder.sample_interval
+
+                if self.stop:
+                    break
+
+                sleep_seconds = sleep_left
+                if sleep_left >= 1:
+                    sleep_seconds = 1
+
+                self.sleep(sleep_seconds)
+                sleep_left -= sleep_seconds
         except BaseException:
             logging.getLogger(__name__).exception("Could not determine %s", self.recorder)
 

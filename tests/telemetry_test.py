@@ -58,8 +58,8 @@ class TestSamplerThread:
         sampler = telemetry.Sampler(recorder, sleep=record_sleep)
         sampler.run()
 
-        assert sleep_record == [10, 10, 10]
-        assert recorder.record.call_count == 3
+        assert sleep_record == [1] * 21
+        assert recorder.record.call_count == 2
 
     def test_sampler_sleep_short_interval(self):
         time_left = 1.5
