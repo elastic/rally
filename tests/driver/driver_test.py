@@ -77,6 +77,7 @@ class DriverTests(TestCase):
             DriverTests.StaticClientFactory.PATCHER = mock.patch("elasticsearch.Elasticsearch")
             self.es = DriverTests.StaticClientFactory.PATCHER.start()
             self.es.indices.stats.return_value = {"mocked": True}
+            self.es.cat.master.return_value = {"mocked": True}
 
         def create(self):
             return self.es
