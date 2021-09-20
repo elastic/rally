@@ -33,6 +33,56 @@ from esrally.metrics import MetaInfoScope
 from esrally.utils import console
 
 
+class TestSamplerThread:
+    def test_sampler_thread_start_join(self):
+        sampler = telemetry.SamplerThread(recorder=mock.Mock())
+        sampler.stop = True
+        sampler.start()
+        sampler.join()
+
+    def test_sampler_sleep_long_interval(self):
+        time_left = 21
+        sleep_record = []
+
+        def record_sleep(seconds):
+            nonlocal time_left
+            nonlocal sleep_record
+            nonlocal sampler
+            sleep_record.append(seconds)
+            time_left -= seconds
+            if time_left <= 0:
+                sampler.stop = True
+
+        recorder = mock.Mock()
+        recorder.sample_interval = 10
+        sampler = telemetry.Sampler(recorder, sleep=record_sleep)
+        sampler.run()
+
+        assert sleep_record == [10, 10, 10]
+        assert recorder.record.call_count == 3
+
+    def test_sampler_sleep_short_interval(self):
+        time_left = 1.5
+        sleep_record = []
+
+        def record_sleep(seconds):
+            nonlocal time_left
+            nonlocal sleep_record
+            nonlocal sampler
+            sleep_record.append(seconds)
+            time_left -= seconds
+            if time_left <= 0:
+                sampler.stop = True
+
+        recorder = mock.Mock()
+        recorder.sample_interval = 0.1
+        sampler = telemetry.Sampler(recorder, sleep=record_sleep)
+        sampler.run()
+
+        assert sleep_record == [0.1] * 15
+        assert recorder.record.call_count == 15
+
+
 def create_config():
     cfg = config.Config()
     cfg.add(config.Scope.application, "system", "env.name", "unittest")
