@@ -150,24 +150,44 @@ class InternalTelemetryDevice(TelemetryDevice):
     internal = True
 
 
-class SamplerThread(threading.Thread):
-    def __init__(self, recorder):
-        threading.Thread.__init__(self)
+class Sampler:
+    """This class contains the actual logic of SamplerThread for unit test purposes."""
+
+    def __init__(self, recorder, *, sleep=time.sleep):
         self.stop = False
         self.recorder = recorder
+        self.sleep = sleep
 
     def finish(self):
         self.stop = True
-        self.join()
 
     def run(self):
         # noinspection PyBroadException
         try:
-            while not self.stop:
-                self.recorder.record()
-                time.sleep(self.recorder.sample_interval)
+            sleep_left = self.recorder.sample_interval
+            while True:
+                if sleep_left <= 0:
+                    self.recorder.record()
+                    sleep_left = self.recorder.sample_interval
+
+                if self.stop:
+                    break
+                # check for self.stop at least every second
+                sleep_seconds = min(sleep_left, 1)
+                self.sleep(sleep_seconds)
+                sleep_left -= sleep_seconds
         except BaseException:
             logging.getLogger(__name__).exception("Could not determine %s", self.recorder)
+
+
+class SamplerThread(Sampler, threading.Thread):
+    def __init__(self, recorder):
+        threading.Thread.__init__(self)
+        Sampler.__init__(self, recorder)
+
+    def finish(self):
+        super().finish()
+        self.join()
 
 
 class FlightRecorder(TelemetryDevice):
