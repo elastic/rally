@@ -172,11 +172,8 @@ class Sampler:
 
                 if self.stop:
                     break
-
-                sleep_seconds = sleep_left
-                if sleep_left >= 1:
-                    sleep_seconds = 1
-
+                # check for self.stop at least every second
+                sleep_seconds = min(sleep_left, 1)
                 self.sleep(sleep_seconds)
                 sleep_left -= sleep_seconds
         except BaseException:
