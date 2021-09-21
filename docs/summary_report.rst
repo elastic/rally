@@ -184,8 +184,22 @@ Service time
 
 Rally reports several percentile numbers for each task. Which percentiles are shown depends on how many requests Rally could capture (i.e. Rally will not show a 99.99th percentile if it could only capture five samples because that would be a vanity metric).
 
-* **Definition**: Time period between start of request processing and receiving the complete response. This metric can easily be mixed up with ``latency`` but does not include waiting time. This is what most load testing tools refer to as "latency" (although it is incorrect).
+* **Definition**: Time period between sending a request and receiving the corresponding response. This metric can easily be mixed up with ``latency`` but does not include waiting time. This is what most load testing tools refer to as "latency" (although it is incorrect).
 * **Corresponding metrics key**: ``service_time``
+
+.. _summary_report_processing_time:
+
+Processing time
+---------------
+
+.. note::
+
+    Processing time is only reported if the setting ``output.processingtime`` is set to ``true`` in the :ref:`configuration file <configuration_reporting>`.
+
+Rally reports several percentile numbers for each task. Which percentiles are shown depends on how many requests Rally could capture (i.e. Rally will not show a 99.99th percentile if it could only capture five samples because that would be a vanity metric).
+
+* **Definition**: Time period between start of request processing and receiving the complete response. Contrary to service time, this metric also includes Rally's client side processing overhead. Large differences between service time and processing time indicate a high overhead in the client and can thus point to a potential client-side bottleneck which requires investigation.
+* **Corresponding metrics key**: ``processing_time``
 
 .. _summary_report_error_rate:
 
