@@ -1,8 +1,13 @@
 Telemetry Devices
 =================
 
-You probably want to gain additional insights from a race. Therefore, we have added telemetry devices to Rally. If you invoke
-``esrally list telemetry``, it will show which telemetry devices are available::
+You probably want to gain additional insights from a race. Therefore, we have added telemetry devices to Rally.
+
+.. warning::
+
+   Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
+
+If you invoke ``esrally list telemetry``, it will show which telemetry devices are available::
 
    $ esrally list telemetry
 
@@ -198,16 +203,16 @@ The data-stream-stats telemetry device regularly calls the `data stream stats AP
 Example of recorded documents given two data streams in the cluster::
 
    {
-      "data_stream": "_all",
-      "name": "data-stream-stats",
-      "shards": {
-        "total": 4,
-        "successful_shards": 2,
-        "failed_shards": 0
-      },
-      "data_stream_count": 2,
-      "backing_indices": 2,
-      "total_store_size_bytes": 878336
+     "data_stream": "_all",
+     "name": "data-stream-stats",
+     "shards": {
+       "total": 4,
+       "successful_shards": 2,
+       "failed_shards": 0
+     },
+     "data_stream_count": 2,
+     "backing_indices": 2,
+     "total_store_size_bytes": 878336
    },
    {
      "name": "data-stream-stats",
