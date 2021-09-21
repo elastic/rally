@@ -96,7 +96,7 @@ def no_retry(f, actor_name):
             return f(self, msg, sender)
         except BaseException as e:
             # log here as the full trace might get lost.
-            logging.getLogger(__name__).exception(f"Error in {actor_name}")
+            logging.getLogger(__name__).exception("Error in %s", actor_name)
             # don't forward the exception as is because the main process might not have this class available on the load path
             # and will fail then while deserializing the cause.
             parsed_exception = _format_exception(e)
