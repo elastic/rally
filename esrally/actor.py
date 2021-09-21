@@ -85,16 +85,28 @@ def no_retry(f, actor_name):
     :param actor_name: A human readable name of the current actor that should be used in the exception message.
     """
 
+    def _format_exception(e):
+        if hasattr(e, "message"):
+            return f"{type(e).__name__}: {e.message}"
+        else:
+            return str(e)
+
     def guard(self, msg, sender):
         try:
             return f(self, msg, sender)
         except BaseException as e:
-            msg = "Error in {}".format(actor_name)
             # log here as the full trace might get lost.
-            logging.getLogger(__name__).exception(msg)
+            logging.getLogger(__name__).exception(f"Error in {actor_name}")
             # don't forward the exception as is because the main process might not have this class available on the load path
             # and will fail then while deserializing the cause.
-            self.send(sender, BenchmarkFailure("{} ({})".format(msg, str(e))))
+            parsed_exception = _format_exception(e)
+            nesting = 0
+            while hasattr(e, "cause") and e.cause:
+                nesting += 1
+                e = e.cause
+                parsed_exception += f" (Caused by: {_format_exception(e)}"
+            parsed_exception += nesting * ")"
+            self.send(sender, BenchmarkFailure(parsed_exception))
 
     return guard
 
