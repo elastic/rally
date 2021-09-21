@@ -23,6 +23,9 @@ PY_BIN = python3
 PIP_WRAPPER = $(PY_BIN) -m pip
 export PY38 = $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 = $(shell jq -r '.python_versions.PY39' .ci/variables.json)
+export PIP_VERSION = $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
+export SETUPTOOLS_VERSION = $(shell jq -r '.prerequisite_versions.SETUPTOOLS' .ci/variables.json)
+export WHEEL_VERSION = $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
 VENV_NAME ?= .venv
 VENV_ACTIVATE_FILE = $(VENV_NAME)/bin/activate
 VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
@@ -56,7 +59,7 @@ check-venv:
 	fi
 
 install-user: venv-create
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip setuptools wheel
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip==$(PIP_VERSION) setuptools==$(SETUPTOOLS_VERSION) wheel==$(WHEEL_VERSION)
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 
 install: install-user

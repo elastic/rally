@@ -1,4 +1,9 @@
 {
+  "prerequisite_versions": {
+    "PIP": "21.2.4",
+    "SETUPTOOLS": "58.0.4",
+    "WHEEL": "0.37.0"
+  },
   "python_versions": {
     "PY38": "3.8.10",
     "PY39": "3.9.2",
