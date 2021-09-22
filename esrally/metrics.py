@@ -46,7 +46,7 @@ class EsClient:
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
 
-    # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
+    # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
     def probe_version(self):
         info = self.guarded(self._client.info)
         try:
@@ -57,19 +57,7 @@ class EsClient:
             raise exceptions.RallyError(msg)
 
     def put_template(self, name, template):
-        # TODO #653: Remove version-specific support for metrics stores before 7.0.0 (also adjust template)
-        if self._cluster_version[0] > 6:
-            return self.guarded(
-                self._client.indices.put_template,
-                name=name,
-                body=template,
-                params={
-                    # allows to include the type name although it is not allowed anymore by default
-                    "include_type_name": "true"
-                },
-            )
-        else:
-            return self.guarded(self._client.indices.put_template, name=name, body=template)
+        return self.guarded(self._client.indices.put_template, name=name, body=template)
 
     def template_exists(self, name):
         return self.guarded(self._client.indices.exists_template, name)
@@ -91,7 +79,6 @@ class EsClient:
         return self.guarded(self._client.indices.refresh, index=index)
 
     def bulk_index(self, index, items):
-        # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
 
