@@ -90,21 +90,18 @@ class EsClient:
     def refresh(self, index):
         return self.guarded(self._client.indices.refresh, index=index)
 
-    def bulk_index(self, index, doc_type, items):
+    def bulk_index(self, index, items):
         # TODO #653: Remove version-specific support for metrics stores before 7.0.0.
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
 
-        if self._cluster_version[0] > 6:
-            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
-        else:
-            self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, doc_type=doc_type, chunk_size=5000)
+        self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
 
-    def index(self, index, doc_type, item, id=None):
+    def index(self, index, item, id=None):
         doc = {"_source": item}
         if id:
             doc["_id"] = id
-        self.bulk_index(index, doc_type, [doc])
+        self.bulk_index(index, [doc])
 
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
@@ -850,8 +847,6 @@ class EsMetricsStore(MetricsStore):
     A metrics store backed by Elasticsearch.
     """
 
-    METRICS_DOC_TYPE = "_doc"
-
     def __init__(
         self,
         cfg,
@@ -910,7 +905,7 @@ class EsMetricsStore(MetricsStore):
         if self._docs:
             sw = time.StopWatch()
             sw.start()
-            self._client.bulk_index(index=self._index, doc_type=EsMetricsStore.METRICS_DOC_TYPE, items=self._docs)
+            self._client.bulk_index(index=self._index, items=self._docs)
             sw.stop()
             self.logger.info(
                 "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
@@ -1599,7 +1594,6 @@ class FileRaceStore(RaceStore):
 
 class EsRaceStore(RaceStore):
     INDEX_PREFIX = "rally-races-"
-    RACE_DOC_TYPE = "_doc"
 
     def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -1617,7 +1611,7 @@ class EsRaceStore(RaceStore):
         doc = race.as_dict()
         # always update the mapping to the latest version
         self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(index=self.index_name(race), doc_type=EsRaceStore.RACE_DOC_TYPE, item=doc, id=race.race_id)
+        self.client.index(index=self.index_name(race), item=doc, id=race.race_id)
 
     def index_name(self, race):
         race_timestamp = race.race_timestamp
@@ -1692,7 +1686,6 @@ class EsResultsStore:
     """
 
     INDEX_PREFIX = "rally-results-"
-    RESULTS_DOC_TYPE = "_doc"
 
     def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -1709,7 +1702,7 @@ class EsResultsStore:
     def store_results(self, race):
         # always update the mapping to the latest version
         self.client.put_template("rally-results", self.index_template_provider.results_template())
-        self.client.bulk_index(index=self.index_name(race), doc_type=EsResultsStore.RESULTS_DOC_TYPE, items=race.to_result_dicts())
+        self.client.bulk_index(index=self.index_name(race), items=race.to_result_dicts())
 
     def index_name(self, race):
         race_timestamp = race.race_timestamp
