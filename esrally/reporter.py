@@ -889,21 +889,21 @@ class ComparisonReporter:
             color_neutral = console.format.neutral
 
         if as_percentage:
-            diff = contender - baseline
-            percentage_diff = round(formatter(abs(_safe_divide(diff, baseline)) * 100.0), 2)
-            # If the percentage difference cannot be rounded up to more than 0.00, then let's just color it neutral
-            if percentage_diff == 0.00:
-                return color_neutral("%.2f" % percentage_diff + "%")
-            elif diff > 0:
-                return color_greater("%.2f" % percentage_diff + "%")
-            elif diff < 0:
-                return color_smaller("-%.2f" % percentage_diff + "%")
+            diff = formatter(_safe_divide(contender - baseline, baseline) * 100.0)
+            precision = 2
+            suffix = "%"
         else:
             diff = formatter(contender - baseline)
-            if diff > 0:
-                return color_greater("+%.5f" % diff)
-            elif diff < 0:
-                return color_smaller("%.5f" % diff)
-            else:
-                # tabulate needs this to align all values correctly
-                return color_neutral("%.5f" % diff)
+            precision = 5
+            suffix = ""
+
+        # ensures that numbers that appear as "zero" are also colored neutrally
+        threshold = 10**-precision
+        formatted = f"{diff:.{precision}f}{suffix}"
+
+        if diff >= threshold:
+            return color_greater(f"+{formatted}")
+        elif diff <= -threshold:
+            return color_smaller(formatted)
+        else:
+            return color_neutral(formatted)
