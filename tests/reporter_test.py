@@ -25,11 +25,11 @@ class FormatterTests(TestCase):
         self.empty_header = ["Header"]
         self.empty_data = []
 
-        self.metrics_header = ["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"]
+        self.metrics_header = ["Metric", "Task", "Baseline", "Contender", "Diff", "Unit", "Diff %"]
         self.metrics_data = [
-            ["Min Throughput", "index", "17300", "18000", "700", "ops/s"],
-            ["Median Throughput", "index", "17500", "18500", "1000", "ops/s"],
-            ["Max Throughput", "index", "17700", "19000", "1300", "ops/s"],
+            ["Min Throughput", "index", "17300", "18000", "700", "ops/s", "4.04%"],
+            ["Median Throughput", "index", "17500", "18500", "1000", "ops/s", "5.71%"],
+            ["Max Throughput", "index", "17700", "19000", "1300", "ops/s", "7.34%"],
         ]
         self.numbers_align = "right"
 

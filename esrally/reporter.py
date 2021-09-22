@@ -64,7 +64,6 @@ def write_single_report(report_file, report_format, cwd, numbers_align, headers,
         formatter = format_as_csv
     else:
         raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
-
     print_internal(formatter(headers, data_rich))
     if len(report_file) > 0:
         normalized_report_file = rio.normalize_path(report_file, cwd)
@@ -379,7 +378,7 @@ class ComparisonReporter:
             self.report_format,
             self.cwd,
             self.numbers_align,
-            headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit"],
+            headers=["Metric", "Task", "Baseline", "Contender", "Diff", "Unit", "Diff %"],
             data_plain=metrics_table,
             data_rich=metrics_table_console,
         )
@@ -864,15 +863,18 @@ class ComparisonReporter:
                 formatter(contender),
                 self._diff(baseline, contender, treat_increase_as_improvement, formatter),
                 unit,
+                self._diff(baseline, contender, treat_increase_as_improvement, formatter, as_percentage=True),
             ]
         else:
             return []
 
-    def _diff(self, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x):
+    def _diff(self, baseline, contender, treat_increase_as_improvement, formatter=lambda x: x, as_percentage=False):
         def identity(x):
             return x
 
-        diff = formatter(contender - baseline)
+        def _safe_divide(n, d):
+            return n / d if d else 0
+
         if self.plain:
             color_greater = identity
             color_smaller = identity
@@ -886,10 +888,22 @@ class ComparisonReporter:
             color_smaller = console.format.green
             color_neutral = console.format.neutral
 
-        if diff > 0:
-            return color_greater("+%.5f" % diff)
-        elif diff < 0:
-            return color_smaller("%.5f" % diff)
+        if as_percentage:
+            diff = formatter(_safe_divide(contender - baseline, baseline) * 100.0)
+            precision = 2
+            suffix = "%"
         else:
-            # tabulate needs this to align all values correctly
-            return color_neutral("%.5f" % diff)
+            diff = formatter(contender - baseline)
+            precision = 5
+            suffix = ""
+
+        # ensures that numbers that appear as "zero" are also colored neutrally
+        threshold = 10 ** -precision
+        formatted = f"{diff:.{precision}f}{suffix}"
+
+        if diff >= threshold:
+            return color_greater(f"+{formatted}")
+        elif diff <= -threshold:
+            return color_smaller(formatted)
+        else:
+            return color_neutral(formatted)
