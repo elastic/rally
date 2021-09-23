@@ -101,8 +101,8 @@ tests_require = [
 # These packages are only required when developing Rally
 develop_require = [
     "tox==3.14.0",
-    "sphinx==2.2.0",
-    "sphinx_rtd_theme==0.5.1",
+    "sphinx==4.2.0",
+    "sphinx_rtd_theme==1.0.0",
     "twine==1.15.0",
     "wheel==0.33.6",
     "github3.py==1.3.0",
