@@ -86,10 +86,9 @@ def no_retry(f, actor_name):
     """
 
     def _format_exception(e):
-        if hasattr(e, "message"):
-            return f"{type(e).__name__}: {e.message}"
-        else:
-            return str(e)
+        clazz = type(e)
+        message = getattr(e, "message", lambda: e)
+        return f"{'.'.join([clazz.__module__, clazz.__name__])}: {message}"
 
     def guard(self, msg, sender):
         try:
