@@ -153,11 +153,12 @@ class StartupTimeTests(TestCase):
 
 
 class Client:
-    def __init__(self, nodes=None, info=None, indices=None, transform=None, transport_client=None):
+    def __init__(self, nodes=None, info=None, indices=None, transform=None, cat=None, transport_client=None):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
         self.transform = transform
+        self.cat = cat
         if transport_client:
             self.transport = transport_client
 
@@ -166,12 +167,13 @@ class Client:
 
 
 class SubClient:
-    def __init__(self, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None):
+    def __init__(self, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, master=None):
         self._stats = wrap(stats)
         self._info = wrap(info)
         self._recovery = wrap(recovery)
         self._transform_stats = wrap(transform_stats)
         self._data_streams_stats = wrap(data_streams_stats)
+        self._master = wrap(master)
 
     def stats(self, *args, **kwargs):
         return self._stats()
@@ -187,6 +189,9 @@ class SubClient:
 
     def data_streams_stats(self, *args, **kwargs):
         return self._data_streams_stats()
+
+    def master(self, *args, **kwargs):
+        return self._master()
 
 
 def wrap(it):
@@ -3714,3 +3719,43 @@ class IndexSizeTests(TestCase):
         self.assertEqual(0, run_subprocess.call_count)
         self.assertEqual(0, metrics_store_cluster_value.call_count)
         self.assertEqual(0, get_size.call_count)
+
+
+class MasterNodeStatsTests(TestCase):
+    def test_negative_sample_interval_forbidden(self):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"master-node-stats-sample-interval": -1}
+        with self.assertRaisesRegex(
+            exceptions.SystemSetupError,
+            r"The telemetry parameter 'master-node-stats-sample-interval' must be greater than zero but was .*\.",
+        ):
+            telemetry.MasterNodeStats(telemetry_params, Client(), metrics_store)
+
+
+class MasterNodeStatsRecorderTests(TestCase):
+    master_node_cat_response = [
+        {
+            "node": "rally-0",
+        }
+    ]
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_store_master_node_stats(self, metrics_store_put_doc):
+        client = Client(cat=SubClient(master=self.master_node_cat_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.MasterNodeStatsRecorder(client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder.record()
+
+        metrics_store_put_doc.assert_has_calls(
+            [
+                mock.call(
+                    {
+                        "name": "master-node-stats",
+                        "node": "rally-0",
+                    },
+                    level=MetaInfoScope.cluster,
+                ),
+            ],
+        )
