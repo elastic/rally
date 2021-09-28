@@ -52,7 +52,7 @@ class ComponentLoader:
         for path in module_paths:
             for filename in os.listdir(path):
                 name, ext = os.path.splitext(filename)
-                if ext.endswith(".py") and name != "__init__":
+                if ext.endswith(".py"):
                     root_relative_path = os.path.join(path, name)[len(self.root_path) + len(os.path.sep) :]
                     module_name = "%s.%s" % (component_name, root_relative_path.replace(os.path.sep, "."))
                     yield module_name
