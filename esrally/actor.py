@@ -87,9 +87,10 @@ def no_retry(f, actor_name):
     """
 
     def guard(self, msg, sender):
+        # noinspection PyBroadException
         try:
             return f(self, msg, sender)
-        except BaseException as e:
+        except BaseException:
             # log here as the full trace might get lost.
             logging.getLogger(__name__).exception("Error in %s", actor_name)
             # don't forward the exception as is because the main process might not have this class available on the load path
