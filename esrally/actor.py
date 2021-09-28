@@ -17,6 +17,7 @@
 
 import logging
 import socket
+import traceback
 
 import thespian.actors
 import thespian.system.messages.status
@@ -85,11 +86,6 @@ def no_retry(f, actor_name):
     :param actor_name: A human readable name of the current actor that should be used in the exception message.
     """
 
-    def _format_exception(e):
-        clazz = type(e)
-        message = getattr(e, "message", lambda: e)
-        return f"{'.'.join([clazz.__module__, clazz.__name__])}: {message}"
-
     def guard(self, msg, sender):
         try:
             return f(self, msg, sender)
@@ -98,13 +94,7 @@ def no_retry(f, actor_name):
             logging.getLogger(__name__).exception("Error in %s", actor_name)
             # don't forward the exception as is because the main process might not have this class available on the load path
             # and will fail then while deserializing the cause.
-            parsed_exception = _format_exception(e)
-            nesting = 0
-            while hasattr(e, "cause") and e.cause:
-                nesting += 1
-                e = e.cause
-                parsed_exception += f" (Caused by: {_format_exception(e)}"
-            parsed_exception += nesting * ")"
+            parsed_exception = traceback.format_exc()
             self.send(sender, BenchmarkFailure(parsed_exception))
 
     return guard
