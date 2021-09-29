@@ -107,16 +107,18 @@ For example, after executing our earlier quickstart example ``docker run elastic
     local               96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199
 
 
-To further examine the contents we can bind mount it from another image e.g.::
+To further examine the contents we can bind mount it from another image e.g.:
 
-    $ docker run --rm -i -v=96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199:/rallyvolume -ti python:3.8.2-slim /bin/bash
+.. parsed-literal:: :class: literal-block highlight
+
+    $ docker run --rm -i -v=96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199:/rallyvolume -ti python:3.8.12-slim-bullseye /bin/bash
     root@9a7dd7b3d8df:/# cd /rallyvolume/
     root@9a7dd7b3d8df:/rallyvolume# ls
     root@9a7dd7b3d8df:/rallyvolume/.rally# ls
     benchmarks  logging.json  logs	rally.ini
     # head -4 benchmarks/races/1d81930a-4ebe-4640-a09b-3055174bce43/race.json
     {
-     "rally-version": "1.2.1.dev0",
+     "rally-version": "\ |release|\ ",
      "environment": "local",
      "race-id": "1d81930a-4ebe-4640-a09b-3055174bce43",
 
@@ -129,9 +131,12 @@ Extending the Docker image
 --------------------------
 
 You can also create your own customized Docker image on top of the existing one.
-The example below shows how to get started::
+The example below shows how to get started:
 
-    FROM elastic/rally:1.2.1
+.. parsed-literal:: :class: literal-block highlight
+
+    FROM elastic/rally:\ |release|\
+
     COPY --chown=1000:0 rally.ini /rally/.rally/
 
 You can then build and test the image with::
