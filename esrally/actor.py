@@ -17,6 +17,7 @@
 
 import logging
 import socket
+import traceback
 
 import thespian.actors
 import thespian.system.messages.status
@@ -86,15 +87,15 @@ def no_retry(f, actor_name):
     """
 
     def guard(self, msg, sender):
+        # noinspection PyBroadException
         try:
             return f(self, msg, sender)
-        except BaseException as e:
-            msg = "Error in {}".format(actor_name)
+        except BaseException:
             # log here as the full trace might get lost.
-            logging.getLogger(__name__).exception(msg)
+            logging.getLogger(__name__).exception("Error in %s", actor_name)
             # don't forward the exception as is because the main process might not have this class available on the load path
             # and will fail then while deserializing the cause.
-            self.send(sender, BenchmarkFailure("{} ({})".format(msg, str(e))))
+            self.send(sender, BenchmarkFailure(traceback.format_exc()))
 
     return guard
 
