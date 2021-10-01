@@ -889,7 +889,7 @@ class ComparisonReporter:
             color_neutral = console.format.neutral
 
         if as_percentage:
-            diff = formatter(_safe_divide(contender - baseline, baseline) * 100.0)
+            diff = _safe_divide(contender - baseline, baseline) * 100.0
             precision = 2
             suffix = "%"
         else:
