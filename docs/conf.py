@@ -73,9 +73,10 @@ def setup(app):
     app.connect("source-read", replace_globals)
 
 
-def read_min_es_version():
-    with open(join(dirname(__file__), os.pardir, "esrally/min-es-version.txt")) as f:
-        return f.read().strip()
+def read_version(version_file="version.txt", full_version=True):
+    with open(join(dirname(__file__), os.pardir, version_file)) as f:
+        raw_version = f.read().strip()
+        return raw_version if full_version else raw_version.replace(".dev0", "")
 
 
 year = date.today().year
@@ -83,7 +84,7 @@ year = date.today().year
 rst_prolog = f"""
 .. |year| replace:: {year}
 .. |MIN_PY_VER| replace:: {read_min_python_version()}
-.. |min_es_version| replace:: {read_min_es_version()}
+.. |min_es_version| replace:: {read_version(version_file="esrally/min-es-version.txt")}
 """
 
 # General information about the project.
@@ -91,16 +92,18 @@ project = "Rally"
 copyright = "%i, Elasticsearch B.V." % year
 author = "Daniel Mitterdorfer"
 
-import esrally
-
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
-# Technically the short X.Y version, but let's use the full version, including .dev0
-version = esrally.__version__
+# The short X.Y version.
+
+# development versions always have the suffix '.dev0'
+
+
+version = read_version(full_version=False)
 # The full version, including alpha/beta/rc tags.
-release = version
+release = read_version()
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:

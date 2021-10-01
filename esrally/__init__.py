@@ -19,7 +19,9 @@ import os
 import sys
 import urllib
 
-from ._version import __version__
+import pkg_resources
+
+__version__ = pkg_resources.require("esrally")[0].version
 
 # Allow an alternative program name be set in case Rally is invoked a wrapper script
 PROGRAM_NAME = os.getenv("RALLY_ALTERNATIVE_BINARY_NAME", os.path.basename(sys.argv[0]))

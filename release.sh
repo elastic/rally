@@ -53,13 +53,13 @@ fi
 echo "Updating changelog"
 # For exit on error to work we have to separate 
 #  CHANGELOG.md generation into two steps.
-# CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
-# printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
-# git commit -a -m "Update changelog for Rally release $RELEASE_VERSION"
+CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
+printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
+git commit -a -m "Update changelog for Rally release $RELEASE_VERSION"
 
 # * Update version in `setup.py` and `docs/conf.py`
 echo "Updating release version number"
-echo "__version__ = \"$RELEASE_VERSION\"" > esrally/_version.py
+echo "$RELEASE_VERSION" > version.txt
 git commit -a -m "Bump version to $RELEASE_VERSION"
 
 # --upgrade is required for virtualenv
@@ -74,10 +74,16 @@ fi
 
 # Build new version
 python3 setup.py bdist_wheel
+# Upload to PyPI
+printf "\033[0;31mUploading to PyPI. Please enter your credentials ...\033[0m\n"
+twine upload dist/esrally-${RELEASE_VERSION}-*.whl
+
+# Create (signed) release tag
+git tag -s "${RELEASE_VERSION}" -m "Rally release $RELEASE_VERSION"
+git push --tags
 
 # Update version to next dev version
-echo "__version__ = \"$NEXT_RELEASE\"" > esrally/_version.py
-
+echo "$NEXT_RELEASE" > version.txt
 
 # Install locally for development
 python3 setup.py develop --upgrade
