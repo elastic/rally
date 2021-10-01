@@ -53,9 +53,9 @@ fi
 echo "Updating changelog"
 # For exit on error to work we have to separate 
 #  CHANGELOG.md generation into two steps.
-CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
-printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
-git commit -a -m "Update changelog for Rally release $RELEASE_VERSION"
+# CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
+# printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
+# git commit -a -m "Update changelog for Rally release $RELEASE_VERSION"
 
 # * Update version in `setup.py` and `docs/conf.py`
 echo "Updating release version number"
@@ -74,16 +74,10 @@ fi
 
 # Build new version
 python3 setup.py bdist_wheel
-# Upload to PyPI
-printf "\033[0;31mUploading to PyPI. Please enter your credentials ...\033[0m\n"
-twine upload dist/esrally-${RELEASE_VERSION}-*.whl
-
-# Create (signed) release tag
-git tag -s "${RELEASE_VERSION}" -m "Rally release $RELEASE_VERSION"
-git push --tags
 
 # Update version to next dev version
 echo "__version__ = \"$NEXT_RELEASE\"" > esrally/_version.py
+
 
 # Install locally for development
 python3 setup.py develop --upgrade
