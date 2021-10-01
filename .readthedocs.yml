@@ -1,0 +1,9 @@
+version: 2
+
+python:
+  install:
+    - method: pip
+      path: .
+
+sphinx:
+  fail_on_warnings: true
