@@ -16,6 +16,7 @@
 # under the License.
 
 from os.path import join, dirname
+import re
 
 try:
     from setuptools import setup, find_packages
@@ -29,10 +30,8 @@ def str_from_file(name):
         return f.read().strip()
 
 
-raw_version = str_from_file("version.txt")
-VERSION = raw_version.split(".")
-__version__ = VERSION
-__versionstr__ = raw_version
+raw_version = str_from_file("esrally/_version.py")
+version = re.match(r'__version__ = "(.+)"', raw_version).group(1)
 
 long_description = str_from_file("README.rst")
 
@@ -122,7 +121,7 @@ first_unsupported_version = "{}.{}".format(supported_python_versions[-1][0], sup
 setup(name="esrally",
       maintainer="Daniel Mitterdorfer",
       maintainer_email="daniel.mitterdorfer@gmail.com",
-      version=__versionstr__,
+      version=version,
       description="Macrobenchmarking framework for Elasticsearch",
       long_description=long_description,
       url="https://github.com/elastic/rally",
