@@ -6,4 +6,4 @@ python:
       path: .
 
 sphinx:
-  fail_on_warnings: true
+  fail_on_warning: true
