@@ -18,8 +18,8 @@
 import re
 from importlib import resources
 
-from esrally._version import __version__
 from esrally import paths
+from esrally._version import __version__
 from esrally.utils import git, io
 
 __RALLY_VERSION_PATTERN = re.compile(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:.(.+))?$")
