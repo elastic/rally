@@ -14,10 +14,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=protected-access
 
-from unittest import TestCase
+from unittest import TestCase, mock
 
-from esrally import reporter
+from esrally import config, reporter
+from esrally.utils import convert
 
 
 class FormatterTests(TestCase):
@@ -50,3 +52,18 @@ class FormatterTests(TestCase):
         formatted = reporter.format_as_csv(self.metrics_header, self.metrics_data)
         # 1 header line, no separation line + 3 data lines
         self.assertEqual(1 + 3, len(formatted.splitlines()))
+
+
+class ComparisonReporterTests(TestCase):
+    def setUp(self):
+        config_mock = mock.Mock(config.Config)
+        config_mock.opts.return_value = True
+        self.reporter = reporter.ComparisonReporter(config_mock)
+
+    def test_diff_percent_divide_by_zero(self):
+        formatted = self.reporter._diff(0, 0, False, as_percentage=True)
+        self.assertEqual("0.00%", formatted)
+
+    def test_diff_percent_ignore_formatter(self):
+        formatted = self.reporter._diff(1, 0, False, formatter=convert.factor(100.0), as_percentage=True)
+        self.assertEqual("-100.00%", formatted)
