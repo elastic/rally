@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 2.3.0
 ------------------------
 
+Support for Elasticsearch 6.x as a metrics store has been dropped
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can still benchmark Elasticsearch 6.x nodes, but can no longer use an Elasticsearch 6.x :doc:`metrics store </metrics>`.
+
 ``relative-time-ms`` is removed
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
