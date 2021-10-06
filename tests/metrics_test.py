@@ -337,7 +337,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
@@ -365,7 +365,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
 
     def test_put_value_with_meta_info(self):
         throughput = 5000
@@ -407,7 +407,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
 
     def test_put_doc_no_meta_data(self):
         self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
@@ -438,7 +438,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
 
     def test_put_doc_with_metadata(self):
         # add a user-defined tag
@@ -492,7 +492,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", doc_type="_doc", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
 
     def test_get_one(self):
         duration = StaticClock.NOW * 1000
@@ -1028,7 +1028,7 @@ class EsRaceStoreTests(TestCase):
                 ],
             },
         }
-        self.es_mock.index.assert_called_with(index="rally-races-2016-01", doc_type="_doc", id=EsRaceStoreTests.RACE_ID, item=expected_doc)
+        self.es_mock.index.assert_called_with(index="rally-races-2016-01", id=EsRaceStoreTests.RACE_ID, item=expected_doc)
 
 
 class EsResultsStoreTests(TestCase):
@@ -1185,7 +1185,7 @@ class EsResultsStoreTests(TestCase):
                 },
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", doc_type="_doc", items=expected_docs)
+        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", items=expected_docs)
 
     def test_store_results_with_missing_version(self):
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
@@ -1319,7 +1319,7 @@ class EsResultsStoreTests(TestCase):
                 },
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", doc_type="_doc", items=expected_docs)
+        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", items=expected_docs)
 
 
 class InMemoryMetricsStoreTests(TestCase):

@@ -1,3 +1,48 @@
+### 2.3.0
+
+#### Enhancements
+
+* [#1343](https://github.com/elastic/rally/pull/1343): Re-introduce fix for listing nested tracks
+* [#1336](https://github.com/elastic/rally/pull/1336): Check benchmark stop at least every second in SamplerThread
+* [#1333](https://github.com/elastic/rally/pull/1333): Add percentage diff column to compare subcommand
+* [#1330](https://github.com/elastic/rally/pull/1330): Add master node telemetry device
+* [#1319](https://github.com/elastic/rally/pull/1319): Add support for listing nested tracks
+* [#1313](https://github.com/elastic/rally/pull/1313): Use bridge network in container mode
+* [#1312](https://github.com/elastic/rally/pull/1312): Update rally-* index template settings to default to Elasticsearch defaults 
+* [#1311](https://github.com/elastic/rally/pull/1311): Show race id in console
+* [#1310](https://github.com/elastic/rally/pull/1310): Configure persistent datastore index settings
+* [#1305](https://github.com/elastic/rally/pull/1305): Allow parallel tasks to exit on any completion
+* [#1303](https://github.com/elastic/rally/pull/1303): Add create and delete ILM policy runners
+* [#1296](https://github.com/elastic/rally/pull/1296): Add data streams telemetry device
+* [#1292](https://github.com/elastic/rally/pull/1292): Bump Python 3.8 version for dev and CI to 3.8.10
+* [#1291](https://github.com/elastic/rally/pull/1291) (Breaking): Drop relative-time-ms metric
+* [#1290](https://github.com/elastic/rally/pull/1290): update elasticsearch client to 7.13.2
+* [#1288](https://github.com/elastic/rally/pull/1288): add transform-stats operation type
+* [#1285](https://github.com/elastic/rally/pull/1285): Ensure exit code 130 is returned from SIGINT
+
+#### Bug Fixes
+
+* [#1318](https://github.com/elastic/rally/pull/1318): Fix num of docs in -1k generated corpus
+* [#1294](https://github.com/elastic/rally/pull/1294): Fix composable templates runner
+* [#1293](https://github.com/elastic/rally/pull/1293): fix download from s3/gs by moving http query parameter downstream
+
+#### Doc Changes
+
+* [#1337](https://github.com/elastic/rally/pull/1337): Clarify definition of processing time
+* [#1332](https://github.com/elastic/rally/pull/1332): Improve docs in various ways
+* [#1327](https://github.com/elastic/rally/pull/1327): Allow more copy/pasting in cluster management docs
+* [#1326](https://github.com/elastic/rally/pull/1326): Improve documentation in various ways
+* [#1325](https://github.com/elastic/rally/pull/1325): Document how to use stat on GNU/Linux too
+* [#1299](https://github.com/elastic/rally/pull/1299): Add Makefile target to run all CI checks
+
+#### Miscellaneous Changes
+
+* [#1304](https://github.com/elastic/rally/pull/1304): Run integration tests with the default distro
+* [#1302](https://github.com/elastic/rally/pull/1302): Upgrade Python client to 7.14.0
+* [#1298](https://github.com/elastic/rally/pull/1298): Use explicit config files for black and isort
+* [#1281](https://github.com/elastic/rally/pull/1281): Format code with black and isort
+* [#1276](https://github.com/elastic/rally/pull/1276): Switch to pytest asserts
+
 ### 2.2.1
 
 #### Enhancements
