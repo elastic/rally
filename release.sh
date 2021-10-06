@@ -17,11 +17,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# Prerequisites for releasing:
-
-# pip3 install twine sphinx sphinx_rtd_theme
-# pip3 install --pre github3.py (see changelog.py)
-
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu
 
@@ -74,9 +69,9 @@ fi
 
 # Build new version
 python3 setup.py bdist_wheel
-# Upload to PyPI
+# Upload to PyPI with retries in case of authentication failure
 printf "\033[0;31mUploading to PyPI. Please enter your credentials ...\033[0m\n"
-twine upload dist/esrally-${RELEASE_VERSION}-*.whl
+for i in 1 2 3 4 5; do twine upload dist/esrally-${RELEASE_VERSION}-*.whl && break || sleep 1; done
 
 # Create (signed) release tag
 git tag -s "${RELEASE_VERSION}" -m "Rally release $RELEASE_VERSION"
@@ -85,23 +80,10 @@ git push --tags
 # Update version to next dev version
 printf '__version__ = "%s"\n' $NEXT_RELEASE > esrally/_version.py
 
-# Install locally for development
-python3 setup.py develop --upgrade
-
 git commit -a -m "Continue in $NEXT_RELEASE"
 git push origin master
-
-# Prepare offline installation package
-# source scripts/offline-install.sh "${RELEASE_VERSION}"
 
 echo ""
 echo "===================="
 echo "Released Rally ${RELEASE_VERSION}"
 echo "===================="
-echo ""
-echo "Manual tasks:"
-echo ""
-echo "* Close milestone on Github: https://github.com/elastic/rally/milestones"
-echo "* Upload offline install package to Github: https://github.com/elastic/rally/releases/edit/$RELEASE_VERSION"
-echo "* Build and publish Docker image using: https://elasticsearch-ci.elastic.co/view/All/job/elastic+rally-release-docker+master specifying $RELEASE_VERSION"
-echo "* Announce on Discuss: https://discuss.elastic.co/c/annoucements"

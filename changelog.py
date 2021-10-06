@@ -17,8 +17,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# requires pip3 install --pre github3.py
-
 import os
 import sys
 

@@ -59,7 +59,7 @@ function main {
     # Jinja2 dependencies
     add_license "Markupsafe" "https://raw.githubusercontent.com/pallets/markupsafe/master/LICENSE.rst"
     # elasticsearch dependencies
-    add_license "urllib3" "https://raw.githubusercontent.com/shazow/urllib3/master/LICENSE.txt"
+    add_license "urllib3" "https://raw.githubusercontent.com/urllib3/urllib3/master/LICENSE.txt"
     #elasticsearch[async] dependencies
     add_license "aiohttp" "https://raw.githubusercontent.com/aio-libs/aiohttp/master/LICENSE.txt"
     #aiohttp dependencies
