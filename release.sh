@@ -17,11 +17,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# Prerequisites for releasing:
-
-# pip3 install twine sphinx sphinx_rtd_theme
-# pip3 install --pre github3.py (see changelog.py)
-
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu
 
