@@ -13,7 +13,6 @@ RUN apt-get -y update && \
 RUN mkdir -p /rally/esrally
 COPY setup.py /rally/
 COPY setup.cfg /rally/
-COPY version.txt /rally/
 COPY README.rst /rally/
 COPY MANIFEST.in /rally/
 COPY esrally/ /rally/esrally/

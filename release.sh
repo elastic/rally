@@ -59,7 +59,7 @@ git commit -a -m "Update changelog for Rally release $RELEASE_VERSION"
 
 # * Update version in `setup.py` and `docs/conf.py`
 echo "Updating release version number"
-echo "$RELEASE_VERSION" > version.txt
+printf '__version__ = "%s"\n' $RELEASE_VERSION > esrally/_version.py
 git commit -a -m "Bump version to $RELEASE_VERSION"
 
 # --upgrade is required for virtualenv
@@ -83,7 +83,7 @@ git tag -s "${RELEASE_VERSION}" -m "Rally release $RELEASE_VERSION"
 git push --tags
 
 # Update version to next dev version
-echo "$NEXT_RELEASE" > version.txt
+printf '__version__ = "%s"\n' $NEXT_RELEASE > esrally/_version.py
 
 # Install locally for development
 python3 setup.py develop --upgrade
