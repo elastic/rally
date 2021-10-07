@@ -122,6 +122,7 @@ it39: check-venv python-caches-clean tox-env-clean
 
 it310: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py310
+
 check-all: lint test it
 
 benchmark: check-venv
