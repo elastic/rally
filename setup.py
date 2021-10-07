@@ -56,7 +56,7 @@ install_requires = [
     # License: MIT
     "py-cpuinfo==7.0.0",
     # License: MIT
-    "tabulate==0.8.7",
+    "tabulate==0.8.9",
     # License: MIT
     "jsonschema==3.1.1",
     # License: BSD
