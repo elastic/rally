@@ -36,7 +36,7 @@ version = re.match(r'__version__ = "(.+)"', raw_version).group(1)
 long_description = str_from_file("README.rst")
 
 # tuples of (major, minor) of supported Python versions ordered from lowest to highest
-supported_python_versions = [(3, 8), (3, 9)]
+supported_python_versions = [(3, 8), (3, 9), (3, 10)]
 
 ################################################################################################
 #
@@ -69,8 +69,8 @@ install_requires = [
     # always use the latest version, these are certificate files...
     # License: MPL 2.0
     "certifi",
-    # License: Apache 2.0
-    "yappi==1.2.3",
+    # License: MIT
+    "yappi==1.3.3",
     # License: BSD
     "ijson==2.6.1",
     # License: Apache 2.0

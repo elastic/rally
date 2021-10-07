@@ -23,6 +23,7 @@ PY_BIN = python3
 PIP_WRAPPER = $(PY_BIN) -m pip
 export PY38 = $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 = $(shell jq -r '.python_versions.PY39' .ci/variables.json)
+export PY310 = $(shell jq -r '.python_versions.PY310' .ci/variables.json)
 export PIP_VERSION = $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
 export SETUPTOOLS_VERSION = $(shell jq -r '.prerequisite_versions.SETUPTOOLS' .ci/variables.json)
 export WHEEL_VERSION = $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
@@ -38,6 +39,7 @@ VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_EN
 prereq:
 	pyenv install --skip-existing $(PY38)
 	pyenv install --skip-existing $(PY39)
+	pyenv install --skip-existing $(PY310)
 	pyenv local $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
@@ -118,6 +120,8 @@ it38: check-venv python-caches-clean tox-env-clean
 it39: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py39
 
+it310: check-venv python-caches-clean tox-env-clean
+	. $(VENV_ACTIVATE_FILE); tox -e py310
 check-all: lint test it
 
 benchmark: check-venv
