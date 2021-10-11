@@ -56,9 +56,7 @@ Also note that automatic updates are disabled in the following cases:
 Configuring Rally
 ~~~~~~~~~~~~~~~~~
 
-Before we can run our first benchmark, we have to configure Rally. Just invoke ``./rally configure`` and Rally will automatically detect that its configuration file is missing and prompt you for some values and write them to ``~/.rally/rally.ini``. After you've configured Rally, it will exit.
-
-For more information see :doc:`configuration help page </configuration>`.
+Rally creates a default configuration automatically on first run. For further configuration, see the :doc:`configuration help page </configuration>`.
 
 Key Components of Rally
 -----------------------
