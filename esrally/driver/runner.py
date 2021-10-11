@@ -470,6 +470,7 @@ class BulkIndex(Runner):
          is in the single digit microsecond range when this feature is disabled and in the single digit millisecond range when this feature
          is enabled; numbers based on a bulk size of 500 elements and no errors). For details please refer to the respective benchmarks
          in ``benchmarks/driver``.
+        * ``timeout``: a time unit value indicating the server-side timeout for the operation
         * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present, defaults to
          ``None`` and potentially falls back to the global timeout setting.
         """
@@ -477,6 +478,8 @@ class BulkIndex(Runner):
         api_kwargs = self._default_kw_params(params)
 
         bulk_params = {}
+        if "timeout" in params:
+            bulk_params["timeout"] = params["timeout"]
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
 
