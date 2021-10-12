@@ -77,7 +77,6 @@ docs-clean:
 # Avoid conflicts between .pyc/pycache related files created by local Python interpreters and other interpreters in Docker
 python-caches-clean:
 	-@find . -name "__pycache__" -prune -exec rm -rf -- \{\} \;
-	-@find . -name ".pyc" -exec -prune rm -rf -- \{\} \;
 
 # Force recreation of the virtual environment used by tox.
 #
