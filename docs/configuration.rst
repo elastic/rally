@@ -218,9 +218,9 @@ With the following configuration Rally will log all output to standard error::
       },
       "handlers": {
         "console_log_handler": {
-            "class": "logging.StreamHandler",
-            "formatter": "normal",
-            "filters": ["isActorLog"]
+          "class": "logging.StreamHandler",
+          "formatter": "normal",
+          "filters": ["isActorLog"]
         }
       },
       "root": {
