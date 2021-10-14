@@ -407,7 +407,7 @@ class BulkIndexRunnerTests(TestCase):
             "action-metadata-present": True,
             "bulk-size": 3,
             "unit": "docs",
-            "timeout": "1m"
+            "timeout": "1m",
         }
 
         result = await bulk(es, bulk_params)
