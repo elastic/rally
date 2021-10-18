@@ -40,7 +40,7 @@ def as_future(result=None, exception=None):
     :param exception: Exceptional result.
     :return: The corresponding future.
     """
-    f = asyncio.Future()
+    f = asyncio.get_running_loop().create_future()
     if exception and result:
         raise AssertionError("Specify a result or an exception but not both")
     if exception:
