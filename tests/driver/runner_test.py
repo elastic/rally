@@ -386,6 +386,44 @@ class BulkIndexRunnerTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
+    async def test_bulk_index_success_with_timeout(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8,
+        }
+        es.bulk.return_value = as_future(io.StringIO(json.dumps(bulk_response)))
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body(
+                "action_meta_data",
+                "index_line",
+                "action_meta_data",
+                "index_line",
+                "action_meta_data",
+                "index_line",
+            ),
+            "action-metadata-present": True,
+            "bulk-size": 3,
+            "unit": "docs",
+            "timeout": "1m",
+        }
+
+        result = await bulk(es, bulk_params)
+
+        self.assertEqual(8, result["took"])
+        self.assertIsNone(result["index"])
+        self.assertEqual(3, result["weight"])
+        self.assertEqual("docs", result["unit"])
+        self.assertEqual(True, result["success"])
+        self.assertEqual(0, result["error-count"])
+        self.assertFalse("error-type" in result)
+
+        es.bulk.assert_called_with(body=bulk_params["body"], params={"timeout": "1m"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
     async def test_bulk_index_success_with_metadata(self, es):
         bulk_response = {
             "errors": False,
