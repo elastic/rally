@@ -3274,7 +3274,7 @@ class RawRequestRunnerTests(TestCase):
 class SleepTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("asyncio.sleep", return_value=None)
+    @mock.patch("asyncio.sleep")
     @run_async
     async def test_missing_parameter(self, sleep, es):
         r = runner.Sleep()
@@ -3292,7 +3292,7 @@ class SleepTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("asyncio.sleep", return_value=None)
+    @mock.patch("asyncio.sleep")
     @run_async
     async def test_sleep(self, sleep, es):
         r = runner.Sleep()
@@ -3812,7 +3812,7 @@ class IndicesRecoveryTests(TestCase):
 class ShrinkIndexTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("asyncio.sleep", return_value=None)
+    @mock.patch("asyncio.sleep")
     @run_async
     async def test_shrink_index_with_shrink_node(self, sleep, es):
         es.indices.get.return_value = as_future({"src": {}})
@@ -3869,7 +3869,7 @@ class ShrinkIndexTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("asyncio.sleep", return_value=None)
+    @mock.patch("asyncio.sleep")
     @run_async
     async def test_shrink_index_derives_shrink_node(self, sleep, es):
         es.indices.get.return_value = as_future({"src": {}})
@@ -3932,7 +3932,7 @@ class ShrinkIndexTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     # To avoid real sleeps in unit tests
-    @mock.patch("asyncio.sleep", return_value=None)
+    @mock.patch("asyncio.sleep")
     @run_async
     async def test_shrink_index_pattern_with_shrink_node(self, sleep, es):
         es.indices.get.return_value = as_future({"src1": {}, "src2": {}, "src-2020": {}})
