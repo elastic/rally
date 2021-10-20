@@ -135,4 +135,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 310 benchmark release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 it310 benchmark release release-checks prereq venv-create check-env
