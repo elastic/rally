@@ -111,8 +111,10 @@ test: check-venv
 
 precommit: lint
 
+# checks min and max python versions
 it: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox
+	. $(VENV_ACTIVATE_FILE); tox -e py38
+	. $(VENV_ACTIVATE_FILE); tox -e py310
 
 it38: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38
