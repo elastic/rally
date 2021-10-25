@@ -5588,7 +5588,10 @@ class RetryTests(TestCase):
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
 
         delegate = mock.AsyncMock(
-            side_effect=[elasticsearch.ConnectionError("N/A", "no route to host"), failed_return_value,]
+            side_effect=[
+                elasticsearch.ConnectionError("N/A", "no route to host"),
+                failed_return_value,
+            ]
         )
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": True, "retry-on-error": False}

@@ -1766,12 +1766,14 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_dict(self):
         es = None
         params = None
-        runner = mock.AsyncMock(return_value={
-            "weight": 50,
-            "unit": "docs",
-            "some-custom-meta-data": "valid",
-            "http-status": 200,
-        })
+        runner = mock.AsyncMock(
+            return_value={
+                "weight": 50,
+                "unit": "docs",
+                "some-custom-meta-data": "valid",
+                "http-status": 200,
+            }
+        )
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
@@ -1803,9 +1805,7 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_with_http_400_aborts_when_specified(self):
         es = None
         params = None
-        runner = mock.AsyncMock(
-            side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found")
-        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
 
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
@@ -1818,9 +1818,7 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_with_http_400(self):
         es = None
         params = None
-        runner = mock.AsyncMock(
-            side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found")
-        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
