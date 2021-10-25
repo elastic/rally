@@ -4392,8 +4392,8 @@ class TransformStatsRunnerTests(TestCase):
     @run_async
     async def test_transform_stats_with_failed_condition(self, es):
         transform_id = "a-transform"
-        es.transform.get_transform_stats = mock.AsyncMock(return_value=
-            {
+        es.transform.get_transform_stats = mock.AsyncMock(
+            return_value={
                 "count": 3,
                 "transforms": [
                     {
@@ -4439,8 +4439,8 @@ class TransformStatsRunnerTests(TestCase):
     @run_async
     async def test_transform_stats_with_successful_condition(self, es):
         transform_id = "a-transform"
-        es.transform.get_transform_stats = mock.AsyncMock(return_value=
-            {
+        es.transform.get_transform_stats = mock.AsyncMock(
+            return_value={
                 "count": 3,
                 "transforms": [
                     {
@@ -4485,8 +4485,8 @@ class TransformStatsRunnerTests(TestCase):
     @run_async
     async def test_transform_stats_with_non_existing_path(self, es):
         transform_id = "a-transform"
-        es.transform.get_transform_stats = mock.AsyncMock(return_value=
-            {
+        es.transform.get_transform_stats = mock.AsyncMock(
+            return_value={
                 "count": 3,
                 "transforms": [
                     {
@@ -4628,8 +4628,8 @@ class GetAsyncSearchTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_get_async_search(self, es):
-        es.async_search.get = mock.AsyncMock(return_value=
-            {
+        es.async_search.get = mock.AsyncMock(
+            return_value={
                 "is_running": False,
                 "response": {
                     "took": 1122,
@@ -4786,10 +4786,12 @@ class QueryWithSearchAfterScrollTests(TestCase):
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(side_effect=[
-            io.BytesIO(json.dumps(page_1).encode()),
-            io.BytesIO(json.dumps(page_2).encode()),
-        ])
+        es.transport.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
 
         r = runner.Query()
 
@@ -4894,10 +4896,12 @@ class QueryWithSearchAfterScrollTests(TestCase):
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(side_effect=[
-            io.BytesIO(json.dumps(page_1).encode()),
-            io.BytesIO(json.dumps(page_2).encode()),
-        ])
+        es.transport.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
         r = runner.Query()
         await r(es, params)
 
@@ -5090,23 +5094,25 @@ class CompositeTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_multiple_streams(self, es):
-        es.transport.perform_request = mock.AsyncMock(side_effect=[
-            # raw-request
-            None,
-            # search
-            io.StringIO(
-                json.dumps(
-                    {
-                        "hits": {
-                            "total": {
-                                "value": 10,
-                                "relation": "eq",
+        es.transport.perform_request = mock.AsyncMock(
+            side_effect=[
+                # raw-request
+                None,
+                # search
+                io.StringIO(
+                    json.dumps(
+                        {
+                            "hits": {
+                                "total": {
+                                    "value": 10,
+                                    "relation": "eq",
+                                },
                             },
                         },
-                    },
+                    ),
                 ),
-            ),
-        ])
+            ]
+        )
 
         params = {
             "max-connections": 4,
@@ -5161,21 +5167,23 @@ class CompositeTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_propagates_violated_assertions(self, es):
-        es.transport.perform_request = mock.AsyncMock(side_effect=[
-            # search
-            io.StringIO(
-                json.dumps(
-                    {
-                        "hits": {
-                            "total": {
-                                "value": 0,
-                                "relation": "eq",
-                            },
+        es.transport.perform_request = mock.AsyncMock(
+            side_effect=[
+                # search
+                io.StringIO(
+                    json.dumps(
+                        {
+                            "hits": {
+                                "total": {
+                                    "value": 0,
+                                    "relation": "eq",
+                                },
+                            }
                         }
-                    }
+                    )
                 )
-            )
-        ])
+            ]
+        )
 
         params = {
             "max-connections": 4,
