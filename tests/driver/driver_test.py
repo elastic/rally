@@ -29,7 +29,7 @@ import elasticsearch
 from esrally import config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
 from esrally.track import params
-from tests import as_future, run_async
+from tests import run_async
 
 
 class DriverTestParamSource:
@@ -1369,7 +1369,7 @@ class AsyncExecutorTests(TestCase):
         task_start = time.perf_counter()
         es.new_request_context.return_value = AsyncExecutorTests.StaticRequestTiming(task_start=task_start)
 
-        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
+        es.bulk = mock.AsyncMock(return_value=io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
@@ -1635,7 +1635,7 @@ class AsyncExecutorTests(TestCase):
     @run_async
     async def test_cancel_execute_schedule(self, es):
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
-        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
+        es.bulk = mock.AsyncMock(return_value=io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
