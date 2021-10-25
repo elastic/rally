@@ -163,8 +163,7 @@ class AssertingRunnerTests(TestCase):
                 },
             },
         }
-        delegate = mock.MagicMock()
-        delegate.return_value = as_future(response)
+        delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
         async with r:
             final_response = await r(
@@ -191,8 +190,7 @@ class AssertingRunnerTests(TestCase):
                 },
             },
         }
-        delegate = mock.MagicMock()
-        delegate.return_value = as_future(response)
+        delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
         with self.assertRaisesRegex(
             exceptions.RallyTaskAssertionError, r"Expected \[hits.hits.relation\] in \[test-task\] to be == \[eq\] but was \[gte\]."
@@ -213,8 +211,7 @@ class AssertingRunnerTests(TestCase):
     async def test_skips_asserts_for_non_dicts(self):
         es = None
         response = (1, "ops")
-        delegate = mock.MagicMock()
-        delegate.return_value = as_future(response)
+        delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
         async with r:
             final_response = await r(
@@ -5456,7 +5453,7 @@ class RequestTimingTests(TestCase):
         multi_cluster_client = {"default": es}
         es.new_request_context.return_value = RequestTimingTests.StaticRequestTiming(task_start=2)
 
-        delegate = mock.Mock(return_value=as_future({"weight": 5, "unit": "ops", "success": True}))
+        delegate = mock.AsyncMock(return_value={"weight": 5, "unit": "ops", "success": True})
         params = {"name": "unit-test-operation", "operation-type": "test-op"}
         timer = runner.RequestTiming(delegate)
 
@@ -5483,7 +5480,7 @@ class RequestTimingTests(TestCase):
         es.new_request_context.return_value = RequestTimingTests.StaticRequestTiming(task_start=2)
 
         # a simple runner without a return value
-        delegate = mock.Mock(return_value=as_future())
+        delegate = mock.AsyncMock()
         params = {"name": "unit-test-operation", "operation-type": "test-op"}
         timer = runner.RequestTiming(delegate)
 
@@ -5509,7 +5506,7 @@ class RequestTimingTests(TestCase):
 class RetryTests(TestCase):
     @run_async
     async def test_is_transparent_on_success_when_no_retries(self):
-        delegate = mock.Mock(return_value=as_future())
+        delegate = mock.AsyncMock()
         es = None
         params = {
             # no retries
@@ -5522,7 +5519,7 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_is_transparent_on_exception_when_no_retries(self):
-        delegate = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")))
+        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
         es = None
         params = {
             # no retries
@@ -5538,7 +5535,7 @@ class RetryTests(TestCase):
     async def test_is_transparent_on_application_error_when_no_retries(self):
         original_return_value = {"weight": 1, "unit": "ops", "success": False}
 
-        delegate = mock.Mock(return_value=as_future(original_return_value))
+        delegate = mock.AsyncMock(return_value=original_return_value)
         es = None
         params = {
             # no retries
@@ -5552,7 +5549,7 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_is_does_not_retry_on_success(self):
-        delegate = mock.Mock(return_value=as_future())
+        delegate = mock.AsyncMock()
         es = None
         params = {"retries": 3, "retry-wait-period": 0.1, "retry-on-timeout": True, "retry-on-error": True}
         retrier = runner.Retry(delegate)
@@ -5563,12 +5560,12 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_retries_on_timeout_if_wanted_and_raises_if_no_recovery(self):
-        delegate = mock.Mock(
+        delegate = mock.AsyncMock(
             side_effect=[
-                as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
-                as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
-                as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
-                as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
             ]
         )
         es = None
@@ -5590,8 +5587,8 @@ class RetryTests(TestCase):
     async def test_retries_on_timeout_if_wanted_and_returns_first_call(self):
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
 
-        delegate = mock.Mock(
-            side_effect=[as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host")), as_future(failed_return_value)]
+        delegate = mock.AsyncMock(
+            side_effect=[elasticsearch.ConnectionError("N/A", "no route to host"), failed_return_value,]
         )
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": True, "retry-on-error": False}
@@ -5615,14 +5612,14 @@ class RetryTests(TestCase):
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": False}
 
-        delegate = mock.Mock(
+        delegate = mock.AsyncMock(
             side_effect=[
-                as_future(exception=connection_error),
-                as_future(failed_return_value),
-                as_future(exception=connection_error),
-                as_future(exception=connection_error),
-                as_future(failed_return_value),
-                as_future(success_return_value),
+                connection_error,
+                failed_return_value,
+                connection_error,
+                connection_error,
+                failed_return_value,
+                success_return_value,
             ]
         )
         es = None
@@ -5657,7 +5654,7 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_does_not_retry_on_timeout_if_not_wanted(self):
-        delegate = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionTimeout(408, "timed out")))
+        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(408, "timed out"))
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": False, "retry-on-error": True}
         retrier = runner.Retry(delegate)
@@ -5672,7 +5669,7 @@ class RetryTests(TestCase):
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": True}
 
-        delegate = mock.Mock(side_effect=[as_future(failed_return_value), as_future(success_return_value)])
+        delegate = mock.AsyncMock(side_effect=[failed_return_value, success_return_value])
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": False, "retry-on-error": True}
         retrier = runner.Retry(delegate)
@@ -5693,7 +5690,7 @@ class RetryTests(TestCase):
     async def test_does_not_retry_on_application_error_if_not_wanted(self):
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
 
-        delegate = mock.Mock(return_value=as_future(failed_return_value))
+        delegate = mock.AsyncMock(return_value=failed_return_value)
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": True, "retry-on-error": False}
         retrier = runner.Retry(delegate)
@@ -5706,7 +5703,7 @@ class RetryTests(TestCase):
 
     @run_async
     async def test_assumes_success_if_runner_returns_non_dict(self):
-        delegate = mock.Mock(return_value=as_future(result=(1, "ops")))
+        delegate = mock.AsyncMock(return_value=(1, "ops"))
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": True, "retry-on-error": True}
         retrier = runner.Retry(delegate)
@@ -5725,10 +5722,10 @@ class RetryTests(TestCase):
         success_return_value = {"weight": 1, "unit": "ops", "success": True}
 
         responses = []
-        responses += failure_count * [as_future(failed_return_value)]
-        responses += [as_future(success_return_value)]
+        responses += failure_count * [failed_return_value]
+        responses += [success_return_value]
 
-        delegate = mock.Mock(side_effect=responses)
+        delegate = mock.AsyncMock(side_effect=responses)
         es = None
         params = {"retry-until-success": True, "retry-wait-period": 0.01}
         retrier = runner.Retry(delegate)
