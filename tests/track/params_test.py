@@ -2470,7 +2470,8 @@ class SearchParamSourceTests(TestCase):
         )
         p = source.params()
 
-        self.assertEqual(10, len(p))
+        self.assertEqual(11, len(p))
+        self.assertEqual("search", p["operation-type"])
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertIsNone(p["request-timeout"])
@@ -2509,7 +2510,8 @@ class SearchParamSourceTests(TestCase):
         )
         p = source.params()
 
-        self.assertEqual(10, len(p))
+        self.assertEqual(11, len(p))
+        self.assertEqual("search", p["operation-type"])
         self.assertEqual("data-stream-1", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual(1.0, p["request-timeout"])
@@ -2561,7 +2563,8 @@ class SearchParamSourceTests(TestCase):
         )
         p = source.params()
 
-        self.assertEqual(10, len(p))
+        self.assertEqual(11, len(p))
+        self.assertEqual("search", p["operation-type"])
         self.assertEqual("index1", p["index"])
         self.assertIsNone(p["type"])
         self.assertIsNone(p["request-timeout"])
@@ -2580,7 +2583,7 @@ class SearchParamSourceTests(TestCase):
             p["body"],
         )
 
-    def test_user_specified_overrides_defaults(self):
+    def test_user_specified_index_overrides_defaults(self):
         index1 = track.Index(name="index1", types=["type1"])
 
         source = params.SearchParamSource(
@@ -2601,7 +2604,8 @@ class SearchParamSourceTests(TestCase):
         )
         p = source.params()
 
-        self.assertEqual(10, len(p))
+        self.assertEqual(11, len(p))
+        self.assertEqual("search", p["operation-type"])
         self.assertEqual("_all", p["index"])
         self.assertEqual("type1", p["type"])
         self.assertDictEqual({}, p["request-params"])
@@ -2620,6 +2624,40 @@ class SearchParamSourceTests(TestCase):
             },
             p["body"],
         )
+
+    def test_passes_search_operation_type_by_default(self):
+        index1 = track.Index(name="index1")
+
+        source = params.SearchParamSource(
+            track = track.Track(name="unit-test", indices=[index1]),
+            params = { }
+        )
+
+        p = source.params()
+        self.assertEqual("search", p["operation-type"])
+
+    def test_user_specified_operation_type_overrides_defaults(self):
+        index1 = track.Index(name="index1")
+
+        source_scroll = params.SearchParamSource(
+            track = track.Track(name="unit-test", indices=[index1]),
+            params = {
+                "operation-type": "scroll-search"
+            }
+        )
+
+        source_paginated = params.SearchParamSource(
+            track = track.Track(name="unit-test", indices=[index1]),
+            params = {
+                "operation-type": "paginated-search"
+            }
+        )
+
+        p1 = source_scroll.params()
+        self.assertEqual("scroll-search", p1["operation-type"])
+
+        p2 = source_paginated.params()
+        self.assertEqual("paginated-search", p2["operation-type"])
 
     def test_user_specified_data_stream_overrides_defaults(self):
         ds1 = track.DataStream(name="data-stream-1")
@@ -2640,7 +2678,8 @@ class SearchParamSourceTests(TestCase):
         )
         p = source.params()
 
-        self.assertEqual(10, len(p))
+        self.assertEqual(11, len(p))
+        self.assertEqual("search", p["operation-type"])
         self.assertEqual("data-stream-2", p["index"])
         self.assertIsNone(p["type"])
         self.assertEqual(1.0, p["request-timeout"])

@@ -1365,6 +1365,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "search",
             "index": "_all",
             "detailed-results": True,
             "cache": True,
@@ -1410,6 +1411,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "search",
             "index": "_all",
             "detailed-results": True,
             "cache": True,
@@ -1460,6 +1462,7 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
+            "operation-type": "search",
             "index": "_all",
             "cache": False,
             "detailed-results": True,
@@ -1513,6 +1516,7 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
+            "operation-type": "search",
             "index": "_all",
             "body": None,
             "request-params": {"q": "user:kimchy"},
@@ -1560,6 +1564,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "search",
             "index": "_all",
             "cache": True,
             "detailed-results": True,
@@ -1614,6 +1619,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "search",
             "index": "unittest",
             "detailed-results": True,
             "response-compression-enabled": False,
@@ -1666,6 +1672,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "search",
             "index": "unittest",
             "type": "type",
             "detailed-results": True,
@@ -1720,6 +1727,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "scroll-search",
             "pages": 1,
             "results-per-page": 100,
             "index": "unittest",
@@ -1780,6 +1788,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "scroll-search",
             "pages": 1,
             "results-per-page": 100,
             "index": "unittest",
@@ -1835,6 +1844,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "scroll-search",
             "index": "_all",
             "pages": 1,
             "results-per-page": 100,
@@ -1916,6 +1926,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "scroll-search",
             "pages": 2,
             "results-per-page": 2,
             "index": "unittest",
@@ -1963,6 +1974,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "scroll-search",
             "pages": 5,
             "results-per-page": 100,
             "index": "unittest",
@@ -2027,6 +2039,7 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
+            "operation-type": "scroll-search",
             "pages": "all",
             "results-per-page": 4,
             "index": "unittest",
@@ -2051,6 +2064,32 @@ class QueryRunnerTests(TestCase):
         self.assertFalse("error-type" in results)
 
         es.clear_scroll.assert_awaited_once_with(body={"scroll_id": ["some-scroll-id"]})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_query_runner_missing_operation_type(self, es):
+        query_runner = runner.Query()
+
+        params = {
+            "index": "_all",
+            "detailed-results": True,
+            "cache": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            await query_runner(es, params)
+        self.assertEqual(
+            "Parameter source for operation 'query' did not provide the mandatory parameter 'operation-type'. "
+            "Add it to your parameter source and try again.",
+            ctx.exception.args[0],
+        )
+
+        self.assertEqual(0, es.call_count)
 
 
 class PutPipelineRunnerTests(TestCase):

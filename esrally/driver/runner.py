@@ -766,6 +766,7 @@ class Query(Runner):
 
     It expects at least the following keys in the `params` hash:
 
+    * `operation-type`: One of `search`, `paginated-search`, or `scroll-search`.
     * `index`: The index or indices against which to issue the query.
     * `type`: See `index`
     * `cache`: True iff the request cache should be used.
@@ -814,6 +815,7 @@ class Query(Runner):
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
+        operation_type = mandatory(params, "operation-type", self)
         index = mandatory(params, "index", self)
         body = mandatory(params, "body", self)
         size = params.get("results-per-page")
@@ -970,19 +972,19 @@ class Query(Runner):
                 "took": took,
             }
 
-        search_method = params.get("operation-type")
-        if search_method == "paginated-search":
+        if operation_type == "paginated-search":
             return await _search_after_query(es, params)
-        elif search_method == "scroll-search":
+        elif operation_type == "scroll-search":
             return await _scroll_query(es, params)
-        elif "pages" in params:
-            logging.getLogger(__name__).warning(
-                "Invoking a scroll search with the 'search' operation is deprecated "
-                "and will be removed in a future release. Use 'scroll-search' instead."
-            )
-            return await _scroll_query(es, params)
+        elif operation_type == "search":
+            if "pages" in params:
+                logging.getLogger(__name__).warning(
+                    "Invoking a scroll search with the 'search' operation is deprecated "
+                    "and will be removed in a future release. Use 'scroll-search' instead.")
+            else:
+                return await _request_body_query(es, params)
         else:
-            return await _request_body_query(es, params)
+            raise exceptions.RallyError("No runner available for operation type [%s]" % operation_type)
 
     async def _raw_search(self, es, doc_type, index, body, params, headers=None):
         components = []
