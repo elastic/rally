@@ -515,7 +515,7 @@ class SearchParamSource(ParamSource):
             "request-params": request_params,
             "response-compression-enabled": response_compression_enabled,
             "body": query_body,
-            "operation-type": operation_type
+            "operation-type": operation_type,
         }
 
         if not target_name:
@@ -783,6 +783,7 @@ class PartitionBulkIndexParamSource:
     @property
     def percent_completed(self):
         return self.current_bulk / self.total_bulks
+
 
 class OpenPointInTimeParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):

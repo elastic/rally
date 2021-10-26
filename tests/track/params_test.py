@@ -2628,10 +2628,7 @@ class SearchParamSourceTests(TestCase):
     def test_passes_search_operation_type_by_default(self):
         index1 = track.Index(name="index1")
 
-        source = params.SearchParamSource(
-            track = track.Track(name="unit-test", indices=[index1]),
-            params = { }
-        )
+        source = params.SearchParamSource(track=track.Track(name="unit-test", indices=[index1]), params={})
 
         p = source.params()
         self.assertEqual("search", p["operation-type"])
@@ -2640,17 +2637,11 @@ class SearchParamSourceTests(TestCase):
         index1 = track.Index(name="index1")
 
         source_scroll = params.SearchParamSource(
-            track = track.Track(name="unit-test", indices=[index1]),
-            params = {
-                "operation-type": "scroll-search"
-            }
+            track=track.Track(name="unit-test", indices=[index1]), params={"operation-type": "scroll-search"}
         )
 
         source_paginated = params.SearchParamSource(
-            track = track.Track(name="unit-test", indices=[index1]),
-            params = {
-                "operation-type": "paginated-search"
-            }
+            track=track.Track(name="unit-test", indices=[index1]), params={"operation-type": "paginated-search"}
         )
 
         p1 = source_scroll.params()

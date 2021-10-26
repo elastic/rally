@@ -980,7 +980,8 @@ class Query(Runner):
             if "pages" in params:
                 logging.getLogger(__name__).warning(
                     "Invoking a scroll search with the 'search' operation is deprecated "
-                    "and will be removed in a future release. Use 'scroll-search' instead.")
+                    "and will be removed in a future release. Use 'scroll-search' instead."
+                )
             else:
                 return await _request_body_query(es, params)
         else:
