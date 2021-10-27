@@ -103,7 +103,7 @@ def runner_for(operation_type):
     try:
         return __RUNNERS[operation_type]
     except KeyError:
-        raise exceptions.RallyError("No runner available for operation type [%s]" % operation_type)
+        raise exceptions.RallyError(f"No runner available for operation-type: {operation_type}]")
 
 
 def enable_assertions(enabled):
@@ -982,10 +982,11 @@ class Query(Runner):
                     "Invoking a scroll search with the 'search' operation is deprecated "
                     "and will be removed in a future release. Use 'scroll-search' instead."
                 )
+                return await _scroll_query(es, params)
             else:
                 return await _request_body_query(es, params)
         else:
-            raise exceptions.RallyError("No runner available for operation type [%s]" % operation_type)
+            raise exceptions.RallyError(f"No runner available for operation-type: {operation_type}")
 
     async def _raw_search(self, es, doc_type, index, body, params, headers=None):
         components = []

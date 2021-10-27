@@ -2091,6 +2091,83 @@ class QueryRunnerTests(TestCase):
 
         self.assertEqual(0, es.call_count)
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_query_runner_search_with_pages_logs_warning_and_executes(self, es):
+        # page 1
+        search_response = {
+            "_scroll_id": "some-scroll-id",
+            "took": 4,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 2, "relation": "eq"},
+                "hits": [
+                    {"title": "some-doc-1"},
+                    {"title": "some-doc-2"},
+                ],
+            },
+        }
+
+        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+
+        query_runner = runner.Query()
+
+        params = {
+            "operation-type": "search",
+            "pages": 1,
+            "results-per-page": 100,
+            "index": "unittest",
+            "cache": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        with mock.patch.object(query_runner.logger, "warning") as mocked_warning_logger:
+            results = await query_runner(es, params)
+            mocked_warning_logger.assert_has_calls(
+                [
+                    mock.call(
+                        "Invoking a scroll search with the 'search' operation is deprecated "
+                        "and will be removed in a future release. Use 'scroll-search' instead."
+                    )
+                ]
+            )
+
+        self.assertEqual(1, results["weight"])
+        self.assertEqual(1, results["pages"])
+        self.assertEqual(2, results["hits"])
+        self.assertEqual("eq", results["hits_relation"])
+        self.assertEqual(4, results["took"])
+        self.assertEqual("pages", results["unit"])
+        self.assertFalse(results["timed_out"])
+        self.assertFalse("error-type" in results)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_query_runner_fails_with_unknown_operation_type(self, es):
+        query_runner = runner.Query()
+
+        params = {
+            "operation-type": "unknown",
+            "index": "unittest",
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        with self.assertRaises(exceptions.RallyError) as ctx:
+            await query_runner(es, params)
+        self.assertEqual(
+            "No runner available for operation-type: unknown",
+            ctx.exception.args[0],
+        )
+
 
 class PutPipelineRunnerTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
