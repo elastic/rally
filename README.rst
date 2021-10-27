@@ -1,7 +1,7 @@
 Rally
 =====
 
-Rally is the macrobenchmarking framework for Elasticsearch
+Rally is the macrobenchmarking framework for Elasticsearch.
 
 What is Rally?
 --------------
