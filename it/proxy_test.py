@@ -38,7 +38,7 @@ def http_proxy():
         f"-v {config_dir}/squid.conf:/etc/squid/squid.conf "
         f"-p 3128:3128 datadog/squid"
     )
-    proxy_container_id = lines[0].strip()
+    proxy_container_id = lines[-1].strip()
     proxy = HttpProxy(authenticated_url="http://testuser:testuser@127.0.0.1:3128", anonymous_url="http://127.0.0.1:3128")
     yield proxy
     process.run_subprocess(f"docker stop {proxy_container_id}")

@@ -29,7 +29,7 @@ import elasticsearch
 from esrally import config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
 from esrally.track import params
-from tests import as_future, run_async
+from tests import run_async
 
 
 class DriverTestParamSource:
@@ -1369,7 +1369,7 @@ class AsyncExecutorTests(TestCase):
         task_start = time.perf_counter()
         es.new_request_context.return_value = AsyncExecutorTests.StaticRequestTiming(task_start=task_start)
 
-        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
+        es.bulk = mock.AsyncMock(return_value=io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
@@ -1566,8 +1566,8 @@ class AsyncExecutorTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_throughput_throttled(self, es):
-        def perform_request(*args, **kwargs):
-            return as_future()
+        async def perform_request(*args, **kwargs):
+            return None
 
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
@@ -1635,7 +1635,7 @@ class AsyncExecutorTests(TestCase):
     @run_async
     async def test_cancel_execute_schedule(self, es):
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
-        es.bulk.return_value = as_future(io.StringIO('{"errors": false, "took": 8}'))
+        es.bulk = mock.AsyncMock(return_value=io.StringIO('{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
@@ -1742,8 +1742,7 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_no_return_value(self):
         es = None
         params = None
-        runner = mock.Mock()
-        runner.return_value = as_future()
+        runner = mock.AsyncMock()
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
@@ -1755,8 +1754,7 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_tuple(self):
         es = None
         params = None
-        runner = mock.Mock()
-        runner.return_value = as_future(result=(500, "MB"))
+        runner = mock.AsyncMock(return_value=(500, "MB"))
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
@@ -1768,9 +1766,8 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_dict(self):
         es = None
         params = None
-        runner = mock.Mock()
-        runner.return_value = as_future(
-            {
+        runner = mock.AsyncMock(
+            return_value={
                 "weight": 50,
                 "unit": "docs",
                 "some-custom-meta-data": "valid",
@@ -1798,7 +1795,7 @@ class AsyncExecutorTests(TestCase):
                 es = None
                 params = None
                 # ES client uses pseudo-status "N/A" in this case...
-                runner = mock.Mock(side_effect=as_future(exception=elasticsearch.ConnectionError("N/A", "no route to host", None)))
+                runner = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host", None))
 
                 with self.assertRaises(exceptions.RallyAssertionError) as ctx:
                     await driver.execute_single(self.context_managed(runner), es, params, on_error=on_error)
@@ -1808,9 +1805,7 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_with_http_400_aborts_when_specified(self):
         es = None
         params = None
-        runner = mock.Mock(
-            side_effect=as_future(exception=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
-        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
 
         with self.assertRaises(exceptions.RallyAssertionError) as ctx:
             await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
@@ -1823,9 +1818,7 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_with_http_400(self):
         es = None
         params = None
-        runner = mock.Mock(
-            side_effect=as_future(exception=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
-        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
@@ -1845,7 +1838,7 @@ class AsyncExecutorTests(TestCase):
     async def test_execute_single_with_http_413(self):
         es = None
         params = None
-        runner = mock.Mock(side_effect=as_future(exception=elasticsearch.NotFoundError(413, b"", b"")))
+        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(413, b"", b""))
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 

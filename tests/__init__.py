@@ -29,22 +29,3 @@ def run_async(t):
         asyncio.run(t(*args, **kwargs), debug=True)
 
     return async_wrapper
-
-
-def as_future(result=None, exception=None):
-    """
-
-    Helper to create a future that completes immediately either with a result or exceptionally.
-
-    :param result: Regular result.
-    :param exception: Exceptional result.
-    :return: The corresponding future.
-    """
-    f = asyncio.Future()
-    if exception and result:
-        raise AssertionError("Specify a result or an exception but not both")
-    if exception:
-        f.set_exception(exception)
-    else:
-        f.set_result(result)
-    return f

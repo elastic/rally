@@ -23,6 +23,7 @@ PY_BIN = python3
 PIP_WRAPPER = $(PY_BIN) -m pip
 export PY38 = $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 = $(shell jq -r '.python_versions.PY39' .ci/variables.json)
+export PY310 = $(shell jq -r '.python_versions.PY310' .ci/variables.json)
 export PIP_VERSION = $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
 export SETUPTOOLS_VERSION = $(shell jq -r '.prerequisite_versions.SETUPTOOLS' .ci/variables.json)
 export WHEEL_VERSION = $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
@@ -38,6 +39,7 @@ VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_EN
 prereq:
 	pyenv install --skip-existing $(PY38)
 	pyenv install --skip-existing $(PY39)
+	pyenv install --skip-existing $(PY310)
 	pyenv local $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
@@ -108,14 +110,19 @@ test: check-venv
 
 precommit: lint
 
+# checks min and max python versions
 it: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox
+	. $(VENV_ACTIVATE_FILE); tox -e py38
+	. $(VENV_ACTIVATE_FILE); tox -e py310
 
 it38: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38
 
 it39: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py39
+
+it310: check-venv python-caches-clean tox-env-clean
+	. $(VENV_ACTIVATE_FILE); tox -e py310
 
 check-all: lint test it
 
@@ -129,4 +136,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 benchmark release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 it310 benchmark release release-checks prereq venv-create check-env
