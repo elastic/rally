@@ -1365,7 +1365,6 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
-            "operation-type": "search",
             "index": "_all",
             "detailed-results": True,
             "cache": True,
@@ -1411,7 +1410,6 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
-            "operation-type": "search",
             "index": "_all",
             "detailed-results": True,
             "cache": True,
@@ -1462,7 +1460,6 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
-            "operation-type": "search",
             "index": "_all",
             "cache": False,
             "detailed-results": True,
@@ -1516,7 +1513,6 @@ class QueryRunnerTests(TestCase):
 
         query_runner = runner.Query()
         params = {
-            "operation-type": "search",
             "index": "_all",
             "body": None,
             "request-params": {"q": "user:kimchy"},
@@ -1564,7 +1560,6 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
-            "operation-type": "search",
             "index": "_all",
             "cache": True,
             "detailed-results": True,
@@ -1619,7 +1614,6 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
-            "operation-type": "search",
             "index": "unittest",
             "detailed-results": True,
             "response-compression-enabled": False,
@@ -1672,7 +1666,6 @@ class QueryRunnerTests(TestCase):
         query_runner = runner.Query()
 
         params = {
-            "operation-type": "search",
             "index": "unittest",
             "type": "type",
             "detailed-results": True,
