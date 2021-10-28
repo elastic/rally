@@ -103,7 +103,7 @@ def runner_for(operation_type):
     try:
         return __RUNNERS[operation_type]
     except KeyError:
-        raise exceptions.RallyError(f"No runner available for operation-type: {operation_type}]")
+        raise exceptions.RallyError(f"No runner available for operation-type: [{operation_type}]")
 
 
 def enable_assertions(enabled):
