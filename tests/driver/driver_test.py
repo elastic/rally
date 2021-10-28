@@ -1591,7 +1591,6 @@ class AsyncExecutorTests(TestCase):
                         "request-params": {},
                         "cache": False,
                         "response-compression-enabled": True,
-                        "operation-type": "search",
                     },
                     param_source="driver-test-param-source",
                 ),

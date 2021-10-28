@@ -2067,32 +2067,6 @@ class QueryRunnerTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
-    async def test_query_runner_missing_operation_type(self, es):
-        query_runner = runner.Query()
-
-        params = {
-            "index": "_all",
-            "detailed-results": True,
-            "cache": True,
-            "body": {
-                "query": {
-                    "match_all": {},
-                },
-            },
-        }
-
-        with self.assertRaises(exceptions.DataError) as ctx:
-            await query_runner(es, params)
-        self.assertEqual(
-            "Parameter source for operation 'query' did not provide the mandatory parameter 'operation-type'. "
-            "Add it to your parameter source and try again.",
-            ctx.exception.args[0],
-        )
-
-        self.assertEqual(0, es.call_count)
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
     async def test_query_runner_search_with_pages_logs_warning_and_executes(self, es):
         # page 1
         search_response = {

@@ -815,9 +815,9 @@ class Query(Runner):
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
-        operation_type = mandatory(params, "operation-type", self)
         index = mandatory(params, "index", self)
         body = mandatory(params, "body", self)
+        operation_type = params.get("operation-type", "search")
         size = params.get("results-per-page")
         if size:
             body["size"] = size
