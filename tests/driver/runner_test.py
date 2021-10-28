@@ -2131,7 +2131,7 @@ class QueryRunnerTests(TestCase):
         with self.assertRaises(exceptions.RallyError) as ctx:
             await query_runner(es, params)
         self.assertEqual(
-            "No runner available for operation-type: unknown",
+            "No runner available for operation-type: [unknown]",
             ctx.exception.args[0],
         )
 

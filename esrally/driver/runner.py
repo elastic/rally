@@ -986,7 +986,7 @@ class Query(Runner):
             else:
                 return await _request_body_query(es, params)
         else:
-            raise exceptions.RallyError(f"No runner available for operation-type: {operation_type}")
+            raise exceptions.RallyError(f"No runner available for operation-type: [{operation_type}]")
 
     async def _raw_search(self, es, doc_type, index, body, params, headers=None):
         components = []
