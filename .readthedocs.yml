@@ -5,6 +5,8 @@ python:
   install:
     - method: pip
       path: .
+      extra_requirements:
+        - develop
 
 sphinx:
   fail_on_warning: true
