@@ -817,7 +817,7 @@ class Query(Runner):
         # by the composite's parameter source.
         index = mandatory(params, "index", self)
         body = mandatory(params, "body", self)
-        operation_type = params.get("operation-type", "search")
+        operation_type = params.get("operation-type")
         size = params.get("results-per-page")
         if size:
             body["size"] = size

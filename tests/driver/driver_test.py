@@ -958,14 +958,14 @@ class SchedulerTests(TestCase):
         schedule = driver.schedule_for(task_allocation, param_source)
 
         expected_schedule = [
-            (0, metrics.SampleType.Warmup, 1 / 8, {}),
-            (0.1, metrics.SampleType.Warmup, 2 / 8, {}),
-            (0.2, metrics.SampleType.Warmup, 3 / 8, {}),
-            (0.3, metrics.SampleType.Normal, 4 / 8, {}),
-            (0.4, metrics.SampleType.Normal, 5 / 8, {}),
-            (0.5, metrics.SampleType.Normal, 6 / 8, {}),
-            (0.6, metrics.SampleType.Normal, 7 / 8, {}),
-            (0.7, metrics.SampleType.Normal, 8 / 8, {}),
+            (0, metrics.SampleType.Warmup, 1 / 8, {"operation-type": "search"}),
+            (0.1, metrics.SampleType.Warmup, 2 / 8, {"operation-type": "search"}),
+            (0.2, metrics.SampleType.Warmup, 3 / 8, {"operation-type": "search"}),
+            (0.3, metrics.SampleType.Normal, 4 / 8, {"operation-type": "search"}),
+            (0.4, metrics.SampleType.Normal, 5 / 8, {"operation-type": "search"}),
+            (0.5, metrics.SampleType.Normal, 6 / 8, {"operation-type": "search"}),
+            (0.6, metrics.SampleType.Normal, 7 / 8, {"operation-type": "search"}),
+            (0.7, metrics.SampleType.Normal, 8 / 8, {"operation-type": "search"}),
         ]
         await self.assert_schedule(expected_schedule, schedule)
 
@@ -984,12 +984,12 @@ class SchedulerTests(TestCase):
         schedule = driver.schedule_for(task_allocation, param_source)
 
         expected_schedule = [
-            (0, metrics.SampleType.Warmup, 1 / 6, {}),
-            (0.2, metrics.SampleType.Normal, 2 / 6, {}),
-            (0.4, metrics.SampleType.Normal, 3 / 6, {}),
-            (0.6, metrics.SampleType.Normal, 4 / 6, {}),
-            (0.8, metrics.SampleType.Normal, 5 / 6, {}),
-            (1.0, metrics.SampleType.Normal, 6 / 6, {}),
+            (0, metrics.SampleType.Warmup, 1 / 6, {"operation-type": "search"}),
+            (0.2, metrics.SampleType.Normal, 2 / 6, {"operation-type": "search"}),
+            (0.4, metrics.SampleType.Normal, 3 / 6, {"operation-type": "search"}),
+            (0.6, metrics.SampleType.Normal, 4 / 6, {"operation-type": "search"}),
+            (0.8, metrics.SampleType.Normal, 5 / 6, {"operation-type": "search"}),
+            (1.0, metrics.SampleType.Normal, 6 / 6, {"operation-type": "search"}),
         ]
         await self.assert_schedule(expected_schedule, schedule)
 
@@ -1014,9 +1014,9 @@ class SchedulerTests(TestCase):
 
         await self.assert_schedule(
             [
-                (0.0, metrics.SampleType.Normal, 1 / 3, {"body": ["a"], "size": 3}),
-                (1.0, metrics.SampleType.Normal, 2 / 3, {"body": ["a"], "size": 3}),
-                (2.0, metrics.SampleType.Normal, 3 / 3, {"body": ["a"], "size": 3}),
+                (0.0, metrics.SampleType.Normal, 1 / 3, {"body": ["a"], "operation-type": "bulk", "size": 3}),
+                (1.0, metrics.SampleType.Normal, 2 / 3, {"body": ["a"], "operation-type": "bulk", "size": 3}),
+                (2.0, metrics.SampleType.Normal, 3 / 3, {"body": ["a"], "operation-type": "bulk", "size": 3}),
             ],
             schedule,
         )
@@ -1042,11 +1042,11 @@ class SchedulerTests(TestCase):
 
         await self.assert_schedule(
             [
-                (0.0, metrics.SampleType.Warmup, 1 / 5, {"body": ["a"], "size": 5}),
-                (1.0, metrics.SampleType.Warmup, 2 / 5, {"body": ["a"], "size": 5}),
-                (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "size": 5}),
-                (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "size": 5}),
-                (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "size": 5}),
+                (0.0, metrics.SampleType.Warmup, 1 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
+                (1.0, metrics.SampleType.Warmup, 2 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
+                (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
+                (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
+                (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
             ],
             schedule,
         )
@@ -1072,7 +1072,7 @@ class SchedulerTests(TestCase):
 
         await self.assert_schedule(
             [
-                (0.0, metrics.SampleType.Normal, 1 / 1, {"body": ["a"]}),
+                (0.0, metrics.SampleType.Normal, 1 / 1, {"body": ["a"], "operation-type": "bulk"}),
             ],
             schedule,
         )
@@ -1098,17 +1098,17 @@ class SchedulerTests(TestCase):
 
         await self.assert_schedule(
             [
-                (0.0, metrics.SampleType.Normal, 1 / 11, {"body": ["a"], "size": 11}),
-                (1.0, metrics.SampleType.Normal, 2 / 11, {"body": ["a"], "size": 11}),
-                (2.0, metrics.SampleType.Normal, 3 / 11, {"body": ["a"], "size": 11}),
-                (3.0, metrics.SampleType.Normal, 4 / 11, {"body": ["a"], "size": 11}),
-                (4.0, metrics.SampleType.Normal, 5 / 11, {"body": ["a"], "size": 11}),
-                (5.0, metrics.SampleType.Normal, 6 / 11, {"body": ["a"], "size": 11}),
-                (6.0, metrics.SampleType.Normal, 7 / 11, {"body": ["a"], "size": 11}),
-                (7.0, metrics.SampleType.Normal, 8 / 11, {"body": ["a"], "size": 11}),
-                (8.0, metrics.SampleType.Normal, 9 / 11, {"body": ["a"], "size": 11}),
-                (9.0, metrics.SampleType.Normal, 10 / 11, {"body": ["a"], "size": 11}),
-                (10.0, metrics.SampleType.Normal, 11 / 11, {"body": ["a"], "size": 11}),
+                (0.0, metrics.SampleType.Normal, 1 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (1.0, metrics.SampleType.Normal, 2 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (2.0, metrics.SampleType.Normal, 3 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (3.0, metrics.SampleType.Normal, 4 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (4.0, metrics.SampleType.Normal, 5 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (5.0, metrics.SampleType.Normal, 6 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (6.0, metrics.SampleType.Normal, 7 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (7.0, metrics.SampleType.Normal, 8 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (8.0, metrics.SampleType.Normal, 9 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (9.0, metrics.SampleType.Normal, 10 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
+                (10.0, metrics.SampleType.Normal, 11 / 11, {"body": ["a"], "operation-type": "bulk", "size": 11}),
             ],
             schedule,
         )
@@ -1134,11 +1134,11 @@ class SchedulerTests(TestCase):
 
         await self.assert_schedule(
             [
-                (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-                (1.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-                (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-                (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-                (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+                (0.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "bulk"}),
+                (1.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "bulk"}),
+                (2.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "bulk"}),
+                (3.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "bulk"}),
+                (4.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "bulk"}),
             ],
             schedule,
             infinite_schedule=True,
@@ -1165,11 +1165,11 @@ class SchedulerTests(TestCase):
 
         await self.assert_schedule(
             [
-                (0.0, metrics.SampleType.Normal, 1 / 5, {"body": ["a"], "size": 5}),
-                (1.0, metrics.SampleType.Normal, 2 / 5, {"body": ["a"], "size": 5}),
-                (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "size": 5}),
-                (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "size": 5}),
-                (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "size": 5}),
+                (0.0, metrics.SampleType.Normal, 1 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
+                (1.0, metrics.SampleType.Normal, 2 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
+                (2.0, metrics.SampleType.Normal, 3 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
+                (3.0, metrics.SampleType.Normal, 4 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
+                (4.0, metrics.SampleType.Normal, 5 / 5, {"body": ["a"], "operation-type": "bulk", "size": 5}),
             ],
             schedule,
             infinite_schedule=False,
@@ -1192,11 +1192,11 @@ class SchedulerTests(TestCase):
 
         await self.assert_schedule(
             [
-                (0.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-                (1.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-                (2.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-                (3.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
-                (4.0, metrics.SampleType.Normal, None, {"body": ["a"]}),
+                (0.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "driver-test-runner-with-completion"}),
+                (1.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "driver-test-runner-with-completion"}),
+                (2.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "driver-test-runner-with-completion"}),
+                (3.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "driver-test-runner-with-completion"}),
+                (4.0, metrics.SampleType.Normal, None, {"body": ["a"], "operation-type": "driver-test-runner-with-completion"}),
             ],
             schedule,
             infinite_schedule=True,
@@ -1240,7 +1240,7 @@ class SchedulerTests(TestCase):
             self.assertTrue(round(progress_percent, 2) >= 0.0, "progress should be >= 0.0 but was [%f]" % progress_percent)
             self.assertTrue(round(progress_percent, 2) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
             self.assertIsNotNone(runner, "runner must be defined")
-            self.assertEqual({"body": ["a"], "size": 11}, params)
+            self.assertEqual({"body": ["a"], "operation-type": "bulk", "size": 11}, params)
 
     @run_async
     async def test_schedule_for_time_based_with_multiple_clients(self):
@@ -1287,7 +1287,7 @@ class SchedulerTests(TestCase):
             self.assertTrue(round(progress_percent, 2) >= 0.0, "progress should be >= 0.0 but was [%f]" % progress_percent)
             self.assertTrue(round(progress_percent, 2) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
             self.assertIsNotNone(runner, "runner must be defined")
-            self.assertEqual({"body": ["a"], "size": 11}, params)
+            self.assertEqual({"body": ["a"], "operation-type": "bulk", "size": 11}, params)
 
 
 class AsyncExecutorTests(TestCase):

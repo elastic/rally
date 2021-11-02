@@ -493,7 +493,6 @@ class CreateComponentTemplateParamSource(CreateTemplateParamSource):
 class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
-        operation_type = params.get("operation-type", "search")
         target_name = get_target(track, params)
         type_name = params.get("type")
         if params.get("data-stream") and type_name:
@@ -515,7 +514,6 @@ class SearchParamSource(ParamSource):
             "request-params": request_params,
             "response-compression-enabled": response_compression_enabled,
             "body": query_body,
-            "operation-type": operation_type,
         }
 
         if not target_name:
