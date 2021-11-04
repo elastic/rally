@@ -573,14 +573,7 @@ class BarCharts:
 class TimeSeriesCharts:
     @staticmethod
     def format_title(environment, track_name, flavor=None, es_license=None, suffix=None):
-        if flavor:
-            title = [environment, flavor, str(track_name)]
-        elif es_license:
-            title = [environment, es_license, str(track_name)]
-        elif flavor and es_license:
-            raise exceptions.RallyAssertionError(f"Specify either flavor [{flavor}] or license [{es_license}] but not both")
-        else:
-            title = [environment, str(track_name)]
+        title = [environment, str(track_name)]
         if suffix:
             title.append(suffix)
 
@@ -588,12 +581,8 @@ class TimeSeriesCharts:
 
     @staticmethod
     def filter_string(environment, race_config):
-        nightly_extra_filter = ""
-        if race_config.es_license:
-            # Time series charts need to support different licenses and produce customized titles.
-            nightly_extra_filter = f' AND user-tags.license:"{race_config.es_license}"'
         if race_config.name:
-            return f'environment:"{environment}" AND active:true AND user-tags.name:"{race_config.name}"{nightly_extra_filter}'
+            return f'environment:"{environment}" AND active:true AND user-tags.name:"{race_config.name}"'
         else:
             return (
                 f'environment:"{environment}" AND active:true AND track:"{race_config.track}"'
