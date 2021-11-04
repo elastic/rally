@@ -1324,6 +1324,8 @@ class SourceOnlyIndexDataReader(IndexDataReader):
 
 register_param_source_for_operation(track.OperationType.Bulk, BulkIndexParamSource)
 register_param_source_for_operation(track.OperationType.Search, SearchParamSource)
+register_param_source_for_operation(track.OperationType.ScrollSearch, SearchParamSource)
+register_param_source_for_operation(track.OperationType.PaginatedSearch, SearchParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndex, CreateIndexParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndexParamSource)
 register_param_source_for_operation(track.OperationType.CreateDataStream, CreateDataStreamParamSource)
