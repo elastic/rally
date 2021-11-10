@@ -55,7 +55,7 @@ def index_label(race_config):
 
 class BarCharts:
     UI_STATE_JSON = json.dumps(
-        {"vis": {"colors": dict(zip(["bare-oss", "bare-basic", "bare-trial-security", "docker-basic", "ear-basic"], color_scheme_rgba))}}
+        {"vis": {"colors": dict(zip(["bare", "docker", "ear"], color_scheme_rgba))}}
     )
 
     @staticmethod
