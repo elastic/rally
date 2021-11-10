@@ -2213,6 +2213,7 @@ class ScheduleHandle:
         :return: A generator for the corresponding parameters.
         """
         self.task_allocation = task_allocation
+        self.operation_type = task_allocation.task.operation.type
         self.sched = sched
         self.task_progress_control = task_progress_control
         self.runner = runner
@@ -2243,6 +2244,11 @@ class ScheduleHandle:
     def after_request(self, now, weight, unit, request_meta_data):
         self.sched.after_request(now, weight, unit, request_meta_data)
 
+    def params_with_operation_type(self):
+        p = self.params.params()
+        p.update({"operation-type": self.operation_type})
+        return p
+
     async def __call__(self):
         next_scheduled = 0
         if self.task_progress_control.infinite:
@@ -2253,7 +2259,13 @@ class ScheduleHandle:
                     # does not contribute at all to completion. Hence, we cannot define completion.
                     percent_completed = self.params.percent_completed if param_source_knows_progress else None
                     # current_params = await self.loop.run_in_executor(self.io_pool_exc, self.params.params)
-                    yield (next_scheduled, self.task_progress_control.sample_type, percent_completed, self.runner, self.params.params())
+                    yield (
+                        next_scheduled,
+                        self.task_progress_control.sample_type,
+                        percent_completed,
+                        self.runner,
+                        self.params_with_operation_type(),
+                    )
                     self.task_progress_control.next()
                 except StopIteration:
                     return
@@ -2267,7 +2279,7 @@ class ScheduleHandle:
                         self.task_progress_control.sample_type,
                         self.task_progress_control.percent_completed,
                         self.runner,
-                        self.params.params(),
+                        self.params_with_operation_type(),
                     )
                     self.task_progress_control.next()
                 except StopIteration:

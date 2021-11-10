@@ -2580,7 +2580,7 @@ class SearchParamSourceTests(TestCase):
             p["body"],
         )
 
-    def test_user_specified_overrides_defaults(self):
+    def test_user_specified_index_overrides_defaults(self):
         index1 = track.Index(name="index1", types=["type1"])
 
         source = params.SearchParamSource(
