@@ -128,7 +128,7 @@ Then store the following mapping file as ``index.json`` in the tutorial director
     }
 
 .. note::
-   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above.
+   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above - i.e. remove '"docs": {' and the corresponding '}' lines in ``index.json``.
 
 
 For details on the allowed syntax, see the Elasticsearch documentation on `mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`__.
@@ -212,7 +212,7 @@ Finally, store the track as ``track.json`` in the tutorial directory::
 The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json``. For the size in bytes, use ``stat -f %z documents.json`` on macOS and ``stat -c %s documents.json`` on GNU/Linux.
 
 .. note::
-   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the ``types`` property above.
+   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the ``types`` property above - i.e. replace ''"types": [ "docs" ]'' with ''"types": [ "_doc" ]'' in ``track.json``.
 
 .. note::
 
@@ -267,7 +267,7 @@ You can also show details about your track with ``esrally info --track-path=~/ra
     5. force-merge
     6. query-match-all (8 clients)
 
-Congratulations, you have created your first track! You can test it with ``esrally race --distribution-version=7.0.0 --track-path=~/rally-tracks/tutorial``.
+Congratulations, you have created your first track! You can test it with Rally version 6.5.3 executing ``esrally race --distribution-version=6.5.3 --track-path=~/rally-tracks/tutorial`` or with Rally version 7.15.1 executing ``esrally race --distribution-version=7.15.1 --track-path=~/rally-tracks/tutorial`` (note to update ''index.json'' and ''track.json'' accordingly).
 
 .. _add_track_test_mode:
 
