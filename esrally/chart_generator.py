@@ -54,9 +54,7 @@ def index_label(race_config):
 
 
 class BarCharts:
-    UI_STATE_JSON = json.dumps(
-        {"vis": {"colors": dict(zip(["bare", "docker", "ear"], color_scheme_rgba))}}
-    )
+    UI_STATE_JSON = json.dumps({"vis": {"colors": dict(zip(["bare", "docker", "ear"], color_scheme_rgba))}})
 
     @staticmethod
     # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
