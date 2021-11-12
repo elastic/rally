@@ -25,7 +25,7 @@ Installation Instructions for Development
     make prereq
     make install
     source .venv/bin/activate
-    ./rally
+    ./rally --help
 
 IDE Setup
 ---------
