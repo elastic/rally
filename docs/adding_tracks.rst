@@ -101,34 +101,39 @@ Then store the following mapping file as ``index.json`` in the tutorial director
         "index.number_of_replicas": 0
       },
       "mappings": {
-        "docs": {
-          "dynamic": "strict",
-          "properties": {
-            "geonameid": {
-              "type": "long"
-            },
-            "name": {
-              "type": "text"
-            },
-            "latitude": {
-              "type": "double"
-            },
-            "longitude": {
-              "type": "double"
-            },
-            "country_code": {
-              "type": "text"
-            },
-            "population": {
-              "type": "long"
-            }
+        "dynamic": "strict",
+        "properties": {
+          "geonameid": {
+            "type": "long"
+          },
+          "name": {
+            "type": "text"
+          },
+          "latitude": {
+            "type": "double"
+          },
+          "longitude": {
+            "type": "double"
+          },
+          "country_code": {
+            "type": "text"
+          },
+          "population": {
+            "type": "long"
           }
         }
       }
     }
 
 .. note::
-   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above.
+   This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the mapping type above so ''index.json'' will looks like::
+      ...
+      "mappings": {
+        "docs": {
+          ...
+        }
+      }
+      ...
 
 
 For details on the allowed syntax, see the Elasticsearch documentation on `mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`__.
@@ -141,8 +146,7 @@ Finally, store the track as ``track.json`` in the tutorial directory::
       "indices": [
         {
           "name": "geonames",
-          "body": "index.json",
-          "types": [ "docs" ]
+          "body": "index.json"
         }
       ],
       "corpora": [
@@ -212,7 +216,17 @@ Finally, store the track as ``track.json`` in the tutorial directory::
 The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json``. For the size in bytes, use ``stat -f %z documents.json`` on macOS and ``stat -c %s documents.json`` on GNU/Linux.
 
 .. note::
-   This tutorial assumes that you want to benchmark a version of Elasticsearch prior to 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the ``types`` property above.
+   This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the ``types`` property above so ''track.json'' will looks like::
+      ...
+      "indices": [
+        {
+          "name": "geonames",
+          "body": "index.json",
+          "types": [ "docs" ]
+        }
+      ],
+      ...
+
 
 .. note::
 
@@ -267,7 +281,12 @@ You can also show details about your track with ``esrally info --track-path=~/ra
     5. force-merge
     6. query-match-all (8 clients)
 
-Congratulations, you have created your first track! You can test it with ``esrally race --distribution-version=7.0.0 --track-path=~/rally-tracks/tutorial``.
+Congratulations, you have created your first track! You can test it with ``esrally race --distribution-version=7.14.1 --track-path=~/rally-tracks/tutorial``.
+
+.. note::
+
+    To test the track with Elasticsearch prior 7.0.0 you need to update ''index.json'' and ''track.json'' as specified in notes above and then execute ``esrally race --distribution-version=6.5.3 --track-path=~/rally-tracks/tutorial``.
+
 
 .. _add_track_test_mode:
 
@@ -292,8 +311,7 @@ To specify different workloads in the same track you can use so-called challenge
       "indices": [
         {
           "name": "geonames",
-          "body": "index.json",
-          "types": [ "docs" ]
+          "body": "index.json"
         }
       ],
       "corpora": [
@@ -369,6 +387,10 @@ To specify different workloads in the same track you can use so-called challenge
 
     If you define multiple challenges, Rally runs the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
 
+.. note::
+
+    To use the track with Elasticsearch prior 7.0.0 you need to update ''index.json'' and ''track.json'' with index and mapping types accordingly as specified in notes above.
+
 When should you use challenges? Challenges are useful when you want to run completely different workloads based on the same track but for the majority of cases you should get away without using challenges:
 
 * To run only a subset of the tasks, you can use :ref:`task filtering <clr_include_tasks>`, e.g. ``--include-tasks="create-index,bulk"`` will only run these two tasks in the track above or ``--exclude-tasks="bulk"`` will run all tasks except for ``bulk``.
@@ -441,8 +463,7 @@ Include the new file in ``track.json``::
       "indices": [
         {
           "name": "geonames",
-          "body": "index.json",
-          "types": [ "docs" ]
+          "body": "index.json"
         }
       ],
       "corpora": [
@@ -472,8 +493,7 @@ To reuse operation definitions across challenges, you can define them in a separ
       "indices": [
         {
           "name": "geonames",
-          "body": "index.json",
-          "types": [ "docs" ]
+          "body": "index.json"
         }
       ],
       "corpora": [
@@ -575,8 +595,7 @@ You can also use Rally's collect helper to simplify including multiple challenge
       "indices": [
         {
           "name": "geonames",
-          "body": "index.json",
-          "types": [ "docs" ]
+          "body": "index.json"
         }
       ],
       "corpora": [
@@ -865,6 +884,10 @@ We also derive an appropriate index and document type from the track's index def
       "index": "employee*",
       "type": "docs"
     }
+
+.. note::
+
+    Please remember about index and mapping types usage in ''index.json'' and ''track.json'' in Elasticsearch prior 7.0.0 as specified in notes above.
 
 
 If you need more control, you need to implement a class. Below is the implementation of the same parameter source as a class::
