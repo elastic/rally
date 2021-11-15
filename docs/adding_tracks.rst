@@ -127,6 +127,7 @@ Then store the following mapping file as ``index.json`` in the tutorial director
 
 .. note::
    This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the mapping type above so ''index.json'' will looks like::
+
       ...
       "mappings": {
         "docs": {
@@ -217,6 +218,7 @@ The numbers under the ``documents`` property are needed to verify integrity and 
 
 .. note::
    This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the ``types`` property above so ''track.json'' will looks like::
+
       ...
       "indices": [
         {
