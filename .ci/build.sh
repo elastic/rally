@@ -49,7 +49,6 @@ function build {
   eval "$(pyenv virtualenv-init -)"
 
   make prereq
-  make install
   make precommit
   make it
 }
