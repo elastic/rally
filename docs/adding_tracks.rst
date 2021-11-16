@@ -889,7 +889,7 @@ We also derive an appropriate index and document type from the track's index def
 
 .. note::
 
-    Please remember about index and mapping types usage in ''index.json'' and ''track.json'' in Elasticsearch prior 7.0.0 as specified in notes above.
+    Please remember about index and mapping types usage in ``index.json`` and ``track.json`` in Elasticsearch prior to 7.0.0 as specified in notes above.
 
 
 If you need more control, you need to implement a class. Below is the implementation of the same parameter source as a class::
