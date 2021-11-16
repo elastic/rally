@@ -126,7 +126,7 @@ Then store the following mapping file as ``index.json`` in the tutorial director
     }
 
 .. note::
-   This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the mapping type above so ''index.json'' will looks like::
+   This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the mapping type above so ``index.json`` will look like::
 
       ...
       "mappings": {
