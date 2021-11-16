@@ -287,7 +287,7 @@ Congratulations, you have created your first track! You can test it with ``esral
 
 .. note::
 
-    To test the track with Elasticsearch prior 7.0.0 you need to update ''index.json'' and ''track.json'' as specified in notes above and then execute ``esrally race --distribution-version=6.5.3 --track-path=~/rally-tracks/tutorial``.
+    To test the track with Elasticsearch prior to 7.0.0 you need to update ``index.json`` and ``track.json`` as specified in notes above and then execute ``esrally race --distribution-version=6.5.3 --track-path=~/rally-tracks/tutorial``.
 
 
 .. _add_track_test_mode:
