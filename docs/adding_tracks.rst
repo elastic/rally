@@ -217,7 +217,7 @@ Finally, store the track as ``track.json`` in the tutorial directory::
 The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json``. For the size in bytes, use ``stat -f %z documents.json`` on macOS and ``stat -c %s documents.json`` on GNU/Linux.
 
 .. note::
-   This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the ``types`` property above so ''track.json'' will looks like::
+   This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the ``types`` property above so ``track.json`` will look like::
 
       ...
       "indices": [
