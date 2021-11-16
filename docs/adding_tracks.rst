@@ -391,7 +391,7 @@ To specify different workloads in the same track you can use so-called challenge
 
 .. note::
 
-    To use the track with Elasticsearch prior 7.0.0 you need to update ''index.json'' and ''track.json'' with index and mapping types accordingly as specified in notes above.
+    To use the track with Elasticsearch prior to 7.0.0 you need to update ``index.json`` and ``track.json`` with index and mapping types accordingly as specified in notes above.
 
 When should you use challenges? Challenges are useful when you want to run completely different workloads based on the same track but for the majority of cases you should get away without using challenges:
 
