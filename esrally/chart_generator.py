@@ -1506,8 +1506,8 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
 
     def add_race_configs(license_configs, flavor_name, track_name):
         if chart_type == BarCharts:
-            # Only one license config, "basic", is present in bar charts
-            _lic_conf = [license_config["configurations"] for license_config in license_configs if license_config["name"] == "basic"]
+            # Only one license config, "trial", is present in bar charts
+            _lic_conf = [license_config["configurations"] for license_config in license_configs if license_config["name"] == "trial"]
             if _lic_conf:
                 race_configs_per_track.extend(add_configs(_lic_conf[0], track_name=track_name))
         else:
