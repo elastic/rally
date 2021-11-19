@@ -20,6 +20,8 @@ import os
 import unittest.mock as mock
 from unittest import TestCase
 
+import pytest
+
 from esrally import exceptions
 from esrally.utils import git
 
@@ -28,8 +30,8 @@ class GitTests(TestCase):
     def test_is_git_working_copy(self):
         test_dir = os.path.dirname(os.path.dirname(__file__))
         # this test is assuming that nobody stripped the git repo info in their Rally working copy
-        self.assertFalse(git.is_working_copy(test_dir))
-        self.assertTrue(git.is_working_copy(os.path.dirname(test_dir)))
+        assert not git.is_working_copy(test_dir)
+        assert git.is_working_copy(os.path.dirname(test_dir))
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -38,9 +40,9 @@ class GitTests(TestCase):
         run_subprocess_with_logging.return_value = 64
         run_subprocess.return_value = "1.0.0"
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as exc:
             git.head_revision("/src")
-        self.assertEqual("Your git version is [1.0.0] but Rally requires at least git 1.9. Please update git.", ctx.exception.args[0])
+        assert exc.value.args[0] == "Your git version is [1.0.0] but Rally requires at least git 1.9. Please update git."
         run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG)
 
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -62,9 +64,9 @@ class GitTests(TestCase):
         src = "/src"
         remote = "http://github.com/some/project"
 
-        with self.assertRaises(exceptions.SupplyError) as ctx:
+        with pytest.raises(exceptions.SupplyError) as exc:
             git.clone(src, remote)
-        self.assertEqual("Could not clone from [http://github.com/some/project] to [/src]", ctx.exception.args[0])
+        assert exc.value.args[0] == "Could not clone from [http://github.com/some/project] to [/src]"
 
         ensure_dir.assert_called_with(src)
         run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
@@ -79,9 +81,9 @@ class GitTests(TestCase):
     def test_fetch_with_error(self, run_subprocess_with_logging):
         # first call is to check the git version (0 -> succeeds), the second call is the failing checkout (1 -> fails)
         run_subprocess_with_logging.side_effect = [0, 1]
-        with self.assertRaises(exceptions.SupplyError) as ctx:
+        with pytest.raises(exceptions.SupplyError) as exc:
             git.fetch("/src", remote="my-origin")
-        self.assertEqual("Could not fetch source tree from [my-origin]", ctx.exception.args[0])
+        assert exc.value.args[0] == "Could not fetch source tree from [my-origin]"
         run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -94,16 +96,19 @@ class GitTests(TestCase):
     def test_checkout_with_error(self, run_subprocess_with_logging):
         # first call is to check the git version (0 -> succeeds), the second call is the failing checkout (1 -> fails)
         run_subprocess_with_logging.side_effect = [0, 1]
-        with self.assertRaises(exceptions.SupplyError) as ctx:
+        with pytest.raises(exceptions.SupplyError) as exc:
             git.checkout("/src", "feature-branch")
-        self.assertEqual("Could not checkout [feature-branch]. Do you have uncommitted changes?", ctx.exception.args[0])
+        assert exc.value.args[0] == "Could not checkout [feature-branch]. Do you have uncommitted changes?"
         run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_rebase(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
         git.rebase("/src", remote="my-origin", branch="feature-branch")
-        calls = [mock.call("git -C /src checkout feature-branch"), mock.call("git -C /src rebase my-origin/feature-branch")]
+        calls = [
+            mock.call("git -C /src checkout feature-branch"),
+            mock.call("git -C /src rebase my-origin/feature-branch"),
+        ]
         run_subprocess_with_logging.assert_has_calls(calls)
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -135,7 +140,12 @@ class GitTests(TestCase):
         git.pull_ts("/src", "20160101T110000Z")
 
         run_subprocess_with_output.assert_called_with('git -C /src rev-list -n 1 --before="20160101T110000Z" --date=iso8601 origin/master')
-        run_subprocess.has_calls([mock.call("git -C /src fetch --prune --tags --quiet origin"), mock.call("git -C /src checkout 3694a07")])
+        run_subprocess.has_calls(
+            [
+                mock.call("git -C /src fetch --prune --tags --quiet origin"),
+                mock.call("git -C /src checkout 3694a07"),
+            ]
+        )
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -155,7 +165,7 @@ class GitTests(TestCase):
     def test_head_revision(self, run_subprocess_with_logging, run_subprocess):
         run_subprocess_with_logging.return_value = 0
         run_subprocess.return_value = ["3694a07"]
-        self.assertEqual("3694a07", git.head_revision("/src"))
+        assert git.head_revision("/src") == "3694a07"
         run_subprocess.assert_called_with("git -C /src rev-parse --short HEAD")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
@@ -168,7 +178,7 @@ class GitTests(TestCase):
             "  origin/5.0.0-alpha1",
             "  origin/5",
         ]
-        self.assertEqual(["master", "5.0.0-alpha1", "5"], git.branches("/src", remote=True))
+        assert git.branches("/src", remote=True) == ["master", "5.0.0-alpha1", "5"]
         run_subprocess.assert_called_with("git -C /src for-each-ref refs/remotes/ --format='%(refname:short)'")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
@@ -181,7 +191,7 @@ class GitTests(TestCase):
             "  5.0.0-alpha1",
             "  5",
         ]
-        self.assertEqual(["master", "5.0.0-alpha1", "5"], git.branches("/src", remote=False))
+        assert git.branches("/src", remote=False) == ["master", "5.0.0-alpha1", "5"]
         run_subprocess.assert_called_with("git -C /src for-each-ref refs/heads/ --format='%(refname:short)'")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
@@ -192,7 +202,7 @@ class GitTests(TestCase):
             "  v1",
             "  v2",
         ]
-        self.assertEqual(["v1", "v2"], git.tags("/src"))
+        assert git.tags("/src") == ["v1", "v2"]
         run_subprocess.assert_called_with("git -C /src tag")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
@@ -200,5 +210,5 @@ class GitTests(TestCase):
     def test_list_tags_no_tags_available(self, run_subprocess_with_logging, run_subprocess):
         run_subprocess_with_logging.return_value = 0
         run_subprocess.return_value = ""
-        self.assertEqual([], git.tags("/src"))
+        assert git.tags("/src") == []
         run_subprocess.assert_called_with("git -C /src tag")
