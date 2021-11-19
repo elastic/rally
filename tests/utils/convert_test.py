@@ -15,14 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from unittest import TestCase
-
 import pytest
 
 from esrally.utils import convert
 
 
-class ToBoolTests(TestCase):
+class TestToBool:
     def test_convert_to_true(self):
         values = ["True", "true", "Yes", "yes", "t", "y", "1", True]
         for value in values:
@@ -36,6 +34,6 @@ class ToBoolTests(TestCase):
     def test_cannot_convert_invalid_value(self):
         values = ["Invalid", None, []]
         for value in values:
-            with pytest.raises(ValueError) as ctx:
+            with pytest.raises(ValueError) as exc:
                 convert.to_bool(value)
-            assert "Cannot convert [%s] to bool." % value == ctx.exception.args[0]
+            assert exc.value.args[0] == "Cannot convert [%s] to bool." % value

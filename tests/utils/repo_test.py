@@ -17,7 +17,6 @@
 
 import random
 import unittest.mock as mock
-from unittest import TestCase
 
 import pytest
 
@@ -25,7 +24,7 @@ from esrally import exceptions
 from esrally.utils import repo
 
 
-class RallyRepositoryTests(TestCase):
+class TestRallyRepository:
     @mock.patch("esrally.utils.io.exists", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     def test_fails_in_offline_mode_if_not_a_git_repo(self, is_working_copy, exists):

@@ -16,12 +16,11 @@
 # under the License.
 
 import os
-from unittest import TestCase
 
 from esrally.utils import opts
 
 
-class ConfigHelperFunctionTests(TestCase):
+class TestConfigHelperFunction:
     def test_csv_to_list(self):
         assert opts.csv_to_list("") == []
         assert opts.csv_to_list("    a,b,c   , d") == ["a", "b", "c", "d"]
@@ -42,7 +41,7 @@ class ConfigHelperFunctionTests(TestCase):
         }
 
 
-class GenericHelperFunctionTests(TestCase):
+class TestGenericHelperFunction:
     def test_list_as_bulleted_list(self):
         src_list = ["param-1", "param-2", "a_longer-parameter"]
 
@@ -126,7 +125,7 @@ class GenericHelperFunctionTests(TestCase):
         assert opts.make_list_of_close_matches(["number_of_shards", "number_of-replicas"], []) == []
 
 
-class TestTargetHosts(TestCase):
+class TestTargetHosts:
     def test_empty_arg_parses_as_empty_list(self):
         assert opts.TargetHosts("").default == []
         assert opts.TargetHosts("").all_hosts == {"default": []}
@@ -167,7 +166,7 @@ class TestTargetHosts(TestCase):
         }
 
 
-class TestClientOptions(TestCase):
+class TestClientOptions:
     def test_csv_client_options_parses(self):
         # "timeout": 60 should automatically get added to each configuration unless overridden
         client_options_string = "use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"

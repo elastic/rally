@@ -17,39 +17,39 @@
 
 import os
 import unittest.mock as mock
-from unittest import TestCase
 
 import psutil
 
 from esrally.utils import process
 
 
-class ProcessTests(TestCase):
-    class Process:
-        def __init__(self, pid, name, cmdline):
-            self.pid = pid
-            self._name = name
-            self._cmdline = cmdline
-            self.killed = False
+class Process:
+    def __init__(self, pid, name, cmdline):
+        self.pid = pid
+        self._name = name
+        self._cmdline = cmdline
+        self.killed = False
 
-        def name(self):
-            return self._name
+    def name(self):
+        return self._name
 
-        def cmdline(self):
-            return self._cmdline
+    def cmdline(self):
+        return self._cmdline
 
-        def kill(self):
-            self.killed = True
+    def kill(self):
+        self.killed = True
 
-        def status(self):
-            if self.killed:
-                raise psutil.NoSuchProcess(self.pid)
-            else:
-                return "running"
+    def status(self):
+        if self.killed:
+            raise psutil.NoSuchProcess(self.pid)
+        else:
+            return "running"
 
+
+class TestProcess:
     @mock.patch("psutil.process_iter")
     def test_find_other_rally_processes(self, process_iter):
-        rally_es_5_process = ProcessTests.Process(
+        rally_es_5_process = Process(
             100,
             "java",
             [
@@ -60,7 +60,7 @@ class ProcessTests(TestCase):
                 "org.elasticsearch.bootstrap.Elasticsearch",
             ],
         )
-        rally_es_1_process = ProcessTests.Process(
+        rally_es_1_process = Process(
             101,
             "java",
             [
@@ -71,7 +71,7 @@ class ProcessTests(TestCase):
                 "org.elasticsearch.bootstrap.Elasticsearch",
             ],
         )
-        metrics_store_process = ProcessTests.Process(
+        metrics_store_process = Process(
             102,
             "java",
             [
@@ -82,15 +82,15 @@ class ProcessTests(TestCase):
                 "org.elasticsearch.bootstrap.Elasticsearch",
             ],
         )
-        random_python = ProcessTests.Process(103, "python3", ["/some/django/app"])
-        other_process = ProcessTests.Process(104, "init", ["/usr/sbin/init"])
-        rally_process_p = ProcessTests.Process(105, "python3", ["/usr/bin/python3", "~/.local/bin/esrally"])
-        rally_process_r = ProcessTests.Process(106, "rally", ["/usr/bin/python3", "~/.local/bin/esrally"])
-        rally_process_e = ProcessTests.Process(107, "esrally", ["/usr/bin/python3", "~/.local/bin/esrally"])
-        rally_process_mac = ProcessTests.Process(108, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
+        random_python = Process(103, "python3", ["/some/django/app"])
+        other_process = Process(104, "init", ["/usr/sbin/init"])
+        rally_process_p = Process(105, "python3", ["/usr/bin/python3", "~/.local/bin/esrally"])
+        rally_process_r = Process(106, "rally", ["/usr/bin/python3", "~/.local/bin/esrally"])
+        rally_process_e = Process(107, "esrally", ["/usr/bin/python3", "~/.local/bin/esrally"])
+        rally_process_mac = Process(108, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
         # fake own process by determining our pid
-        own_rally_process = ProcessTests.Process(os.getpid(), "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
-        night_rally_process = ProcessTests.Process(110, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/night_rally"])
+        own_rally_process = Process(os.getpid(), "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
+        night_rally_process = Process(110, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/night_rally"])
 
         process_iter.return_value = [
             rally_es_1_process,
@@ -110,7 +110,7 @@ class ProcessTests(TestCase):
 
     @mock.patch("psutil.process_iter")
     def test_find_no_other_rally_process_running(self, process_iter):
-        metrics_store_process = ProcessTests.Process(
+        metrics_store_process = Process(
             102,
             "java",
             [
@@ -121,7 +121,7 @@ class ProcessTests(TestCase):
                 "org.elasticsearch.bootstrap.Elasticsearch",
             ],
         )
-        random_python = ProcessTests.Process(103, "python3", ["/some/django/app"])
+        random_python = Process(103, "python3", ["/some/django/app"])
 
         process_iter.return_value = [metrics_store_process, random_python]
 
@@ -129,7 +129,7 @@ class ProcessTests(TestCase):
 
     @mock.patch("psutil.process_iter")
     def test_kills_only_rally_processes(self, process_iter):
-        rally_es_5_process = ProcessTests.Process(
+        rally_es_5_process = Process(
             100,
             "java",
             [
@@ -140,7 +140,7 @@ class ProcessTests(TestCase):
                 "org.elasticsearch.bootstrap.Elasticsearch",
             ],
         )
-        rally_es_1_process = ProcessTests.Process(
+        rally_es_1_process = Process(
             101,
             "java",
             [
@@ -151,7 +151,7 @@ class ProcessTests(TestCase):
                 "org.elasticsearch.bootstrap.Elasticsearch",
             ],
         )
-        metrics_store_process = ProcessTests.Process(
+        metrics_store_process = Process(
             102,
             "java",
             [
@@ -162,15 +162,15 @@ class ProcessTests(TestCase):
                 "org.elasticsearch.bootstrap.Elasticsearch",
             ],
         )
-        random_python = ProcessTests.Process(103, "python3", ["/some/django/app"])
-        other_process = ProcessTests.Process(104, "init", ["/usr/sbin/init"])
-        rally_process_p = ProcessTests.Process(105, "python3", ["/usr/bin/python3", "~/.local/bin/esrally"])
-        rally_process_r = ProcessTests.Process(106, "rally", ["/usr/bin/python3", "~/.local/bin/esrally"])
-        rally_process_e = ProcessTests.Process(107, "esrally", ["/usr/bin/python3", "~/.local/bin/esrally"])
-        rally_process_mac = ProcessTests.Process(108, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
+        random_python = Process(103, "python3", ["/some/django/app"])
+        other_process = Process(104, "init", ["/usr/sbin/init"])
+        rally_process_p = Process(105, "python3", ["/usr/bin/python3", "~/.local/bin/esrally"])
+        rally_process_r = Process(106, "rally", ["/usr/bin/python3", "~/.local/bin/esrally"])
+        rally_process_e = Process(107, "esrally", ["/usr/bin/python3", "~/.local/bin/esrally"])
+        rally_process_mac = Process(108, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
         # fake own process by determining our pid
-        own_rally_process = ProcessTests.Process(os.getpid(), "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
-        night_rally_process = ProcessTests.Process(110, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/night_rally"])
+        own_rally_process = Process(os.getpid(), "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/esrally"])
+        night_rally_process = Process(110, "Python", ["/Python.app/Contents/MacOS/Python", "~/.local/bin/night_rally"])
 
         process_iter.return_value = [
             rally_es_1_process,

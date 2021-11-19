@@ -21,7 +21,6 @@ import os
 import subprocess
 import tempfile
 import unittest.mock as mock
-from unittest import TestCase
 
 from esrally.utils import io
 
@@ -45,7 +44,7 @@ def mock_red_hat(path):
         return None
 
 
-class IoTests(TestCase):
+class TestIo:
     def test_normalize_path(self):
         assert io.normalize_path("/already/a/normalized/path") == "/already/a/normalized/path"
         assert io.normalize_path("/not/normalized/path/../") == "/not/normalized"

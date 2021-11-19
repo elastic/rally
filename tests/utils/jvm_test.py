@@ -16,14 +16,14 @@
 # under the License.
 
 import unittest.mock as mock
-from unittest import TestCase
+
+import pytest
 
 from esrally import exceptions
 from esrally.utils import jvm
-import pytest
 
 
-class JvmTests(TestCase):
+class TestJvm:
     def test_extract_major_version_7(self):
         assert jvm.major_version("1.7", lambda x, y: x) == 7
 

@@ -18,7 +18,6 @@
 import logging
 import os
 import unittest.mock as mock
-from unittest import TestCase
 
 import pytest
 
@@ -26,7 +25,7 @@ from esrally import exceptions
 from esrally.utils import git
 
 
-class GitTests(TestCase):
+class TestGit:
     def test_is_git_working_copy(self):
         test_dir = os.path.dirname(os.path.dirname(__file__))
         # this test is assuming that nobody stripped the git repo info in their Rally working copy
