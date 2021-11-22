@@ -17,20 +17,21 @@
 
 import random
 import unittest.mock as mock
-from unittest import TestCase
+
+import pytest
 
 from esrally import exceptions
 from esrally.utils import repo
 
 
-class RallyRepositoryTests(TestCase):
+class TestRallyRepository:
     @mock.patch("esrally.utils.io.exists", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     def test_fails_in_offline_mode_if_not_a_git_repo(self, is_working_copy, exists):
         is_working_copy.return_value = False
         exists.return_value = True
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as exc:
             repo.RallyRepository(
                 remote_url=None,
                 root_dir="/rally-resources",
@@ -39,9 +40,8 @@ class RallyRepositoryTests(TestCase):
                 offline=True,
             )
 
-        self.assertEqual(
-            "[/rally-resources/unit-test] must be a git repository.\n\nPlease run:\ngit -C /rally-resources/unit-test init",
-            ctx.exception.args[0],
+        assert exc.value.args[0] == (
+            "[/rally-resources/unit-test] must be a git repository.\n\nPlease run:\ngit -C /rally-resources/unit-test init"
         )
 
     @mock.patch("esrally.utils.io.exists", autospec=True)
@@ -50,7 +50,7 @@ class RallyRepositoryTests(TestCase):
         is_working_copy.return_value = False
         exists.return_value = False
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as exc:
             repo.RallyRepository(
                 remote_url=None,
                 root_dir="/rally-resources",
@@ -59,9 +59,7 @@ class RallyRepositoryTests(TestCase):
                 offline=True,
             )
 
-        self.assertEqual(
-            "Expected a git repository at [/rally-resources/unit-test] but the directory does not exist.", ctx.exception.args[0]
-        )
+        assert exc.value.args[0] == "Expected a git repository at [/rally-resources/unit-test] but the directory does not exist."
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     def test_does_nothing_if_working_copy_present(self, is_working_copy):
@@ -75,7 +73,7 @@ class RallyRepositoryTests(TestCase):
             offline=True,
         )
 
-        self.assertFalse(r.remote)
+        assert not r.remote
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.clone", autospec=True)
@@ -90,9 +88,12 @@ class RallyRepositoryTests(TestCase):
             offline=False,
         )
 
-        self.assertTrue(r.remote)
+        assert r.remote
 
-        clone.assert_called_with(src="/rally-resources/unit-test", remote="git@gitrepos.example.org/rally-resources")
+        clone.assert_called_with(
+            src="/rally-resources/unit-test",
+            remote="git@gitrepos.example.org/rally-resources",
+        )
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
@@ -123,9 +124,9 @@ class RallyRepositoryTests(TestCase):
             fetch=False,
         )
 
-        self.assertTrue(r.remote)
+        assert r.remote
 
-        self.assertEqual(0, fetch.call_count)
+        assert fetch.call_count == 0
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch")
@@ -141,7 +142,7 @@ class RallyRepositoryTests(TestCase):
             offline=False,
         )
         # no exception during the call - we reach this here
-        self.assertTrue(r.remote)
+        assert r.remote
 
         fetch.assert_called_with(src="/rally-resources/unit-test")
 
@@ -194,7 +195,7 @@ class RallyRepositoryTests(TestCase):
         r.update(distribution_version="6.0.0")
 
         branches.assert_called_with("/rally-resources/unit-test", remote=False)
-        self.assertEqual(0, rebase.call_count)
+        assert rebase.call_count == 0
         checkout.assert_called_with("/rally-resources/unit-test", branch="master")
 
     @mock.patch("esrally.utils.git.head_revision")
@@ -223,7 +224,7 @@ class RallyRepositoryTests(TestCase):
         r.update(distribution_version="1.7.4")
 
         branches.assert_called_with("/rally-resources/unit-test", remote=False)
-        self.assertEqual(0, rebase.call_count)
+        assert rebase.call_count == 0
         tags.assert_called_with("/rally-resources/unit-test")
         checkout.assert_called_with("/rally-resources/unit-test", branch="v1.7")
 
@@ -246,12 +247,12 @@ class RallyRepositoryTests(TestCase):
             offline=False,
         )
 
-        self.assertTrue(r.remote)
+        assert r.remote
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as exc:
             r.update(distribution_version="4.0.0")
 
-        self.assertEqual("Cannot find unittest-resources for distribution version 4.0.0", ctx.exception.args[0])
+        assert exc.value.args[0] == "Cannot find unittest-resources for distribution version 4.0.0"
 
         calls = [
             # first try to find it remotely...
@@ -262,8 +263,8 @@ class RallyRepositoryTests(TestCase):
 
         branches.assert_has_calls(calls)
         tags.assert_called_with("/rally-resources/unit-test")
-        self.assertEqual(0, checkout.call_count)
-        self.assertEqual(0, rebase.call_count)
+        assert checkout.call_count == 0
+        assert rebase.call_count == 0
 
     @mock.patch("esrally.utils.git.head_revision")
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
@@ -301,9 +302,9 @@ class RallyRepositoryTests(TestCase):
         ]
 
         branches.assert_has_calls(calls)
-        self.assertEqual(0, tags.call_count)
+        assert tags.call_count == 0
         checkout.assert_called_with("/rally-resources/unit-test", branch="1")
-        self.assertEqual(0, rebase.call_count)
+        assert rebase.call_count == 0
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
@@ -324,14 +325,14 @@ class RallyRepositoryTests(TestCase):
             offline=False,
         )
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as exc:
             r.update(distribution_version="4.0.0")
 
-        self.assertEqual("Cannot find unittest-resources for distribution version 4.0.0", ctx.exception.args[0])
+        assert exc.value.args[0] == "Cannot find unittest-resources for distribution version 4.0.0"
 
         branches.assert_called_with("/rally-resources/unit-test", remote=False)
-        self.assertEqual(0, checkout.call_count)
-        self.assertEqual(0, rebase.call_count)
+        assert checkout.call_count == 0
+        assert rebase.call_count == 0
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)

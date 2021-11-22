@@ -15,25 +15,25 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from unittest import TestCase
+import pytest
 
 from esrally.utils import convert
 
 
-class ToBoolTests(TestCase):
+class TestToBool:
     def test_convert_to_true(self):
         values = ["True", "true", "Yes", "yes", "t", "y", "1", True]
         for value in values:
-            self.assertTrue(convert.to_bool(value), msg="Expect [%s] of type [%s] to be converted to True." % (str(value), type(value)))
+            assert convert.to_bool(value) is True
 
     def test_convert_to_false(self):
         values = ["False", "false", "No", "no", "f", "n", "0", False]
         for value in values:
-            self.assertFalse(convert.to_bool(value), msg="Expect [%s] of type [%s] to be converted to False." % (str(value), type(value)))
+            assert convert.to_bool(value) is False
 
     def test_cannot_convert_invalid_value(self):
         values = ["Invalid", None, []]
         for value in values:
-            with self.assertRaises(ValueError, msg="Expect [%s] of type [%s] to fail to be converted." % (str(value), type(value))) as ctx:
+            with pytest.raises(ValueError) as exc:
                 convert.to_bool(value)
-            self.assertEqual("Cannot convert [%s] to bool." % value, ctx.exception.args[0])
+            assert exc.value.args[0] == f"Cannot convert [{value}] to bool."

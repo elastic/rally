@@ -18,14 +18,13 @@
 import os
 import random
 import unittest.mock as mock
-from unittest import TestCase
 
 import pytest
 
 from esrally.utils import console
 
 
-class ConsoleFunctionTests(TestCase):
+class TestConsoleFunction:
     oldconsole_quiet = None
     oldconsole_rally_running_in_docker = None
     oldconsole_rally_assume_tty = None
@@ -45,17 +44,17 @@ class ConsoleFunctionTests(TestCase):
     @mock.patch.dict(os.environ, {"RALLY_RUNNING_IN_DOCKER": random.choice(["false", "False", "FALSE", ""])})
     def test_global_rally_running_in_docker_is_false(self):
         console.init()
-        self.assertEqual(False, console.RALLY_RUNNING_IN_DOCKER)
+        assert console.RALLY_RUNNING_IN_DOCKER is False
 
     @mock.patch.dict(os.environ, {"RALLY_RUNNING_IN_DOCKER": ""})
     def test_global_rally_running_in_docker_is_false_if_unset(self):
         console.init()
-        self.assertEqual(False, console.RALLY_RUNNING_IN_DOCKER)
+        assert console.RALLY_RUNNING_IN_DOCKER is False
 
     @mock.patch.dict(os.environ, {"RALLY_RUNNING_IN_DOCKER": random.choice(["True", "true", "TRUE"])})
     def test_global_rally_running_in_docker_is_true(self):
         console.init()
-        self.assertEqual(True, console.RALLY_RUNNING_IN_DOCKER)
+        assert console.RALLY_RUNNING_IN_DOCKER is True
 
     @mock.patch("sys.stdout.isatty")
     @mock.patch("builtins.print")
