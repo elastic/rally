@@ -36,4 +36,4 @@ class TestToBool:
         for value in values:
             with pytest.raises(ValueError) as exc:
                 convert.to_bool(value)
-            assert exc.value.args[0] == "Cannot convert [%s] to bool." % value
+            assert exc.value.args[0] == f"Cannot convert [{value}] to bool."

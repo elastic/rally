@@ -48,7 +48,7 @@ class TestIo:
     def test_normalize_path(self):
         assert io.normalize_path("/already/a/normalized/path") == "/already/a/normalized/path"
         assert io.normalize_path("/not/normalized/path/../") == "/not/normalized"
-        assert os.path.expanduser("~") == io.normalize_path("~/Documents/..")
+        assert io.normalize_path("~/Documents/..") == os.path.expanduser("~")
 
     def test_archive(self):
         assert io.is_archive("/tmp/some-archive.tar.gz")
