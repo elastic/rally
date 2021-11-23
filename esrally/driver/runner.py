@@ -24,7 +24,7 @@ import re
 import sys
 import time
 import types
-from collections import Counter, OrderedDict
+from collections import Counter, OrderedDict, namedtuple
 from copy import deepcopy
 from enum import Enum
 from functools import total_ordering
@@ -46,9 +46,9 @@ def register_default_runners():
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
-    register_runner(track.OperationType.Search, Query(), async_runner=True)
-    register_runner(track.OperationType.PaginatedSearch, Query(), async_runner=True)
-    register_runner(track.OperationType.ScrollSearch, Query(), async_runner=True)
+    register_runner(track.OperationType.Search, Search(), async_runner=True)
+    register_runner(track.OperationType.PaginatedSearch, PaginatedSearch(), async_runner=True)
+    register_runner(track.OperationType.ScrollSearch, ScrollSearch(), async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
     register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
@@ -760,235 +760,30 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None) -> dict:
     return parsed
 
 
-class Query(Runner):
+class Query:
     """
-    Runs a request body search against Elasticsearch.
+    A mixin that provides runners that execute queries with two methods:
 
-    It expects at least the following keys in the `params` hash:
+    1. `_raw_search()` is a thin wrapper around elasticsearch.transport.perform_request(). It does two things:
 
-    * `operation-type`: One of `search`, `paginated-search`, or `scroll-search`.
-    * `index`: The index or indices against which to issue the query.
-    * `type`: See `index`
-    * `cache`: True iff the request cache should be used.
-    * `body`: Query body
+       - Builds a request path with the `doc_type` and `index` arguments interpolated appropriately.
+       - Disables eager response parsing. Parsing responses lazily elsewhere in the code presents less
+         opportunity for skewing results.
 
-    The following parameters are optional:
+    2. `_query_params()` transforms a provided `params` dict into a `QueryParams` namedtuple. It includes
+        named fields for the following parameters that Elasticsearch's various flavors of `_search` APIs
+        all commonly require, and that _raw_search() consumes as keyword arguments:
 
-    * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
-                                               corresponding response in more detail, this might incur additional
-                                               overhead which can skew measurement results. This flag is ineffective
-                                               for scroll queries (detailed meta-data are always returned).
-    * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present,
-                           defaults to ``None`` and potentially falls back to the global timeout setting.
-    * `results-per-page`: Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and
-                           can be used for paginated and non-paginated searches.  Defaults to ``10``
+       - `doc_type`
+       - `index`
+       - `body`
+       - `request_params`
+       - `headers`
 
-    If the following parameters are present in addition, a paginated query will be issued:
-
-    * `pages`: Number of pages to retrieve at most for this search. If a query yields fewer results than the specified
-               number of pages we will terminate earlier.
-
-
-    Returned meta data
-
-    The following meta data are always returned:
-
-    * ``weight``: operation-agnostic representation of the "weight" of an operation (used internally by Rally for throughput calculation).
-                  Always 1 for normal queries and the number of retrieved pages for scroll queries.
-    * ``unit``: The unit in which to interpret ``weight``. Always "ops".
-    * ``hits``: Total number of hits for this operation.
-    * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
-    * ``timed_out``: Whether the search has timed out. For scroll queries, this flag is ``True`` if the flag was ``True`` for any of the
-                     queries issued.
-
-    For paginated queries we also return:
-
-    * ``pages``: Total number of pages that have been retrieved.
+       This facilitates calling _raw_search() by unpacking a `QueryParams` tuple's dictionary representation.
     """
 
-    def __init__(self):
-        super().__init__()
-        self._extractor = SearchAfterExtractor()
-
-    async def __call__(self, es, params):
-        request_params, headers = self._transport_request_params(params)
-        # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
-        # composite context where there is no actual parameter source and the entire request structure must be provided
-        # by the composite's parameter source.
-        index = mandatory(params, "index", self)
-        body = mandatory(params, "body", self)
-        operation_type = params.get("operation-type")
-        size = params.get("results-per-page")
-        if size:
-            body["size"] = size
-        detailed_results = params.get("detailed-results", False)
-        encoding_header = self._query_headers(params)
-        if encoding_header is not None:
-            headers.update(encoding_header)
-        cache = params.get("cache")
-        if cache is not None:
-            request_params["request_cache"] = str(cache).lower()
-        if not bool(headers):
-            # counter-intuitive but preserves prior behavior
-            headers = None
-        # disable eager response parsing - responses might be huge thus skewing results
-        es.return_raw_response()
-
-        async def _search_after_query(es, params):
-            index = params.get("index", "_all")
-            pit_op = params.get("with-point-in-time-from")
-            results = {
-                "unit": "pages",
-                "success": True,
-                "timed_out": False,
-                "took": 0,
-            }
-            if pit_op:
-                # these are disallowed as they are encoded in the pit_id
-                for item in ["index", "routing", "preference"]:
-                    body.pop(item, None)
-                index = None
-            # explicitly convert to int to provoke an error otherwise
-            total_pages = sys.maxsize if params.get("pages") == "all" else int(mandatory(params, "pages", self))
-            for page in range(1, total_pages + 1):
-                if pit_op:
-                    pit_id = CompositeContext.get(pit_op)
-                    body["pit"] = {"id": pit_id, "keep_alive": "1m"}
-
-                response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = self._extractor(response, bool(pit_op), results.get("hits"))
-                results["pages"] = page
-                results["weight"] = page
-                if results.get("hits") is None:
-                    results["hits"] = parsed.get("hits.total.value")
-                    results["hits_relation"] = parsed.get("hits.total.relation")
-                results["took"] += parsed.get("took")
-                # when this evaluates to True, keep it for the final result
-                if not results["timed_out"]:
-                    results["timed_out"] = parsed.get("timed_out")
-                if pit_op:
-                    # per the documentation the response pit id is most up-to-date
-                    CompositeContext.put(pit_op, parsed.get("pit_id"))
-
-                if results.get("hits") / size > page:
-                    body["search_after"] = last_sort
-                else:
-                    # body needs to be un-mutated for the next iteration (preferring to do this over a deepcopy at the start)
-                    for item in ["pit", "search_after"]:
-                        body.pop(item, None)
-                    break
-
-            return results
-
-        async def _request_body_query(es, params):
-            doc_type = params.get("type")
-
-            r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
-
-            if detailed_results:
-                props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
-                hits_total = props.get("hits.total.value", props.get("hits.total", 0))
-                hits_relation = props.get("hits.total.relation", "eq")
-                timed_out = props.get("timed_out", False)
-                took = props.get("took", 0)
-
-                return {
-                    "weight": 1,
-                    "unit": "ops",
-                    "success": True,
-                    "hits": hits_total,
-                    "hits_relation": hits_relation,
-                    "timed_out": timed_out,
-                    "took": took,
-                }
-            else:
-                return {
-                    "weight": 1,
-                    "unit": "ops",
-                    "success": True,
-                }
-
-        async def _scroll_query(es, params):
-            hits = 0
-            hits_relation = None
-            timed_out = False
-            took = 0
-            retrieved_pages = 0
-            scroll_id = None
-            # explicitly convert to int to provoke an error otherwise
-            total_pages = sys.maxsize if params.get("pages") == "all" else int(mandatory(params, "pages", self))
-            try:
-                for page in range(total_pages):
-                    if page == 0:
-                        sort = "_doc"
-                        scroll = "10s"
-                        doc_type = params.get("type")
-                        params = request_params.copy()
-                        params["sort"] = sort
-                        params["scroll"] = scroll
-                        params["size"] = size
-                        r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
-
-                        props = parse(
-                            r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"]
-                        )
-                        scroll_id = props.get("_scroll_id")
-                        hits = props.get("hits.total.value", props.get("hits.total", 0))
-                        hits_relation = props.get("hits.total.relation", "eq")
-                        timed_out = props.get("timed_out", False)
-                        took = props.get("took", 0)
-                        all_results_collected = (size is not None and hits < size) or hits == 0
-                    else:
-                        r = await es.transport.perform_request(
-                            "GET", "/_search/scroll", body={"scroll_id": scroll_id, "scroll": "10s"}, params=request_params, headers=headers
-                        )
-                        props = parse(r, ["timed_out", "took"], ["hits.hits"])
-                        timed_out = timed_out or props.get("timed_out", False)
-                        took += props.get("took", 0)
-                        # is the list of hits empty?
-                        all_results_collected = props.get("hits.hits", False)
-                    retrieved_pages += 1
-                    if all_results_collected:
-                        break
-            finally:
-                if scroll_id:
-                    # noinspection PyBroadException
-                    try:
-                        await es.clear_scroll(body={"scroll_id": [scroll_id]})
-                    except BaseException:
-                        self.logger.exception(
-                            "Could not clear scroll [%s]. This will lead to excessive resource usage in "
-                            "Elasticsearch and will skew your benchmark results.",
-                            scroll_id,
-                        )
-
-            return {
-                "weight": retrieved_pages,
-                "pages": retrieved_pages,
-                "hits": hits,
-                "hits_relation": hits_relation,
-                "unit": "pages",
-                "timed_out": timed_out,
-                "took": took,
-            }
-
-        if operation_type == "paginated-search":
-            return await _search_after_query(es, params)
-        elif operation_type == "scroll-search":
-            return await _scroll_query(es, params)
-        elif operation_type == "search":
-            if "pages" in params:
-                logging.getLogger(__name__).warning(
-                    "Invoking a scroll search with the 'search' operation is deprecated "
-                    "and will be removed in a future release. Use 'scroll-search' instead."
-                )
-                return await _scroll_query(es, params)
-            else:
-                return await _request_body_query(es, params)
-        else:
-            raise exceptions.RallyError(f"No runner available for operation-type: [{operation_type}]")
-
-    async def _raw_search(self, es, doc_type, index, body, params, headers=None):
+    async def _raw_search(self, es, *, doc_type, index, body, request_params, headers=None):
         components = []
         if index:
             components.append(index)
@@ -996,17 +791,222 @@ class Query(Runner):
             components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
-        return await es.transport.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
 
-    def _query_headers(self, params):
-        # reduces overhead due to decompression of very large responses
-        if params.get("response-compression-enabled", True):
-            return None
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
+        return await es.transport.perform_request("GET", "/" + path, params=request_params, body=body, headers=headers)
+
+    def _query_params(self, params):
+        request_params, headers = self._transport_request_params(params)
+        index = mandatory(params, "index", self)
+        body = mandatory(params, "body", self)
+        size = params.get("results-per-page")
+        if size:
+            body["size"] = size
+        if not params.get("response-compression-enabled", True):
+            headers.update({"Accept-Encoding": "identity"})
+        cache = params.get("cache")
+        if cache is not None:
+            request_params["request_cache"] = str(cache).lower()
+        if not bool(headers):
+            # counter-intuitive but preserves prior behavior
+            headers = None
+        doc_type = params.get("type")
+
+        QueryParams = namedtuple("QueryParams", ["doc_type", "index", "body", "request_params", "headers"])
+        return QueryParams(doc_type, index, body, request_params, headers)
+
+
+class Search(Runner, Query):
+    def __init__(self):
+        super().__init__()
+        self._extractor = SearchAfterExtractor()
+
+    async def __call__(self, es, params):
+        # TODO: reject `pages` if found in params dict
+        query_params = super()._query_params(params)
+        detailed_results = params.get("detailed-results", False)
+
+        r = await super()._raw_search(es, **query_params._asdict())
+
+        if detailed_results:
+            props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+            hits_total = props.get("hits.total.value", props.get("hits.total", 0))
+            hits_relation = props.get("hits.total.relation", "eq")
+            timed_out = props.get("timed_out", False)
+            took = props.get("took", 0)
+
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "success": True,
+                "hits": hits_total,
+                "hits_relation": hits_relation,
+                "timed_out": timed_out,
+                "took": took,
+            }
         else:
-            return {"Accept-Encoding": "identity"}
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "success": True,
+            }
 
     def __repr__(self, *args, **kwargs):
-        return "query"
+        return "search"
+
+
+class PaginatedSearch(Runner, Query):
+    def __init__(self):
+        super().__init__()
+        self._extractor = SearchAfterExtractor()
+
+    async def __call__(self, es, params):
+        query_params = super()._query_params(params)
+        # TODO: Is this necessary?
+        index = query_params.index or "_all"
+        body = query_params.body
+        size = params.get("results-per-page")
+        # explicitly convert to int to provoke an error otherwise
+        total_pages = sys.maxsize if params.get("pages") == "all" else int(mandatory(params, "pages", self))
+        pit_op = params.get("with-point-in-time-from")
+        results = {
+            "unit": "pages",
+            "success": True,
+            "timed_out": False,
+            "took": 0,
+        }
+
+        async def point_in_time(es, query_params, results, size, pit_op):
+            pit_body = query_params.body.copy()
+            for item in ["index", "routing", "preference"]:
+                pit_body.pop(item, None)
+                pit_body.update({"pit": {"id": CompositeContext.get(pit_op), "keep_alive": "1m"}})
+
+            qp = query_params._replace(index=None, body=pit_body)
+            response = await self._raw_search(es, **qp._asdict())
+            parsed, last_sort = self._extractor(response, bool(pit_op), results.get("hits"))
+
+            CompositeContext.put(pit_op, parsed.get("pit_id"))
+
+            return parsed, last_sort
+
+        async def search_after(es, query_params, results, size):
+            query_params_dict = query_params._replace(index=index, body=body.copy())._asdict()
+            response = await self._raw_search(es, **query_params_dict)
+
+            parsed, last_sort = self._extractor(response, bool(pit_op), results.get("hits"))
+            return parsed, last_sort
+
+        def paginated_search(es, query_params, results, size, pit_op=None):
+            if pit_op:
+                return point_in_time(es, query_params, results, size, pit_op)
+            else:
+                return search_after(es, query_params, results, size)
+
+        def update_results(results, page, parsed):
+            results["pages"] = page
+            results["weight"] = page
+            if results.get("hits") is None:
+                results["hits"] = parsed.get("hits.total.value")
+                results["hits_relation"] = parsed.get("hits.total.relation")
+            results["took"] += parsed.get("took")
+            # when this evaluates to True, keep it for the final result
+            if not results["timed_out"]:
+                results["timed_out"] = parsed.get("timed_out")
+
+        for page in range(1, total_pages + 1):
+            parsed, last_sort = await paginated_search(es, query_params, results, size, pit_op)
+            update_results(results, page, parsed)
+            if results.get("hits") / size > page:
+                body["search_after"] = last_sort
+            else:
+                # body needs to be un-mutated for the next iteration (preferring to do this over a deepcopy at the start)
+                for item in ["pit", "search_after"]:
+                    body.pop(item, None)
+                break
+
+        return results
+
+
+class ScrollSearch(Runner, Query):
+    def __init__(self):
+        super().__init__()
+        self._extractor = SearchAfterExtractor()
+
+    async def __call__(self, es, params):
+        query_params = super()._query_params(params)
+        # explicitly convert to int to provoke an error otherwise
+        total_pages = sys.maxsize if params.get("pages") == "all" else int(mandatory(params, "pages", self))
+
+        hits = 0
+        hits_relation = None
+        timed_out = False
+        took = 0
+        retrieved_pages = 0
+        scroll_id = None
+        size = query_params.body.get("size", None)
+        try:
+            for page in range(total_pages):
+                if page == 0:
+                    sort = "_doc"
+                    scroll = "10s"
+                    scroll_request_params = query_params.request_params.copy()
+                    scroll_request_params["sort"] = sort
+                    scroll_request_params["scroll"] = scroll
+                    scroll_request_params["size"] = query_params.body["size"]
+                    initial_scroll_query_params = query_params._replace(request_params=scroll_request_params)
+                    r = await super()._raw_search(es, **initial_scroll_query_params._asdict())
+
+                    props = parse(
+                        r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"]
+                    )
+                    scroll_id = props.get("_scroll_id")
+                    hits = props.get("hits.total.value", props.get("hits.total", 0))
+                    hits_relation = props.get("hits.total.relation", "eq")
+                    timed_out = props.get("timed_out", False)
+                    took = props.get("took", 0)
+                    all_results_collected = (size is not None and hits < size) or hits == 0
+                else:
+                    r = await es.transport.perform_request(
+                        "GET",
+                        "/_search/scroll",
+                        body={"scroll_id": scroll_id, "scroll": "10s"},
+                        params=query_params.request_params,
+                        headers=query_params.headers,
+                    )
+                    props = parse(r, ["timed_out", "took"], ["hits.hits"])
+                    timed_out = timed_out or props.get("timed_out", False)
+                    took += props.get("took", 0)
+                    # is the list of hits empty?
+                    all_results_collected = props.get("hits.hits", False)
+                retrieved_pages += 1
+                if all_results_collected:
+                    break
+        finally:
+            if scroll_id:
+                # noinspection PyBroadException
+                try:
+                    await es.clear_scroll(body={"scroll_id": [scroll_id]})
+                except BaseException:
+                    self.logger.exception(
+                        "Could not clear scroll [%s]. This will lead to excessive resource usage in "
+                        "Elasticsearch and will skew your benchmark results.",
+                        scroll_id,
+                    )
+
+        return {
+            "weight": retrieved_pages,
+            "pages": retrieved_pages,
+            "hits": hits,
+            "hits_relation": hits_relation,
+            "unit": "pages",
+            "timed_out": timed_out,
+            "took": took,
+        }
+
+    def __repr__(self, *args, **kwargs):
+        return "scroll-search"
 
 
 class SearchAfterExtractor:
