@@ -2320,6 +2320,7 @@ class Composite(Runner):
         self.supported_op_types = [
             "open-point-in-time",
             "close-point-in-time",
+            "paginated-search",
             "search",
             "raw-request",
             "sleep",
