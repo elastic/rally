@@ -5517,7 +5517,7 @@ class CompositeTests(TestCase):
 
         self.assertEqual(
             "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
-            "search, raw-request, sleep, submit-async-search, get-async-search, delete-async-search].",
+            "search, paginated-search, raw-request, sleep, submit-async-search, get-async-search, delete-async-search].",
             ctx.exception.args[0],
         )
 
