@@ -2321,6 +2321,7 @@ class Composite(Runner):
             "open-point-in-time",
             "close-point-in-time",
             "search",
+            "paginated-search",
             "raw-request",
             "sleep",
             "submit-async-search",
