@@ -1,0 +1,5 @@
+---
+
+jjbb-template: periodic.yml
+vars:
+  - branch: master

@@ -1,0 +1,8 @@
+---
+
+- job:
+    name: elastic+rally+{branch}+periodic
+    display-name: "elastic / rally # {branch} - periodic"
+    description: "CI testing for Rally"
+    triggers:
+      - timed: "H H * * *"

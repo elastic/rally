@@ -1,0 +1,6 @@
+---
+
+- job:
+    name: elastic+rally+{branch}
+    display-name: "elastic / rally # {branch}"
+    description: "CI testing for Rally #{branch}"
