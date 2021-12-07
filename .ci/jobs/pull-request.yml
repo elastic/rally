@@ -1,0 +1,22 @@
+---
+
+- job:
+    name: "elastic+rally+pull-request"
+    display-name: "elastic / rally # pull-request"
+    description: "CI testing for rally pull requests"
+    scm:
+      - git:
+          refspec: "+refs/pull/*:refs/remotes/origin/pr/* +refs/heads/*:refs/remotes/origin/*"
+          branches:
+            - "${ghprbActualCommit}"
+    triggers:
+      - github-pull-request:
+          org-list:
+            - elastic
+          allow-whitelist-orgs-as-admins: true
+          trigger-phrase: '.*run\W+tests.*'
+          github-hooks: true
+          status-context: tests
+          cancel-builds-on-update: true
+          black-list-labels:
+            - '>test-mute'
