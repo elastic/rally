@@ -110,7 +110,7 @@ def init(quiet=False, assume_tty=True):
     #
     # Set a proper width (see argparse.HelpFormatter)
     try:
-        int(os.environ["COLUMNS"])
+        int(os.environ["COLUMNS"], 10)
     except (KeyError, ValueError):
         # noinspection PyBroadException
         try:

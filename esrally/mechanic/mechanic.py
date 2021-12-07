@@ -50,7 +50,7 @@ def install(cfg):
     sources = not distribution
     build_type = cfg.opts("mechanic", "build.type")
     ip = cfg.opts("mechanic", "network.host")
-    http_port = int(cfg.opts("mechanic", "network.http.port"))
+    http_port = int(cfg.opts("mechanic", "network.http.port"), 10)
     node_name = cfg.opts("mechanic", "node.name")
     master_nodes = cfg.opts("mechanic", "master.nodes")
     seed_hosts = cfg.opts("mechanic", "seed.hosts")

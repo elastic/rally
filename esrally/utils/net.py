@@ -181,7 +181,7 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
             raise urllib.error.HTTPError(url, r.status, "", None, None)
         # noinspection PyBroadException
         try:
-            size_from_content_header = int(r.getheader("Content-Length"))
+            size_from_content_header = int(r.getheader("Content-Length"), 10)
             if expected_size_in_bytes is None:
                 expected_size_in_bytes = size_from_content_header
         except BaseException:

@@ -60,7 +60,7 @@ class ExitStatus(Enum):
 
 def create_arg_parser():
     def positive_number(v):
-        value = int(v)
+        value = int(v, 10)
         if value <= 0:
             raise argparse.ArgumentTypeError(f"must be positive but was {value}")
         return value

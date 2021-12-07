@@ -106,7 +106,7 @@ def wait_for_pidfile(pidfilename, timeout=60, clock=time.Clock):
                 buf = f.read()
                 if not buf:
                     raise EOFError
-                return int(buf)
+                return int(buf, 10)
         except (FileNotFoundError, EOFError):
             time.sleep(0.5)
 
