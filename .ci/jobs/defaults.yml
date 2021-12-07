@@ -62,9 +62,6 @@
             JAVA15_HOME=$HOME/.java/openjdk15
             JAVA16_HOME=$HOME/.java/openjdk16
             JAVA17_HOME=$HOME/.java/openjdk17
-            # Build ES with Java 16
-            JAVA_HOME=$JAVA16_HOME
-            # Run ES with Java 17
             ES_JAVA_HOME=$JAVA17_HOME
             RALLY_HOME=$WORKSPACE
       - shell: |
