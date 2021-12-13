@@ -37,6 +37,7 @@ import ijson
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
+from esrally.utils import console
 
 __RUNNERS = {}
 
@@ -524,6 +525,9 @@ class BulkIndex(Runner):
             bulk_lines = params["body"].split("\n")
         elif isinstance(params["body"], list):
             bulk_lines = params["body"]
+        elif isinstance(params["body"], bytes):
+            bulk_lines = params["body"].decode("UTF-8")
+            bulk_lines = bulk_lines.split("\n")
         else:
             raise exceptions.DataError("bulk body is neither string nor list")
 
@@ -570,6 +574,7 @@ class BulkIndex(Runner):
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
+            self.logger.warning(f"Bulk request failed: [{stats['error-description']}]")
         if "ingest_took" in response:
             stats["ingest_took"] = response["ingest_took"]
 
