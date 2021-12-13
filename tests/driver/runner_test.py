@@ -1059,8 +1059,8 @@ class BulkIndexRunnerTests(TestCase):
                             "error": {
                                 "type": "cluster_block_exception",
                                 "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
-                                          "flood-stage watermark, index has read-only-allow-delete block];"
-                            }
+                                "flood-stage watermark, index has read-only-allow-delete block];",
+                            },
                         }
                     }
                 ],
@@ -1083,13 +1083,7 @@ class BulkIndexRunnerTests(TestCase):
 
         with mock.patch.object(bulk.logger, "warning") as mocked_warning_logger:
             result = await bulk(es, bulk_params)
-            mocked_warning_logger.assert_has_calls(
-                [
-                    mock.call(
-                        "Bulk request failed: [%s]", result["error-description"]
-                    )
-                ]
-            )
+            mocked_warning_logger.assert_has_calls([mock.call("Bulk request failed: [%s]", result["error-description"])])
 
         self.assertEqual("test", result["index"])
         self.assertEqual(5, result["took"])
@@ -1098,9 +1092,11 @@ class BulkIndexRunnerTests(TestCase):
         self.assertEqual(False, result["success"])
         self.assertEqual(1, result["error-count"])
         self.assertEqual("bulk", result["error-type"])
-        self.assertEqual("HTTP status: 429, message: index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage "
-                         "exceeded flood-stage watermark, index has read-only-allow-delete block];",
-                         result["error-description"])
+        self.assertEqual(
+            "HTTP status: 429, message: index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage "
+            "exceeded flood-stage watermark, index has read-only-allow-delete block];",
+            result["error-description"],
+        )
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
 

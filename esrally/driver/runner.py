@@ -523,7 +523,7 @@ class BulkIndex(Runner):
         if not isinstance(params["body"], bytes):
             raise exceptions.DataError("bulk body is not of type bytes")
 
-        for line_number, data in enumerate(params["body"].split(b'\n')):
+        for line_number, data in enumerate(params["body"].split(b"\n")):
             line_size = len(data)
             if with_action_metadata:
                 if line_number % 2 == 1:
