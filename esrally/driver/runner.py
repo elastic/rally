@@ -37,7 +37,6 @@ import ijson
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
-from esrally.utils import console
 
 __RUNNERS = {}
 
@@ -529,7 +528,7 @@ class BulkIndex(Runner):
             bulk_lines = params["body"].decode("UTF-8")
             bulk_lines = bulk_lines.split("\n")
         else:
-            raise exceptions.DataError("bulk body is neither string nor list")
+            raise exceptions.DataError("bulk body is not string, list, or bytes")
 
         for line_number, data in enumerate(bulk_lines):
             line_size = len(data.encode("utf-8"))
