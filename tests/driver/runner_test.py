@@ -1037,7 +1037,7 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test",
         }
 
-        with self.assertRaisesRegex(exceptions.DataError, "bulk body is neither string nor list"):
+        with self.assertRaisesRegex(exceptions.DataError, "bulk body is not string, list, or bytes"):
             await bulk(es, bulk_params)
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})

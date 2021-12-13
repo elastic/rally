@@ -573,7 +573,7 @@ class BulkIndex(Runner):
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
-            self.logger.warning(f"Bulk request failed: [{stats['error-description']}]")
+            self.logger.warning("Bulk request failed: [%s]", stats["error-description"])
         if "ingest_took" in response:
             stats["ingest_took"] = response["ingest_took"]
 
