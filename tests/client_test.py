@@ -294,19 +294,16 @@ class RequestContextManagerTests(TestCase):
         test_client = client.RequestContextHolder()
         async with test_client.new_request_context() as top_level_ctx:
             test_client.on_request_start()
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
             async with test_client.new_request_context() as nested_ctx:
                 test_client.on_request_start()
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.01)
                 test_client.on_request_end()
-                nested_duration = nested_ctx.request_end - nested_ctx.request_start
             test_client.on_request_end()
-            top_level_duration = top_level_ctx.request_end - top_level_ctx.request_start
 
-        # top level request should cover total duration
-        self.assertAlmostEqual(top_level_duration, 0.2, delta=0.05)
-        # nested request should only cover nested duration
-        self.assertAlmostEqual(nested_duration, 0.1, delta=0.05)
+        assert top_level_ctx.request_start < nested_ctx.request_start + 0.01
+        assert top_level_ctx.request_end > nested_ctx.request_end
+        assert nested_ctx.request_end > nested_ctx.request_start + 0.01
 
 
 class RestLayerTests(TestCase):
