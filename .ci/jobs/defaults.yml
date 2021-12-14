@@ -19,8 +19,7 @@
       - string:
           name: branch_specifier
           default: "refs/heads/{branch}"
-          description: "the Git branch specifier to build (&lt;branchName&gt;,
-    &lt;tagName&gt;, &lt;commitId&gt;, etc.)\n"
+          description: "the Git branch specifier to build (&lt;branchName&gt;, &lt;tagName&gt;, &lt;commitId&gt;, etc.)\n"
     scm:
       - git:
           name: origin
