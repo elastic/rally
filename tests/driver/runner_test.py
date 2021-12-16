@@ -347,7 +347,7 @@ class SelectiveJsonParserTests(TestCase):
 
 
 def _build_bulk_body(*lines):
-    return "".join(line + "\n" for line in lines)
+    return "".join(line + "\n" for line in lines).encode("UTF-8")
 
 
 class BulkIndexRunnerTests(TestCase):
@@ -495,7 +495,7 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_awaited_with(
             doc_type="_doc",
             params={},
-            body="index_line\nindex_line\nindex_line\n",
+            body=b"index_line\nindex_line\nindex_line\n",
             headers={"x-test-id": "1234"},
             index="test1",
             opaque_id="DESIRED-OPAQUE-ID",
@@ -1037,8 +1037,66 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test",
         }
 
-        with self.assertRaisesRegex(exceptions.DataError, "bulk body is neither string nor list"):
+        with self.assertRaisesRegex(exceptions.DataError, "bulk body is not of type bytes"):
             await bulk(es, bulk_params)
+
+        es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_bulk_index_error_logs_warning_with_detailed_stats_body(self, es):
+        es.bulk = mock.AsyncMock(
+            return_value={
+                "took": 5,
+                "errors": True,
+                "items": [
+                    {
+                        "create": {
+                            "_index": "test",
+                            "_type": "_doc",
+                            "_id": "6UNLsn0BfMD3e6iftbdV",
+                            "status": 429,
+                            "error": {
+                                "type": "cluster_block_exception",
+                                "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
+                                "flood-stage watermark, index has read-only-allow-delete block];",
+                            },
+                        }
+                    }
+                ],
+            }
+        )
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body(
+                '{ "index" : { "_index" : "test", "_type" : "_doc" } }',
+                '{"message" : "in a bottle"}',
+            ),
+            "action-metadata-present": True,
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "index": "test",
+        }
+
+        with mock.patch.object(bulk.logger, "warning") as mocked_warning_logger:
+            result = await bulk(es, bulk_params)
+            mocked_warning_logger.assert_has_calls([mock.call("Bulk request failed: [%s]", result["error-description"])])
+
+        self.assertEqual("test", result["index"])
+        self.assertEqual(5, result["took"])
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("docs", result["unit"])
+        self.assertEqual(False, result["success"])
+        self.assertEqual(1, result["error-count"])
+        self.assertEqual("bulk", result["error-type"])
+        self.assertEqual(
+            "HTTP status: 429, message: index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage "
+            "exceeded flood-stage watermark, index has read-only-allow-delete block];",
+            result["error-description"],
+        )
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
 
