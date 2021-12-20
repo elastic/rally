@@ -199,7 +199,9 @@ def _load_single_track(cfg, track_repository, track_name, install_dependencies):
         reader = TrackFileReader(cfg)
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
         tpr = TrackProcessorRegistry(cfg)
-        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor, install_dependencies=install_dependencies)
+        has_plugins = load_track_plugins(
+            cfg, track_name, register_track_processor=tpr.register_track_processor, install_dependencies=install_dependencies
+        )
         current_track.has_plugins = has_plugins
         for processor in tpr.processors:
             processor.on_after_load_track(current_track)
@@ -214,7 +216,15 @@ def _load_single_track(cfg, track_repository, track_name, install_dependencies):
         raise
 
 
-def load_track_plugins(cfg, track_name, register_runner=None, register_scheduler=None, register_track_processor=None, install_dependencies=False, force_update=False):
+def load_track_plugins(
+    cfg,
+    track_name,
+    register_runner=None,
+    register_scheduler=None,
+    register_track_processor=None,
+    install_dependencies=False,
+    force_update=False,
+):
     """
     Loads plugins that are defined for the current track (as specified by the configuration).
 
@@ -1076,7 +1086,9 @@ class TrackPluginReader:
     Loads track plugins
     """
 
-    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None, dependency_registry=None):
+    def __init__(
+        self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None, dependency_registry=None
+    ):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
         self.track_processor_registry = track_processor_registry
@@ -1127,6 +1139,7 @@ class TrackDependencyRegistry:
     """
     Installs track-specific dependencies to the local runtime
     """
+
     def __init__(self, install_dependencies):
         self.install_dependencies = install_dependencies
 
@@ -1135,9 +1148,10 @@ class TrackDependencyRegistry:
             console.info(f"Installing track dependency {name}")
             try:
                 with open(os.path.join(paths.logs(), "dependency.log"), "ab") as install_log:
-                    subprocess.check_call([sys.executable, '-m', 'pip', 'install', f"{name}"], stdout=install_log, stderr=install_log)
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", f"{name}"], stdout=install_log, stderr=install_log)
             except subprocess.CalledProcessError:
                 raise exceptions.SystemSetupError(f"Installation of [{name}] failed. See [{install_log.name}] for more information.")
+
 
 class TrackSpecificationReader:
     """
