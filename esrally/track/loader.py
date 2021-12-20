@@ -193,7 +193,7 @@ def load_track(cfg, install_dependencies=False):
     return _load_single_track(cfg, repo, repo.track_name, install_dependencies)
 
 
-def _load_single_track(cfg, track_repository, track_name, install_dependencies):
+def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
     try:
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)

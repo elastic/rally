@@ -24,7 +24,7 @@ def test_track_dependencies(cfg):
     port = 19200
     it.wait_until_port_is_free(port_number=port)
     dist_version = it.DISTRIBUTIONS[-1]
-    # workaround for MacOS and Python deficiency. See http://sealiesoftware.com/blog/archive/2017/6/5/Objective-C_and_fork_in_macOS_1013.html
+    # workaround for MacOS and Python deficiency. http://sealiesoftware.com/blog/archive/2017/6/5/Objective-C_and_fork_in_macOS_1013.html
     os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
     assert it.race(cfg, f"--distribution-version={dist_version} --track-path=resources/track_with_dependency --kill-running-processes") == 0
     del os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"]
