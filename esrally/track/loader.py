@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import urllib.error
@@ -29,7 +30,7 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import PROGRAM_NAME, config, exceptions, time, version
+from esrally import PROGRAM_NAME, config, exceptions, paths, time, version
 from esrally.track import params, track
 from esrally.utils import collections, console, convert, io, modules, net, opts, repo
 
@@ -180,7 +181,7 @@ def track_info(cfg):
             console.println("")
 
 
-def load_track(cfg):
+def load_track(cfg, install_dependencies=False):
     """
 
     Loads a track
@@ -189,16 +190,16 @@ def load_track(cfg):
     :return: The loaded track.
     """
     repo = track_repo(cfg)
-    return _load_single_track(cfg, repo, repo.track_name)
+    return _load_single_track(cfg, repo, repo.track_name, install_dependencies)
 
 
-def _load_single_track(cfg, track_repository, track_name):
+def _load_single_track(cfg, track_repository, track_name, install_dependencies):
     try:
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
         tpr = TrackProcessorRegistry(cfg)
-        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
+        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor, install_dependencies=install_dependencies)
         current_track.has_plugins = has_plugins
         for processor in tpr.processors:
             processor.on_after_load_track(current_track)
@@ -213,7 +214,7 @@ def _load_single_track(cfg, track_repository, track_name):
         raise
 
 
-def load_track_plugins(cfg, track_name, register_runner=None, register_scheduler=None, register_track_processor=None, force_update=False):
+def load_track_plugins(cfg, track_name, register_runner=None, register_scheduler=None, register_track_processor=None, install_dependencies=False, force_update=False):
     """
     Loads plugins that are defined for the current track (as specified by the configuration).
 
@@ -222,14 +223,16 @@ def load_track_plugins(cfg, track_name, register_runner=None, register_scheduler
     :param register_runner: An optional function where runners can be registered.
     :param register_scheduler: An optional function where custom schedulers can be registered.
     :param register_track_processor: An optional function where track processors can be registered.
+    :param install_dependencies: If set to ``True``, install declared dependencies from the track.py. Defaults to ``False``.
     :param force_update: If set to ``True`` this ensures that the track is first updated from the remote repository.
                          Defaults to ``False``.
     :return: True iff this track defines plugins and they have been loaded.
     """
     repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_plugin_path = repo.track_dir(track_name)
+    dependency_registry = TrackDependencyRegistry(install_dependencies)
     logging.getLogger(__name__).debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
-    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
+    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor, dependency_registry)
 
     if plugin_reader.can_load():
         plugin_reader.load()
@@ -1073,10 +1076,11 @@ class TrackPluginReader:
     Loads track plugins
     """
 
-    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None):
+    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None, dependency_registry=None):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
         self.track_processor_registry = track_processor_registry
+        self.dependency_registry = dependency_registry
         self.loader = modules.ComponentLoader(root_path=track_plugin_path, component_entry_point="track")
 
     def can_load(self):
@@ -1107,6 +1111,10 @@ class TrackPluginReader:
         if self.track_processor_registry:
             self.track_processor_registry(track_processor)
 
+    def register_dependency(self, name):
+        if self.dependency_registry:
+            self.dependency_registry(name)
+
     @property
     def meta_data(self):
         return {
@@ -1114,6 +1122,22 @@ class TrackPluginReader:
             "async_runner": True,
         }
 
+
+class TrackDependencyRegistry:
+    """
+    Installs track-specific dependencies to the local runtime
+    """
+    def __init__(self, install_dependencies):
+        self.install_dependencies = install_dependencies
+
+    def __call__(self, name):
+        if self.install_dependencies:
+            console.info(f"Installing track dependency {name}")
+            try:
+                with open(os.path.join(paths.logs(), "dependency.log"), "ab") as install_log:
+                    subprocess.check_call([sys.executable, '-m', 'pip', 'install', f"{name}"], stdout=install_log, stderr=install_log)
+            except subprocess.CalledProcessError:
+                raise exceptions.SystemSetupError(f"Installation of [{name}] failed. See [{install_log.name}] for more information.")
 
 class TrackSpecificationReader:
     """
