@@ -28,4 +28,4 @@ def test_track_dependencies(cfg):
     track_path = os.path.join(cwd, "resources", "track_with_dependency")
     # workaround for MacOS and Python deficiency. http://sealiesoftware.com/blog/archive/2017/6/5/Objective-C_and_fork_in_macOS_1013.html
     os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
-    assert it.race(cfg, f"--distribution-version={dist_version} --track-path={track_path} --car=basic-license") == 0
+    assert it.race(cfg, f"--distribution-version={dist_version} --track-path={track_path} --car=4gheap,basic-license") == 0
