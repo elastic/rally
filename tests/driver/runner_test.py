@@ -347,7 +347,7 @@ class SelectiveJsonParserTests(TestCase):
 
 
 def _build_bulk_body(*lines):
-    return "".join(line + "\n" for line in lines).encode("UTF-8")
+    return "".join(line + "\n" for line in lines)
 
 
 class BulkIndexRunnerTests(TestCase):
@@ -495,7 +495,7 @@ class BulkIndexRunnerTests(TestCase):
         es.bulk.assert_awaited_with(
             doc_type="_doc",
             params={},
-            body=b"index_line\nindex_line\nindex_line\n",
+            body="index_line\nindex_line\nindex_line\n",
             headers={"x-test-id": "1234"},
             index="test1",
             opaque_id="DESIRED-OPAQUE-ID",
@@ -998,6 +998,75 @@ class BulkIndexRunnerTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
+    async def test_simple_bulk_with_detailed_stats_body_as_bytes(self, es):
+        es.bulk = mock.AsyncMock(
+            return_value={
+                "took": 30,
+                "ingest_took": 20,
+                "errors": False,
+                "items": [
+                    {
+                        "index": {
+                            "_index": "bytes",
+                            "_type": "bytes1",
+                            "_id": "1",
+                            "_version": 1,
+                            "result": "created",
+                            "_shards": {"total": 1, "successful": 1, "failed": 0},
+                            "created": True,
+                            "status": 201,
+                            "_seq_no": 0,
+                        }
+                    }
+                ],
+            }
+        )
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": b'{ "index" : { "_index" : "bytes", "_type" : "bytes1" } }\n{"message" : "in a bottle"}',
+            "action-metadata-present": True,
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "index": "test",
+        }
+
+        result = await bulk(es, bulk_params)
+
+        self.assertEqual("test", result["index"])
+        self.assertEqual(30, result["took"])
+        self.assertEqual(20, result["ingest_took"])
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("docs", result["unit"])
+        self.assertEqual(True, result["success"])
+        self.assertEqual(0, result["error-count"])
+        self.assertEqual(
+            {
+                "index": {"item-count": 1, "created": 1},
+            },
+            result["ops"],
+        )
+        self.assertEqual(
+            [
+                {
+                    "item-count": 1,
+                    "shards": {"total": 1, "successful": 1, "failed": 0},
+                }
+            ],
+            result["shards_histogram"],
+        )
+        self.assertEqual(83, result["bulk-request-size-bytes"])
+        self.assertEqual(27, result["total-document-size-bytes"])
+
+        es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
+
+        es.bulk.return_value.pop("ingest_took")
+        result = await bulk(es, bulk_params)
+        self.assertNotIn("ingest_took", result)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
     async def test_simple_bulk_with_detailed_stats_body_as_unrecognized_type(self, es):
         es.bulk = mock.AsyncMock(
             return_value={
@@ -1025,10 +1094,7 @@ class BulkIndexRunnerTests(TestCase):
 
         bulk_params = {
             "body": {
-                "items": _build_bulk_body(
-                    '{ "index" : { "_index" : "test", "_type" : "type1" } }',
-                    '{"location" : [-0.1485188, 51.5250666]}',
-                ),
+                "items": 1,
             },
             "action-metadata-present": True,
             "bulk-size": 1,
@@ -1037,7 +1103,7 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test",
         }
 
-        with self.assertRaisesRegex(exceptions.DataError, "bulk body is not of type bytes"):
+        with self.assertRaisesRegex(exceptions.DataError, "bulk body is not of type bytes, string, or list"):
             await bulk(es, bulk_params)
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})

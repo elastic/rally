@@ -511,6 +511,13 @@ class BulkIndex(Runner):
         return meta_data
 
     def detailed_stats(self, params, response):
+
+        def _utf8len(line):
+            if isinstance(line, bytes):
+                return len(line)
+            else:
+                return len(line.encode('utf-8'))
+
         ops = {}
         shards_histogram = OrderedDict()
         bulk_error_count = 0
@@ -520,11 +527,17 @@ class BulkIndex(Runner):
         total_document_size_bytes = 0
         with_action_metadata = mandatory(params, "action-metadata-present", self)
 
-        if not isinstance(params["body"], bytes):
-            raise exceptions.DataError("bulk body is not of type bytes")
+        if isinstance(params["body"], bytes):
+            bulk_lines = params["body"].split(b"\n")
+        elif isinstance(params["body"], str):
+            bulk_lines = params["body"].split("\n")
+        elif isinstance(params["body"], list):
+            bulk_lines = params["body"]
+        else:
+            raise exceptions.DataError("bulk body is not of type bytes, string, or list")
 
-        for line_number, data in enumerate(params["body"].split(b"\n")):
-            line_size = len(data)
+        for line_number, data in enumerate(bulk_lines):
+            line_size = _utf8len(data)
             if with_action_metadata:
                 if line_number % 2 == 1:
                     total_document_size_bytes += line_size
