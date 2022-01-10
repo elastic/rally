@@ -959,8 +959,8 @@ def create_readers(
                     corpus.name,
                 )
                 readers[len(corpora) * entry + group] = create_reader(
-                        docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
-                    )
+                    docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
+                )
             else:
                 logger.info(
                     "Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
