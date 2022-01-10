@@ -885,7 +885,7 @@ def chain(*iterables):
     :param iterables: A number of iterable that should be chained.
     :return: An iterable that will delegate to all provided iterables in turn.
     """
-    for it in iterables:
+    for it in filter(lambda x: x is not None, iterables):
         # execute within a context
         with it:
             for element in it:
@@ -936,9 +936,11 @@ def create_readers(
     create_reader,
 ):
     logger = logging.getLogger(__name__)
-    readers = []
-    for corpus in corpora:
-        for docs in corpus.documents:
+    # pre-initialize in order to assign parallel tasks for different corpora through assignment
+    readers = [None for corpus in corpora for _ in corpus.documents] * num_clients
+    # stagger which corpus each client starts with for better parallelism
+    for group, corpus in enumerate(corpora[(start_client_index + mod) % len(corpora)] for mod in range(len(corpora))):
+        for entry, docs in enumerate(corpus.documents):
             offset, num_docs, num_lines = bounds(
                 docs.number_of_documents, start_client_index, end_client_index, num_clients, docs.includes_action_and_meta_data
             )
@@ -956,11 +958,9 @@ def create_readers(
                     target,
                     corpus.name,
                 )
-                readers.append(
-                    create_reader(
+                readers[len(corpora) * entry + group] = create_reader(
                         docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
                     )
-                )
             else:
                 logger.info(
                     "Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
