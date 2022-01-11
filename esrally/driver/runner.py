@@ -511,12 +511,11 @@ class BulkIndex(Runner):
         return meta_data
 
     def detailed_stats(self, params, response):
-
         def _utf8len(line):
             if isinstance(line, bytes):
                 return len(line)
             else:
-                return len(line.encode('utf-8'))
+                return len(line.encode("utf-8"))
 
         ops = {}
         shards_histogram = OrderedDict()
