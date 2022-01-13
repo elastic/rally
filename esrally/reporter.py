@@ -117,6 +117,8 @@ class SummaryReporter:
 
         metrics_table.extend(self._report_transform_stats(stats))
 
+        metrics_table.extend(self._report_ingest_pipeline_stats(stats))
+
         for record in stats.op_metrics:
             task = record["task"]
             metrics_table.extend(self._report_throughput(record, task))
@@ -277,7 +279,7 @@ class SummaryReporter:
         )
 
     def _report_segment_counts(self, stats):
-        return self._join(self._line("Segment count", "", stats.segment_count, ""))
+        return self._join(self._line("Segment count", "", stats.segment_count, "", ))
 
     def _report_transform_stats(self, stats):
         lines = []
@@ -291,6 +293,13 @@ class SummaryReporter:
             lines.append(self._line("Transform throughput", throughput["id"], throughput["mean"], throughput["unit"]))
 
         return lines
+
+    def _report_ingest_pipeline_stats(self, stats):
+        return self._join(
+            self._line("Total Ingest Pipeline count", "", stats.ingest_pipeline_total_count, ""),
+            self._line("Total Ingest Pipeline time", "", stats.ingest_pipeline_total_time, "ms"),
+            self._line("Total Ingest Pipeline failed", "", stats.ingest_pipeline_total_failed, ""),
+        )
 
     def _join(self, *args):
         lines = []
