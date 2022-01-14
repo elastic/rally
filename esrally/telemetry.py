@@ -1468,15 +1468,14 @@ class IngestPipelineStats(TelemetryDevice):
                                 continue
                             self._record_pipeline_level_processor_stats(pipeline, pipeline_name, cluster_name, node_name)
 
-            self._record_cluster_level_pipeline_stats()
+            self._record_cluster_level_pipeline_stats(cluster_name)
 
-    def _record_cluster_level_pipeline_stats(self):
-        # Cluster level statistics are calculated from node level statistics. The
-        # difference is reported in Rally's  table output as well as the 'rally-results*' index
-        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_count", self.ingest_pipeline_cluster_count)
+    def _record_cluster_level_pipeline_stats(self, cluster_name):
+        metadata = {"cluster_name": cluster_name}
+        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_count", self.ingest_pipeline_cluster_count, meta_data=metadata)
 
-        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_time", self.ingest_pipeline_cluster_time, "ms")
-        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_failed", self.ingest_pipeline_cluster_failed)
+        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_time", self.ingest_pipeline_cluster_time, "ms", meta_data=metadata)
+        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_failed", self.ingest_pipeline_cluster_failed, meta_data=metadata)
 
     def _record_node_level_pipeline_stats(self, stats, cluster_name, node_name):
         # Node level statistics are calculated per-benchmark execution. Stats are collected at the beginning, and end of

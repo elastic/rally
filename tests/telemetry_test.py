@@ -3915,9 +3915,9 @@ class IngestPipelineStatsTests(TestCase):
 
         metrics_store_cluster_level.assert_has_calls(
             [
-                mock.call("ingest_pipeline_cluster_count", 1),
-                mock.call("ingest_pipeline_cluster_time", 1, "ms"),
-                mock.call("ingest_pipeline_cluster_failed", 1),
+                mock.call("ingest_pipeline_cluster_count", 1, meta_data={"cluster_name": "docker-cluster"}),
+                mock.call("ingest_pipeline_cluster_time", 1, "ms", meta_data={"cluster_name": "docker-cluster"}),
+                mock.call("ingest_pipeline_cluster_failed", 1, meta_data={"cluster_name": "docker-cluster"}),
             ]
         )
 
