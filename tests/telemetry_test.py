@@ -3886,9 +3886,10 @@ class IngestPipelineStatsTests(TestCase):
         },
     }
 
-    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_put_doc):
+    def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_cluster_level, metrics_store_node_level):
         es.search.side_effect = elasticsearch.TransportError("unit test error")
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -3897,7 +3898,8 @@ class IngestPipelineStatsTests(TestCase):
         t.on_benchmark_start()
         t.on_benchmark_stop()
 
-        self.assertEqual(0, metrics_store_put_doc.call_count)
+        self.assertEqual(0, metrics_store_cluster_level.call_count)
+        self.assertEqual(0, metrics_store_node_level.call_count)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
