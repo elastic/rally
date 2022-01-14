@@ -1474,8 +1474,12 @@ class IngestPipelineStats(TelemetryDevice):
         metadata = {"cluster_name": cluster_name}
         self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_count", self.ingest_pipeline_cluster_count, meta_data=metadata)
 
-        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_time", self.ingest_pipeline_cluster_time, "ms", meta_data=metadata)
-        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_failed", self.ingest_pipeline_cluster_failed, meta_data=metadata)
+        self.metrics_store.put_value_cluster_level(
+            "ingest_pipeline_cluster_time", self.ingest_pipeline_cluster_time, "ms", meta_data=metadata
+        )
+        self.metrics_store.put_value_cluster_level(
+            "ingest_pipeline_cluster_failed", self.ingest_pipeline_cluster_failed, meta_data=metadata
+        )
 
     def _record_node_level_pipeline_stats(self, stats, cluster_name, node_name):
         # Node level statistics are calculated per-benchmark execution. Stats are collected at the beginning, and end of
@@ -1558,6 +1562,7 @@ class IngestPipelineStats(TelemetryDevice):
         # pylint: disable=import-outside-toplevel
 
         import elasticsearch
+
         summaries = {}
         for cluster_name in self.specified_cluster_names:
             try:
