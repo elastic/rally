@@ -3768,3 +3768,323 @@ class MasterNodeStatsRecorderTests(TestCase):
                 ),
             ],
         )
+
+
+class IngestPipelineStatsTests(TestCase):
+
+    ingest_pipeline_stats_start_response = {
+        "_nodes": {"total": 1, "successful": 1, "failed": 0},
+        "cluster_name": "docker-cluster",
+        "nodes": {
+            "ZlPBlHtYQDmG4ASbvRrFBg": {
+                "timestamp": 1642121373533,
+                "name": "elasticsearch31",
+                "transport_address": "172.18.0.2:9300",
+                "host": "172.18.0.2",
+                "ip": "172.18.0.2:9300",
+                "roles": [],
+                "attributes": {
+                    "ml.machine_memory": "7291248640",
+                    "xpack.installed": "true",
+                    "transform.node": "true",
+                    "ml.max_open_jobs": "512",
+                    "ml.max_jvm_size": "536870912",
+                },
+                "ingest": {
+                    "total": {"count": 1, "time_in_millis": 1, "current": 1, "failed": 1},
+                    "pipelines": {
+                        "http-log-baseline-pipeline": {
+                            "count": 1,
+                            "time_in_millis": 1,
+                            "current": 1,
+                            "failed": 1,
+                            "processors": [
+                                {"uppercase": {"type": "uppercase", "stats": {"count": 1, "time_in_millis": 1, "current": 1, "failed": 1}}}
+                            ],
+                        },
+                        "pipeline-1": {
+                            "count": 1,
+                            "time_in_millis": 1,
+                            "current": 1,
+                            "failed": 1,
+                            "processors": [
+                                {
+                                    "append": {
+                                        "type": "append",
+                                        "stats": {
+                                            "count": 1,
+                                            "time_in_millis": 1,
+                                            "current": 1,
+                                            "failed": 1,
+                                        },
+                                    }
+                                },
+                                {
+                                    "append": {
+                                        "type": "append",
+                                        "stats": {
+                                            "count": 1,
+                                            "time_in_millis": 1,
+                                            "current": 1,
+                                            "failed": 1,
+                                        },
+                                    }
+                                },
+                                {"lowercase": {"type": "lowercase", "stats": {"count": 1, "time_in_millis": 1, "current": 1, "failed": 1}}},
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    ingest_pipeline_stats_end_response = {
+        "_nodes": {"total": 1, "successful": 1, "failed": 0},
+        "cluster_name": "docker-cluster",
+        "nodes": {
+            "ZlPBlHtYQDmG4ASbvRrFBg": {
+                "timestamp": 1642121373533,
+                "name": "elasticsearch31",
+                "transport_address": "172.18.0.2:9300",
+                "host": "172.18.0.2",
+                "ip": "172.18.0.2:9300",
+                "roles": [],
+                "attributes": {
+                    "ml.machine_memory": "7291248640",
+                    "xpack.installed": "true",
+                    "transform.node": "true",
+                    "ml.max_open_jobs": "512",
+                    "ml.max_jvm_size": "536870912",
+                },
+                "ingest": {
+                    "total": {"count": 2, "time_in_millis": 2, "current": 2, "failed": 2},
+                    "pipelines": {
+                        "http-log-baseline-pipeline": {
+                            "count": 2,
+                            "time_in_millis": 2,
+                            "current": 2,
+                            "failed": 2,
+                            "processors": [
+                                {"uppercase": {"type": "uppercase", "stats": {"count": 2, "time_in_millis": 2, "current": 2, "failed": 2}}}
+                            ],
+                        },
+                        "pipeline-1": {
+                            "count": 2,
+                            "time_in_millis": 2,
+                            "current": 2,
+                            "failed": 2,
+                            "processors": [
+                                {"append": {"type": "append", "stats": {"count": 2, "time_in_millis": 2, "current": 2, "failed": 2}}},
+                                {"append": {"type": "append", "stats": {"count": 2, "time_in_millis": 2, "current": 2, "failed": 2}}},
+                                {"lowercase": {"type": "lowercase", "stats": {"count": 2, "time_in_millis": 2, "current": 2, "failed": 2}}},
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_put_doc):
+        es.search.side_effect = elasticsearch.TransportError("unit test error")
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.IngestPipelineStats(es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+
+        self.assertEqual(0, metrics_store_put_doc.call_count)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_stores_only_diff_of_ingest_pipeline_stats(self, metrics_store_cluster_level, metrics_store_node_level):
+        clients = {"default": Client(nodes=SubClient(stats=self.ingest_pipeline_stats_start_response))}
+        cfg = create_config()
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.IngestPipelineStats(clients, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+
+        clients["default"].nodes = SubClient(stats=self.ingest_pipeline_stats_end_response)
+        t.on_benchmark_stop()
+
+        metrics_store_cluster_level.assert_has_calls(
+            [
+                mock.call("ingest_pipeline_cluster_count", 1),
+                mock.call("ingest_pipeline_cluster_time", 1, "ms"),
+                mock.call("ingest_pipeline_cluster_failed", 1),
+            ]
+        )
+
+        metrics_store_node_level.assert_has_calls(
+            [
+                # node level stats
+                mock.call("elasticsearch31", "ingest_pipeline_node_count", 1),
+                mock.call("elasticsearch31", "ingest_pipeline_node_time", 1, "ms"),
+                mock.call("elasticsearch31", "ingest_pipeline_node_failed", 1),
+                # pipeline level stats
+                mock.call(
+                    "elasticsearch31", "ingest_pipeline_pipeline_count", 1, meta_data={"ingest_pipeline": "http-log-baseline-pipeline"}
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_pipeline_time",
+                    1,
+                    unit="ms",
+                    meta_data={"ingest_pipeline": "http-log-baseline-pipeline"},
+                ),
+                mock.call(
+                    "elasticsearch31", "ingest_pipeline_pipeline_failed", 1, meta_data={"ingest_pipeline": "http-log-baseline-pipeline"}
+                ),
+                # processor level stats
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_count",
+                    1,
+                    meta_data={"processor_name": "uppercase_1", "type": "uppercase", "ingest_pipeline": "http-log-baseline-pipeline"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_time",
+                    1,
+                    unit="ms",
+                    meta_data={"processor_name": "uppercase_1", "type": "uppercase", "ingest_pipeline": "http-log-baseline-pipeline"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_failed",
+                    1,
+                    meta_data={"processor_name": "uppercase_1", "type": "uppercase", "ingest_pipeline": "http-log-baseline-pipeline"},
+                ),
+                # pipeline level stats
+                mock.call("elasticsearch31", "ingest_pipeline_pipeline_count", 1, meta_data={"ingest_pipeline": "pipeline-1"}),
+                mock.call("elasticsearch31", "ingest_pipeline_pipeline_time", 1, unit="ms", meta_data={"ingest_pipeline": "pipeline-1"}),
+                mock.call("elasticsearch31", "ingest_pipeline_pipeline_failed", 1, meta_data={"ingest_pipeline": "pipeline-1"}),
+                # processor 1 stats
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_count",
+                    1,
+                    meta_data={"processor_name": "append_1", "type": "append", "ingest_pipeline": "pipeline-1"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_time",
+                    1,
+                    unit="ms",
+                    meta_data={"processor_name": "append_1", "type": "append", "ingest_pipeline": "pipeline-1"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_failed",
+                    1,
+                    meta_data={"processor_name": "append_1", "type": "append", "ingest_pipeline": "pipeline-1"},
+                ),
+                # processor 2 stats
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_count",
+                    1,
+                    meta_data={"processor_name": "append_2", "type": "append", "ingest_pipeline": "pipeline-1"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_time",
+                    1,
+                    unit="ms",
+                    meta_data={"processor_name": "append_2", "type": "append", "ingest_pipeline": "pipeline-1"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_failed",
+                    1,
+                    meta_data={"processor_name": "append_2", "type": "append", "ingest_pipeline": "pipeline-1"},
+                ),
+                # processor 3 stats
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_count",
+                    1,
+                    meta_data={"processor_name": "lowercase_3", "type": "lowercase", "ingest_pipeline": "pipeline-1"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_time",
+                    1,
+                    unit="ms",
+                    meta_data={"processor_name": "lowercase_3", "type": "lowercase", "ingest_pipeline": "pipeline-1"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_processor_failed",
+                    1,
+                    meta_data={"processor_name": "lowercase_3", "type": "lowercase", "ingest_pipeline": "pipeline-1"},
+                ),
+            ]
+        )
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_logs_warning_on_missing_stats(self, metrics_put_value_cluster_level, metrics_put_value_node_level):
+
+        cfg = create_config()
+        logger = logging.getLogger("esrally.telemetry")
+        metrics_store = metrics.EsMetricsStore(cfg)
+        clients = {"default": Client(nodes=SubClient(stats=self.ingest_pipeline_stats_start_response))}
+        device = telemetry.IngestPipelineStats(clients, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+
+        #  cluster level
+        t.on_benchmark_start()
+        clients["default"].nodes = SubClient(stats=self.ingest_pipeline_stats_end_response)
+        del device.start_stats["docker-cluster"]
+
+        with mock.patch.object(logger, "warning") as mocked_warning:
+            t.on_benchmark_stop()
+            mocked_warning.assert_called_once_with(
+                "Cannot determine Ingest Pipeline stats for %s (cluster stats weren't collected " "at the start of the benchmark).",
+                "docker-cluster",
+            )
+
+        # node level
+        clients["default"].nodes = SubClient(stats=self.ingest_pipeline_stats_start_response)
+        t.on_benchmark_start()
+        del device.start_stats["docker-cluster"]["elasticsearch31"]
+        clients["default"].nodes = SubClient(stats=self.ingest_pipeline_stats_end_response)
+
+        with mock.patch.object(logger, "warning") as mocked_warning:
+            t.on_benchmark_stop()
+            mocked_warning.assert_called_once_with(
+                "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start " "of the benchmark).", "elasticsearch31"
+            )
+
+        # pipeline level
+        clients["default"].nodes = SubClient(stats=self.ingest_pipeline_stats_start_response)
+        t.on_benchmark_start()
+        del device.start_stats["docker-cluster"]["elasticsearch31"]["pipelines"]["pipeline-1"]
+        clients["default"].nodes = SubClient(stats=self.ingest_pipeline_stats_end_response)
+
+        with mock.patch.object(logger, "warning") as mocked_warning:
+            t.on_benchmark_stop()
+            mocked_warning.assert_called_once_with(
+                "Cannot determine Ingest Pipeline stats for %s (pipeline " "was not defined at the of the benchmark).", "pipeline-1"
+            )
+
+        # processor level
+        clients["default"].nodes = SubClient(stats=self.ingest_pipeline_stats_start_response)
+        t.on_benchmark_start()
+        del device.start_stats["docker-cluster"]["elasticsearch31"]["pipelines"]["pipeline-1"]["append_1"]
+        clients["default"].nodes = SubClient(stats=self.ingest_pipeline_stats_end_response)
+
+        with mock.patch.object(logger, "warning") as mocked_warning:
+            t.on_benchmark_stop()
+            mocked_warning.assert_called_once_with(
+                "Cannot determine Ingest Pipeline stats in %s for %s (processor " "was not defined at the start of the benchmark).",
+                "pipeline-1",
+                "append_1",
+            )

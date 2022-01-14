@@ -1805,10 +1805,9 @@ class GlobalStatsCalculator:
         result.total_transform_throughput = self.total_transform_metric("total_transform_throughput")
 
         self.logger.debug("Gathering Ingest Pipeline metrics.")
-        result.ingest_pipeline_total_count = self.sum("ingest_pipeline_cluster_count")
-        result.ingest_pipeline_total_time = self.sum("ingest_pipeline_cluster_time")
-        result.ingest_pipeline_total_failed = self.sum("ingest_pipeline_cluster_failed")
-
+        result.ingest_pipeline_cluster_count = self.sum("ingest_pipeline_cluster_count")
+        result.ingest_pipeline_cluster_time = self.sum("ingest_pipeline_cluster_time")
+        result.ingest_pipeline_cluster_failed = self.sum("ingest_pipeline_cluster_failed")
 
         return result
 
@@ -1962,9 +1961,9 @@ class GlobalStats:
         self.total_transform_processing_times = self.v(d, "total_transform_processing_times")
         self.total_transform_throughput = self.v(d, "total_transform_throughput")
 
-        self.ingest_pipeline_total_count = self.v(d, "ingest_pipeline_cluster_count")
-        self.ingest_pipeline_total_time = self.v(d, "ingest_pipeline_cluster_time")
-        self.ingest_pipeline_total_failed = self.v(d, "ingest_pipeline_cluster_failed")
+        self.ingest_pipeline_cluster_count = self.v(d, "ingest_pipeline_cluster_count")
+        self.ingest_pipeline_cluster_time = self.v(d, "ingest_pipeline_cluster_time")
+        self.ingest_pipeline_cluster_failed = self.v(d, "ingest_pipeline_cluster_failed")
 
     def as_dict(self):
         return self.__dict__
