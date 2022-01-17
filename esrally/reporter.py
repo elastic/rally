@@ -279,14 +279,7 @@ class SummaryReporter:
         )
 
     def _report_segment_counts(self, stats):
-        return self._join(
-            self._line(
-                "Segment count",
-                "",
-                stats.segment_count,
-                "",
-            )
-        )
+        return self._join(self._line("Segment count", "", stats.segment_count, ""))
 
     def _report_transform_stats(self, stats):
         lines = []
@@ -573,7 +566,6 @@ class ComparisonReporter:
 
     def _report_ingest_pipeline_counts(self, baseline_stats, contender_stats):
         if baseline_stats.ingest_pipeline_cluster_count is None:
-            print(baseline_stats.as_dict())
             return []
         return self._join(
             self._line(
