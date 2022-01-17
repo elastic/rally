@@ -244,6 +244,7 @@ class TemplateRenderer:
             self.arch = arch
         else:
             derived_arch = sysstats.cpu_arch().lower()
+            # Elasticsearch artifacts for Apple Silicon use "aarch64" as the CPU architecture
             self.arch = "aarch64" if derived_arch == "arm64" else derived_arch
 
     def render(self, template):
