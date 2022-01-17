@@ -243,7 +243,9 @@ class TemplateRenderer:
         if arch is not None:
             self.arch = arch
         else:
-            self.arch = sysstats.cpu_arch().lower()
+            derived_arch = sysstats.cpu_arch().lower()
+            # Elasticsearch artifacts for Apple Silicon use "aarch64" as the CPU architecture
+            self.arch = "aarch64" if derived_arch == "arm64" else derived_arch
 
     def render(self, template):
         substitutions = {"{{VERSION}}": self.version, "{{OSNAME}}": self.os, "{{ARCH}}": self.arch}
