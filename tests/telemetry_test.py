@@ -3926,106 +3926,188 @@ class IngestPipelineStatsTests(TestCase):
         metrics_store_node_level.assert_has_calls(
             [
                 # node level stats
-                mock.call("elasticsearch31", "ingest_pipeline_node_count", 1),
-                mock.call("elasticsearch31", "ingest_pipeline_node_time", 1, "ms"),
-                mock.call("elasticsearch31", "ingest_pipeline_node_failed", 1),
+                mock.call("elasticsearch31", "ingest_pipeline_node_count", 1, meta_data={"cluster_name": "docker-cluster"}),
+                mock.call("elasticsearch31", "ingest_pipeline_node_time", 1, "ms", meta_data={"cluster_name": "docker-cluster"}),
+                mock.call("elasticsearch31", "ingest_pipeline_node_failed", 1, meta_data={"cluster_name": "docker-cluster"}),
                 # pipeline level stats
                 mock.call(
-                    "elasticsearch31", "ingest_pipeline_pipeline_count", 1, meta_data={"ingest_pipeline": "http-log-baseline-pipeline"}
+                    "elasticsearch31",
+                    "ingest_pipeline_pipeline_count",
+                    1,
+                    meta_data={"ingest_pipeline": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_pipeline_time",
                     1,
                     unit="ms",
-                    meta_data={"ingest_pipeline": "http-log-baseline-pipeline"},
+                    meta_data={"ingest_pipeline": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
                 ),
                 mock.call(
-                    "elasticsearch31", "ingest_pipeline_pipeline_failed", 1, meta_data={"ingest_pipeline": "http-log-baseline-pipeline"}
+                    "elasticsearch31",
+                    "ingest_pipeline_pipeline_failed",
+                    1,
+                    meta_data={"ingest_pipeline": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
                 ),
                 # processor level stats
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_count",
                     1,
-                    meta_data={"processor_name": "uppercase_1", "type": "uppercase", "ingest_pipeline": "http-log-baseline-pipeline"},
+                    meta_data={
+                        "processor_name": "uppercase_1",
+                        "type": "uppercase",
+                        "ingest_pipeline": "http-log-baseline-pipeline",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_time",
                     1,
                     unit="ms",
-                    meta_data={"processor_name": "uppercase_1", "type": "uppercase", "ingest_pipeline": "http-log-baseline-pipeline"},
+                    meta_data={
+                        "processor_name": "uppercase_1",
+                        "type": "uppercase",
+                        "ingest_pipeline": "http-log-baseline-pipeline",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_failed",
                     1,
-                    meta_data={"processor_name": "uppercase_1", "type": "uppercase", "ingest_pipeline": "http-log-baseline-pipeline"},
+                    meta_data={
+                        "processor_name": "uppercase_1",
+                        "type": "uppercase",
+                        "ingest_pipeline": "http-log-baseline-pipeline",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 # pipeline level stats
-                mock.call("elasticsearch31", "ingest_pipeline_pipeline_count", 1, meta_data={"ingest_pipeline": "pipeline-1"}),
-                mock.call("elasticsearch31", "ingest_pipeline_pipeline_time", 1, unit="ms", meta_data={"ingest_pipeline": "pipeline-1"}),
-                mock.call("elasticsearch31", "ingest_pipeline_pipeline_failed", 1, meta_data={"ingest_pipeline": "pipeline-1"}),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_pipeline_count",
+                    1,
+                    meta_data={"ingest_pipeline": "pipeline-1", "cluster_name": "docker-cluster"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_pipeline_time",
+                    1,
+                    unit="ms",
+                    meta_data={"ingest_pipeline": "pipeline-1", "cluster_name": "docker-cluster"},
+                ),
+                mock.call(
+                    "elasticsearch31",
+                    "ingest_pipeline_pipeline_failed",
+                    1,
+                    meta_data={"ingest_pipeline": "pipeline-1", "cluster_name": "docker-cluster"},
+                ),
                 # processor 1 stats
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_count",
                     1,
-                    meta_data={"processor_name": "append_1", "type": "append", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "append_1",
+                        "type": "append",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_time",
                     1,
                     unit="ms",
-                    meta_data={"processor_name": "append_1", "type": "append", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "append_1",
+                        "type": "append",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_failed",
                     1,
-                    meta_data={"processor_name": "append_1", "type": "append", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "append_1",
+                        "type": "append",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 # processor 2 stats
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_count",
                     1,
-                    meta_data={"processor_name": "append_2", "type": "append", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "append_2",
+                        "type": "append",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_time",
                     1,
                     unit="ms",
-                    meta_data={"processor_name": "append_2", "type": "append", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "append_2",
+                        "type": "append",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_failed",
                     1,
-                    meta_data={"processor_name": "append_2", "type": "append", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "append_2",
+                        "type": "append",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 # processor 3 stats
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_count",
                     1,
-                    meta_data={"processor_name": "lowercase_3", "type": "lowercase", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "lowercase_3",
+                        "type": "lowercase",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_time",
                     1,
                     unit="ms",
-                    meta_data={"processor_name": "lowercase_3", "type": "lowercase", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "lowercase_3",
+                        "type": "lowercase",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_processor_failed",
                     1,
-                    meta_data={"processor_name": "lowercase_3", "type": "lowercase", "ingest_pipeline": "pipeline-1"},
+                    meta_data={
+                        "processor_name": "lowercase_3",
+                        "type": "lowercase",
+                        "ingest_pipeline": "pipeline-1",
+                        "cluster_name": "docker-cluster",
+                    },
                 ),
             ]
         )
@@ -4049,7 +4131,7 @@ class IngestPipelineStatsTests(TestCase):
         with mock.patch.object(logger, "warning") as mocked_warning:
             t.on_benchmark_stop()
             mocked_warning.assert_called_once_with(
-                "Cannot determine Ingest Pipeline stats for %s (cluster stats weren't collected " "at the start of the benchmark).",
+                "Cannot determine Ingest Pipeline stats for %s (cluster stats weren't collected at the start of the benchmark).",
                 "docker-cluster",
             )
 
@@ -4062,7 +4144,7 @@ class IngestPipelineStatsTests(TestCase):
         with mock.patch.object(logger, "warning") as mocked_warning:
             t.on_benchmark_stop()
             mocked_warning.assert_called_once_with(
-                "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start " "of the benchmark).", "elasticsearch31"
+                "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start of the benchmark).", "elasticsearch31"
             )
 
         # pipeline level
@@ -4074,7 +4156,7 @@ class IngestPipelineStatsTests(TestCase):
         with mock.patch.object(logger, "warning") as mocked_warning:
             t.on_benchmark_stop()
             mocked_warning.assert_called_once_with(
-                "Cannot determine Ingest Pipeline stats for %s (pipeline " "was not defined at the of the benchmark).", "pipeline-1"
+                "Cannot determine Ingest Pipeline stats for %s (pipeline was not defined at the of the benchmark).", "pipeline-1"
             )
 
         # processor level
@@ -4086,7 +4168,7 @@ class IngestPipelineStatsTests(TestCase):
         with mock.patch.object(logger, "warning") as mocked_warning:
             t.on_benchmark_stop()
             mocked_warning.assert_called_once_with(
-                "Cannot determine Ingest Pipeline stats in %s for %s (processor " "was not defined at the start of the benchmark).",
+                "Cannot determine Ingest Pipeline stats in %s for %s (processor was not defined at the start of the benchmark).",
                 "pipeline-1",
                 "append_1",
             )

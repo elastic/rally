@@ -1428,11 +1428,11 @@ class IngestPipelineStats(TelemetryDevice):
         self.ingest_pipeline_cluster_failed = 0
 
     def on_benchmark_start(self):
-        self.logger.debug("Gathering Ingest Pipeline stats at benchmark start")
+        self.logger.info("Gathering Ingest Pipeline stats at benchmark start")
         self.start_stats = self.get_ingest_pipeline_stats()
 
     def on_benchmark_stop(self):
-        self.logger.debug("Gathering Ingest Pipeline stats at benchmark end")
+        self.logger.info("Gathering Ingest Pipeline stats at benchmark end")
         end_stats = self.get_ingest_pipeline_stats()
 
         # The nesting level is ok here given the structure of the Ingest Pipeline stats
@@ -1440,14 +1440,14 @@ class IngestPipelineStats(TelemetryDevice):
         for cluster_name, node in end_stats.items():
             if cluster_name not in self.start_stats:
                 self.logger.warning(
-                    "Cannot determine Ingest Pipeline stats for %s (cluster stats weren't collected " "at the start of the benchmark).",
+                    "Cannot determine Ingest Pipeline stats for %s (cluster stats weren't collected at the start of the benchmark).",
                     cluster_name,
                 )
                 continue
             for node_name, summaries in node.items():
                 if node_name not in self.start_stats[cluster_name]:
                     self.logger.warning(
-                        "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start " "of the benchmark).", node_name
+                        "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start of the benchmark).", node_name
                     )
                     continue
                 for summary_name, stats in summaries.items():
@@ -1462,7 +1462,7 @@ class IngestPipelineStats(TelemetryDevice):
                         for pipeline_name, pipeline in stats.items():
                             if pipeline_name not in self.start_stats[cluster_name][node_name]["pipelines"]:
                                 self.logger.warning(
-                                    "Cannot determine Ingest Pipeline stats for %s (pipeline " "was not defined at the of the benchmark).",
+                                    "Cannot determine Ingest Pipeline stats for %s (pipeline was not defined at the of the benchmark).",
                                     pipeline_name,
                                 )
                                 continue
@@ -1484,6 +1484,7 @@ class IngestPipelineStats(TelemetryDevice):
     def _record_node_level_pipeline_stats(self, stats, cluster_name, node_name):
         # Node level statistics are calculated per-benchmark execution. Stats are collected at the beginning, and end of
         # each benchmark
+        metadata = {"cluster_name": cluster_name}
         ingest_pipeline_node_count = stats.get("count", 0) - self.start_stats[cluster_name][node_name]["total"].get("count", 0)
         ingest_pipeline_node_time = stats.get("time_in_millis", 0) - self.start_stats[cluster_name][node_name]["total"].get(
             "time_in_millis", 0
@@ -1494,9 +1495,9 @@ class IngestPipelineStats(TelemetryDevice):
         self.ingest_pipeline_cluster_time += ingest_pipeline_node_time
         self.ingest_pipeline_cluster_failed += ingest_pipeline_node_failed
 
-        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_count", ingest_pipeline_node_count)
-        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_time", ingest_pipeline_node_time, "ms")
-        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_failed", ingest_pipeline_node_failed)
+        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_count", ingest_pipeline_node_count, meta_data=metadata)
+        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_time", ingest_pipeline_node_time, "ms", meta_data=metadata)
+        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_failed", ingest_pipeline_node_failed, meta_data=metadata)
 
     def _record_pipeline_level_processor_stats(self, pipeline, pipeline_name, cluster_name, node_name):
         for processor_name, processor_stats in pipeline.items():
@@ -1504,7 +1505,7 @@ class IngestPipelineStats(TelemetryDevice):
 
             if processor_name not in start_stats_processors:
                 self.logger.warning(
-                    "Cannot determine Ingest Pipeline stats in %s for %s (processor was not defined at the " "start of the benchmark).",
+                    "Cannot determine Ingest Pipeline stats in %s for %s (processor was not defined at the start of the benchmark).",
                     pipeline_name,
                     processor_name,
                 )
@@ -1512,7 +1513,12 @@ class IngestPipelineStats(TelemetryDevice):
             # We have an individual processor obj, which contains the stats for each individual processor
             if processor_name != "total":
 
-                metadata = {"processor_name": processor_name, "type": processor_stats.get("type", None), "ingest_pipeline": pipeline_name}
+                metadata = {
+                    "processor_name": processor_name,
+                    "type": processor_stats.get("type", None),
+                    "ingest_pipeline": pipeline_name,
+                    "cluster_name": cluster_name,
+                }
 
                 ingest_pipeline_processor_count = processor_stats.get("stats", {}).get("count", 0) - start_stats_processors[
                     processor_name
@@ -1538,7 +1544,7 @@ class IngestPipelineStats(TelemetryDevice):
             # We have a top level pipeline stats obj, which contains the total time spent preprocessing documents in
             # the ingest pipeline.
             elif processor_name == "total":
-                metadata = {"ingest_pipeline": pipeline_name}
+                metadata = {"ingest_pipeline": pipeline_name, "cluster_name": cluster_name}
 
                 ingest_pipeline_pipeline_count = processor_stats.get("count", 0) - start_stats_processors[processor_name].get("count", 0)
                 self.metrics_store.put_value_node_level(
