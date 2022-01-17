@@ -1409,8 +1409,7 @@ class DataStreamStatsRecorder:
             self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=data_stream_metadata)
 
 
-class IngestPipelineStats(TelemetryDevice):
-    internal = False
+class IngestPipelineStats(InternalTelemetryDevice):
     command = "ingest-pipeline-stats"
     human_name = "Ingest Pipeline Stats"
     help = "Reports Ingest Pipeline stats at the end of the benchmark."
