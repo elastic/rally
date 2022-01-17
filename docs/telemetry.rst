@@ -237,7 +237,7 @@ Supported telemetry parameters:
 ingest-pipeline-stats
 ---------------------
 
-The ingest-pipeline-stats telemetry device makes a call at the beginning and end of the benchmark to the `node stats API (_nodes/stats/ingest) <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records:
+The ingest-pipeline-stats telemetry device makes a call at the beginning and end of the benchmark to the `node stats API (_nodes/stats/ingest) <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records the deltas in the form of:
 
   * Three results documents for each cluster: ``ingest_pipeline_cluster_count``, ``ingest_pipeline_cluster_time``, ``ingest_pipeline_cluster_failed``
   * One metrics document for each node's respective stats: ``ingest_pipeline_node_count``, ``ingest_pipeline_node_time``, ``ingest_pipeline_node_failed``
