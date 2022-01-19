@@ -297,7 +297,7 @@ class SummaryReporter:
     def _report_ingest_pipeline_stats(self, stats):
         return self._join(
             self._line("Total Ingest Pipeline count", "", stats.ingest_pipeline_cluster_count, ""),
-            self._line("Total Ingest Pipeline time", "", stats.ingest_pipeline_cluster_time, "ms", convert.ms_to_seconds),
+            self._line("Total Ingest Pipeline time", "", stats.ingest_pipeline_cluster_time, "s", convert.ms_to_seconds),
             self._line("Total Ingest Pipeline failed", "", stats.ingest_pipeline_cluster_failed, ""),
         )
 
