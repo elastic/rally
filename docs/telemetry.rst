@@ -251,7 +251,7 @@ Example of recorded documents given a single cluster, single node, single pipeli
        "value": 1001,
        "meta": {
          "cluster_name": "docker-cluster"
-     }
+       }
    },
    {
        "name": "ingest_pipeline_node_count",
@@ -259,7 +259,7 @@ Example of recorded documents given a single cluster, single node, single pipeli
        "meta": {
          "cluster_name": "docker-cluster",
          "node_name": "node-001"
-     }
+       }
    },
    {
        "name": "ingest_pipeline_pipeline_count",
@@ -268,7 +268,7 @@ Example of recorded documents given a single cluster, single node, single pipeli
          "cluster_name": "docker-cluster",
          "node_name": "node-001",
          "ingest_pipeline": "test-pipeline-1"
-     }
+       }
    },
    {
        "name": "ingest_pipeline_processor_count",
@@ -279,5 +279,5 @@ Example of recorded documents given a single cluster, single node, single pipeli
          "ingest_pipeline": "test-pipeline-1",
          "processor_name": "uppercase_1",
          "type": "uppercase"
-     }
+       }
    }

@@ -3934,20 +3934,20 @@ class IngestPipelineStatsTests(TestCase):
                     "elasticsearch31",
                     "ingest_pipeline_pipeline_count",
                     1,
-                    meta_data={"ingest_pipeline": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
+                    meta_data={"pipeline_name": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_pipeline_time",
                     1,
                     unit="ms",
-                    meta_data={"ingest_pipeline": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
+                    meta_data={"pipeline_name": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_pipeline_failed",
                     1,
-                    meta_data={"ingest_pipeline": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
+                    meta_data={"pipeline_name": "http-log-baseline-pipeline", "cluster_name": "docker-cluster"},
                 ),
                 # processor level stats
                 mock.call(
@@ -3957,7 +3957,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "uppercase_1",
                         "type": "uppercase",
-                        "ingest_pipeline": "http-log-baseline-pipeline",
+                        "pipeline_name": "http-log-baseline-pipeline",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -3969,7 +3969,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "uppercase_1",
                         "type": "uppercase",
-                        "ingest_pipeline": "http-log-baseline-pipeline",
+                        "pipeline_name": "http-log-baseline-pipeline",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -3980,7 +3980,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "uppercase_1",
                         "type": "uppercase",
-                        "ingest_pipeline": "http-log-baseline-pipeline",
+                        "pipeline_name": "http-log-baseline-pipeline",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -3989,20 +3989,20 @@ class IngestPipelineStatsTests(TestCase):
                     "elasticsearch31",
                     "ingest_pipeline_pipeline_count",
                     1,
-                    meta_data={"ingest_pipeline": "pipeline-1", "cluster_name": "docker-cluster"},
+                    meta_data={"pipeline_name": "pipeline-1", "cluster_name": "docker-cluster"},
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_pipeline_time",
                     1,
                     unit="ms",
-                    meta_data={"ingest_pipeline": "pipeline-1", "cluster_name": "docker-cluster"},
+                    meta_data={"pipeline_name": "pipeline-1", "cluster_name": "docker-cluster"},
                 ),
                 mock.call(
                     "elasticsearch31",
                     "ingest_pipeline_pipeline_failed",
                     1,
-                    meta_data={"ingest_pipeline": "pipeline-1", "cluster_name": "docker-cluster"},
+                    meta_data={"pipeline_name": "pipeline-1", "cluster_name": "docker-cluster"},
                 ),
                 # processor 1 stats
                 mock.call(
@@ -4012,7 +4012,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "append_1",
                         "type": "append",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -4024,7 +4024,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "append_1",
                         "type": "append",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -4035,7 +4035,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "append_1",
                         "type": "append",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -4047,7 +4047,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "append_2",
                         "type": "append",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -4059,7 +4059,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "append_2",
                         "type": "append",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -4070,7 +4070,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "append_2",
                         "type": "append",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -4082,7 +4082,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "lowercase_3",
                         "type": "lowercase",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -4094,7 +4094,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "lowercase_3",
                         "type": "lowercase",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
@@ -4105,7 +4105,7 @@ class IngestPipelineStatsTests(TestCase):
                     meta_data={
                         "processor_name": "lowercase_3",
                         "type": "lowercase",
-                        "ingest_pipeline": "pipeline-1",
+                        "pipeline_name": "pipeline-1",
                         "cluster_name": "docker-cluster",
                     },
                 ),
