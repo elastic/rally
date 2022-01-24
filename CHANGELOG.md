@@ -1,3 +1,128 @@
+### 2.3.1
+
+#### Highlights
+
+* [#1355](https://github.com/elastic/rally/pull/1355): Support Python 3.10
+
+#### Enhancements
+
+* [#1362](https://github.com/elastic/rally/pull/1362): Add timeout parameter to bulk operation
+
+#### Bug Fixes
+
+* [#1418](https://github.com/elastic/rally/pull/1418): Derive correct artifact name for ARM architecture
+* [#1368](https://github.com/elastic/rally/pull/1368): Call the correct functions for `scroll-search` and `paginated-search` operations
+
+#### Doc Changes
+
+* [#1358](https://github.com/elastic/rally/pull/1358): Document challenge's user-info property
+* [#1357](https://github.com/elastic/rally/pull/1357): Simplify python-caches-clean Makefile command
+* [#1356](https://github.com/elastic/rally/pull/1356): Stop mentioning removed "configure" command
+
+#### Miscellaneous Changes
+
+* [#1387](https://github.com/elastic/rally/pull/1387): Switch to native pytest in tests/utils
+
+### 2.3.1
+
+#### Highlights
+
+* [#1355](https://github.com/elastic/rally/pull/1355): Support Python 3.10
+
+#### Enhancements
+
+* [#1362](https://github.com/elastic/rally/pull/1362): Add timeout parameter to bulk operation
+
+#### Bug Fixes
+
+* [#1418](https://github.com/elastic/rally/pull/1418): Derive correct artifact name for ARM architecture
+* [#1368](https://github.com/elastic/rally/pull/1368): Call the correct functions for `scroll-search` and `paginated-search` operations
+
+#### Doc Changes
+
+* [#1358](https://github.com/elastic/rally/pull/1358): Document challenge's user-info property
+* [#1357](https://github.com/elastic/rally/pull/1357): Simplify python-caches-clean Makefile command
+* [#1356](https://github.com/elastic/rally/pull/1356): Stop mentioning removed "configure" command
+
+#### Miscellaneous Changes
+
+* [#1387](https://github.com/elastic/rally/pull/1387): Switch to native pytest in tests/utils
+
+### 2.3.1
+
+#### Highlights
+
+* [#1355](https://github.com/elastic/rally/pull/1355): Support Python 3.10
+
+#### Enhancements
+
+* [#1362](https://github.com/elastic/rally/pull/1362): Add timeout parameter to bulk operation
+
+#### Bug Fixes
+
+* [#1418](https://github.com/elastic/rally/pull/1418): Derive correct artifact name for ARM architecture
+* [#1368](https://github.com/elastic/rally/pull/1368): Call the correct functions for `scroll-search` and `paginated-search` operations
+
+#### Doc Changes
+
+* [#1358](https://github.com/elastic/rally/pull/1358): Document challenge's user-info property
+* [#1357](https://github.com/elastic/rally/pull/1357): Simplify python-caches-clean Makefile command
+* [#1356](https://github.com/elastic/rally/pull/1356): Stop mentioning removed "configure" command
+
+#### Miscellaneous Changes
+
+* [#1387](https://github.com/elastic/rally/pull/1387): Switch to native pytest in tests/utils
+
+### 2.3.1
+
+#### Highlights
+
+* [#1355](https://github.com/elastic/rally/pull/1355): Support Python 3.10
+
+#### Enhancements
+
+* [#1362](https://github.com/elastic/rally/pull/1362): Add timeout parameter to bulk operation
+
+#### Bug Fixes
+
+* [#1418](https://github.com/elastic/rally/pull/1418): Derive correct artifact name for ARM architecture
+* [#1368](https://github.com/elastic/rally/pull/1368): Call the correct functions for `scroll-search` and `paginated-search` operations
+
+#### Doc Changes
+
+* [#1358](https://github.com/elastic/rally/pull/1358): Document challenge's user-info property
+* [#1357](https://github.com/elastic/rally/pull/1357): Simplify python-caches-clean Makefile command
+* [#1356](https://github.com/elastic/rally/pull/1356): Stop mentioning removed "configure" command
+
+#### Miscellaneous Changes
+
+* [#1387](https://github.com/elastic/rally/pull/1387): Switch to native pytest in tests/utils
+
+### 2.3.1
+
+#### Highlights
+
+* [#1355](https://github.com/elastic/rally/pull/1355): Support Python 3.10
+
+#### Enhancements
+
+* [#1362](https://github.com/elastic/rally/pull/1362): Add timeout parameter to bulk operation
+
+#### Bug Fixes
+
+* [#1418](https://github.com/elastic/rally/pull/1418): Derive correct artifact name for ARM architecture
+* [#1368](https://github.com/elastic/rally/pull/1368): Call the correct functions for `scroll-search` and `paginated-search` operations
+
+#### Doc Changes
+
+* [#1358](https://github.com/elastic/rally/pull/1358): Document challenge's user-info property
+* [#1357](https://github.com/elastic/rally/pull/1357): Simplify python-caches-clean Makefile command
+* [#1356](https://github.com/elastic/rally/pull/1356): Stop mentioning removed "configure" command
+
+#### Miscellaneous Changes
+
+* [#1387](https://github.com/elastic/rally/pull/1387): Switch to native pytest in tests/utils
+
 ### 2.3.0
 
 #### Enhancements
