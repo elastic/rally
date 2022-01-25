@@ -1443,28 +1443,21 @@ class IngestPipelineStats(InternalTelemetryDevice):
                     cluster_name,
                 )
                 continue
+
             for node_name, summaries in node.items():
                 if node_name not in self.start_stats[cluster_name]:
                     self.logger.warning(
                         "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start of the benchmark).", node_name
                     )
                     continue
+
                 for summary_name, stats in summaries.items():
-                    if summary_name not in self.start_stats[cluster_name][node_name]:
-                        self.logger.warning("'%s' is not an expected field for Ingest Pipeline stats (skipping)", summary_name)
-                        continue
                     if summary_name == "total":
                         # The top level "total" contains stats for the node as a whole,
                         # each node will have exactly one top level "total" key
                         self._record_node_level_pipeline_stats(stats, cluster_name, node_name)
                     elif summary_name == "pipelines":
                         for pipeline_name, pipeline in stats.items():
-                            if pipeline_name not in self.start_stats[cluster_name][node_name]["pipelines"]:
-                                self.logger.warning(
-                                    "Cannot determine Ingest Pipeline stats for %s (pipeline was not defined at the of the benchmark).",
-                                    pipeline_name,
-                                )
-                                continue
                             self._record_pipeline_level_processor_stats(pipeline, pipeline_name, cluster_name, node_name)
 
             self._record_cluster_level_pipeline_stats(cluster_name)
@@ -1500,18 +1493,11 @@ class IngestPipelineStats(InternalTelemetryDevice):
 
     def _record_pipeline_level_processor_stats(self, pipeline, pipeline_name, cluster_name, node_name):
         for processor_name, processor_stats in pipeline.items():
-            start_stats_processors = self.start_stats[cluster_name][node_name]["pipelines"][pipeline_name]
+            start_stats_processors = self.start_stats[cluster_name][node_name]["pipelines"].get(pipeline_name, {})
+            start_stats_processors.setdefault(processor_name, {})
 
-            if processor_name not in start_stats_processors:
-                self.logger.warning(
-                    "Cannot determine Ingest Pipeline stats in %s for %s (processor was not defined at the start of the benchmark).",
-                    pipeline_name,
-                    processor_name,
-                )
-                continue
             # We have an individual processor obj, which contains the stats for each individual processor
             if processor_name != "total":
-
                 metadata = {
                     "processor_name": processor_name,
                     "type": processor_stats.get("type", None),
