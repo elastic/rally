@@ -693,7 +693,7 @@ Rally supports PEM format for CA and client certificates. Certificates in PKCS#1
 
  ::
 
-   openssl pkcs12 -in elastic-stack-ca.p12 -out cacert.pem
+   openssl pkcs12 -in elastic-stack-ca.p12 -nokeys -out cacert.pem
 
 * Export a node private key for client authentication:
 
