@@ -905,13 +905,13 @@ This operation returns no meta-data.
 index-stats
 ~~~~~~~~~~~
 
-With the operation type ``index-stats`` you can call the `indices stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_.
+With the operation type ``index-stats`` you can call the `index stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_.
 
 Properties
 """"""""""
 
 * ``index`` (optional, defaults to `_all`): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this operation.
-* ``condition`` (optional, defaults to no condition): A structured object with the properties ``path`` and ``expected-value``. If the actual value returned by indices stats API is equal to the expected value at the provided path, this operation will return successfully. See below for an example how this can be used.
+* ``condition`` (optional, defaults to no condition): A structured object with the properties ``path`` and ``expected-value``. If the actual value returned by index stats API is equal to the expected value at the provided path, this operation will return successfully. See below for an example how this can be used.
 
 In the following example the ``index-stats`` operation will wait until all segments have been merged::
 
