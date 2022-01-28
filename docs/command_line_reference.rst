@@ -674,7 +674,7 @@ Enable it with ``use_ssl:true``.
 **TLS/SSL Certificate Verification**
 
 Server certificate verification is controlled with the ``verify_certs`` boolean. The default value is `true`. To disable use ``verify_certs:false``.
-If ``verify_certs:true``, Rally will attempt to verify the certificate provided by Elasticsearch. If they are private self-signed certificates, you will also need to supply the private self-signed CA certificate in PEM format using ``ca_certs:'/path/to/cacert.pem'``.
+If ``verify_certs:true``, Rally will attempt to verify the certificate provided by Elasticsearch. If this certificate is signed by a private certificate authority (CA), you will also need to supply that CA in PEM format using ``ca_certs:'/path/to/cacert.pem'``.
 
 You can also optionally present client certificates, e.g. if Elasticsearch has been configured with ``xpack.security.http.ssl.client_authentication: required`` (see also `Elasticsearch HTTP TLS/SSL settings <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-settings.html#http-tls-ssl-settings>`_).
 Client certificates can be presented regardless of the ``verify_certs`` setting, but it's strongly recommended to always verify the server certificates.
