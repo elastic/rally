@@ -998,6 +998,75 @@ class BulkIndexRunnerTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
+    async def test_simple_bulk_with_detailed_stats_body_as_bytes(self, es):
+        es.bulk = mock.AsyncMock(
+            return_value={
+                "took": 30,
+                "ingest_took": 20,
+                "errors": False,
+                "items": [
+                    {
+                        "index": {
+                            "_index": "bytes",
+                            "_type": "bytes1",
+                            "_id": "1",
+                            "_version": 1,
+                            "result": "created",
+                            "_shards": {"total": 1, "successful": 1, "failed": 0},
+                            "created": True,
+                            "status": 201,
+                            "_seq_no": 0,
+                        }
+                    }
+                ],
+            }
+        )
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": b'{ "index" : { "_index" : "bytes", "_type" : "bytes1" } }\n{"message" : "in a bottle"}',
+            "action-metadata-present": True,
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "index": "test",
+        }
+
+        result = await bulk(es, bulk_params)
+
+        self.assertEqual("test", result["index"])
+        self.assertEqual(30, result["took"])
+        self.assertEqual(20, result["ingest_took"])
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("docs", result["unit"])
+        self.assertEqual(True, result["success"])
+        self.assertEqual(0, result["error-count"])
+        self.assertEqual(
+            {
+                "index": {"item-count": 1, "created": 1},
+            },
+            result["ops"],
+        )
+        self.assertEqual(
+            [
+                {
+                    "item-count": 1,
+                    "shards": {"total": 1, "successful": 1, "failed": 0},
+                }
+            ],
+            result["shards_histogram"],
+        )
+        self.assertEqual(83, result["bulk-request-size-bytes"])
+        self.assertEqual(27, result["total-document-size-bytes"])
+
+        es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
+
+        es.bulk.return_value.pop("ingest_took")
+        result = await bulk(es, bulk_params)
+        self.assertNotIn("ingest_took", result)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
     async def test_simple_bulk_with_detailed_stats_body_as_unrecognized_type(self, es):
         es.bulk = mock.AsyncMock(
             return_value={
@@ -1025,10 +1094,7 @@ class BulkIndexRunnerTests(TestCase):
 
         bulk_params = {
             "body": {
-                "items": _build_bulk_body(
-                    '{ "index" : { "_index" : "test", "_type" : "type1" } }',
-                    '{"location" : [-0.1485188, 51.5250666]}',
-                ),
+                "items": 1,
             },
             "action-metadata-present": True,
             "bulk-size": 1,
@@ -1037,8 +1103,66 @@ class BulkIndexRunnerTests(TestCase):
             "index": "test",
         }
 
-        with self.assertRaisesRegex(exceptions.DataError, "bulk body is neither string nor list"):
+        with self.assertRaisesRegex(exceptions.DataError, "bulk body is not of type bytes, string, or list"):
             await bulk(es, bulk_params)
+
+        es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_bulk_index_error_logs_warning_with_detailed_stats_body(self, es):
+        es.bulk = mock.AsyncMock(
+            return_value={
+                "took": 5,
+                "errors": True,
+                "items": [
+                    {
+                        "create": {
+                            "_index": "test",
+                            "_type": "_doc",
+                            "_id": "6UNLsn0BfMD3e6iftbdV",
+                            "status": 429,
+                            "error": {
+                                "type": "cluster_block_exception",
+                                "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
+                                "flood-stage watermark, index has read-only-allow-delete block];",
+                            },
+                        }
+                    }
+                ],
+            }
+        )
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body(
+                '{ "index" : { "_index" : "test", "_type" : "_doc" } }',
+                '{"message" : "in a bottle"}',
+            ),
+            "action-metadata-present": True,
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "index": "test",
+        }
+
+        with mock.patch.object(bulk.logger, "warning") as mocked_warning_logger:
+            result = await bulk(es, bulk_params)
+            mocked_warning_logger.assert_has_calls([mock.call("Bulk request failed: [%s]", result["error-description"])])
+
+        self.assertEqual("test", result["index"])
+        self.assertEqual(5, result["took"])
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("docs", result["unit"])
+        self.assertEqual(False, result["success"])
+        self.assertEqual(1, result["error-count"])
+        self.assertEqual("bulk", result["error-type"])
+        self.assertEqual(
+            "HTTP status: 429, message: index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage "
+            "exceeded flood-stage watermark, index has read-only-allow-delete block];",
+            result["error-description"],
+        )
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
 

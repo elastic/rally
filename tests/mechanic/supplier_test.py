@@ -191,6 +191,15 @@ class TemplateRendererTests(TestCase):
             renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."),
         )
 
+    @mock.patch("esrally.utils.sysstats.os_name", return_value="Darwin")
+    @mock.patch("esrally.utils.sysstats.cpu_arch", return_value="arm64")
+    def test_converts_arm_architecture(self, os_name, cpu_arch):
+        renderer = supplier.TemplateRenderer(version="7.16.0")
+        self.assertEqual(
+            "This is version 7.16.0 on darwin with a aarch64 CPU.",
+            renderer.render("This is version {{VERSION}} on {{OSNAME}} with a {{ARCH}} CPU."),
+        )
+
 
 class CachedElasticsearchSourceSupplierTests(TestCase):
     @mock.patch("esrally.utils.io.ensure_dir")

@@ -24,17 +24,18 @@ If you invoke ``esrally list telemetry``, it will show which telemetry devices a
    Command                     Name                        Description
    --------------------------  --------------------------  --------------------------------------------------------------------
    jit                         JIT Compiler Profiler       Enables JIT compiler logs.
-   gc                          GC log                      Enables GC logs.
+   gc                          GC log                      Enables GC logs
    jfr                         Flight Recorder             Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
-   heapdump                    Heap Dump                   Captures a heap dump.
+   heapdump                    Heap Dump                   Captures a heap dump
    node-stats                  Node Stats                  Regularly samples node stats
    recovery-stats              Recovery Stats              Regularly samples shard recovery stats
    ccr-stats                   CCR Stats                   Regularly samples Cross Cluster Replication (CCR) related stats
-   segment-stats               Segment Stats               Determines segment stats at the end of the benchmark.
+   segment-stats               Segment Stats               Determines segment stats at the end of the benchmark
    transform-stats             Transform Stats             Regularly samples transform stats
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
    data-stream-stats           Data Streams Stats          Regularly samples data streams stats
+   ingest-pipeline-stats       Ingest Pipeline Stats       Determines ingest pipeline stats at the end of the benchmark
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -198,7 +199,7 @@ Supported telemetry parameters:
 data-stream-stats
 -----------------
 
-The data-stream-stats telemetry device regularly calls the `data stream stats API <https://https://www.elastic.co/guide/en/elasticsearch/reference/master/data-stream-stats-api.html>`_ and records one metrics document for cluster level stats (``_all``), and one metrics document per data stream.
+The data-stream-stats telemetry device regularly calls the `data stream stats API <https://www.elastic.co/guide/en/elasticsearch/reference/master/data-stream-stats-api.html>`_ and records one metrics document for cluster level stats (``_all``), and one metrics document per data stream.
 
 Example of recorded documents given two data streams in the cluster::
 
@@ -232,3 +233,51 @@ Example of recorded documents given two data streams in the cluster::
 Supported telemetry parameters:
 
 * ``data-stream-stats-sample-interval`` (default 10): A positive number greater than zero denoting the sampling interval in seconds.
+
+ingest-pipeline-stats
+---------------------
+
+The ingest-pipeline-stats telemetry device makes a call at the beginning and end of the benchmark to the `node stats API (_nodes/stats/ingest) <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records the deltas in the form of:
+
+  * Three results documents for each cluster: ``ingest_pipeline_cluster_count``, ``ingest_pipeline_cluster_time``, ``ingest_pipeline_cluster_failed``
+  * One metrics document for each node's respective stats: ``ingest_pipeline_node_count``, ``ingest_pipeline_node_time``, ``ingest_pipeline_node_failed``
+  * One metrics document for each pipeline's respective stats: ``ingest_pipeline_pipeline_count``, ``ingest_pipeline_pipeline_time``, ``ingest_pipeline_pipeline_failed``
+  * One metrics document for each pipeline processor's respective stats: ``ingest_pipeline_processor_count``, ``ingest_pipeline_processor_time``, ``ingest_pipeline_processor_failed``
+
+Example of recorded documents given a single cluster, single node, single pipeline, single processor::
+
+   {
+       "name": "ingest_pipeline_cluster_count",
+       "value": 1001,
+       "meta": {
+         "cluster_name": "docker-cluster"
+       }
+   },
+   {
+       "name": "ingest_pipeline_node_count",
+       "value": 1001,
+       "meta": {
+         "cluster_name": "docker-cluster",
+         "node_name": "node-001"
+       }
+   },
+   {
+       "name": "ingest_pipeline_pipeline_count",
+       "value": 1001,
+       "meta": {
+         "cluster_name": "docker-cluster",
+         "node_name": "node-001",
+         "ingest_pipeline": "test-pipeline-1"
+       }
+   },
+   {
+       "name": "ingest_pipeline_processor_count",
+       "value": 1001,
+       "meta": {
+         "cluster_name": "docker-cluster",
+         "node_name": "node-001",
+         "ingest_pipeline": "test-pipeline-1",
+         "processor_name": "uppercase_1",
+         "type": "uppercase"
+       }
+   }

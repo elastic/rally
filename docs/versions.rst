@@ -5,6 +5,7 @@ Minimum supported version
 =========================
 
 Rally |release| can benchmark Elasticsearch |min_es_version| and above.
+However, Rally does not support Elasticsearch clusters using the OSS license.
 
 End-of-life Policy
 ==================
