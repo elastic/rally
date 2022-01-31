@@ -2426,10 +2426,9 @@ class TestSearchParamSource:
         assert p["opaque-id"] is None
         assert p["headers"] == {"header1": "value1"}
         assert p["request-params"] == {}
-        # Explicitly check in these tests for equality - assertFalse would also succeed if it is `None`.
-        assert p["cache"] == True
-        assert p["response-compression-enabled"] == True
-        assert p["detailed-results"] == False
+        assert p["cache"] is True
+        assert p["response-compression-enabled"] is True
+        assert p["detailed-results"] is False
         assert p["body"] == {
             "query": {
                 "match_all": {},
@@ -2462,9 +2461,9 @@ class TestSearchParamSource:
         assert p["headers"] == {"header1": "value1", "header2": "value2"}
         assert p["opaque-id"] == "12345abcde"
         assert p["request-params"] == {}
-        assert p["cache"] == True
-        assert p["response-compression-enabled"] == True
-        assert p["detailed-results"] == False
+        assert p["cache"] is True
+        assert p["response-compression-enabled"] is True
+        assert p["detailed-results"] is False
         assert p["body"] == {
             "query": {
                 "match_all": {},
@@ -2512,8 +2511,8 @@ class TestSearchParamSource:
         assert p["opaque-id"] is None
         assert p["request-params"] == {"_source_include": "some_field"}
         assert p["cache"] is None
-        assert p["response-compression-enabled"] == True
-        assert p["detailed-results"] == False
+        assert p["response-compression-enabled"] is True
+        assert p["detailed-results"] is False
         assert p["body"] == {
             "query": {
                 "match_all": {},
@@ -2548,10 +2547,9 @@ class TestSearchParamSource:
         assert p["request-timeout"] is None
         assert p["headers"] is None
         assert p["opaque-id"] == "12345abcde"
-        # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
-        assert p["cache"] == False
-        assert p["response-compression-enabled"] == False
-        assert p["detailed-results"] == True
+        assert p["cache"] is False
+        assert p["response-compression-enabled"] is False
+        assert p["detailed-results"] is True
         assert p["body"] == {
             "query": {
                 "match_all": {},
@@ -2584,10 +2582,9 @@ class TestSearchParamSource:
         assert p["headers"] is None
         assert p["opaque-id"] is None
         assert p["request-params"] == {}
-        # Explicitly check for equality to `False` - assertFalse would also succeed if it is `None`.
-        assert p["cache"] == False
-        assert p["response-compression-enabled"] == False
-        assert p["detailed-results"] == False
+        assert p["cache"] is False
+        assert p["response-compression-enabled"] is False
+        assert p["detailed-results"] is False
         assert p["body"] == {
             "query": {
                 "match_all": {},
