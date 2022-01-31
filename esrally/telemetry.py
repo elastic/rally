@@ -1942,10 +1942,10 @@ class IndexStats(InternalTelemetryDevice):
             self.first_time = False
 
     def on_benchmark_stop(self):
-        self.logger.info("Gathering indices stats for all primaries on benchmark stop.")
+        self.logger.info("Gathering index stats for all primaries on benchmark stop.")
         index_stats = self.index_stats()
         # import json
-        # self.logger.debug("Returned indices stats:\n%s", json.dumps(index_stats, indent=2))
+        # self.logger.debug("Returned index stats:\n%s", json.dumps(index_stats, indent=2))
         if "_all" not in index_stats or "primaries" not in index_stats["_all"]:
             return
         p = index_stats["_all"]["primaries"]

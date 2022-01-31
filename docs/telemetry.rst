@@ -107,7 +107,7 @@ node-stats
 
 The node-stats telemetry device regularly calls the `cluster node-stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-stats.html>`_ and records metrics from the following sections:
 
-* Indices stats (key ``indices`` in the node-stats API)
+* Index stats (key ``indices`` in the node-stats API)
 * Thread pool stats (key ``thread_pool`` in the node-stats API)
 * JVM buffer pool stats (key ``jvm.buffer_pools`` in the node-stats API)
 * JVM gc stats (key ``jvm.gc`` in the node-stats API)
@@ -119,10 +119,10 @@ The node-stats telemetry device regularly calls the `cluster node-stats API <htt
 Supported telemetry parameters:
 
 * ``node-stats-sample-interval`` (default: 1): A positive number greater than zero denoting the sampling interval in seconds.
-* ``node-stats-include-indices`` (default: ``false``): A boolean indicating whether indices stats should be included.
-* ``node-stats-include-indices-metrics`` (default: ``docs,store,indexing,search,merges,query_cache,fielddata,segments,translog,request_cache``): A comma-separated string specifying the Indices stats metrics to include. This is useful, for example, to restrict the collected Indices stats metrics. Specifying this parameter implicitly enables collection of Indices stats, so you don't also need to specify ``node-stats-include-indices: true``.
+* ``node-stats-include-indices`` (default: ``false``): A boolean indicating whether index stats should be included.
+* ``node-stats-include-indices-metrics`` (default: ``docs,store,indexing,search,merges,query_cache,fielddata,segments,translog,request_cache``): A comma-separated string specifying the Index stats metrics to include. This is useful, for example, to restrict the collected Index stats metrics. Specifying this parameter implicitly enables collection of Index stats, so you don't also need to specify ``node-stats-include-indices: true``.
 
-  Example: ``--telemetry-params="node-stats-include-indices-metrics:'docs'"`` will **only** collect the ``docs`` metrics from Indices stats. If you want to use multiple fields, pass a JSON file to ``telemetry-params`` (see the :ref:`command line reference <clr_telemetry_params>` for details).
+  Example: ``--telemetry-params="node-stats-include-indices-metrics:'docs'"`` will **only** collect the ``docs`` metrics from Index stats. If you want to use multiple fields, pass a JSON file to ``telemetry-params`` (see the :ref:`command line reference <clr_telemetry_params>` for details).
 * ``node-stats-include-thread-pools`` (default: ``true``): A boolean indicating whether thread pool stats should be included.
 * ``node-stats-include-buffer-pools`` (default: ``true``): A boolean indicating whether buffer pool stats should be included.
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
