@@ -423,7 +423,7 @@ class CcrStatsTests(TestCase):
 
 
 class CcrStatsRecorderTests(TestCase):
-    java_signed_maxlong = (2 ** 63) - 1
+    java_signed_maxlong = (2**63) - 1
 
     def test_raises_exception_on_transport_error(self):
         client = Client(transport_client=TransportClient(response={}, force_error=True))
@@ -2779,7 +2779,7 @@ class TransformStatsRecorderTests(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        java_signed_maxlong = (2 ** 63) - 1
+        java_signed_maxlong = (2**63) - 1
         transform_id_prefix = "transform_job_"
         count = random.randrange(1, 10)
         transforms = []
