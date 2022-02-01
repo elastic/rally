@@ -21,11 +21,12 @@ import os
 import sys
 import uuid
 from datetime import datetime
-from unittest import TestCase, mock
+from unittest import mock
 from unittest.mock import mock_open
 
 import elasticsearch
 import psutil
+import pytest
 
 from esrally import config, exceptions, telemetry
 from esrally.mechanic import cluster, launcher
@@ -145,7 +146,7 @@ def get_metrics_store(cfg):
 MOCK_PID_VALUE = 1234
 
 
-class ProcessLauncherTests(TestCase):
+class TestProcessLauncher:
     @mock.patch("subprocess.Popen", new=MockPopen)
     @mock.patch("esrally.mechanic.java_resolver.java_home", return_value=(12, "/java_home/"))
     @mock.patch("esrally.utils.jvm.supports_option", return_value=True)
@@ -180,12 +181,12 @@ class ProcessLauncherTests(TestCase):
             )
 
         nodes = proc_launcher.start(node_configs)
-        self.assertEqual(len(nodes), 2)
-        self.assertEqual(nodes[0].pid, MOCK_PID_VALUE)
+        assert len(nodes) == 2
+        assert nodes[0].pid == MOCK_PID_VALUE
 
         stopped_nodes = proc_launcher.stop(nodes, ms)
         # all nodes should be stopped
-        self.assertEqual(nodes, stopped_nodes)
+        assert stopped_nodes == nodes
 
     @mock.patch("psutil.Process", new=TerminatedProcess)
     def test_daemon_stop_with_already_terminated_process(self):
@@ -202,7 +203,7 @@ class ProcessLauncherTests(TestCase):
 
         stopped_nodes = proc_launcher.stop(nodes, ms)
         # no nodes should have been stopped (they were already stopped)
-        self.assertEqual([], stopped_nodes)
+        assert stopped_nodes == []
 
     # flight recorder shows a warning for several seconds before continuing
     @mock.patch("esrally.time.sleep")
@@ -216,13 +217,12 @@ class ProcessLauncherTests(TestCase):
         t = telemetry.Telemetry(["jfr"], devices=node_telemetry)
         env = proc_launcher._prepare_env(node_name="node0", java_home="/java_home", t=t)
 
-        self.assertEqual("/java_home/bin" + os.pathsep + os.environ["PATH"], env["PATH"])
-        self.assertEqual(
+        assert env["PATH"] == "/java_home/bin" + os.pathsep + os.environ["PATH"]
+        assert env["ES_JAVA_OPTS"] == (
             "-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
             "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
             "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr "  # pylint: disable=line-too-long
-            "-XX:StartFlightRecording=defaultrecording=true",
-            env["ES_JAVA_OPTS"],
+            "-XX:StartFlightRecording=defaultrecording=true"
         )
 
     def test_bundled_jdk_not_in_path(self):
@@ -237,8 +237,8 @@ class ProcessLauncherTests(TestCase):
         env = proc_launcher._prepare_env(node_name="node0", java_home=None, t=t)
 
         # unmodified
-        self.assertEqual(os.environ["PATH"], env["PATH"])
-        self.assertIsNone(env.get("JAVA_HOME"))
+        assert env["PATH"] == os.environ["PATH"]
+        assert env.get("JAVA_HOME") is None
 
     def test_pass_env_vars(self):
         cfg = config.Config()
@@ -254,9 +254,9 @@ class ProcessLauncherTests(TestCase):
         env = proc_launcher._prepare_env(node_name="node0", java_home=None, t=t)
 
         # unmodified
-        self.assertEqual(os.environ["JAVA_HOME"], env["JAVA_HOME"])
-        self.assertEqual(os.environ["FOO1"], env["FOO1"])
-        self.assertEqual(env["ES_JAVA_OPTS"], "-XX:+ExitOnOutOfMemoryError")
+        assert env["JAVA_HOME"] == os.environ["JAVA_HOME"]
+        assert env["FOO1"] == os.environ["FOO1"]
+        assert env["ES_JAVA_OPTS"] == "-XX:+ExitOnOutOfMemoryError"
 
     def test_pass_java_opts(self):
         cfg = config.Config()
@@ -271,26 +271,26 @@ class ProcessLauncherTests(TestCase):
         env = proc_launcher._prepare_env(node_name="node0", java_home=None, t=t)
 
         # unmodified
-        self.assertEqual(os.environ["ES_JAVA_OPTS"], env["ES_JAVA_OPTS"])
+        assert env["ES_JAVA_OPTS"] == os.environ["ES_JAVA_OPTS"]
 
     @mock.patch("esrally.time.sleep")
     def test_pidfile_wait_race(self, sleep):
         mo = mock_open()
-        with self.assertRaises(exceptions.LaunchError):
+        with pytest.raises(exceptions.LaunchError):
             mo.side_effect = FileNotFoundError
-            testclock = TestClock(IterationBasedStopWatch(1))
+            testclock = MockClock(IterationBasedStopWatch(1))
             with mock.patch("builtins.open", mo):
                 launcher.wait_for_pidfile("testpidfile", clock=testclock)
-        with self.assertRaises(exceptions.LaunchError):
+        with pytest.raises(exceptions.LaunchError):
             mo = mock_open()
-            testclock = TestClock(IterationBasedStopWatch(1))
+            testclock = MockClock(IterationBasedStopWatch(1))
             with mock.patch("builtins.open", mo):
                 launcher.wait_for_pidfile("testpidfile", clock=testclock)
         mo = mock_open(read_data="1234")
-        testclock = TestClock(IterationBasedStopWatch(1))
+        testclock = MockClock(IterationBasedStopWatch(1))
         with mock.patch("builtins.open", mo):
             ret = launcher.wait_for_pidfile("testpidfile", clock=testclock)
-            self.assertEqual(ret, 1234)
+            assert ret == 1234
 
         def mock_open_with_delayed_write(read_data):
             mo = mock_open(read_data=read_data)
@@ -308,10 +308,10 @@ class ProcessLauncherTests(TestCase):
             handle.read.side_effect = _stub_first_read
             return mo
 
-        testclock = TestClock(IterationBasedStopWatch(2))
+        testclock = MockClock(IterationBasedStopWatch(2))
         with mock.patch("builtins.open", mock_open_with_delayed_write(read_data="4321")):
             ret = launcher.wait_for_pidfile("testpidfile", clock=testclock)
-            self.assertEqual(ret, 4321)
+            assert ret == 4321
 
 
 class IterationBasedStopWatch:
@@ -332,7 +332,7 @@ class IterationBasedStopWatch:
             return sys.maxsize
 
 
-class TestClock:
+class MockClock:
     __test__ = False
 
     def __init__(self, stop_watch):
@@ -342,7 +342,7 @@ class TestClock:
         return self._stop_watch
 
 
-class DockerLauncherTests(TestCase):
+class TestDockerLauncher:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     def test_starts_container_successfully(self, run_subprocess_with_output, run_subprocess_with_logging):
@@ -364,14 +364,14 @@ class DockerLauncherTests(TestCase):
         )
 
         nodes = docker.start([node_config])
-        self.assertEqual(1, len(nodes))
+        assert len(nodes) == 1
         node = nodes[0]
 
-        self.assertEqual(0, node.pid)
-        self.assertEqual("/bin", node.binary_path)
-        self.assertEqual("127.0.0.1", node.host_name)
-        self.assertEqual("testnode", node.node_name)
-        self.assertIsNotNone(node.telemetry)
+        assert node.pid == 0
+        assert node.binary_path == "/bin"
+        assert node.host_name == "127.0.0.1"
+        assert node.node_name == "testnode"
+        assert node.telemetry is not None
 
         run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml up -d")
         run_subprocess_with_output.assert_has_calls(
@@ -391,7 +391,7 @@ class DockerLauncherTests(TestCase):
         cfg = config.Config()
         # ensure we only check the status two times
         stop_watch = IterationBasedStopWatch(max_iterations=2)
-        docker = launcher.DockerLauncher(cfg, clock=TestClock(stop_watch=stop_watch))
+        docker = launcher.DockerLauncher(cfg, clock=MockClock(stop_watch=stop_watch))
 
         node_config = NodeConfiguration(
             build_type="docker",
@@ -404,7 +404,7 @@ class DockerLauncherTests(TestCase):
             data_paths="/tmp",
         )
 
-        with self.assertRaisesRegex(exceptions.LaunchError, "No healthy running container after 600 seconds!"):
+        with pytest.raises(exceptions.LaunchError, match="No healthy running container after 600 seconds!"):
             docker.start([node_config])
 
     @mock.patch("esrally.telemetry.add_metadata_for_node")
@@ -435,6 +435,6 @@ class DockerLauncherTests(TestCase):
 
         docker.stop(nodes, metrics_store=metrics_store)
 
-        self.assertEqual(0, add_metadata_for_node.call_count)
+        assert add_metadata_for_node.call_count == 0
 
         run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml down")
