@@ -304,23 +304,30 @@ class SummaryReporter:
         )
 
     def _report_field_disk_usage(self, stats):
-        lines = []
-
+        # Collect stats so we can easily make lines
+        collated = {}
         for stat, fieldStats in {
-            "total": stats.field_disk_usage_totals,
             "inverted index": stats.field_disk_usage_inverted_index,
             "stored fields": stats.field_disk_usage_stored_fields,
             "doc values": stats.field_disk_usage_doc_values,
             "points": stats.field_disk_usage_points,
             "norms": stats.field_disk_usage_norms,
             "term vectors": stats.field_disk_usage_term_vectors,
+            "total": stats.field_disk_usage_totals,
         }.items():
             for fieldStat in fieldStats:
-                index = fieldStat["index"]
-                field = fieldStat["field"]
-                lines.append(self._line(f"{index} {field} {stat}", " ", fieldStat["value"], "", convert.bytes_to_human_string))
+                collated.setdefault(fieldStat["index"], {}).setdefault(fieldStat["field"], {})[stat] = fieldStat["value"]
 
-        lines.sort()
+        # Sort by total disk usage descending
+        totals = []
+        for fieldStat in stats.field_disk_usage_totals:
+            totals.append([fieldStat["index"], fieldStat["value"], fieldStat["field"]])
+        totals.sort()
+
+        lines = []
+        for index, _total, field in totals:
+            for stat, value in collated[index][field].items():
+                lines.append(self._line(f"{index} {field} {stat}", " ", value, "", convert.bytes_to_human_string))
         return lines
 
     def _join(self, *args):
