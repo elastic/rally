@@ -2028,6 +2028,11 @@ class GlobalStats:
             elif metric.startswith("total_transform_") and value is not None:
                 for item in value:
                     all_results.append({"id": item["id"], "name": metric, "value": {"single": item["mean"]}})
+            elif metric.startswith("field_disk_usage_") and value is not None:
+                for item in value:
+                    index = item["index"]
+                    field = item["field"]
+                    all_results.append({"id": f"{index} {field}", "name": metric, "value": {"single": item["value"]}})
             elif metric.endswith("_time_per_shard"):
                 if value:
                     all_results.append({"name": metric, "value": value})
