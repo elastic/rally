@@ -119,6 +119,8 @@ class SummaryReporter:
 
         metrics_table.extend(self._report_ingest_pipeline_stats(stats))
 
+        metrics_table.extend(self._report_field_disk_usage(stats))
+
         for record in stats.op_metrics:
             task = record["task"]
             metrics_table.extend(self._report_throughput(record, task))
@@ -300,6 +302,26 @@ class SummaryReporter:
             self._line("Total Ingest Pipeline time", "", stats.ingest_pipeline_cluster_time, "s", convert.ms_to_seconds),
             self._line("Total Ingest Pipeline failed", "", stats.ingest_pipeline_cluster_failed, ""),
         )
+
+    def _report_field_disk_usage(self, stats):
+        lines = []
+
+        for stat, fieldStats in {
+            "total": stats.field_disk_usage_totals,
+            "inverted index": stats.field_disk_usage_inverted_index,
+            "stored fields": stats.field_disk_usage_stored_fields,
+            "doc values": stats.field_disk_usage_doc_values,
+            "points": stats.field_disk_usage_points,
+            "norms": stats.field_disk_usage_norms,
+            "term vectors": stats.field_disk_usage_term_vectors,
+        }.items():
+            for fieldStat in fieldStats:
+                index = fieldStat["index"]
+                field = fieldStat["field"]
+                lines.append(self._line(f"{index} {field} {stat}", " ", fieldStat["value"], "", convert.bytes_to_human_string))
+
+        lines.sort()
+        return lines
 
     def _join(self, *args):
         lines = []

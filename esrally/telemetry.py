@@ -47,6 +47,7 @@ def list_telemetry():
             ShardStats,
             DataStreamStats,
             IngestPipelineStats,
+            FieldDiskUsage
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -2225,3 +2226,71 @@ class MasterNodeStatsRecorder:
         }
 
         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster)
+
+class FieldDiskUsage(TelemetryDevice):
+    """
+    Measures the space taken by each field
+    """
+    internal = False
+    command = "field-disk-usage"
+    human_name = "Analyze field disk usage"
+    help = "Runs the analyze index disk usage API after benchmarking"
+
+    def __init__(self, telemetry_params, client, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            Must specify:
+            ``field-disk-usage-indices``: Pattern of indices to capture.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+        self.telemetry_params = telemetry_params
+        self.client = client
+        self.metrics_store = metrics_store
+
+    def on_benchmark_stop(self):
+        indices = self.telemetry_params["field-disk-usage-indices"]
+        self.logger.debug(f"Gathering field disk usage for {indices}")
+        response = self.client.transport.perform_request(
+            "POST", f"/{indices}/_disk_usage", params={"run_expensive_tasks": "true"}
+        )
+        result = dict()
+        for index, idxFields in response.items():
+            if index == "_shards":
+                continue
+            for field, fieldInfo in idxFields["fields"].items():
+                meta = {"index": index, "field": field}
+                self.metrics_store.put_value_cluster_level(
+                    "field_disk_usage_total", fieldInfo["total_in_bytes"], meta_data=meta, unit="byte"
+                )
+                inverted_index = fieldInfo["inverted_index"]["total_in_bytes"]
+                if inverted_index > 0:
+                    self.metrics_store.put_value_cluster_level(
+                        "field_disk_usage_inverted_index", inverted_index, meta_data=meta, unit="byte"
+                    )
+                stored_fields = fieldInfo["stored_fields_in_bytes"]
+                if stored_fields > 0:
+                    self.metrics_store.put_value_cluster_level(
+                        "field_disk_usage_stored_fields", stored_fields, meta_data=meta, unit="byte"
+                    )
+                doc_values = fieldInfo["doc_values_in_bytes"]
+                if doc_values > 0:
+                    self.metrics_store.put_value_cluster_level(
+                        "field_disk_usage_doc_values", doc_values, meta_data=meta, unit="byte"
+                    )
+                points = fieldInfo["points_in_bytes"]
+                if points > 0:
+                    self.metrics_store.put_value_cluster_level(
+                        "field_disk_usage_points", points, meta_data=meta, unit="byte"
+                    )
+                norms = fieldInfo["norms_in_bytes"]
+                if norms > 0:
+                    self.metrics_store.put_value_cluster_level(
+                        "field_disk_usage_norms", norms, meta_data=meta, unit="byte"
+                    )
+                term_vectors = fieldInfo["term_vectors_in_bytes"]
+                if term_vectors > 0:
+                    self.metrics_store.put_value_cluster_level(
+                        "field_disk_usage_term_vectors", term_vectors, meta_data=meta, unit="byte"
+                    )

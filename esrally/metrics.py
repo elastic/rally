@@ -1809,6 +1809,15 @@ class GlobalStatsCalculator:
         result.ingest_pipeline_cluster_time = self.sum("ingest_pipeline_cluster_time")
         result.ingest_pipeline_cluster_failed = self.sum("ingest_pipeline_cluster_failed")
 
+        self.logger.debug("Gathering field disk usage metrics.")
+        result.field_disk_usage_totals = self.field_disk_usage("field_disk_usage_total")
+        result.field_disk_usage_inverted_index = self.field_disk_usage("field_disk_usage_inverted_index")
+        result.field_disk_usage_stored_fields = self.field_disk_usage("field_disk_usage_stored_fields")
+        result.field_disk_usage_doc_values = self.field_disk_usage("field_disk_usage_doc_values")
+        result.field_disk_usage_points = self.field_disk_usage("field_disk_usage_points")
+        result.field_disk_usage_norms = self.field_disk_usage("field_disk_usage_norms")
+        result.field_disk_usage_term_vectors = self.field_disk_usage("field_disk_usage_term_vectors")
+
         return result
 
     def merge(self, *args):
@@ -1883,6 +1892,18 @@ class GlobalStatsCalculator:
                 transform_id = v.get("meta", {}).get("transform_id")
                 if transform_id is not None:
                     result.append({"id": transform_id, "mean": v["value"], "unit": v["unit"]})
+        return result
+
+    def field_disk_usage(self, metric_name):
+        values = self.store.get_raw(metric_name)
+        result = []
+        if values:
+            for v in values:
+                meta = v.get("meta", {})
+                index = meta.get("index")
+                field = meta.get("field")
+                if index is not None and field is not None:
+                    result.append({"index": index, "field": field, "value": v["value"], "unit": v["unit"]})
         return result
 
     def error_rate(self, task_name, operation_type):
