@@ -2426,6 +2426,7 @@ class TestSearchParamSource:
         assert p["opaque-id"] is None
         assert p["headers"] == {"header1": "value1"}
         assert p["request-params"] == {}
+        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
         assert p["cache"] is True
         assert p["response-compression-enabled"] is True
         assert p["detailed-results"] is False
@@ -2461,6 +2462,7 @@ class TestSearchParamSource:
         assert p["headers"] == {"header1": "value1", "header2": "value2"}
         assert p["opaque-id"] == "12345abcde"
         assert p["request-params"] == {}
+        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
         assert p["cache"] is True
         assert p["response-compression-enabled"] is True
         assert p["detailed-results"] is False
@@ -2510,6 +2512,7 @@ class TestSearchParamSource:
         assert p["headers"] is None
         assert p["opaque-id"] is None
         assert p["request-params"] == {"_source_include": "some_field"}
+        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
         assert p["cache"] is None
         assert p["response-compression-enabled"] is True
         assert p["detailed-results"] is False
@@ -2547,6 +2550,7 @@ class TestSearchParamSource:
         assert p["request-timeout"] is None
         assert p["headers"] is None
         assert p["opaque-id"] == "12345abcde"
+        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
         assert p["cache"] is False
         assert p["response-compression-enabled"] is False
         assert p["detailed-results"] is True
@@ -2582,6 +2586,7 @@ class TestSearchParamSource:
         assert p["headers"] is None
         assert p["opaque-id"] is None
         assert p["request-params"] == {}
+        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
         assert p["cache"] is False
         assert p["response-compression-enabled"] is False
         assert p["detailed-results"] is False
