@@ -29,6 +29,7 @@ import time
 import zlib
 from enum import Enum, IntEnum
 from http.client import responses
+from elasticsearch.helpers import scan
 
 import tabulate
 
@@ -912,7 +913,10 @@ class EsMetricsStore(MetricsStore):
         self._docs.append(doc)
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
-        query = {"query": self._query_by_name(name, task, operation_type, sample_type, node_name)}
+        query = {
+            "query": self._query_by_name(name, task, operation_type, sample_type, node_name),
+            "size": 10000, # TODO maybe scroll or something.
+        }
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
         result = self._client.search(index=self._index, body=query)
         self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
@@ -1810,7 +1814,7 @@ class GlobalStatsCalculator:
         result.ingest_pipeline_cluster_failed = self.sum("ingest_pipeline_cluster_failed")
 
         self.logger.debug("Gathering field disk usage metrics.")
-        result.field_disk_usage_totals = self.field_disk_usage("field_disk_usage_total")
+        result.field_disk_usage_total = self.field_disk_usage("field_disk_usage_total")
         result.field_disk_usage_inverted_index = self.field_disk_usage("field_disk_usage_inverted_index")
         result.field_disk_usage_stored_fields = self.field_disk_usage("field_disk_usage_stored_fields")
         result.field_disk_usage_doc_values = self.field_disk_usage("field_disk_usage_doc_values")
@@ -1985,6 +1989,15 @@ class GlobalStats:
         self.ingest_pipeline_cluster_count = self.v(d, "ingest_pipeline_cluster_count")
         self.ingest_pipeline_cluster_time = self.v(d, "ingest_pipeline_cluster_time")
         self.ingest_pipeline_cluster_failed = self.v(d, "ingest_pipeline_cluster_failed")
+
+        self.field_disk_usage_total = self.v(d, "field_disk_usage_total")
+        self.field_disk_usage_inverted_index = self.v(d, "field_disk_usage_inverted_index")
+        self.field_disk_usage_stored_fields = self.v(d, "field_disk_usage_stored_fields")
+        self.field_disk_usage_doc_values = self.v(d, "field_disk_usage_doc_values")
+        self.field_disk_usage_points = self.v(d, "field_disk_usage_points")
+        self.field_disk_usage_norms = self.v(d, "field_disk_usage_norms")
+        self.field_disk_usage_term_vectors = self.v(d, "field_disk_usage_term_vectors")
+
 
     def as_dict(self):
         return self.__dict__

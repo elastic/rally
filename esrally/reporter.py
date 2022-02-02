@@ -86,6 +86,29 @@ def format_as_csv(headers, data):
             writer.writerow(metric_record)
         return out.getvalue()
 
+def disk_usage_fields(stats):
+    return {
+        "inverted index": stats.field_disk_usage_inverted_index,
+        "stored fields": stats.field_disk_usage_stored_fields,
+        "doc values": stats.field_disk_usage_doc_values,
+        "points": stats.field_disk_usage_points,
+        "norms": stats.field_disk_usage_norms,
+        "term vectors": stats.field_disk_usage_term_vectors,
+        "total": stats.field_disk_usage_total,
+    }
+
+def collate_field_usage_stats(stats):
+    collated = {}
+    for stat, fieldStats in disk_usage_fields(stats).items():
+        for fieldStat in fieldStats:
+            collated.setdefault(fieldStat["index"], {}).setdefault(fieldStat["field"], {})[stat] = fieldStat["value"]
+    return collated
+
+def total_field_disk_usage_per_field(stats):
+    totals = []
+    for fieldStat in stats.field_disk_usage_total:
+        totals.append([fieldStat["index"], fieldStat["value"], fieldStat["field"]])
+    return totals
 
 class SummaryReporter:
     def __init__(self, results, config):
@@ -304,30 +327,11 @@ class SummaryReporter:
         )
 
     def _report_field_disk_usage(self, stats):
-        # Collect stats so we can easily make lines
-        collated = {}
-        for stat, fieldStats in {
-            "inverted index": stats.field_disk_usage_inverted_index,
-            "stored fields": stats.field_disk_usage_stored_fields,
-            "doc values": stats.field_disk_usage_doc_values,
-            "points": stats.field_disk_usage_points,
-            "norms": stats.field_disk_usage_norms,
-            "term vectors": stats.field_disk_usage_term_vectors,
-            "total": stats.field_disk_usage_totals,
-        }.items():
-            for fieldStat in fieldStats:
-                collated.setdefault(fieldStat["index"], {}).setdefault(fieldStat["field"], {})[stat] = fieldStat["value"]
-
-        # Sort by total disk usage descending
-        totals = []
-        for fieldStat in stats.field_disk_usage_totals:
-            totals.append([fieldStat["index"], fieldStat["value"], fieldStat["field"]])
-        totals.sort()
-
+        collated = collate_field_usage_stats(stats)
         lines = []
-        for index, _total, field in totals:
+        for index, _total, field in sorted(total_field_disk_usage_per_field(stats)):
             for stat, value in collated[index][field].items():
-                lines.append(self._line(f"{index} {field} {stat}", " ", value, "", convert.bytes_to_human_string))
+                lines.append(self._line(f"{index} {field} {stat}", "", value, "", convert.bytes_to_human_string))
         return lines
 
     def _join(self, *args):
@@ -402,6 +406,7 @@ class ComparisonReporter:
         metrics_table.extend(self._report_ingest_pipeline_counts(baseline_stats, contender_stats))
         metrics_table.extend(self._report_ingest_pipeline_times(baseline_stats, contender_stats))
         metrics_table.extend(self._report_ingest_pipeline_failed(baseline_stats, contender_stats))
+        metrics_table.extend(self._report_field_disk_usage(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
@@ -634,6 +639,45 @@ class ComparisonReporter:
                 treat_increase_as_improvement=False,
             )
         )
+
+    def _report_field_disk_usage(self, baseline_stats, contender_stats):
+        best = {}
+        for index, total, field in total_field_disk_usage_per_field(baseline_stats):
+            best.setdefault(index, {})[field] = total
+        for index, total, field in total_field_disk_usage_per_field(contender_stats):
+            for_idx = best.setdefault(index, {})
+            prev = for_idx.get(field, 0)
+            if prev < total:
+                for_idx[field] = total
+        totals = []
+        for index, for_idx in best.items():
+            for field, total in for_idx.items():
+                totals.append([index, total, field])
+        totals.sort()
+
+        collated_baseline = collate_field_usage_stats(baseline_stats)
+        collated_contender = collate_field_usage_stats(contender_stats)
+
+        lines = []
+        for index, _total, field in totals:
+            for stat in disk_usage_fields(baseline_stats):
+                baseline_value = collated_baseline[index][field].get(stat, 0)
+                contender_value = collated_contender[index][field].get(stat, 0)
+                if baseline_value == 0 and contender_value == 0:
+                    continue
+                lines.append(
+                    self._line(
+                        f"{index} {field} {stat}",
+                        baseline_value,
+                        contender_value,
+                        "",
+                        "",
+                        treat_increase_as_improvement=False,
+                        formatter=convert.bytes_to_human_string,
+                    )
+                )
+        return lines
+
 
     def _report_total_times(self, baseline_stats, contender_stats):
         lines = []
@@ -974,15 +1018,16 @@ class ComparisonReporter:
         if as_percentage:
             diff = _safe_divide(contender - baseline, baseline) * 100.0
             precision = 2
-            suffix = "%"
+            formatted = f"{diff:.{precision}f}%"
         else:
-            diff = formatter(contender - baseline)
+            diff = contender - baseline
             precision = 5
-            suffix = ""
+            formatted = formatter(diff)
+            if not isinstance(formatted, str):
+                formatted = f"{diff:.{precision}f}"
 
         # ensures that numbers that appear as "zero" are also colored neutrally
         threshold = 10 ** -precision
-        formatted = f"{diff:.{precision}f}{suffix}"
 
         if diff >= threshold:
             return color_greater(f"+{formatted}")
