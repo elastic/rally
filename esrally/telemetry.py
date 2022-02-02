@@ -2255,7 +2255,6 @@ class FieldDiskUsage(TelemetryDevice):
         response = self.client.transport.perform_request(
             "POST", f"/{indices}/_disk_usage", params={"run_expensive_tasks": "true"}
         )
-        result = dict()
         for index, idxFields in response.items():
             if index == "_shards":
                 continue

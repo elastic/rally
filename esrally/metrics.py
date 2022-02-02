@@ -2032,7 +2032,7 @@ class GlobalStats:
                 for item in value:
                     index = item["index"]
                     field = item["field"]
-                    all_results.append({"id": f"{index} {field}", "name": metric, "value": {"single": item["value"]}})
+                    all_results.append({"index": item["index"], "field": item["field"], "name": metric, "value": {"single": item["value"]}})
             elif metric.endswith("_time_per_shard"):
                 if value:
                     all_results.append({"name": metric, "value": value})
