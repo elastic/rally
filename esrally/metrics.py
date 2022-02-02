@@ -29,7 +29,6 @@ import time
 import zlib
 from enum import Enum, IntEnum
 from http.client import responses
-from elasticsearch.helpers import scan
 
 import tabulate
 
