@@ -32,13 +32,13 @@ def bytes_to_human_string(b):
     if b is None:
         return "N/A"
     gb = bytes_to_gb(b)
-    if gb > 1.0:
+    if gb > 1.0 or gb < 1.0:
         return "%.1f GB" % gb
     mb = bytes_to_mb(b)
-    if mb > 1.0:
+    if mb > 1.0 or mb < 1.0:
         return "%.1f MB" % mb
     kb = bytes_to_kb(b)
-    if kb > 1.0:
+    if kb > 1.0 or kb < 1.0:
         return "%.1f kB" % kb
     return "%d bytes" % b
 
