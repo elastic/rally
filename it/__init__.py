@@ -21,11 +21,12 @@ import json
 import os
 import random
 import socket
+import sys
 import time
 
 import pytest
 
-from esrally import client, config, version
+from esrally import client, config, version, paths
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
@@ -79,7 +80,15 @@ def esrally(cfg, command_line):
     This method should be used for rally invocations of the all commands besides race.
     These commands may have different CLI options than race.
     """
-    return os.system(esrally_command_line_for(cfg, command_line))
+    # Seek to the end of rally.log to show new lines in case of failure
+    with open(os.path.join(paths.logs(), "rally.log")) as f:
+        f.seek(0, os.SEEK_END)
+
+        ret = os.system(esrally_command_line_for(cfg, command_line))
+        if ret != 0:
+            print("Command failed, here is the Rally log:", file=sys.stderr)
+            print(f.read())
+        return ret
 
 
 def race(cfg, command_line):
