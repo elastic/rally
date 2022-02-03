@@ -162,6 +162,24 @@ Segment count
 * **Definition**: Total number of segments as reported by the index stats API.
 * **Corresponding metrics key**: ``segments_count``
 
+Total Ingest Pipeline count
+---------------------------
+
+* **Definition**: Total number of documents ingested by all nodes within the cluster, over the duration of the race.
+* **Corresponding metrics key**: ``ingest_pipeline_cluster_count``
+
+
+Total Ingest Pipeline time
+---------------------------
+
+* **Definition**: Total time, in milliseconds, spent preprocessing ingest documents by all nodes within the cluster, over the duration of the race.
+* **Corresponding metrics key**: ``ingest_pipeline_cluster_time``
+
+Total Ingest Pipeline failed
+----------------------------
+
+* **Definition**: Total number of failed ingest operations by all nodes within the cluster, over the duration of the race.
+* **Corresponding metrics key**: ``ingest_pipeline_cluster_failed``
 
 Throughput
 ----------
