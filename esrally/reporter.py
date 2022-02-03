@@ -661,8 +661,8 @@ class ComparisonReporter:
         lines = []
         for index, _total, field in totals:
             for stat in disk_usage_fields(baseline_stats):
-                baseline_value = collated_baseline[index][field].get(stat, 0)
-                contender_value = collated_contender[index][field].get(stat, 0)
+                baseline_value = collated_baseline[index].get(field, {}).get(stat, 0)
+                contender_value = collated_contender[index].get(field, {}).get(stat, 0)
                 if baseline_value == 0 and contender_value == 0:
                     continue
                 lines.append(
