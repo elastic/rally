@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import contextlib
 import errno
 import functools
 import json
@@ -80,15 +81,27 @@ def esrally(cfg, command_line):
     This method should be used for rally invocations of the all commands besides race.
     These commands may have different CLI options than race.
     """
-    # Seek to the end of rally.log to show new lines in case of failure
-    with open(os.path.join(paths.logs(), "rally.log")) as f:
-        f.seek(0, os.SEEK_END)
 
+    # This function used to be a simple call to `os.system()`, but to debug failures we
+    # want to print the Rally log too. However, two issues complicate that:
+    #  1. We don't want to print the whole Rally log, only the lines relevant to this
+    #     run. Which is why we first seek to the end of the file before running Rally.
+    #     That way, `f.read()` will only return the new lines.
+    #  2. When we're invoking Rally through a proxy, the log does not exist locally,
+    #     which means can't use `with open()` and instead need explicit try/except
+    #     clauses.
+    f = None
+    try:
+        with contextlib.suppress(OSError):
+            f = open(os.path.join(paths.logs(), "rally.log"))
+            f.seek(0, os.SEEK_END)
         ret = os.system(esrally_command_line_for(cfg, command_line))
-        if ret != 0:
-            print("Command failed, here is the Rally log:", file=sys.stderr)
-            print(f.read())
-        return ret
+        if ret != 0 and f is not None:
+            print("Command failed, here is the Rally log:\n" + f.read())
+    finally:
+        if f is not None:
+            f.close()
+    return ret
 
 
 def race(cfg, command_line):
