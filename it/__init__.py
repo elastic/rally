@@ -26,7 +26,7 @@ import time
 
 import pytest
 
-from esrally import client, config, version, paths
+from esrally import client, config, paths, version
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
