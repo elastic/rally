@@ -433,6 +433,7 @@ class Track:
         composable_templates=None,
         component_templates=None,
         corpora=None,
+        dependencies=None,
         has_plugins=False,
     ):
         """
@@ -460,6 +461,7 @@ class Track:
         self.templates = templates if templates else []
         self.composable_templates = composable_templates if composable_templates else []
         self.component_templates = component_templates if component_templates else []
+        self.dependencies = dependencies if dependencies else []
         self.has_plugins = has_plugins
 
     @property

@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -193,15 +194,36 @@ def load_track(cfg, install_dependencies=False):
     return _load_single_track(cfg, repo, repo.track_name, install_dependencies)
 
 
+def _install_dependencies(dependencies):
+    def _cleanup():
+        # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
+        shutil.rmtree(paths.libs(), onerror=_trap)
+
+    def _trap(function, path, exc_info):
+        logging.error(f"Failed to clean up [{path}] with [{function}]", exc_info=True)
+        raise exceptions.SystemSetupError(f"Failed to clean up [{path}]").with_traceback(exc_info[2])
+
+    for dependency in dependencies:
+        log_path = os.path.join(paths.logs(), "dependency.log")
+        console.info(f"Installing track dependency {dependency}")
+        _cleanup()
+        try:
+            with open(log_path, "ab") as install_log:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", f"{dependency}", "--upgrade", "--target", paths.libs()], stdout=install_log, stderr=install_log)
+        except subprocess.CalledProcessError:
+            raise exceptions.SystemSetupError(f"Installation of [{dependency}] failed. See [{install_log.name}] for more information.")
+
+
 def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
     try:
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
         tpr = TrackProcessorRegistry(cfg)
-        has_plugins = load_track_plugins(
-            cfg, track_name, register_track_processor=tpr.register_track_processor, install_dependencies=install_dependencies
-        )
+        console.println(f"[{install_dependencies}] [{current_track.dependencies}]")
+        if install_dependencies:
+            _install_dependencies(current_track.dependencies)
+        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
         current_track.has_plugins = has_plugins
         for processor in tpr.processors:
             processor.on_after_load_track(current_track)
@@ -240,9 +262,8 @@ def load_track_plugins(
     """
     repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_plugin_path = repo.track_dir(track_name)
-    dependency_registry = TrackDependencyRegistry(install_dependencies)
     logging.getLogger(__name__).debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
-    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor, dependency_registry)
+    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
 
     if plugin_reader.can_load():
         plugin_reader.load()
@@ -1026,6 +1047,7 @@ class TrackFileReader:
             raise TrackSyntaxError(msg, e)
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
+        console.println(f"[{track_spec.get('dependencies')}]")
         try:
             track_version = int(raw_version)
         except ValueError:
@@ -1086,19 +1108,18 @@ class TrackPluginReader:
     Loads track plugins
     """
 
-    def __init__(
-        self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None, dependency_registry=None
-    ):
+    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
         self.track_processor_registry = track_processor_registry
-        self.dependency_registry = dependency_registry
         self.loader = modules.ComponentLoader(root_path=track_plugin_path, component_entry_point="track")
 
     def can_load(self):
         return self.loader.can_load()
 
     def load(self):
+        # get dependent libraries installed in a prior step
+        sys.path.insert(0, paths.libs())
         root_module = self.loader.load()
         try:
             # every module needs to have a register() method
@@ -1123,34 +1144,12 @@ class TrackPluginReader:
         if self.track_processor_registry:
             self.track_processor_registry(track_processor)
 
-    def register_dependency(self, name):
-        if self.dependency_registry:
-            self.dependency_registry(name)
-
     @property
     def meta_data(self):
         return {
             "rally_version": version.release_version(),
             "async_runner": True,
         }
-
-
-class TrackDependencyRegistry:
-    """
-    Installs track-specific dependencies to the local runtime
-    """
-
-    def __init__(self, install_dependencies):
-        self.install_dependencies = install_dependencies
-
-    def __call__(self, name):
-        if self.install_dependencies:
-            console.info(f"Installing track dependency {name}")
-            try:
-                with open(os.path.join(paths.logs(), "dependency.log"), "ab") as install_log:
-                    subprocess.check_call([sys.executable, "-m", "pip", "install", f"{name}"], stdout=install_log, stderr=install_log)
-            except subprocess.CalledProcessError:
-                raise exceptions.SystemSetupError(f"Installation of [{name}] failed. See [{install_log.name}] for more information.")
 
 
 class TrackSpecificationReader:
@@ -1194,6 +1193,7 @@ class TrackSpecificationReader:
         ]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices, data_streams)
         challenges = self._create_challenges(track_specification)
+        dependencies = self._r(track_specification, "dependencies", mandatory=False)
         # at this point, *all* track params must have been referenced in the templates
         return track.Track(
             name=self.name,
@@ -1206,6 +1206,7 @@ class TrackSpecificationReader:
             composable_templates=composable_templates,
             component_templates=component_templates,
             corpora=corpora,
+            dependencies=dependencies,
         )
 
     def _error(self, msg):

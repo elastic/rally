@@ -1,2 +1,4 @@
+from track_with_dependency import noop
+
 def register(registry):
-    registry.register_dependency("faker==10.0.0")
+    registry.register_runner("no-op", noop)

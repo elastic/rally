@@ -11,5 +11,9 @@
             "retry-until-success": true
           }
     }
+    ],
+    "dependencies": [
+      "pytoml",
+      "git+https://github.com/elastic/detection-rules.git@e0dda91f26eaa5ebf64fd829dfc3d33106a418eb"
     ]
 }
