@@ -17,13 +17,25 @@
 
 import difflib
 import json
+import re
 
 from esrally.utils import io
+
+# detect (very simplistically) json that starts with an array
+RE_JSON_ARRAY_START = re.compile(r'^(\s*\[\s*\]|(\s*\[\s*".*))')
 
 
 def csv_to_list(csv):
     if csv is None:
         return None
+    if io.has_extension(csv, ".json"):
+        with open(io.normalize_path(csv), mode="rt", encoding="utf-8") as f:
+            content = f.read()
+            if not RE_JSON_ARRAY_START.match(content):
+                raise ValueError(f"csv args only support arrays in json but you supplied [{csv}]")
+            return json.loads(content)
+    elif RE_JSON_ARRAY_START.match(csv):
+        return json.loads(csv)
     elif len(csv.strip()) == 0:
         return []
     else:
@@ -79,9 +91,9 @@ def to_dict(arg, default_parser=kv_to_map):
     if io.has_extension(arg, ".json"):
         with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
             return json.load(f)
-    elif arg.startswith("{"):
+    try:
         return json.loads(arg)
-    else:
+    except json.decoder.JSONDecodeError:
         return default_parser(csv_to_list(arg))
 
 
