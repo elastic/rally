@@ -22,7 +22,7 @@ import re
 from esrally.utils import io
 
 # detect (very simplistically) json that starts with an array
-RE_JSON_ARRAY_START = re.compile(r'^(\s*\[\s*\]|(\s*\[\s*".*))')
+RE_JSON_ARRAY_START = re.compile(r'^(\s*\[\s*\])|(\s*\[\s*".*)')
 
 
 def csv_to_list(csv):
