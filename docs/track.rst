@@ -2898,6 +2898,48 @@ Meta-data
 
 This operation returns no meta-data.
 
+sql-query
+~~~~~~~~~~~~~~~~~~~
+
+Executes an SQL query and optionally paginates through subsequent pages. The ``body`` property will directly be passed to
+the `SQL search API <https://www.elastic.co/guide/en/elasticsearch/reference/current/sql-search-api.html>`_.
+
+Properties
+""""""""""
+
+* ``body``: The request body passed to the _sql API with the initial request. Must contain the "query" key. Subsequent pagination requests will only include the cursor in the request body.
+* ``pages``: (optional, defaults to 1) Number of pages to retrieve at most for this search. If a query yields fewer results than the specified number of pages it will fail with an exception.
+
+**Example**
+
+Run an SQL query and fetch the first 10 pages with 100 records each::
+
+    {
+      "operation": {
+        "operation-type": "sql-query",
+        "name": "select-station-names",
+        "body": {
+          "query": "SELECT station.name FROM \"weather-data-2016\"",
+          "page_timeout": "1000ms",
+          "request_timeout": "1000ms",
+          "fetch_size": 100
+        },
+        "pages": 10
+      },
+      "target-throughput": 10,
+      "clients": 2,
+      "warmup-iterations": 50,
+      "iterations": 100
+    }
+
+Meta-data
+"""""""""
+
+The following meta data is always returned:
+
+* ``weight``: The number of fetched pages. Should always equal to the ``pages`` parameter.
+* ``unit``: The unit in which to interpret ``weight``. Always "ops".
+
 Examples
 ========
 

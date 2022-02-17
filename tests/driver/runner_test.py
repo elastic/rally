@@ -4814,6 +4814,92 @@ class DeleteIlmPolicyRunner(TestCase):
         es.ilm.delete_lifecycle.assert_awaited_once_with(policy=params["policy-name"], params={})
 
 
+class SqlQueryTests(TestCase):
+    default_response = {
+        "columns": [{"name": "first_name", "type": "text"}],
+        "rows": [
+            ["Georgi"],
+            ["Bezalel"],
+        ],
+        "cursor": "firstCursor",
+    }
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_sql_query(self, es):
+        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+
+        sql_runner = runner.SqlQuery()
+        params = {
+            "operation-type": "sql",
+            "body": {
+                "query": "SELECT first_name FROM emp",
+                "fetch_size": 2,
+                "page_timeout": "10s",
+                "request_timeout": "20s",
+            },
+        }
+
+        async with sql_runner:
+            result = await sql_runner(es, params)
+
+        self.assertEqual(1, result["weight"])
+        self.assertEqual("ops", result["unit"])
+
+        es.transport.perform_request.assert_awaited_once_with("POST", "/_sql", body=params["body"])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_fetch_all_pages(self, es):
+        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+
+        sql_runner = runner.SqlQuery()
+        params = {"operation-type": "sql", "body": {"query": "SELECT first_name FROM emp"}, "pages": 3}
+
+        async with sql_runner:
+            result = await sql_runner(es, params)
+
+        self.assertEqual(3, result["weight"])
+        self.assertEqual("ops", result["unit"])
+
+        es.transport.perform_request.assert_has_calls(
+            [
+                mock.call("POST", "/_sql", body=params["body"]),
+                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_failure_on_too_few_pages(self, es):
+        es.transport.perform_request = mock.AsyncMock(
+            side_effect=[io.StringIO(json.dumps(self.default_response)), io.StringIO(json.dumps({"rows": [["John"]]}))]
+        )
+
+        sql_runner = runner.SqlQuery()
+        params = {
+            "operation-type": "sql",
+            "body": {
+                "query": "SELECT first_name FROM emp",
+            },
+            "pages": 3,
+        }
+
+        with self.assertRaises(exceptions.DataError) as ctx:
+            async with sql_runner:
+                await sql_runner(es, params)
+
+        self.assertEqual("Result set has been exhausted before all pages have been fetched, 1 page(s) remaining.", ctx.exception.message)
+
+        es.transport.perform_request.assert_has_calls(
+            [
+                mock.call("POST", "/_sql", body=params["body"]),
+                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+            ]
+        )
+
+
 class SubmitAsyncSearchTests(TestCase):
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
