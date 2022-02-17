@@ -21,7 +21,7 @@ import re
 
 from esrally.utils import io
 
-# detect (very simplistically) json that starts with an array
+# detect (very simplistically) json that starts with an empty array or array of strings
 RE_JSON_ARRAY_START = re.compile(r'^(\s*\[\s*\])|(\s*\[\s*".*)')
 
 
