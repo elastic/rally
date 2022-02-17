@@ -10,7 +10,7 @@ However, Rally does not support Elasticsearch clusters using the OSS license.
 End-of-life Policy
 ==================
 
-The latest version of Rally allows to benchmark all currently supported versions of Elasticsearch. Once an `Elasticsearch version reaches end-of-life <https://www.elastic.co/support/eol>`_, Rally will support benchmarking its last minor version until a new major version comes out. For example, after the release of Elasticsearch 8.0.0, Rally dropped support for Elasticsearch <= 6.7.x.
+The latest version of Rally allows to benchmark all currently supported versions of Elasticsearch. Once an `Elasticsearch version reaches end-of-life <https://www.elastic.co/support/eol>`_, Rally will support benchmarking its last minor version until a new major version comes out. For example, after the release of Elasticsearch 8.0.0, Rally dropped support for Elasticsearch < 6.8.0.
 
 Metrics store
 =============
