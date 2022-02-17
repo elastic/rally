@@ -1,6 +1,14 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.4.0
+------------------------
+
+Support for Elasticsearch < 6.8.0 has been dropped
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To benchmark Elasticsearch 6.x nodes, you need to upgrade to 6.8.x first.
+
 Migrating to Rally 2.3.0
 ------------------------
 
