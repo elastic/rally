@@ -90,7 +90,7 @@ s3_require = [
     "boto3==1.10.32",
 ]
 
-tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-asyncio==0.16.0"]
+tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-asyncio==0.18.1"]
 
 # These packages are only required when developing Rally
 develop_require = [

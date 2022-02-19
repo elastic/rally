@@ -22,9 +22,9 @@ import threading
 import time
 import unittest.mock as mock
 from datetime import datetime
-from unittest import TestCase
 
 import elasticsearch
+import pytest
 
 from esrally import config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
@@ -58,24 +58,19 @@ class DriverTestParamSource:
         return self._params
 
 
-class DriverTests(TestCase):
+class TestDriver:
     class Holder:
         def __init__(self, all_hosts=None, all_client_options=None):
             self.all_hosts = all_hosts
             self.all_client_options = all_client_options
             self.uses_static_responses = False
 
-    def __init__(self, methodName="runTest"):
-        super().__init__(methodName)
-        self.cfg = None
-        self.track = None
-
     class StaticClientFactory:
         PATCHER = None
 
         def __init__(self, *args, **kwargs):
-            DriverTests.StaticClientFactory.PATCHER = mock.patch("elasticsearch.Elasticsearch")
-            self.es = DriverTests.StaticClientFactory.PATCHER.start()
+            TestDriver.StaticClientFactory.PATCHER = mock.patch("elasticsearch.Elasticsearch")
+            self.es = TestDriver.StaticClientFactory.PATCHER.start()
             self.es.indices.stats.return_value = {"mocked": True}
             self.es.cat.master.return_value = {"mocked": True}
 
@@ -84,9 +79,9 @@ class DriverTests(TestCase):
 
         @classmethod
         def close(cls):
-            DriverTests.StaticClientFactory.PATCHER.stop()
+            TestDriver.StaticClientFactory.PATCHER.stop()
 
-    def setUp(self):
+    def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
         self.cfg.add(config.Scope.application, "system", "time.start", datetime(year=2017, month=8, day=20, hour=1, minute=0, second=0))
@@ -100,8 +95,8 @@ class DriverTests(TestCase):
         self.cfg.add(config.Scope.application, "telemetry", "params", {})
         self.cfg.add(config.Scope.application, "mechanic", "car.names", ["default"])
         self.cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", True)
-        self.cfg.add(config.Scope.application, "client", "hosts", DriverTests.Holder(all_hosts={"default": ["localhost:9200"]}))
-        self.cfg.add(config.Scope.application, "client", "options", DriverTests.Holder(all_client_options={"default": {}}))
+        self.cfg.add(config.Scope.application, "client", "hosts", self.Holder(all_hosts={"default": ["localhost:9200"]}))
+        self.cfg.add(config.Scope.application, "client", "options", self.Holder(all_client_options={"default": {}}))
         self.cfg.add(config.Scope.application, "driver", "load_driver_hosts", ["localhost"])
         self.cfg.add(config.Scope.application, "reporting", "datastore.type", "in-memory")
 
@@ -113,8 +108,8 @@ class DriverTests(TestCase):
         another_challenge = track.Challenge("other", default=False)
         self.track = track.Track(name="unittest", description="unittest track", challenges=[another_challenge, default_challenge])
 
-    def tearDown(self):
-        DriverTests.StaticClientFactory.close()
+    def teardown_method(self):
+        self.StaticClientFactory.close()
 
     def create_test_driver_target(self):
         client = "client_marker"
@@ -128,7 +123,7 @@ class DriverTests(TestCase):
         resolve.side_effect = ["10.5.5.1", "10.5.5.2"]
 
         target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=DriverTests.StaticClientFactory)
+        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
         d.prepare_benchmark(t=self.track)
 
         target.prepare_track.assert_called_once_with(["10.5.5.1", "10.5.5.2"], self.cfg, self.track)
@@ -144,11 +139,11 @@ class DriverTests(TestCase):
         )
 
         # Did we start all load generators? There is no specific mock assert for this...
-        self.assertEqual(4, target.start_worker.call_count)
+        assert target.start_worker.call_count == 4
 
     def test_assign_drivers_round_robin(self):
         target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=DriverTests.StaticClientFactory)
+        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
 
@@ -166,34 +161,34 @@ class DriverTests(TestCase):
         )
 
         # Did we start all load generators? There is no specific mock assert for this...
-        self.assertEqual(4, target.start_worker.call_count)
+        assert target.start_worker.call_count == 4
 
     def test_client_reaches_join_point_others_still_executing(self):
         target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=DriverTests.StaticClientFactory)
+        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
 
-        self.assertEqual(0, len(d.workers_completed_current_step))
+        assert len(d.workers_completed_current_step) == 0
 
         d.joinpoint_reached(
             worker_id=0, worker_local_timestamp=10, task_allocations=[driver.ClientAllocation(client_id=0, task=driver.JoinPoint(id=0))]
         )
 
-        self.assertEqual(1, len(d.workers_completed_current_step))
+        assert len(d.workers_completed_current_step) == 1
 
-        self.assertEqual(0, target.on_task_finished.call_count)
-        self.assertEqual(0, target.drive_at.call_count)
+        assert target.on_task_finished.call_count == 0
+        assert target.drive_at.call_count == 0
 
     def test_client_reaches_join_point_which_completes_parent(self):
         target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=DriverTests.StaticClientFactory)
+        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
 
-        self.assertEqual(0, len(d.workers_completed_current_step))
+        assert len(d.workers_completed_current_step) == 0
 
         d.joinpoint_reached(
             worker_id=0,
@@ -201,10 +196,10 @@ class DriverTests(TestCase):
             task_allocations=[driver.ClientAllocation(client_id=0, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))],
         )
 
-        self.assertEqual(-1, d.current_step)
-        self.assertEqual(1, len(d.workers_completed_current_step))
+        assert d.current_step == -1
+        assert len(d.workers_completed_current_step) == 1
         # notified all drivers that they should complete the current task ASAP
-        self.assertEqual(4, target.complete_current_task.call_count)
+        assert target.complete_current_task.call_count == 4
 
         # awaiting responses of other clients
         d.joinpoint_reached(
@@ -213,16 +208,16 @@ class DriverTests(TestCase):
             task_allocations=[driver.ClientAllocation(client_id=1, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))],
         )
 
-        self.assertEqual(-1, d.current_step)
-        self.assertEqual(2, len(d.workers_completed_current_step))
+        assert d.current_step == -1
+        assert len(d.workers_completed_current_step) == 2
 
         d.joinpoint_reached(
             worker_id=2,
             worker_local_timestamp=12,
             task_allocations=[driver.ClientAllocation(client_id=2, task=driver.JoinPoint(id=0, clients_executing_completing_task=[0]))],
         )
-        self.assertEqual(-1, d.current_step)
-        self.assertEqual(3, len(d.workers_completed_current_step))
+        assert d.current_step == -1
+        assert len(d.workers_completed_current_step) == 3
 
         d.joinpoint_reached(
             worker_id=3,
@@ -231,20 +226,20 @@ class DriverTests(TestCase):
         )
 
         # by now the previous step should be considered completed and we are at the next one
-        self.assertEqual(0, d.current_step)
-        self.assertEqual(0, len(d.workers_completed_current_step))
+        assert d.current_step == 0
+        assert len(d.workers_completed_current_step) == 0
 
         # this requires at least Python 3.6
         # target.on_task_finished.assert_called_once()
-        self.assertEqual(1, target.on_task_finished.call_count)
-        self.assertEqual(4, target.drive_at.call_count)
+        assert target.on_task_finished.call_count == 1
+        assert target.drive_at.call_count == 4
 
 
 def op(name, operation_type):
     return track.Operation(name, operation_type, param_source="driver-test-param-source")
 
 
-class SamplePostprocessorTests(TestCase):
+class TestSamplePostprocessor:
     def throughput(self, absolute_time, relative_time, value):
         return mock.call(
             name="throughput",
@@ -372,7 +367,7 @@ class SamplePostprocessorTests(TestCase):
         metrics_store.put_value_cluster_level.assert_has_calls(calls)
 
 
-class WorkerAssignmentTests(TestCase):
+class TestWorkerAssignment:
     def test_single_host_assignment_clients_matches_cores(self):
         host_configs = [
             {
@@ -383,20 +378,17 @@ class WorkerAssignmentTests(TestCase):
 
         assignments = driver.calculate_worker_assignments(host_configs, client_count=4)
 
-        self.assertEqual(
-            [
-                {
-                    "host": "localhost",
-                    "workers": [
-                        [0],
-                        [1],
-                        [2],
-                        [3],
-                    ],
-                }
-            ],
-            assignments,
-        )
+        assert assignments == [
+            {
+                "host": "localhost",
+                "workers": [
+                    [0],
+                    [1],
+                    [2],
+                    [3],
+                ],
+            }
+        ]
 
     def test_single_host_assignment_more_clients_than_cores(self):
         host_configs = [
@@ -408,20 +400,17 @@ class WorkerAssignmentTests(TestCase):
 
         assignments = driver.calculate_worker_assignments(host_configs, client_count=6)
 
-        self.assertEqual(
-            [
-                {
-                    "host": "localhost",
-                    "workers": [
-                        [0, 1],
-                        [2, 3],
-                        [4],
-                        [5],
-                    ],
-                }
-            ],
-            assignments,
-        )
+        assert assignments == [
+            {
+                "host": "localhost",
+                "workers": [
+                    [0, 1],
+                    [2, 3],
+                    [4],
+                    [5],
+                ],
+            }
+        ]
 
     def test_single_host_assignment_less_clients_than_cores(self):
         host_configs = [
@@ -433,20 +422,17 @@ class WorkerAssignmentTests(TestCase):
 
         assignments = driver.calculate_worker_assignments(host_configs, client_count=2)
 
-        self.assertEqual(
-            [
-                {
-                    "host": "localhost",
-                    "workers": [
-                        [0],
-                        [1],
-                        [],
-                        [],
-                    ],
-                }
-            ],
-            assignments,
-        )
+        assert assignments == [
+            {
+                "host": "localhost",
+                "workers": [
+                    [0],
+                    [1],
+                    [],
+                    [],
+                ],
+            }
+        ]
 
     def test_multiple_host_assignment_more_clients_than_cores(self):
         host_configs = [
@@ -462,29 +448,26 @@ class WorkerAssignmentTests(TestCase):
 
         assignments = driver.calculate_worker_assignments(host_configs, client_count=16)
 
-        self.assertEqual(
-            [
-                {
-                    "host": "host-a",
-                    "workers": [
-                        [0, 1],
-                        [2, 3],
-                        [4, 5],
-                        [6, 7],
-                    ],
-                },
-                {
-                    "host": "host-b",
-                    "workers": [
-                        [8, 9],
-                        [10, 11],
-                        [12, 13],
-                        [14, 15],
-                    ],
-                },
-            ],
-            assignments,
-        )
+        assert assignments == [
+            {
+                "host": "host-a",
+                "workers": [
+                    [0, 1],
+                    [2, 3],
+                    [4, 5],
+                    [6, 7],
+                ],
+            },
+            {
+                "host": "host-b",
+                "workers": [
+                    [8, 9],
+                    [10, 11],
+                    [12, 13],
+                    [14, 15],
+                ],
+            },
+        ]
 
     def test_multiple_host_assignment_less_clients_than_cores(self):
         host_configs = [
@@ -500,29 +483,26 @@ class WorkerAssignmentTests(TestCase):
 
         assignments = driver.calculate_worker_assignments(host_configs, client_count=4)
 
-        self.assertEqual(
-            [
-                {
-                    "host": "host-a",
-                    "workers": [
-                        [0],
-                        [1],
-                        [],
-                        [],
-                    ],
-                },
-                {
-                    "host": "host-b",
-                    "workers": [
-                        [2],
-                        [3],
-                        [],
-                        [],
-                    ],
-                },
-            ],
-            assignments,
-        )
+        assert assignments == [
+            {
+                "host": "host-a",
+                "workers": [
+                    [0],
+                    [1],
+                    [],
+                    [],
+                ],
+            },
+            {
+                "host": "host-b",
+                "workers": [
+                    [2],
+                    [3],
+                    [],
+                    [],
+                ],
+            },
+        ]
 
     def test_uneven_assignment_across_hosts(self):
         host_configs = [
@@ -542,42 +522,39 @@ class WorkerAssignmentTests(TestCase):
 
         assignments = driver.calculate_worker_assignments(host_configs, client_count=17)
 
-        self.assertEqual(
-            [
-                {
-                    "host": "host-a",
-                    "workers": [
-                        [0, 1],
-                        [2, 3],
-                        [4],
-                        [5],
-                    ],
-                },
-                {
-                    "host": "host-b",
-                    "workers": [
-                        [6, 7],
-                        [8, 9],
-                        [10],
-                        [11],
-                    ],
-                },
-                {
-                    "host": "host-c",
-                    "workers": [
-                        [12, 13],
-                        [14],
-                        [15],
-                        [16],
-                    ],
-                },
-            ],
-            assignments,
-        )
+        assert assignments == [
+            {
+                "host": "host-a",
+                "workers": [
+                    [0, 1],
+                    [2, 3],
+                    [4],
+                    [5],
+                ],
+            },
+            {
+                "host": "host-b",
+                "workers": [
+                    [6, 7],
+                    [8, 9],
+                    [10],
+                    [11],
+                ],
+            },
+            {
+                "host": "host-c",
+                "workers": [
+                    [12, 13],
+                    [14],
+                    [15],
+                    [16],
+                ],
+            },
+        ]
 
 
-class AllocatorTests(TestCase):
-    def setUp(self):
+class TestAllocator:
+    def setup_method(self, method):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
 
     def ta(self, task, client_index_in_task, global_client_index=None, total_clients=None):
@@ -593,35 +570,35 @@ class AllocatorTests(TestCase):
 
         allocator = driver.Allocator([task])
 
-        self.assertEqual(1, allocator.clients)
-        self.assertEqual(3, len(allocator.allocations[0]))
-        self.assertEqual(2, len(allocator.join_points))
-        self.assertEqual([{task}], allocator.tasks_per_joinpoint)
+        assert allocator.clients == 1
+        assert len(allocator.allocations[0]) == 3
+        assert len(allocator.join_points) == 2
+        assert allocator.tasks_per_joinpoint == [{task}]
 
     def test_allocates_two_serial_tasks(self):
         task = track.Task("index", op("index", track.OperationType.Bulk))
 
         allocator = driver.Allocator([task, task])
 
-        self.assertEqual(1, allocator.clients)
+        assert allocator.clients == 1
         # we have two operations and three join points
-        self.assertEqual(5, len(allocator.allocations[0]))
-        self.assertEqual(3, len(allocator.join_points))
-        self.assertEqual([{task}, {task}], allocator.tasks_per_joinpoint)
+        assert len(allocator.allocations[0]) == 5
+        assert len(allocator.join_points) == 3
+        assert allocator.tasks_per_joinpoint == [{task}, {task}]
 
     def test_allocates_two_parallel_tasks(self):
         task = track.Task("index", op("index", track.OperationType.Bulk))
 
         allocator = driver.Allocator([track.Parallel([task, task])])
 
-        self.assertEqual(2, allocator.clients)
-        self.assertEqual(3, len(allocator.allocations[0]))
-        self.assertEqual(3, len(allocator.allocations[1]))
-        self.assertEqual(2, len(allocator.join_points))
-        self.assertEqual([{task}], allocator.tasks_per_joinpoint)
+        assert allocator.clients == 2
+        assert len(allocator.allocations[0]) == 3
+        assert len(allocator.allocations[1]) == 3
+        assert len(allocator.join_points) == 2
+        assert allocator.tasks_per_joinpoint == [{task}]
         for join_point in allocator.join_points:
-            self.assertFalse(join_point.preceding_task_completes_parent)
-            self.assertEqual(0, join_point.num_clients_executing_completing_task)
+            assert not join_point.preceding_task_completes_parent is True
+            assert join_point.num_clients_executing_completing_task == 0
 
     def test_a_task_completes_the_parallel_structure(self):
         taskA = track.Task("index-completing", op("index", track.OperationType.Bulk), completes_parent=True)
@@ -629,15 +606,15 @@ class AllocatorTests(TestCase):
 
         allocator = driver.Allocator([track.Parallel([taskA, taskB])])
 
-        self.assertEqual(2, allocator.clients)
-        self.assertEqual(3, len(allocator.allocations[0]))
-        self.assertEqual(3, len(allocator.allocations[1]))
-        self.assertEqual(2, len(allocator.join_points))
-        self.assertEqual([{taskA, taskB}], allocator.tasks_per_joinpoint)
+        assert allocator.clients == 2
+        assert len(allocator.allocations[0]) == 3
+        assert len(allocator.allocations[1]) == 3
+        assert len(allocator.join_points) == 2
+        assert allocator.tasks_per_joinpoint == [{taskA, taskB}]
         final_join_point = allocator.join_points[1]
-        self.assertTrue(final_join_point.preceding_task_completes_parent)
-        self.assertEqual(1, final_join_point.num_clients_executing_completing_task)
-        self.assertEqual([0], final_join_point.clients_executing_completing_task)
+        assert final_join_point.preceding_task_completes_parent is True
+        assert final_join_point.num_clients_executing_completing_task == 1
+        assert final_join_point.clients_executing_completing_task == [0]
 
     def test_any_task_completes_the_parallel_structure(self):
         taskA = track.Task("index-completing", op("index", track.OperationType.Bulk), any_completes_parent=True)
@@ -645,14 +622,14 @@ class AllocatorTests(TestCase):
 
         # Both tasks can complete the parent
         allocator = driver.Allocator([track.Parallel([taskA, taskB])])
-        self.assertEqual(2, allocator.clients)
-        self.assertEqual(3, len(allocator.allocations[0]))
-        self.assertEqual(3, len(allocator.allocations[1]))
-        self.assertEqual(2, len(allocator.join_points))
-        self.assertEqual([{taskA, taskB}], allocator.tasks_per_joinpoint)
+        assert allocator.clients == 2
+        assert len(allocator.allocations[0]) == 3
+        assert len(allocator.allocations[1]) == 3
+        assert len(allocator.join_points) == 2
+        assert allocator.tasks_per_joinpoint == [{taskA, taskB}]
         final_join_point = allocator.join_points[-1]
-        self.assertEqual(2, len(final_join_point.any_task_completes_parent))
-        self.assertEqual([0, 1], final_join_point.any_task_completes_parent)
+        assert len(final_join_point.any_task_completes_parent) == 2
+        assert final_join_point.any_task_completes_parent == [0, 1]
 
     def test_allocates_mixed_tasks(self):
         index = track.Task("index", op("index", track.OperationType.Bulk))
@@ -661,17 +638,17 @@ class AllocatorTests(TestCase):
 
         allocator = driver.Allocator([index, track.Parallel([index, stats, stats]), index, index, track.Parallel([search, search, search])])
 
-        self.assertEqual(3, allocator.clients)
+        assert allocator.clients == 3
 
         # 1 join point, 1 op, 1 jp, 1 (parallel) op, 1 jp, 1 op, 1 jp, 1 op, 1 jp, 1 (parallel) op, 1 jp
-        self.assertEqual(11, len(allocator.allocations[0]))
-        self.assertEqual(11, len(allocator.allocations[1]))
-        self.assertEqual(11, len(allocator.allocations[2]))
-        self.assertEqual(6, len(allocator.join_points))
-        self.assertEqual([{index}, {index, stats}, {index}, {index}, {search}], allocator.tasks_per_joinpoint)
+        assert len(allocator.allocations[0]) == 11
+        assert len(allocator.allocations[1]) == 11
+        assert len(allocator.allocations[2]) == 11
+        assert len(allocator.join_points) == 6
+        assert allocator.tasks_per_joinpoint == [{index}, {index, stats}, {index}, {index}, {search}]
         for join_point in allocator.join_points:
-            self.assertFalse(join_point.preceding_task_completes_parent)
-            self.assertEqual(0, join_point.num_clients_executing_completing_task)
+            assert not join_point.preceding_task_completes_parent is True
+            assert join_point.num_clients_executing_completing_task == 0
 
     # TODO (follow-up PR): We should probably forbid this
     def test_allocates_more_tasks_than_clients(self):
@@ -683,44 +660,38 @@ class AllocatorTests(TestCase):
 
         allocator = driver.Allocator([track.Parallel(tasks=[index_a, index_b, index_c, index_d, index_e], clients=2)])
 
-        self.assertEqual(2, allocator.clients)
+        assert allocator.clients == 2
 
         allocations = allocator.allocations
 
         # 2 clients
-        self.assertEqual(2, len(allocations))
+        assert len(allocations) == 2
         # join_point, index_a, index_c, index_e, join_point
-        self.assertEqual(5, len(allocations[0]))
+        assert len(allocations[0]) == 5
         # we really have no chance to extract the join point so we just take what is there...
-        self.assertEqual(
-            [
-                allocations[0][0],
-                self.ta(index_a, client_index_in_task=0, global_client_index=0, total_clients=2),
-                self.ta(index_c, client_index_in_task=0, global_client_index=2, total_clients=2),
-                self.ta(index_e, client_index_in_task=0, global_client_index=4, total_clients=2),
-                allocations[0][4],
-            ],
-            allocations[0],
-        )
+        assert allocations[0] == [
+            allocations[0][0],
+            self.ta(index_a, client_index_in_task=0, global_client_index=0, total_clients=2),
+            self.ta(index_c, client_index_in_task=0, global_client_index=2, total_clients=2),
+            self.ta(index_e, client_index_in_task=0, global_client_index=4, total_clients=2),
+            allocations[0][4],
+        ]
         # join_point, index_a, index_c, None, join_point
-        self.assertEqual(5, len(allocator.allocations[1]))
-        self.assertEqual(
-            [
-                allocations[1][0],
-                self.ta(index_b, client_index_in_task=0, global_client_index=1, total_clients=2),
-                self.ta(index_d, client_index_in_task=0, global_client_index=3, total_clients=2),
-                None,
-                allocations[1][4],
-            ],
-            allocations[1],
-        )
+        assert len(allocator.allocations[1]) == 5
+        assert allocations[1] == [
+            allocations[1][0],
+            self.ta(index_b, client_index_in_task=0, global_client_index=1, total_clients=2),
+            self.ta(index_d, client_index_in_task=0, global_client_index=3, total_clients=2),
+            None,
+            allocations[1][4],
+        ]
 
-        self.assertEqual([{index_a, index_b, index_c, index_d, index_e}], allocator.tasks_per_joinpoint)
-        self.assertEqual(2, len(allocator.join_points))
+        assert allocator.tasks_per_joinpoint == [{index_a, index_b, index_c, index_d, index_e}]
+        assert len(allocator.join_points) == 2
         final_join_point = allocator.join_points[1]
-        self.assertTrue(final_join_point.preceding_task_completes_parent)
-        self.assertEqual(1, final_join_point.num_clients_executing_completing_task)
-        self.assertEqual([1], final_join_point.clients_executing_completing_task)
+        assert final_join_point.preceding_task_completes_parent is True
+        assert final_join_point.num_clients_executing_completing_task == 1
+        assert final_join_point.clients_executing_completing_task == [1]
 
     # TODO (follow-up PR): We should probably forbid this
     def test_considers_number_of_clients_per_subtask(self):
@@ -730,64 +701,55 @@ class AllocatorTests(TestCase):
 
         allocator = driver.Allocator([track.Parallel(tasks=[index_a, index_b, index_c], clients=3)])
 
-        self.assertEqual(3, allocator.clients)
+        assert allocator.clients == 3
 
         allocations = allocator.allocations
 
         # 3 clients
-        self.assertEqual(3, len(allocations))
+        assert len(allocations) == 3
 
         # tasks that client 0 will execute:
         # join_point, index_a, index_c, join_point
-        self.assertEqual(4, len(allocations[0]))
+        assert len(allocations[0]) == 4
         # we really have no chance to extract the join point so we just take what is there...
-        self.assertEqual(
-            [
-                allocations[0][0],
-                self.ta(index_a, client_index_in_task=0, global_client_index=0, total_clients=3),
-                self.ta(index_c, client_index_in_task=1, global_client_index=3, total_clients=3),
-                allocations[0][3],
-            ],
-            allocations[0],
-        )
+        assert allocations[0] == [
+            allocations[0][0],
+            self.ta(index_a, client_index_in_task=0, global_client_index=0, total_clients=3),
+            self.ta(index_c, client_index_in_task=1, global_client_index=3, total_clients=3),
+            allocations[0][3],
+        ]
 
         # task that client 1 will execute:
         # join_point, index_b, None, join_point
-        self.assertEqual(4, len(allocator.allocations[1]))
-        self.assertEqual(
-            [
-                allocations[1][0],
-                self.ta(index_b, client_index_in_task=0, global_client_index=1, total_clients=3),
-                None,
-                allocations[1][3],
-            ],
-            allocations[1],
-        )
+        assert len(allocator.allocations[1]) == 4
+        assert allocations[1] == [
+            allocations[1][0],
+            self.ta(index_b, client_index_in_task=0, global_client_index=1, total_clients=3),
+            None,
+            allocations[1][3],
+        ]
 
         # tasks that client 2 will execute:
-        self.assertEqual(4, len(allocator.allocations[2]))
-        self.assertEqual(
-            [
-                allocations[2][0],
-                self.ta(index_c, client_index_in_task=0, global_client_index=2, total_clients=3),
-                None,
-                allocations[2][3],
-            ],
-            allocations[2],
-        )
+        assert len(allocator.allocations[2]) == 4
+        assert allocations[2] == [
+            allocations[2][0],
+            self.ta(index_c, client_index_in_task=0, global_client_index=2, total_clients=3),
+            None,
+            allocations[2][3],
+        ]
 
-        self.assertEqual([{index_a, index_b, index_c}], allocator.tasks_per_joinpoint)
+        assert [{index_a, index_b, index_c}] == allocator.tasks_per_joinpoint
 
-        self.assertEqual(2, len(allocator.join_points))
+        assert len(allocator.join_points) == 2
         final_join_point = allocator.join_points[1]
-        self.assertTrue(final_join_point.preceding_task_completes_parent)
+        assert final_join_point.preceding_task_completes_parent is True
         # task index_c has two clients, hence we have to wait for two clients to finish
-        self.assertEqual(2, final_join_point.num_clients_executing_completing_task)
-        self.assertEqual([2, 0], final_join_point.clients_executing_completing_task)
+        assert final_join_point.num_clients_executing_completing_task == 2
+        assert final_join_point.clients_executing_completing_task == [2, 0]
 
 
-class MetricsAggregationTests(TestCase):
-    def setUp(self):
+class TestMetricsAggregation:
+    def setup_method(self, method):
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
 
     def test_different_sample_types(self):
@@ -800,13 +762,13 @@ class MetricsAggregationTests(TestCase):
 
         aggregated = self.calculate_global_throughput(samples)
 
-        self.assertIn(op, aggregated)
-        self.assertEqual(1, len(aggregated))
+        assert op in aggregated
+        assert len(aggregated) == 1
 
         throughput = aggregated[op]
-        self.assertEqual(2, len(throughput))
-        self.assertEqual((1470838595, 21, metrics.SampleType.Warmup, 3000, "docs/s"), throughput[0])
-        self.assertEqual((1470838595.5, 21.5, metrics.SampleType.Normal, 3666.6666666666665, "docs/s"), throughput[1])
+        assert len(throughput) == 2
+        assert throughput[0] == (1470838595, 21, metrics.SampleType.Warmup, 3000, "docs/s")
+        assert throughput[1] == (1470838595.5, 21.5, metrics.SampleType.Normal, 3666.6666666666665, "docs/s")
 
     def test_single_metrics_aggregation(self):
         op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
@@ -825,18 +787,17 @@ class MetricsAggregationTests(TestCase):
 
         aggregated = self.calculate_global_throughput(samples)
 
-        self.assertIn(op, aggregated)
-        self.assertEqual(1, len(aggregated))
+        assert op in aggregated
+        assert len(aggregated) == 1
 
         throughput = aggregated[op]
-        self.assertEqual(6, len(throughput))
-        self.assertEqual((38595, 21, metrics.SampleType.Normal, 5000, "docs/s"), throughput[0])
-        self.assertEqual((38596, 22, metrics.SampleType.Normal, 5000, "docs/s"), throughput[1])
-        self.assertEqual((38597, 23, metrics.SampleType.Normal, 5000, "docs/s"), throughput[2])
-        self.assertEqual((38598, 24, metrics.SampleType.Normal, 5000, "docs/s"), throughput[3])
-        self.assertEqual((38599, 25, metrics.SampleType.Normal, 6000, "docs/s"), throughput[4])
-        self.assertEqual((38600, 26, metrics.SampleType.Normal, 6666.666666666667, "docs/s"), throughput[5])
-        # self.assertEqual((1470838600.5, 26.5, metrics.SampleType.Normal, 10000), throughput[6])
+        assert len(throughput) == 6
+        assert throughput[0] == (38595, 21, metrics.SampleType.Normal, 5000, "docs/s")
+        assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 5000, "docs/s")
+        assert throughput[2] == (38597, 23, metrics.SampleType.Normal, 5000, "docs/s")
+        assert throughput[3] == (38598, 24, metrics.SampleType.Normal, 5000, "docs/s")
+        assert throughput[4] == (38599, 25, metrics.SampleType.Normal, 6000, "docs/s")
+        assert throughput[5] == (38600, 26, metrics.SampleType.Normal, 6666.666666666667, "docs/s")
 
     def test_use_provided_throughput(self):
         op = track.Operation("index-recovery", track.OperationType.WaitForRecovery, param_source="driver-test-param-source")
@@ -849,20 +810,20 @@ class MetricsAggregationTests(TestCase):
 
         aggregated = self.calculate_global_throughput(samples)
 
-        self.assertIn(op, aggregated)
-        self.assertEqual(1, len(aggregated))
+        assert op in aggregated
+        assert len(aggregated) == 1
 
         throughput = aggregated[op]
-        self.assertEqual(3, len(throughput))
-        self.assertEqual((38595, 21, metrics.SampleType.Normal, 8000, "byte/s"), throughput[0])
-        self.assertEqual((38596, 22, metrics.SampleType.Normal, 8000, "byte/s"), throughput[1])
-        self.assertEqual((38597, 23, metrics.SampleType.Normal, 8000, "byte/s"), throughput[2])
+        assert len(throughput) == 3
+        assert throughput[0] == (38595, 21, metrics.SampleType.Normal, 8000, "byte/s")
+        assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 8000, "byte/s")
+        assert throughput[2] == (38597, 23, metrics.SampleType.Normal, 8000, "byte/s")
 
     def calculate_global_throughput(self, samples):
         return driver.ThroughputCalculator().calculate(samples)
 
 
-class SchedulerTests(TestCase):
+class TestScheduler:
     class RunnerWithProgress:
         def __init__(self, complete_after=3):
             self.completed = False
@@ -899,11 +860,11 @@ class SchedulerTests(TestCase):
         async for invocation_time, sample_type, progress_percent, runner, params in schedule_handle():
             schedule_handle.before_request(now=idx)
             exp_invocation_time, exp_sample_type, exp_progress_percent, exp_params = expected_schedule[idx]
-            self.assertAlmostEqual(exp_invocation_time, invocation_time, msg="Invocation time for sample at index %d does not match" % idx)
-            self.assertEqual(exp_sample_type, sample_type, "Sample type for sample at index %d does not match" % idx)
-            self.assertEqual(exp_progress_percent, progress_percent, "Current progress for sample at index %d does not match" % idx)
-            self.assertIsNotNone(runner, "runner must be defined")
-            self.assertEqual(exp_params, params, "Parameters do not match")
+            assert round(abs(exp_invocation_time - invocation_time), 7) == 0
+            assert sample_type == exp_sample_type
+            assert progress_percent == exp_progress_percent
+            assert runner is not None
+            assert params == exp_params
             idx += 1
             # for infinite schedules we only check the first few elements
             if infinite_schedule and idx == len(expected_schedule):
@@ -911,17 +872,17 @@ class SchedulerTests(TestCase):
             # simulate that the request is done - we only support throttling based on request count (ops).
             schedule_handle.after_request(now=idx, weight=1, unit="ops", request_meta_data=None)
         if not infinite_schedule:
-            self.assertEqual(len(expected_schedule), idx, msg="Number of elements in the schedules do not match")
+            assert len(expected_schedule) == idx
 
-    def setUp(self):
+    def setup_method(self, method):
         self.test_track = track.Track(name="unittest")
-        self.runner_with_progress = SchedulerTests.RunnerWithProgress()
+        self.runner_with_progress = self.RunnerWithProgress()
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         runner.register_default_runners()
         runner.register_runner("driver-test-runner-with-completion", self.runner_with_progress, async_runner=True)
-        scheduler.register_scheduler("custom-complex-scheduler", SchedulerTests.CustomComplexScheduler)
+        scheduler.register_scheduler("custom-complex-scheduler", self.CustomComplexScheduler)
 
-    def tearDown(self):
+    def teardown_method(self, method):
         runner.remove_runner("driver-test-runner-with-completion")
         scheduler.remove_scheduler("custom-complex-scheduler")
 
@@ -940,8 +901,8 @@ class SchedulerTests(TestCase):
         param_source = track.operation_parameters(self.test_track, task)
         schedule = driver.schedule_for(task_allocation, param_source)
 
-        self.assertIsNotNone(schedule.sched.parameter_source, "Parameter source has not been injected into scheduler")
-        self.assertEqual(param_source, schedule.sched.parameter_source)
+        assert schedule.sched.parameter_source is not None, "Parameter source has not been injected into scheduler"
+        assert schedule.sched.parameter_source == param_source
 
     @run_async
     async def test_search_task_one_client(self):
@@ -1223,24 +1184,24 @@ class SchedulerTests(TestCase):
         schedule_handle = driver.schedule_for(task_allocation, param_source)
         schedule_handle.start()
         # first client does not wait
-        self.assertEqual(0.0, schedule_handle.ramp_up_wait_time)
+        assert schedule_handle.ramp_up_wait_time == 0.0
         schedule = schedule_handle()
 
         last_progress = -1
 
         async for invocation_time, sample_type, progress_percent, runner, params in schedule:
             # we're not throughput throttled
-            self.assertEqual(0, invocation_time)
+            assert invocation_time == 0
             if progress_percent <= 0.5:
-                self.assertEqual(metrics.SampleType.Warmup, sample_type)
+                assert metrics.SampleType.Warmup == sample_type
             else:
-                self.assertEqual(metrics.SampleType.Normal, sample_type)
-            self.assertTrue(last_progress < progress_percent)
+                assert metrics.SampleType.Normal == sample_type
+            assert last_progress < progress_percent
             last_progress = progress_percent
-            self.assertTrue(round(progress_percent, 2) >= 0.0, "progress should be >= 0.0 but was [%f]" % progress_percent)
-            self.assertTrue(round(progress_percent, 2) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
-            self.assertIsNotNone(runner, "runner must be defined")
-            self.assertEqual({"body": ["a"], "operation-type": "bulk", "size": 11}, params)
+            assert round(progress_percent, 2) >= 0.0
+            assert round(progress_percent, 2) <= 1.0
+            assert runner is not None
+            assert params == {"body": ["a"], "operation-type": "bulk", "size": 11}
 
     @run_async
     async def test_schedule_for_time_based_with_multiple_clients(self):
@@ -1270,27 +1231,27 @@ class SchedulerTests(TestCase):
         schedule_handle = driver.schedule_for(task_allocation, param_source)
         schedule_handle.start()
         # client number 4 out of 8 -> 0.1 * (4 / 8) = 0.05
-        self.assertEqual(0.05, schedule_handle.ramp_up_wait_time)
+        assert schedule_handle.ramp_up_wait_time == 0.05
         schedule = schedule_handle()
 
         last_progress = -1
 
         async for invocation_time, sample_type, progress_percent, runner, params in schedule:
             # we're not throughput throttled
-            self.assertEqual(0, invocation_time)
+            assert invocation_time == 0
             if progress_percent <= 0.5:
-                self.assertEqual(metrics.SampleType.Warmup, sample_type)
+                assert metrics.SampleType.Warmup == sample_type
             else:
-                self.assertEqual(metrics.SampleType.Normal, sample_type)
-            self.assertTrue(last_progress < progress_percent)
+                assert metrics.SampleType.Normal == sample_type
+            assert last_progress < progress_percent
             last_progress = progress_percent
-            self.assertTrue(round(progress_percent, 2) >= 0.0, "progress should be >= 0.0 but was [%f]" % progress_percent)
-            self.assertTrue(round(progress_percent, 2) <= 1.0, "progress should be <= 1.0 but was [%f]" % progress_percent)
-            self.assertIsNotNone(runner, "runner must be defined")
-            self.assertEqual({"body": ["a"], "operation-type": "bulk", "size": 11}, params)
+            assert round(progress_percent, 2) >= 0.0
+            assert round(progress_percent, 2) <= 1.0
+            assert runner is not None
+            assert params == {"body": ["a"], "operation-type": "bulk", "size": 11}
 
 
-class AsyncExecutorTests(TestCase):
+class TestAsyncExecutor:
     class NoopContextManager:
         def __init__(self, mock):
             self.mock = mock
@@ -1348,18 +1309,14 @@ class AsyncExecutorTests(TestCase):
         async def __call__(self, es, params):
             return {"weight": 1, "unit": "ops", "throughput": 1.23}
 
-    def __init__(self, methodName):
-        super().__init__(methodName)
-        self.runner_with_progress = None
-
     @staticmethod
     def context_managed(mock):
-        return AsyncExecutorTests.NoopContextManager(mock)
+        return TestAsyncExecutor.NoopContextManager(mock)
 
-    def setUp(self):
+    def setup_method(self, method):
         runner.register_default_runners()
-        self.runner_with_progress = AsyncExecutorTests.RunnerWithProgress()
-        self.runner_overriding_throughput = AsyncExecutorTests.RunnerOverridingThroughput()
+        self.runner_with_progress = self.RunnerWithProgress()
+        self.runner_overriding_throughput = self.RunnerOverridingThroughput()
         runner.register_runner("unit-test-recovery", self.runner_with_progress, async_runner=True)
         runner.register_runner("override-throughput", self.runner_overriding_throughput, async_runner=True)
 
@@ -1367,7 +1324,7 @@ class AsyncExecutorTests(TestCase):
     @run_async
     async def test_execute_schedule_in_throughput_mode(self, es):
         task_start = time.perf_counter()
-        es.new_request_context.return_value = AsyncExecutorTests.StaticRequestTiming(task_start=task_start)
+        es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
 
         es.bulk = mock.AsyncMock(return_value=io.StringIO('{"errors": false, "took": 8}'))
 
@@ -1416,29 +1373,29 @@ class AsyncExecutorTests(TestCase):
 
         samples = sampler.samples
 
-        self.assertTrue(len(samples) > 0)
-        self.assertFalse(complete.is_set(), "Executor should not auto-complete a normal task")
+        assert len(samples) > 0
+        assert not complete.is_set(), "Executor should not auto-complete a normal task"
         previous_absolute_time = -1.0
         previous_relative_time = -1.0
         for sample in samples:
-            self.assertEqual(2, sample.client_id)
-            self.assertEqual(task, sample.task)
-            self.assertLess(previous_absolute_time, sample.absolute_time)
+            assert sample.client_id == 2
+            assert sample.task == task
+            assert previous_absolute_time < sample.absolute_time
             previous_absolute_time = sample.absolute_time
-            self.assertLess(previous_relative_time, sample.relative_time)
+            assert previous_relative_time < sample.relative_time
             previous_relative_time = sample.relative_time
             # we don't have any warmup time period
-            self.assertEqual(metrics.SampleType.Normal, sample.sample_type)
+            assert metrics.SampleType.Normal == sample.sample_type
             # latency equals service time in throughput mode
-            self.assertEqual(sample.latency, sample.service_time)
-            self.assertEqual(1, sample.total_ops)
-            self.assertEqual("docs", sample.total_ops_unit)
+            assert sample.latency == sample.service_time
+            assert sample.total_ops == 1
+            assert sample.total_ops_unit == "docs"
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_with_progress_determined_by_runner(self, es):
         task_start = time.perf_counter()
-        es.new_request_context.return_value = AsyncExecutorTests.StaticRequestTiming(task_start=task_start)
+        es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
@@ -1480,33 +1437,33 @@ class AsyncExecutorTests(TestCase):
 
         samples = sampler.samples
 
-        self.assertEqual(5, len(samples))
-        self.assertTrue(self.runner_with_progress.completed)
-        self.assertEqual(1.0, self.runner_with_progress.percent_completed)
-        self.assertFalse(complete.is_set(), "Executor should not auto-complete a normal task")
+        assert len(samples) == 5
+        assert self.runner_with_progress.completed is True
+        assert self.runner_with_progress.percent_completed == 1.0
+        assert not complete.is_set(), "Executor should not auto-complete a normal task"
         previous_absolute_time = -1.0
         previous_relative_time = -1.0
         for sample in samples:
-            self.assertEqual(2, sample.client_id)
-            self.assertEqual(task, sample.task)
-            self.assertLess(previous_absolute_time, sample.absolute_time)
+            assert sample.client_id == 2
+            assert sample.task == task
+            assert previous_absolute_time < sample.absolute_time
             previous_absolute_time = sample.absolute_time
-            self.assertLess(previous_relative_time, sample.relative_time)
+            assert previous_relative_time < sample.relative_time
             previous_relative_time = sample.relative_time
             # we don't have any warmup time period
-            self.assertEqual(metrics.SampleType.Normal, sample.sample_type)
+            assert metrics.SampleType.Normal == sample.sample_type
             # throughput is not overridden and will be calculated later
-            self.assertIsNone(sample.throughput)
+            assert sample.throughput is None
             # latency equals service time in throughput mode
-            self.assertEqual(sample.latency, sample.service_time)
-            self.assertEqual(1, sample.total_ops)
-            self.assertEqual("ops", sample.total_ops_unit)
+            assert sample.latency == sample.service_time
+            assert sample.total_ops == 1
+            assert sample.total_ops_unit == "ops"
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_execute_schedule_runner_overrides_times(self, es):
         task_start = time.perf_counter()
-        es.new_request_context.return_value = AsyncExecutorTests.StaticRequestTiming(task_start=task_start)
+        es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
@@ -1549,19 +1506,19 @@ class AsyncExecutorTests(TestCase):
 
         samples = sampler.samples
 
-        self.assertFalse(complete.is_set(), "Executor should not auto-complete a normal task")
-        self.assertEqual(1, len(samples))
+        assert not complete.is_set(), "Executor should not auto-complete a normal task"
+        assert len(samples) == 1
         sample = samples[0]
-        self.assertEqual(0, sample.client_id)
-        self.assertEqual(task, sample.task)
+        assert sample.client_id == 0
+        assert sample.task == task
         # we don't have any warmup samples
-        self.assertEqual(metrics.SampleType.Normal, sample.sample_type)
-        self.assertEqual(sample.latency, sample.service_time)
-        self.assertEqual(1, sample.total_ops)
-        self.assertEqual("ops", sample.total_ops_unit)
-        self.assertEqual(1.23, sample.throughput)
-        self.assertIsNotNone(sample.service_time)
-        self.assertIsNotNone(sample.time_period)
+        assert metrics.SampleType.Normal == sample.sample_type
+        assert sample.latency == sample.service_time
+        assert sample.total_ops == 1
+        assert sample.total_ops_unit == "ops"
+        assert sample.throughput == 1.23
+        assert sample.service_time is not None
+        assert sample.time_period is not None
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1625,11 +1582,8 @@ class AsyncExecutorTests(TestCase):
             sample_size = len(samples)
             lower_bound = bounds[0]
             upper_bound = bounds[1]
-            self.assertTrue(
-                lower_bound <= sample_size <= upper_bound,
-                msg="Expected sample size to be between %d and %d but was %d" % (lower_bound, upper_bound, sample_size),
-            )
-            self.assertTrue(complete.is_set(), "Executor should auto-complete a task that terminates its parent")
+            assert lower_bound <= sample_size <= upper_bound
+            assert complete.is_set(), "Executor should auto-complete a task that terminates its parent"
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1680,7 +1634,7 @@ class AsyncExecutorTests(TestCase):
             samples = sampler.samples
 
             sample_size = len(samples)
-            self.assertEqual(0, sample_size)
+            assert sample_size == 0
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -1706,7 +1660,7 @@ class AsyncExecutorTests(TestCase):
                 pass
 
             async def __call__(self):
-                invocations = [(0, metrics.SampleType.Warmup, 0, AsyncExecutorTests.context_managed(run), None)]
+                invocations = [(0, metrics.SampleType.Warmup, 0, TestAsyncExecutor.context_managed(run), None)]
                 for invocation in invocations:
                     yield invocation
 
@@ -1733,10 +1687,10 @@ class AsyncExecutorTests(TestCase):
             on_error="continue",
         )
 
-        with self.assertRaisesRegex(exceptions.RallyError, r"Cannot run task \[no-op\]: expected unit test exception"):
+        with pytest.raises(exceptions.RallyError, match=r"Cannot run task \[no-op\]: expected unit test exception"):
             await execute_schedule()
 
-        self.assertEqual(0, es.call_count)
+        assert es.call_count == 0
 
     @run_async
     async def test_execute_single_no_return_value(self):
@@ -1746,9 +1700,9 @@ class AsyncExecutorTests(TestCase):
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
-        self.assertEqual(1, ops)
-        self.assertEqual("ops", unit)
-        self.assertEqual({"success": True}, request_meta_data)
+        assert ops == 1
+        assert unit == "ops"
+        assert request_meta_data == {"success": True}
 
     @run_async
     async def test_execute_single_tuple(self):
@@ -1758,9 +1712,9 @@ class AsyncExecutorTests(TestCase):
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
-        self.assertEqual(500, ops)
-        self.assertEqual("MB", unit)
-        self.assertEqual({"success": True}, request_meta_data)
+        assert ops == 500
+        assert unit == "MB"
+        assert request_meta_data == {"success": True}
 
     @run_async
     async def test_execute_single_dict(self):
@@ -1777,29 +1731,25 @@ class AsyncExecutorTests(TestCase):
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
-        self.assertEqual(50, ops)
-        self.assertEqual("docs", unit)
-        self.assertEqual(
-            {
-                "some-custom-meta-data": "valid",
-                "http-status": 200,
-                "success": True,
-            },
-            request_meta_data,
-        )
+        assert ops == 50
+        assert unit == "docs"
+        assert request_meta_data == {
+            "some-custom-meta-data": "valid",
+            "http-status": 200,
+            "success": True,
+        }
 
-    @run_async
-    async def test_execute_single_with_connection_error_always_aborts(self):
-        for on_error in ["abort", "continue"]:
-            with self.subTest():
-                es = None
-                params = None
-                # ES client uses pseudo-status "N/A" in this case...
-                runner = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host", None))
+    @pytest.mark.parametrize("on_error", ["abort", "continue"])
+    @pytest.mark.asyncio
+    async def test_execute_single_with_connection_error_always_aborts(self, on_error):
+        es = None
+        params = None
+        # ES client uses pseudo-status "N/A" in this case...
+        runner = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host", None))
 
-                with self.assertRaises(exceptions.RallyAssertionError) as ctx:
-                    await driver.execute_single(self.context_managed(runner), es, params, on_error=on_error)
-                self.assertEqual("Request returned an error. Error type: transport, Description: no route to host", ctx.exception.args[0])
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error=on_error)
+        assert exc.value.args[0] == "Request returned an error. Error type: transport, Description: no route to host"
 
     @run_async
     async def test_execute_single_with_http_400_aborts_when_specified(self):
@@ -1807,11 +1757,10 @@ class AsyncExecutorTests(TestCase):
         params = None
         runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
 
-        with self.assertRaises(exceptions.RallyAssertionError) as ctx:
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
-        self.assertEqual(
-            "Request returned an error. Error type: transport, Description: not found (the requested document could not be found)",
-            ctx.exception.args[0],
+        assert exc.value.args[0] == (
+            "Request returned an error. Error type: transport, Description: not found (the requested document could not be found)"
         )
 
     @run_async
@@ -1822,17 +1771,14 @@ class AsyncExecutorTests(TestCase):
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
-        self.assertEqual(0, ops)
-        self.assertEqual("ops", unit)
-        self.assertEqual(
-            {
-                "http-status": 404,
-                "error-type": "transport",
-                "error-description": "not found (the requested document could not be found)",
-                "success": False,
-            },
-            request_meta_data,
-        )
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data == {
+            "http-status": 404,
+            "error-type": "transport",
+            "error-description": "not found (the requested document could not be found)",
+            "success": False,
+        }
 
     @run_async
     async def test_execute_single_with_http_413(self):
@@ -1842,17 +1788,14 @@ class AsyncExecutorTests(TestCase):
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
-        self.assertEqual(0, ops)
-        self.assertEqual("ops", unit)
-        self.assertEqual(
-            {
-                "http-status": 413,
-                "error-type": "transport",
-                "error-description": "",
-                "success": False,
-            },
-            request_meta_data,
-        )
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data == {
+            "http-status": 413,
+            "error-type": "transport",
+            "error-description": "",
+            "success": False,
+        }
 
     @run_async
     async def test_execute_single_with_key_error(self):
@@ -1870,15 +1813,14 @@ class AsyncExecutorTests(TestCase):
         params["mode"] = "append"
         runner = FailingRunner()
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
-        self.assertEqual(
-            "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing'].",
-            ctx.exception.args[0],
+        assert exc.value.args[0] == (
+            "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing']."
         )
 
 
-class AsyncProfilerTests(TestCase):
+class TestAsyncProfiler:
     @run_async
     async def test_profiler_is_a_transparent_wrapper(self):
         async def f(x):
@@ -1890,6 +1832,6 @@ class AsyncProfilerTests(TestCase):
         # this should take roughly 1 second and should return something
         return_value = await profiler(1)
         end = time.perf_counter()
-        self.assertEqual(2, return_value)
+        assert return_value == 2
         duration = end - start
-        self.assertTrue(0.9 <= duration <= 1.2, "Should sleep for roughly 1 second but took [%.2f] seconds." % duration)
+        assert 0.9 <= duration <= 1.2, "Should sleep for roughly 1 second but took [%.2f] seconds." % duration
