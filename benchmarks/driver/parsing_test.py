@@ -18,7 +18,6 @@
 import io
 import json
 import re
-from unittest import TestCase
 
 import pytest
 import ujson
@@ -246,33 +245,33 @@ def pit_id_parsing_candidate_runner_parse(response):
     return pit_id
 
 
-class ParsingBenchmarks(TestCase):
+class TestParsingBenchmarks:
     def test_all_candidates(self):
         """
         Quick utility test to ensure all benchmark cases are correct
         """
 
         pit_id = pit_id_parsing_candidate_runner_parse(self.small_page.encode())
-        self.assertEqual("fedcba9876543210", pit_id)
+        assert pit_id == "fedcba9876543210"
 
         sort = sort_parsing_candidate_reverse_and_regexp(self.small_page)
-        self.assertEqual([1609780186, "2"], sort)
+        assert sort == [1609780186, "2"]
 
         sort = sort_parsing_candidate_rfind_and_regexp(self.large_page)
-        self.assertEqual([1609780186, "2"], sort)
+        assert sort == [1609780186, "2"]
 
         sort = sort_parsing_candidate_end_anchor_regexp(self.small_page)
-        self.assertEqual([1609780186, "2"], sort)
+        assert sort == [1609780186, "2"]
 
         sort = sort_parsing_candidate_find_all(self.large_page)
-        self.assertEqual([1609780186, "2"], sort)
+        assert sort == [1609780186, "2"]
 
         pit_id = pit_id_parsing_candidate_regexp(self.large_page)
-        self.assertEqual("fedcba9876543210", pit_id)
+        assert pit_id == "fedcba9876543210"
 
         pit_id, sort = combined_parsing_candidate_json_loads(self.small_page)
-        self.assertEqual([1609780186, "2"], sort)
-        self.assertEqual("fedcba9876543210", pit_id)
+        assert sort == [1609780186, "2"]
+        assert pit_id == "fedcba9876543210"
 
     small_page = """
     {

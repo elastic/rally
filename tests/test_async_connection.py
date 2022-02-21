@@ -16,12 +16,11 @@
 # under the License.
 
 import json
-from unittest import TestCase
 
 from esrally.async_connection import ResponseMatcher
 
 
-class ResponseMatcherTests(TestCase):
+class TestResponseMatcher:
     def test_matches(self):
         matcher = ResponseMatcher(
             responses=[
@@ -49,4 +48,4 @@ class ResponseMatcherTests(TestCase):
 
     def assert_response_type(self, matcher, path, expected_response_type):
         response = json.loads(matcher.response(path))
-        self.assertEqual(response["response-type"], expected_response_type)
+        assert response["response-type"] == expected_response_type
