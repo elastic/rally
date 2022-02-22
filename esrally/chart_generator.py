@@ -567,6 +567,11 @@ class BarCharts:
             },
         }
 
+    @staticmethod
+    def ingest(title, environment, race_config):
+        # TBD
+        return None
+
 
 class TimeSeriesCharts:
     @staticmethod
@@ -1214,6 +1219,78 @@ class TimeSeriesCharts:
             },
         }
 
+    @staticmethod
+    def ingest(environment, race_config, title):
+        track = race_config.track
+        flavor = race_config.name
+        vis_state = {
+            "title": title,
+            "type": "metrics",
+            "params": {
+                "axis_formatter": "number",
+                "axis_position": "left",
+                "id": str(uuid.uuid4()),
+                "index_pattern": "rally-metrics-*",
+                "interval": "1d",
+                "series": [
+                    {
+                        "axis_position": "left",
+                        "chart_type": "line",
+                        "color": "#68BC00",
+                        "fill": "0",
+                        "formatter": "number",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "sum", "field": "value"}],
+                        "point_size": "3",
+                        "separate_axis": 0,
+                        "split_color_mode": "rainbow",
+                        "split_mode": "terms",
+                        "terms_field": "meta.type",
+                        "stacked": "none",
+                        "filter": 'environment:"%s" AND track:"%s" AND meta.tag_name:"%s" AND name:"ingest_pipeline_processor_time"' % (environment, track, flavor),
+                        "label": "Ingest Processor Time (ms)",
+                        "steps": 0,
+                    }
+                ],
+                "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
+                "time_field": "race-timestamp",
+                "type": "timeseries",
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": f'((NOT _exists_:track) OR track:"{track}") '
+                                        f"AND ((NOT _exists_:chart) OR chart:ingest) "
+                                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "race-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1,
+                    }
+                ],
+                "axis_min": "0",
+            },
+            "aggs": [],
+            "listeners": {},
+        }
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
+                "description": "index",
+                "version": 1,
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
+        }
+
 
 class RaceConfigTrack:
     def __init__(self, cfg, repository, name=None):
@@ -1259,6 +1336,16 @@ def generate_index_ops(chart_type, race_configs, environment, logger):
         title = chart_type.format_title(environment, race_configs[0].track, flavor=race_configs[0].flavor, suffix="indexing-throughput")
         charts = [chart_type.index(environment, idx_race_configs, title)]
     return charts
+
+
+def generate_ingest(chart_type, race_configs, environment):
+    structures = []
+
+    for race_config in race_configs:
+        if "ingest" in race_config.charts:
+            title = f"{race_config.name}-ingest-time"
+            structures.append(chart_type.ingest(environment, race_config, title))
+    return structures
 
 
 def generate_queries(chart_type, race_configs, environment):
@@ -1542,6 +1629,7 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
 def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, logger=None):
     charts = (
         generate_index_ops(chart_type, race_configs, env, logger)
+        + generate_ingest(chart_type, race_configs, env)
         + generate_io(chart_type, race_configs, env)
         + generate_gc(chart_type, race_configs, env)
         + generate_merge_time(chart_type, race_configs, env)
