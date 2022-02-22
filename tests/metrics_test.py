@@ -16,7 +16,6 @@
 # under the License.
 # pylint: disable=protected-access
 
-import collections
 import datetime
 import json
 import logging
