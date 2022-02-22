@@ -1248,7 +1248,8 @@ class TimeSeriesCharts:
                         "split_mode": "terms",
                         "terms_field": "meta.type",
                         "stacked": "none",
-                        "filter": 'environment:"%s" AND track:"%s" AND meta.tag_name:"%s" AND name:"ingest_pipeline_processor_time"' % (environment, track, flavor),
+                        "filter": 'environment:"%s" AND track:"%s" AND meta.tag_name:"%s" AND name:"ingest_pipeline_processor_time"'
+                        % (environment, track, flavor),
                         "label": "Ingest Processor Time (ms)",
                         "steps": 0,
                     }
@@ -1264,8 +1265,8 @@ class TimeSeriesCharts:
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
                         "query_string": f'((NOT _exists_:track) OR track:"{track}") '
-                                        f"AND ((NOT _exists_:chart) OR chart:ingest) "
-                                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
+                        f"AND ((NOT _exists_:chart) OR chart:ingest) "
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
