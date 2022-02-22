@@ -32,7 +32,7 @@ from esrally.driver import runner
     disable_gc=True,
 )
 def test_sort_reverse_and_regexp_small(benchmark):
-    benchmark(sort_parsing_candidate_reverse_and_regexp, ParsingBenchmarks.small_page)
+    benchmark(sort_parsing_candidate_reverse_and_regexp, TestParsingBenchmarks.small_page)
 
 
 @pytest.mark.benchmark(
@@ -42,7 +42,7 @@ def test_sort_reverse_and_regexp_small(benchmark):
     disable_gc=True,
 )
 def test_sort_reverse_and_regexp_large(benchmark):
-    benchmark(sort_parsing_candidate_reverse_and_regexp, ParsingBenchmarks.large_page)
+    benchmark(sort_parsing_candidate_reverse_and_regexp, TestParsingBenchmarks.large_page)
 
 
 def sort_parsing_candidate_reverse_and_regexp(response):
@@ -60,7 +60,7 @@ def sort_parsing_candidate_reverse_and_regexp(response):
     disable_gc=True,
 )
 def test_sort_rfind_and_regexp_small(benchmark):
-    benchmark(sort_parsing_candidate_rfind_and_regexp, ParsingBenchmarks.small_page)
+    benchmark(sort_parsing_candidate_rfind_and_regexp, TestParsingBenchmarks.small_page)
 
 
 @pytest.mark.benchmark(
@@ -70,7 +70,7 @@ def test_sort_rfind_and_regexp_small(benchmark):
     disable_gc=True,
 )
 def test_sort_rfind_and_regexp_large(benchmark):
-    benchmark(sort_parsing_candidate_rfind_and_regexp, ParsingBenchmarks.large_page)
+    benchmark(sort_parsing_candidate_rfind_and_regexp, TestParsingBenchmarks.large_page)
 
 
 def sort_parsing_candidate_rfind_and_regexp(response):
@@ -88,7 +88,7 @@ def sort_parsing_candidate_rfind_and_regexp(response):
     disable_gc=True,
 )
 def test_sort_end_anchor_regexp(benchmark):
-    benchmark(sort_parsing_candidate_end_anchor_regexp, ParsingBenchmarks.small_page)
+    benchmark(sort_parsing_candidate_end_anchor_regexp, TestParsingBenchmarks.small_page)
 
 
 @pytest.mark.benchmark(
@@ -98,7 +98,7 @@ def test_sort_end_anchor_regexp(benchmark):
     disable_gc=True,
 )
 def test_sort_end_anchor_regexp_large(benchmark):
-    benchmark(sort_parsing_candidate_end_anchor_regexp, ParsingBenchmarks.large_page)
+    benchmark(sort_parsing_candidate_end_anchor_regexp, TestParsingBenchmarks.large_page)
 
 
 def sort_parsing_candidate_end_anchor_regexp(response):
@@ -117,7 +117,7 @@ def sort_parsing_candidate_end_anchor_regexp(response):
     disable_gc=True,
 )
 def test_sort_find_all_regexp_small(benchmark):
-    benchmark(sort_parsing_candidate_find_all, ParsingBenchmarks.small_page)
+    benchmark(sort_parsing_candidate_find_all, TestParsingBenchmarks.small_page)
 
 
 @pytest.mark.benchmark(
@@ -127,7 +127,7 @@ def test_sort_find_all_regexp_small(benchmark):
     disable_gc=True,
 )
 def test_sort_find_all_regexp_large(benchmark):
-    benchmark(sort_parsing_candidate_find_all, ParsingBenchmarks.large_page)
+    benchmark(sort_parsing_candidate_find_all, TestParsingBenchmarks.large_page)
 
 
 def sort_parsing_candidate_find_all(response):
@@ -143,7 +143,7 @@ def sort_parsing_candidate_find_all(response):
     disable_gc=True,
 )
 def test_pit_id_regexp_small(benchmark):
-    benchmark(pit_id_parsing_candidate_regexp, ParsingBenchmarks.small_page)
+    benchmark(pit_id_parsing_candidate_regexp, TestParsingBenchmarks.small_page)
 
 
 @pytest.mark.benchmark(
@@ -153,7 +153,7 @@ def test_pit_id_regexp_small(benchmark):
     disable_gc=True,
 )
 def test_pit_id_regexp_large(benchmark):
-    benchmark(pit_id_parsing_candidate_regexp, ParsingBenchmarks.large_page)
+    benchmark(pit_id_parsing_candidate_regexp, TestParsingBenchmarks.large_page)
 
 
 def pit_id_parsing_candidate_regexp(response):
@@ -169,7 +169,7 @@ def pit_id_parsing_candidate_regexp(response):
     disable_gc=True,
 )
 def test_combined_json_small(benchmark):
-    benchmark(combined_parsing_candidate_json_loads, ParsingBenchmarks.small_page)
+    benchmark(combined_parsing_candidate_json_loads, TestParsingBenchmarks.small_page)
 
 
 @pytest.mark.benchmark(
@@ -179,7 +179,7 @@ def test_combined_json_small(benchmark):
     disable_gc=True,
 )
 def test_combined_json_large(benchmark):
-    benchmark(combined_parsing_candidate_json_loads, ParsingBenchmarks.large_page)
+    benchmark(combined_parsing_candidate_json_loads, TestParsingBenchmarks.large_page)
 
 
 def combined_parsing_candidate_json_loads(response):
@@ -196,7 +196,7 @@ def combined_parsing_candidate_json_loads(response):
     disable_gc=True,
 )
 def test_combined_ijson_large(benchmark):
-    benchmark(combined_parsing_candidate_json_loads, ParsingBenchmarks.large_page)
+    benchmark(combined_parsing_candidate_json_loads, TestParsingBenchmarks.large_page)
 
 
 @pytest.mark.benchmark(
@@ -206,7 +206,7 @@ def test_combined_ijson_large(benchmark):
     disable_gc=True,
 )
 def test_combined_ijson_small(benchmark):
-    benchmark(combined_parsing_candidate_json_loads, ParsingBenchmarks.small_page)
+    benchmark(combined_parsing_candidate_json_loads, TestParsingBenchmarks.small_page)
 
 
 def combined_parsing_candidate_ijson_loads(response):
@@ -223,7 +223,7 @@ def combined_parsing_candidate_ijson_loads(response):
     disable_gc=True,
 )
 def test_pit_id_parse_small(benchmark):
-    page = ParsingBenchmarks.small_page.encode()
+    page = TestParsingBenchmarks.small_page.encode()
     benchmark(pit_id_parsing_candidate_runner_parse, page)
 
 
@@ -234,7 +234,7 @@ def test_pit_id_parse_small(benchmark):
     disable_gc=True,
 )
 def test_pit_id_parse_large(benchmark):
-    page = ParsingBenchmarks.large_page.encode()
+    page = TestParsingBenchmarks.large_page.encode()
     benchmark(pit_id_parsing_candidate_runner_parse, page)
 
 
