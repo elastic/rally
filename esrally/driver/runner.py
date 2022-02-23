@@ -17,7 +17,6 @@
 
 import asyncio
 import contextvars
-import ijson
 import json
 import logging
 import random
