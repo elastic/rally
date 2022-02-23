@@ -55,10 +55,12 @@ class TestRegisterRunner:
         returned_runner = runner.runner_for("unit_test")
         assert isinstance(returned_runner, runner.NoCompletion)
         assert repr(returned_runner) == "user-defined runner for [runner_function]"
-        assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == ("default_client", "param")
+        assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == (
+        "default_client", "param")
 
     @run_async
-    async def test_single_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(self):
+    async def test_single_cluster_runner_class_with_context_manager_should_be_wrapped_with_context_manager_enabled(
+            self):
         class UnitTestSingleClusterContextManagerRunner(BaseUnitTestContextManagerRunner):
             async def __call__(self, *args):
                 return args
@@ -70,10 +72,12 @@ class TestRegisterRunner:
         runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
         assert isinstance(returned_runner, runner.NoCompletion)
-        assert repr(returned_runner) == "user-defined context-manager enabled runner for [UnitTestSingleClusterContextManagerRunner]"
+        assert repr(
+            returned_runner) == "user-defined context-manager enabled runner for [UnitTestSingleClusterContextManagerRunner]"
         # test that context_manager functionality gets preserved after wrapping
         async with returned_runner:
-            assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == ("default_client", "param")
+            assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == (
+            "default_client", "param")
         # check that the context manager interface of our inner runner has been respected.
         assert test_runner.fp.closed
 
@@ -92,7 +96,8 @@ class TestRegisterRunner:
         runner.register_runner(operation_type="unit_test", runner=test_runner, async_runner=True)
         returned_runner = runner.runner_for("unit_test")
         assert isinstance(returned_runner, runner.NoCompletion)
-        assert repr(returned_runner) == "user-defined context-manager enabled runner for [UnitTestMultiClusterContextManagerRunner]"
+        assert repr(
+            returned_runner) == "user-defined context-manager enabled runner for [UnitTestMultiClusterContextManagerRunner]"
 
         # test that context_manager functionality gets preserved after wrapping
         all_clients = {"default": "default_client", "other": "other_client"}
@@ -115,7 +120,8 @@ class TestRegisterRunner:
         returned_runner = runner.runner_for("unit_test")
         assert isinstance(returned_runner, runner.NoCompletion)
         assert repr(returned_runner) == "user-defined runner for [UnitTestSingleClusterRunner]"
-        assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == ("default_client", "param")
+        assert await returned_runner({"default": "default_client", "other": "other_client"}, "param") == (
+        "default_client", "param")
 
     @run_async
     async def test_multi_cluster_runner_class_should_be_wrapped(self):
@@ -185,7 +191,8 @@ class TestAssertingRunner:
         delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
         with pytest.raises(
-            exceptions.RallyTaskAssertionError, match=r"Expected \[hits.hits.relation\] in \[test-task\] to be == \[eq\] but was \[gte\]."
+                exceptions.RallyTaskAssertionError,
+                match=r"Expected \[hits.hits.relation\] in \[test-task\] to be == \[eq\] but was \[gte\]."
         ):
             async with r:
                 await r(
@@ -634,7 +641,8 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "1",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@1]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@1]",
+                        # pylint: disable=line-too-long
                     }
                 },
                 {
@@ -643,7 +651,8 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "2",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@2]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@2]",
+                        # pylint: disable=line-too-long
                     }
                 },
                 {
@@ -652,7 +661,8 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "3",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@3]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@3]",
+                        # pylint: disable=line-too-long
                     }
                 },
             ],
@@ -1131,7 +1141,7 @@ class TestBulkIndexRunner:
                             "error": {
                                 "type": "cluster_block_exception",
                                 "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
-                                "flood-stage watermark, index has read-only-allow-delete block];",
+                                          "flood-stage watermark, index has read-only-allow-delete block];",
                             },
                         }
                     }
@@ -1155,7 +1165,8 @@ class TestBulkIndexRunner:
 
         with mock.patch.object(bulk.logger, "warning") as mocked_warning_logger:
             result = await bulk(es, bulk_params)
-            mocked_warning_logger.assert_has_calls([mock.call("Bulk request failed: [%s]", result["error-description"])])
+            mocked_warning_logger.assert_has_calls(
+                [mock.call("Bulk request failed: [%s]", result["error-description"])])
 
         assert result == {
             "took": 5,
@@ -1194,7 +1205,8 @@ class TestForceMergeRunner:
     async def test_force_merge_with_timeout_and_headers(self, es):
         es.indices.forcemerge = mock.AsyncMock()
         force_merge = runner.ForceMerge()
-        await force_merge(es, params={"index": "_all", "opaque-id": "test-id", "request-timeout": 3.0, "headers": {"header1": "value1"}})
+        await force_merge(es, params={"index": "_all", "opaque-id": "test-id", "request-timeout": 3.0,
+                                      "headers": {"header1": "value1"}})
 
         es.indices.forcemerge.assert_awaited_once_with(
             headers={"header1": "value1"}, index="_all", opaque_id="test-id", request_timeout=3.0
@@ -2329,7 +2341,8 @@ class TestPutPipelineRunner:
 
         await r(es, params)
 
-        es.ingest.put_pipeline.assert_awaited_once_with(id="rename", body=params["body"], master_timeout=None, timeout=None)
+        es.ingest.put_pipeline.assert_awaited_once_with(id="rename", body=params["body"], master_timeout=None,
+                                                        timeout=None)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2340,9 +2353,9 @@ class TestPutPipelineRunner:
 
         params = {"id": "rename"}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'body'. "
-            "Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'body'. "
+                      "Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -2357,9 +2370,9 @@ class TestPutPipelineRunner:
 
         params = {"body": {}}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
-            "Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'put-pipeline' did not provide the mandatory parameter 'id'. "
+                      "Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -2431,7 +2444,8 @@ class TestClusterHealthRunner:
         }
 
         es.cluster.health.assert_awaited_once_with(
-            headers={"header1": "value1"}, opaque_id="testid-1", params={"wait_for_status": "yellow"}, request_timeout=3.0
+            headers={"header1": "value1"}, opaque_id="testid-1", params={"wait_for_status": "yellow"},
+            request_timeout=3.0
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -2458,7 +2472,8 @@ class TestClusterHealthRunner:
             "relocating-shards": 3,
         }
 
-        es.cluster.health.assert_awaited_once_with(index="logs-*", params={"wait_for_status": "red", "wait_for_no_relocating_shards": True})
+        es.cluster.health.assert_awaited_once_with(index="logs-*", params={"wait_for_status": "red",
+                                                                           "wait_for_no_relocating_shards": True})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2576,7 +2591,8 @@ class TestCreateIndexRunner:
             "success": True,
         }
 
-        es.indices.create.assert_awaited_once_with(index="indexA", body={"settings": {}}, params={"wait_for_active_shards": "true"})
+        es.indices.create.assert_awaited_once_with(index="indexA", body={"settings": {}},
+                                                   params={"wait_for_active_shards": "true"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -2587,9 +2603,9 @@ class TestCreateIndexRunner:
 
         params = {}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'create-index' did not provide the mandatory parameter 'indices'. "
-            "Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'create-index' did not provide the mandatory parameter 'indices'. "
+                      "Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -2638,9 +2654,9 @@ class TestCreateDataStreamRunner:
 
         params = {}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'create-data-stream' did not provide the "
-            "mandatory parameter 'data-streams'. Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'create-data-stream' did not provide the "
+                      "mandatory parameter 'data-streams'. Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -2653,7 +2669,8 @@ class TestDeleteIndexRunner:
     async def test_deletes_existing_indices(self, es):
         es.indices.exists = mock.AsyncMock(side_effect=[False, True])
         es.indices.delete = mock.AsyncMock()
-        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.get_settings = mock.AsyncMock(
+            return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
         es.cluster.put_settings = mock.AsyncMock()
         r = runner.DeleteIndex()
 
@@ -2804,9 +2821,9 @@ class TestCreateIndexTemplateRunner:
 
         params = {}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'create-index-template' did not provide the mandatory parameter "
-            "'templates'. Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'create-index-template' did not provide the mandatory parameter "
+                      "'templates'. Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -2839,7 +2856,8 @@ class TestDeleteIndexTemplateRunner:
         }
 
         es.indices.delete_template.assert_has_awaits(
-            [mock.call(name="templateA", params=params["request-params"]), mock.call(name="templateB", params=params["request-params"])]
+            [mock.call(name="templateA", params=params["request-params"]),
+             mock.call(name="templateB", params=params["request-params"])]
         )
         es.indices.delete.assert_awaited_once_with(index="logs-*")
 
@@ -2882,9 +2900,9 @@ class TestDeleteIndexTemplateRunner:
 
         params = {}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'delete-index-template' did not provide the mandatory parameter "
-            "'templates'. Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'delete-index-template' did not provide the mandatory parameter "
+                      "'templates'. Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -2935,9 +2953,9 @@ class TestCreateComponentTemplateRunner:
 
         params = {}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'create-component-template' did not provide the mandatory parameter "
-            "'templates'. Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'create-component-template' did not provide the mandatory parameter "
+                      "'templates'. Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -3012,9 +3030,9 @@ class TestDeleteComponentTemplateRunner:
 
         params = {}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'delete-component-template' did not provide the mandatory parameter "
-            "'templates'. Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'delete-component-template' did not provide the mandatory parameter "
+                      "'templates'. Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -3095,9 +3113,9 @@ class TestCreateComposableTemplateRunner:
 
         params = {}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'create-composable-template' did not provide the mandatory parameter "
-            "'templates'. Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'create-composable-template' did not provide the mandatory parameter "
+                      "'templates'. Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -3175,9 +3193,9 @@ class TestDeleteComposableTemplateRunner:
 
         params = {}
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'delete-composable-template' did not provide the mandatory parameter "
-            "'templates'. Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'delete-composable-template' did not provide the mandatory parameter "
+                      "'templates'. Add it to your parameter source and try again.",
         ):
             await r(es, params)
 
@@ -3269,7 +3287,9 @@ class TestStartMlDatafeed:
         r = runner.StartMlDatafeed()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with("POST", f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_start", body=body)
+        es.transport.perform_request.assert_awaited_once_with("POST",
+                                                              f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_start",
+                                                              body=body)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -3286,7 +3306,8 @@ class TestStartMlDatafeed:
         await r(es, params)
 
         es.xpack.ml.start_datafeed.assert_awaited_once_with(
-            datafeed_id=params["datafeed-id"], body=None, start=params["start"], end=params["end"], timeout=params["timeout"]
+            datafeed_id=params["datafeed-id"], body=None, start=params["start"], end=params["end"],
+            timeout=params["timeout"]
         )
 
 
@@ -3384,7 +3405,8 @@ class TestCreateMlJob:
         r = runner.CreateMlJob()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with("PUT", f"/_xpack/ml/anomaly_detectors/{params['job-id']}", body=body)
+        es.transport.perform_request.assert_awaited_once_with("PUT", f"/_xpack/ml/anomaly_detectors/{params['job-id']}",
+                                                              body=body)
 
 
 class TestDeleteMlJob:
@@ -3444,7 +3466,8 @@ class TestOpenMlJob:
         r = runner.OpenMlJob()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with("POST", f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_open")
+        es.transport.perform_request.assert_awaited_once_with("POST",
+                                                              f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_open")
 
 
 class TestCloseMlJob:
@@ -3461,7 +3484,8 @@ class TestCloseMlJob:
         r = runner.CloseMlJob()
         await r(es, params)
 
-        es.xpack.ml.close_job.assert_awaited_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
+        es.xpack.ml.close_job.assert_awaited_once_with(job_id=params["job-id"], force=params["force"],
+                                                       timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -3511,7 +3535,8 @@ class TestRawRequestRunner:
         params = {"path": "/_cat/count"}
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with(method="GET", url="/_cat/count", headers=None, body=None, params={})
+        es.transport.perform_request.assert_called_once_with(method="GET", url="/_cat/count", headers=None, body=None,
+                                                             params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -3553,7 +3578,8 @@ class TestRawRequestRunner:
         await r(es, params)
 
         es.transport.perform_request.assert_called_once_with(
-            method="POST", url="/twitter", headers=None, body={"settings": {"index": {"number_of_replicas": 0}}}, params={}
+            method="POST", url="/twitter", headers=None, body={"settings": {"index": {"number_of_replicas": 0}}},
+            params={}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -3629,9 +3655,9 @@ class TestSleep:
     async def test_missing_parameter(self, sleep, es):
         r = runner.Sleep()
         with pytest.raises(
-            exceptions.DataError,
-            match="Parameter source for operation 'sleep' did not provide the mandatory parameter "
-            "'duration'. Add it to your parameter source and try again.",
+                exceptions.DataError,
+                match="Parameter source for operation 'sleep' did not provide the mandatory parameter "
+                      "'duration'. Add it to your parameter source and try again.",
         ):
             await r(es, params={})
 
@@ -3763,6 +3789,24 @@ class TestWaitForSnapshotCreate:
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_entire_lifecycle(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                # target snapshot running
+                {
+                    "snapshots": [
+                        {"snapshot": "restore_speed_snapshot"}
+                    ]
+                },
+                # different snapshot running
+                {
+                    "snapshots": [
+                        {"snapshot": "different_snapshot"}
+                    ]
+                },
+                {},
+                {},
+            ]
+        )
         es.snapshot.status = mock.AsyncMock(
             side_effect=[
                 # empty response
@@ -3853,7 +3897,9 @@ class TestWaitForSnapshotCreate:
         r = runner.WaitForSnapshotCreate()
         result = await r(es, basic_params)
 
-        es.snapshot.status.assert_awaited_with(repository="restore_speed", snapshot="restore_speed_snapshot", ignore_unavailable=True)
+        es.snapshot.status.assert_awaited_with(repository="restore_speed", snapshot="restore_speed_snapshot",
+                                               ignore_unavailable=True)
+        es.snapshot.get.assert_awaited_with(repository="restore_speed", snapshot="_current", verbose=False)
 
         assert result == {
             "weight": 243468188055,
@@ -3867,10 +3913,16 @@ class TestWaitForSnapshotCreate:
         }
 
         assert es.snapshot.status.await_count == 3
+        assert es.snapshot.get.await_count == 4
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_immediate_success(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                {},
+            ]
+        )
         es.snapshot.status = mock.AsyncMock(
             return_value={
                 "snapshots": [
@@ -3912,11 +3964,18 @@ class TestWaitForSnapshotCreate:
             "stop_time_millis": 1591776481060 + 200,
         }
 
-        es.snapshot.status.assert_awaited_once_with(repository="backups", snapshot="snapshot-001", ignore_unavailable=True)
+        es.snapshot.status.assert_awaited_once_with(repository="backups", snapshot="snapshot-001",
+                                                    ignore_unavailable=True)
+        es.snapshot.get.assert_awaited_once_with(repository="backups", snapshot="_current", verbose=False)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_failure(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                {},
+            ]
+        )
         snapshot_status = {
             "snapshots": [
                 {
@@ -3941,7 +4000,8 @@ class TestWaitForSnapshotCreate:
                 await r(es, params)
                 assert exc.value.args[0] == "Snapshot [snapshot-001] failed. Please check logs."
             mocked_error_logger.assert_has_calls(
-                [mock.call("Snapshot [%s] failed. Response:\n%s", "snapshot-001", json.dumps(snapshot_status, indent=2))]
+                [mock.call("Snapshot [%s] failed. Response:\n%s", "snapshot-001",
+                           json.dumps(snapshot_status, indent=2))]
             )
 
 
@@ -4295,17 +4355,20 @@ class TestShrinkIndex:
             [
                 mock.call(
                     index="src1",
-                    body={"settings": {"index.routing.allocation.require._name": "rally-node-0", "index.blocks.write": "true"}},
+                    body={"settings": {"index.routing.allocation.require._name": "rally-node-0",
+                                       "index.blocks.write": "true"}},
                     preserve_existing=True,
                 ),
                 mock.call(
                     index="src2",
-                    body={"settings": {"index.routing.allocation.require._name": "rally-node-0", "index.blocks.write": "true"}},
+                    body={"settings": {"index.routing.allocation.require._name": "rally-node-0",
+                                       "index.blocks.write": "true"}},
                     preserve_existing=True,
                 ),
                 mock.call(
                     index="src-2020",
-                    body={"settings": {"index.routing.allocation.require._name": "rally-node-0", "index.blocks.write": "true"}},
+                    body={"settings": {"index.routing.allocation.require._name": "rally-node-0",
+                                       "index.blocks.write": "true"}},
                     preserve_existing=True,
                 ),
             ]
@@ -4374,7 +4437,8 @@ class TestPutSettings:
         r = runner.PutSettings()
         await r(es, params)
 
-        es.cluster.put_settings.assert_awaited_once_with(body={"transient": {"indices.recovery.max_bytes_per_sec": "20mb"}})
+        es.cluster.put_settings.assert_awaited_once_with(
+            body={"transient": {"indices.recovery.max_bytes_per_sec": "20mb"}})
 
 
 class TestCreateTransform:
@@ -4458,7 +4522,8 @@ class TestWaitForTransform:
                             "exponential_avg_documents_indexed": 14.14,
                             "exponential_avg_documents_processed": 15.15,
                         },
-                        "checkpointing": {"last": {"checkpoint": 1, "timestamp_millis": 16}, "changes_last_detected_at": 16},
+                        "checkpointing": {"last": {"checkpoint": 1, "timestamp_millis": 16},
+                                          "changes_last_detected_at": 16},
                     }
                 ],
             }
@@ -4527,7 +4592,8 @@ class TestWaitForTransform:
                             },
                             "checkpointing": {
                                 "last": {},
-                                "next": {"checkpoint": 1, "timestamp_millis": 16, "checkpoint_progress": {"percent_complete": 10.20}},
+                                "next": {"checkpoint": 1, "timestamp_millis": 16,
+                                         "checkpoint_progress": {"percent_complete": 10.20}},
                                 "changes_last_detected_at": 16,
                             },
                         }
@@ -4558,7 +4624,8 @@ class TestWaitForTransform:
                             },
                             "checkpointing": {
                                 "last": {},
-                                "next": {"checkpoint": 1, "timestamp_millis": 16, "checkpoint_progress": {"percent_complete": 20.40}},
+                                "next": {"checkpoint": 1, "timestamp_millis": 16,
+                                         "checkpoint_progress": {"percent_complete": 20.40}},
                                 "changes_last_detected_at": 16,
                             },
                         }
@@ -4589,7 +4656,8 @@ class TestWaitForTransform:
                             },
                             "checkpointing": {
                                 "last": {},
-                                "next": {"checkpoint": 1, "timestamp_millis": 16, "checkpoint_progress": {"percent_complete": 30.60}},
+                                "next": {"checkpoint": 1, "timestamp_millis": 16,
+                                         "checkpoint_progress": {"percent_complete": 30.60}},
                                 "changes_last_detected_at": 16,
                             },
                         }
@@ -4618,7 +4686,8 @@ class TestWaitForTransform:
                                 "exponential_avg_documents_indexed": 14.14,
                                 "exponential_avg_documents_processed": 15.15,
                             },
-                            "checkpointing": {"last": {"checkpoint": 1, "timestamp_millis": 16}, "changes_last_detected_at": 16},
+                            "checkpointing": {"last": {"checkpoint": 1, "timestamp_millis": 16},
+                                              "changes_last_detected_at": 16},
                         }
                     ],
                 },
@@ -4648,7 +4717,8 @@ class TestWaitForTransform:
         }
 
         es.transform.stop_transform.assert_awaited_once_with(
-            transform_id=transform_id, force=params["force"], timeout=params["timeout"], wait_for_completion=False, wait_for_checkpoint=True
+            transform_id=transform_id, force=params["force"], timeout=params["timeout"], wait_for_completion=False,
+            wait_for_checkpoint=True
         )
 
 
@@ -4664,7 +4734,8 @@ class TestDeleteTransform:
         r = runner.DeleteTransform()
         await r(es, params)
 
-        es.transform.delete_transform.assert_awaited_once_with(transform_id=transform_id, force=params["force"], ignore=[404])
+        es.transform.delete_transform.assert_awaited_once_with(transform_id=transform_id, force=params["force"],
+                                                               ignore=[404])
 
 
 class TestTransformStatsRunner:
@@ -4833,13 +4904,13 @@ class TestTransformStatsRunner:
 
 
 class TestCreateIlmPolicyRunner:
-
     params = {
         "policy-name": "my-ilm-policy",
         "request-params": {"master_timeout": "30s", "timeout": "30s"},
         "body": {
             "policy": {
-                "phases": {"hot": {"min_age": "0ms", "actions": {"rollover": {"max_age": "30d"}, "set_priority": {"priority": 100}}}}
+                "phases": {"hot": {"min_age": "0ms",
+                                   "actions": {"rollover": {"max_age": "30d"}, "set_priority": {"priority": 100}}}}
             }
         },
     }
@@ -4879,7 +4950,6 @@ class TestCreateIlmPolicyRunner:
 
 
 class TestDeleteIlmPolicyRunner:
-
     params = {"policy-name": "my-ilm-policy", "request-params": {"master_timeout": "30s", "timeout": "30s"}}
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -4894,7 +4964,8 @@ class TestDeleteIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.delete_lifecycle.assert_awaited_once_with(policy=self.params["policy-name"], params=self.params["request-params"])
+        es.ilm.delete_lifecycle.assert_awaited_once_with(policy=self.params["policy-name"],
+                                                         params=self.params["request-params"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
@@ -5279,7 +5350,8 @@ class TestSearchAfterExtractor:
     def test_extract_all_properties(self):
         target = runner.SearchAfterExtractor()
         props, last_sort = target(response=self.response, get_point_in_time=True, hits_total=None)
-        expected_props = {"hits.total.relation": "eq", "hits.total.value": 2, "pit_id": "fedcba9876543210", "timed_out": False, "took": 10}
+        expected_props = {"hits.total.relation": "eq", "hits.total.value": 2, "pit_id": "fedcba9876543210",
+                          "timed_out": False, "took": 10}
         expected_sort_value = [1609780186, "2"]
         assert props == expected_props
         assert last_sort == expected_sort_value
@@ -5341,7 +5413,8 @@ class TestCompositeContext:
         async with runner.CompositeContext():
             with pytest.raises(KeyError) as exc:
                 runner.CompositeContext.get("don't clear this key")
-            assert exc.value.args[0] == "Unknown property [don't clear this key]. Currently recognized properties are []."
+            assert exc.value.args[
+                       0] == "Unknown property [don't clear this key]. Currently recognized properties are []."
 
     @run_async
     async def test_fails_to_read_unknown_key(self):

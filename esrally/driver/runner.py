@@ -1847,12 +1847,7 @@ class WaitForSnapshotCreate(Runner):
 
         while not snapshot_done:
             response = await es.snapshot.get(repository=repository, snapshot="_current", verbose=False)
-            running = False
-            for s in response["snapshots"]:
-                if s["snapshot"] == snapshot:
-                    running = True
-                    break
-            if running:
+            if snapshot in [s.get("snapshot") for s in response.get("snapshots", [])]:
                 await asyncio.sleep(wait_period)
                 continue
 
