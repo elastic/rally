@@ -951,6 +951,10 @@ class TestTemplateSource:
         assert response == expected_response
 
 
+def assert_equal_ignore_whitespace(expected, actual):
+    assert strip_ws(expected) == strip_ws(actual)
+
+
 class TestTemplateRender:
     unittest_template_internal_vars = loader.default_internal_template_vars(clock=StaticClock)
 
@@ -1034,7 +1038,7 @@ class TestTemplateRender:
 
         }
         """
-        self.assertEqualIgnoreWhitespace(expected, rendered)
+        assert_equal_ignore_whitespace(expected, rendered)
 
     def test_render_template_with_variables(self):
         template = """
@@ -1058,10 +1062,7 @@ class TestTemplateRender:
             "dkey2": 100
         }
         """
-        self.assertEqualIgnoreWhitespace(expected, rendered)
-
-    def assertEqualIgnoreWhitespace(self, expected, actual):
-        assert strip_ws(expected) == strip_ws(actual)
+        assert_equal_ignore_whitespace(expected, rendered)
 
 
 class TestCompleteTrackParams:

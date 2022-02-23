@@ -16,12 +16,11 @@
 # under the License.
 
 import time
-from unittest import TestCase
 
 import esrally.time
 
 
-class TimeTests(TestCase):
+class TestTime:
     def test_split_time_increases(self):
         wait_period_seconds = 0.05
 
@@ -31,11 +30,11 @@ class TimeTests(TestCase):
         for _ in range(3):
             time.sleep(wait_period_seconds)
             split_time = stop_watch.split_time()
-            self.assertLess(prev_split_time, split_time)
+            assert prev_split_time < split_time
             prev_split_time = split_time
         stop_watch.stop()
         total_time = stop_watch.total_time()
-        self.assertLessEqual(prev_split_time, total_time)
+        assert prev_split_time <= total_time
 
     def test_total_time_roughly_in_expected_range(self):
         wait_period_seconds = 0.05
@@ -48,8 +47,8 @@ class TimeTests(TestCase):
 
         interval = stop_watch.total_time()
         # depending on scheduling accuracy we should end up somewhere in that range
-        self.assertGreaterEqual(interval, wait_period_seconds - acceptable_delta_seconds)
-        self.assertLessEqual(interval, wait_period_seconds + acceptable_delta_seconds)
+        assert interval >= wait_period_seconds - acceptable_delta_seconds
+        assert interval <= wait_period_seconds + acceptable_delta_seconds
 
     def test_millis_conversion_roughly_in_expected_range(self):
         wait_period_millis = 50
@@ -62,5 +61,5 @@ class TimeTests(TestCase):
         interval_millis = end - start
 
         # depending on scheduling accuracy we should end up somewhere in that range
-        self.assertGreaterEqual(interval_millis, wait_period_millis - acceptable_delta_millis)
-        self.assertLessEqual(interval_millis, wait_period_millis + acceptable_delta_millis)
+        assert interval_millis >= wait_period_millis - acceptable_delta_millis
+        assert interval_millis <= wait_period_millis + acceptable_delta_millis

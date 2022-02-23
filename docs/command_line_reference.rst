@@ -975,3 +975,24 @@ Examples, assuming that two clusters have been specified with ``--target-hosts``
 
 .. WARNING::
    If you use ``client-options`` you must specify options for **every** cluster name defined with ``target-hosts``. Rally will raise an error if there is a mismatch.
+
+Command line parameters accepting comma-separated values
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Parameters that can accept comma-separated values such as ``--car``, ``--telemetry``, ``--include-tasks`` etc. can also accept a JSON array.
+This can either be defined in a file ending in ``.json`` or passed as an inline JSON string.
+
+Examples:
+
+* comma-separated values::
+
+    --car="4gheap,trial-license"
+
+* json file: ``--car="car.json"``::
+
+    $ cat car.json
+    ["4gheap", "trial-license"]
+
+* json inline string::
+
+    esrally race ... --telemetry='["node-stats", "recovery-stats"]'

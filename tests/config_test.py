@@ -16,7 +16,8 @@
 # under the License.
 
 import configparser
-from unittest import TestCase
+
+import pytest
 
 from esrally import config, exceptions
 
@@ -77,16 +78,16 @@ class InMemoryConfigStore:
         return self.config
 
 
-class ConfigTests(TestCase):
+class TestConfig:
     def test_load_non_existing_config(self):
         cfg = config.Config(config_file_class=InMemoryConfigStore)
-        self.assertFalse(cfg.config_present())
+        assert not cfg.config_present()
         # standard properties are still available
-        self.assertEqual("rally-node", cfg.opts("provisioning", "node.name.prefix"))
+        assert cfg.opts("provisioning", "node.name.prefix") == "rally-node"
 
     def test_load_existing_config(self):
         cfg = config.Config(config_file_class=InMemoryConfigStore)
-        self.assertFalse(cfg.config_present())
+        assert not cfg.config_present()
 
         sample_config = {
             "tests": {"sample.key": "value"},
@@ -94,18 +95,18 @@ class ConfigTests(TestCase):
         }
         cfg.config_file.store(sample_config)
 
-        self.assertTrue(cfg.config_present())
+        assert cfg.config_present()
         cfg.load_config()
         # standard properties are still available
-        self.assertEqual("rally-node", cfg.opts("provisioning", "node.name.prefix"))
-        self.assertEqual("value", cfg.opts("tests", "sample.key"))
+        assert cfg.opts("provisioning", "node.name.prefix") == "rally-node"
+        assert cfg.opts("tests", "sample.key") == "value"
         # we can also override values
         cfg.add(config.Scope.applicationOverride, "tests", "sample.key", "override")
-        self.assertEqual("override", cfg.opts("tests", "sample.key"))
+        assert cfg.opts("tests", "sample.key") == "override"
 
     def test_load_all_opts_in_section(self):
         cfg = config.Config(config_file_class=InMemoryConfigStore)
-        self.assertFalse(cfg.config_present())
+        assert not cfg.config_present()
 
         sample_config = {
             "distributions": {
@@ -119,21 +120,18 @@ class ConfigTests(TestCase):
         }
         cfg.config_file.store(sample_config)
 
-        self.assertTrue(cfg.config_present())
+        assert cfg.config_present()
         cfg.load_config()
         # override a value so we can see that the scoping logic still works. Default is scope "application"
         cfg.add(config.Scope.applicationOverride, "distributions", "snapshot.cache", "true")
 
-        self.assertEqual(
-            {
-                "release.url": "https://acme.com/releases",
-                "release.cache": "true",
-                "snapshot.url": "https://acme.com/snapshots",
-                # overridden!
-                "snapshot.cache": "true",
-            },
-            cfg.all_opts("distributions"),
-        )
+        assert cfg.all_opts("distributions") == {
+            "release.url": "https://acme.com/releases",
+            "release.cache": "true",
+            "snapshot.url": "https://acme.com/snapshots",
+            # overridden!
+            "snapshot.cache": "true",
+        }
 
     def test_add_all_in_section(self):
         source_cfg = config.Config(config_file_class=InMemoryConfigStore)
@@ -147,17 +145,17 @@ class ConfigTests(TestCase):
 
         target_cfg = config.Config(config_file_class=InMemoryConfigStore)
 
-        self.assertIsNone(target_cfg.opts("tests", "sample.key", mandatory=False))
+        assert target_cfg.opts("tests", "sample.key", mandatory=False) is None
 
         target_cfg.add_all(source=source_cfg, section="tests")
-        self.assertEqual("value", target_cfg.opts("tests", "sample.key"))
-        self.assertIsNone(target_cfg.opts("no_copy", "other.key", mandatory=False))
+        assert target_cfg.opts("tests", "sample.key") == "value"
+        assert target_cfg.opts("no_copy", "other.key", mandatory=False) is None
 
         # nonexisting key will not throw an error
         target_cfg.add_all(source=source_cfg, section="this section does not exist")
 
 
-class AutoLoadConfigTests(TestCase):
+class TestAutoLoadConfig:
     def test_can_create_non_existing_config(self):
         base_cfg = config.Config(config_name="unittest", config_file_class=InMemoryConfigStore)
         base_cfg.add(config.Scope.application, "meta", "config.version", config.Config.CURRENT_CONFIG_VERSION)
@@ -169,9 +167,9 @@ class AutoLoadConfigTests(TestCase):
         base_cfg.add(config.Scope.application, "defaults", "preserve_benchmark_candidate", True)
 
         cfg = config.auto_load_local_config(base_cfg, config_file_class=InMemoryConfigStore)
-        self.assertTrue(cfg.config_file.present)
+        assert cfg.config_file.present
         # did not just copy base config
-        self.assertNotEqual(base_cfg.opts("benchmarks", "local.dataset.cache"), cfg.opts("benchmarks", "local.dataset.cache"))
+        assert base_cfg.opts("benchmarks", "local.dataset.cache") != cfg.opts("benchmarks", "local.dataset.cache")
         # copied sections from base config
         self.assert_equals_base_config(base_cfg, cfg, "reporting", "datastore.type")
         self.assert_equals_base_config(base_cfg, cfg, "tracks", "metrics.url")
@@ -200,11 +198,11 @@ class AutoLoadConfigTests(TestCase):
                 "benchmarks": {"local.dataset.cache": "/tmp/rally/data"},
             },
         )
-        self.assertTrue(cfg.config_file.present)
+        assert cfg.config_file.present
         # did not just copy base config
-        self.assertNotEqual(base_cfg.opts("benchmarks", "local.dataset.cache"), cfg.opts("benchmarks", "local.dataset.cache"))
+        assert base_cfg.opts("benchmarks", "local.dataset.cache") != cfg.opts("benchmarks", "local.dataset.cache")
         # keeps config properties
-        self.assertEqual("existing-unit-test-config", cfg.opts("system", "env.name"))
+        assert cfg.opts("system", "env.name") == "existing-unit-test-config"
         # copies additional properties
         self.assert_equals_base_config(base_cfg, cfg, "unit-test", "sample.property")
 
@@ -234,17 +232,17 @@ class AutoLoadConfigTests(TestCase):
                 "runtime": {"java8.home": "/opt/jdk8"},
             },
         )
-        self.assertTrue(cfg.config_file.present)
+        assert cfg.config_file.present
         # did not just copy base config
-        self.assertNotEqual(base_cfg.opts("benchmarks", "local.dataset.cache"), cfg.opts("benchmarks", "local.dataset.cache"))
+        assert base_cfg.opts("benchmarks", "local.dataset.cache") != cfg.opts("benchmarks", "local.dataset.cache")
         # migrated existing config
-        self.assertEqual(config.Config.CURRENT_CONFIG_VERSION, int(cfg.opts("meta", "config.version")))
+        assert int(cfg.opts("meta", "config.version")) == config.Config.CURRENT_CONFIG_VERSION
 
     def assert_equals_base_config(self, base_config, local_config, section, key):
-        self.assertEqual(base_config.opts(section, key), local_config.opts(section, key))
+        assert base_config.opts(section, key) == local_config.opts(section, key)
 
 
-class ConfigMigrationTests(TestCase):
+class TestConfigMigration:
     def test_does_not_migrate_outdated_config(self):
         config_file = InMemoryConfigStore("test")
         sample_config = {
@@ -268,8 +266,8 @@ class ConfigMigrationTests(TestCase):
         }
 
         config_file.store(sample_config)
-        with self.assertRaisesRegex(
-            exceptions.ConfigError, "The config file.*is too old. Please delete it and reconfigure Rally from scratch"
+        with pytest.raises(
+            exceptions.ConfigError, match="The config file.*is too old. Please delete it and reconfigure Rally from scratch"
         ):
             config.migrate(config_file, config.Config.EARLIEST_SUPPORTED_VERSION - 1, config.Config.CURRENT_CONFIG_VERSION, out=null_output)
 
@@ -306,5 +304,5 @@ class ConfigMigrationTests(TestCase):
         config.migrate(config_file, config.Config.EARLIEST_SUPPORTED_VERSION, config.Config.CURRENT_CONFIG_VERSION, out=null_output)
 
         if config.Config.EARLIEST_SUPPORTED_VERSION < config.Config.CURRENT_CONFIG_VERSION:
-            self.assertTrue(config_file.backup_created)
-        self.assertEqual(str(config.Config.CURRENT_CONFIG_VERSION), config_file.config["meta"]["config.version"])
+            assert config_file.backup_created
+        assert config_file.config["meta"]["config.version"] == str(config.Config.CURRENT_CONFIG_VERSION)

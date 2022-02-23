@@ -19,7 +19,8 @@
 import os
 import tempfile
 import unittest.mock as mock
-from unittest import TestCase
+
+import pytest
 
 from esrally import exceptions
 from esrally.mechanic import provisioner, team
@@ -27,7 +28,7 @@ from esrally.mechanic import provisioner, team
 HOME_DIR = os.path.expanduser("~")
 
 
-class BareProvisionerTests(TestCase):
+class TestBareProvisioner:
     @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-5.0.0"])
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -61,37 +62,34 @@ class BareProvisionerTests(TestCase):
         p = provisioner.BareProvisioner(es_installer=installer, plugin_installers=[], apply_config=null_apply_config)
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
-        self.assertEqual("8", node_config.car_runtime_jdks)
-        self.assertEqual("/opt/elasticsearch-5.0.0", node_config.binary_path)
-        self.assertEqual(["/opt/elasticsearch-5.0.0/data"], node_config.data_paths)
+        assert node_config.car_runtime_jdks == "8"
+        assert node_config.binary_path == "/opt/elasticsearch-5.0.0"
+        assert node_config.data_paths == ["/opt/elasticsearch-5.0.0/data"]
 
-        self.assertEqual(1, len(apply_config_calls))
+        assert len(apply_config_calls) == 1
         source_root_path, target_root_path, config_vars = apply_config_calls[0]
 
-        self.assertEqual(HOME_DIR + "/.rally/benchmarks/teams/default/my-car", source_root_path)
-        self.assertEqual("/opt/elasticsearch-5.0.0", target_root_path)
-        self.assertEqual(
-            {
-                "cluster_settings": {},
-                "heap": "4g",
-                "runtime.jdk": "8",
-                "runtime.jdk.bundled": "true",
-                "cluster_name": "rally-benchmark",
-                "node_name": "rally-node-0",
-                "data_paths": ["/opt/elasticsearch-5.0.0/data"],
-                "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
-                "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
-                "node_ip": "10.17.22.23",
-                "network_host": "10.17.22.23",
-                "http_port": "9200",
-                "transport_port": "9300",
-                "all_node_ips": '["10.17.22.22","10.17.22.23"]',
-                "all_node_names": '["rally-node-0","rally-node-1"]',
-                "minimum_master_nodes": 2,
-                "install_root_path": "/opt/elasticsearch-5.0.0",
-            },
-            config_vars,
-        )
+        assert HOME_DIR + "/.rally/benchmarks/teams/default/my-car" == source_root_path
+        assert target_root_path == "/opt/elasticsearch-5.0.0"
+        assert config_vars == {
+            "cluster_settings": {},
+            "heap": "4g",
+            "runtime.jdk": "8",
+            "runtime.jdk.bundled": "true",
+            "cluster_name": "rally-benchmark",
+            "node_name": "rally-node-0",
+            "data_paths": ["/opt/elasticsearch-5.0.0/data"],
+            "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
+            "node_ip": "10.17.22.23",
+            "network_host": "10.17.22.23",
+            "http_port": "9200",
+            "transport_port": "9300",
+            "all_node_ips": '["10.17.22.22","10.17.22.23"]',
+            "all_node_names": '["rally-node-0","rally-node-1"]',
+            "minimum_master_nodes": 2,
+            "install_root_path": "/opt/elasticsearch-5.0.0",
+        }
 
     class NoopHookHandler:
         def __init__(self, plugin):
@@ -170,9 +168,9 @@ class BareProvisionerTests(TestCase):
             es_installer=installer,
             plugin_installers=[
                 provisioner.PluginInstaller(
-                    BareProvisionerTests.MockRallyTeamXPackPlugin(),
+                    self.MockRallyTeamXPackPlugin(),
                     java_home="/usr/local/javas/java8",
-                    hook_handler_class=BareProvisionerTests.NoopHookHandler,
+                    hook_handler_class=self.NoopHookHandler,
                 )
             ],
             distribution_version="6.2.3",
@@ -180,42 +178,39 @@ class BareProvisionerTests(TestCase):
         )
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
-        self.assertEqual("8", node_config.car_runtime_jdks)
-        self.assertEqual("/opt/elasticsearch-5.0.0", node_config.binary_path)
-        self.assertEqual(["/opt/elasticsearch-5.0.0/data"], node_config.data_paths)
+        assert node_config.car_runtime_jdks == "8"
+        assert node_config.binary_path == "/opt/elasticsearch-5.0.0"
+        assert node_config.data_paths == ["/opt/elasticsearch-5.0.0/data"]
 
-        self.assertEqual(1, len(apply_config_calls))
+        assert len(apply_config_calls) == 1
         source_root_path, target_root_path, config_vars = apply_config_calls[0]
 
-        self.assertEqual(HOME_DIR + "/.rally/benchmarks/teams/default/my-car", source_root_path)
-        self.assertEqual("/opt/elasticsearch-5.0.0", target_root_path)
+        assert source_root_path == HOME_DIR + "/.rally/benchmarks/teams/default/my-car"
+        assert target_root_path == "/opt/elasticsearch-5.0.0"
 
         self.maxDiff = None
 
-        self.assertEqual(
-            {
-                "cluster_settings": {"plugin.mandatory": ["x-pack-security"]},
-                "heap": "4g",
-                "runtime.jdk": "8",
-                "runtime.jdk.bundled": "true",
-                "cluster_name": "rally-benchmark",
-                "node_name": "rally-node-0",
-                "data_paths": ["/opt/elasticsearch-5.0.0/data"],
-                "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
-                "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
-                "node_ip": "10.17.22.23",
-                "network_host": "10.17.22.23",
-                "http_port": "9200",
-                "transport_port": "9300",
-                "all_node_ips": '["10.17.22.22","10.17.22.23"]',
-                "all_node_names": '["rally-node-0","rally-node-1"]',
-                "minimum_master_nodes": 2,
-                "install_root_path": "/opt/elasticsearch-5.0.0",
-                "plugin_name": "x-pack-security",
-                "xpack_security_enabled": True,
-            },
-            config_vars,
-        )
+        assert config_vars == {
+            "cluster_settings": {"plugin.mandatory": ["x-pack-security"]},
+            "heap": "4g",
+            "runtime.jdk": "8",
+            "runtime.jdk.bundled": "true",
+            "cluster_name": "rally-benchmark",
+            "node_name": "rally-node-0",
+            "data_paths": ["/opt/elasticsearch-5.0.0/data"],
+            "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
+            "node_ip": "10.17.22.23",
+            "network_host": "10.17.22.23",
+            "http_port": "9200",
+            "transport_port": "9300",
+            "all_node_ips": '["10.17.22.22","10.17.22.23"]',
+            "all_node_names": '["rally-node-0","rally-node-1"]',
+            "minimum_master_nodes": 2,
+            "install_root_path": "/opt/elasticsearch-5.0.0",
+            "plugin_name": "x-pack-security",
+            "xpack_security_enabled": True,
+        }
 
     @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-6.3.0"])
     @mock.patch("esrally.utils.io.decompress")
@@ -258,9 +253,9 @@ class BareProvisionerTests(TestCase):
             es_installer=installer,
             plugin_installers=[
                 provisioner.PluginInstaller(
-                    BareProvisionerTests.MockRallyTeamXPackPlugin(),
+                    self.MockRallyTeamXPackPlugin(),
                     java_home="/usr/local/javas/java8",
-                    hook_handler_class=BareProvisionerTests.NoopHookHandler,
+                    hook_handler_class=self.NoopHookHandler,
                 )
             ],
             distribution_version="6.3.0",
@@ -268,42 +263,39 @@ class BareProvisionerTests(TestCase):
         )
 
         node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-6.3.0.tar.gz"})
-        self.assertEqual("8", node_config.car_runtime_jdks)
-        self.assertEqual("/opt/elasticsearch-6.3.0", node_config.binary_path)
-        self.assertEqual(["/opt/elasticsearch-6.3.0/data"], node_config.data_paths)
+        assert node_config.car_runtime_jdks == "8"
+        assert node_config.binary_path == "/opt/elasticsearch-6.3.0"
+        assert node_config.data_paths == ["/opt/elasticsearch-6.3.0/data"]
 
-        self.assertEqual(1, len(apply_config_calls))
+        assert len(apply_config_calls) == 1
         source_root_path, target_root_path, config_vars = apply_config_calls[0]
 
-        self.assertEqual(HOME_DIR + "/.rally/benchmarks/teams/default/my-car", source_root_path)
-        self.assertEqual("/opt/elasticsearch-6.3.0", target_root_path)
+        assert source_root_path == HOME_DIR + "/.rally/benchmarks/teams/default/my-car"
+        assert target_root_path == "/opt/elasticsearch-6.3.0"
 
         self.maxDiff = None
 
-        self.assertEqual(
-            {
-                "cluster_settings": {"plugin.mandatory": ["x-pack"]},
-                "heap": "4g",
-                "runtime.jdk": "8",
-                "runtime.jdk.bundled": "true",
-                "cluster_name": "rally-benchmark",
-                "node_name": "rally-node-0",
-                "data_paths": ["/opt/elasticsearch-6.3.0/data"],
-                "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
-                "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
-                "node_ip": "10.17.22.23",
-                "network_host": "10.17.22.23",
-                "http_port": "9200",
-                "transport_port": "9300",
-                "all_node_ips": '["10.17.22.22","10.17.22.23"]',
-                "all_node_names": '["rally-node-0","rally-node-1"]',
-                "minimum_master_nodes": 2,
-                "install_root_path": "/opt/elasticsearch-6.3.0",
-                "plugin_name": "x-pack-security",
-                "xpack_security_enabled": True,
-            },
-            config_vars,
-        )
+        assert config_vars == {
+            "cluster_settings": {"plugin.mandatory": ["x-pack"]},
+            "heap": "4g",
+            "runtime.jdk": "8",
+            "runtime.jdk.bundled": "true",
+            "cluster_name": "rally-benchmark",
+            "node_name": "rally-node-0",
+            "data_paths": ["/opt/elasticsearch-6.3.0/data"],
+            "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
+            "node_ip": "10.17.22.23",
+            "network_host": "10.17.22.23",
+            "http_port": "9200",
+            "transport_port": "9300",
+            "all_node_ips": '["10.17.22.22","10.17.22.23"]',
+            "all_node_names": '["rally-node-0","rally-node-1"]',
+            "minimum_master_nodes": 2,
+            "install_root_path": "/opt/elasticsearch-6.3.0",
+            "plugin_name": "x-pack-security",
+            "xpack_security_enabled": True,
+        }
 
 
 class NoopHookHandler:
@@ -320,7 +312,7 @@ class NoopHookHandler:
         }
 
 
-class ElasticsearchInstallerTests(TestCase):
+class TestElasticsearchInstaller:
     @mock.patch("glob.glob", lambda p: ["/install/elasticsearch-5.0.0-SNAPSHOT"])
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -338,28 +330,25 @@ class ElasticsearchInstallerTests(TestCase):
         )
 
         installer.install("/data/builds/distributions")
-        self.assertEqual(installer.es_home_path, "/install/elasticsearch-5.0.0-SNAPSHOT")
+        assert installer.es_home_path == "/install/elasticsearch-5.0.0-SNAPSHOT"
 
-        self.assertEqual(
-            {
-                "cluster_name": "rally-benchmark",
-                "node_name": "rally-node-0",
-                "data_paths": ["/install/elasticsearch-5.0.0-SNAPSHOT/data"],
-                "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
-                "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
-                "node_ip": "10.17.22.23",
-                "network_host": "10.17.22.23",
-                "http_port": "9200",
-                "transport_port": "9300",
-                "all_node_ips": '["10.17.22.22","10.17.22.23"]',
-                "all_node_names": '["rally-node-0","rally-node-1"]',
-                "minimum_master_nodes": 2,
-                "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT",
-            },
-            installer.variables,
-        )
+        assert installer.variables == {
+            "cluster_name": "rally-benchmark",
+            "node_name": "rally-node-0",
+            "data_paths": ["/install/elasticsearch-5.0.0-SNAPSHOT/data"],
+            "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
+            "node_ip": "10.17.22.23",
+            "network_host": "10.17.22.23",
+            "http_port": "9200",
+            "transport_port": "9300",
+            "all_node_ips": '["10.17.22.22","10.17.22.23"]',
+            "all_node_names": '["rally-node-0","rally-node-1"]',
+            "minimum_master_nodes": 2,
+            "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT",
+        }
 
-        self.assertEqual(installer.data_paths, ["/install/elasticsearch-5.0.0-SNAPSHOT/data"])
+        assert installer.data_paths == ["/install/elasticsearch-5.0.0-SNAPSHOT/data"]
 
     @mock.patch("glob.glob", lambda p: ["/install/elasticsearch-5.0.0-SNAPSHOT"])
     @mock.patch("esrally.utils.io.decompress")
@@ -385,28 +374,25 @@ class ElasticsearchInstallerTests(TestCase):
         )
 
         installer.install("/data/builds/distributions")
-        self.assertEqual(installer.es_home_path, "/install/elasticsearch-5.0.0-SNAPSHOT")
+        assert installer.es_home_path == "/install/elasticsearch-5.0.0-SNAPSHOT"
 
-        self.assertEqual(
-            {
-                "cluster_name": "rally-benchmark",
-                "node_name": "rally-node-0",
-                "data_paths": ["/tmp/some/data-path-dir"],
-                "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
-                "heap_dump_path": "~/.rally/benchmarks/races/unittest/heapdump",
-                "node_ip": "10.17.22.23",
-                "network_host": "10.17.22.23",
-                "http_port": "9200",
-                "transport_port": "9300",
-                "all_node_ips": '["10.17.22.22","10.17.22.23"]',
-                "all_node_names": '["rally-node-0","rally-node-1"]',
-                "minimum_master_nodes": 2,
-                "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT",
-            },
-            installer.variables,
-        )
+        assert installer.variables == {
+            "cluster_name": "rally-benchmark",
+            "node_name": "rally-node-0",
+            "data_paths": ["/tmp/some/data-path-dir"],
+            "log_path": "~/.rally/benchmarks/races/unittest/logs/server",
+            "heap_dump_path": "~/.rally/benchmarks/races/unittest/heapdump",
+            "node_ip": "10.17.22.23",
+            "network_host": "10.17.22.23",
+            "http_port": "9200",
+            "transport_port": "9300",
+            "all_node_ips": '["10.17.22.22","10.17.22.23"]',
+            "all_node_names": '["rally-node-0","rally-node-1"]',
+            "minimum_master_nodes": 2,
+            "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT",
+        }
 
-        self.assertEqual(installer.data_paths, ["/tmp/some/data-path-dir"])
+        assert installer.data_paths == ["/tmp/some/data-path-dir"]
 
     def test_invokes_hook_with_java_home(self):
         installer = provisioner.ElasticsearchInstaller(
@@ -428,11 +414,11 @@ class ElasticsearchInstallerTests(TestCase):
             hook_handler_class=NoopHookHandler,
         )
 
-        self.assertEqual(0, len(installer.hook_handler.hook_calls))
+        assert len(installer.hook_handler.hook_calls) == 0
         installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
-        self.assertEqual(1, len(installer.hook_handler.hook_calls))
-        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
-        self.assertEqual({"env": {"JAVA_HOME": "/usr/local/javas/java8"}}, installer.hook_handler.hook_calls["post_install"]["kwargs"])
+        assert len(installer.hook_handler.hook_calls) == 1
+        assert installer.hook_handler.hook_calls["post_install"]["variables"] == {"foo": "bar"}
+        assert installer.hook_handler.hook_calls["post_install"]["kwargs"] == {"env": {"JAVA_HOME": "/usr/local/javas/java8"}}
 
     def test_invokes_hook_no_java_home(self):
         installer = provisioner.ElasticsearchInstaller(
@@ -454,14 +440,14 @@ class ElasticsearchInstallerTests(TestCase):
             hook_handler_class=NoopHookHandler,
         )
 
-        self.assertEqual(0, len(installer.hook_handler.hook_calls))
+        assert len(installer.hook_handler.hook_calls) == 0
         installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
-        self.assertEqual(1, len(installer.hook_handler.hook_calls))
-        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
-        self.assertEqual({"env": {}}, installer.hook_handler.hook_calls["post_install"]["kwargs"])
+        assert len(installer.hook_handler.hook_calls) == 1
+        assert installer.hook_handler.hook_calls["post_install"]["variables"] == {"foo": "bar"}
+        assert installer.hook_handler.hook_calls["post_install"]["kwargs"] == {"env": {}}
 
 
-class PluginInstallerTests(TestCase):
+class TestPluginInstaller:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_plugin_successfully(self, installer_subprocess):
         installer_subprocess.return_value = 0
@@ -515,9 +501,9 @@ class PluginInstallerTests(TestCase):
         plugin = team.PluginDescriptor(name="unknown")
         installer = provisioner.PluginInstaller(plugin, java_home="/usr/local/javas/java8", hook_handler_class=NoopHookHandler)
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as exc:
             installer.install(es_home_path="/opt/elasticsearch")
-        self.assertEqual("Unknown plugin [unknown]", ctx.exception.args[0])
+        assert exc.value.args[0] == "Unknown plugin [unknown]"
 
         installer_subprocess.assert_called_with(
             '/opt/elasticsearch/bin/elasticsearch-plugin install --batch "unknown"',
@@ -532,9 +518,9 @@ class PluginInstallerTests(TestCase):
         plugin = team.PluginDescriptor(name="simple")
         installer = provisioner.PluginInstaller(plugin, java_home="/usr/local/javas/java8", hook_handler_class=NoopHookHandler)
 
-        with self.assertRaises(exceptions.SupplyError) as ctx:
+        with pytest.raises(exceptions.SupplyError) as exc:
             installer.install(es_home_path="/opt/elasticsearch")
-        self.assertEqual("I/O error while trying to install [simple]", ctx.exception.args[0])
+        assert exc.value.args[0] == "I/O error while trying to install [simple]"
 
         installer_subprocess.assert_called_with(
             '/opt/elasticsearch/bin/elasticsearch-plugin install --batch "simple"',
@@ -549,11 +535,9 @@ class PluginInstallerTests(TestCase):
         plugin = team.PluginDescriptor(name="simple")
         installer = provisioner.PluginInstaller(plugin, java_home="/usr/local/javas/java8", hook_handler_class=NoopHookHandler)
 
-        with self.assertRaises(exceptions.RallyError) as ctx:
+        with pytest.raises(exceptions.RallyError) as exc:
             installer.install(es_home_path="/opt/elasticsearch")
-        self.assertEqual(
-            "Unknown error while trying to install [simple] (installer return code [12987]). Please check the logs.", ctx.exception.args[0]
-        )
+        assert exc.value.args[0] == "Unknown error while trying to install [simple] (installer return code [12987]). Please check the logs."
 
         installer_subprocess.assert_called_with(
             '/opt/elasticsearch/bin/elasticsearch-plugin install --batch "simple"',
@@ -571,9 +555,9 @@ class PluginInstallerTests(TestCase):
         )
         installer = provisioner.PluginInstaller(plugin, java_home="/usr/local/javas/java8", hook_handler_class=NoopHookHandler)
 
-        self.assertEqual("unit-test-plugin", installer.plugin_name)
-        self.assertEqual({"active": True}, installer.variables)
-        self.assertEqual(["/etc/plugin"], installer.config_source_paths)
+        assert installer.plugin_name == "unit-test-plugin"
+        assert installer.variables == {"active": True}
+        assert installer.config_source_paths == ["/etc/plugin"]
 
     def test_invokes_hook_with_java_home(self):
         plugin = team.PluginDescriptor(
@@ -586,11 +570,11 @@ class PluginInstallerTests(TestCase):
         )
         installer = provisioner.PluginInstaller(plugin, java_home="/usr/local/javas/java8", hook_handler_class=NoopHookHandler)
 
-        self.assertEqual(0, len(installer.hook_handler.hook_calls))
+        assert len(installer.hook_handler.hook_calls) == 0
         installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
-        self.assertEqual(1, len(installer.hook_handler.hook_calls))
-        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
-        self.assertEqual({"env": {"JAVA_HOME": "/usr/local/javas/java8"}}, installer.hook_handler.hook_calls["post_install"]["kwargs"])
+        assert len(installer.hook_handler.hook_calls) == 1
+        assert installer.hook_handler.hook_calls["post_install"]["variables"] == {"foo": "bar"}
+        assert installer.hook_handler.hook_calls["post_install"]["kwargs"] == {"env": {"JAVA_HOME": "/usr/local/javas/java8"}}
 
     def test_invokes_hook_no_java_home(self):
         plugin = team.PluginDescriptor(
@@ -603,14 +587,14 @@ class PluginInstallerTests(TestCase):
         )
         installer = provisioner.PluginInstaller(plugin, java_home=None, hook_handler_class=NoopHookHandler)
 
-        self.assertEqual(0, len(installer.hook_handler.hook_calls))
+        assert len(installer.hook_handler.hook_calls) == 0
         installer.invoke_install_hook(team.BootstrapPhase.post_install, {"foo": "bar"})
-        self.assertEqual(1, len(installer.hook_handler.hook_calls))
-        self.assertEqual({"foo": "bar"}, installer.hook_handler.hook_calls["post_install"]["variables"])
-        self.assertEqual({"env": {}}, installer.hook_handler.hook_calls["post_install"]["kwargs"])
+        assert len(installer.hook_handler.hook_calls) == 1
+        assert installer.hook_handler.hook_calls["post_install"]["variables"] == {"foo": "bar"}
+        assert installer.hook_handler.hook_calls["post_install"]["kwargs"] == {"env": {}}
 
 
-class DockerProvisionerTests(TestCase):
+class TestDockerProvisioner:
     @mock.patch("uuid.uuid4")
     def test_provisioning_with_defaults(self, uuid4):
         uuid4.return_value = "9dbc682e-d32a-4669-8fbe-56fb77120dd4"
@@ -641,41 +625,35 @@ class DockerProvisionerTests(TestCase):
             rally_root=rally_root,
         )
 
-        self.assertDictEqual(
-            {
-                "cluster_name": "rally-benchmark",
-                "node_name": "rally-node-0",
-                "install_root_path": "/usr/share/elasticsearch",
-                "data_paths": ["/usr/share/elasticsearch/data"],
-                "log_path": "/var/log/elasticsearch",
-                "heap_dump_path": "/usr/share/elasticsearch/heapdump",
-                "discovery_type": "single-node",
-                "network_host": "0.0.0.0",
-                "http_port": "39200",
-                "transport_port": "39300",
-                "cluster_settings": {},
-                "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss",
-            },
-            docker.config_vars,
-        )
+        assert docker.config_vars == {
+            "cluster_name": "rally-benchmark",
+            "node_name": "rally-node-0",
+            "install_root_path": "/usr/share/elasticsearch",
+            "data_paths": ["/usr/share/elasticsearch/data"],
+            "log_path": "/var/log/elasticsearch",
+            "heap_dump_path": "/usr/share/elasticsearch/heapdump",
+            "discovery_type": "single-node",
+            "network_host": "0.0.0.0",
+            "http_port": "39200",
+            "transport_port": "39300",
+            "cluster_settings": {},
+            "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss",
+        }
 
-        self.assertDictEqual(
-            {
-                "es_data_dir": data_dir,
-                "es_log_dir": log_dir,
-                "es_heap_dump_dir": heap_dump_dir,
-                "es_version": "6.3.0",
-                "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss",
-                "http_port": 39200,
-                "node_ip": node_ip,
-                "mounts": {},
-            },
-            docker.docker_vars(mounts={}),
-        )
+        assert docker.docker_vars(mounts={}) == {
+            "es_data_dir": data_dir,
+            "es_log_dir": log_dir,
+            "es_heap_dump_dir": heap_dump_dir,
+            "es_version": "6.3.0",
+            "docker_image": "docker.elastic.co/elasticsearch/elasticsearch-oss",
+            "http_port": 39200,
+            "node_ip": node_ip,
+            "mounts": {},
+        }
 
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
-        self.assertEqual(
+        assert docker_cfg == (
             f'''version: '2.2'
 services:
   elasticsearch1:
@@ -705,8 +683,7 @@ services:
 networks:
   rally-es:
     driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"''',
-            docker_cfg,
+      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"'''
         )
 
     @mock.patch("uuid.uuid4")
@@ -743,8 +720,9 @@ networks:
 
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
-        self.assertEqual(
-            f'''version: '2.2'
+        assert (
+            docker_cfg
+            == f'''version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -775,12 +753,11 @@ services:
 networks:
   rally-es:
     driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"''',
-            docker_cfg,
+      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"'''
         )
 
 
-class CleanupTests(TestCase):
+class TestCleanup:
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
     def test_preserves(self, mock_path_exists, mock_rm):
@@ -788,8 +765,8 @@ class CleanupTests(TestCase):
 
         provisioner.cleanup(preserve=True, install_dir="./rally/races/install", data_paths=["./rally/races/data"])
 
-        self.assertEqual(mock_path_exists.call_count, 0)
-        self.assertEqual(mock_rm.call_count, 0)
+        assert mock_path_exists.call_count == 0
+        assert mock_rm.call_count == 0
 
     @mock.patch("shutil.rmtree")
     @mock.patch("os.path.exists")
