@@ -3766,17 +3766,9 @@ class TestWaitForSnapshotCreate:
         es.snapshot.get = mock.AsyncMock(
             side_effect=[
                 # target snapshot running
-                {
-                    "snapshots": [
-                        {"snapshot": "restore_speed_snapshot"}
-                    ]
-                },
+                {"snapshots": [{"snapshot": "restore_speed_snapshot"}]},
                 # different snapshot running
-                {
-                    "snapshots": [
-                        {"snapshot": "different_snapshot"}
-                    ]
-                },
+                {"snapshots": [{"snapshot": "different_snapshot"}]},
                 {},
                 {},
             ]
@@ -3871,8 +3863,7 @@ class TestWaitForSnapshotCreate:
         r = runner.WaitForSnapshotCreate()
         result = await r(es, basic_params)
 
-        es.snapshot.status.assert_awaited_with(repository="restore_speed", snapshot="restore_speed_snapshot",
-                                               ignore_unavailable=True)
+        es.snapshot.status.assert_awaited_with(repository="restore_speed", snapshot="restore_speed_snapshot", ignore_unavailable=True)
         es.snapshot.get.assert_awaited_with(repository="restore_speed", snapshot="_current", verbose=False)
 
         assert result == {
@@ -3938,8 +3929,7 @@ class TestWaitForSnapshotCreate:
             "stop_time_millis": 1591776481060 + 200,
         }
 
-        es.snapshot.status.assert_awaited_once_with(repository="backups", snapshot="snapshot-001",
-                                                    ignore_unavailable=True)
+        es.snapshot.status.assert_awaited_once_with(repository="backups", snapshot="snapshot-001", ignore_unavailable=True)
         es.snapshot.get.assert_awaited_once_with(repository="backups", snapshot="_current", verbose=False)
 
     @mock.patch("elasticsearch.Elasticsearch")
