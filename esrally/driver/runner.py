@@ -479,7 +479,6 @@ class BulkIndex(Runner):
 
         bulk_params = {}
         if "timeout" in params:
-
             bulk_params["timeout"] = params["timeout"]
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
