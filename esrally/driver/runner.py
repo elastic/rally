@@ -32,6 +32,8 @@ from io import BytesIO
 from os.path import commonprefix
 from typing import List, Optional
 
+import ijson
+
 from esrally import exceptions, track
 
 # Mapping from operation type to specific runner
