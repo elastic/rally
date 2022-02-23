@@ -17,6 +17,7 @@
 
 import asyncio
 import contextvars
+import ijson
 import json
 import logging
 import random
@@ -31,8 +32,6 @@ from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
 from typing import List, Optional
-
-import ijson
 
 from esrally import exceptions, track
 
@@ -192,6 +191,7 @@ class Runner:
             "index": "index",
             "opaque_id": "opaque-id",
             "params": "request-params",
+            "request_timeout": "request-timeout",
             "request_timeout": "request-timeout",
         }
         full_result = {k: params.get(v) for (k, v) in kw_dict.items()}
@@ -479,6 +479,7 @@ class BulkIndex(Runner):
 
         bulk_params = {}
         if "timeout" in params:
+
             bulk_params["timeout"] = params["timeout"]
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
@@ -1846,6 +1847,16 @@ class WaitForSnapshotCreate(Runner):
         stats = {}
 
         while not snapshot_done:
+            response = await es.snapshot.get(repository=repository, snapshot="_current", verbose=False)
+            running = False
+            for s in response["snapshots"]:
+                if s["snapshot"] == snapshot:
+                    running = True
+                    break
+            if running:
+                await asyncio.sleep(wait_period)
+                continue
+
             response = await es.snapshot.status(repository=repository, snapshot=snapshot, ignore_unavailable=True)
 
             if "snapshots" in response:
