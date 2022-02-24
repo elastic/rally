@@ -4913,7 +4913,7 @@ class TestDeleteIlmPolicyRunner:
         es.ilm.delete_lifecycle.assert_awaited_once_with(policy=params["policy-name"], params={})
 
 
-class SqlTests(TestCase):
+class TestSqlRunner:
     default_response = {
         "columns": [{"name": "first_name", "type": "text"}],
         "rows": [
@@ -4942,8 +4942,7 @@ class SqlTests(TestCase):
         async with sql_runner:
             result = await sql_runner(es, params)
 
-        self.assertEqual(1, result["weight"])
-        self.assertEqual("ops", result["unit"])
+        assert result == {"success": True, "weight": 1, "unit": "ops"}
 
         es.transport.perform_request.assert_awaited_once_with("POST", "/_sql", body=params["body"])
 
@@ -4958,8 +4957,7 @@ class SqlTests(TestCase):
         async with sql_runner:
             result = await sql_runner(es, params)
 
-        self.assertEqual(3, result["weight"])
-        self.assertEqual("ops", result["unit"])
+        assert result == {"success": True, "weight": 3, "unit": "ops"}
 
         es.transport.perform_request.assert_has_calls(
             [
@@ -4985,11 +4983,11 @@ class SqlTests(TestCase):
             "pages": 3,
         }
 
-        with self.assertRaises(exceptions.DataError) as ctx:
+        with pytest.raises(exceptions.DataError) as ctx:
             async with sql_runner:
                 await sql_runner(es, params)
 
-        self.assertEqual("Result set has been exhausted before all pages have been fetched, 1 page(s) remaining.", ctx.exception.message)
+        assert ctx.value.message == "Result set has been exhausted before all pages have been fetched, 1 page(s) remaining."
 
         es.transport.perform_request.assert_has_calls(
             [
