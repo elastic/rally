@@ -2263,31 +2263,34 @@ class DiskUsage(TelemetryDevice):
             msg = "A transport error occurred while collecting disk usage"
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
+        if response["_shards"]["failed"] > 0:
+            msg = "Shards failed when fetching disk usage"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+        del response["_shards"]
         for index, idxFields in response.items():
-            if index == "_shards":
-                continue
             for field, fieldInfo in idxFields["fields"].items():
                 meta = {"index": index, "field": field}
                 self.metrics_store.put_value_cluster_level(
                     "disk_usage_total", fieldInfo["total_in_bytes"], meta_data=meta, unit="byte"
                 )
-                inverted_index = fieldInfo["inverted_index"]["total_in_bytes"]
+                inverted_index = fieldInfo.get("inverted_index", {"total_in_bytes": 0})["total_in_bytes"]
                 if inverted_index > 0:
                     self.metrics_store.put_value_cluster_level(
                         "disk_usage_inverted_index", inverted_index, meta_data=meta, unit="byte"
                     )
-                stored_fields = fieldInfo["stored_fields_in_bytes"]
+                stored_fields = fieldInfo.get("stored_fields_in_bytes", 0)
                 if stored_fields > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_stored_fields", stored_fields, meta_data=meta, unit="byte")
-                doc_values = fieldInfo["doc_values_in_bytes"]
+                doc_values = fieldInfo.get("doc_values_in_bytes", 0)
                 if doc_values > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_doc_values", doc_values, meta_data=meta, unit="byte")
-                points = fieldInfo["points_in_bytes"]
+                points = fieldInfo.get("points_in_bytes", 0)
                 if points > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_points", points, meta_data=meta, unit="byte")
-                norms = fieldInfo["norms_in_bytes"]
+                norms = fieldInfo.get("norms_in_bytes", 0)
                 if norms > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_norms", norms, meta_data=meta, unit="byte")
-                term_vectors = fieldInfo["term_vectors_in_bytes"]
+                term_vectors = fieldInfo.get("term_vectors_in_bytes", 0)
                 if term_vectors > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_term_vectors", term_vectors, meta_data=meta, unit="byte")
