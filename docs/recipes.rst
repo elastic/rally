@@ -215,8 +215,6 @@ This behavior can also be changed, by invoking Rally with the :ref:`--on-error <
 
 	esrally race --track=geonames --on-error=abort
 	
-Errors can also be investigated: this is what the next section is about.
-
 Checking Queries and Responses
 ------------------------------
 
