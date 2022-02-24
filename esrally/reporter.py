@@ -86,6 +86,7 @@ def format_as_csv(headers, data):
             writer.writerow(metric_record)
         return out.getvalue()
 
+
 def disk_usage_fields(stats):
     return {
         "inverted index": stats.disk_usage_inverted_index,
@@ -97,6 +98,7 @@ def disk_usage_fields(stats):
         "total": stats.disk_usage_total,
     }
 
+
 def collate_field_usage_stats(stats):
     collated = {}
     for stat, fieldStats in disk_usage_fields(stats).items():
@@ -104,11 +106,13 @@ def collate_field_usage_stats(stats):
             collated.setdefault(fieldStat["index"], {}).setdefault(fieldStat["field"], {})[stat] = fieldStat["value"]
     return collated
 
+
 def total_disk_usage_per_field(stats):
     totals = []
     for fieldStat in stats.disk_usage_total:
         totals.append([fieldStat["index"], fieldStat["value"], fieldStat["field"]])
     return totals
+
 
 class SummaryReporter:
     def __init__(self, results, config):
@@ -678,7 +682,6 @@ class ComparisonReporter:
                 )
         return lines
 
-
     def _report_total_times(self, baseline_stats, contender_stats):
         lines = []
         lines.extend(
@@ -1027,7 +1030,7 @@ class ComparisonReporter:
                 formatted = f"{diff:.{precision}f}"
 
         # ensures that numbers that appear as "zero" are also colored neutrally
-        threshold = 10 ** -precision
+        threshold = 10**-precision
 
         if diff >= threshold:
             return color_greater(f"+{formatted}")

@@ -2271,14 +2271,10 @@ class DiskUsage(TelemetryDevice):
         for index, idxFields in response.items():
             for field, fieldInfo in idxFields["fields"].items():
                 meta = {"index": index, "field": field}
-                self.metrics_store.put_value_cluster_level(
-                    "disk_usage_total", fieldInfo["total_in_bytes"], meta_data=meta, unit="byte"
-                )
+                self.metrics_store.put_value_cluster_level("disk_usage_total", fieldInfo["total_in_bytes"], meta_data=meta, unit="byte")
                 inverted_index = fieldInfo.get("inverted_index", {"total_in_bytes": 0})["total_in_bytes"]
                 if inverted_index > 0:
-                    self.metrics_store.put_value_cluster_level(
-                        "disk_usage_inverted_index", inverted_index, meta_data=meta, unit="byte"
-                    )
+                    self.metrics_store.put_value_cluster_level("disk_usage_inverted_index", inverted_index, meta_data=meta, unit="byte")
                 stored_fields = fieldInfo.get("stored_fields_in_bytes", 0)
                 if stored_fields > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_stored_fields", stored_fields, meta_data=meta, unit="byte")

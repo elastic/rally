@@ -914,7 +914,7 @@ class EsMetricsStore(MetricsStore):
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         query = {
             "query": self._query_by_name(name, task, operation_type, sample_type, node_name),
-            "size": 10000, # TODO maybe scroll or something.
+            "size": 10000,  # TODO maybe scroll or something.
         }
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
         result = self._client.search(index=self._index, body=query)
@@ -1996,7 +1996,6 @@ class GlobalStats:
         self.disk_usage_points = self.v(d, "disk_usage_points")
         self.disk_usage_norms = self.v(d, "disk_usage_norms")
         self.disk_usage_term_vectors = self.v(d, "disk_usage_term_vectors")
-
 
     def as_dict(self):
         return self.__dict__

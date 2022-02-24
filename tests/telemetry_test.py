@@ -4143,13 +4143,14 @@ class TestIngestPipelineStats:
                 "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start of the benchmark).", "elasticsearch31"
             )
 
+
 class TestDiskUsage:
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es = Client(transport_client=TransportClient(force_error=True, error=elasticsearch.RequestError))
-        device = telemetry.DiskUsage({'disk-usage-indices': 'foo'}, es, metrics_store)
+        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4161,7 +4162,7 @@ class TestDiskUsage:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es = Client(transport_client=TransportClient(response={"_shards": {"total": 1, "successful": 1, "failed": 0}}))
-        device = telemetry.DiskUsage({'disk-usage-indices': 'foo'}, es, metrics_store)
+        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4172,7 +4173,7 @@ class TestDiskUsage:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es = Client(transport_client=TransportClient(response={"_shards": {"total": 1, "successful": 0, "failed": 1}}))
-        device = telemetry.DiskUsage({'disk-usage-indices': 'foo'}, es, metrics_store)
+        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4183,18 +4184,22 @@ class TestDiskUsage:
     def test_source(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(transport_client=TransportClient(response={
-            "_shards": {"failed": 0},
-            "foo": {
-                "fields": {
-                    "_source": {
-                        "total_in_bytes": 40676,
-                        "stored_fields_in_bytes": 40676,
-                    }
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "_source": {
+                                "total_in_bytes": 40676,
+                                "stored_fields_in_bytes": 40676,
+                            }
+                        }
+                    },
                 }
-            }
-        }))
-        device = telemetry.DiskUsage({'disk-usage-indices': 'foo'}, es, metrics_store)
+            )
+        )
+        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4207,21 +4212,23 @@ class TestDiskUsage:
     def test_id(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(transport_client=TransportClient(response={
-            "_shards": {"failed": 0},
-            "foo": {
-                "fields": {
-                    "_id": {
-                        "total_in_bytes": 21079,
-                        "inverted_index": {
-                            "total_in_bytes": 17110
-                        },
-                        "stored_fields_in_bytes": 3969,
-                    }
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "_id": {
+                                "total_in_bytes": 21079,
+                                "inverted_index": {"total_in_bytes": 17110},
+                                "stored_fields_in_bytes": 3969,
+                            }
+                        }
+                    },
                 }
-            }
-        }))
-        device = telemetry.DiskUsage({'disk-usage-indices': 'foo'}, es, metrics_store)
+            )
+        )
+        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4240,23 +4247,25 @@ class TestDiskUsage:
         """
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(transport_client=TransportClient(response={
-            "_shards": {"failed": 0},
-            "foo": {
-                "fields": {
-                    "_primary_term": {
-                        "total_in_bytes": 0,
-                        "inverted_index": {
-                            "total_in_bytes": 0
-                        },
-                        "stored_fields_in_bytes": 0,
-                        "doc_values_in_bytes": 0,
-                        "points_in_bytes": 0,
-                    }
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "_primary_term": {
+                                "total_in_bytes": 0,
+                                "inverted_index": {"total_in_bytes": 0},
+                                "stored_fields_in_bytes": 0,
+                                "doc_values_in_bytes": 0,
+                                "points_in_bytes": 0,
+                            }
+                        }
+                    },
                 }
-            }
-        }))
-        device = telemetry.DiskUsage({'disk-usage-indices': 'foo'}, es, metrics_store)
+            )
+        )
+        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4268,19 +4277,23 @@ class TestDiskUsage:
     def test_number(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(transport_client=TransportClient(response={
-            "_shards": {"failed": 0},
-            "foo": {
-                "fields": {
-                    "prcp": {
-                        "total_in_bytes": 1498,
-                        "doc_values_in_bytes": 748,
-                        "points_in_bytes": 750,
-                    }
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "prcp": {
+                                "total_in_bytes": 1498,
+                                "doc_values_in_bytes": 748,
+                                "points_in_bytes": 750,
+                            }
+                        }
+                    },
                 }
-            }
-        }))
-        device = telemetry.DiskUsage({'disk-usage-indices': 'foo'}, es, metrics_store)
+            )
+        )
+        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4294,19 +4307,23 @@ class TestDiskUsage:
     def test_keyword(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(transport_client=TransportClient(response={
-            "_shards": {"failed": 0},
-            "foo": {
-                "fields": {
-                    "station.country_code": {
-                        "total_in_bytes": 346,
-                        "doc_values_in_bytes": 328,
-                        "points_in_bytes": 18,
-                    }
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "station.country_code": {
+                                "total_in_bytes": 346,
+                                "doc_values_in_bytes": 328,
+                                "points_in_bytes": 18,
+                            }
+                        }
+                    },
                 }
-            }
-        }))
-        device = telemetry.DiskUsage({'disk-usage-indices': 'foo'}, es, metrics_store)
+            )
+        )
+        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
