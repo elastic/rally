@@ -56,7 +56,7 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteAsyncSearch, DeleteAsyncSearch(), async_runner=True)
     register_runner(track.OperationType.OpenPointInTime, OpenPointInTime(), async_runner=True)
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
-    register_runner(track.OperationType.SqlQuery, SqlQuery(), async_runner=True)
+    register_runner(track.OperationType.Sql, Sql(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -2438,7 +2438,7 @@ class DeleteIlmPolicy(Runner):
         return "delete-ilm-policy"
 
 
-class SqlQuery(Runner):
+class Sql(Runner):
     """
     Executes an SQL query and optionally paginates through subsequent pages.
     """

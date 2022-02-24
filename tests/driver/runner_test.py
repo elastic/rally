@@ -4814,7 +4814,7 @@ class DeleteIlmPolicyRunner(TestCase):
         es.ilm.delete_lifecycle.assert_awaited_once_with(policy=params["policy-name"], params={})
 
 
-class SqlQueryTests(TestCase):
+class SqlTests(TestCase):
     default_response = {
         "columns": [{"name": "first_name", "type": "text"}],
         "rows": [
@@ -4826,10 +4826,10 @@ class SqlQueryTests(TestCase):
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
-    async def test_sql_query(self, es):
+    async def test_fetch_one_page(self, es):
         es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
 
-        sql_runner = runner.SqlQuery()
+        sql_runner = runner.Sql()
         params = {
             "operation-type": "sql",
             "body": {
@@ -4853,7 +4853,7 @@ class SqlQueryTests(TestCase):
     async def test_fetch_all_pages(self, es):
         es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
 
-        sql_runner = runner.SqlQuery()
+        sql_runner = runner.Sql()
         params = {"operation-type": "sql", "body": {"query": "SELECT first_name FROM emp"}, "pages": 3}
 
         async with sql_runner:
@@ -4877,7 +4877,7 @@ class SqlQueryTests(TestCase):
             side_effect=[io.StringIO(json.dumps(self.default_response)), io.StringIO(json.dumps({"rows": [["John"]]}))]
         )
 
-        sql_runner = runner.SqlQuery()
+        sql_runner = runner.Sql()
         params = {
             "operation-type": "sql",
             "body": {

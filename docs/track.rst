@@ -2898,7 +2898,7 @@ Meta-data
 
 This operation returns no meta-data.
 
-sql-query
+sql
 ~~~~~~~~~~~~~~~~~~~
 
 Executes an SQL query and optionally paginates through subsequent pages. The ``body`` property will directly be passed to
@@ -2916,7 +2916,7 @@ Run an SQL query and fetch the first 10 pages with 100 records each::
 
     {
       "operation": {
-        "operation-type": "sql-query",
+        "operation-type": "sql",
         "name": "select-station-names",
         "body": {
           "query": "SELECT station.name FROM \"weather-data-2016\"",
