@@ -1,19 +1,12 @@
 {
     "schedule": [
-     {
-          "name": "check-cluster-health",
+        {
           "operation": {
-            "operation-type": "cluster-health",
-            "request-params": {
-              "wait_for_status": "{{cluster_health | default('green')}}",
-              "wait_for_no_relocating_shards": "true"
-            },
-            "retry-until-success": true
+            "operation-type": "no-op"
           }
-    }
+        }
     ],
     "dependencies": [
-      "pytoml",
-      "git+https://github.com/elastic/detection-rules.git@e0dda91f26eaa5ebf64fd829dfc3d33106a418eb"
+      "pytoml"
     ]
 }

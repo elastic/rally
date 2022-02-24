@@ -898,7 +898,7 @@ class ComparisonReporter:
             suffix = ""
 
         # ensures that numbers that appear as "zero" are also colored neutrally
-        threshold = 10 ** -precision
+        threshold = 10**-precision
         formatted = f"{diff:.{precision}f}{suffix}"
 
         if diff >= threshold:

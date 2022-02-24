@@ -191,7 +191,7 @@ class BenchmarkCoordinator:
             if specified_version < min_es_version:
                 raise exceptions.SystemSetupError(f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]")
 
-        self.current_track = track.load_track(self.cfg, install_dependencies=True)
+        self.current_track = track.load_track(self.cfg, install_dependencies=False)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
         challenge_name = self.cfg.opts("track", "challenge.name")
         self.current_challenge = self.current_track.find_challenge_or_default(challenge_name)

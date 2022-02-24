@@ -200,7 +200,7 @@ def _install_dependencies(dependencies):
         shutil.rmtree(paths.libs(), onerror=_trap)
 
     def _trap(function, path, exc_info):
-        logging.error(f"Failed to clean up [{path}] with [{function}]", exc_info=True)
+        logging.error("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
         raise exceptions.SystemSetupError(f"Failed to clean up [{path}]").with_traceback(exc_info[2])
 
     for dependency in dependencies:
@@ -209,7 +209,11 @@ def _install_dependencies(dependencies):
         _cleanup()
         try:
             with open(log_path, "ab") as install_log:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", f"{dependency}", "--upgrade", "--target", paths.libs()], stdout=install_log, stderr=install_log)
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", f"{dependency}", "--upgrade", "--target", paths.libs()],
+                    stdout=install_log,
+                    stderr=install_log,
+                )
         except subprocess.CalledProcessError:
             raise exceptions.SystemSetupError(f"Installation of [{dependency}] failed. See [{install_log.name}] for more information.")
 
@@ -220,7 +224,6 @@ def _load_single_track(cfg, track_repository, track_name, install_dependencies=F
         reader = TrackFileReader(cfg)
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
         tpr = TrackProcessorRegistry(cfg)
-        console.println(f"[{install_dependencies}] [{current_track.dependencies}]")
         if install_dependencies:
             _install_dependencies(current_track.dependencies)
         has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
@@ -1047,7 +1050,6 @@ class TrackFileReader:
             raise TrackSyntaxError(msg, e)
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
-        console.println(f"[{track_spec.get('dependencies')}]")
         try:
             track_version = int(raw_version)
         except ValueError:

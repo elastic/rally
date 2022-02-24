@@ -101,7 +101,7 @@ class EsClient:
         execution_count = 0
 
         while execution_count < max_execution_count:
-            time_to_sleep = 2 ** execution_count + random.random()
+            time_to_sleep = 2**execution_count + random.random()
             execution_count += 1
 
             try:
