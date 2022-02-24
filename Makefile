@@ -91,6 +91,8 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: activate-venv
+	env
+	echo $$PATH
 	@find esrally benchmarks scripts tests it setup.py -name "*.py" | xargs pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc
 	black --check esrally benchmarks scripts tests it setup.py
 	isort --check esrally benchmarks scripts tests it setup.py
