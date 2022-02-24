@@ -1812,7 +1812,7 @@ class GlobalStatsCalculator:
         result.ingest_pipeline_cluster_time = self.sum("ingest_pipeline_cluster_time")
         result.ingest_pipeline_cluster_failed = self.sum("ingest_pipeline_cluster_failed")
 
-        self.logger.debug("Gathering field disk usage metrics.")
+        self.logger.debug("Gathering disk usage metrics.")
         result.field_disk_usage_total = self.field_disk_usage("field_disk_usage_total")
         result.field_disk_usage_inverted_index = self.field_disk_usage("field_disk_usage_inverted_index")
         result.field_disk_usage_stored_fields = self.field_disk_usage("field_disk_usage_stored_fields")

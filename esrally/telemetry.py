@@ -47,7 +47,7 @@ def list_telemetry():
             ShardStats,
             DataStreamStats,
             IngestPipelineStats,
-            FieldDiskUsage,
+            DiskUsage,
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -2228,21 +2228,21 @@ class MasterNodeStatsRecorder:
         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster)
 
 
-class FieldDiskUsage(TelemetryDevice):
+class DiskUsage(TelemetryDevice):
     """
     Measures the space taken by each field
     """
 
     internal = False
-    command = "field-disk-usage"
-    human_name = "Analyze field disk usage"
-    help = "Runs the analyze index disk usage API after benchmarking"
+    command = "disk-usage"
+    human_name = "Analyze disk usage of each field"
+    help = "Runs the indices disk usage API after benchmarking"
 
     def __init__(self, telemetry_params, client, metrics_store):
         """
         :param telemetry_params: The configuration object for telemetry_params.
             Must specify:
-            ``field-disk-usage-indices``: Pattern of indices to capture.
+            ``disk-usage-indices``: Pattern of indices to capture.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         """
@@ -2252,8 +2252,8 @@ class FieldDiskUsage(TelemetryDevice):
         self.metrics_store = metrics_store
 
     def on_benchmark_stop(self):
-        indices = self.telemetry_params["field-disk-usage-indices"]
-        self.logger.debug("Gathering field disk usage for %s", indices)
+        indices = self.telemetry_params["disk-usage-indices"]
+        self.logger.debug("Gathering disk usage for %s", indices)
         response = self.client.transport.perform_request("POST", f"/{indices}/_disk_usage", params={"run_expensive_tasks": "true"})
         for index, idxFields in response.items():
             if index == "_shards":
