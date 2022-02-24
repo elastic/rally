@@ -29,7 +29,6 @@ export SETUPTOOLS_VERSION = $(shell jq -r '.prerequisite_versions.SETUPTOOLS' .c
 export WHEEL_VERSION = $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
 VIRTUAL_ENV ?= .venv
 VENV_ACTIVATE_FILE = $(VIRTUAL_ENV)/bin/activate
-VENV_ACTIVATE = . $(VENV_ACTIVATE_FILE)
 VEPYTHON = $(VIRTUAL_ENV)/bin/$(PY_BIN)
 VEPYLINT = $(VIRTUAL_ENV)/bin/pylint
 PYENV_ERROR = "\033[0;31mIMPORTANT\033[0m: Please install pyenv.\n"
@@ -55,18 +54,20 @@ venv-create:
 		printf "Created python3 venv under $(PWD)/$(VIRTUAL_ENV).\n"; \
 	fi;
 
-check-venv:
+activate-venv:
 	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
-	printf $(VE_MISSING_HELP); \
-	fi
+		printf $(VE_MISSING_HELP); \
+	else \
+		. $(VENV_ACTIVATE_FILE); \
+	fi;
 
-install-user: venv-create
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip==$(PIP_VERSION) setuptools==$(SETUPTOOLS_VERSION) wheel==$(WHEEL_VERSION)
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
+install-user: venv-create activate-venv
+	$(PIP_WRAPPER) install --upgrade pip==$(PIP_VERSION) setuptools==$(SETUPTOOLS_VERSION) wheel==$(WHEEL_VERSION)
+	$(PIP_WRAPPER) install -e .
 
 install: install-user
 	# Also install development dependencies
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop]
+	$(PIP_WRAPPER) install -e .[develop]
 
 clean: nondocs-clean docs-clean
 
@@ -90,50 +91,50 @@ python-caches-clean:
 tox-env-clean:
 	rm -rf .tox
 
-lint: check-venv
+lint: activate-venv
 	@find esrally benchmarks scripts tests it setup.py -name "*.py" -exec $(VEPYLINT) -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
-	@. $(VENV_ACTIVATE_FILE); black --check esrally benchmarks scripts tests it setup.py
-	@. $(VENV_ACTIVATE_FILE); isort --check esrally benchmarks scripts tests it setup.py
+	black --check esrally benchmarks scripts tests it setup.py
+	isort --check esrally benchmarks scripts tests it setup.py
 
-format: check-venv
-	@. $(VENV_ACTIVATE_FILE); black esrally benchmarks scripts tests it setup.py
-	@. $(VENV_ACTIVATE_FILE); isort esrally benchmarks scripts tests it setup.py
+format: activate-venv
+	black esrally benchmarks scripts tests it setup.py
+	isort esrally benchmarks scripts tests it setup.py
 
-docs: check-venv
-	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
+docs: activate-venv
+	@cd docs && $(MAKE) html
 
-serve-docs: check-venv
-	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
+serve-docs: activate-venv
+	@cd docs && $(MAKE) serve
 
-test: check-venv
-	. $(VENV_ACTIVATE_FILE); pytest tests/
+test: activate-venv
+	pytest tests/
 
 precommit: lint
 
 # checks min and max python versions
-it: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38
-	. $(VENV_ACTIVATE_FILE); tox -e py310
+it: activate-venv python-caches-clean tox-env-clean
+	tox -e py38
+	tox -e py310
 
-it38: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38
+it38: activate-venv python-caches-clean tox-env-clean
+	tox -e py38
 
-it39: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py39
+it39: activate-venv python-caches-clean tox-env-clean
+	tox -e py39
 
-it310: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py310
+it310: activate-venv python-caches-clean tox-env-clean
+	tox -e py310
 
 check-all: lint test it
 
-benchmark: check-venv
-	. $(VENV_ACTIVATE_FILE); pytest benchmarks/
+benchmark: activate-venv
+	pytest benchmarks/
 
-release-checks: check-venv
-	. $(VENV_ACTIVATE_FILE); ./release-checks.sh $(release_version) $(next_version)
+release-checks: activate-venv
+	./release-checks.sh $(release_version) $(next_version)
 
 # usage: e.g. make release release_version=0.9.2 next_version=0.9.3
-release: check-venv release-checks clean docs it
-	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
+release: activate-venv release-checks clean docs it
+	./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 it310 benchmark release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 it310 benchmark release release-checks prereq venv-create activate-venv
