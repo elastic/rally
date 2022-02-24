@@ -62,6 +62,7 @@ install_requires = [
     # License: BSD
     # transitive dependency Markupsafe: BSD
     "Jinja2==2.11.3",
+    "markupsafe==2.0.1",
     # License: MIT
     "thespian==3.10.1",
     # recommended library for thespian to identify actors more easily with `ps`
@@ -90,7 +91,7 @@ s3_require = [
     "boto3==1.10.32",
 ]
 
-tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-asyncio==0.16.0"]
+tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-asyncio==0.18.1"]
 
 # These packages are only required when developing Rally
 develop_require = [
@@ -101,7 +102,7 @@ develop_require = [
     "wheel==0.33.6",
     "github3.py==1.3.0",
     "pylint==2.6.0",
-    "black==21.5b2",
+    "black==22.1.0",
     "isort==5.8.0",
 ]
 

@@ -16,15 +16,40 @@
 # under the License.
 
 import os
+from unittest import mock
+
+import pytest
 
 from esrally.utils import opts
 
 
 class TestConfigHelperFunction:
-    def test_csv_to_list(self):
+    def test_csv_to_list_inline(self):
         assert opts.csv_to_list("") == []
         assert opts.csv_to_list("    a,b,c   , d") == ["a", "b", "c", "d"]
         assert opts.csv_to_list("    a-;d    ,b,c   , d") == ["a-;d", "b", "c", "d"]
+        assert opts.csv_to_list("node-stats,recovery-stats") == ["node-stats", "recovery-stats"]
+        # stringified inline json tests
+        assert opts.csv_to_list('["node-stats", "recovery-stats"]') == ["node-stats", "recovery-stats"]
+        assert opts.csv_to_list(' [     "node-stats", "recovery-stats"]') == ["node-stats", "recovery-stats"]
+        assert opts.csv_to_list(' [ "node-stats", "recovery-stats"]') == ["node-stats", "recovery-stats"]
+        assert opts.csv_to_list("[]") == []
+        assert opts.csv_to_list(" [ ]    ") == []
+
+    def test_csv_to_line_from_json_file(self):
+        # used to mock contents of "./telemetry_params.json"
+        config_data = mock.mock_open(read_data='["v1", "v2"]')
+
+        with mock.patch("esrally.utils.opts.open", config_data):
+            assert opts.csv_to_list("telemetry_params.json") == ["v1", "v2"]
+
+    def test_csv_to_line_raises_with_non_acceptable_json_file(self):
+        # used to mock contents of "./telemetry_params.json"
+        config_data = mock.mock_open(read_data="{}")
+
+        with mock.patch("esrally.utils.opts.open", config_data):
+            with pytest.raises(ValueError, match=r"csv args only support arrays in json but you supplied"):
+                opts.csv_to_list("telemetry_params.json")
 
     def test_kv_to_map(self):
         assert opts.kv_to_map([]) == {}
@@ -39,6 +64,17 @@ class TestConfigHelperFunction:
             "empty": False,
             "temperature": 0.5,
         }
+
+    def test_to_dict_with_inline_json(self):
+        assert opts.to_dict('{"default": ["127.0.0.1:9200","10.17.0.5:19200"]}') == {"default": ["127.0.0.1:9200", "10.17.0.5:19200"]}
+
+        # valid json may also start with an array
+        assert opts.to_dict('["node-stats", "recovery-stats"]') == ["node-stats", "recovery-stats"]
+
+        assert opts.to_dict("[]") == []
+
+    def test_to_dict_with_inline_kv(self):
+        assert opts.to_dict("k1:v1,k2:v2") == {"k1": "v1", "k2": "v2"}
 
 
 class TestGenericHelperFunction:

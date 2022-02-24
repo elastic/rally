@@ -1,6 +1,11 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.4.0
+------------------------
+
+Rally now accepts JSON files (ending in .json) or inline JSON strings for cli arguments that accept comma separated values like `--car`, `--telemetry` etc. The only allowed JSON is a plain array e.g. ``esrally race ... --car='["4g", "trial-license"]'``.
+
 Migrating to Rally 2.3.0
 ------------------------
 

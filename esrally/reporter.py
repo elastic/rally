@@ -117,6 +117,8 @@ class SummaryReporter:
 
         metrics_table.extend(self._report_transform_stats(stats))
 
+        metrics_table.extend(self._report_ingest_pipeline_stats(stats))
+
         for record in stats.op_metrics:
             task = record["task"]
             metrics_table.extend(self._report_throughput(record, task))
@@ -292,6 +294,13 @@ class SummaryReporter:
 
         return lines
 
+    def _report_ingest_pipeline_stats(self, stats):
+        return self._join(
+            self._line("Total Ingest Pipeline count", "", stats.ingest_pipeline_cluster_count, ""),
+            self._line("Total Ingest Pipeline time", "", stats.ingest_pipeline_cluster_time, "s", convert.ms_to_seconds),
+            self._line("Total Ingest Pipeline failed", "", stats.ingest_pipeline_cluster_failed, ""),
+        )
+
     def _join(self, *args):
         lines = []
         for arg in args:
@@ -361,6 +370,9 @@ class ComparisonReporter:
         metrics_table.extend(self._report_segment_memory(baseline_stats, contender_stats))
         metrics_table.extend(self._report_segment_counts(baseline_stats, contender_stats))
         metrics_table.extend(self._report_transform_processing_times(baseline_stats, contender_stats))
+        metrics_table.extend(self._report_ingest_pipeline_counts(baseline_stats, contender_stats))
+        metrics_table.extend(self._report_ingest_pipeline_times(baseline_stats, contender_stats))
+        metrics_table.extend(self._report_ingest_pipeline_failed(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
@@ -551,6 +563,48 @@ class ComparisonReporter:
                         )
                     )
         return lines
+
+    def _report_ingest_pipeline_counts(self, baseline_stats, contender_stats):
+        if baseline_stats.ingest_pipeline_cluster_count is None:
+            return []
+        return self._join(
+            self._line(
+                "Total Ingest Pipeline count",
+                baseline_stats.ingest_pipeline_cluster_count,
+                contender_stats.ingest_pipeline_cluster_count,
+                "",
+                "",
+                treat_increase_as_improvement=False,
+            )
+        )
+
+    def _report_ingest_pipeline_times(self, baseline_stats, contender_stats):
+        if baseline_stats.ingest_pipeline_cluster_time is None:
+            return []
+        return self._join(
+            self._line(
+                "Total Ingest Pipeline time",
+                baseline_stats.ingest_pipeline_cluster_time,
+                contender_stats.ingest_pipeline_cluster_time,
+                "",
+                "ms",
+                treat_increase_as_improvement=False,
+            )
+        )
+
+    def _report_ingest_pipeline_failed(self, baseline_stats, contender_stats):
+        if baseline_stats.ingest_pipeline_cluster_failed is None:
+            return []
+        return self._join(
+            self._line(
+                "Total Ingest Pipeline failed",
+                baseline_stats.ingest_pipeline_cluster_failed,
+                contender_stats.ingest_pipeline_cluster_failed,
+                "",
+                "",
+                treat_increase_as_improvement=False,
+            )
+        )
 
     def _report_total_times(self, baseline_stats, contender_stats):
         lines = []

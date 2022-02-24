@@ -46,6 +46,7 @@ def list_telemetry():
             SearchableSnapshotsStats,
             ShardStats,
             DataStreamStats,
+            IngestPipelineStats,
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -1408,6 +1409,195 @@ class DataStreamStatsRecorder:
             self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster, meta_data=data_stream_metadata)
 
 
+class IngestPipelineStats(InternalTelemetryDevice):
+    command = "ingest-pipeline-stats"
+    human_name = "Ingest Pipeline Stats"
+    help = "Reports Ingest Pipeline stats at the end of the benchmark."
+
+    def __init__(self, clients, metrics_store):
+        super().__init__()
+        self.logger = logging.getLogger(__name__)
+        self.clients = clients
+        self.metrics_store = metrics_store
+        self.start_stats = {}
+        self.specified_cluster_names = self.clients.keys()
+
+        self.ingest_pipeline_cluster_count = 0
+        self.ingest_pipeline_cluster_time = 0
+        self.ingest_pipeline_cluster_failed = 0
+
+    def on_benchmark_start(self):
+        self.logger.info("Gathering Ingest Pipeline stats at benchmark start")
+        self.start_stats = self.get_ingest_pipeline_stats()
+
+    def on_benchmark_stop(self):
+        self.logger.info("Gathering Ingest Pipeline stats at benchmark end")
+        end_stats = self.get_ingest_pipeline_stats()
+
+        # The nesting level is ok here given the structure of the Ingest Pipeline stats
+        # pylint: disable=too-many-nested-blocks
+        for cluster_name, node in end_stats.items():
+            if cluster_name not in self.start_stats:
+                self.logger.warning(
+                    "Cannot determine Ingest Pipeline stats for %s (cluster stats weren't collected at the start of the benchmark).",
+                    cluster_name,
+                )
+                continue
+
+            for node_name, summaries in node.items():
+                if node_name not in self.start_stats[cluster_name]:
+                    self.logger.warning(
+                        "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start of the benchmark).", node_name
+                    )
+                    continue
+
+                for summary_name, stats in summaries.items():
+                    if summary_name == "total":
+                        # The top level "total" contains stats for the node as a whole,
+                        # each node will have exactly one top level "total" key
+                        self._record_node_level_pipeline_stats(stats, cluster_name, node_name)
+                    elif summary_name == "pipelines":
+                        for pipeline_name, pipeline in stats.items():
+                            self._record_pipeline_level_processor_stats(pipeline, pipeline_name, cluster_name, node_name)
+
+            self._record_cluster_level_pipeline_stats(cluster_name)
+
+    def _record_cluster_level_pipeline_stats(self, cluster_name):
+        metadata = {"cluster_name": cluster_name}
+        self.metrics_store.put_value_cluster_level("ingest_pipeline_cluster_count", self.ingest_pipeline_cluster_count, meta_data=metadata)
+
+        self.metrics_store.put_value_cluster_level(
+            "ingest_pipeline_cluster_time", self.ingest_pipeline_cluster_time, "ms", meta_data=metadata
+        )
+        self.metrics_store.put_value_cluster_level(
+            "ingest_pipeline_cluster_failed", self.ingest_pipeline_cluster_failed, meta_data=metadata
+        )
+
+    def _record_node_level_pipeline_stats(self, stats, cluster_name, node_name):
+        # Node level statistics are calculated per-benchmark execution. Stats are collected at the beginning, and end of
+        # each benchmark
+        metadata = {"cluster_name": cluster_name}
+        ingest_pipeline_node_count = stats.get("count", 0) - self.start_stats[cluster_name][node_name]["total"].get("count", 0)
+        ingest_pipeline_node_time = stats.get("time_in_millis", 0) - self.start_stats[cluster_name][node_name]["total"].get(
+            "time_in_millis", 0
+        )
+        ingest_pipeline_node_failed = stats.get("failed", 0) - self.start_stats[cluster_name][node_name]["total"].get("failed", 0)
+
+        self.ingest_pipeline_cluster_count += ingest_pipeline_node_count
+        self.ingest_pipeline_cluster_time += ingest_pipeline_node_time
+        self.ingest_pipeline_cluster_failed += ingest_pipeline_node_failed
+
+        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_count", ingest_pipeline_node_count, meta_data=metadata)
+        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_time", ingest_pipeline_node_time, "ms", meta_data=metadata)
+        self.metrics_store.put_value_node_level(node_name, "ingest_pipeline_node_failed", ingest_pipeline_node_failed, meta_data=metadata)
+
+    def _record_pipeline_level_processor_stats(self, pipeline, pipeline_name, cluster_name, node_name):
+        for processor_name, processor_stats in pipeline.items():
+            start_stats_processors = self.start_stats[cluster_name][node_name]["pipelines"].get(pipeline_name, {})
+            start_stats_processors.setdefault(processor_name, {})
+
+            # We have an individual processor obj, which contains the stats for each individual processor
+            if processor_name != "total":
+                metadata = {
+                    "processor_name": processor_name,
+                    "type": processor_stats.get("type", None),
+                    "pipeline_name": pipeline_name,
+                    "cluster_name": cluster_name,
+                }
+
+                start_count = start_stats_processors[processor_name].get("stats", {}).get("count", 0)
+                end_count = processor_stats.get("stats", {}).get("count", 0)
+                ingest_pipeline_processor_count = end_count - start_count
+
+                self.metrics_store.put_value_node_level(
+                    node_name, "ingest_pipeline_processor_count", ingest_pipeline_processor_count, meta_data=metadata
+                )
+
+                start_time = start_stats_processors[processor_name].get("stats", {}).get("time_in_millis", 0)
+                end_time = processor_stats.get("stats", {}).get("time_in_millis", 0)
+                ingest_pipeline_processor_time = end_time - start_time
+
+                self.metrics_store.put_value_node_level(
+                    node_name, "ingest_pipeline_processor_time", ingest_pipeline_processor_time, unit="ms", meta_data=metadata
+                )
+
+                start_failed = start_stats_processors[processor_name].get("stats", {}).get("failed", 0)
+                end_failed = processor_stats.get("stats", {}).get("failed", 0)
+                ingest_pipeline_processor_failed = end_failed - start_failed
+
+                self.metrics_store.put_value_node_level(
+                    node_name, "ingest_pipeline_processor_failed", ingest_pipeline_processor_failed, meta_data=metadata
+                )
+
+            # We have a top level pipeline stats obj, which contains the total time spent preprocessing documents in
+            # the ingest pipeline.
+            elif processor_name == "total":
+
+                metadata = {"pipeline_name": pipeline_name, "cluster_name": cluster_name}
+
+                start_count = start_stats_processors[processor_name].get("count", 0)
+                end_count = processor_stats.get("count", 0)
+                ingest_pipeline_pipeline_count = end_count - start_count
+
+                self.metrics_store.put_value_node_level(
+                    node_name, "ingest_pipeline_pipeline_count", ingest_pipeline_pipeline_count, meta_data=metadata
+                )
+
+                start_time = start_stats_processors[processor_name].get("time_in_millis", 0)
+                end_time = processor_stats.get("time_in_millis", 0)
+                ingest_pipeline_pipeline_time = end_time - start_time
+
+                self.metrics_store.put_value_node_level(
+                    node_name, "ingest_pipeline_pipeline_time", ingest_pipeline_pipeline_time, unit="ms", meta_data=metadata
+                )
+
+                start_failed = start_stats_processors[processor_name].get("failed", 0)
+                end_failed = processor_stats.get("failed", 0)
+                ingest_pipeline_pipeline_failed = end_failed - start_failed
+
+                self.metrics_store.put_value_node_level(
+                    node_name, "ingest_pipeline_pipeline_failed", ingest_pipeline_pipeline_failed, meta_data=metadata
+                )
+
+    def get_ingest_pipeline_stats(self):
+        # pylint: disable=import-outside-toplevel
+
+        import elasticsearch
+
+        summaries = {}
+        for cluster_name in self.specified_cluster_names:
+            try:
+                ingest_stats = self.clients[cluster_name].nodes.stats(metric="ingest")
+            except elasticsearch.TransportError:
+                msg = f"A transport error occurred while collecting Ingest Pipeline stats on cluster [{cluster_name}]"
+                self.logger.exception(msg)
+                raise exceptions.RallyError(msg)
+            summaries[ingest_stats["cluster_name"]] = self._parse_ingest_pipelines(ingest_stats)
+        return summaries
+
+    def _parse_ingest_pipelines(self, ingest_stats):
+        parsed_stats = {}
+
+        for node in ingest_stats["nodes"].values():
+            parsed_stats[node["name"]] = {}
+            parsed_stats[node["name"]]["total"] = node["ingest"]["total"]
+            parsed_stats[node["name"]]["pipelines"] = {}
+            for pipeline_name, pipeline_stats in node["ingest"]["pipelines"].items():
+                parsed_stats[node["name"]]["pipelines"][pipeline_name] = {}
+                parsed_stats[node["name"]]["pipelines"][pipeline_name]["total"] = {
+                    key: pipeline_stats[key] for key in pipeline_stats if key != "processors"
+                }
+                # There may be multiple processors of the same name/type in a single pipeline, so let's just
+                # label them 1-N
+                suffix = 1
+                for processor in pipeline_stats["processors"]:
+                    for processor_name, processor_stats in processor.items():
+                        processor_name = f"{str(processor_name)}_{suffix}"
+                        suffix += 1
+                        parsed_stats[node["name"]]["pipelines"][pipeline_name][processor_name] = processor_stats
+        return parsed_stats
+
+
 class StartupTime(InternalTelemetryDevice):
     def __init__(self, stopwatch=time.StopWatch):
         super().__init__()
@@ -1752,10 +1942,10 @@ class IndexStats(InternalTelemetryDevice):
             self.first_time = False
 
     def on_benchmark_stop(self):
-        self.logger.info("Gathering indices stats for all primaries on benchmark stop.")
+        self.logger.info("Gathering index stats for all primaries on benchmark stop.")
         index_stats = self.index_stats()
         # import json
-        # self.logger.debug("Returned indices stats:\n%s", json.dumps(index_stats, indent=2))
+        # self.logger.debug("Returned index stats:\n%s", json.dumps(index_stats, indent=2))
         if "_all" not in index_stats or "primaries" not in index_stats["_all"]:
             return
         p = index_stats["_all"]["primaries"]

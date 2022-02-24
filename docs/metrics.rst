@@ -129,23 +129,23 @@ Rally stores the following metrics:
 * ``node_total_young_gen_gc_count``: The total number of young generation garbage collections across the whole cluster as reported by the node stats API.
 * ``node_total_old_gen_gc_time``: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
 * ``node_total_old_gen_gc_count``: The total number of old generation garbage collections across the whole cluster as reported by the node stats API.
-* ``segments_count``: Total number of segments as reported by the indices stats API.
-* ``segments_memory_in_bytes``: Number of bytes used for segments as reported by the indices stats API.
-* ``segments_doc_values_memory_in_bytes``: Number of bytes used for doc values as reported by the indices stats API.
-* ``segments_stored_fields_memory_in_bytes``: Number of bytes used for stored fields as reported by the indices stats API.
-* ``segments_terms_memory_in_bytes``: Number of bytes used for terms as reported by the indices stats API.
-* ``segments_norms_memory_in_bytes``: Number of bytes used for norms as reported by the indices stats API.
-* ``segments_points_memory_in_bytes``: Number of bytes used for points as reported by the indices stats API.
-* ``merges_total_time``: Cumulative runtime of merges of primary shards, as reported by the indices stats API. Note that this is not Wall clock time (i.e. if M merge threads ran for N minutes, we will report M * N minutes, not N minutes). These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
-* ``merges_total_count``: Cumulative number of merges of primary shards, as reported by indices stats API under ``_all/primaries``.
-* ``merges_total_throttled_time``: Cumulative time within merges have been throttled as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
-* ``indexing_total_time``: Cumulative time used for indexing of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
-* ``indexing_throttle_time``: Cumulative time that indexing has been throttled, as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
-* ``refresh_total_time``: Cumulative time used for index refresh of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
-* ``refresh_total_count``: Cumulative number of refreshes of primary shards, as reported by indices stats API under ``_all/primaries``.
-* ``flush_total_time``: Cumulative time used for index flush of primary shards, as reported by the indices stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
-* ``flush_total_count``: Cumulative number of flushes of primary shards, as reported by indices stats API under ``_all/primaries``.
+* ``segments_count``: Total number of segments as reported by the index stats API.
+* ``segments_memory_in_bytes``: Number of bytes used for segments as reported by the index stats API.
+* ``segments_doc_values_memory_in_bytes``: Number of bytes used for doc values as reported by the index stats API.
+* ``segments_stored_fields_memory_in_bytes``: Number of bytes used for stored fields as reported by the index stats API.
+* ``segments_terms_memory_in_bytes``: Number of bytes used for terms as reported by the index stats API.
+* ``segments_norms_memory_in_bytes``: Number of bytes used for norms as reported by the index stats API.
+* ``segments_points_memory_in_bytes``: Number of bytes used for points as reported by the index stats API.
+* ``merges_total_time``: Cumulative runtime of merges of primary shards, as reported by the index stats API. Note that this is not Wall clock time (i.e. if M merge threads ran for N minutes, we will report M * N minutes, not N minutes). These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``merges_total_count``: Cumulative number of merges of primary shards, as reported by index stats API under ``_all/primaries``.
+* ``merges_total_throttled_time``: Cumulative time within merges have been throttled as reported by the index stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``indexing_total_time``: Cumulative time used for indexing of primary shards, as reported by the index stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``indexing_throttle_time``: Cumulative time that indexing has been throttled, as reported by the index stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``refresh_total_time``: Cumulative time used for index refresh of primary shards, as reported by the index stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``refresh_total_count``: Cumulative number of refreshes of primary shards, as reported by index stats API under ``_all/primaries``.
+* ``flush_total_time``: Cumulative time used for index flush of primary shards, as reported by the index stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
+* ``flush_total_count``: Cumulative number of flushes of primary shards, as reported by index stats API under ``_all/primaries``.
 * ``final_index_size_bytes``: Final resulting index size on the file system after all nodes have been shutdown at the end of the benchmark. It includes all files in the nodes' data directories (actual index files and translog).
-* ``store_size_in_bytes``: The size in bytes of the index (excluding the translog), as reported by the indices stats API.
-* ``translog_size_in_bytes``: The size in bytes of the translog, as reported by the indices stats API.
+* ``store_size_in_bytes``: The size in bytes of the index (excluding the translog), as reported by the index stats API.
+* ``translog_size_in_bytes``: The size in bytes of the translog, as reported by the index stats API.
 * ``ml_processing_time``: A structure containing the minimum, mean, median and maximum bucket processing time in milliseconds per machine learning job. These metrics are only available if a machine learning job has been created in the respective benchmark.

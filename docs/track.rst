@@ -327,7 +327,7 @@ Each entry in the ``documents`` list consists of the following properties:
 
     .. note::
 
-        When this is ``true``, the ``documents`` property should only reflect the number of documents and not additionally include the number of action and metadata lines.
+        When this is ``true``, the ``document-count`` property should only reflect the number of documents and not additionally include the number of action and metadata lines.
 
 * ``document-count`` (mandatory): Number of documents in the source file. This number is used by Rally to determine which client indexes which part of the document corpus (each of the N clients gets one N-th of the document corpus). If you are using parent-child, specify the number of parent documents.
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
@@ -736,7 +736,7 @@ Properties
 * ``conflict-probability`` (optional, defaults to 25 percent): A number between [0, 100] that defines how many of the documents will get replaced. Combining ``conflicts=sequential`` and ``conflict-probability=0`` makes Rally generate index ids by itself, instead of relying on Elasticsearch's `automatic id generation <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html#_automatic_id_generation>`_.
 * ``on-conflict`` (optional, defaults to ``index``): Determines whether Rally should use the action ``index`` or ``update`` on id conflicts.
 * ``recency`` (optional, defaults to 0): A number between [0,1] indicating whether to bias conflicting ids towards more recent ids (``recency`` towards 1) or whether to consider all ids for id conflicts (``recency`` towards 0). See the diagram below for details.
-* ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results. See the section below for the meta-data that are returned.
+* ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results. See the section below for the meta-data that are returned. This property must be set to ``true`` for individual bulk request failures to be logged by Rally.
 * ``timeout`` (optional, defaults to ``1m``): Defines the `time period that Elasticsearch will wait per action <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-query-params>`_ until it has finished processing the following operations: automatic index creation, dynamic mapping updates, waiting for active shards.
 
 
@@ -905,13 +905,13 @@ This operation returns no meta-data.
 index-stats
 ~~~~~~~~~~~
 
-With the operation type ``index-stats`` you can call the `indices stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_.
+With the operation type ``index-stats`` you can call the `index stats API <http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html>`_.
 
 Properties
 """"""""""
 
 * ``index`` (optional, defaults to `_all`): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this operation.
-* ``condition`` (optional, defaults to no condition): A structured object with the properties ``path`` and ``expected-value``. If the actual value returned by indices stats API is equal to the expected value at the provided path, this operation will return successfully. See below for an example how this can be used.
+* ``condition`` (optional, defaults to no condition): A structured object with the properties ``path`` and ``expected-value``. If the actual value returned by index stats API is equal to the expected value at the provided path, this operation will return successfully. See below for an example how this can be used.
 
 In the following example the ``index-stats`` operation will wait until all segments have been merged::
 
