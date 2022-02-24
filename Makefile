@@ -30,7 +30,6 @@ export WHEEL_VERSION = $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variable
 VIRTUAL_ENV ?= .venv
 VENV_ACTIVATE_FILE = $(VIRTUAL_ENV)/bin/activate
 VEPYTHON = $(VIRTUAL_ENV)/bin/$(PY_BIN)
-VEPYLINT = $(VIRTUAL_ENV)/bin/pylint
 PYENV_ERROR = "\033[0;31mIMPORTANT\033[0m: Please install pyenv.\n"
 PYENV_PREREQ_HELP = "\033[0;31mIMPORTANT\033[0m: please type \033[0;31mpyenv init\033[0m, follow the instructions there and restart your terminal before proceeding any further.\n"
 VE_MISSING_HELP = "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_ENV); have you executed make venv-create?\033[0m\n"
@@ -92,7 +91,7 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: activate-venv
-	@find esrally benchmarks scripts tests it setup.py -name "*.py" -exec $(VEPYLINT) -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
+	@find esrally benchmarks scripts tests it setup.py -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
 	black --check esrally benchmarks scripts tests it setup.py
 	isort --check esrally benchmarks scripts tests it setup.py
 
