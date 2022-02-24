@@ -17,59 +17,48 @@
 # pylint: disable=protected-access
 
 import random
-from unittest import TestCase
+
+import pytest
 
 from esrally import exceptions
 from esrally.driver import scheduler
 from esrally.track import track
 
 
-class SchedulerTestCase(TestCase):
+def assert_throughput(sched, expected_average_throughput, msg="", relative_delta=0.05):
     ITERATIONS = 10000
+    expected_average_rate = 1 / expected_average_throughput
+    sum = 0
+    for _ in range(0, ITERATIONS):
+        tn = sched.next(0)
+        # schedule must not go backwards in time
+        assert tn >= 0, msg
+        sum += tn
+    actual_average_rate = sum / ITERATIONS
 
-    def assertThroughputEquals(self, sched, expected_average_throughput, msg="", relative_delta=0.05):
-        expected_average_rate = 1 / expected_average_throughput
-        sum = 0
-        for _ in range(0, SchedulerTestCase.ITERATIONS):
-            tn = sched.next(0)
-            # schedule must not go backwards in time
-            self.assertGreaterEqual(tn, 0, msg)
-            sum += tn
-        actual_average_rate = sum / SchedulerTestCase.ITERATIONS
-
-        expected_lower_bound = (1.0 - relative_delta) * expected_average_rate
-        expected_upper_bound = (1.0 + relative_delta) * expected_average_rate
-
-        self.assertGreaterEqual(
-            actual_average_rate,
-            expected_lower_bound,
-            f"{msg}: expected target rate to be >= [{expected_lower_bound}] but was [{actual_average_rate}].",
-        )
-        self.assertLessEqual(
-            actual_average_rate,
-            expected_upper_bound,
-            f"{msg}: expected target rate to be <= [{expected_upper_bound}] but was [{actual_average_rate}].",
-        )
+    expected_lower_bound = (1.0 - relative_delta) * expected_average_rate
+    expected_upper_bound = (1.0 + relative_delta) * expected_average_rate
+    assert expected_lower_bound <= actual_average_rate <= expected_upper_bound
 
 
-class DeterministicSchedulerTests(SchedulerTestCase):
+class TestDeterministicScheduler:
     def test_schedule_matches_expected_target_throughput(self):
         target_throughput = random.randint(10, 1000)
 
         # this scheduler does not make use of the task, thus we won't specify it here
         s = scheduler.DeterministicScheduler(task=None, target_throughput=target_throughput)
-        self.assertThroughputEquals(s, target_throughput, f"target throughput=[{target_throughput}] ops/s")
+        assert_throughput(s, target_throughput, f"target throughput=[{target_throughput}] ops/s")
 
 
-class PoissonSchedulerTests(SchedulerTestCase):
+class TestPoissonScheduler:
     def test_schedule_matches_expected_target_throughput(self):
         target_throughput = random.randint(10, 1000)
         # this scheduler does not make use of the task, thus we won't specify it here
         s = scheduler.PoissonScheduler(task=None, target_throughput=target_throughput)
-        self.assertThroughputEquals(s, target_throughput, f"target throughput=[{target_throughput}] ops/s")
+        assert_throughput(s, target_throughput, f"target throughput=[{target_throughput}] ops/s")
 
 
-class UnitAwareSchedulerTests(TestCase):
+class TestUnitAwareScheduler:
     def test_scheduler_rejects_differing_throughput_units(self):
         task = track.Task(
             name="bulk-index",
@@ -79,11 +68,10 @@ class UnitAwareSchedulerTests(TestCase):
         )
 
         s = scheduler.UnitAwareScheduler(task=task, scheduler_class=scheduler.DeterministicScheduler)
-        with self.assertRaises(exceptions.RallyAssertionError) as ex:
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
             s.after_request(now=None, weight=1000, unit="docs", request_meta_data=None)
-        self.assertEqual(
-            "Target throughput for [bulk-index] is specified in [MB/s] but the task throughput is measured in [docs/s].",
-            ex.exception.args[0],
+        assert exc.value.args[0] == (
+            "Target throughput for [bulk-index] is specified in [MB/s] but the task throughput is measured in [docs/s]."
         )
 
     def test_scheduler_adapts_to_changed_weights(self):
@@ -98,18 +86,18 @@ class UnitAwareSchedulerTests(TestCase):
         # first request is unthrottled
         # suppress pylint false positive
         # pylint: disable=not-callable
-        self.assertEqual(0, s.next(0))
+        assert s.next(0) == 0
         # we'll start with bulks of 1.000 docs, which corresponds to 5 requests per second for all clients
         s.after_request(now=None, weight=1000, unit="docs", request_meta_data=None)
         # suppress pylint false positive
         # pylint: disable=not-callable
-        self.assertEqual(1 / 5 * task.clients, s.next(0))
+        assert s.next(0) == 1 / 5 * task.clients
 
         # bulk size changes to 10.000 docs, which means one request every two seconds for all clients
         s.after_request(now=None, weight=10000, unit="docs", request_meta_data=None)
         # suppress pylint false positive
         # pylint: disable=not-callable
-        self.assertEqual(2 * task.clients, s.next(0))
+        assert s.next(0) == 2 * task.clients
 
     def test_scheduler_accepts_differing_units_pages_and_ops(self):
         task = track.Task(
@@ -126,13 +114,13 @@ class UnitAwareSchedulerTests(TestCase):
         # first request is unthrottled
         # suppress pylint false positive
         # pylint: disable=not-callable
-        self.assertEqual(0, s.next(0))
+        assert s.next(0) == 0
         # no exception despite differing units ...
         s.after_request(now=None, weight=20, unit="pages", request_meta_data=None)
         # ... and it is still throttled in ops/s
         # suppress pylint false positive
         # pylint: disable=not-callable
-        self.assertEqual(0.1 * task.clients, s.next(0))
+        assert s.next(0) == 0.1 * task.clients
 
     def test_scheduler_does_not_change_throughput_for_empty_requests(self):
         task = track.Task(
@@ -150,23 +138,23 @@ class UnitAwareSchedulerTests(TestCase):
         s.before_request(now=0)
         # suppress pylint false positive
         # pylint: disable=not-callable
-        self.assertEqual(0, s.next(0))
+        assert s.next(0) == 0
         # ... but it also produced an error (zero ops)
         s.after_request(now=1, weight=0, unit="ops", request_meta_data=None)
         # next request is still unthrottled
         s.before_request(now=1)
         # suppress pylint false positive
         # pylint: disable=not-callable
-        self.assertEqual(0, s.next(0))
+        assert s.next(0) == 0
         s.after_request(now=2, weight=1, unit="ops", request_meta_data=None)
         # now we throttle
         s.before_request(now=2)
         # suppress pylint false positive
         # pylint: disable=not-callable
-        self.assertEqual(0.1 * task.clients, s.next(0))
+        assert s.next(0) == 0.1 * task.clients
 
 
-class SchedulerCategorizationTests(TestCase):
+class TestSchedulerCategorization:
     class LegacyScheduler:
         # pylint: disable=unused-variable
         def __init__(self, params):
@@ -178,21 +166,21 @@ class SchedulerCategorizationTests(TestCase):
             pass
 
     def test_detects_legacy_scheduler(self):
-        self.assertTrue(scheduler.is_legacy_scheduler(SchedulerCategorizationTests.LegacyScheduler))
-        self.assertTrue(scheduler.is_legacy_scheduler(SchedulerCategorizationTests.LegacySchedulerWithAdditionalArgs))
+        assert scheduler.is_legacy_scheduler(self.LegacyScheduler)
+        assert scheduler.is_legacy_scheduler(self.LegacySchedulerWithAdditionalArgs)
 
     def test_a_regular_scheduler_is_not_a_legacy_scheduler(self):
-        self.assertFalse(scheduler.is_legacy_scheduler(scheduler.DeterministicScheduler))
-        self.assertFalse(scheduler.is_legacy_scheduler(scheduler.UnitAwareScheduler))
+        assert not scheduler.is_legacy_scheduler(scheduler.DeterministicScheduler)
+        assert not scheduler.is_legacy_scheduler(scheduler.UnitAwareScheduler)
 
     def test_is_simple_scheduler(self):
-        self.assertTrue(scheduler.is_simple_scheduler(scheduler.PoissonScheduler))
+        assert scheduler.is_simple_scheduler(scheduler.PoissonScheduler)
 
     def test_is_not_simple_scheduler(self):
-        self.assertFalse(scheduler.is_simple_scheduler(scheduler.UnitAwareScheduler))
+        assert not scheduler.is_simple_scheduler(scheduler.UnitAwareScheduler)
 
 
-class SchedulerThrottlingTests(TestCase):
+class TestSchedulerThrottling:
     def task(self, schedule=None, target_throughput=None, target_interval=None):
         op = track.Operation("bulk-index", track.OperationType.Bulk.to_hyphenated_string())
         params = {}
@@ -203,22 +191,22 @@ class SchedulerThrottlingTests(TestCase):
         return track.Task("test", op, schedule=schedule, params=params)
 
     def test_throttled_by_target_throughput(self):
-        self.assertFalse(scheduler.run_unthrottled(self.task(target_throughput=4, schedule="deterministic")))
+        assert not scheduler.run_unthrottled(self.task(target_throughput=4, schedule="deterministic"))
 
     def test_throttled_by_target_interval(self):
-        self.assertFalse(scheduler.run_unthrottled(self.task(target_interval=2)))
+        assert not scheduler.run_unthrottled(self.task(target_interval=2))
 
     def test_throttled_by_custom_schedule(self):
-        self.assertFalse(scheduler.run_unthrottled(self.task(schedule="my-custom-schedule")))
+        assert not scheduler.run_unthrottled(self.task(schedule="my-custom-schedule"))
 
     def test_unthrottled_by_target_throughput(self):
-        self.assertTrue(scheduler.run_unthrottled(self.task(target_throughput=None)))
+        assert scheduler.run_unthrottled(self.task(target_throughput=None))
 
     def test_unthrottled_by_target_interval(self):
-        self.assertTrue(scheduler.run_unthrottled(self.task(target_interval=0, schedule="poisson")))
+        assert scheduler.run_unthrottled(self.task(target_interval=0, schedule="poisson"))
 
 
-class LegacyWrappingSchedulerTests(TestCase):
+class TestLegacyWrappingScheduler:
     class SimpleLegacyScheduler:
         # pylint: disable=unused-variable
         def __init__(self, params):
@@ -227,10 +215,10 @@ class LegacyWrappingSchedulerTests(TestCase):
         def next(self, current):
             return current
 
-    def setUp(self):
-        scheduler.register_scheduler("simple", LegacyWrappingSchedulerTests.SimpleLegacyScheduler)
+    def setup_method(self, method):
+        scheduler.register_scheduler("simple", self.SimpleLegacyScheduler)
 
-    def tearDown(self):
+    def teardown_method(self, method):
         scheduler.remove_scheduler("simple")
 
     def test_legacy_scheduler(self):
@@ -243,5 +231,5 @@ class LegacyWrappingSchedulerTests(TestCase):
 
         s = scheduler.scheduler_for(task)
 
-        self.assertEqual(0, s.next(0))
-        self.assertEqual(0, s.next(0))
+        assert s.next(0) == 0
+        assert s.next(0) == 0

@@ -16,7 +16,6 @@
 # under the License.
 # pylint: disable=protected-access
 
-import collections
 import datetime
 import json
 import logging
@@ -26,9 +25,9 @@ import string
 import tempfile
 import unittest.mock as mock
 import uuid
-from unittest import TestCase
 
 import elasticsearch.exceptions
+import pytest
 
 from esrally import config, exceptions, metrics, paths, track
 from esrally.metrics import GlobalStatsCalculator
@@ -110,39 +109,39 @@ class TransportErrors:
         return side_effect_list
 
 
-class ExtractUserTagsTests(TestCase):
+class TestExtractUserTags:
     def test_no_tags_returns_empty_dict(self):
         cfg = config.Config()
-        self.assertEqual(0, len(metrics.extract_user_tags_from_config(cfg)))
+        assert len(metrics.extract_user_tags_from_config(cfg)) == 0
 
     def test_missing_comma_raises_error(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "race", "user.tag", "invalid")
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             metrics.extract_user_tags_from_config(cfg)
-        self.assertEqual("User tag keys and values have to separated by a ':'. Invalid value [invalid]", ctx.exception.args[0])
+        assert ctx.value.args[0] == "User tag keys and values have to separated by a ':'. Invalid value [invalid]"
 
     def test_missing_value_raises_error(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "race", "user.tag", "invalid1,invalid2")
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             metrics.extract_user_tags_from_config(cfg)
-        self.assertEqual("User tag keys and values have to separated by a ':'. Invalid value [invalid1,invalid2]", ctx.exception.args[0])
+        assert ctx.value.args[0] == "User tag keys and values have to separated by a ':'. Invalid value [invalid1,invalid2]"
 
     def test_extracts_proper_user_tags(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "race", "user.tag", "os:Linux,cpu:ARM")
-        self.assertDictEqual({"os": "Linux", "cpu": "ARM"}, metrics.extract_user_tags_from_config(cfg))
+        assert metrics.extract_user_tags_from_config(cfg) == {"os": "Linux", "cpu": "ARM"}
 
 
-class EsClientTests(TestCase):
+class TestEsClient:
     class TransportMock:
         def __init__(self, hosts):
             self.hosts = hosts
 
     class ClientMock:
         def __init__(self, hosts):
-            self.transport = EsClientTests.TransportMock(hosts)
+            self.transport = TestEsClient.TransportMock(hosts)
 
     @mock.patch("esrally.client.EsClientFactory")
     def test_config_opts_parsing(self, client_esclientfactory):
@@ -180,57 +179,53 @@ class EsClientTests(TestCase):
         def raise_connection_error():
             raise elasticsearch.exceptions.ConnectionError("unit-test")
 
-        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9200"}]))
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9200"}]))
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             client.guarded(raise_connection_error)
-        self.assertEqual(
+        assert ctx.value.args[0] == (
             "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [127.0.0.1] at "
-            "port [9200] or fix the configuration in [%s/rally.ini]." % paths.rally_confdir(),
-            ctx.exception.args[0],
+            f"port [9200] or fix the configuration in [{paths.rally_confdir()}/rally.ini]."
         )
 
     def test_raises_sytem_setup_error_on_authentication_problems(self):
         def raise_authentication_error():
             raise elasticsearch.exceptions.AuthenticationException("unit-test")
 
-        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             client.guarded(raise_authentication_error)
-        self.assertEqual(
+        assert ctx.value.args[0] == (
             "The configured user could not authenticate against your Elasticsearch metrics store running on host [127.0.0.1] "
-            "at port [9243] (wrong password?). Please fix the configuration in [%s/rally.ini]." % paths.rally_confdir(),
-            ctx.exception.args[0],
+            f"at port [9243] (wrong password?). Please fix the configuration in [{paths.rally_confdir()}/rally.ini]."
         )
 
     def test_raises_sytem_setup_error_on_authorization_problems(self):
         def raise_authorization_error():
             raise elasticsearch.exceptions.AuthorizationException("unit-test")
 
-        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             client.guarded(raise_authorization_error)
-        self.assertEqual(
+        assert ctx.value.args[0] == (
             "The configured user does not have enough privileges to run the operation [raise_authorization_error] against "
             "your Elasticsearch metrics store running on host [127.0.0.1] at port [9243]. Please adjust your x-pack "
-            "configuration or specify a user with enough privileges in the configuration in [%s/rally.ini]." % paths.rally_confdir(),
-            ctx.exception.args[0],
+            f"configuration or specify a user with enough privileges in the configuration in [{paths.rally_confdir()}/rally.ini]."
         )
 
     def test_raises_rally_error_on_unknown_problems(self):
         def raise_unknown_error():
             raise elasticsearch.exceptions.SerializationError("unit-test")
 
-        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
-        with self.assertRaises(exceptions.RallyError) as ctx:
+        with pytest.raises(exceptions.RallyError) as ctx:
             client.guarded(raise_unknown_error)
-        self.assertEqual(
+        assert ctx.value.args[0] == (
             "An unknown error occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
-            "store on host [127.0.0.1] at port [9243].",
-            ctx.exception.args[0],
+            "store on host [127.0.0.1] at port [9243]."
         )
 
     def test_retries_on_various_transport_errors(self):
@@ -243,14 +238,14 @@ class EsClientTests(TestCase):
             # Disable additional randomization time in exponential backoff calls
             mocked_random.return_value = 0
 
-            client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+            client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
             logger = logging.getLogger("esrally.metrics")
             with mock.patch.object(logger, "debug") as mocked_debug_logger:
                 test_result = client.guarded(operation)
                 mocked_sleep.assert_has_calls(expected_sleep_calls)
                 mocked_debug_logger.assert_has_calls(expected_logging_calls, any_order=True)
-                self.assertEqual("success", test_result)
+                assert test_result == "success"
 
         max_retry = 10
         all_err_codes = TransportErrors.err_return_codes
@@ -284,25 +279,24 @@ class EsClientTests(TestCase):
         def random_transport_error(rnd_resp_code):
             raise elasticsearch.exceptions.TransportError(rnd_resp_code, TransportErrors.err_return_codes[rnd_resp_code])
 
-        client = metrics.EsClient(EsClientTests.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
         rnd_code = random.choice(list(TransportErrors.err_return_codes))
 
-        with self.assertRaises(exceptions.RallyError) as ctx:
+        with pytest.raises(exceptions.RallyError) as ctx:
             client.guarded(random_transport_error, rnd_code)
 
-        self.assertEqual(
+        assert ctx.value.args[0] == (
             "A transport error occurred while running the operation "
             "[random_transport_error] against your Elasticsearch metrics "
-            "store on host [127.0.0.1] at port [9243].",
-            ctx.exception.args[0],
+            "store on host [127.0.0.1] at port [9243]."
         )
 
 
-class EsMetricsTests(TestCase):
+class TestEsMetrics:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
-    def setUp(self):
+    def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
         self.cfg.add(config.Scope.application, "track", "params", {"shard-count": 3})
@@ -315,12 +309,12 @@ class EsMetricsTests(TestCase):
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         self.metrics_store.put_value_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
-            "race-id": EsMetricsTests.RACE_ID,
+            "race-id": self.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
@@ -341,14 +335,14 @@ class EsMetricsTests(TestCase):
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         self.metrics_store.put_value_cluster_level(
             name="indexing_throughput", value=throughput, unit="docs/s", absolute_time=0, relative_time=10
         )
         expected_doc = {
             "@timestamp": 0,
-            "race-id": EsMetricsTests.RACE_ID,
+            "race-id": self.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 10000,
             "environment": "unittest",
@@ -371,7 +365,7 @@ class EsMetricsTests(TestCase):
         throughput = 5000
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing,disk_type:hdd")
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
@@ -384,7 +378,7 @@ class EsMetricsTests(TestCase):
         self.metrics_store.put_value_node_level("node0", "indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
-            "race-id": EsMetricsTests.RACE_ID,
+            "race-id": self.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
@@ -410,7 +404,7 @@ class EsMetricsTests(TestCase):
         self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
 
     def test_put_doc_no_meta_data(self):
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         self.metrics_store.put_doc(
             doc={
@@ -422,7 +416,7 @@ class EsMetricsTests(TestCase):
         )
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
-            "race-id": EsMetricsTests.RACE_ID,
+            "race-id": self.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
@@ -443,7 +437,7 @@ class EsMetricsTests(TestCase):
     def test_put_doc_with_metadata(self):
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "race", "user.tag", "intention:testing,disk_type:hdd")
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
@@ -468,7 +462,7 @@ class EsMetricsTests(TestCase):
         )
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
-            "race-id": EsMetricsTests.RACE_ID,
+            "race-id": self.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "relative-time": 0,
             "environment": "unittest",
@@ -507,13 +501,13 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
                 "bool": {
                     "filter": [
-                        {"term": {"race-id": EsMetricsTests.RACE_ID}},
+                        {"term": {"race-id": self.RACE_ID}},
                         {"term": {"name": "service_time"}},
                         {"term": {"task": "task1"}},
                     ]
@@ -529,20 +523,20 @@ class EsMetricsTests(TestCase):
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
-        self.assertEqual(duration, actual_duration)
+        assert actual_duration == duration
 
     def test_get_one_no_hits(self):
         duration = None
         search_result = {"hits": {"total": 0, "hits": []}}
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
                 "bool": {
                     "filter": [
-                        {"term": {"race-id": EsMetricsTests.RACE_ID}},
+                        {"term": {"race-id": self.RACE_ID}},
                         {"term": {"name": "latency"}},
                         {"term": {"task": "task2"}},
                     ]
@@ -558,7 +552,7 @@ class EsMetricsTests(TestCase):
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
-        self.assertEqual(duration, actual_duration)
+        assert actual_duration == duration
 
     def test_get_value(self):
         throughput = 5000
@@ -577,7 +571,7 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
@@ -585,7 +579,7 @@ class EsMetricsTests(TestCase):
                     "filter": [
                         {
                             "term": {
-                                "race-id": EsMetricsTests.RACE_ID,
+                                "race-id": self.RACE_ID,
                             },
                         },
                         {
@@ -603,7 +597,7 @@ class EsMetricsTests(TestCase):
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
-        self.assertEqual(throughput, actual_throughput)
+        assert actual_throughput == throughput
 
     def test_get_per_node_value(self):
         index_size = 5000
@@ -622,13 +616,13 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
                 "bool": {
                     "filter": [
-                        {"term": {"race-id": EsMetricsTests.RACE_ID}},
+                        {"term": {"race-id": self.RACE_ID}},
                         {"term": {"name": "final_index_size_bytes"}},
                         {"term": {"meta.node_name": "rally-node-3"}},
                     ]
@@ -641,7 +635,7 @@ class EsMetricsTests(TestCase):
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
-        self.assertEqual(index_size, actual_index_size)
+        assert actual_index_size == index_size
 
     def test_get_mean(self):
         mean_throughput = 1734
@@ -661,13 +655,13 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
                 "bool": {
                     "filter": [
-                        {"term": {"race-id": EsMetricsTests.RACE_ID}},
+                        {"term": {"race-id": self.RACE_ID}},
                         {"term": {"name": "indexing_throughput"}},
                         {"term": {"operation-type": "bulk"}},
                     ]
@@ -687,7 +681,7 @@ class EsMetricsTests(TestCase):
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
-        self.assertEqual(mean_throughput, actual_mean_throughput)
+        assert actual_mean_throughput == mean_throughput
 
     def test_get_median(self):
         median_throughput = 30535
@@ -705,13 +699,13 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
                 "bool": {
                     "filter": [
-                        {"term": {"race-id": EsMetricsTests.RACE_ID}},
+                        {"term": {"race-id": self.RACE_ID}},
                         {"term": {"name": "indexing_throughput"}},
                         {"term": {"operation-type": "bulk"}},
                     ]
@@ -732,11 +726,10 @@ class EsMetricsTests(TestCase):
 
         self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
 
-        self.assertEqual(median_throughput, actual_median_throughput)
+        assert actual_median_throughput == median_throughput
 
     def test_get_error_rate_implicit_zero(self):
-        self.assertEqual(
-            0.0,
+        assert (
             self._get_error_rate(
                 buckets=[
                     {
@@ -745,12 +738,12 @@ class EsMetricsTests(TestCase):
                         "doc_count": 0,
                     },
                 ],
-            ),
+            )
+            == 0.0
         )
 
     def test_get_error_rate_explicit_zero(self):
-        self.assertEqual(
-            0.0,
+        assert (
             self._get_error_rate(
                 buckets=[
                     {
@@ -764,12 +757,12 @@ class EsMetricsTests(TestCase):
                         "doc_count": 500,
                     },
                 ]
-            ),
+            )
+            == 0.0
         )
 
     def test_get_error_rate_implicit_one(self):
-        self.assertEqual(
-            1.0,
+        assert (
             self._get_error_rate(
                 buckets=[
                     {
@@ -778,12 +771,12 @@ class EsMetricsTests(TestCase):
                         "doc_count": 123,
                     },
                 ],
-            ),
+            )
+            == 1.0
         )
 
     def test_get_error_rate_explicit_one(self):
-        self.assertEqual(
-            1.0,
+        assert (
             self._get_error_rate(
                 buckets=[
                     {
@@ -797,12 +790,12 @@ class EsMetricsTests(TestCase):
                         "doc_count": 0,
                     },
                 ]
-            ),
+            )
+            == 1.0
         )
 
     def test_get_error_rate_mixed(self):
-        self.assertEqual(
-            0.5,
+        assert (
             self._get_error_rate(
                 buckets=[
                     {
@@ -816,12 +809,12 @@ class EsMetricsTests(TestCase):
                         "doc_count": 500,
                     },
                 ]
-            ),
+            )
+            == 0.5
         )
 
     def test_get_error_rate_additional_unknown_key(self):
-        self.assertEqual(
-            0.25,
+        assert (
             self._get_error_rate(
                 buckets=[
                     {
@@ -840,7 +833,8 @@ class EsMetricsTests(TestCase):
                         "doc_count": 13700,
                     },
                 ]
-            ),
+            )
+            == 0.25
         )
 
     def _get_error_rate(self, buckets):
@@ -852,13 +846,13 @@ class EsMetricsTests(TestCase):
         }
         self.es_mock.search = mock.MagicMock(return_value=search_result)
 
-        self.metrics_store.open(EsMetricsTests.RACE_ID, EsMetricsTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         expected_query = {
             "query": {
                 "bool": {
                     "filter": [
-                        {"term": {"race-id": EsMetricsTests.RACE_ID}},
+                        {"term": {"race-id": self.RACE_ID}},
                         {"term": {"name": "service_time"}},
                         {"term": {"task": "scroll_query"}},
                     ]
@@ -879,7 +873,7 @@ class EsMetricsTests(TestCase):
         return actual_error_rate
 
 
-class EsRaceStoreTests(TestCase):
+class TestEsRaceStore:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
@@ -890,11 +884,11 @@ class EsRaceStoreTests(TestCase):
         def as_dict(self):
             return self.d
 
-    def setUp(self):
+    def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
-        self.cfg.add(config.Scope.application, "system", "time.start", EsRaceStoreTests.RACE_TIMESTAMP)
-        self.cfg.add(config.Scope.application, "system", "race.id", FileRaceStoreTests.RACE_ID)
+        self.cfg.add(config.Scope.application, "system", "time.start", self.RACE_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "race.id", self.RACE_ID)
         self.race_store = metrics.EsRaceStore(
             self.cfg,
             client_factory_class=MockClientFactory,
@@ -912,7 +906,7 @@ class EsRaceStoreTests(TestCase):
                         "_source": {
                             "rally-version": "0.4.4",
                             "environment": "unittest",
-                            "race-id": EsRaceStoreTests.RACE_ID,
+                            "race-id": self.RACE_ID,
                             "race-timestamp": "20160131T000000Z",
                             "pipeline": "from-sources",
                             "track": "unittest",
@@ -929,8 +923,8 @@ class EsRaceStoreTests(TestCase):
             }
         }
 
-        race = self.race_store.find_by_race_id(race_id=EsRaceStoreTests.RACE_ID)
-        self.assertEqual(race.race_id, EsRaceStoreTests.RACE_ID)
+        race = self.race_store.find_by_race_id(race_id=self.RACE_ID)
+        assert race.race_id == self.RACE_ID
 
     def test_does_not_find_missing_race_by_race_id(self):
         self.es_mock.search.return_value = {
@@ -943,7 +937,7 @@ class EsRaceStoreTests(TestCase):
             },
         }
 
-        with self.assertRaisesRegex(exceptions.NotFound, r"No race with race id \[.*\]"):
+        with pytest.raises(exceptions.NotFound, match=r"No race with race id \[.*\]"):
             self.race_store.find_by_race_id(race_id="some invalid race id")
 
     def test_store_race(self):
@@ -959,8 +953,8 @@ class EsRaceStoreTests(TestCase):
             rally_version="0.4.4",
             rally_revision="123abc",
             environment_name="unittest",
-            race_id=EsRaceStoreTests.RACE_ID,
-            race_timestamp=EsRaceStoreTests.RACE_TIMESTAMP,
+            race_id=self.RACE_ID,
+            race_timestamp=self.RACE_TIMESTAMP,
             pipeline="from-sources",
             user_tags={"os": "Linux"},
             track=t,
@@ -974,7 +968,7 @@ class EsRaceStoreTests(TestCase):
             distribution_version="5.0.0",
             distribution_flavor="default",
             revision="aaaeeef",
-            results=EsRaceStoreTests.DictHolder(
+            results=self.DictHolder(
                 {
                     "young_gc_time": 100,
                     "old_gc_time": 5,
@@ -995,7 +989,7 @@ class EsRaceStoreTests(TestCase):
             "rally-version": "0.4.4",
             "rally-revision": "123abc",
             "environment": "unittest",
-            "race-id": EsRaceStoreTests.RACE_ID,
+            "race-id": self.RACE_ID,
             "race-timestamp": "20160131T000000Z",
             "pipeline": "from-sources",
             "user-tags": {"os": "Linux"},
@@ -1028,17 +1022,17 @@ class EsRaceStoreTests(TestCase):
                 ],
             },
         }
-        self.es_mock.index.assert_called_with(index="rally-races-2016-01", id=EsRaceStoreTests.RACE_ID, item=expected_doc)
+        self.es_mock.index.assert_called_with(index="rally-races-2016-01", id=self.RACE_ID, item=expected_doc)
 
 
-class EsResultsStoreTests(TestCase):
+class TestEsResultsStore:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
-    def setUp(self):
+    def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
-        self.cfg.add(config.Scope.application, "system", "time.start", EsRaceStoreTests.RACE_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "time.start", self.RACE_TIMESTAMP)
         self.results_store = metrics.EsResultsStore(
             self.cfg,
             client_factory_class=MockClientFactory,
@@ -1061,8 +1055,8 @@ class EsResultsStoreTests(TestCase):
             rally_version="0.4.4",
             rally_revision="123abc",
             environment_name="unittest",
-            race_id=EsResultsStoreTests.RACE_ID,
-            race_timestamp=EsResultsStoreTests.RACE_TIMESTAMP,
+            race_id=self.RACE_ID,
+            race_timestamp=self.RACE_TIMESTAMP,
             pipeline="from-sources",
             user_tags={"os": "Linux"},
             track=t,
@@ -1108,7 +1102,7 @@ class EsResultsStoreTests(TestCase):
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
-                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-id": self.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
                 "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
@@ -1132,7 +1126,7 @@ class EsResultsStoreTests(TestCase):
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
-                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-id": self.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
                 "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
@@ -1164,7 +1158,7 @@ class EsResultsStoreTests(TestCase):
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
-                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-id": self.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
                 "distribution-flavor": "oss",
                 "distribution-version": "5.0.0",
@@ -1201,8 +1195,8 @@ class EsResultsStoreTests(TestCase):
             rally_version="0.4.4",
             rally_revision=None,
             environment_name="unittest",
-            race_id=EsResultsStoreTests.RACE_ID,
-            race_timestamp=EsResultsStoreTests.RACE_TIMESTAMP,
+            race_id=self.RACE_ID,
+            race_timestamp=self.RACE_TIMESTAMP,
             pipeline="from-sources",
             user_tags={"os": "Linux"},
             track=t,
@@ -1248,7 +1242,7 @@ class EsResultsStoreTests(TestCase):
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
-                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-id": self.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
                 "distribution-flavor": None,
                 "distribution-version": None,
@@ -1270,7 +1264,7 @@ class EsResultsStoreTests(TestCase):
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
-                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-id": self.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
                 "distribution-flavor": None,
                 "distribution-version": None,
@@ -1300,7 +1294,7 @@ class EsResultsStoreTests(TestCase):
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
-                "race-id": EsResultsStoreTests.RACE_ID,
+                "race-id": self.RACE_ID,
                 "race-timestamp": "20160131T000000Z",
                 "distribution-flavor": None,
                 "distribution-version": None,
@@ -1322,25 +1316,25 @@ class EsResultsStoreTests(TestCase):
         self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", items=expected_docs)
 
 
-class InMemoryMetricsStoreTests(TestCase):
+class TestInMemoryMetricsStore:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
-    def setUp(self):
+    def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
         self.cfg.add(config.Scope.application, "track", "params", {})
         self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock)
 
-    def tearDown(self):
+    def teardown_method(self, method):
         del self.metrics_store
         del self.cfg
 
     def test_get_one(self):
         duration = StaticClock.NOW
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1352,21 +1346,19 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         actual_duration = self.metrics_store.get_one(
             "service_time", task="task1", mapper=lambda doc: doc["relative-time"], sort_key="relative-time", sort_reverse=True
         )
 
-        self.assertEqual(duration * 1000, actual_duration)
+        assert duration * 1000 == actual_duration
 
     def test_get_one_no_hits(self):
         duration = StaticClock.NOW
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1376,21 +1368,19 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         actual_duration = self.metrics_store.get_one(
             "service_time", task="task1", mapper=lambda doc: doc["relative-time"], sort_key="relative-time", sort_reverse=True
         )
 
-        self.assertIsNone(actual_duration)
+        assert actual_duration is None
 
     def test_get_value(self):
         throughput = 5000
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1402,17 +1392,15 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
-        self.assertEqual(1, self.metrics_store.get_one("indexing_throughput", sample_type=metrics.SampleType.Warmup))
-        self.assertEqual(throughput, self.metrics_store.get_one("indexing_throughput", sample_type=metrics.SampleType.Normal))
+        assert self.metrics_store.get_one("indexing_throughput", sample_type=metrics.SampleType.Warmup) == 1
+        assert self.metrics_store.get_one("indexing_throughput", sample_type=metrics.SampleType.Normal) == throughput
 
     def test_get_percentile(self):
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1423,9 +1411,7 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
         self.assert_equal_percentiles("query_latency", [100.0], {100.0: 1000.0})
         self.assert_equal_percentiles("query_latency", [99.0], {99.0: 990.0})
@@ -1436,8 +1422,8 @@ class InMemoryMetricsStoreTests(TestCase):
 
     def test_get_mean(self):
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1448,16 +1434,14 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
-        self.assertAlmostEqual(50, self.metrics_store.get_mean("query_latency"))
+        assert round(abs(50 - self.metrics_store.get_mean("query_latency")), 7) == 0
 
     def test_get_median(self):
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1468,24 +1452,20 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
-        self.assertAlmostEqual(500.5, self.metrics_store.get_median("query_latency"))
+        assert round(abs(500.5 - self.metrics_store.get_median("query_latency")), 7) == 0
 
     def assert_equal_percentiles(self, name, percentiles, expected_percentiles):
         actual_percentiles = self.metrics_store.get_percentiles(name, percentiles=percentiles)
-        self.assertEqual(len(expected_percentiles), len(actual_percentiles))
+        assert len(expected_percentiles) == len(actual_percentiles)
         for percentile, actual_percentile_value in actual_percentiles.items():
-            self.assertAlmostEqual(
-                expected_percentiles[percentile], actual_percentile_value, places=1, msg=str(percentile) + "th percentile differs"
-            )
+            assert round(abs(expected_percentiles[percentile] - actual_percentile_value), 1) == 0
 
     def test_externalize_and_bulk_add(self):
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1493,23 +1473,23 @@ class InMemoryMetricsStoreTests(TestCase):
         )
         self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB")
 
-        self.assertEqual(1, len(self.metrics_store.docs))
+        assert len(self.metrics_store.docs) == 1
         memento = self.metrics_store.to_externalizable()
 
         self.metrics_store.close()
         del self.metrics_store
 
         self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock)
-        self.assertEqual(0, len(self.metrics_store.docs))
+        assert len(self.metrics_store.docs) == 0
 
         self.metrics_store.bulk_add(memento)
-        self.assertEqual(1, len(self.metrics_store.docs))
-        self.assertEqual(1000, self.metrics_store.get_one("final_index_size"))
+        assert len(self.metrics_store.docs) == 1
+        assert self.metrics_store.get_one("final_index_size") == 1000
 
     def test_meta_data_per_document(self):
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1520,15 +1500,15 @@ class InMemoryMetricsStoreTests(TestCase):
         self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB", meta_data={"fs-block-size-bytes": 512})
         self.metrics_store.put_value_cluster_level("final_bytes_written", 1, "TB", meta_data={"io-batch-size-kb": 4})
 
-        self.assertEqual(2, len(self.metrics_store.docs))
-        self.assertEqual({"cluster-name": "test", "fs-block-size-bytes": 512}, self.metrics_store.docs[0]["meta"])
+        assert len(self.metrics_store.docs) == 2
+        assert self.metrics_store.docs[0]["meta"] == {"cluster-name": "test", "fs-block-size-bytes": 512}
 
-        self.assertEqual({"cluster-name": "test", "io-batch-size-kb": 4}, self.metrics_store.docs[1]["meta"])
+        assert self.metrics_store.docs[1]["meta"] == {"cluster-name": "test", "io-batch-size-kb": 4}
 
     def test_get_error_rate_zero_without_samples(self):
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1536,16 +1516,14 @@ class InMemoryMetricsStoreTests(TestCase):
         )
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
-        self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
+        assert self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal) == 0.0
 
     def test_get_error_rate_by_sample_type(self):
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1560,17 +1538,15 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
-        self.assertEqual(1.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup))
-        self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
+        assert self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup) == 1.0
+        assert self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal) == 0.0
 
     def test_get_error_rate_mixed(self):
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-no-conflicts",
             "defaults",
@@ -1594,15 +1570,13 @@ class InMemoryMetricsStoreTests(TestCase):
 
         self.metrics_store.close()
 
-        self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID, InMemoryMetricsStoreTests.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults"
-        )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
 
-        self.assertEqual(0.0, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup))
-        self.assertEqual(0.2, self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal))
+        assert self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Warmup) == 0.0
+        assert self.metrics_store.get_error_rate("term-query", sample_type=metrics.SampleType.Normal) == 0.2
 
 
-class FileRaceStoreTests(TestCase):
+class TestFileRaceStore:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
@@ -1613,19 +1587,19 @@ class FileRaceStoreTests(TestCase):
         def as_dict(self):
             return self.d
 
-    def setUp(self):
+    def setup_method(self):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
         self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
-        self.cfg.add(config.Scope.application, "system", "time.start", FileRaceStoreTests.RACE_TIMESTAMP)
-        self.cfg.add(config.Scope.application, "system", "race.id", FileRaceStoreTests.RACE_ID)
+        self.cfg.add(config.Scope.application, "system", "time.start", self.RACE_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "race.id", self.RACE_ID)
         self.race_store = metrics.FileRaceStore(self.cfg)
 
     def test_race_not_found(self):
-        with self.assertRaisesRegex(exceptions.NotFound, r"No race with race id \[.*\]"):
+        with pytest.raises(exceptions.NotFound, match=r"No race with race id \[.*\]"):
             # did not store anything yet
-            self.race_store.find_by_race_id(FileRaceStoreTests.RACE_ID)
+            self.race_store.find_by_race_id(self.RACE_ID)
 
     def test_store_race(self):
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
@@ -1640,8 +1614,8 @@ class FileRaceStoreTests(TestCase):
             rally_version="0.4.4",
             rally_revision="123abc",
             environment_name="unittest",
-            race_id=FileRaceStoreTests.RACE_ID,
-            race_timestamp=FileRaceStoreTests.RACE_TIMESTAMP,
+            race_id=self.RACE_ID,
+            race_timestamp=self.RACE_TIMESTAMP,
             pipeline="from-sources",
             user_tags={"os": "Linux"},
             track=t,
@@ -1655,7 +1629,7 @@ class FileRaceStoreTests(TestCase):
             distribution_version="5.0.0",
             distribution_flavor="default",
             revision="aaaeeef",
-            results=FileRaceStoreTests.DictHolder(
+            results=self.DictHolder(
                 {
                     "young_gc_time": 100,
                     "old_gc_time": 5,
@@ -1677,13 +1651,13 @@ class FileRaceStoreTests(TestCase):
 
         self.race_store.store_race(race)
 
-        retrieved_race = self.race_store.find_by_race_id(race_id=FileRaceStoreTests.RACE_ID)
-        self.assertEqual(race.race_id, retrieved_race.race_id)
-        self.assertEqual(race.race_timestamp, retrieved_race.race_timestamp)
-        self.assertEqual(1, len(self.race_store.list()))
+        retrieved_race = self.race_store.find_by_race_id(race_id=self.RACE_ID)
+        assert race.race_id == retrieved_race.race_id
+        assert race.race_timestamp == retrieved_race.race_timestamp
+        assert len(self.race_store.list()) == 1
 
 
-class StatsCalculatorTests(TestCase):
+class TestStatsCalculator:
     def test_calculate_global_stats(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "env.name", "unittest")
@@ -1794,28 +1768,48 @@ class StatsCalculatorTests(TestCase):
         del store
 
         opm = stats.metrics("index #1")
-        self.assertEqual(
-            collections.OrderedDict([("min", 500), ("mean", 1125), ("median", 1000), ("max", 2000), ("unit", "docs/s")]), opm["throughput"]
-        )
-        self.assertEqual(collections.OrderedDict([("50_0", 220), ("100_0", 225), ("mean", 215), ("unit", "ms")]), opm["latency"])
-        self.assertEqual(collections.OrderedDict([("50_0", 200), ("100_0", 210), ("mean", 200), ("unit", "ms")]), opm["service_time"])
-        self.assertAlmostEqual(0.3333333333333333, opm["error_rate"])
-        self.assertEqual(709 * 1000, opm["duration"])
+        assert opm["throughput"] == {
+            "min": 500,
+            "mean": 1125,
+            "median": 1000,
+            "max": 2000,
+            "unit": "docs/s",
+        }
+        assert opm["latency"] == {
+            "50_0": 220,
+            "100_0": 225,
+            "mean": 215,
+            "unit": "ms",
+        }
+        assert opm["service_time"] == {
+            "50_0": 200,
+            "100_0": 210,
+            "mean": 200,
+            "unit": "ms",
+        }
+        assert round(abs(0.3333333333333333 - opm["error_rate"]), 7) == 0
+        assert opm["duration"] == 709 * 1000
 
         opm2 = stats.metrics("index #2")
-        self.assertEqual(
-            collections.OrderedDict([("min", None), ("mean", None), ("median", None), ("max", None), ("unit", "docs/s")]),
-            opm2["throughput"],
-        )
+        assert opm2["throughput"] == {
+            "min": None,
+            "mean": None,
+            "median": None,
+            "max": None,
+            "unit": "docs/s",
+        }
 
-        self.assertEqual(1, len(stats.ml_processing_time))
-        self.assertEqual("benchmark_ml_job_1", stats.ml_processing_time[0]["job"])
-        self.assertEqual(2.2, stats.ml_processing_time[0]["min"])
-        self.assertEqual(12.3, stats.ml_processing_time[0]["mean"])
-        self.assertEqual(17.2, stats.ml_processing_time[0]["median"])
-        self.assertEqual(36.0, stats.ml_processing_time[0]["max"])
-        self.assertEqual("ms", stats.ml_processing_time[0]["unit"])
-        self.assertEqual(600 * 1000, opm2["duration"])
+        assert stats.ml_processing_time == [
+            {
+                "job": "benchmark_ml_job_1",
+                "min": 2.2,
+                "mean": 12.3,
+                "median": 17.2,
+                "max": 36.0,
+                "unit": "ms",
+            }
+        ]
+        assert opm2["duration"] == 600 * 1000
 
     def test_calculate_system_stats(self):
         cfg = config.Config()
@@ -1845,17 +1839,14 @@ class StatsCalculatorTests(TestCase):
 
         del store
 
-        self.assertEqual(
-            [
-                {
-                    "node": "rally-node-0",
-                    "name": "index_size",
-                    "value": 2048,
-                    "unit": "bytes",
-                }
-            ],
-            stats.node_metrics,
-        )
+        assert stats.node_metrics == [
+            {
+                "node": "rally-node-0",
+                "name": "index_size",
+                "value": 2048,
+                "unit": "bytes",
+            }
+        ]
 
 
 def select(l, name, operation=None, job=None, node=None):
@@ -1865,17 +1856,17 @@ def select(l, name, operation=None, job=None, node=None):
     return None
 
 
-class GlobalStatsCalculatorTests(TestCase):
+class TestGlobalStatsCalculator:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
     RACE_ID = "fb26018b-428d-4528-b36b-cf8c54a303ec"
 
-    def setUp(self):
+    def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
         self.cfg.add(config.Scope.application, "track", "params", {})
         self.metrics_store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock)
 
-    def tearDown(self):
+    def teardown_method(self, method):
         del self.metrics_store
         del self.cfg
 
@@ -1885,8 +1876,8 @@ class GlobalStatsCalculatorTests(TestCase):
         challenge = Challenge(name="append-fast-with-conflicts", schedule=[task], meta_data={})
 
         self.metrics_store.open(
-            InMemoryMetricsStoreTests.RACE_ID,
-            InMemoryMetricsStoreTests.RACE_TIMESTAMP,
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
             "test",
             "append-fast-with-conflicts",
             "defaults",
@@ -1922,7 +1913,7 @@ class GlobalStatsCalculatorTests(TestCase):
         assert "delete-index" in [op_metric.get("task") for op_metric in result.op_metrics]
 
 
-class GlobalStatsTests(TestCase):
+class TestGlobalStats:
     def test_as_flat_list(self):
         d = {
             "op_metrics": [
@@ -2014,276 +2005,213 @@ class GlobalStatsTests(TestCase):
 
         s = metrics.GlobalStats(d)
         metric_list = s.as_flat_list()
-        self.assertEqual(
-            {
-                "name": "throughput",
-                "task": "index #1",
-                "operation": "index",
-                "value": {
-                    "min": 450,
-                    "mean": 450,
-                    "median": 450,
-                    "max": 452,
-                    "unit": "docs/s",
-                },
-                "meta": {
-                    "clients": 8,
-                    "phase": "idx",
-                },
+        assert select(metric_list, "throughput", operation="index") == {
+            "name": "throughput",
+            "task": "index #1",
+            "operation": "index",
+            "value": {
+                "min": 450,
+                "mean": 450,
+                "median": 450,
+                "max": 452,
+                "unit": "docs/s",
             },
-            select(metric_list, "throughput", operation="index"),
-        )
+            "meta": {
+                "clients": 8,
+                "phase": "idx",
+            },
+        }
 
-        self.assertEqual(
-            {
-                "name": "service_time",
-                "task": "index #1",
-                "operation": "index",
-                "value": {
-                    "50": 341,
-                    "100": 376,
-                },
-                "meta": {
-                    "clients": 8,
-                    "phase": "idx",
-                },
+        assert select(metric_list, "service_time", operation="index") == {
+            "name": "service_time",
+            "task": "index #1",
+            "operation": "index",
+            "value": {
+                "50": 341,
+                "100": 376,
             },
-            select(metric_list, "service_time", operation="index"),
-        )
+            "meta": {
+                "clients": 8,
+                "phase": "idx",
+            },
+        }
 
-        self.assertEqual(
-            {
-                "name": "latency",
-                "task": "index #1",
-                "operation": "index",
-                "value": {
-                    "50": 340,
-                    "100": 376,
-                },
-                "meta": {
-                    "clients": 8,
-                    "phase": "idx",
-                },
+        assert select(metric_list, "latency", operation="index") == {
+            "name": "latency",
+            "task": "index #1",
+            "operation": "index",
+            "value": {
+                "50": 340,
+                "100": 376,
             },
-            select(metric_list, "latency", operation="index"),
-        )
+            "meta": {
+                "clients": 8,
+                "phase": "idx",
+            },
+        }
 
-        self.assertEqual(
-            {
-                "name": "error_rate",
-                "task": "index #1",
-                "operation": "index",
-                "value": {
-                    "single": 0.0,
-                },
-                "meta": {
-                    "clients": 8,
-                    "phase": "idx",
-                },
+        assert select(metric_list, "error_rate", operation="index") == {
+            "name": "error_rate",
+            "task": "index #1",
+            "operation": "index",
+            "value": {
+                "single": 0.0,
             },
-            select(metric_list, "error_rate", operation="index"),
-        )
+            "meta": {
+                "clients": 8,
+                "phase": "idx",
+            },
+        }
 
-        self.assertEqual(
-            {
-                "name": "throughput",
-                "task": "search #2",
-                "operation": "search",
-                "value": {
-                    "min": 9,
-                    "mean": 10,
-                    "median": 10,
-                    "max": 12,
-                    "unit": "ops/s",
-                },
+        assert select(metric_list, "throughput", operation="search") == {
+            "name": "throughput",
+            "task": "search #2",
+            "operation": "search",
+            "value": {
+                "min": 9,
+                "mean": 10,
+                "median": 10,
+                "max": 12,
+                "unit": "ops/s",
             },
-            select(metric_list, "throughput", operation="search"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "service_time",
-                "task": "search #2",
-                "operation": "search",
-                "value": {
-                    "50": 98,
-                    "100": 110,
-                },
+        assert select(metric_list, "service_time", operation="search") == {
+            "name": "service_time",
+            "task": "search #2",
+            "operation": "search",
+            "value": {
+                "50": 98,
+                "100": 110,
             },
-            select(metric_list, "service_time", operation="search"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "latency",
-                "task": "search #2",
-                "operation": "search",
-                "value": {
-                    "50": 99,
-                    "100": 111,
-                },
+        assert select(metric_list, "latency", operation="search") == {
+            "name": "latency",
+            "task": "search #2",
+            "operation": "search",
+            "value": {
+                "50": 99,
+                "100": 111,
             },
-            select(metric_list, "latency", operation="search"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "error_rate",
-                "task": "search #2",
-                "operation": "search",
-                "value": {
-                    "single": 0.1,
-                },
+        assert select(metric_list, "error_rate", operation="search") == {
+            "name": "error_rate",
+            "task": "search #2",
+            "operation": "search",
+            "value": {
+                "single": 0.1,
             },
-            select(metric_list, "error_rate", operation="search"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "ml_processing_time",
-                "job": "job_1",
-                "value": {
-                    "min": 3.3,
-                    "mean": 5.2,
-                    "median": 5.8,
-                    "max": 12.34,
-                },
+        assert select(metric_list, "ml_processing_time", job="job_1") == {
+            "name": "ml_processing_time",
+            "job": "job_1",
+            "value": {
+                "min": 3.3,
+                "mean": 5.2,
+                "median": 5.8,
+                "max": 12.34,
             },
-            select(metric_list, "ml_processing_time", job="job_1"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "ml_processing_time",
-                "job": "job_2",
-                "value": {
-                    "min": 3.55,
-                    "mean": 4.2,
-                    "median": 4.9,
-                    "max": 9.4,
-                },
+        assert select(metric_list, "ml_processing_time", job="job_2") == {
+            "name": "ml_processing_time",
+            "job": "job_2",
+            "value": {
+                "min": 3.55,
+                "mean": 4.2,
+                "median": 4.9,
+                "max": 9.4,
             },
-            select(metric_list, "ml_processing_time", job="job_2"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "young_gc_time",
-                "value": {
-                    "single": 68,
-                },
+        assert select(metric_list, "young_gc_time") == {
+            "name": "young_gc_time",
+            "value": {
+                "single": 68,
             },
-            select(metric_list, "young_gc_time"),
-        )
-        self.assertEqual(
-            {
-                "name": "young_gc_count",
-                "value": {
-                    "single": 7,
-                },
+        }
+        assert select(metric_list, "young_gc_count") == {
+            "name": "young_gc_count",
+            "value": {
+                "single": 7,
             },
-            select(metric_list, "young_gc_count"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "old_gc_time",
-                "value": {
-                    "single": 0,
-                },
+        assert select(metric_list, "old_gc_time") == {
+            "name": "old_gc_time",
+            "value": {
+                "single": 0,
             },
-            select(metric_list, "old_gc_time"),
-        )
-        self.assertEqual(
-            {
-                "name": "old_gc_count",
-                "value": {
-                    "single": 0,
-                },
+        }
+        assert select(metric_list, "old_gc_count") == {
+            "name": "old_gc_count",
+            "value": {
+                "single": 0,
             },
-            select(metric_list, "old_gc_count"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "merge_time",
-                "value": {
-                    "single": 3702,
-                },
+        assert select(metric_list, "merge_time") == {
+            "name": "merge_time",
+            "value": {
+                "single": 3702,
             },
-            select(metric_list, "merge_time"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "merge_time_per_shard",
-                "value": {
-                    "min": 40,
-                    "median": 3702,
-                    "max": 3900,
-                    "unit": "ms",
-                },
+        assert select(metric_list, "merge_time_per_shard") == {
+            "name": "merge_time_per_shard",
+            "value": {
+                "min": 40,
+                "median": 3702,
+                "max": 3900,
+                "unit": "ms",
             },
-            select(metric_list, "merge_time_per_shard"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "merge_count",
-                "value": {
-                    "single": 2,
-                },
+        assert select(metric_list, "merge_count") == {
+            "name": "merge_count",
+            "value": {
+                "single": 2,
             },
-            select(metric_list, "merge_count"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "refresh_time",
-                "value": {
-                    "single": 596,
-                },
+        assert select(metric_list, "refresh_time") == {
+            "name": "refresh_time",
+            "value": {
+                "single": 596,
             },
-            select(metric_list, "refresh_time"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "refresh_time_per_shard",
-                "value": {
-                    "min": 48,
-                    "median": 89,
-                    "max": 204,
-                    "unit": "ms",
-                },
+        assert select(metric_list, "refresh_time_per_shard") == {
+            "name": "refresh_time_per_shard",
+            "value": {
+                "min": 48,
+                "median": 89,
+                "max": 204,
+                "unit": "ms",
             },
-            select(metric_list, "refresh_time_per_shard"),
-        )
+        }
 
-        self.assertEqual(
-            {
-                "name": "refresh_count",
-                "value": {
-                    "single": 10,
-                },
+        assert select(metric_list, "refresh_count") == {
+            "name": "refresh_count",
+            "value": {
+                "single": 10,
             },
-            select(metric_list, "refresh_count"),
-        )
+        }
 
-        self.assertIsNone(select(metric_list, "flush_time"))
-        self.assertIsNone(select(metric_list, "flush_time_per_shard"))
-        self.assertEqual(
-            {
-                "name": "flush_count",
-                "value": {
-                    "single": 0,
-                },
+        assert select(metric_list, "flush_time") is None
+        assert select(metric_list, "flush_time_per_shard") is None
+        assert select(metric_list, "flush_count") == {
+            "name": "flush_count",
+            "value": {
+                "single": 0,
             },
-            select(metric_list, "flush_count"),
-        )
+        }
 
 
-class SystemStatsTests(TestCase):
+class TestSystemStats:
     def test_as_flat_list(self):
         d = {
             "node_metrics": [
@@ -2299,46 +2227,64 @@ class SystemStatsTests(TestCase):
         s = metrics.SystemStats(d)
         metric_list = s.as_flat_list()
 
-        self.assertEqual(
-            {"node": "rally-node-0", "name": "startup_time", "value": {"single": 3.4}},
-            select(metric_list, "startup_time", node="rally-node-0"),
-        )
+        assert select(metric_list, "startup_time", node="rally-node-0") == {
+            "node": "rally-node-0",
+            "name": "startup_time",
+            "value": {
+                "single": 3.4,
+            },
+        }
 
-        self.assertEqual(
-            {"node": "rally-node-1", "name": "startup_time", "value": {"single": 4.2}},
-            select(metric_list, "startup_time", node="rally-node-1"),
-        )
+        assert select(metric_list, "startup_time", node="rally-node-1") == {
+            "node": "rally-node-1",
+            "name": "startup_time",
+            "value": {
+                "single": 4.2,
+            },
+        }
 
-        self.assertEqual(
-            {"node": "rally-node-0", "name": "index_size", "value": {"single": 300 * 1024 * 1024}},
-            select(metric_list, "index_size", node="rally-node-0"),
-        )
+        assert select(metric_list, "index_size", node="rally-node-0") == {
+            "node": "rally-node-0",
+            "name": "index_size",
+            "value": {
+                "single": 300 * 1024 * 1024,
+            },
+        }
 
-        self.assertEqual(
-            {"node": "rally-node-1", "name": "index_size", "value": {"single": 302 * 1024 * 1024}},
-            select(metric_list, "index_size", node="rally-node-1"),
-        )
+        assert select(metric_list, "index_size", node="rally-node-1") == {
+            "node": "rally-node-1",
+            "name": "index_size",
+            "value": {
+                "single": 302 * 1024 * 1024,
+            },
+        }
 
-        self.assertEqual(
-            {"node": "rally-node-0", "name": "bytes_written", "value": {"single": 817 * 1024 * 1024}},
-            select(metric_list, "bytes_written", node="rally-node-0"),
-        )
+        assert select(metric_list, "bytes_written", node="rally-node-0") == {
+            "node": "rally-node-0",
+            "name": "bytes_written",
+            "value": {
+                "single": 817 * 1024 * 1024,
+            },
+        }
 
-        self.assertEqual(
-            {"node": "rally-node-1", "name": "bytes_written", "value": {"single": 833 * 1024 * 1024}},
-            select(metric_list, "bytes_written", node="rally-node-1"),
-        )
+        assert select(metric_list, "bytes_written", node="rally-node-1") == {
+            "node": "rally-node-1",
+            "name": "bytes_written",
+            "value": {
+                "single": 833 * 1024 * 1024,
+            },
+        }
 
 
-class IndexTemplateProviderTests(TestCase):
-    def setUp(self):
+class TestIndexTemplateProvider:
+    def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
         self.cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
         self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
-        self.cfg.add(config.Scope.application, "system", "time.start", FileRaceStoreTests.RACE_TIMESTAMP)
-        self.cfg.add(config.Scope.application, "system", "race.id", FileRaceStoreTests.RACE_ID)
+        self.cfg.add(config.Scope.application, "system", "time.start", TestFileRaceStore.RACE_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "race.id", TestFileRaceStore.RACE_ID)
 
     def test_primary_and_replica_shard_count_specified_index_template_update(self):
         _datastore_type = "elasticsearch"
@@ -2380,7 +2326,7 @@ class IndexTemplateProviderTests(TestCase):
         for template in templates:
             t = json.loads(template)
             assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
-            with self.assertRaises(KeyError):
+            with pytest.raises(KeyError):
                 # pylint: disable=unused-variable
                 number_of_replicas = t["settings"]["index"]["number_of_replicas"]
 
@@ -2402,7 +2348,7 @@ class IndexTemplateProviderTests(TestCase):
         for template in templates:
             t = json.loads(template)
             assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
-            with self.assertRaises(KeyError):
+            with pytest.raises(KeyError):
                 # pylint: disable=unused-variable
                 number_of_shards = t["settings"]["index"]["number_of_shards"]
 
@@ -2414,17 +2360,16 @@ class IndexTemplateProviderTests(TestCase):
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
-        with self.assertRaises(exceptions.SystemSetupError) as ctx:
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
             # pylint: disable=unused-variable
             templates = [
                 _index_template_provider.metrics_template(),
                 _index_template_provider.races_template(),
                 _index_template_provider.results_template(),
             ]
-        self.assertEqual(
+        assert ctx.value.args[0] == (
             "The setting: datastore.number_of_shards must be >= 1. Please check the configuration in "
-            f"{_index_template_provider._config.config_file.location}",
-            ctx.exception.args[0],
+            f"{_index_template_provider._config.config_file.location}"
         )
 
     def test_primary_and_replica_shard_counts_passed_as_strings(self):
