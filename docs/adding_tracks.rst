@@ -1147,26 +1147,3 @@ You can then use your custom scheduler as follows::
     "variation-millis": 1
   }
 
-
-.. _adding_tracks_track_processors:
-
-Track Processors
-^^^^^^^^^^^^^^^^
-
-.. warning::
-
-    The following functionality is experimental. Expect the functionality and the code signature to change significantly even in patch releases.
-
-Track processors are a tool which define some preparatory work to be performed before Rally begins executing the benchmark.
-
-
-.. _adding_tracks_track_dependencies:
-
-Track Dependencies
-^^^^^^^^^^^^^^^^^^
-
-.. warning::
-
-    The following functionality is experimental. Expect the functionality and the code signature to change significantly even in patch releases.
-
-If custom track code requires external dependencies,
