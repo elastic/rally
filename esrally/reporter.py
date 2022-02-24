@@ -88,13 +88,13 @@ def format_as_csv(headers, data):
 
 def disk_usage_fields(stats):
     return {
-        "inverted index": stats.field_disk_usage_inverted_index,
-        "stored fields": stats.field_disk_usage_stored_fields,
-        "doc values": stats.field_disk_usage_doc_values,
-        "points": stats.field_disk_usage_points,
-        "norms": stats.field_disk_usage_norms,
-        "term vectors": stats.field_disk_usage_term_vectors,
-        "total": stats.field_disk_usage_total,
+        "inverted index": stats.disk_usage_inverted_index,
+        "stored fields": stats.disk_usage_stored_fields,
+        "doc values": stats.disk_usage_doc_values,
+        "points": stats.disk_usage_points,
+        "norms": stats.disk_usage_norms,
+        "term vectors": stats.disk_usage_term_vectors,
+        "total": stats.disk_usage_total,
     }
 
 def collate_field_usage_stats(stats):
@@ -104,9 +104,9 @@ def collate_field_usage_stats(stats):
             collated.setdefault(fieldStat["index"], {}).setdefault(fieldStat["field"], {})[stat] = fieldStat["value"]
     return collated
 
-def total_field_disk_usage_per_field(stats):
+def total_disk_usage_per_field(stats):
     totals = []
-    for fieldStat in stats.field_disk_usage_total:
+    for fieldStat in stats.disk_usage_total:
         totals.append([fieldStat["index"], fieldStat["value"], fieldStat["field"]])
     return totals
 
@@ -142,7 +142,7 @@ class SummaryReporter:
 
         metrics_table.extend(self._report_ingest_pipeline_stats(stats))
 
-        metrics_table.extend(self._report_field_disk_usage(stats))
+        metrics_table.extend(self._report_disk_usage(stats))
 
         for record in stats.op_metrics:
             task = record["task"]
@@ -326,10 +326,10 @@ class SummaryReporter:
             self._line("Total Ingest Pipeline failed", "", stats.ingest_pipeline_cluster_failed, ""),
         )
 
-    def _report_field_disk_usage(self, stats):
+    def _report_disk_usage(self, stats):
         collated = collate_field_usage_stats(stats)
         lines = []
-        for index, _total, field in sorted(total_field_disk_usage_per_field(stats)):
+        for index, _total, field in sorted(total_disk_usage_per_field(stats)):
             for stat, value in collated[index][field].items():
                 lines.append(self._line(f"{index} {field} {stat}", "", value, "", convert.bytes_to_human_string))
         return lines
@@ -406,7 +406,7 @@ class ComparisonReporter:
         metrics_table.extend(self._report_ingest_pipeline_counts(baseline_stats, contender_stats))
         metrics_table.extend(self._report_ingest_pipeline_times(baseline_stats, contender_stats))
         metrics_table.extend(self._report_ingest_pipeline_failed(baseline_stats, contender_stats))
-        metrics_table.extend(self._report_field_disk_usage(baseline_stats, contender_stats))
+        metrics_table.extend(self._report_disk_usage(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
@@ -640,11 +640,11 @@ class ComparisonReporter:
             )
         )
 
-    def _report_field_disk_usage(self, baseline_stats, contender_stats):
+    def _report_disk_usage(self, baseline_stats, contender_stats):
         best = {}
-        for index, total, field in total_field_disk_usage_per_field(baseline_stats):
+        for index, total, field in total_disk_usage_per_field(baseline_stats):
             best.setdefault(index, {})[field] = total
-        for index, total, field in total_field_disk_usage_per_field(contender_stats):
+        for index, total, field in total_disk_usage_per_field(contender_stats):
             for_idx = best.setdefault(index, {})
             prev = for_idx.get(field, 0)
             if prev < total:

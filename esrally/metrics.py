@@ -1813,13 +1813,13 @@ class GlobalStatsCalculator:
         result.ingest_pipeline_cluster_failed = self.sum("ingest_pipeline_cluster_failed")
 
         self.logger.debug("Gathering disk usage metrics.")
-        result.field_disk_usage_total = self.field_disk_usage("field_disk_usage_total")
-        result.field_disk_usage_inverted_index = self.field_disk_usage("field_disk_usage_inverted_index")
-        result.field_disk_usage_stored_fields = self.field_disk_usage("field_disk_usage_stored_fields")
-        result.field_disk_usage_doc_values = self.field_disk_usage("field_disk_usage_doc_values")
-        result.field_disk_usage_points = self.field_disk_usage("field_disk_usage_points")
-        result.field_disk_usage_norms = self.field_disk_usage("field_disk_usage_norms")
-        result.field_disk_usage_term_vectors = self.field_disk_usage("field_disk_usage_term_vectors")
+        result.disk_usage_total = self.disk_usage("disk_usage_total")
+        result.disk_usage_inverted_index = self.disk_usage("disk_usage_inverted_index")
+        result.disk_usage_stored_fields = self.disk_usage("disk_usage_stored_fields")
+        result.disk_usage_doc_values = self.disk_usage("disk_usage_doc_values")
+        result.disk_usage_points = self.disk_usage("disk_usage_points")
+        result.disk_usage_norms = self.disk_usage("disk_usage_norms")
+        result.disk_usage_term_vectors = self.disk_usage("disk_usage_term_vectors")
 
         return result
 
@@ -1897,7 +1897,7 @@ class GlobalStatsCalculator:
                     result.append({"id": transform_id, "mean": v["value"], "unit": v["unit"]})
         return result
 
-    def field_disk_usage(self, metric_name):
+    def disk_usage(self, metric_name):
         values = self.store.get_raw(metric_name)
         result = []
         if values:
@@ -1989,13 +1989,13 @@ class GlobalStats:
         self.ingest_pipeline_cluster_time = self.v(d, "ingest_pipeline_cluster_time")
         self.ingest_pipeline_cluster_failed = self.v(d, "ingest_pipeline_cluster_failed")
 
-        self.field_disk_usage_total = self.v(d, "field_disk_usage_total")
-        self.field_disk_usage_inverted_index = self.v(d, "field_disk_usage_inverted_index")
-        self.field_disk_usage_stored_fields = self.v(d, "field_disk_usage_stored_fields")
-        self.field_disk_usage_doc_values = self.v(d, "field_disk_usage_doc_values")
-        self.field_disk_usage_points = self.v(d, "field_disk_usage_points")
-        self.field_disk_usage_norms = self.v(d, "field_disk_usage_norms")
-        self.field_disk_usage_term_vectors = self.v(d, "field_disk_usage_term_vectors")
+        self.disk_usage_total = self.v(d, "disk_usage_total")
+        self.disk_usage_inverted_index = self.v(d, "disk_usage_inverted_index")
+        self.disk_usage_stored_fields = self.v(d, "disk_usage_stored_fields")
+        self.disk_usage_doc_values = self.v(d, "disk_usage_doc_values")
+        self.disk_usage_points = self.v(d, "disk_usage_points")
+        self.disk_usage_norms = self.v(d, "disk_usage_norms")
+        self.disk_usage_term_vectors = self.v(d, "disk_usage_term_vectors")
 
 
     def as_dict(self):
@@ -2040,7 +2040,7 @@ class GlobalStats:
             elif metric.startswith("total_transform_") and value is not None:
                 for item in value:
                     all_results.append({"id": item["id"], "name": metric, "value": {"single": item["mean"]}})
-            elif metric.startswith("field_disk_usage_") and value is not None:
+            elif metric.startswith("disk_usage_") and value is not None:
                 for item in value:
                     all_results.append({"index": item["index"], "field": item["field"], "name": metric, "value": {"single": item["value"]}})
             elif metric.endswith("_time_per_shard"):
