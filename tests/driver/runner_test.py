@@ -3763,6 +3763,16 @@ class TestWaitForSnapshotCreate:
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_entire_lifecycle(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                # target snapshot running
+                {"snapshots": [{"snapshot": "restore_speed_snapshot"}]},
+                # different snapshot running
+                {"snapshots": [{"snapshot": "different_snapshot"}]},
+                {},
+                {},
+            ]
+        )
         es.snapshot.status = mock.AsyncMock(
             side_effect=[
                 # empty response
@@ -3854,6 +3864,7 @@ class TestWaitForSnapshotCreate:
         result = await r(es, basic_params)
 
         es.snapshot.status.assert_awaited_with(repository="restore_speed", snapshot="restore_speed_snapshot", ignore_unavailable=True)
+        es.snapshot.get.assert_awaited_with(repository="restore_speed", snapshot="_current", verbose=False)
 
         assert result == {
             "weight": 243468188055,
@@ -3867,10 +3878,16 @@ class TestWaitForSnapshotCreate:
         }
 
         assert es.snapshot.status.await_count == 3
+        assert es.snapshot.get.await_count == 4
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_immediate_success(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                {},
+            ]
+        )
         es.snapshot.status = mock.AsyncMock(
             return_value={
                 "snapshots": [
@@ -3913,10 +3930,16 @@ class TestWaitForSnapshotCreate:
         }
 
         es.snapshot.status.assert_awaited_once_with(repository="backups", snapshot="snapshot-001", ignore_unavailable=True)
+        es.snapshot.get.assert_awaited_once_with(repository="backups", snapshot="_current", verbose=False)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_failure(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                {},
+            ]
+        )
         snapshot_status = {
             "snapshots": [
                 {
