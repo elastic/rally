@@ -2252,6 +2252,7 @@ class DiskUsage(TelemetryDevice):
         self.metrics_store = metrics_store
 
     def on_benchmark_stop(self):
+        # pylint: disable=import-outside-toplevel
         import elasticsearch
 
         indices = self.telemetry_params["disk-usage-indices"]
