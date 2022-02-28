@@ -2445,7 +2445,11 @@ class Sql(Runner):
 
     async def __call__(self, es, params):
         body = mandatory(params, "body", self)
-        mandatory(body, "query", str(self) + ".body")
+        if body.get("query") is None:
+            raise exceptions.DataError(
+                f"Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
+                f"Add it to your parameter source and try again."
+            )
         pages = params.get("pages", 1)
 
         es.return_raw_response()
