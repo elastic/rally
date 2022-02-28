@@ -4996,7 +4996,38 @@ class TestSqlRunner:
             ]
         )
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_mandatory_body_param(self, es):
+        sql_runner = runner.Sql()
+        params = {
+            "operation-type": "sql",
+            "pages": 3,
+        }
 
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'sql' did not provide the mandatory parameter 'body'. "
+            "Add it to your parameter source and try again."
+        )
+        
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_mandatory_query_in_body_param(self, es):
+        sql_runner = runner.Sql()
+        params = {
+            "operation-type": "sql",
+            "body": {},
+            "pages": 3,
+        }
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
+            "Add it to your parameter source and try again."
+        )
 class TestSubmitAsyncSearch:
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
