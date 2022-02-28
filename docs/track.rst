@@ -2907,7 +2907,7 @@ the `SQL search API <https://www.elastic.co/guide/en/elasticsearch/reference/cur
 Properties
 """"""""""
 
-* ``body``: The request body passed to the _sql API with the initial request. Must contain the "query" key. Subsequent pagination requests will only include the cursor in the request body.
+* ``body`` (mandatory): The request body passed to the _sql API with the initial request. Must contain the "query" key. Subsequent pagination requests will only include the cursor in the request body.
 * ``pages``: (optional, defaults to 1) Number of pages to retrieve at most for this search. If a query yields fewer results than the specified number of pages it will fail with an exception.
 
 **Example**
