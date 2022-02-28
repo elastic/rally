@@ -5011,7 +5011,7 @@ class TestSqlRunner:
             "Parameter source for operation 'sql' did not provide the mandatory parameter 'body'. "
             "Add it to your parameter source and try again."
         )
-        
+
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_mandatory_query_in_body_param(self, es):
@@ -5028,6 +5028,8 @@ class TestSqlRunner:
             "Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
             "Add it to your parameter source and try again."
         )
+
+
 class TestSubmitAsyncSearch:
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async

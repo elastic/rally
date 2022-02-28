@@ -2447,8 +2447,8 @@ class Sql(Runner):
         body = mandatory(params, "body", self)
         if body.get("query") is None:
             raise exceptions.DataError(
-                f"Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
-                f"Add it to your parameter source and try again."
+                "Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
+                "Add it to your parameter source and try again."
             )
         pages = params.get("pages", 1)
 
