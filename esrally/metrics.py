@@ -914,11 +914,15 @@ class EsMetricsStore(MetricsStore):
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         query = {
             "query": self._query_by_name(name, task, operation_type, sample_type, node_name),
-            "size": 10000,  # TODO maybe scroll or something.
+            "track_total_hits": True,
+            "size": 10000,
         }
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
         result = self._client.search(index=self._index, body=query)
-        self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
+        es_count = result["hits"]["total"]["value"]
+        self.logger.debug("Metrics query found [%s] results.", es_count)
+        if es_count != len(result["hits"]["hits"]):
+            self.logger.warning("Metrics query returned [%d] out of [%s] matching docs.", len(result["hits"]["hits"]), es_count)
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
     def get_one(
