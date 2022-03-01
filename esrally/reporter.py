@@ -99,7 +99,7 @@ def disk_usage_fields(stats):
     }
 
 
-def collate_field_usage_stats(stats):
+def collate_disk_usage_stats(stats):
     collated = {}
     for stat, fieldStats in disk_usage_fields(stats).items():
         for fieldStat in fieldStats:
@@ -331,7 +331,7 @@ class SummaryReporter:
         )
 
     def _report_disk_usage(self, stats):
-        collated = collate_field_usage_stats(stats)
+        collated = collate_disk_usage_stats(stats)
         lines = []
         for index, _total, field in sorted(total_disk_usage_per_field(stats)):
             for stat, value in collated[index][field].items():
@@ -659,8 +659,8 @@ class ComparisonReporter:
                 totals.append([index, total, field])
         totals.sort()
 
-        collated_baseline = collate_field_usage_stats(baseline_stats)
-        collated_contender = collate_field_usage_stats(contender_stats)
+        collated_baseline = collate_disk_usage_stats(baseline_stats)
+        collated_contender = collate_disk_usage_stats(contender_stats)
 
         lines = []
         for index, _total, field in totals:
