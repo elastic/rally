@@ -200,8 +200,7 @@ def _install_dependencies(dependencies):
         shutil.rmtree(paths.libs(), onerror=_trap)
 
     def _trap(function, path, exc_info):
-        logging.error("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
-        raise exceptions.SystemSetupError(f"Failed to clean up [{path}]").with_traceback(exc_info[2])
+        logging.debug("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
 
     for dependency in dependencies:
         log_path = os.path.join(paths.logs(), "dependency.log")
@@ -216,7 +215,6 @@ def _install_dependencies(dependencies):
                 )
         except subprocess.CalledProcessError:
             raise exceptions.SystemSetupError(f"Installation of [{dependency}] failed. See [{install_log.name}] for more information.")
-
 
 def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
     try:
@@ -1120,7 +1118,8 @@ class TrackPluginReader:
         return self.loader.can_load()
 
     def load(self):
-        # get dependent libraries installed in a prior step
+        # get dependent libraries installed in a prior step. ensure dir exists to make sure loading works correctly.
+        os.makedirs(paths.libs(), exist_ok=True)
         sys.path.insert(0, paths.libs())
         root_module = self.loader.load()
         try:
