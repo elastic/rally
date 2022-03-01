@@ -3763,6 +3763,16 @@ class TestWaitForSnapshotCreate:
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_entire_lifecycle(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                # target snapshot running
+                {"snapshots": [{"snapshot": "restore_speed_snapshot"}]},
+                # different snapshot running
+                {"snapshots": [{"snapshot": "different_snapshot"}]},
+                {},
+                {},
+            ]
+        )
         es.snapshot.status = mock.AsyncMock(
             side_effect=[
                 # empty response
@@ -3854,6 +3864,7 @@ class TestWaitForSnapshotCreate:
         result = await r(es, basic_params)
 
         es.snapshot.status.assert_awaited_with(repository="restore_speed", snapshot="restore_speed_snapshot", ignore_unavailable=True)
+        es.snapshot.get.assert_awaited_with(repository="restore_speed", snapshot="_current", verbose=False)
 
         assert result == {
             "weight": 243468188055,
@@ -3867,10 +3878,16 @@ class TestWaitForSnapshotCreate:
         }
 
         assert es.snapshot.status.await_count == 3
+        assert es.snapshot.get.await_count == 4
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_immediate_success(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                {},
+            ]
+        )
         es.snapshot.status = mock.AsyncMock(
             return_value={
                 "snapshots": [
@@ -3913,10 +3930,16 @@ class TestWaitForSnapshotCreate:
         }
 
         es.snapshot.status.assert_awaited_once_with(repository="backups", snapshot="snapshot-001", ignore_unavailable=True)
+        es.snapshot.get.assert_awaited_once_with(repository="backups", snapshot="_current", verbose=False)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
     async def test_wait_for_snapshot_create_failure(self, es):
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                {},
+            ]
+        )
         snapshot_status = {
             "snapshots": [
                 {
@@ -4911,6 +4934,123 @@ class TestDeleteIlmPolicyRunner:
         }
 
         es.ilm.delete_lifecycle.assert_awaited_once_with(policy=params["policy-name"], params={})
+
+
+class TestSqlRunner:
+    default_response = {
+        "columns": [{"name": "first_name", "type": "text"}],
+        "rows": [
+            ["Georgi"],
+            ["Bezalel"],
+        ],
+        "cursor": "firstCursor",
+    }
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_fetch_one_page(self, es):
+        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+
+        sql_runner = runner.Sql()
+        params = {
+            "operation-type": "sql",
+            "body": {
+                "query": "SELECT first_name FROM emp",
+                "fetch_size": 2,
+                "page_timeout": "10s",
+                "request_timeout": "20s",
+            },
+        }
+
+        async with sql_runner:
+            result = await sql_runner(es, params)
+
+        assert result == {"success": True, "weight": 1, "unit": "ops"}
+
+        es.transport.perform_request.assert_awaited_once_with("POST", "/_sql", body=params["body"])
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_fetch_all_pages(self, es):
+        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+
+        sql_runner = runner.Sql()
+        params = {"operation-type": "sql", "body": {"query": "SELECT first_name FROM emp"}, "pages": 3}
+
+        async with sql_runner:
+            result = await sql_runner(es, params)
+
+        assert result == {"success": True, "weight": 3, "unit": "ops"}
+
+        es.transport.perform_request.assert_has_calls(
+            [
+                mock.call("POST", "/_sql", body=params["body"]),
+                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_failure_on_too_few_pages(self, es):
+        es.transport.perform_request = mock.AsyncMock(
+            side_effect=[io.StringIO(json.dumps(self.default_response)), io.StringIO(json.dumps({"rows": [["John"]]}))]
+        )
+
+        sql_runner = runner.Sql()
+        params = {
+            "operation-type": "sql",
+            "body": {
+                "query": "SELECT first_name FROM emp",
+            },
+            "pages": 3,
+        }
+
+        with pytest.raises(exceptions.DataError) as ctx:
+            async with sql_runner:
+                await sql_runner(es, params)
+
+        assert ctx.value.message == "Result set has been exhausted before all pages have been fetched, 1 page(s) remaining."
+
+        es.transport.perform_request.assert_has_calls(
+            [
+                mock.call("POST", "/_sql", body=params["body"]),
+                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_mandatory_body_param(self, es):
+        sql_runner = runner.Sql()
+        params = {
+            "operation-type": "sql",
+            "pages": 3,
+        }
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'sql' did not provide the mandatory parameter 'body'. "
+            "Add it to your parameter source and try again."
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_mandatory_query_in_body_param(self, es):
+        sql_runner = runner.Sql()
+        params = {
+            "operation-type": "sql",
+            "body": {},
+            "pages": 3,
+        }
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
+            "Add it to your parameter source and try again."
+        )
 
 
 class TestSubmitAsyncSearch:

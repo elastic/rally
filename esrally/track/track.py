@@ -672,6 +672,7 @@ class OperationType(Enum):
     ScrollSearch = 13
     OpenPointInTime = 14
     ClosePointInTime = 15
+    Sql = 16
 
     # administrative actions
     ForceMerge = 1001
@@ -829,6 +830,8 @@ class OperationType(Enum):
             return OperationType.CreateIlmPolicy
         elif v == "delete-ilm-policy":
             return OperationType.DeleteIlmPolicy
+        elif v == "sql":
+            return OperationType.Sql
         else:
             raise KeyError(f"No enum value for [{v}]")
 

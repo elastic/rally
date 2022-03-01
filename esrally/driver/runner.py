@@ -56,6 +56,7 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteAsyncSearch, DeleteAsyncSearch(), async_runner=True)
     register_runner(track.OperationType.OpenPointInTime, OpenPointInTime(), async_runner=True)
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
+    register_runner(track.OperationType.Sql, Sql(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -1846,6 +1847,11 @@ class WaitForSnapshotCreate(Runner):
         stats = {}
 
         while not snapshot_done:
+            response = await es.snapshot.get(repository=repository, snapshot="_current", verbose=False)
+            if snapshot in [s.get("snapshot") for s in response.get("snapshots", [])]:
+                await asyncio.sleep(wait_period)
+                continue
+
             response = await es.snapshot.status(repository=repository, snapshot=snapshot, ignore_unavailable=True)
 
             if "snapshots" in response:
@@ -2435,6 +2441,45 @@ class DeleteIlmPolicy(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-ilm-policy"
+
+
+class Sql(Runner):
+    """
+    Executes an SQL query and optionally paginates through subsequent pages.
+    """
+
+    async def __call__(self, es, params):
+        body = mandatory(params, "body", self)
+        if body.get("query") is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
+                "Add it to your parameter source and try again."
+            )
+        pages = params.get("pages", 1)
+
+        es.return_raw_response()
+
+        r = await es.transport.perform_request("POST", "/_sql", body=body)
+        pages -= 1
+        weight = 1
+
+        cursor = parse(r, ["cursor"]).get("cursor")
+
+        while cursor and pages > 0:
+            r = await es.transport.perform_request("POST", "/_sql", body={"cursor": cursor})
+            pages -= 1
+            weight += 1
+            cursor = parse(r, ["cursor"]).get("cursor")
+
+        if pages > 0:
+            raise exceptions.DataError(
+                "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
+            )
+
+        return {"weight": weight, "unit": "ops", "success": True}
+
+    def __repr__(self, *args, **kwargs):
+        return "sql"
 
 
 class RequestTiming(Runner, Delegator):
