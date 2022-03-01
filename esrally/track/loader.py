@@ -216,6 +216,7 @@ def _install_dependencies(dependencies):
         except subprocess.CalledProcessError:
             raise exceptions.SystemSetupError(f"Installation of [{dependency}] failed. See [{install_log.name}] for more information.")
 
+
 def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
     try:
         track_dir = track_repository.track_dir(track_name)
