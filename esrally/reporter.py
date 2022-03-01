@@ -146,7 +146,7 @@ class SummaryReporter:
 
         metrics_table.extend(self._report_ingest_pipeline_stats(stats))
 
-        metrics_table.extend(self._report_disk_usage(stats))
+        metrics_table.extend(self._report_disk_usage_per_field(stats))
 
         for record in stats.op_metrics:
             task = record["task"]
@@ -330,7 +330,7 @@ class SummaryReporter:
             self._line("Total Ingest Pipeline failed", "", stats.ingest_pipeline_cluster_failed, ""),
         )
 
-    def _report_disk_usage(self, stats):
+    def _report_disk_usage_per_field(self, stats):
         collated = collate_disk_usage_stats(stats)
         lines = []
         for index, _total, field in sorted(total_disk_usage_per_field(stats)):
@@ -410,7 +410,7 @@ class ComparisonReporter:
         metrics_table.extend(self._report_ingest_pipeline_counts(baseline_stats, contender_stats))
         metrics_table.extend(self._report_ingest_pipeline_times(baseline_stats, contender_stats))
         metrics_table.extend(self._report_ingest_pipeline_failed(baseline_stats, contender_stats))
-        metrics_table.extend(self._report_disk_usage(baseline_stats, contender_stats))
+        metrics_table.extend(self._report_disk_usage_per_field(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
@@ -644,7 +644,7 @@ class ComparisonReporter:
             )
         )
 
-    def _report_disk_usage(self, baseline_stats, contender_stats):
+    def _report_disk_usage_per_field(self, baseline_stats, contender_stats):
         best = {}
         for index, total, field in total_disk_usage_per_field(baseline_stats):
             best.setdefault(index, {})[field] = total
