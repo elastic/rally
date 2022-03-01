@@ -24,18 +24,19 @@ If you invoke ``esrally list telemetry``, it will show which telemetry devices a
    Command                     Name                        Description
    --------------------------  --------------------------  --------------------------------------------------------------------
    jit                         JIT Compiler Profiler       Enables JIT compiler logs.
-   gc                          GC log                      Enables GC logs
+   gc                          GC log                      Enables GC logs.
    jfr                         Flight Recorder             Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
-   heapdump                    Heap Dump                   Captures a heap dump
+   heapdump                    Heap Dump                   Captures a heap dump.
    node-stats                  Node Stats                  Regularly samples node stats
    recovery-stats              Recovery Stats              Regularly samples shard recovery stats
    ccr-stats                   CCR Stats                   Regularly samples Cross Cluster Replication (CCR) related stats
-   segment-stats               Segment Stats               Determines segment stats at the end of the benchmark
+   segment-stats               Segment Stats               Determines segment stats at the end of the benchmark.
    transform-stats             Transform Stats             Regularly samples transform stats
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
-   data-stream-stats           Data Streams Stats          Regularly samples data streams stats
-   ingest-pipeline-stats       Ingest Pipeline Stats       Determines ingest pipeline stats at the end of the benchmark
+   data-stream-stats           Data Stream Stats           Regularly samples data stream stats
+   ingest-pipeline-stats       Ingest Pipeline Stats       Reports Ingest Pipeline stats at the end of the benchmark.
+   disk-usage                  Disk usage of each field    Runs the indices disk usage API after benchmarking
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -281,3 +282,35 @@ Example of recorded documents given a single cluster, single node, single pipeli
          "type": "uppercase"
        }
    }
+
+disk-usage
+----------
+
+The disk-usage telemetry device runs the `(_disk_usage) <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-disk-usage.html>`_ api after the track has completed and adds the disk used of each field to the report.
+
+Required telemetry parameters:
+
+* ``disk-usage-indices``: Comma separated list of indices who's disk usage to fetch.
+
+Example::
+
+   esrally race --track noaa \
+     --telemetry disk-usage --telemetry-params disk-usage-indices:weather-data-2016
+   ...
+   |    weather-data-2016 _id inverted index | 16.8 kB |
+   |     weather-data-2016 _id stored fields |  4.4 kB |
+   |             weather-data-2016 _id total | 21.2 kB |
+   | weather-data-2016 _source stored fields | 45.3 kB |
+   |         weather-data-2016 _source total | 45.3 kB |
+
+It also works with ``esrally compare``::
+
+   |    weather-data-2016 _id inverted index | 16.7 kB | 16.8 kB | +143 bytes |  +0.84% |
+   |     weather-data-2016 _id stored fields |  3.9 kB |  4.4 kB | +531 bytes | +13.31% |
+   |             weather-data-2016 _id total | 20.6 kB | 21.2 kB | +674 bytes |  +3.20% |
+   | weather-data-2016 _source stored fields | 40.0 kB | 45.3 kB |    +5.3 kB | +13.38% |
+   |         weather-data-2016 _source total | 40.0 kB | 45.3 kB |    +5.3 kB | +13.38% |
+
+.. note::
+
+    This telemetry device has no runtime overhead. It does all of it's work after the race is complete.

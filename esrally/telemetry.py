@@ -2235,14 +2235,14 @@ class DiskUsage(TelemetryDevice):
 
     internal = False
     command = "disk-usage"
-    human_name = "Analyze disk usage of each field"
+    human_name = "Disk usage of each field"
     help = "Runs the indices disk usage API after benchmarking"
 
     def __init__(self, telemetry_params, client, metrics_store):
         """
         :param telemetry_params: The configuration object for telemetry_params.
             Must specify:
-            ``disk-usage-indices``: Pattern of indices to capture.
+            ``disk-usage-indices``: Comma separated list of indices who's disk usage to fetch.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         """
