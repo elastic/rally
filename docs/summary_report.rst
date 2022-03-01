@@ -181,6 +181,55 @@ Total Ingest Pipeline failed
 * **Definition**: Total number of failed ingest operations by all nodes within the cluster, over the duration of the race.
 * **Corresponding metrics key**: ``ingest_pipeline_cluster_failed``
 
+Per field total disk usage
+--------------------------
+
+* **Defintion**: The total number of bytes that a single field uses on disk. Enabled with the ``disk-usage`` telemetry device. Recorded for each field returned by the disk usage API even if the total is 0.
+* **Corresponding metrics keys**: ``disk_usage_total``
+* **Metric metadata**: ``index`` and ``field``
+
+Per field inverted index disk usage
+-----------------------------------
+
+* **Defintion**: The number of bytes that a single field uses for its inverted index on disk. Enabled with the ``disk-usage`` telemetry device. Recorded for each field with a non-0 byte inverted index. Expect this on `text` and `keyword` fields but not on `long` or `date` fields.
+* **Corresponding metrics keys**: ``disk_usage_inverted_index``
+* **Metric metadata**: ``index`` and ``field``
+
+Per field stored fields disk usage
+----------------------------------
+
+* **Defintion**: The number of bytes that a single field uses for stored fields on disk. Enabled with the ``disk-usage`` telemetry device. Recorded for each field with non-0 byte stored fields. Expect this for `_id` and `_source`.
+* **Corresponding metrics keys**: ``disk_usage_stored_fields``
+* **Metric metadata**: ``index`` and ``field``
+
+Per field doc values disk usage
+-------------------------------
+
+* **Defintion**: The number of bytes that a single field uses for doc values on disk. Enabled with the ``disk-usage`` telemetry device. Recorded for each field with non-0 byte doc values. Expect this on every most fields.
+* **Corresponding metrics keys**: ``disk_usage_doc_values``
+* **Metric metadata**: ``index`` and ``field``
+
+Per field points disk usage
+---------------------------
+
+* **Defintion**: The number of bytes that a single field uses for points on disk. Enabled with the ``disk-usage`` telemetry device. Recorded for each field with a non-0 byte BKD tree. Expect this on `long` and `date` fields but not on `text` and `keyword` fields.
+* **Corresponding metrics keys**: ``disk_usage_points``
+* **Metric metadata**: ``index`` and ``field``
+
+Per field norms disk usage
+--------------------------
+
+* **Defintion**: The number of bytes that a single field uses for norms on disk. Enabled with the ``disk-usage`` telemetry device. Recorded for each field with a non-0 byte norms. Expect this for `text` fields.
+* **Corresponding metrics keys**: ``disk_usage_norms``
+* **Metric metadata**: ``index`` and ``field``
+
+Per field term vectors disk usage
+---------------------------------
+
+* **Defintion**: The number of bytes that a single field uses for term vectors on disk. Enabled with the ``disk-usage`` telemetry device. Recorded for each field with a non-0 byte term vectors. Expect this for `text` fields configured to store term vectors. This is rare.
+* **Corresponding metrics keys**: ``disk_usage_term_vectors``
+* **Metric metadata**: ``index`` and ``field``
+
 Throughput
 ----------
 
