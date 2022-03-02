@@ -52,7 +52,7 @@ def _bytes_to_human(b):
         return b, "N/A"
     gb = bytes_to_gb(b)
     if gb > 1.0 or gb < -1.0:
-        return b, "GB"
+        return gb, "GB"
     mb = bytes_to_mb(b)
     if mb > 1.0 or mb < -1.0:
         return mb, "MB"

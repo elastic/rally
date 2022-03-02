@@ -42,29 +42,45 @@ class TestToBool:
 class TestBytesToHuman:
     def test_none(self):
         assert convert.bytes_to_human_string(None) == "N/A"
-        assert convert.bytes_to_human_unit(None) == "N/A"
         assert convert.bytes_to_human_value(None) == None
+        assert convert.bytes_to_human_unit(None) == "N/A"
 
     def test_positive_bytes(self):
         assert convert.bytes_to_human_string(100) == "100 bytes"
+        assert convert.bytes_to_human_value(100) == 100
+        assert convert.bytes_to_human_unit(100) == "bytes"
 
     def test_negative_bytes(self):
         assert convert.bytes_to_human_string(-100) == "-100 bytes"
+        assert convert.bytes_to_human_value(-100) == -100
+        assert convert.bytes_to_human_unit(-100) == "bytes"
 
     def test_positive_kb(self):
         assert convert.bytes_to_human_string(8808) == "8.6 kB"
+        assert convert.bytes_to_human_value(8808) == 8.6015625
+        assert convert.bytes_to_human_unit(8808) == "kB"
 
     def test_negative_kb(self):
         assert convert.bytes_to_human_string(-88134) == "-86.1 kB"
+        assert convert.bytes_to_human_value(-88134) == -86.068359375
+        assert convert.bytes_to_human_unit(-88134) == "kB"
 
     def test_positive_mb(self):
         assert convert.bytes_to_human_string(8808812) == "8.4 MB"
+        assert convert.bytes_to_human_value(8808812) == 8.400737762451172
+        assert convert.bytes_to_human_unit(8808812) == "MB"
 
     def test_negative_mb(self):
         assert convert.bytes_to_human_string(-881348666) == "-840.5 MB"
+        assert convert.bytes_to_human_value(-881348666) == -840.5195865631104
+        assert convert.bytes_to_human_unit(-881348666) == "MB"
 
     def test_positive_gb(self):
         assert convert.bytes_to_human_string(8808812123) == "8.2 GB"
+        assert convert.bytes_to_human_value(8808812123) == 8.2038455856964
+        assert convert.bytes_to_human_unit(8808812123) == "GB"
 
     def test_negative_gb(self):
         assert convert.bytes_to_human_string(-881348666323) == "-820.8 GB"
+        assert convert.bytes_to_human_value(-881348666323) == -820.8199090538546
+        assert convert.bytes_to_human_unit(-881348666323) == "GB"

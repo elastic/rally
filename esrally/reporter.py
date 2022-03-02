@@ -1021,16 +1021,15 @@ class ComparisonReporter:
         if as_percentage:
             diff = _safe_divide(contender - baseline, baseline) * 100.0
             precision = 2
-            formatted = f"{diff:.{precision}f}%"
+            suffix = "%"
         else:
-            diff = contender - baseline
+            diff = formatter(contender - baseline)
             precision = 5
-            formatted = formatter(diff)
-            if not isinstance(formatted, str):
-                formatted = f"{diff:.{precision}f}"
+            suffix = ""
 
         # ensures that numbers that appear as "zero" are also colored neutrally
         threshold = 10**-precision
+        formatted = f"{diff:.{precision}f}{suffix}"
 
         if diff >= threshold:
             return color_greater(f"+{formatted}")
