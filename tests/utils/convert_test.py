@@ -39,9 +39,11 @@ class TestToBool:
             assert exc.value.args[0] == f"Cannot convert [{value}] to bool."
 
 
-class TestBytesToHumanString:
+class TestBytesToHuman:
     def test_none(self):
         assert convert.bytes_to_human_string(None) == "N/A"
+        assert convert.bytes_to_human_unit(None) == "N/A"
+        assert convert.bytes_to_human_value(None) == None
 
     def test_positive_bytes(self):
         assert convert.bytes_to_human_string(100) == "100 bytes"

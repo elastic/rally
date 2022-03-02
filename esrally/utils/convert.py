@@ -31,16 +31,35 @@ def bytes_to_gb(b):
 def bytes_to_human_string(b):
     if b is None:
         return "N/A"
+
+    value, unit = _bytes_to_human(b)
+    if unit == "bytes":
+        return "%d bytes" % b
+
+    return "%.1f %s" % (value, unit)
+
+
+def bytes_to_human_value(b):
+    return _bytes_to_human(b)[0]
+
+
+def bytes_to_human_unit(b):
+    return _bytes_to_human(b)[1]
+
+
+def _bytes_to_human(b):
+    if b is None:
+        return b, "N/A"
     gb = bytes_to_gb(b)
     if gb > 1.0 or gb < -1.0:
-        return "%.1f GB" % gb
+        return b, "GB"
     mb = bytes_to_mb(b)
     if mb > 1.0 or mb < -1.0:
-        return "%.1f MB" % mb
+        return mb, "MB"
     kb = bytes_to_kb(b)
     if kb > 1.0 or kb < -1.0:
-        return "%.1f kB" % kb
-    return "%d bytes" % b
+        return (kb, "kB")
+    return b, "bytes"
 
 
 def number_to_human_string(number):
