@@ -299,19 +299,26 @@ Example::
    esrally race --track noaa \
      --telemetry disk-usage-stats --telemetry-params disk-usage-stats-indices:weather-data-2016
    ...
-   |    weather-data-2016 _id inverted index | 16.8 kB |
-   |     weather-data-2016 _id stored fields |  4.4 kB |
-   |             weather-data-2016 _id total | 21.2 kB |
-   | weather-data-2016 _source stored fields | 45.3 kB |
-   |         weather-data-2016 _source total | 45.3 kB |
+   | weather-data-2016 station.location doc values |   256.8 | MB |
+   |     weather-data-2016 station.location points | 108.488 | MB |
+   |      weather-data-2016 station.location total | 365.289 | MB |
+   |          weather-data-2016 _id inverted index | 210.878 | MB |
+   |           weather-data-2016 _id stored fields |  311.63 | MB |
+   |                   weather-data-2016 _id total | 522.508 | MB |
+   |       weather-data-2016 _source stored fields | 3.36536 | GB |
+   |               weather-data-2016 _source total | 3.36536 | GB |
+
 
 It also works with ``esrally compare``::
 
-   |    weather-data-2016 _id inverted index | 16.7 kB | 16.8 kB | +143 bytes |  +0.84% |
-   |     weather-data-2016 _id stored fields |  3.9 kB |  4.4 kB | +531 bytes | +13.31% |
-   |             weather-data-2016 _id total | 20.6 kB | 21.2 kB | +674 bytes |  +3.20% |
-   | weather-data-2016 _source stored fields | 40.0 kB | 45.3 kB |    +5.3 kB | +13.38% |
-   |         weather-data-2016 _source total | 40.0 kB | 45.3 kB |    +5.3 kB | +13.38% |
+   | weather-data-2016 station.location points | 108.488 | 108.076 | -0.41203 | MB |  -0.38% |
+   |  weather-data-2016 station.location total | 365.289 | 364.877 | -0.41153 | MB |  -0.11% |
+   |      weather-data-2016 _id inverted index | 210.878 | 211.052 |  0.17399 | MB |  +0.08% |
+   |       weather-data-2016 _id stored fields |  311.63 | 311.363 | -0.26625 | MB |  -0.09% |
+   |               weather-data-2016 _id total | 522.508 | 522.416 | -0.09225 | MB |  -0.02% |
+   |   weather-data-2016 _source stored fields | 3.36536 |  3.3652 | -0.00016 | GB |  -0.00% |
+   |           weather-data-2016 _source total | 3.36536 |  3.3652 | -0.00016 | GB |  -0.00% |
+
 
 .. note::
 
