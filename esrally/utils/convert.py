@@ -53,7 +53,7 @@ def bytes_to_unit(unit, b):
 
     if unit == "GB":
         return bytes_to_gb(b)
-    
+
     if unit == "MB":
         return bytes_to_mb(b)
 

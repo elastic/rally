@@ -67,11 +67,3 @@ class TestComparisonReporter:
     def test_diff_percent_ignore_formatter(self):
         formatted = self.reporter._diff(1, 0, False, formatter=convert.factor(100.0), as_percentage=True)
         assert formatted == "-100.00%"
-
-    def test_diff_bytes_to_human_string(self):
-        formatted = self.reporter._diff(4096, 1024, False, formatter=convert.bytes_to_human_string, as_percentage=False)
-        assert formatted == "-3.0 kB"
-
-    def test_diff_bytes_to_human_string_pct(self):
-        formatted = self.reporter._diff(4096, 1024, False, formatter=convert.bytes_to_human_string, as_percentage=True)
-        assert formatted == "-75.00%"

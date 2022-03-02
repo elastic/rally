@@ -335,7 +335,9 @@ class SummaryReporter:
         lines = []
         for index, _total, field in sorted(total_disk_usage_per_field(stats)):
             for stat, value in collated[index][field].items():
-                lines.append(self._line(f"{index} {field} {stat}", "", value, convert.bytes_to_human_unit(value), convert.bytes_to_human_value))
+                lines.append(
+                    self._line(f"{index} {field} {stat}", "", value, convert.bytes_to_human_unit(value), convert.bytes_to_human_value)
+                )
         return lines
 
     def _join(self, *args):

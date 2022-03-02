@@ -43,7 +43,7 @@ class TestToBool:
 class TestBytesToHuman:
     def test_none(self):
         assert convert.bytes_to_human_string(None) == "N/A"
-        assert convert.bytes_to_human_value(None) == None
+        assert convert.bytes_to_human_value(None) is None
         assert convert.bytes_to_human_unit(None) == "N/A"
 
     def test_positive_bytes(self):
@@ -89,31 +89,36 @@ class TestBytesToHuman:
 
 class TestBytesToUnit:
     def test_to_na(self):
+        assert convert.bytes_to_unit("N/A", None) is None
         assert convert.bytes_to_unit("N/A", 100) == 100
         assert convert.bytes_to_unit("N/A", 4500) == 4500
         assert convert.bytes_to_unit("N/A", 8004200) == 8004200
         assert convert.bytes_to_unit("N/A", 12348004200) == 12348004200
 
     def test_to_bytes(self):
+        assert convert.bytes_to_unit("bytes", None) is None
         assert convert.bytes_to_unit("bytes", 100) == 100
         assert convert.bytes_to_unit("bytes", 4500) == 4500
         assert convert.bytes_to_unit("bytes", 8004200) == 8004200
         assert convert.bytes_to_unit("bytes", 12348004200) == 12348004200
 
     def test_to_kb(self):
+        assert convert.bytes_to_unit("kb", None) is None
         assert convert.bytes_to_unit("kB", 100) == approx(.098, rel=.1)
         assert convert.bytes_to_unit("kB", 4500) == approx(4.4, rel=.1)
         assert convert.bytes_to_unit("kB", 8004200) == approx(7800, rel=.1)
         assert convert.bytes_to_unit("kB", 12348004200) == approx(12000000, rel=.1)
 
     def test_to_mb(self):
-        assert convert.bytes_to_unit("MB", 100) == 9.5367431640625e-05
-        assert convert.bytes_to_unit("MB", 4500) == 0.004291534423828125
-        assert convert.bytes_to_unit("MB", 8004200) == 7.633399963378906
-        assert convert.bytes_to_unit("MB", 12348004200) == 11775.974464416504
+        assert convert.bytes_to_unit("MB", None) is None
+        assert convert.bytes_to_unit("MB", 100) == approx(9.5e-05, rel=.1)
+        assert convert.bytes_to_unit("MB", 4500) == approx(0.0043, rel=.1)
+        assert convert.bytes_to_unit("MB", 8004200) == approx(7.6, rel=.1)
+        assert convert.bytes_to_unit("MB", 12348004200) == approx(12000, rel=.1)
 
     def test_to_gb(self):
-        assert convert.bytes_to_unit("GB", 100) == 9.313225746154785e-08
-        assert convert.bytes_to_unit("GB", 4500) == 4.190951585769653e-06
-        assert convert.bytes_to_unit("GB", 8004200) == 0.007454492151737213
-        assert convert.bytes_to_unit("GB", 12348004200) == 11.499975062906742
+        assert convert.bytes_to_unit("GB", None) is None
+        assert convert.bytes_to_unit("GB", 100) == approx(9.3e-08, rel=.1)
+        assert convert.bytes_to_unit("GB", 4500) == approx(4.2e-06, rel=.1)
+        assert convert.bytes_to_unit("GB", 8004200) == approx(0.0075, rel=.1)
+        assert convert.bytes_to_unit("GB", 12348004200) == approx(11, rel=.1)
