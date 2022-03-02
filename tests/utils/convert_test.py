@@ -16,6 +16,7 @@
 # under the License.
 
 import pytest
+from pytest import approx
 
 from esrally.utils import convert
 
@@ -84,3 +85,35 @@ class TestBytesToHuman:
         assert convert.bytes_to_human_string(-881348666323) == "-820.8 GB"
         assert convert.bytes_to_human_value(-881348666323) == -820.8199090538546
         assert convert.bytes_to_human_unit(-881348666323) == "GB"
+
+
+class TestBytesToUnit:
+    def test_to_na(self):
+        assert convert.bytes_to_unit("N/A", 100) == 100
+        assert convert.bytes_to_unit("N/A", 4500) == 4500
+        assert convert.bytes_to_unit("N/A", 8004200) == 8004200
+        assert convert.bytes_to_unit("N/A", 12348004200) == 12348004200
+
+    def test_to_bytes(self):
+        assert convert.bytes_to_unit("bytes", 100) == 100
+        assert convert.bytes_to_unit("bytes", 4500) == 4500
+        assert convert.bytes_to_unit("bytes", 8004200) == 8004200
+        assert convert.bytes_to_unit("bytes", 12348004200) == 12348004200
+
+    def test_to_kb(self):
+        assert convert.bytes_to_unit("kB", 100) == approx(.098, rel=.1)
+        assert convert.bytes_to_unit("kB", 4500) == approx(4.4, rel=.1)
+        assert convert.bytes_to_unit("kB", 8004200) == approx(7800, rel=.1)
+        assert convert.bytes_to_unit("kB", 12348004200) == approx(12000000, rel=.1)
+
+    def test_to_mb(self):
+        assert convert.bytes_to_unit("MB", 100) == 9.5367431640625e-05
+        assert convert.bytes_to_unit("MB", 4500) == 0.004291534423828125
+        assert convert.bytes_to_unit("MB", 8004200) == 7.633399963378906
+        assert convert.bytes_to_unit("MB", 12348004200) == 11775.974464416504
+
+    def test_to_gb(self):
+        assert convert.bytes_to_unit("GB", 100) == 9.313225746154785e-08
+        assert convert.bytes_to_unit("GB", 4500) == 4.190951585769653e-06
+        assert convert.bytes_to_unit("GB", 8004200) == 0.007454492151737213
+        assert convert.bytes_to_unit("GB", 12348004200) == 11.499975062906742

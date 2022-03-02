@@ -47,7 +47,7 @@ def bytes_to_human_unit(b):
     return _bytes_to_human(b)[1]
 
 
-def bytes_to_unit(unit, b):   # NOCOMMIT tests for me
+def bytes_to_unit(unit, b):
     if unit == "N/A":
         return b
 

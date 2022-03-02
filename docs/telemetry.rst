@@ -311,13 +311,13 @@ Example::
 
 It also works with ``esrally compare``::
 
-   | weather-data-2016 station.location points | 108.488 | 108.076 | -0.41203 | MB |  -0.38% |
-   |  weather-data-2016 station.location total | 365.289 | 364.877 | -0.41153 | MB |  -0.11% |
-   |      weather-data-2016 _id inverted index | 210.878 | 211.052 |  0.17399 | MB |  +0.08% |
-   |       weather-data-2016 _id stored fields |  311.63 | 311.363 | -0.26625 | MB |  -0.09% |
-   |               weather-data-2016 _id total | 522.508 | 522.416 | -0.09225 | MB |  -0.02% |
-   |   weather-data-2016 _source stored fields | 3.36536 |  3.3652 | -0.00016 | GB |  -0.00% |
-   |           weather-data-2016 _source total | 3.36536 |  3.3652 | -0.00016 | GB |  -0.00% |
+   | weather-data-2016 station.location points | 108.488 | 108.076 | -0.41203 | MB | -0.38% |
+   |  weather-data-2016 station.location total | 365.289 | 364.877 | -0.41153 | MB | -0.11% |
+   |      weather-data-2016 _id inverted index | 210.878 | 211.052 |  0.17399 | MB | +0.08% |
+   |       weather-data-2016 _id stored fields |  311.63 | 311.363 | -0.26625 | MB | -0.09% |
+   |               weather-data-2016 _id total | 522.508 | 522.416 | -0.09225 | MB | -0.02% |
+   |   weather-data-2016 _source stored fields | 3.36536 |  3.3652 | -0.00016 | GB | -0.00% |
+   |           weather-data-2016 _source total | 3.36536 |  3.3652 | -0.00016 | GB | -0.00% |
 
 
 .. note::
