@@ -101,16 +101,16 @@ def disk_usage_fields(stats):
 
 def collate_disk_usage_stats(stats):
     collated = {}
-    for stat, fieldStats in disk_usage_fields(stats).items():
-        for fieldStat in fieldStats:
-            collated.setdefault(fieldStat["index"], {}).setdefault(fieldStat["field"], {})[stat] = fieldStat["value"]
+    for stat, field_stats in disk_usage_fields(stats).items():
+        for field_stat in field_stats:
+            collated.setdefault(field_stat["index"], {}).setdefault(field_stat["field"], {})[stat] = field_stat["value"]
     return collated
 
 
 def total_disk_usage_per_field(stats):
     totals = []
-    for fieldStat in stats.disk_usage_total:
-        totals.append([fieldStat["index"], fieldStat["value"], fieldStat["field"]])
+    for field_stat in stats.disk_usage_total:
+        totals.append([field_stat["index"], field_stat["value"], field_stat["field"]])
     return totals
 
 
