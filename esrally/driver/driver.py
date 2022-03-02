@@ -612,7 +612,7 @@ class Driver:
                 telemetry.SearchableSnapshotsStats(telemetry_params, es, self.metrics_store),
                 telemetry.DataStreamStats(telemetry_params, es, self.metrics_store),
                 telemetry.IngestPipelineStats(es, self.metrics_store),
-                telemetry.DiskUsage(telemetry_params, es_default, self.metrics_store),
+                telemetry.DiskUsageStats(telemetry_params, es_default, self.metrics_store),
             ]
         else:
             devices = []

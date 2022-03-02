@@ -4144,13 +4144,13 @@ class TestIngestPipelineStats:
             )
 
 
-class TestDiskUsage:
+class TestDiskUsageStats:
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es = Client(transport_client=TransportClient(force_error=True, error=elasticsearch.RequestError))
-        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4162,7 +4162,7 @@ class TestDiskUsage:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es = Client(transport_client=TransportClient(response={"_shards": {"total": 1, "successful": 1, "failed": 0}}))
-        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4173,7 +4173,7 @@ class TestDiskUsage:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es = Client(transport_client=TransportClient(response={"_shards": {"total": 1, "successful": 0, "failed": 1}}))
-        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4199,7 +4199,7 @@ class TestDiskUsage:
                 }
             )
         )
-        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4228,7 +4228,7 @@ class TestDiskUsage:
                 }
             )
         )
-        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4265,7 +4265,7 @@ class TestDiskUsage:
                 }
             )
         )
-        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4293,7 +4293,7 @@ class TestDiskUsage:
                 }
             )
         )
-        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4323,7 +4323,7 @@ class TestDiskUsage:
                 }
             )
         )
-        device = telemetry.DiskUsage({"disk-usage-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()

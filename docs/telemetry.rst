@@ -36,7 +36,7 @@ If you invoke ``esrally list telemetry``, it will show which telemetry devices a
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
    data-stream-stats           Data Stream Stats           Regularly samples data stream stats
    ingest-pipeline-stats       Ingest Pipeline Stats       Reports Ingest Pipeline stats at the end of the benchmark.
-   disk-usage                  Disk usage of each field    Runs the indices disk usage API after benchmarking
+   disk-usage-stats            Disk usage of each field    Runs the indices disk usage API after benchmarking
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -283,19 +283,21 @@ Example of recorded documents given a single cluster, single node, single pipeli
        }
    }
 
-disk-usage
-----------
+.. _disk-usage-stats:
 
-The disk-usage telemetry device runs the `(_disk_usage) <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-disk-usage.html>`_ api after the track has completed and adds the disk used of each field to the report.
+disk-usage-stats
+----------------
+
+The disk-usage-stats telemetry device runs the `_disk_usage <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-disk-usage.html>`_ API after the track has completed and adds the disk used of each field to the report.
 
 Required telemetry parameters:
 
-* ``disk-usage-indices``: Comma separated list of indices who's disk usage to fetch.
+* ``disk-usage-stats-indices``: Comma separated list of indices who's disk usage to fetch.
 
 Example::
 
    esrally race --track noaa \
-     --telemetry disk-usage --telemetry-params disk-usage-indices:weather-data-2016
+     --telemetry disk-usage-stats --telemetry-params disk-usage-stats-indices:weather-data-2016
    ...
    |    weather-data-2016 _id inverted index | 16.8 kB |
    |     weather-data-2016 _id stored fields |  4.4 kB |
