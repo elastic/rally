@@ -47,6 +47,22 @@ def bytes_to_human_unit(b):
     return _bytes_to_human(b)[1]
 
 
+def bytes_to_unit(unit, b):
+    if unit == "N/A":
+        return b
+
+    if unit == "GB":
+        return bytes_to_gb(b)
+    
+    if unit == "MB":
+        return bytes_to_mb(b)
+
+    if unit == "kB":
+        return bytes_to_kb(b)
+
+    return b
+
+
 def _bytes_to_human(b):
     if b is None:
         return b, "N/A"

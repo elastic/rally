@@ -669,15 +669,16 @@ class ComparisonReporter:
                 contender_value = collated_contender[index].get(field, {}).get(stat, 0)
                 if baseline_value == 0 and contender_value == 0:
                     continue
+                unit = convert.bytes_to_human_unit(min(baseline_value, contender_value))
                 lines.append(
                     self._line(
                         f"{index} {field} {stat}",
                         baseline_value,
                         contender_value,
                         "",
-                        "",
+                        unit,
                         treat_increase_as_improvement=False,
-                        formatter=convert.bytes_to_human_string,
+                        formatter=partial(convert.bytes_to_unit, unit),
                     )
                 )
         return lines
