@@ -572,6 +572,10 @@ class BarCharts:
         # TBD
         return None
 
+    @staticmethod
+    def revisions_table(title, environment, race_config):
+        return None
+
 
 class TimeSeriesCharts:
     @staticmethod
@@ -1292,6 +1296,83 @@ class TimeSeriesCharts:
             },
         }
 
+    @staticmethod
+    def revisions_table(title, environment, race_config):
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(
+                    {
+                        "title": title,
+                        "type": "table",
+                        "params": {
+                            "perPage": 15,
+                            "sort": {"columnIndex": 0, "direction": "desc"},
+                        },
+                        "aggs": [
+                            {"id": "1", "enabled": True, "type": "count", "params": {}, "schema": "metric"},
+                            {
+                                "id": "2",
+                                "enabled": True,
+                                "type": "date_histogram",
+                                "params": {
+                                    "field": "race-timestamp",
+                                    "interval": "d",
+                                    "customLabel": "day",
+                                },
+                                "schema": "bucket",
+                            },
+                            {
+                                "id": "3",
+                                "enabled": True,
+                                "type": "terms",
+                                "params": {
+                                    "field": "cluster.revision",
+                                    "size": 100,
+                                    "customLabel": "revision",
+                                },
+                                "schema": "bucket",
+                            },
+                            {
+                                "id": "4",
+                                "enabled": True,
+                                "type": "terms",
+                                "params": {
+                                    "field": "cluster.distribution-version",
+                                    "size": 100,
+                                    "customLabel": "version",
+                                },
+                                "schema": "bucket",
+                            },
+                        ],
+                        "listeners": {},
+                    }
+                ),
+                "uiStateJSON": "{}",
+                "description": "revisions",
+                "version": 1,
+                "kibanaSavedObjectMeta": {
+                    "searchSourceJSON": json.dumps(
+                        {
+                            "index": "13969350-badf-11ea-af86-7d06bde52cfd",
+                            "query": {
+                                "query_string": {
+                                    "query": f'environment:"{environment}"'
+                                    f' AND track:"{race_config.track}"'
+                                    f' AND challenge:"{race_config.challenge}"'
+                                    f' AND car:"{race_config.car}"',
+                                    "analyze_wildcard": True,
+                                }
+                            },
+                            "filter": [],
+                        }
+                    )
+                },
+            },
+        }
+
 
 class RaceConfigTrack:
     def __init__(self, cfg, repository, name=None):
@@ -1436,111 +1517,11 @@ def generate_revisions(chart_type, race_configs, environment):
             title = chart_type.format_title(
                 environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-revisions"
             )
-            chart = revisions_table(title, environment, race_config)
+            chart = chart_type.revisions_table(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
 
     return structures
-
-
-def revisions_table(title, environment, race_config):
-    vis_state = {
-        "title": title,
-        "type": "table",
-        "params": {
-            "perPage": 30,
-            "showPartialRows": False,
-            "showMetricsAtAllLevels": False,
-            "sort": {"columnIndex": 0, "direction": "desc"},
-            "showTotal": False,
-            "totalFunc": "sum",
-            "percentageCol": "",
-        },
-        "aggs": [
-            {"id": "1", "enabled": True, "type": "count", "params": {}, "schema": "metric"},
-            {
-                "id": "2",
-                "enabled": True,
-                "type": "date_histogram",
-                "params": {
-                    "field": "race-timestamp",
-                    "timeRange": {"from": "now-30d", "to": "now"},
-                    "useNormalizedEsInterval": True,
-                    "scaleMetricValues": False,
-                    "interval": "d",
-                    "drop_partials": False,
-                    "min_doc_count": 1,
-                    "extended_bounds": {},
-                    "customLabel": "day",
-                },
-                "schema": "bucket",
-            },
-            {
-                "id": "3",
-                "enabled": True,
-                "type": "terms",
-                "params": {
-                    "field": "cluster.revision",
-                    "orderBy": "1",
-                    "order": "desc",
-                    "size": 100,
-                    "otherBucket": False,
-                    "otherBucketLabel": "Other",
-                    "missingBucket": False,
-                    "missingBucketLabel": "Missing",
-                    "customLabel": "revision",
-                },
-                "schema": "bucket",
-            },
-            {
-                "id": "4",
-                "enabled": True,
-                "type": "terms",
-                "params": {
-                    "field": "cluster.distribution-version",
-                    "orderBy": "1",
-                    "order": "desc",
-                    "size": 100,
-                    "otherBucket": False,
-                    "otherBucketLabel": "Other",
-                    "missingBucket": False,
-                    "missingBucketLabel": "Missing",
-                    "customLabel": "version",
-                },
-                "schema": "bucket",
-            },
-        ],
-        "listeners": {},
-    }
-
-    return {
-        "id": str(uuid.uuid4()),
-        "type": "visualization",
-        "attributes": {
-            "title": title,
-            "visState": json.dumps(vis_state),
-            "uiStateJSON": "{}",
-            "description": "revisions",
-            "version": 1,
-            "kibanaSavedObjectMeta": {
-                "searchSourceJSON": json.dumps(
-                    {
-                        "index": "13969350-badf-11ea-af86-7d06bde52cfd",
-                        "query": {
-                            "query_string": {
-                                "query": f'environment:"{environment}"'
-                                f' AND track:"{race_config.track}"'
-                                f' AND challenge:"{race_config.challenge}"'
-                                f' AND car:"{race_config.car}"',
-                                "analyze_wildcard": True,
-                            }
-                        },
-                        "filter": [],
-                    }
-                )
-            },
-        },
-    }
 
 
 def generate_dashboard(chart_type, environment, track, charts, flavor=None):
