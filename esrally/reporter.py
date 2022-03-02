@@ -92,7 +92,7 @@ class SummaryReporter:
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
-        self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="right")
+        self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="decimal")
         reporting_values = config.opts("reporting", "values")
         self.report_all_values = reporting_values == "all"
         self.report_all_percentile_values = reporting_values == "all-percentiles"
@@ -323,7 +323,7 @@ class ComparisonReporter:
     def __init__(self, config):
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
-        self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="right")
+        self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="decimal")
         self.cwd = config.opts("node", "rally.cwd")
         self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime", mandatory=False, default_value=False))
         self.plain = False
