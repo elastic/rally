@@ -1429,6 +1429,120 @@ def generate_merge_count(chart_type, race_configs, environment):
     return structures
 
 
+def generate_revisions(chart_type, race_configs, environment):
+    structures = []
+    for race_config in race_configs:
+        if "revisions" in race_config.charts:
+            title = chart_type.format_title(
+                environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-revisions"
+            )
+            chart = revisions_table(title, environment, race_config)
+            if chart is not None:
+                structures.append(chart)
+
+    return structures
+
+
+def revisions_table(title, environment, race_config):
+    vis_state = {
+        "title": title,
+        "type": "table",
+        "params": {
+            "perPage": 30,
+            "showPartialRows": False,
+            "showMetricsAtAllLevels": False,
+            "sort": {"columnIndex": 0, "direction": "desc"},
+            "showTotal": False,
+            "totalFunc": "sum",
+            "percentageCol": "",
+        },
+        "aggs": [
+            {"id": "1", "enabled": True, "type": "count", "params": {}, "schema": "metric"},
+            {
+                "id": "2",
+                "enabled": True,
+                "type": "date_histogram",
+                "params": {
+                    "field": "race-timestamp",
+                    "timeRange": {"from": "now-30d", "to": "now"},
+                    "useNormalizedEsInterval": True,
+                    "scaleMetricValues": False,
+                    "interval": "d",
+                    "drop_partials": False,
+                    "min_doc_count": 1,
+                    "extended_bounds": {},
+                    "customLabel": "day",
+                },
+                "schema": "bucket",
+            },
+            {
+                "id": "3",
+                "enabled": True,
+                "type": "terms",
+                "params": {
+                    "field": "cluster.revision",
+                    "orderBy": "1",
+                    "order": "desc",
+                    "size": 100,
+                    "otherBucket": False,
+                    "otherBucketLabel": "Other",
+                    "missingBucket": False,
+                    "missingBucketLabel": "Missing",
+                    "customLabel": "revision",
+                },
+                "schema": "bucket",
+            },
+            {
+                "id": "4",
+                "enabled": True,
+                "type": "terms",
+                "params": {
+                    "field": "cluster.distribution-version",
+                    "orderBy": "1",
+                    "order": "desc",
+                    "size": 100,
+                    "otherBucket": False,
+                    "otherBucketLabel": "Other",
+                    "missingBucket": False,
+                    "missingBucketLabel": "Missing",
+                    "customLabel": "version",
+                },
+                "schema": "bucket",
+            },
+        ],
+        "listeners": {},
+    }
+
+    return {
+        "id": str(uuid.uuid4()),
+        "type": "visualization",
+        "attributes": {
+            "title": title,
+            "visState": json.dumps(vis_state),
+            "uiStateJSON": "{}",
+            "description": "revisions",
+            "version": 1,
+            "kibanaSavedObjectMeta": {
+                "searchSourceJSON": json.dumps(
+                    {
+                        "index": "13969350-badf-11ea-af86-7d06bde52cfd",
+                        "query": {
+                            "query_string": {
+                                "query": f'environment:"{environment}"'
+                                f' AND track:"{race_config.track}"'
+                                f' AND challenge:"{race_config.challenge}"'
+                                f' AND car:"{race_config.car}"',
+                                "analyze_wildcard": True,
+                            }
+                        },
+                        "filter": [],
+                    }
+                )
+            },
+        },
+    }
+
+
 def generate_dashboard(chart_type, environment, track, charts, flavor=None):
     panels = []
 
@@ -1637,6 +1751,7 @@ def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, log
         + generate_merge_count(chart_type, race_configs, env)
         + generate_ml_processing_time(chart_type, race_configs, env)
         + generate_queries(chart_type, race_configs, env)
+        + generate_revisions(chart_type, race_configs, env)
     )
 
     dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)
