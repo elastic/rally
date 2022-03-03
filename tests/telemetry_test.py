@@ -4149,7 +4149,12 @@ class TestDiskUsageStats:
     def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(transport_client=TransportClient(force_error=True, error=elasticsearch.RequestError))
+        es = Client(
+            transport_client=TransportClient(
+                force_error=True,
+                error=elasticsearch.RequestError,
+            )
+        )
         device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4161,7 +4166,13 @@ class TestDiskUsageStats:
     def test_successful_shards(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(transport_client=TransportClient(response={"_shards": {"total": 1, "successful": 1, "failed": 0}}))
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"total": 1, "successful": 1, "failed": 0},
+                }
+            )
+        )
         device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4172,7 +4183,13 @@ class TestDiskUsageStats:
     def test_unsuccessful_shards(self, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(transport_client=TransportClient(response={"_shards": {"total": 1, "successful": 0, "failed": 1}}))
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"total": 1, "successful": 0, "failed": 1},
+                }
+            )
+        )
         device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()

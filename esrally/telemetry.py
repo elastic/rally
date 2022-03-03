@@ -2290,9 +2290,11 @@ class DiskUsageStats(TelemetryDevice):
                 points = fieldInfo.get("points_in_bytes", 0)
                 if points > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_points", points, meta_data=meta, unit="byte")
+
                 norms = fieldInfo.get("norms_in_bytes", 0)
                 if norms > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_norms", norms, meta_data=meta, unit="byte")
+
                 term_vectors = fieldInfo.get("term_vectors_in_bytes", 0)
                 if term_vectors > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_term_vectors", term_vectors, meta_data=meta, unit="byte")

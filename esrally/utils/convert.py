@@ -50,17 +50,14 @@ def bytes_to_human_unit(b):
 def bytes_to_unit(unit, b):
     if unit == "N/A":
         return b
-
-    if unit == "GB":
+    elif unit == "GB":
         return bytes_to_gb(b)
-
-    if unit == "MB":
+    elif unit == "MB":
         return bytes_to_mb(b)
-
-    if unit == "kB":
+    elif unit == "kB":
         return bytes_to_kb(b)
-
-    return b
+    else:
+        return b
 
 
 def _bytes_to_human(b):
