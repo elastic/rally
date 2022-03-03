@@ -530,6 +530,9 @@ class Track:
                 return None
         return size
 
+    def index_names(self):
+        return [i.name for i in self.indices]
+
     def __str__(self):
         return self.name
 

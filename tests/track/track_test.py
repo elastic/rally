@@ -74,6 +74,17 @@ class TestTrack:
 
         assert exc.value.args[0] == "Unknown challenge [unknown-name] for track [unittest]"
 
+    def test_index_names(self):
+        idx1 = track.Index(name="foo")
+        idx2 = track.Index(name="bar")
+        assert ["foo", "bar"] == (
+            track.Track(
+                name="unittest",
+                description="unittest track",
+                indices=[idx1, idx2],
+            ).index_names()
+        )
+
 
 class TestIndex:
     def test_matches_exactly(self):
