@@ -37,3 +37,87 @@ class TestToBool:
             with pytest.raises(ValueError) as exc:
                 convert.to_bool(value)
             assert exc.value.args[0] == f"Cannot convert [{value}] to bool."
+
+
+class TestBytesToHuman:
+    def test_none(self):
+        assert convert.bytes_to_human_string(None) == "N/A"
+        assert convert.bytes_to_human_value(None) is None
+        assert convert.bytes_to_human_unit(None) == "N/A"
+
+    def test_positive_bytes(self):
+        assert convert.bytes_to_human_string(100) == "100 bytes"
+        assert convert.bytes_to_human_value(100) == 100
+        assert convert.bytes_to_human_unit(100) == "bytes"
+
+    def test_negative_bytes(self):
+        assert convert.bytes_to_human_string(-100) == "-100 bytes"
+        assert convert.bytes_to_human_value(-100) == -100
+        assert convert.bytes_to_human_unit(-100) == "bytes"
+
+    def test_positive_kb(self):
+        assert convert.bytes_to_human_string(8808) == "8.6 kB"
+        assert convert.bytes_to_human_value(8808) == 8.6015625
+        assert convert.bytes_to_human_unit(8808) == "kB"
+
+    def test_negative_kb(self):
+        assert convert.bytes_to_human_string(-88134) == "-86.1 kB"
+        assert convert.bytes_to_human_value(-88134) == -86.068359375
+        assert convert.bytes_to_human_unit(-88134) == "kB"
+
+    def test_positive_mb(self):
+        assert convert.bytes_to_human_string(8808812) == "8.4 MB"
+        assert convert.bytes_to_human_value(8808812) == 8.400737762451172
+        assert convert.bytes_to_human_unit(8808812) == "MB"
+
+    def test_negative_mb(self):
+        assert convert.bytes_to_human_string(-881348666) == "-840.5 MB"
+        assert convert.bytes_to_human_value(-881348666) == -840.5195865631104
+        assert convert.bytes_to_human_unit(-881348666) == "MB"
+
+    def test_positive_gb(self):
+        assert convert.bytes_to_human_string(8808812123) == "8.2 GB"
+        assert convert.bytes_to_human_value(8808812123) == 8.2038455856964
+        assert convert.bytes_to_human_unit(8808812123) == "GB"
+
+    def test_negative_gb(self):
+        assert convert.bytes_to_human_string(-881348666323) == "-820.8 GB"
+        assert convert.bytes_to_human_value(-881348666323) == -820.8199090538546
+        assert convert.bytes_to_human_unit(-881348666323) == "GB"
+
+
+class TestBytesToUnit:
+    def test_to_na(self):
+        assert convert.bytes_to_unit("N/A", None) is None
+        assert convert.bytes_to_unit("N/A", 100) == 100
+        assert convert.bytes_to_unit("N/A", 4500) == 4500
+        assert convert.bytes_to_unit("N/A", 8004200) == 8004200
+        assert convert.bytes_to_unit("N/A", 12348004200) == 12348004200
+
+    def test_to_bytes(self):
+        assert convert.bytes_to_unit("bytes", None) is None
+        assert convert.bytes_to_unit("bytes", 100) == 100
+        assert convert.bytes_to_unit("bytes", 4500) == 4500
+        assert convert.bytes_to_unit("bytes", 8004200) == 8004200
+        assert convert.bytes_to_unit("bytes", 12348004200) == 12348004200
+
+    def test_to_kb(self):
+        assert convert.bytes_to_unit("kb", None) is None
+        assert convert.bytes_to_unit("kB", 100) == pytest.approx(0.098, rel=0.1)
+        assert convert.bytes_to_unit("kB", 4500) == pytest.approx(4.4, rel=0.1)
+        assert convert.bytes_to_unit("kB", 8004200) == pytest.approx(7800, rel=0.1)
+        assert convert.bytes_to_unit("kB", 12348004200) == pytest.approx(12000000, rel=0.1)
+
+    def test_to_mb(self):
+        assert convert.bytes_to_unit("MB", None) is None
+        assert convert.bytes_to_unit("MB", 100) == pytest.approx(9.5e-05, rel=0.1)
+        assert convert.bytes_to_unit("MB", 4500) == pytest.approx(0.0043, rel=0.1)
+        assert convert.bytes_to_unit("MB", 8004200) == pytest.approx(7.6, rel=0.1)
+        assert convert.bytes_to_unit("MB", 12348004200) == pytest.approx(12000, rel=0.1)
+
+    def test_to_gb(self):
+        assert convert.bytes_to_unit("GB", None) is None
+        assert convert.bytes_to_unit("GB", 100) == pytest.approx(9.3e-08, rel=0.1)
+        assert convert.bytes_to_unit("GB", 4500) == pytest.approx(4.2e-06, rel=0.1)
+        assert convert.bytes_to_unit("GB", 8004200) == pytest.approx(0.0075, rel=0.1)
+        assert convert.bytes_to_unit("GB", 12348004200) == pytest.approx(11, rel=0.1)

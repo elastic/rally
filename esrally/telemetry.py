@@ -47,6 +47,7 @@ def list_telemetry():
             ShardStats,
             DataStreamStats,
             IngestPipelineStats,
+            DiskUsageStats,
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -2225,3 +2226,75 @@ class MasterNodeStatsRecorder:
         }
 
         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster)
+
+
+class DiskUsageStats(TelemetryDevice):
+    """
+    Measures the space taken by each field
+    """
+
+    internal = False
+    command = "disk-usage-stats"
+    human_name = "Disk usage of each field"
+    help = "Runs the indices disk usage API after benchmarking"
+
+    def __init__(self, telemetry_params, client, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            Must specify:
+            ``disk-usage-stats-indices``: Comma separated list of indices who's disk usage to fetch.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+        self.telemetry_params = telemetry_params
+        self.client = client
+        self.metrics_store = metrics_store
+
+    def on_benchmark_stop(self):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        indices = self.telemetry_params["disk-usage-stats-indices"]
+        self.logger.debug("Gathering disk usage for %s", indices)
+        try:
+            response = self.client.transport.perform_request("POST", f"/{indices}/_disk_usage", params={"run_expensive_tasks": "true"})
+        except elasticsearch.RequestError:
+            msg = "A transport error occurred while collecting disk usage"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        if response["_shards"]["failed"] > 0:
+            msg = "Shards failed when fetching disk usage"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        del response["_shards"]
+        for index, idxFields in response.items():
+            for field, fieldInfo in idxFields["fields"].items():
+                meta = {"index": index, "field": field}
+                self.metrics_store.put_value_cluster_level("disk_usage_total", fieldInfo["total_in_bytes"], meta_data=meta, unit="byte")
+
+                inverted_index = fieldInfo.get("inverted_index", {"total_in_bytes": 0})["total_in_bytes"]
+                if inverted_index > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_inverted_index", inverted_index, meta_data=meta, unit="byte")
+
+                stored_fields = fieldInfo.get("stored_fields_in_bytes", 0)
+                if stored_fields > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_stored_fields", stored_fields, meta_data=meta, unit="byte")
+
+                doc_values = fieldInfo.get("doc_values_in_bytes", 0)
+                if doc_values > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_doc_values", doc_values, meta_data=meta, unit="byte")
+
+                points = fieldInfo.get("points_in_bytes", 0)
+                if points > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_points", points, meta_data=meta, unit="byte")
+
+                norms = fieldInfo.get("norms_in_bytes", 0)
+                if norms > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_norms", norms, meta_data=meta, unit="byte")
+
+                term_vectors = fieldInfo.get("term_vectors_in_bytes", 0)
+                if term_vectors > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_term_vectors", term_vectors, meta_data=meta, unit="byte")

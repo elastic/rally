@@ -4142,3 +4142,213 @@ class TestIngestPipelineStats:
             mocked_warning.assert_called_once_with(
                 "Cannot determine Ingest Pipeline stats for %s (not in the cluster at the start of the benchmark).", "elasticsearch31"
             )
+
+
+class TestDiskUsageStats:
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                force_error=True,
+                error=elasticsearch.RequestError,
+            )
+        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        with pytest.raises(exceptions.RallyError):
+            t.on_benchmark_stop()
+        assert metrics_store_cluster_level.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_successful_shards(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"total": 1, "successful": 1, "failed": 0},
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_unsuccessful_shards(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"total": 1, "successful": 0, "failed": 1},
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        with pytest.raises(exceptions.RallyError):
+            t.on_benchmark_stop()
+        assert metrics_store_cluster_level.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_source(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "_source": {
+                                "total_in_bytes": 40676,
+                                "stored_fields_in_bytes": 40676,
+                            }
+                        }
+                    },
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.mock_calls == [
+            self._mock_store("disk_usage_total", 40676, "_source"),
+            self._mock_store("disk_usage_stored_fields", 40676, "_source"),
+        ]
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_id(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "_id": {
+                                "total_in_bytes": 21079,
+                                "inverted_index": {"total_in_bytes": 17110},
+                                "stored_fields_in_bytes": 3969,
+                            }
+                        }
+                    },
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.mock_calls == [
+            self._mock_store("disk_usage_total", 21079, "_id"),
+            self._mock_store("disk_usage_inverted_index", 17110, "_id"),
+            self._mock_store("disk_usage_stored_fields", 3969, "_id"),
+        ]
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_empty_field(self, metrics_store_cluster_level):
+        """
+        Fields like _primary_term commonly have take 0 bytes at all. But they
+        are declared fields so we return their total size just so no one
+        thinks they are lost. But their total size is 0.
+        """
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "_primary_term": {
+                                "total_in_bytes": 0,
+                                "inverted_index": {"total_in_bytes": 0},
+                                "stored_fields_in_bytes": 0,
+                                "doc_values_in_bytes": 0,
+                                "points_in_bytes": 0,
+                            }
+                        }
+                    },
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.mock_calls == [
+            self._mock_store("disk_usage_total", 0, "_primary_term"),
+        ]
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_number(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "prcp": {
+                                "total_in_bytes": 1498,
+                                "doc_values_in_bytes": 748,
+                                "points_in_bytes": 750,
+                            }
+                        }
+                    },
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.mock_calls == [
+            self._mock_store("disk_usage_total", 1498, "prcp"),
+            self._mock_store("disk_usage_doc_values", 748, "prcp"),
+            self._mock_store("disk_usage_points", 750, "prcp"),
+        ]
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_keyword(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {
+                            "station.country_code": {
+                                "total_in_bytes": 346,
+                                "doc_values_in_bytes": 328,
+                                "points_in_bytes": 18,
+                            }
+                        }
+                    },
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.mock_calls == [
+            self._mock_store("disk_usage_total", 346, "station.country_code"),
+            self._mock_store("disk_usage_doc_values", 328, "station.country_code"),
+            self._mock_store("disk_usage_points", 18, "station.country_code"),
+        ]
+
+    def _mock_store(self, name, size, field):
+        return mock.call(name, size, meta_data={"index": "foo", "field": field}, unit="byte")

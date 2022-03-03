@@ -24,18 +24,19 @@ If you invoke ``esrally list telemetry``, it will show which telemetry devices a
    Command                     Name                        Description
    --------------------------  --------------------------  --------------------------------------------------------------------
    jit                         JIT Compiler Profiler       Enables JIT compiler logs.
-   gc                          GC log                      Enables GC logs
+   gc                          GC log                      Enables GC logs.
    jfr                         Flight Recorder             Enables Java Flight Recorder (requires an Oracle JDK or OpenJDK 11+)
-   heapdump                    Heap Dump                   Captures a heap dump
+   heapdump                    Heap Dump                   Captures a heap dump.
    node-stats                  Node Stats                  Regularly samples node stats
    recovery-stats              Recovery Stats              Regularly samples shard recovery stats
    ccr-stats                   CCR Stats                   Regularly samples Cross Cluster Replication (CCR) related stats
-   segment-stats               Segment Stats               Determines segment stats at the end of the benchmark
+   segment-stats               Segment Stats               Determines segment stats at the end of the benchmark.
    transform-stats             Transform Stats             Regularly samples transform stats
    searchable-snapshots-stats  Searchable Snapshots Stats  Regularly samples searchable snapshots stats
    shard-stats                 Shard Stats                 Regularly samples nodes stats at shard level
-   data-stream-stats           Data Streams Stats          Regularly samples data streams stats
-   ingest-pipeline-stats       Ingest Pipeline Stats       Determines ingest pipeline stats at the end of the benchmark
+   data-stream-stats           Data Stream Stats           Regularly samples data stream stats
+   ingest-pipeline-stats       Ingest Pipeline Stats       Reports Ingest Pipeline stats at the end of the benchmark.
+   disk-usage-stats            Disk usage of each field    Runs the indices disk usage API after benchmarking
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -281,3 +282,44 @@ Example of recorded documents given a single cluster, single node, single pipeli
          "type": "uppercase"
        }
    }
+
+.. _disk-usage-stats:
+
+disk-usage-stats
+----------------
+
+The disk-usage-stats telemetry device runs the `_disk_usage <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-disk-usage.html>`_ API after the track has completed and adds the disk used of each field to the report.
+
+Required telemetry parameters:
+
+* ``disk-usage-stats-indices``: Comma separated list of indices who's disk usage to fetch.
+
+Example::
+
+   esrally race --track noaa \
+     --telemetry disk-usage-stats --telemetry-params disk-usage-stats-indices:weather-data-2016
+   ...
+   | weather-data-2016 station.location doc values |   256.8 | MB |
+   |     weather-data-2016 station.location points | 108.488 | MB |
+   |      weather-data-2016 station.location total | 365.289 | MB |
+   |          weather-data-2016 _id inverted index | 210.878 | MB |
+   |           weather-data-2016 _id stored fields |  311.63 | MB |
+   |                   weather-data-2016 _id total | 522.508 | MB |
+   |       weather-data-2016 _source stored fields | 3.36536 | GB |
+   |               weather-data-2016 _source total | 3.36536 | GB |
+
+
+It also works with ``esrally compare``::
+
+   | weather-data-2016 station.location points | 108.488 | 108.076 | -0.41203 | MB | -0.38% |
+   |  weather-data-2016 station.location total | 365.289 | 364.877 | -0.41153 | MB | -0.11% |
+   |      weather-data-2016 _id inverted index | 210.878 | 211.052 |  0.17399 | MB | +0.08% |
+   |       weather-data-2016 _id stored fields |  311.63 | 311.363 | -0.26625 | MB | -0.09% |
+   |               weather-data-2016 _id total | 522.508 | 522.416 | -0.09225 | MB | -0.02% |
+   |   weather-data-2016 _source stored fields | 3.36536 |  3.3652 | -0.00016 | GB | -0.00% |
+   |           weather-data-2016 _source total | 3.36536 |  3.3652 | -0.00016 | GB | -0.00% |
+
+
+.. note::
+
+    This telemetry device has no runtime overhead. It does all of it's work after the race is complete.
