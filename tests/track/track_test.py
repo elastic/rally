@@ -77,13 +77,8 @@ class TestTrack:
     def test_index_names(self):
         idx1 = track.Index(name="foo")
         idx2 = track.Index(name="bar")
-        assert ["foo", "bar"] == (
-            track.Track(
-                name="unittest",
-                description="unittest track",
-                indices=[idx1, idx2],
-            ).index_names()
-        )
+        track_ = track.Track(name="unittest", description="unittest track", indices=[idx1, idx2])
+        assert track_.index_names() == ["foo", "bar"]
 
 
 class TestIndex:
