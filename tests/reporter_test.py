@@ -29,20 +29,30 @@ class TestFormatter:
 
         self.metrics_header = ["Metric", "Task", "Baseline", "Contender", "Diff", "Unit", "Diff %"]
         self.metrics_data = [
-            ["Min Throughput", "index", "17300", "18000", "700", "ops/s", "4.04%"],
-            ["Median Throughput", "index", "17500", "18500", "1000", "ops/s", "5.71%"],
-            ["Max Throughput", "index", "17700", "19000", "1300", "ops/s", "7.34%"],
+            ["Min Throughput", "index", 17300, 18000, 700, "ops/s", "4.04%"],
+            ["Median Throughput", "index", 17500, 18500, 1000, "ops/s", "5.71%"],
+            ["Max Throughput", "index", 17700, 19000, 1300, "ops/s", "7.34%"],
+            ["Bubblegum", "", 1.7, 1.9, 0.2, "bubbles/flavonoid", "11.71%"],
         ]
-        self.numbers_align = "right"
 
-    def test_formats_as_markdown(self):
-        formatted = reporter.format_as_markdown(self.empty_header, self.empty_data, self.numbers_align)
+    def test_formats_as_markdown_empty(self):
+        formatted = reporter.format_as_markdown(self.empty_header, self.empty_data, "ignored")
         # 1 header line, 1 separation line + 0 data lines
         assert len(formatted.splitlines()) == 1 + 1 + 0
 
-        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data, self.numbers_align)
+    def test_formats_as_markdown_numbers_align_decimal(self):
+        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data, "decimal")
         # 1 header line, 1 separation line + 3 data lines
-        assert len(formatted.splitlines()) == 1 + 1 + 3
+        assert len(formatted.splitlines()) == 1 + 1 + 4
+        assert "|    Min Throughput |  index |    17300   |     18000   |  700   |             ops/s |    4.04% |" in formatted.splitlines()
+        assert "|         Bubblegum |        |        1.7 |         1.9 |    0.2 | bubbles/flavonoid |   11.71% |" in formatted.splitlines()
+
+    def test_formats_as_markdown_numbers_align_right(self):
+        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data, "right")
+        # 1 header line, 1 separation line + 3 data lines
+        assert len(formatted.splitlines()) == 1 + 1 + 4
+        assert "|    Min Throughput |  index |      17300 |       18000 |    700 |             ops/s |    4.04% |" in formatted.splitlines()
+        assert "|         Bubblegum |        |        1.7 |         1.9 |    0.2 | bubbles/flavonoid |   11.71% |" in formatted.splitlines()
 
     def test_formats_as_csv(self):
         formatted = reporter.format_as_csv(self.empty_header, self.empty_data)
@@ -51,7 +61,7 @@ class TestFormatter:
 
         formatted = reporter.format_as_csv(self.metrics_header, self.metrics_data)
         # 1 header line, no separation line + 3 data lines
-        assert len(formatted.splitlines()) == 1 + 3
+        assert len(formatted.splitlines()) == 1 + 4
 
 
 class TestComparisonReporter:
