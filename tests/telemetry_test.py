@@ -218,6 +218,8 @@ class TransportClient:
         self._error = error
 
     def perform_request(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
         if self._force_error:
             raise self._error
         else:
@@ -4145,6 +4147,30 @@ class TestIngestPipelineStats:
 
 
 class TestDiskUsageStats:
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_by_default(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        tc = TransportClient(response={"_shards": {"failed": 0}})
+        es = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert tc.args == ("POST", "/foo,bar/_disk_usage")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_if_specified(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        tc = TransportClient(response={"_shards": {"failed": 0}})
+        es = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, ["bar"])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert tc.args == ("POST", "/foo/_disk_usage")
+
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
         cfg = create_config()
@@ -4155,7 +4181,7 @@ class TestDiskUsageStats:
                 error=elasticsearch.RequestError,
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4173,7 +4199,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4190,7 +4216,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4216,7 +4242,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4245,7 +4271,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4282,7 +4308,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4310,7 +4336,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4340,7 +4366,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()

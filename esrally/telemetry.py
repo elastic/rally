@@ -2238,11 +2238,12 @@ class DiskUsageStats(TelemetryDevice):
     human_name = "Disk usage of each field"
     help = "Runs the indices disk usage API after benchmarking"
 
-    def __init__(self, telemetry_params, client, metrics_store):
+    def __init__(self, telemetry_params, client, metrics_store, index_names):
         """
         :param telemetry_params: The configuration object for telemetry_params.
-            Must specify:
-            ``disk-usage-stats-indices``: Comma separated list of indices who's disk usage to fetch.
+            May specify:
+            ``disk-usage-stats-indices``: Comma separated list of indices who's disk
+                usage to fetch. Default is all indices in the track.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         """
@@ -2250,12 +2251,13 @@ class DiskUsageStats(TelemetryDevice):
         self.telemetry_params = telemetry_params
         self.client = client
         self.metrics_store = metrics_store
+        self.index_names = index_names
 
     def on_benchmark_stop(self):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
-        indices = self.telemetry_params["disk-usage-stats-indices"]
+        indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names))
         self.logger.debug("Gathering disk usage for %s", indices)
         try:
             response = self.client.transport.perform_request("POST", f"/{indices}/_disk_usage", params={"run_expensive_tasks": "true"})

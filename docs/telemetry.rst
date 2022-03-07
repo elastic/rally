@@ -290,9 +290,9 @@ disk-usage-stats
 
 The disk-usage-stats telemetry device runs the `_disk_usage <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-disk-usage.html>`_ API after the track has completed and adds the disk used of each field to the report.
 
-Required telemetry parameters:
+Supported telemetry parameters:
 
-* ``disk-usage-stats-indices``: Comma separated list of indices who's disk usage to fetch.
+* ``disk-usage-stats-indices`` (default all indices in the track): Comma separated list of indices who's disk usage to fetch.
 
 Example::
 
