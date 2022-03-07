@@ -32,7 +32,7 @@ class TestFormatter:
             ["Min Throughput", "index", 17300, 18000, 700, "ops/s", "4.04%"],
             ["Median Throughput", "index", 17500, 18500, 1000, "ops/s", "5.71%"],
             ["Max Throughput", "index", 17700, 19000, 1300, "ops/s", "7.34%"],
-            ["Bubblegum", "", 1.7, 1.9, 0.2, "bubbles/flavonoid", "11.71"],
+            ["Bubblegum", "", 1.7, 1.9, 0.2, "bubbles/flavonoid", "11.71%"],
         ]
 
     def test_formats_as_markdown_empty(self):
