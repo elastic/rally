@@ -36,26 +36,23 @@ class TestFormatter:
         ]
 
     def test_formats_as_markdown_empty(self):
-        self.numbers_align = "ignored"
-        formatted = reporter.format_as_markdown(self.empty_header, self.empty_data, self.numbers_align)
+        formatted = reporter.format_as_markdown(self.empty_header, self.empty_data, "ignored")
         # 1 header line, 1 separation line + 0 data lines
         assert len(formatted.splitlines()) == 1 + 1 + 0
 
     def test_formats_as_markdown_numbers_align_decimal(self):
-        self.numbers_align = "decimal"
-        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data, self.numbers_align)
+        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data, "decimal")
         # 1 header line, 1 separation line + 3 data lines
         assert len(formatted.splitlines()) == 1 + 1 + 4
         assert "|    Min Throughput |  index |    17300   |     18000   |  700   |             ops/s |    4.04% |" in formatted.splitlines()
-        assert "|         Bubblegum |        |        1.7 |         1.9 |    0.2 | bubbles/flavonoid |    11.71 |" in formatted.splitlines()
+        assert "|         Bubblegum |        |        1.7 |         1.9 |    0.2 | bubbles/flavonoid |   11.71% |" in formatted.splitlines()
 
     def test_formats_as_markdown_numbers_align_right(self):
-        self.numbers_align = "right"
-        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data, self.numbers_align)
+        formatted = reporter.format_as_markdown(self.metrics_header, self.metrics_data, "right")
         # 1 header line, 1 separation line + 3 data lines
         assert len(formatted.splitlines()) == 1 + 1 + 4
         assert "|    Min Throughput |  index |      17300 |       18000 |    700 |             ops/s |    4.04% |" in formatted.splitlines()
-        assert "|         Bubblegum |        |        1.7 |         1.9 |    0.2 | bubbles/flavonoid |    11.71 |" in formatted.splitlines()
+        assert "|         Bubblegum |        |        1.7 |         1.9 |    0.2 | bubbles/flavonoid |   11.71% |" in formatted.splitlines()
 
     def test_formats_as_csv(self):
         formatted = reporter.format_as_csv(self.empty_header, self.empty_data)
