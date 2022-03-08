@@ -4183,12 +4183,73 @@ class TestDiskUsageStats:
                 error=elasticsearch.RequestError,
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
             t.on_benchmark_stop()
         assert metrics_store_cluster_level.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_missing_all_fails(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                force_error=True,
+                error=elasticsearch.RequestError,
+            )
+        )
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        with pytest.raises(exceptions.RallyError):
+            t.on_benchmark_stop()
+        assert metrics_store_cluster_level.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_some_mising_succeeds(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+
+        class TwoTransportClients:
+            def __init__(self, first, rest):
+                self.first = first
+                self.rest = rest
+
+            def perform_request(self, *args, **kwargs):
+                if self.first:
+                    first = self.first
+                    self.first = None
+                    return first.perform_request(args, kwargs)
+                else:
+                    return self.rest.perform_request(args, kwargs)
+
+        not_found_transport_client = TransportClient(
+            force_error=True,
+            error=elasticsearch.NotFoundError,
+        )
+        successful_client = TransportClient(
+            response={
+                "_shards": {"failed": 0},
+                "foo": {
+                    "fields": {
+                        "_id": {
+                            "total_in_bytes": 21079,
+                            "inverted_index": {"total_in_bytes": 17110},
+                            "stored_fields_in_bytes": 3969,
+                        }
+                    }
+                },
+            }
+        )
+
+        es = Client(transport_client=TwoTransportClients(not_found_transport_client, successful_client))
+        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.call_count == 3
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_successful_shards(self, metrics_store_cluster_level):

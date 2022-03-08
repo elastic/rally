@@ -2258,19 +2258,30 @@ class DiskUsageStats(TelemetryDevice):
         import elasticsearch
 
         indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names))
+        found = False
         for index in indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
                 response = self.client.transport.perform_request("POST", f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
             except elasticsearch.RequestError:
-                msg = "A transport error occurred while collecting disk usage"
+                msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)
                 raise exceptions.RallyError(msg)
+            except elasticsearch.NotFoundError:
+                msg = f"Requested disk usage for missing index {index}"
+                self.logger.warning(msg)
+                continue
+            found = True
             self.handle_telemetry_usage(response)
+        if not found:
+            msg = f"Couldn't find any indices for disk usage {indices}"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
 
     def handle_telemetry_usage(self, response):
         if response["_shards"]["failed"] > 0:
-            msg = "Shards failed when fetching disk usage " + str(response["_shards"]["failures"])
+            failures = str(response["_shards"]["failures"])
+            msg = f"Shards failed when fetching disk usage: {failures}"
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
