@@ -216,14 +216,16 @@ class TransportClient:
         self._response = response
         self._force_error = force_error
         self._error = error
+        self.args = []
+        self.kwargs = []
 
     def perform_request(self, *args, **kwargs):
-        self.args = args
-        self.kwargs = kwargs
+        self.args.append(args)
+        self.kwargs.append(kwargs)
         if self._force_error:
             raise self._error
         else:
-            return self._response
+            return copy.deepcopy(self._response)
 
 
 class TestJfr:
@@ -4157,7 +4159,7 @@ class TestDiskUsageStats:
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == ("POST", "/foo,bar/_disk_usage")
+        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_indices_param_if_specified(self, es):
@@ -4165,11 +4167,11 @@ class TestDiskUsageStats:
         metrics_store = metrics.EsMetricsStore(cfg)
         tc = TransportClient(response={"_shards": {"failed": 0}})
         es = Client(transport_client=tc)
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, ["bar"])
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, ["baz"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == ("POST", "/foo/_disk_usage")
+        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
@@ -4212,7 +4214,7 @@ class TestDiskUsageStats:
         es = Client(
             transport_client=TransportClient(
                 response={
-                    "_shards": {"total": 1, "successful": 0, "failed": 1},
+                    "_shards": {"total": 1, "successful": 0, "failed": 1, "failures": "hello there!"},
                 }
             )
         )
