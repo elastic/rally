@@ -1355,6 +1355,7 @@ class TestBulkDataGenerator:
             on_conflict=None,
             recency=None,
             pipeline=None,
+            use_create=False,
             original_params={"my-custom-parameter": "foo", "my-custom-parameter-2": True},
             create_reader=self.create_test_reader([["1", "2", "3", "4", "5"], ["6", "7", "8"]]),
         )
@@ -1426,6 +1427,7 @@ class TestBulkDataGenerator:
             on_conflict=None,
             recency=None,
             pipeline=None,
+            use_create=False,
             original_params={"my-custom-parameter": "foo", "my-custom-parameter-2": True},
             create_reader=self.create_test_reader([["1", "2", "3", "4", "5"]]),
         )
@@ -1489,6 +1491,7 @@ class TestBulkDataGenerator:
             on_conflict=None,
             recency=None,
             pipeline=None,
+            use_create=False,
             original_params={"body": "foo", "custom-param": "bar"},
             create_reader=self.create_test_reader([["1", "2", "3"]]),
         )

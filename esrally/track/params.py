@@ -588,6 +588,8 @@ class BulkIndexParamSource(ParamSource):
             self.on_conflict = None
             self.recency = None
 
+        self.use_create = params.get("use-create", False)
+
         self.corpora = self.used_corpora(track, params)
 
         if len(self.corpora) == 0:
@@ -638,6 +640,7 @@ class BulkIndexParamSource(ParamSource):
             self.on_conflict,
             self.recency,
             self.pipeline,
+            self.use_create,
             self._params,
         )
 
@@ -699,6 +702,7 @@ class PartitionBulkIndexParamSource:
         on_conflict,
         recency,
         pipeline=None,
+        use_create=False,
         original_params=None,
     ):
         """
@@ -713,6 +717,8 @@ class PartitionBulkIndexParamSource:
         :param recency: A number between [0.0, 1.0] indicating whether to bias generation of conflicting ids towards more recent ones.
                         May be None.
         :param pipeline: The name of the ingest pipeline to run.
+        :param use_create: Should generated bulk operations "create" so that duplicate `_id`s fail (True) or use "index" so that duplicate
+                        `_id`s overwrite (False).
         :param original_params: The original dict passed to the parent parameter source.
         """
         self.corpora = corpora
@@ -726,6 +732,7 @@ class PartitionBulkIndexParamSource:
         self.on_conflict = on_conflict
         self.recency = recency
         self.pipeline = pipeline
+        self.use_create = use_create
         self.original_params = original_params
         # this is only intended for unit-testing
         self.create_reader = original_params.pop("__create_reader", create_default_reader)
@@ -772,6 +779,7 @@ class PartitionBulkIndexParamSource:
             self.recency,
             self.pipeline,
             self.original_params,
+            self.use_create,
             self.create_reader,
         )
 
@@ -893,11 +901,10 @@ def chain(*iterables):
 
 
 def create_default_reader(
-    docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
+    docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency, use_create
 ):
     source = Slice(io.MmapSource, offset, num_lines)
     target = None
-    use_create = False
     if docs.target_index:
         target = docs.target_index
     elif docs.target_data_stream:
@@ -933,6 +940,7 @@ def create_readers(
     conflict_probability,
     on_conflict,
     recency,
+    use_create,
     create_reader,
 ):
     logger = logging.getLogger(__name__)
@@ -959,7 +967,7 @@ def create_readers(
                     corpus.name,
                 )
                 readers[len(corpora) * entry + group] = create_reader(
-                    docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
+                    docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency, use_create
                 )
             else:
                 logger.info(
@@ -1036,6 +1044,7 @@ def bulk_data_based(
     recency,
     pipeline,
     original_params,
+    use_create,
     create_reader=create_default_reader,
 ):
     """
@@ -1069,6 +1078,7 @@ def bulk_data_based(
         conflict_probability,
         on_conflict,
         recency,
+        use_create,
         create_reader,
     )
     return bulk_generator(chain(*readers), pipeline, original_params)
