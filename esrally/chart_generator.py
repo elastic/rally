@@ -1356,7 +1356,7 @@ class TimeSeriesCharts:
                 "kibanaSavedObjectMeta": {
                     "searchSourceJSON": json.dumps(
                         {
-                            "index": "13969350-badf-11ea-af86-7d06bde52cfd",
+                            "index": "rally-races-*",
                             "query": {
                                 "query_string": {
                                     "query": f'environment:"{environment}"'
