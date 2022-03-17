@@ -1082,6 +1082,7 @@ class TimeSeriesCharts:
                 "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
             },
         }
+
     @staticmethod
     def query(environment, race_config, q, iterations):
         metric = "latency"
@@ -1463,7 +1464,6 @@ def generate_disk_usage(chart_type, race_configs, environment):
             structures.append(chart_type.disk_usage(title, environment, race_config))
 
     return structures
-
 
 
 def generate_gc(chart_type, race_configs, environment):
