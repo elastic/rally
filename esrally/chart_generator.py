@@ -315,6 +315,10 @@ class BarCharts:
         }
 
     @staticmethod
+    def disk_usage(title, environment, race_config):
+        return None
+
+    @staticmethod
     def ml_processing_time(title, environment, race_config):
         return None
 
@@ -1004,6 +1008,81 @@ class TimeSeriesCharts:
         }
 
     @staticmethod
+    def disk_usage(title, environment, race_config):
+        env_filter = TimeSeriesCharts.filter_string(environment, race_config)
+        vis_state = {
+            "title": title,
+            "type": "metrics",
+            "params": {
+                "axis_formatter": "number",
+                "axis_position": "left",
+                "id": str(uuid.uuid4()),
+                "index_pattern": "rally-results-*",
+                "interval": "1d",
+                "series": [
+                    {
+                        "axis_position": "left",
+                        "chart_type": "bar",
+                        "color": "#68BC00",
+                        "fill": "0.6",
+                        "formatter": "bytes",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "sum", "field": "value.single"}],
+                        "point_size": 1,
+                        "seperate_axis": 1,
+                        "split_mode": "terms",
+                        "split_color_mode": "rainbow",
+                        "stacked": "stacked",
+                        "filter": "",
+                        "terms_size": "1000",
+                        "terms_order_by": "_key",
+                        "terms_direction": "asc",
+                        "terms_field": "field",
+                        "label": "Disk Usage",
+                        "value_template": "{{value}}",
+                        "steps": 0,
+                    }
+                ],
+                "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
+                "time_field": "race-timestamp",
+                "type": "timeseries",
+                "filter": f"name:disk_usage_total {env_filter}",
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") AND ((NOT _exists_:chart) OR chart:io) '
+                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "race-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1,
+                    }
+                ],
+                "axis_min": "0",
+            },
+            "aggs": [],
+            "listeners": {},
+        }
+
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
+                "description": "io",
+                "version": 1,
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
+        }
+    @staticmethod
     def query(environment, race_config, q, iterations):
         metric = "latency"
         title = TimeSeriesCharts.format_title(
@@ -1373,6 +1452,20 @@ def generate_io(chart_type, race_configs, environment):
     return structures
 
 
+def generate_disk_usage(chart_type, race_configs, environment):
+    # output JSON structures
+    structures = []
+    for race_config in race_configs:
+        if "disk_usage" in race_config.charts:
+            title = chart_type.format_title(
+                environment, race_config.track, es_license=race_config.es_license, suffix="%s-disk-usage" % race_config.label
+            )
+            structures.append(chart_type.disk_usage(title, environment, race_config))
+
+    return structures
+
+
+
 def generate_gc(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
@@ -1637,6 +1730,7 @@ def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, log
         + generate_merge_count(chart_type, race_configs, env)
         + generate_ml_processing_time(chart_type, race_configs, env)
         + generate_queries(chart_type, race_configs, env)
+        + generate_disk_usage(chart_type, race_configs, env)
     )
 
     dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)
