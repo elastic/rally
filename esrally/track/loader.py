@@ -1122,6 +1122,7 @@ class TrackSpecificationReader:
 
     def __init__(self, track_params=None, complete_track_params=None, selected_challenge=None, source=io.FileSource):
         self.name = None
+        self.base_path = None
         self.track_params = track_params if track_params else {}
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
