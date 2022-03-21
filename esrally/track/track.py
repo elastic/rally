@@ -434,6 +434,7 @@ class Track:
         component_templates=None,
         corpora=None,
         has_plugins=False,
+        root=None,
     ):
         """
 
@@ -449,6 +450,7 @@ class Track:
         :param templates: A list of index templates for this track. May be None.
         :param corpora: A list of document corpus definitions for this track. May be None.
         :param has_plugins: True iff the track also defines plugins (e.g. custom runners or parameter sources).
+        :param root: The absolute path to the directory containing the track file(s).
         """
         self.name = name
         self.meta_data = meta_data if meta_data else {}
@@ -461,6 +463,7 @@ class Track:
         self.composable_templates = composable_templates if composable_templates else []
         self.component_templates = component_templates if component_templates else []
         self.has_plugins = has_plugins
+        self.root = root
 
     @property
     def default_challenge(self):
