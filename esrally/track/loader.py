@@ -1036,7 +1036,7 @@ class TrackFileReader:
                 )
             )
 
-        current_track = self.read_track(track_name, track_spec, mapping_dir)
+        current_track = self.read_track(track_name, track_spec, mapping_dir, track_spec_file)
 
         unused_user_defined_track_params = self.complete_track_params.unused_user_defined_track_params()
         if len(unused_user_defined_track_params) > 0:
@@ -1122,14 +1122,16 @@ class TrackSpecificationReader:
 
     def __init__(self, track_params=None, complete_track_params=None, selected_challenge=None, source=io.FileSource):
         self.name = None
+        self.base_path = None
         self.track_params = track_params if track_params else {}
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
         self.source = source
         self.logger = logging.getLogger(__name__)
 
-    def __call__(self, track_name, track_specification, mapping_dir):
+    def __call__(self, track_name, track_specification, mapping_dir, spec_file=None):
         self.name = track_name
+        self.base_path = os.path.dirname(os.path.abspath(spec_file)) if spec_file else None
         description = self._r(track_specification, "description", mandatory=False, default_value="")
 
         meta_data = self._r(track_specification, "meta", mandatory=False)
@@ -1168,6 +1170,7 @@ class TrackSpecificationReader:
             composable_templates=composable_templates,
             component_templates=component_templates,
             corpora=corpora,
+            root=self.base_path,
         )
 
     def _error(self, msg):
