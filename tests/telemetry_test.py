@@ -4150,30 +4150,57 @@ class TestIngestPipelineStats:
 
 class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_uses_indices_and_data_streams_by_default(self, es):
+    def test_uses_indices_by_default(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         tc = TransportClient(response={"_shards": {"failed": 0}})
         es = Client(transport_client=tc)
-        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=["baz", "bork"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
         assert tc.args == [
             ("POST", "/foo/_disk_usage"),
             ("POST", "/bar/_disk_usage"),
-            ("POST", "/baz/_disk_usage"),
-            ("POST", "/bork/_disk_usage"),
         ]
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_uses_indices_param_if_specified(self, es):
+    def test_uses_data_streams_by_default(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        tc = TransportClient(response={"_shards": {"failed": 0}})
+        es = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=["foo", "bar"])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert tc.args == [
+            ("POST", "/foo/_disk_usage"),
+            ("POST", "/bar/_disk_usage"),
+        ]
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_if_specified_instead_of_index_names(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         tc = TransportClient(response={"_shards": {"failed": 0}})
         es = Client(transport_client=tc)
         device = telemetry.DiskUsageStats(
-            {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=["baz"], data_stream_names=["not_this"]
+            {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=["baz"], data_stream_names=[]
+        )
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_if_specified_instead_of_data_stream_names(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        tc = TransportClient(response={"_shards": {"failed": 0}})
+        es = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats(
+            {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=[], data_stream_names=["baz"]
         )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
