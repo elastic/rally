@@ -1082,7 +1082,7 @@ class ClusterHealth(Runner):
                 return ClusterHealthStatus.UNKNOWN
 
         request_params = params.get("request-params", {})
-        api_kw_params = self._default_kw_params(params)
+        api_kwargs = self._default_kw_params(params)
         # by default, Elasticsearch will not wait and thus we treat this as success
         expected_cluster_status = request_params.get("wait_for_status", str(ClusterHealthStatus.UNKNOWN))
         if "wait_for_no_relocating_shards" in request_params:
@@ -1091,7 +1091,7 @@ class ClusterHealth(Runner):
             # we're good with any count of relocating shards.
             expected_relocating_shards = sys.maxsize
 
-        result = await es.cluster.health(**api_kw_params)
+        result = await es.cluster.health(**api_kwargs)
         cluster_status = result["status"]
         relocating_shards = result["relocating_shards"]
 
@@ -1139,7 +1139,8 @@ class Refresh(Runner):
     """
 
     async def __call__(self, es, params):
-        await es.indices.refresh(index=params.get("index", "_all"))
+        api_kwargs = self._default_kw_params(params)
+        await es.indices.refresh(**api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "refresh"
@@ -1152,12 +1153,12 @@ class CreateIndex(Runner):
 
     async def __call__(self, es, params):
         indices = mandatory(params, "indices", self)
-        api_params = self._default_kw_params(params)
+        api_kwargs = self._default_kw_params(params)
         ## ignore invalid entries rather than erroring
         for term in ["index", "body"]:
-            api_params.pop(term, None)
+            api_kwargs.pop(term, None)
         for index, body in indices:
-            await es.indices.create(index=index, body=body, **api_params)
+            await es.indices.create(index=index, body=body, **api_kwargs)
         return {
             "weight": len(indices),
             "unit": "ops",

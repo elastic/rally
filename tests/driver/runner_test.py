@@ -6207,3 +6207,22 @@ class TestRemovePrefix:
         suffix = runner.remove_prefix(index_name, "unrelatedprefix")
 
         assert index_name == suffix
+
+class TestRefreshRunner:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_refresh_with_defaults(self, es):
+        es.indices.refresh = mock.AsyncMock()
+        refresh = runner.Refresh()
+        await refresh(es, params={"index": "_all"})
+
+        es.indices.refresh.assert_awaited_once_with(index="_all")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_refresh_request_timeout(self, es):
+        es.indices.refresh = mock.AsyncMock()
+        refresh = runner.Refresh()
+        await refresh(es, params={"index": "_all", "request-timeout": 50000})
+
+        es.indices.refresh.assert_awaited_once_with(index="_all", request_timeout=50000)
