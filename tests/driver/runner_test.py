@@ -6208,6 +6208,7 @@ class TestRemovePrefix:
 
         assert index_name == suffix
 
+
 class TestRefreshRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
