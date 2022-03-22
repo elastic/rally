@@ -1055,7 +1055,7 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") AND ((NOT _exists_:chart) OR chart:io) '
+                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") AND ((NOT _exists_:chart) OR chart:disk_usage) '
                         f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
@@ -1077,7 +1077,7 @@ class TimeSeriesCharts:
                 "title": title,
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
-                "description": "io",
+                "description": "per field disk usage",
                 "version": 1,
                 "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
             },
