@@ -1010,6 +1010,7 @@ class TimeSeriesCharts:
     @staticmethod
     def disk_usage(title, environment, race_config):
         env_filter = TimeSeriesCharts.filter_string(environment, race_config)
+        annotations_query = f'((NOT _exists_:track) OR track:"{race_config.track}") AND ((NOT _exists_:chart) OR chart:disk_usage)'
         vis_state = {
             "title": title,
             "type": "metrics",
@@ -1055,8 +1056,7 @@ class TimeSeriesCharts:
                         "fields": "message",
                         "template": "{{message}}",
                         "index_pattern": "rally-annotations",
-                        "query_string": f'((NOT _exists_:track) OR track:"{race_config.track}") AND ((NOT _exists_:chart) OR chart:disk_usage) '
-                        f'AND ((NOT _exists_:chart-name) OR chart-name:"{title}") AND environment:"{environment}"',
+                        "query_string": annotations_query,
                         "id": str(uuid.uuid4()),
                         "color": "rgba(102,102,102,1)",
                         "time_field": "race-timestamp",
