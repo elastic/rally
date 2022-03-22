@@ -4150,24 +4150,58 @@ class TestIngestPipelineStats:
 
 class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_uses_indices_param_by_default(self, es):
+    def test_uses_indices_by_default(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         tc = TransportClient(response={"_shards": {"failed": 0}})
         es = Client(transport_client=tc)
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert tc.args == [
+            ("POST", "/foo/_disk_usage"),
+            ("POST", "/bar/_disk_usage"),
+        ]
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_data_streams_by_default(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        tc = TransportClient(response={"_shards": {"failed": 0}})
+        es = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=["foo", "bar"])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert tc.args == [
+            ("POST", "/foo/_disk_usage"),
+            ("POST", "/bar/_disk_usage"),
+        ]
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_if_specified_instead_of_index_names(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        tc = TransportClient(response={"_shards": {"failed": 0}})
+        es = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats(
+            {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=["baz"], data_stream_names=[]
+        )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
         assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_uses_indices_param_if_specified(self, es):
+    def test_uses_indices_param_if_specified_instead_of_data_stream_names(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         tc = TransportClient(response={"_shards": {"failed": 0}})
         es = Client(transport_client=tc)
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, ["baz"])
+        device = telemetry.DiskUsageStats(
+            {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=[], data_stream_names=["baz"]
+        )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4183,11 +4217,27 @@ class TestDiskUsageStats:
                 error=elasticsearch.RequestError,
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
             t.on_benchmark_stop()
+        assert metrics_store_cluster_level.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_no_indices_fails(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                force_error=True,
+                error=elasticsearch.RequestError,
+            )
+        )
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=[])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        with pytest.raises(exceptions.RallyError):
+            t.on_benchmark_start()
         assert metrics_store_cluster_level.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
@@ -4200,7 +4250,7 @@ class TestDiskUsageStats:
                 error=elasticsearch.RequestError,
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4245,7 +4295,7 @@ class TestDiskUsageStats:
         )
 
         es = Client(transport_client=TwoTransportClients(not_found_transport_client, successful_client))
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4262,7 +4312,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4279,7 +4329,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4305,7 +4355,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4334,7 +4384,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4371,7 +4421,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4399,7 +4449,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4429,7 +4479,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()

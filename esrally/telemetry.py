@@ -2238,7 +2238,7 @@ class DiskUsageStats(TelemetryDevice):
     human_name = "Disk usage of each field"
     help = "Runs the indices disk usage API after benchmarking"
 
-    def __init__(self, telemetry_params, client, metrics_store, index_names):
+    def __init__(self, telemetry_params, client, metrics_store, index_names, data_stream_names):
         """
         :param telemetry_params: The configuration object for telemetry_params.
             May specify:
@@ -2246,20 +2246,32 @@ class DiskUsageStats(TelemetryDevice):
                 usage to fetch. Default is all indices in the track.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
+        :param index_names: Names of indices defined by this track
+        :param data_stream_names: Names of data streams defined by this track
         """
         super().__init__()
         self.telemetry_params = telemetry_params
         self.client = client
         self.metrics_store = metrics_store
         self.index_names = index_names
+        self.data_stream_names = data_stream_names
+
+    def on_benchmark_start(self):
+        self.indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names + self.data_stream_names))
+        if not self.indices:
+            msg = (
+                "No indices defined for disk-usage-stats. Set disk-usage-stats-indices "
+                "telemetry param or add indices or data streams to the track config."
+            )
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
 
     def on_benchmark_stop(self):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
-        indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names))
         found = False
-        for index in indices.split(","):
+        for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
                 response = self.client.transport.perform_request("POST", f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
@@ -2274,7 +2286,7 @@ class DiskUsageStats(TelemetryDevice):
             found = True
             self.handle_telemetry_usage(response)
         if not found:
-            msg = f"Couldn't find any indices for disk usage {indices}"
+            msg = f"Couldn't find any indices for disk usage {self.indices}"
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
