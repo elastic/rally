@@ -1725,12 +1725,12 @@ def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, log
         generate_index_ops(chart_type, race_configs, env, logger)
         + generate_ingest(chart_type, race_configs, env)
         + generate_io(chart_type, race_configs, env)
+        + generate_disk_usage(chart_type, race_configs, env)
         + generate_gc(chart_type, race_configs, env)
         + generate_merge_time(chart_type, race_configs, env)
         + generate_merge_count(chart_type, race_configs, env)
         + generate_ml_processing_time(chart_type, race_configs, env)
         + generate_queries(chart_type, race_configs, env)
-        + generate_disk_usage(chart_type, race_configs, env)
     )
 
     dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)
