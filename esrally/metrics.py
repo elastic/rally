@@ -912,10 +912,17 @@ class EsMetricsStore(MetricsStore):
         self._docs.append(doc)
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
-        query = {"query": self._query_by_name(name, task, operation_type, sample_type, node_name)}
+        query = {
+            "query": self._query_by_name(name, task, operation_type, sample_type, node_name),
+            "track_total_hits": True,
+            "size": 10000,
+        }
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
         result = self._client.search(index=self._index, body=query)
-        self.logger.debug("Metrics query produced [%s] results.", result["hits"]["total"])
+        es_count = result["hits"]["total"]["value"]
+        self.logger.debug("Metrics query found [%s] results.", es_count)
+        if es_count != len(result["hits"]["hits"]):
+            self.logger.warning("Metrics query returned [%d] out of [%s] matching docs.", len(result["hits"]["hits"]), es_count)
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
     def get_one(
@@ -1809,6 +1816,15 @@ class GlobalStatsCalculator:
         result.ingest_pipeline_cluster_time = self.sum("ingest_pipeline_cluster_time")
         result.ingest_pipeline_cluster_failed = self.sum("ingest_pipeline_cluster_failed")
 
+        self.logger.debug("Gathering disk usage metrics.")
+        result.disk_usage_total = self.disk_usage("disk_usage_total")
+        result.disk_usage_inverted_index = self.disk_usage("disk_usage_inverted_index")
+        result.disk_usage_stored_fields = self.disk_usage("disk_usage_stored_fields")
+        result.disk_usage_doc_values = self.disk_usage("disk_usage_doc_values")
+        result.disk_usage_points = self.disk_usage("disk_usage_points")
+        result.disk_usage_norms = self.disk_usage("disk_usage_norms")
+        result.disk_usage_term_vectors = self.disk_usage("disk_usage_term_vectors")
+
         return result
 
     def merge(self, *args):
@@ -1883,6 +1899,18 @@ class GlobalStatsCalculator:
                 transform_id = v.get("meta", {}).get("transform_id")
                 if transform_id is not None:
                     result.append({"id": transform_id, "mean": v["value"], "unit": v["unit"]})
+        return result
+
+    def disk_usage(self, metric_name):
+        values = self.store.get_raw(metric_name)
+        result = []
+        if values:
+            for v in values:
+                meta = v.get("meta", {})
+                index = meta.get("index")
+                field = meta.get("field")
+                if index is not None and field is not None:
+                    result.append({"index": index, "field": field, "value": v["value"], "unit": v["unit"]})
         return result
 
     def error_rate(self, task_name, operation_type):
@@ -1965,6 +1993,14 @@ class GlobalStats:
         self.ingest_pipeline_cluster_time = self.v(d, "ingest_pipeline_cluster_time")
         self.ingest_pipeline_cluster_failed = self.v(d, "ingest_pipeline_cluster_failed")
 
+        self.disk_usage_total = self.v(d, "disk_usage_total")
+        self.disk_usage_inverted_index = self.v(d, "disk_usage_inverted_index")
+        self.disk_usage_stored_fields = self.v(d, "disk_usage_stored_fields")
+        self.disk_usage_doc_values = self.v(d, "disk_usage_doc_values")
+        self.disk_usage_points = self.v(d, "disk_usage_points")
+        self.disk_usage_norms = self.v(d, "disk_usage_norms")
+        self.disk_usage_term_vectors = self.v(d, "disk_usage_term_vectors")
+
     def as_dict(self):
         return self.__dict__
 
@@ -2007,6 +2043,9 @@ class GlobalStats:
             elif metric.startswith("total_transform_") and value is not None:
                 for item in value:
                     all_results.append({"id": item["id"], "name": metric, "value": {"single": item["mean"]}})
+            elif metric.startswith("disk_usage_") and value is not None:
+                for item in value:
+                    all_results.append({"index": item["index"], "field": item["field"], "name": metric, "value": {"single": item["value"]}})
             elif metric.endswith("_time_per_shard"):
                 if value:
                     all_results.append({"name": metric, "value": value})

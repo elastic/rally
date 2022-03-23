@@ -47,6 +47,7 @@ def list_telemetry():
             ShardStats,
             DataStreamStats,
             IngestPipelineStats,
+            DiskUsageStats,
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -2225,3 +2226,103 @@ class MasterNodeStatsRecorder:
         }
 
         self.metrics_store.put_doc(doc, level=MetaInfoScope.cluster)
+
+
+class DiskUsageStats(TelemetryDevice):
+    """
+    Measures the space taken by each field
+    """
+
+    internal = False
+    command = "disk-usage-stats"
+    human_name = "Disk usage of each field"
+    help = "Runs the indices disk usage API after benchmarking"
+
+    def __init__(self, telemetry_params, client, metrics_store, index_names, data_stream_names):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            May specify:
+            ``disk-usage-stats-indices``: Comma separated list of indices who's disk
+                usage to fetch. Default is all indices in the track.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param index_names: Names of indices defined by this track
+        :param data_stream_names: Names of data streams defined by this track
+        """
+        super().__init__()
+        self.telemetry_params = telemetry_params
+        self.client = client
+        self.metrics_store = metrics_store
+        self.index_names = index_names
+        self.data_stream_names = data_stream_names
+
+    def on_benchmark_start(self):
+        self.indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names + self.data_stream_names))
+        if not self.indices:
+            msg = (
+                "No indices defined for disk-usage-stats. Set disk-usage-stats-indices "
+                "telemetry param or add indices or data streams to the track config."
+            )
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+    def on_benchmark_stop(self):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        found = False
+        for index in self.indices.split(","):
+            self.logger.debug("Gathering disk usage for [%s]", index)
+            try:
+                response = self.client.transport.perform_request("POST", f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
+            except elasticsearch.RequestError:
+                msg = f"A transport error occurred while collecting disk usage for {index}"
+                self.logger.exception(msg)
+                raise exceptions.RallyError(msg)
+            except elasticsearch.NotFoundError:
+                msg = f"Requested disk usage for missing index {index}"
+                self.logger.warning(msg)
+                continue
+            found = True
+            self.handle_telemetry_usage(response)
+        if not found:
+            msg = f"Couldn't find any indices for disk usage {self.indices}"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+    def handle_telemetry_usage(self, response):
+        if response["_shards"]["failed"] > 0:
+            failures = str(response["_shards"]["failures"])
+            msg = f"Shards failed when fetching disk usage: {failures}"
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
+
+        del response["_shards"]
+        for index, idx_fields in response.items():
+            for field, field_info in idx_fields["fields"].items():
+                meta = {"index": index, "field": field}
+                self.metrics_store.put_value_cluster_level("disk_usage_total", field_info["total_in_bytes"], meta_data=meta, unit="byte")
+
+                inverted_index = field_info.get("inverted_index", {"total_in_bytes": 0})["total_in_bytes"]
+                if inverted_index > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_inverted_index", inverted_index, meta_data=meta, unit="byte")
+
+                stored_fields = field_info.get("stored_fields_in_bytes", 0)
+                if stored_fields > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_stored_fields", stored_fields, meta_data=meta, unit="byte")
+
+                doc_values = field_info.get("doc_values_in_bytes", 0)
+                if doc_values > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_doc_values", doc_values, meta_data=meta, unit="byte")
+
+                points = field_info.get("points_in_bytes", 0)
+                if points > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_points", points, meta_data=meta, unit="byte")
+
+                norms = field_info.get("norms_in_bytes", 0)
+                if norms > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_norms", norms, meta_data=meta, unit="byte")
+
+                term_vectors = field_info.get("term_vectors_in_bytes", 0)
+                if term_vectors > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_term_vectors", term_vectors, meta_data=meta, unit="byte")

@@ -615,7 +615,7 @@ The command line reporter in Rally displays a table with key metrics after a rac
 ``report-numbers-align``
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-By default, the number columns are aligned to the right for the command line report. You can override the default alignment. Possible values are ``right``, ``center``, ``left``, and ``decimal``.
+By default, the number columns are aligned with the decimal place in the same spot for the command line report. You can override the default alignment. Possible values are ``right``, ``center``, ``left``, and ``decimal`` (the default).
 
 ``show-in-report``
 ~~~~~~~~~~~~~~~~~~

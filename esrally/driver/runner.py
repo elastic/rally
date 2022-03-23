@@ -56,6 +56,7 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteAsyncSearch, DeleteAsyncSearch(), async_runner=True)
     register_runner(track.OperationType.OpenPointInTime, OpenPointInTime(), async_runner=True)
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
+    register_runner(track.OperationType.Sql, Sql(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -1081,7 +1082,7 @@ class ClusterHealth(Runner):
                 return ClusterHealthStatus.UNKNOWN
 
         request_params = params.get("request-params", {})
-        api_kw_params = self._default_kw_params(params)
+        api_kwargs = self._default_kw_params(params)
         # by default, Elasticsearch will not wait and thus we treat this as success
         expected_cluster_status = request_params.get("wait_for_status", str(ClusterHealthStatus.UNKNOWN))
         if "wait_for_no_relocating_shards" in request_params:
@@ -1090,7 +1091,7 @@ class ClusterHealth(Runner):
             # we're good with any count of relocating shards.
             expected_relocating_shards = sys.maxsize
 
-        result = await es.cluster.health(**api_kw_params)
+        result = await es.cluster.health(**api_kwargs)
         cluster_status = result["status"]
         relocating_shards = result["relocating_shards"]
 
@@ -1138,7 +1139,8 @@ class Refresh(Runner):
     """
 
     async def __call__(self, es, params):
-        await es.indices.refresh(index=params.get("index", "_all"))
+        api_kwargs = self._default_kw_params(params)
+        await es.indices.refresh(**api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "refresh"
@@ -1151,12 +1153,12 @@ class CreateIndex(Runner):
 
     async def __call__(self, es, params):
         indices = mandatory(params, "indices", self)
-        api_params = self._default_kw_params(params)
+        api_kwargs = self._default_kw_params(params)
         ## ignore invalid entries rather than erroring
         for term in ["index", "body"]:
-            api_params.pop(term, None)
+            api_kwargs.pop(term, None)
         for index, body in indices:
-            await es.indices.create(index=index, body=body, **api_params)
+            await es.indices.create(index=index, body=body, **api_kwargs)
         return {
             "weight": len(indices),
             "unit": "ops",
@@ -2440,6 +2442,45 @@ class DeleteIlmPolicy(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-ilm-policy"
+
+
+class Sql(Runner):
+    """
+    Executes an SQL query and optionally paginates through subsequent pages.
+    """
+
+    async def __call__(self, es, params):
+        body = mandatory(params, "body", self)
+        if body.get("query") is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
+                "Add it to your parameter source and try again."
+            )
+        pages = params.get("pages", 1)
+
+        es.return_raw_response()
+
+        r = await es.transport.perform_request("POST", "/_sql", body=body)
+        pages -= 1
+        weight = 1
+
+        cursor = parse(r, ["cursor"]).get("cursor")
+
+        while cursor and pages > 0:
+            r = await es.transport.perform_request("POST", "/_sql", body={"cursor": cursor})
+            pages -= 1
+            weight += 1
+            cursor = parse(r, ["cursor"]).get("cursor")
+
+        if pages > 0:
+            raise exceptions.DataError(
+                "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
+            )
+
+        return {"weight": weight, "unit": "ops", "success": True}
+
+    def __repr__(self, *args, **kwargs):
+        return "sql"
 
 
 class RequestTiming(Runner, Delegator):

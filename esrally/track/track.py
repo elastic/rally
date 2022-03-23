@@ -435,6 +435,7 @@ class Track:
         corpora=None,
         dependencies=None,
         has_plugins=False,
+        root=None,
     ):
         """
 
@@ -450,6 +451,7 @@ class Track:
         :param templates: A list of index templates for this track. May be None.
         :param corpora: A list of document corpus definitions for this track. May be None.
         :param has_plugins: True iff the track also defines plugins (e.g. custom runners or parameter sources).
+        :param root: The absolute path to the directory containing the track file(s).
         """
         self.name = name
         self.meta_data = meta_data if meta_data else {}
@@ -463,6 +465,7 @@ class Track:
         self.component_templates = component_templates if component_templates else []
         self.dependencies = dependencies if dependencies else []
         self.has_plugins = has_plugins
+        self.root = root
 
     @property
     def default_challenge(self):
@@ -531,6 +534,12 @@ class Track:
             else:
                 return None
         return size
+
+    def index_names(self):
+        return [i.name for i in self.indices]
+
+    def data_stream_names(self):
+        return [i.name for i in self.data_streams]
 
     def __str__(self):
         return self.name
@@ -674,6 +683,7 @@ class OperationType(Enum):
     ScrollSearch = 13
     OpenPointInTime = 14
     ClosePointInTime = 15
+    Sql = 16
 
     # administrative actions
     ForceMerge = 1001
@@ -831,6 +841,8 @@ class OperationType(Enum):
             return OperationType.CreateIlmPolicy
         elif v == "delete-ilm-policy":
             return OperationType.DeleteIlmPolicy
+        elif v == "sql":
+            return OperationType.Sql
         else:
             raise KeyError(f"No enum value for [{v}]")
 

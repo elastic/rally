@@ -246,9 +246,9 @@ def create_arg_parser():
     )
     compare_parser.add_argument(
         "--report-numbers-align",
-        help="Define the output column number alignment for the command line report (default: right).",
+        help="Define the output column number alignment for the command line report (default: decimal).",
         choices=["right", "center", "left", "decimal"],
-        default="right",
+        default="decimal",
     )
     compare_parser.add_argument(
         "--report-file",
@@ -593,9 +593,9 @@ def create_arg_parser():
     )
     race_parser.add_argument(
         "--report-numbers-align",
-        help="Define the output column number alignment for the command line report (default: right).",
+        help="Define the output column number alignment for the command line report (default: decimal).",
         choices=["right", "center", "left", "decimal"],
-        default="right",
+        default="decimal",
     )
     race_parser.add_argument(
         "--show-in-report",

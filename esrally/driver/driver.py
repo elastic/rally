@@ -589,7 +589,7 @@ class Driver:
             es[cluster_name] = self.es_client_factory(cluster_hosts, cluster_client_options).create()
         return es
 
-    def prepare_telemetry(self, es, enable):
+    def prepare_telemetry(self, es, enable, index_names, data_stream_names):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
@@ -613,6 +613,7 @@ class Driver:
                 telemetry.SearchableSnapshotsStats(telemetry_params, es, self.metrics_store),
                 telemetry.DataStreamStats(telemetry_params, es, self.metrics_store),
                 telemetry.IngestPipelineStats(es, self.metrics_store),
+                telemetry.DiskUsageStats(telemetry_params, es_default, self.metrics_store, index_names, data_stream_names),
             ]
         else:
             devices = []
@@ -659,7 +660,12 @@ class Driver:
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
-        self.prepare_telemetry(es_clients, enable=not uses_static_responses)
+        self.prepare_telemetry(
+            es_clients,
+            enable=not uses_static_responses,
+            index_names=self.track.index_names(),
+            data_stream_names=self.track.data_stream_names(),
+        )
 
         for host in self.config.opts("driver", "load_driver_hosts"):
             host_config = {
