@@ -134,9 +134,9 @@ A track JSON file can include the following sections:
 * :ref:`composable-templates <track_composable_templates>`
 * :ref:`component-templates <track_component_templates>`
 * :ref:`corpora <track_corpora>`
-* :ref:`operations <track_operations>`
-* :ref:`schedule <track_schedule>`
 * :ref:`challenge(s) <track_challenge>`
+* :ref:`schedule <track_schedule>`
+* :ref:`operations <track_operations>`
 * :ref:`dependencies <track_dependencies>`
 
 In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally. The index templates here represent the `legacy Elasticsearch index templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.9/indices-templates-v1.html>`_ which have been deprecated in Elasticsearch 7.9. Users should refer to the ``composable-templates`` and ``component-templates`` for new tracks.
@@ -3230,7 +3230,7 @@ This will ensure that the phrase query will be executed by two clients. All othe
 dependencies
 ............
 
-If your track code requires additional Python dependencies at runtime (for instance, for code included in :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`) you can declare Pip-installable libraries in your track's ``dependencies`` section.
+If your track code requires additional Python dependencies at runtime (for instance, for code included in :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`) you can declare pip-installable packages in your track's ``dependencies`` section.
 ``dependencies`` is an array of ``pip install`` targets, which Rally will manage when the benchmark begins::
 
   "dependencies": [
@@ -3240,9 +3240,9 @@ If your track code requires additional Python dependencies at runtime (for insta
   ]
 
 
-Rally will manage the installation of the libraries, given the environmentally-available ``pip`` and the target directory ``~/.rally/lib``
+Rally will manage the installation of the libraries in the target directory ``$RALLY_HOME/libs``, erasing its contents between races.
 
 .. warning::
 
     Because modules will be loaded in the same environment as ``esrally`` itself, conflicts with Rally and its own dependencies are possible with the usage of Track Dependencies.
-    **It is highly recommended to use pinned versions and to extensively test dependencies for their impact on your benchmarks.**
+    **It is highly recommended to use pinned versions and to carefully test dependencies for their impact on your benchmarks.**

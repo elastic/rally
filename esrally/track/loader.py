@@ -200,7 +200,8 @@ def _install_dependencies(dependencies):
         shutil.rmtree(paths.libs(), onerror=_trap)
 
     def _trap(function, path, exc_info):
-        logging.debug("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
+        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
+        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
 
     for dependency in dependencies:
         log_path = os.path.join(paths.logs(), "dependency.log")

@@ -42,7 +42,7 @@ def install_root(cfg=None):
 
 
 def libs():
-    return os.path.join(rally_confdir(), "lib")
+    return os.path.join(rally_confdir(), "libs")
 
 
 def logs():
