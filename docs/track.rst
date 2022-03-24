@@ -2910,6 +2910,11 @@ Properties
 * ``body`` (mandatory): The request body passed to the _sql API with the initial request. Must contain the "query" key. Subsequent pagination requests will only include the cursor in the request body.
 * ``pages``: (optional, defaults to 1) Number of pages to retrieve at most for this search. If a query yields fewer results than the specified number of pages it will fail with an exception.
 
+    .. note::
+
+        If ``pages`` is greater than 1 the response body will be parsed to extract ``cursor`` for subsequent pagination requests.
+        This JSON parsing can be expensive and might have a significant impact on the measured latency if the response body is too large.
+
 **Example**
 
 Run an SQL query and fetch the first 10 pages with 100 records each::
