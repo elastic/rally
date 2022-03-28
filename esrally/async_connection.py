@@ -206,7 +206,7 @@ class AIOHttpConnection(elasticsearch.AIOHttpConnection):
         )
 
         self._trace_configs = [trace_config] if trace_config else None
-        self._enable_cleanup_closed = kwargs.get("enable_cleanup_closed", False)
+        self._enable_cleanup_closed = kwargs.get("enable_cleanup_closed", True)
 
         static_responses = kwargs.get("static_responses")
         self.use_static_responses = static_responses is not None
