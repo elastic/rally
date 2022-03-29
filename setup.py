@@ -102,7 +102,7 @@ develop_require = [
     "wheel==0.33.6",
     "github3.py==1.3.0",
     "pylint==2.6.0",
-    "black==22.1.0",
+    "black==22.3.0",
     "isort==5.8.0",
 ]
 
