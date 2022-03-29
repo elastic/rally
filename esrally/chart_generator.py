@@ -1513,13 +1513,12 @@ def generate_merge_count(chart_type, race_configs, environment):
 def generate_revisions(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
-        if "revisions" in race_config.charts:
-            title = chart_type.format_title(
-                environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-revisions"
-            )
-            chart = chart_type.revisions_table(title, environment, race_config)
-            if chart is not None:
-                structures.append(chart)
+        title = chart_type.format_title(
+            environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-revisions"
+        )
+        chart = chart_type.revisions_table(title, environment, race_config)
+        if chart is not None:
+            structures.append(chart)
 
     return structures
 
