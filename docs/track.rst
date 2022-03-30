@@ -2959,6 +2959,30 @@ The following meta data is always returned:
 * ``weight``: The number of fetched pages. Should always equal to the ``pages`` parameter.
 * ``unit``: The unit in which to interpret ``weight``. Always "ops".
 
+
+.. _track_dependencies:
+
+dependencies
+............
+
+If your track code requires additional Python dependencies at runtime (for instance, for code included in :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`) you can declare pip-installable packages in your track's ``dependencies`` section.
+``dependencies`` is an array of ``pip install`` targets, which Rally will manage when the benchmark begins::
+
+  "dependencies": [
+    "pytoml",
+    "git+https://github.com/elastic/apm-agent-python@main",
+    "eland<8.0.0"
+  ]
+
+
+Rally will manage the installation of the libraries in the target directory ``$RALLY_HOME/libs``, erasing its contents between races.
+
+.. warning::
+
+    Because modules will be loaded in the same environment as ``esrally`` itself, conflicts with Rally and its own dependencies are possible with the usage of Track Dependencies.
+    **It is highly recommended to use pinned versions and to carefully test dependencies for their impact on your benchmarks.**
+
+
 Examples
 ========
 
@@ -3223,26 +3247,3 @@ You can also specify a number of clients on sub tasks explicitly (by default, on
         }
 
 This will ensure that the phrase query will be executed by two clients. All other ones are executed by one client.
-
-
-.. _track_dependencies:
-
-dependencies
-............
-
-If your track code requires additional Python dependencies at runtime (for instance, for code included in :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`) you can declare pip-installable packages in your track's ``dependencies`` section.
-``dependencies`` is an array of ``pip install`` targets, which Rally will manage when the benchmark begins::
-
-  "dependencies": [
-    "pytoml",
-    "git+https://github.com/elastic/apm-agent-python@main",
-    "eland<8.0.0"
-  ]
-
-
-Rally will manage the installation of the libraries in the target directory ``$RALLY_HOME/libs``, erasing its contents between races.
-
-.. warning::
-
-    Because modules will be loaded in the same environment as ``esrally`` itself, conflicts with Rally and its own dependencies are possible with the usage of Track Dependencies.
-    **It is highly recommended to use pinned versions and to carefully test dependencies for their impact on your benchmarks.**
