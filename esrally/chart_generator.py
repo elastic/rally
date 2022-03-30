@@ -868,7 +868,7 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.max"}],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.median"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
@@ -877,7 +877,7 @@ class TimeSeriesCharts:
                         "split_filters": [
                             {
                                 "filter": "ml_processing_time",
-                                "label": "Maximum ML processing time",
+                                "label": "Median ML processing time",
                                 "color": "rgba(0,191,179,1)",
                                 "id": str(uuid.uuid4()),
                             }
