@@ -197,25 +197,26 @@ def load_track(cfg, install_dependencies=False):
 def _install_dependencies(dependencies):
     def _cleanup():
         # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
+        console.info("Cleaning track dependency directory...")
+        logging.info("Cleaning track dependency directory [%s]...", paths.libs())
         shutil.rmtree(paths.libs(), onerror=_trap)
 
     def _trap(function, path, exc_info):
         logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
         raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
 
-    for dependency in dependencies:
-        log_path = os.path.join(paths.logs(), "dependency.log")
-        console.info(f"Installing track dependency {dependency}")
-        _cleanup()
-        try:
-            with open(log_path, "ab") as install_log:
-                subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", f"{dependency}", "--upgrade", "--target", paths.libs()],
-                    stdout=install_log,
-                    stderr=install_log,
-                )
-        except subprocess.CalledProcessError:
-            raise exceptions.SystemSetupError(f"Installation of [{dependency}] failed. See [{install_log.name}] for more information.")
+    _cleanup()
+    log_path = os.path.join(paths.logs(), "dependency.log")
+    console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
+    try:
+        with open(log_path, "ab") as install_log:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", " ".join(dependencies), "--upgrade", "--target", paths.libs()],
+                stdout=install_log,
+                stderr=install_log,
+            )
+    except subprocess.CalledProcessError:
+        raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
 
 
 def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
