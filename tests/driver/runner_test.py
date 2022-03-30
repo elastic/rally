@@ -5795,13 +5795,13 @@ class TestComposite:
         assert len(timings) == 3
 
         assert timings[0]["operation"] == "initial-call"
-        assert math.isclose(timings[0]["service_time"], 0.1, rel_tol=0.05)
+        assert timings[0]["service_time"] == pytest.approx(0.1, abs=0.1)
 
         assert timings[1]["operation"] == "stream-a"
-        assert math.isclose(timings[1]["service_time"], 0.2, rel_tol=0.05)
+        assert timings[1]["service_time"] == pytest.approx(0.2, abs=0.1)
 
         assert timings[2]["operation"] == "stream-b"
-        assert math.isclose(timings[2]["service_time"], 0.1, rel_tol=0.05)
+        assert timings[2]["service_time"] == pytest.approx(0.1, abs=0.1)
 
         # common properties
         for timing in timings:
