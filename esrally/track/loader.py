@@ -205,18 +205,19 @@ def _install_dependencies(dependencies):
         logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
         raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
 
-    _cleanup()
-    log_path = os.path.join(paths.logs(), "dependency.log")
-    console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
-    try:
-        with open(log_path, "ab") as install_log:
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
-                stdout=install_log,
-                stderr=install_log,
-            )
-    except subprocess.CalledProcessError:
-        raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
+    if dependencies:
+        _cleanup()
+        log_path = os.path.join(paths.logs(), "dependency.log")
+        console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
+        try:
+            with open(log_path, "ab") as install_log:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
+                    stdout=install_log,
+                    stderr=install_log,
+                )
+        except subprocess.CalledProcessError:
+            raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
 
 
 def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
