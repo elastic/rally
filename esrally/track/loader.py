@@ -211,7 +211,7 @@ def _install_dependencies(dependencies):
     try:
         with open(log_path, "ab") as install_log:
             subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", " ".join(dependencies), "--upgrade", "--target", paths.libs()],
+                [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
                 stdout=install_log,
                 stderr=install_log,
             )
