@@ -576,6 +576,10 @@ class BarCharts:
         # TBD
         return None
 
+    @staticmethod
+    def revisions_table(title, environment, race_config):
+        return None
+
 
 class TimeSeriesCharts:
     @staticmethod
@@ -864,7 +868,7 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.max"}],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.median"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
@@ -873,7 +877,7 @@ class TimeSeriesCharts:
                         "split_filters": [
                             {
                                 "filter": "ml_processing_time",
-                                "label": "Maximum ML processing time",
+                                "label": "Median ML processing time",
                                 "color": "rgba(0,191,179,1)",
                                 "id": str(uuid.uuid4()),
                             }
@@ -1372,6 +1376,83 @@ class TimeSeriesCharts:
             },
         }
 
+    @staticmethod
+    def revisions_table(title, environment, race_config):
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(
+                    {
+                        "title": title,
+                        "type": "table",
+                        "params": {
+                            "perPage": 15,
+                            "sort": {"columnIndex": 0, "direction": "desc"},
+                        },
+                        "aggs": [
+                            {"id": "1", "enabled": True, "type": "count", "params": {}, "schema": "metric"},
+                            {
+                                "id": "2",
+                                "enabled": True,
+                                "type": "date_histogram",
+                                "params": {
+                                    "field": "race-timestamp",
+                                    "interval": "d",
+                                    "customLabel": "day",
+                                },
+                                "schema": "bucket",
+                            },
+                            {
+                                "id": "3",
+                                "enabled": True,
+                                "type": "terms",
+                                "params": {
+                                    "field": "cluster.revision",
+                                    "size": 100,
+                                    "customLabel": "revision",
+                                },
+                                "schema": "bucket",
+                            },
+                            {
+                                "id": "4",
+                                "enabled": True,
+                                "type": "terms",
+                                "params": {
+                                    "field": "cluster.distribution-version",
+                                    "size": 100,
+                                    "customLabel": "version",
+                                },
+                                "schema": "bucket",
+                            },
+                        ],
+                        "listeners": {},
+                    }
+                ),
+                "uiStateJSON": "{}",
+                "description": "revisions",
+                "version": 1,
+                "kibanaSavedObjectMeta": {
+                    "searchSourceJSON": json.dumps(
+                        {
+                            "index": "rally-races-*",
+                            "query": {
+                                "query_string": {
+                                    "query": f'environment:"{environment}"'
+                                    f' AND track:"{race_config.track}"'
+                                    f' AND challenge:"{race_config.challenge}"'
+                                    f' AND car:"{race_config.car}"',
+                                    "analyze_wildcard": True,
+                                }
+                            },
+                            "filter": [],
+                        }
+                    )
+                },
+            },
+        }
+
 
 class RaceConfigTrack:
     def __init__(self, cfg, repository, name=None):
@@ -1518,6 +1599,19 @@ def generate_merge_count(chart_type, race_configs, environment):
             chart = chart_type.merge_count(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
+
+    return structures
+
+
+def generate_revisions(chart_type, race_configs, environment):
+    structures = []
+    for race_config in race_configs:
+        title = chart_type.format_title(
+            environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-revisions"
+        )
+        chart = chart_type.revisions_table(title, environment, race_config)
+        if chart is not None:
+            structures.append(chart)
 
     return structures
 
@@ -1725,12 +1819,13 @@ def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, log
         generate_index_ops(chart_type, race_configs, env, logger)
         + generate_ingest(chart_type, race_configs, env)
         + generate_io(chart_type, race_configs, env)
+        + generate_disk_usage(chart_type, race_configs, env)
         + generate_gc(chart_type, race_configs, env)
         + generate_merge_time(chart_type, race_configs, env)
         + generate_merge_count(chart_type, race_configs, env)
         + generate_ml_processing_time(chart_type, race_configs, env)
         + generate_queries(chart_type, race_configs, env)
-        + generate_disk_usage(chart_type, race_configs, env)
+        + generate_revisions(chart_type, race_configs, env)
     )
 
     dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)

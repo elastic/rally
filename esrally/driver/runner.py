@@ -2464,18 +2464,17 @@ class Sql(Runner):
         pages -= 1
         weight = 1
 
-        cursor = parse(r, ["cursor"]).get("cursor")
+        while pages > 0:
+            cursor = parse(r, ["cursor"]).get("cursor")
 
-        while cursor and pages > 0:
+            if not cursor:
+                raise exceptions.DataError(
+                    "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
+                )
+
             r = await es.transport.perform_request("POST", "/_sql", body={"cursor": cursor})
             pages -= 1
             weight += 1
-            cursor = parse(r, ["cursor"]).get("cursor")
-
-        if pages > 0:
-            raise exceptions.DataError(
-                "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
-            )
 
         return {"weight": weight, "unit": "ops", "success": True}
 
