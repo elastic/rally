@@ -181,7 +181,7 @@ Selects the track repository that Rally should use to resolve tracks. By default
 ``track-revision``
 ~~~~~~~~~~~~~~~~~~
 
-Selects a specific revision in the track repository. By default, Rally will choose the most appropriate branch on its own but in some cases it is necessary to specify a certain commit. This is mostly needed when testing whether a change in performance has occurred due to a change in the workload. 
+Selects a specific revision in the track repository. By default, Rally will choose the most appropriate branch on its own but in some cases it is necessary to specify a certain commit. This is mostly needed when testing whether a change in performance has occurred due to a change in the workload.
 
 ``track``
 ~~~~~~~~~
@@ -656,7 +656,7 @@ Default value: ``timeout:60`` (applies any time ``timeout`` is not specified)
 Rally recognizes the following client options in addition:
 
 * ``max_connections``: By default, Rally will choose the maximum allowed number of connections automatically (equal to the number of simulated clients but at least 256 connections). With this property it is possible to override that logic but a minimum of 256 is enforced internally.
-* ``enable_cleanup_closed`` (default: ``false``): In some cases, SSL connections might not be properly closed and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections.
+* ``enable_cleanup_closed`` (default: ``true``): In some cases, `Elasticsearch does not properly close SSL connections <https://github.com/elastic/elasticsearch/issues/76642>`_ and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections.
 * ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. See below for a specific example.
 
 **Examples**
