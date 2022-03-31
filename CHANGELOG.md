@@ -1,3 +1,27 @@
+### 2.4.0
+
+#### Highlights
+
+* [#1435](https://github.com/elastic/rally/pull/1435): Update Elasticsearch support policy after 8.0 release
+
+#### Enhancements
+
+* [#1461](https://github.com/elastic/rally/pull/1461): Add 'root' attribute to Track class
+* [#1412](https://github.com/elastic/rally/pull/1412): Parallelize on corpora basis in bulk task clients
+
+#### Bug Fixes
+
+* [#1469](https://github.com/elastic/rally/pull/1469): Set enable_cleanup_closed by default
+* [#1455](https://github.com/elastic/rally/pull/1455): Pick up data streams in disk-usage-stats telemetry
+* [#1440](https://github.com/elastic/rally/pull/1440): Fix build by downgrading markupsafe
+
+#### Doc Changes
+
+* [#1447](https://github.com/elastic/rally/pull/1447): Stop leading users away from finding errors in docs
+* [#1433](https://github.com/elastic/rally/pull/1433): minor change to docs
+* [#1422](https://github.com/elastic/rally/pull/1422): Rename 'indices stats API' to 'index stats API'
+* [#1403](https://github.com/elastic/rally/pull/1403): Document exporting certificates from PKCS#12 keystores
+
 ### 2.3.1
 
 #### Highlights
