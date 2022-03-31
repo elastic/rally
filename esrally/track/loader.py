@@ -19,6 +19,8 @@ import json
 import logging
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import urllib.error
@@ -29,7 +31,7 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import PROGRAM_NAME, config, exceptions, time, version
+from esrally import PROGRAM_NAME, config, exceptions, paths, time, version
 from esrally.track import params, track
 from esrally.utils import collections, console, convert, io, modules, net, opts, repo
 
@@ -180,7 +182,7 @@ def track_info(cfg):
             console.println("")
 
 
-def load_track(cfg):
+def load_track(cfg, install_dependencies=False):
     """
 
     Loads a track
@@ -189,15 +191,43 @@ def load_track(cfg):
     :return: The loaded track.
     """
     repo = track_repo(cfg)
-    return _load_single_track(cfg, repo, repo.track_name)
+    return _load_single_track(cfg, repo, repo.track_name, install_dependencies)
 
 
-def _load_single_track(cfg, track_repository, track_name):
+def _install_dependencies(dependencies):
+    def _cleanup():
+        # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
+        console.info("Cleaning track dependency directory...")
+        logging.info("Cleaning track dependency directory [%s]...", paths.libs())
+        shutil.rmtree(paths.libs(), onerror=_trap)
+
+    def _trap(function, path, exc_info):
+        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
+        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
+
+    if dependencies:
+        _cleanup()
+        log_path = os.path.join(paths.logs(), "dependency.log")
+        console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
+        try:
+            with open(log_path, "ab") as install_log:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
+                    stdout=install_log,
+                    stderr=install_log,
+                )
+        except subprocess.CalledProcessError:
+            raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
+
+
+def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
     try:
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
         tpr = TrackProcessorRegistry(cfg)
+        if install_dependencies:
+            _install_dependencies(current_track.dependencies)
         has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
         current_track.has_plugins = has_plugins
         for processor in tpr.processors:
@@ -213,7 +243,15 @@ def _load_single_track(cfg, track_repository, track_name):
         raise
 
 
-def load_track_plugins(cfg, track_name, register_runner=None, register_scheduler=None, register_track_processor=None, force_update=False):
+def load_track_plugins(
+    cfg,
+    track_name,
+    register_runner=None,
+    register_scheduler=None,
+    register_track_processor=None,
+    install_dependencies=False,
+    force_update=False,
+):
     """
     Loads plugins that are defined for the current track (as specified by the configuration).
 
@@ -222,6 +260,7 @@ def load_track_plugins(cfg, track_name, register_runner=None, register_scheduler
     :param register_runner: An optional function where runners can be registered.
     :param register_scheduler: An optional function where custom schedulers can be registered.
     :param register_track_processor: An optional function where track processors can be registered.
+    :param install_dependencies: If set to ``True``, install declared dependencies from the track.py. Defaults to ``False``.
     :param force_update: If set to ``True`` this ensures that the track is first updated from the remote repository.
                          Defaults to ``False``.
     :return: True iff this track defines plugins and they have been loaded.
@@ -1083,6 +1122,9 @@ class TrackPluginReader:
         return self.loader.can_load()
 
     def load(self):
+        # get dependent libraries installed in a prior step. ensure dir exists to make sure loading works correctly.
+        os.makedirs(paths.libs(), exist_ok=True)
+        sys.path.insert(0, paths.libs())
         root_module = self.loader.load()
         try:
             # every module needs to have a register() method
@@ -1158,6 +1200,7 @@ class TrackSpecificationReader:
         ]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices, data_streams)
         challenges = self._create_challenges(track_specification)
+        dependencies = self._r(track_specification, "dependencies", mandatory=False)
         # at this point, *all* track params must have been referenced in the templates
         return track.Track(
             name=self.name,
@@ -1170,6 +1213,7 @@ class TrackSpecificationReader:
             composable_templates=composable_templates,
             component_templates=component_templates,
             corpora=corpora,
+            dependencies=dependencies,
             root=self.base_path,
         )
 

@@ -126,17 +126,18 @@ We recommend the following path:
 Anatomy of a track
 ==================
 
-A track JSON file consists of the following sections:
+A track JSON file can include the following sections:
 
-* indices
-* templates
-* data-streams
-* composable-templates
-* component-templates
-* corpora
-* operations
-* schedule
-* challenges
+* :ref:`indices <track_indices>`
+* :ref:`templates <track_templates>`
+* :ref:`data-streams <track_data_streams>`
+* :ref:`composable-templates <track_composable_templates>`
+* :ref:`component-templates <track_component_templates>`
+* :ref:`corpora <track_corpora>`
+* :ref:`challenge(s) <track_challenge>`
+* :ref:`schedule <track_schedule>`
+* :ref:`operations <track_operations>`
+* :ref:`dependencies <track_dependencies>`
 
 In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally. The index templates here represent the `legacy Elasticsearch index templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.9/indices-templates-v1.html>`_ which have been deprecated in Elasticsearch 7.9. Users should refer to the ``composable-templates`` and ``component-templates`` for new tracks.
 
@@ -200,6 +201,9 @@ If the ``meta`` structure contains the same key on different elements, more spec
 
 E.g. a key defined on a task, will override the same key defined on a challenge. All properties defined within the merged ``meta`` structure, will get copied into each metrics record.
 
+
+.. _track_indices:
+
 indices
 .......
 
@@ -220,6 +224,9 @@ Example::
           "types": ["docs"]
         }
     ]
+
+
+.. _track_templates:
 
 templates
 .........
@@ -242,6 +249,9 @@ Example::
         }
     ]
 
+
+.. _track_data_streams:
+
 data-streams
 ............
 
@@ -258,6 +268,9 @@ Example::
           "name": "my-logging-data-stream"
         }
     ]
+
+
+.. _track_composable_templates:
 
 composable-templates
 ....................
@@ -282,6 +295,9 @@ Example::
         }
     ]
 
+
+.. _track_component_templates:
+
 component-templates
 ....................
 
@@ -300,6 +316,9 @@ Example::
             "template": "one-shard-template.json"
         }
     ]
+
+
+.. _track_corpora:
 
 corpora
 .......
@@ -2944,6 +2963,30 @@ The following meta data is always returned:
 
 * ``weight``: The number of fetched pages. Should always equal to the ``pages`` parameter.
 * ``unit``: The unit in which to interpret ``weight``. Always "ops".
+
+
+.. _track_dependencies:
+
+dependencies
+............
+
+If your track code requires additional Python dependencies at runtime (for instance, for code included in :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`) you can declare pip-installable packages in your track's ``dependencies`` section.
+``dependencies`` is an array of ``pip install`` targets, which Rally will manage when the benchmark begins::
+
+  "dependencies": [
+    "pytoml",
+    "git+https://github.com/elastic/apm-agent-python@main",
+    "eland<8.0.0"
+  ]
+
+
+Rally will manage the installation of the libraries in the target directory ``$RALLY_HOME/libs``, erasing its contents between races.
+
+.. warning::
+
+    Because modules will be loaded in the same environment as ``esrally`` itself, conflicts with Rally and its own dependencies are possible with the usage of Track Dependencies.
+    **It is highly recommended to use pinned versions and to carefully test dependencies for their impact on your benchmarks.**
+
 
 Examples
 ========

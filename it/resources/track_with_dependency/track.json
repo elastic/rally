@@ -1,0 +1,12 @@
+{
+    "schedule": [
+        {
+          "operation": {
+            "operation-type": "no-op"
+          }
+        }
+    ],
+    "dependencies": [
+      "pytoml"
+    ]
+}

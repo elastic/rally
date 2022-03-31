@@ -585,6 +585,14 @@
         "$ref": "#/definitions/challenge"
       }
     },
+    "dependencies": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
     "challenge": {
       "$ref": "#/definitions/challenge"
     },

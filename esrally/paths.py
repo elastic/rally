@@ -41,6 +41,10 @@ def install_root(cfg=None):
     return os.path.join(races_root(cfg), install_id)
 
 
+def libs():
+    return os.path.join(rally_confdir(), "libs")
+
+
 def logs():
     """
     :return: The absolute path to the directory that contains Rally's log file.
