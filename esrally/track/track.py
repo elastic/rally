@@ -684,6 +684,7 @@ class OperationType(Enum):
     OpenPointInTime = 14
     ClosePointInTime = 15
     Sql = 16
+    FieldCaps = 17
 
     # administrative actions
     ForceMerge = 1001

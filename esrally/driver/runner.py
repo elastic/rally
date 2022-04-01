@@ -57,6 +57,8 @@ def register_default_runners():
     register_runner(track.OperationType.OpenPointInTime, OpenPointInTime(), async_runner=True)
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
+    register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
+
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -2481,6 +2483,25 @@ class Sql(Runner):
     def __repr__(self, *args, **kwargs):
         return "sql"
 
+
+class FieldCaps(Runner):
+    """
+    Retrieve `the capabilities of fields among indices.
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-field-caps.html>` _.
+    """
+
+    async def __call__(self, es, params):
+        index = params.get("index", "_all")
+        fields = params.get("fields", "*")
+        body = params.get("body", {})
+        index_filter = params.get("index_filter")
+        if index_filter:
+            body["index_filter"] = index_filter
+        request_params = params.get("request-params")
+        await es.field_caps(index=index, body=body, fields=fields, params=request_params)
+
+    def __repr__(self, *args, **kwargs):
+        return "field-caps"
 
 class RequestTiming(Runner, Delegator):
     def __init__(self, delegate):

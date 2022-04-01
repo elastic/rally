@@ -2964,6 +2964,41 @@ The following meta data is always returned:
 * ``weight``: The number of fetched pages. Should always equal to the ``pages`` parameter.
 * ``unit``: The unit in which to interpret ``weight``. Always "ops".
 
+field-caps
+~~~~~~~~~~~~~~~~~~~
+
+Retrieve `the capabilities of fields among indices. <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-field-caps.html>`_.
+
+Properties
+""""""""""
+
+* ``index`` (optional, defaults to `_all`): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this operation.
+* ``fields`` (optional, default to `*`): Comma-separated list of fields to retrieve capabilities for.
+* ``index_filter`` (optional): An index_filter to limit this operation to target only indices that match this index_filter
+
+**Example**
+
+Retrieve the capabilities of fields starting with `message` of the `log-*` indices::
+
+    {
+      "operation": {
+        "operation-type": "field-caps",
+        "name": "field-caps-logs-indices",
+        "index": "log-*",
+        "fields": "message*"
+      },
+      "target-throughput": 10,
+      "clients": 2,
+      "warmup-iterations": 50,
+      "iterations": 100
+    }
+
+
+Meta-data
+"""""""""
+
+The operation returns no meta-data.
+
 
 .. _track_dependencies:
 
