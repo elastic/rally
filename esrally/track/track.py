@@ -844,6 +844,8 @@ class OperationType(Enum):
             return OperationType.DeleteIlmPolicy
         elif v == "sql":
             return OperationType.Sql
+        elif v == "field-caps":
+            return OperationType.FieldCaps
         else:
             raise KeyError(f"No enum value for [{v}]")
 
