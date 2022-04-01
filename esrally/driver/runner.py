@@ -59,7 +59,6 @@ def register_default_runners():
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
 
-
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
     # these requests should not be retried as they are not idempotent
@@ -2502,6 +2501,7 @@ class FieldCaps(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "field-caps"
+
 
 class RequestTiming(Runner, Delegator):
     def __init__(self, delegate):

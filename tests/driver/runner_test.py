@@ -6228,6 +6228,7 @@ class TestRefreshRunner:
 
         es.indices.refresh.assert_awaited_once_with(index="_all", request_timeout=50000)
 
+
 class TestFieldCapsRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @run_async
