@@ -324,6 +324,7 @@ class Heapdump(TelemetryDevice):
 
     def detach_from_node(self, node, running):
         if running:
+            io.ensure_dir(self.log_root)
             heap_dump_file = os.path.join(self.log_root, "heap_at_exit_{}.hprof".format(node.pid))
             console.info("{}: Writing heap dump to [{}]".format(self.human_name, heap_dump_file), logger=self.logger)
             cmd = "jmap -dump:format=b,file={} {}".format(heap_dump_file, node.pid)
