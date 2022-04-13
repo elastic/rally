@@ -2978,7 +2978,7 @@ Properties
 
 **Example**
 
-Retrieve the capabilities of fields starting with `message` of the `log-*` indices::
+Retrieve the capabilities of fields starting with ``message`` of the ``log-*`` indices::
 
     {
       "operation": {
