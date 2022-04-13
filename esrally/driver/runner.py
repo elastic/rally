@@ -2344,6 +2344,7 @@ class Composite(Runner):
             "submit-async-search",
             "get-async-search",
             "delete-async-search",
+            "field-caps",
         ]
 
     async def run_stream(self, es, stream, connection_limit):
