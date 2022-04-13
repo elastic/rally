@@ -2972,7 +2972,7 @@ Retrieve `the capabilities of fields among indices <https://www.elastic.co/guide
 Properties
 """"""""""
 
-* ``index`` (optional, defaults to ``_all``): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/api-conventions.html#api-multi-index>`_ that defines which indices should be targeted by this operation.
+* ``index`` (optional, defaults to ``_all``): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this operation.
 * ``fields`` (optional, default to ``*``): Comma-separated list of fields to retrieve capabilities for.
 * ``index_filter`` (optional): An index_filter to limit this operation to target only indices that match this index_filter
 
