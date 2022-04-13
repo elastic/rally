@@ -214,13 +214,12 @@ class ProcessLauncher:
             ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
         except subprocess.CalledProcessError as e:
             logging.error(
-                """
-            Daemon startup failed with exit code [%s].
-            ===================STDOUT=============================
-            {%s}
-            ===================STDERR=============================
-            {%s}
-            """,
+                """Daemon startup failed with exit code [%s].
+                ===================STDOUT=============================
+                %s
+                ===================STDERR=============================
+                %s
+                """,
                 e.returncode,
                 e.stdout,
                 e.stderr,
