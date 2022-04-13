@@ -2967,7 +2967,7 @@ The following meta data is always returned:
 field-caps
 ~~~~~~~~~~~~~~~~~~~
 
-Retrieve `the capabilities of fields among indices. <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-field-caps.html>`_.
+Retrieve `the capabilities of fields among indices <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-field-caps.html>`_.
 
 Properties
 """"""""""
