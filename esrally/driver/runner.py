@@ -2499,8 +2499,9 @@ class FieldCaps(Runner):
             body["index_filter"] = index_filter
         request_params = params.get("request-params")
         await es.field_caps(index=index, body=body, fields=fields, params=request_params)
-        
+
         return {"weight": 1, "unit": "ops", "success": True}
+
     def __repr__(self, *args, **kwargs):
         return "field-caps"
 

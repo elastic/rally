@@ -6236,7 +6236,8 @@ class TestFieldCapsRunner:
     async def test_field_caps_without_index_filter(self, es):
         es.field_caps = mock.AsyncMock()
         field_caps = runner.FieldCaps()
-        await field_caps(es, params={"index": "log-*"})
+        result = await field_caps(es, params={"index": "log-*"})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
 
         es.field_caps.assert_awaited_once_with(index="log-*", fields="*", body={}, params=None)
 
@@ -6246,7 +6247,8 @@ class TestFieldCapsRunner:
         es.field_caps = mock.AsyncMock()
         field_caps = runner.FieldCaps()
         index_filter = {"range": {"@timestamp": {"gte": "2022"}}}
-        await field_caps(es, params={"fields": "time-*", "index_filter": index_filter})
+        result = await field_caps(es, params={"fields": "time-*", "index_filter": index_filter})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
 
         expected_body = {"index_filter": index_filter}
         es.field_caps.assert_awaited_once_with(index="_all", fields="time-*", body=expected_body, params=None)
