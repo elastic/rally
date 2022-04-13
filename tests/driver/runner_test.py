@@ -5874,7 +5874,8 @@ class TestComposite:
 
         assert exc.value.args[0] == (
             "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
-            "search, paginated-search, raw-request, sleep, submit-async-search, get-async-search, delete-async-search]."
+            "search, paginated-search, raw-request, sleep, submit-async-search, get-async-search, "
+            "delete-async-search, field-caps]."
         )
 
 
