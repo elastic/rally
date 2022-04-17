@@ -400,6 +400,11 @@ def create_arg_parser():
         help="A comma-separated list of the initial seed host IPs",
         default="",
     )
+    install_parser.add_argument(
+        "--cluster-name",
+        help="The name of this Elasticsearch cluster",
+        default="rally-benchmark",
+    )
 
     start_parser = subparsers.add_parser("start", help="Starts an Elasticsearch node locally")
     start_parser.add_argument(
@@ -927,6 +932,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "cluster.name", args.cluster_name)
             cfg.add(config.Scope.applicationOverride, "mechanic", "master.nodes", opts.csv_to_list(args.master_nodes))
             cfg.add(config.Scope.applicationOverride, "mechanic", "seed.hosts", opts.csv_to_list(args.seed_hosts))
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
