@@ -74,9 +74,7 @@ def install(cfg):
             raise exceptions.SystemSetupError(
                 "You cannot specify any plugins for Docker clusters. Please remove " '"--elasticsearch-plugins" and try again.'
             )
-        p = provisioner.docker(
-            cfg=cfg, car=car, ip=ip, http_port=http_port, target_root=root_path, node_name=node_name, cluster_name=cluster_name
-        )
+        p = provisioner.docker(cfg=cfg, car=car, ip=ip, http_port=http_port, target_root=root_path, node_name=node_name)
         # there is no binary for Docker that can be downloaded / built upfront
         node_config = p.prepare(binary=None)
     else:
