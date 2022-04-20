@@ -52,7 +52,7 @@ def docker(cfg, car, ip, http_port, target_root, node_name, cluster_name):
 
     node_root_dir = os.path.join(target_root, node_name)
 
-    return DockerProvisioner(car, node_name, ip, http_port, node_root_dir, distribution_version, rally_root)
+    return DockerProvisioner(car, node_name, cluster_name, ip, http_port, node_root_dir, distribution_version, rally_root)
 
 
 class NodeConfiguration:
