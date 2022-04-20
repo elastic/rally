@@ -2533,12 +2533,16 @@ Properties
 
 The ``composite`` operation only supports the following operation-types:
 
+* ``open-point-in-time``
+* ``close-point-in-time``
+* ``search``
+* ``paginated-search``
 * ``raw-request``
 * ``sleep``
-* ``search``
 * ``submit-async-search``
 * ``get-async-search``
 * ``delete-async-search``
+* ``field-caps``
 
 **Examples**
 
