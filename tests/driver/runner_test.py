@@ -5874,7 +5874,8 @@ class TestComposite:
 
         assert exc.value.args[0] == (
             "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
-            "search, paginated-search, raw-request, sleep, submit-async-search, get-async-search, delete-async-search]."
+            "search, paginated-search, raw-request, sleep, submit-async-search, get-async-search, "
+            "delete-async-search, field-caps]."
         )
 
 
@@ -6227,3 +6228,27 @@ class TestRefreshRunner:
         await refresh(es, params={"index": "_all", "request-timeout": 50000})
 
         es.indices.refresh.assert_awaited_once_with(index="_all", request_timeout=50000)
+
+
+class TestFieldCapsRunner:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_field_caps_without_index_filter(self, es):
+        es.field_caps = mock.AsyncMock()
+        field_caps = runner.FieldCaps()
+        result = await field_caps(es, params={"index": "log-*"})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+
+        es.field_caps.assert_awaited_once_with(index="log-*", fields="*", body={}, params=None)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @run_async
+    async def test_field_caps_with_index_filter(self, es):
+        es.field_caps = mock.AsyncMock()
+        field_caps = runner.FieldCaps()
+        index_filter = {"range": {"@timestamp": {"gte": "2022"}}}
+        result = await field_caps(es, params={"fields": "time-*", "index_filter": index_filter})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+
+        expected_body = {"index_filter": index_filter}
+        es.field_caps.assert_awaited_once_with(index="_all", fields="time-*", body=expected_body, params=None)
