@@ -29,8 +29,9 @@ from esrally.mechanic import java_resolver, team
 from esrally.utils import console, convert, io, process, versions
 
 
-def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name, cluster_name):
+def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    cluster_name = cfg.opts("mechanic", "cluster.name", default_value="rally=benchmark", mandatory=False)
 
     node_root_dir = os.path.join(target_root, node_name)
 
@@ -46,8 +47,9 @@ def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target
     return BareProvisioner(es_installer, plugin_installers, distribution_version=distribution_version)
 
 
-def docker(cfg, car, ip, http_port, target_root, node_name, cluster_name):
+def docker(cfg, car, ip, http_port, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    cluster_name = cfg.opts("mechanic", "cluster.name", default_value="rally=benchmark", mandatory=False)
     rally_root = cfg.opts("node", "rally.root")
 
     node_root_dir = os.path.join(target_root, node_name)

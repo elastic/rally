@@ -54,7 +54,6 @@ def install(cfg):
     node_name = cfg.opts("mechanic", "node.name")
     master_nodes = cfg.opts("mechanic", "master.nodes")
     seed_hosts = cfg.opts("mechanic", "seed.hosts")
-    cluster_name = cfg.opts("mechanic", "cluster.name")
 
     if build_type == "tar":
         binary_supplier = supplier.create(cfg, sources, distribution, car, plugins)
@@ -68,7 +67,6 @@ def install(cfg):
             all_node_names=master_nodes,
             target_root=root_path,
             node_name=node_name,
-            cluster_name=cluster_name,
         )
         node_config = p.prepare(binary=binary_supplier())
     elif build_type == "docker":
