@@ -536,6 +536,11 @@ def create_arg_parser():
         default="",
     )
     race_parser.add_argument(
+        "--cluster-name",
+        help="The name of this Elasticsearch cluster",
+        default="rally-benchmark",
+    )
+    race_parser.add_argument(
         "--target-hosts",
         help="Define a comma-separated list of host:port pairs which should be targeted if using the pipeline 'benchmark-only' "
         "(default: localhost:9200).",
@@ -976,6 +981,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
             cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
             cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", convert.to_bool(args.skip_rest_api_check))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "cluster.name", args.cluster_name)
 
             configure_reporting_params(args, cfg)
             race(cfg, args.kill_running_processes)

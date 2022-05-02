@@ -31,7 +31,7 @@ from esrally.utils import console, convert, io, process, versions
 
 def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    cluster_name = cfg.opts("mechanic", "cluster.name", default_value="rally=benchmark", mandatory=False)
+    cluster_name = cfg.opts("mechanic", "cluster.name")
 
     node_root_dir = os.path.join(target_root, node_name)
 
@@ -49,7 +49,7 @@ def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target
 
 def docker(cfg, car, ip, http_port, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
-    cluster_name = cfg.opts("mechanic", "cluster.name", default_value="rally=benchmark", mandatory=False)
+    cluster_name = cfg.opts("mechanic", "cluster.name")
     rally_root = cfg.opts("node", "rally.root")
 
     node_root_dir = os.path.join(target_root, node_name)

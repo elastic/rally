@@ -159,7 +159,7 @@ class TestCluster:
             output = process.run_subprocess_with_output(
                 "esrally install --configuration-name={cfg} --quiet --distribution-version={dist} --build-type=tar "
                 "--http-port={http_port} --node={node_name} --master-nodes={node_name} --car={car} "
-                '--seed-hosts="127.0.0.1:{transport_port}"'.format(
+                '--seed-hosts="127.0.0.1:{transport_port}" --cluster-name={cfg}'.format(
                     cfg=self.cfg,
                     dist=distribution_version,
                     http_port=http_port,
@@ -178,6 +178,7 @@ class TestCluster:
             raise AssertionError("Failed to start Elasticsearch test cluster.")
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         client.wait_for_rest_layer(es)
+        assert es.info()["cluster_name"] == self.cfg
 
     def stop(self):
         if self.installation_id:
