@@ -88,7 +88,7 @@ s3_require = [
     #   botocore: Apache 2.0
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
-    "boto3==1.10.32",
+    "boto3==1.18.46",
 ]
 
 tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-asyncio==0.18.1"]
