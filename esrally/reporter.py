@@ -648,21 +648,22 @@ class ComparisonReporter:
 
     def _report_disk_usage_stats_per_field(self, baseline_stats, contender_stats):
         best = {}
-        for index, total, field in total_disk_usage_per_field(baseline_stats):
-            best.setdefault(index, {})[field] = total
-        for index, total, field in total_disk_usage_per_field(contender_stats):
-            for_idx = best.setdefault(index, {})
-            prev = for_idx.get(field, 0)
-            if prev < total:
-                for_idx[field] = total
+        if baseline_stats.disk_usage_total:
+            for index, total, field in total_disk_usage_per_field(baseline_stats):
+                best.setdefault(index, {})[field] = total
+            collated_baseline = collate_disk_usage_stats(baseline_stats)
+        if contender_stats.disk_usage_total:
+            for index, total, field in total_disk_usage_per_field(contender_stats):
+                for_idx = best.setdefault(index, {})
+                prev = for_idx.get(field, 0)
+                if prev < total:
+                    for_idx[field] = total
+            collated_contender = collate_disk_usage_stats(contender_stats)
         totals = []
         for index, for_idx in best.items():
             for field, total in for_idx.items():
                 totals.append([index, total, field])
         totals.sort()
-
-        collated_baseline = collate_disk_usage_stats(baseline_stats)
-        collated_contender = collate_disk_usage_stats(contender_stats)
 
         lines = []
         for index, _total, field in totals:
