@@ -443,8 +443,7 @@ class CreateTemplateParamSource(ABC, ParamSource):
             settings = params.get("settings")
             for template in templates:
                 if not filter_template or template.name == filter_template:
-                    body = template.content
-                    if body and "template" in body:
+                    if template.content:
                         body = CreateComposableTemplateParamSource._create_or_merge(template.content, ["template", "settings"], settings)
                         self.template_definitions.append((template.name, body))
         else:
