@@ -444,10 +444,8 @@ class CreateTemplateParamSource(ABC, ParamSource):
             template_definitions = []
             for template in templates:
                 if not filter_template or template.name == filter_template:
-                    body = template.content
-                    if body and "template" in body:
-                        body = CreateComposableTemplateParamSource._create_or_merge(template.content, ["template", "settings"], settings)
-                        template_definitions.append((template.name, body))
+                    body = self._create_or_merge(template.content, ["template", "settings"], settings)
+                    template_definitions.append((template.name, body))
             if filter_template and not template_definitions:
                 template_names = ", ".join([template.name for template in templates])
                 raise exceptions.InvalidSyntax(

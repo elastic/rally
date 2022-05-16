@@ -2161,6 +2161,35 @@ class TestCreateComposableTemplateParamSource:
             "Unknown template: t3. Available templates: t1, t2."
         )
 
+    def test_create_composable_index_template_from_track_no_template(self):
+        tpl = track.IndexTemplate(
+            name="default",
+            pattern="*",
+            content={
+                "index_patterns": ["my*"],
+                "composed_of": ["ct1", "ct2"],
+            },
+        )
+
+        source = params.CreateComposableTemplateParamSource(
+            track=track.Track(name="unit-test", composable_templates=[tpl]),
+            params={
+                "settings": {"index.number_of_replicas": 1},
+            },
+        )
+
+        p = source.params()
+
+        assert len(p["templates"]) == 1
+        assert p["request-params"] == {}
+        template, body = p["templates"][0]
+        assert template == "default"
+        assert body == {
+            "index_patterns": ["my*"],
+            "template": {"settings": {"index.number_of_replicas": 1}},
+            "composed_of": ["ct1", "ct2"],
+        }
+
     def test_create_or_merge(self):
         content = params.CreateComposableTemplateParamSource._create_or_merge(
             {"parent": {}},
