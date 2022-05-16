@@ -2151,7 +2151,7 @@ class TestCreateComposableTemplateParamSource:
         )
 
         with pytest.raises(exceptions.InvalidSyntax) as exc:
-            source = params.CreateComposableTemplateParamSource(
+            params.CreateComposableTemplateParamSource(
                 track=track.Track(name="unit-test", composable_templates=[t1, t2]),
                 params={
                     "template": "t3",
@@ -2333,7 +2333,7 @@ class TestCreateComponentTemplateParamSource:
         )
 
         with pytest.raises(exceptions.InvalidSyntax) as exc:
-            source = params.CreateComponentTemplateParamSource(
+            params.CreateComponentTemplateParamSource(
                 track=track.Track(name="unit-test", component_templates=[t1, t2]),
                 params={
                     "template": "t3",
