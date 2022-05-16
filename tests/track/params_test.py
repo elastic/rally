@@ -2157,9 +2157,7 @@ class TestCreateComposableTemplateParamSource:
                     "template": "t3",
                 },
             )
-        assert exc.value.args[0] == (
-            "Unknown template: t3. Available templates: t1, t2."
-        )
+        assert exc.value.args[0] == ("Unknown template: t3. Available templates: t1, t2.")
 
     def test_create_composable_index_template_from_track_no_template(self):
         tpl = track.IndexTemplate(
@@ -2339,9 +2337,7 @@ class TestCreateComponentTemplateParamSource:
                     "template": "t3",
                 },
             )
-        assert exc.value.args[0] == (
-            "Unknown template: t3. Available templates: t1, t2."
-        )
+        assert exc.value.args[0] == ("Unknown template: t3. Available templates: t1, t2.")
 
 
 class TestDeleteComponentTemplateParamSource:

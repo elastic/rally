@@ -448,9 +448,7 @@ class CreateTemplateParamSource(ABC, ParamSource):
                     template_definitions.append((template.name, body))
             if filter_template and not template_definitions:
                 template_names = ", ".join([template.name for template in templates])
-                raise exceptions.InvalidSyntax(
-                    f"Unknown template: {filter_template}. Available templates: {template_names}."
-                )
+                raise exceptions.InvalidSyntax(f"Unknown template: {filter_template}. Available templates: {template_names}.")
             self.template_definitions.extend(template_definitions)
         else:
             raise exceptions.InvalidSyntax(
