@@ -255,6 +255,10 @@
           "template": {
             "type": "string",
             "description": "Component template file name."
+          },
+          "template-path": {
+            "type": "string",
+            "description": "Path to the template inside the file content."
           }
         },
         "required": [
@@ -286,6 +290,10 @@
           "template": {
             "type": "string",
             "description": "Composable template file name."
+          },
+          "template-path": {
+            "type": "string",
+            "description": "Path to the template inside the file content."
           }
         },
         "required": [
