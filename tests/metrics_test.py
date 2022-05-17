@@ -256,7 +256,7 @@ class TestEsClient:
 
         # The sec to sleep for 10 transport errors is
         # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
-        sleep_slots = [float(2**i) for i in range(0, max_retry)]
+        sleep_slots = [float(2 ** i) for i in range(0, max_retry)]
         mocked_sleep_calls = [mock.call(sleep_slots[i]) for i in range(0, max_retry)]
 
         for rnd_err_idx, rnd_err_code in enumerate(rnd_err_codes):

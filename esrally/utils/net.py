@@ -187,7 +187,7 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
         except BaseException:
             size_from_content_header = None
 
-        chunk_size = 2**16
+        chunk_size = 2 ** 16
         bytes_read = 0
 
         for chunk in r.stream(chunk_size):
