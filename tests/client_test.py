@@ -357,7 +357,7 @@ class TestEsClientAgainstHTTPSServer:
     def test_ip_address(self, tmp_path_factory: pytest.TempPathFactory):
         tmpdir = tmp_path_factory.mktemp("certs")
         with _build_server(tmpdir, "127.0.0.1") as cfg:
-            server, ca, ca_cert_path = cfg
+            server, _ca, ca_cert_path = cfg
             hosts = [{"host": "127.0.0.1", "port": server.port}]
             client_options = {
                 "use_ssl": True,
