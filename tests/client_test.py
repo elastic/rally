@@ -24,12 +24,12 @@ import ssl
 from copy import deepcopy
 from unittest import mock
 
+import elasticsearch
 import pytest
 import trustme
 import urllib3.exceptions
 from pytest_httpserver import HTTPServer
 
-import elasticsearch
 from esrally import client, doc_link, exceptions
 from esrally.async_connection import AIOHttpConnection
 from esrally.utils import console
