@@ -16,7 +16,6 @@
 # under the License.
 
 import asyncio
-import contextlib
 import logging
 import os
 import random
@@ -26,9 +25,7 @@ from unittest import mock
 
 import elasticsearch
 import pytest
-import trustme
 import urllib3.exceptions
-from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
 from esrally.async_connection import AIOHttpConnection
@@ -40,7 +37,7 @@ class TestEsClientFactory:
     cwd = os.path.dirname(__file__)
 
     def test_create_http_connection(self):
-        hosts = [{"host": "localhost", "port": 9200}]
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {}
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = dict(client_options)
@@ -56,7 +53,7 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_verify_server(self, mocked_load_cert_chain):
-        hosts = [{"host": "localhost", "port": 9200}]
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
@@ -94,7 +91,7 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_verify_self_signed_server_and_client_certificate(self, mocked_load_cert_chain):
-        hosts = [{"host": "localhost", "port": 9200}]
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
@@ -138,7 +135,7 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_only_verify_self_signed_server_certificate(self, mocked_load_cert_chain):
-        hosts = [{"host": "localhost", "port": 9200}]
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
@@ -175,7 +172,7 @@ class TestEsClientFactory:
         assert client_options == original_client_options
 
     def test_raises_error_when_only_one_of_client_cert_and_client_key_defined(self):
-        hosts = [{"host": "localhost", "port": 9200}]
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
@@ -209,7 +206,7 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_unverified_certificate(self, mocked_load_cert_chain):
-        hosts = [{"host": "localhost", "port": 9200}]
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": False,
@@ -249,7 +246,7 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_unverified_certificate_present_client_certificates(self, mocked_load_cert_chain):
-        hosts = [{"host": "localhost", "port": 9200}]
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": False,
@@ -290,107 +287,6 @@ class TestEsClientFactory:
         assert "client_key" not in f.client_options
 
         assert client_options == original_client_options
-
-    def test_raises_error_when_verify_ssl_with_mixed_hosts(self):
-        hosts = [{"host": "127.0.0.1", "port": 9200}, {"host": "localhost", "port": 9200}]
-        client_options = {
-            "use_ssl": True,
-            "verify_certs": True,
-            "http_auth": ("user", "password"),
-        }
-
-        with pytest.raises(
-            exceptions.SystemSetupError,
-            match="Cannot verify certs with mixed IP addresses and hostnames",
-        ):
-            client.EsClientFactory(hosts, client_options)
-
-    def test_check_hostname_false_when_host_is_ip(self):
-        hosts = [{"host": "127.0.0.1", "port": 9200}]
-        client_options = {
-            "use_ssl": True,
-            "verify_certs": True,
-            "http_auth": ("user", "password"),
-        }
-
-        f = client.EsClientFactory(hosts, client_options)
-        assert f.hosts == hosts
-        assert f.ssl_context.check_hostname is False
-        assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
-
-
-@contextlib.contextmanager
-def _build_server(tmpdir, host):
-    ca = trustme.CA()
-    ca_cert_path = str(tmpdir / "ca.pem")
-    ca.cert_pem.write_to_path(ca_cert_path)
-
-    server_cert = ca.issue_cert(host)
-    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    server_crt = server_cert.cert_chain_pems[0]
-    server_key = server_cert.private_key_pem
-    with server_crt.tempfile() as crt_file, server_key.tempfile() as key_file:
-        context.load_cert_chain(crt_file, key_file)
-
-    server = HTTPServer(ssl_context=context)
-    # Fake what the client expects from Elasticsearch
-    server.expect_request("/").respond_with_json(
-        headers={
-            "x-elastic-product": "Elasticsearch",
-        },
-        response_json={
-            "version": {
-                "number": "8.0.0",
-            }
-        },
-    )
-    server.start()
-
-    yield server, ca, ca_cert_path
-
-    server.clear()
-    if server.is_running():
-        server.stop()
-
-
-class TestEsClientAgainstHTTPSServer:
-    def test_ip_address(self, tmp_path_factory: pytest.TempPathFactory):
-        tmpdir = tmp_path_factory.mktemp("certs")
-        with _build_server(tmpdir, "127.0.0.1") as cfg:
-            server, _ca, ca_cert_path = cfg
-            hosts = [{"host": "127.0.0.1", "port": server.port}]
-            client_options = {
-                "use_ssl": True,
-                "verify_certs": True,
-                "ca_certs": ca_cert_path,
-            }
-            f = client.EsClientFactory(hosts, client_options)
-            es = f.create()
-            assert es.info() == {"version": {"number": "8.0.0"}}
-
-    def test_client_cert(self, tmp_path_factory: pytest.TempPathFactory):
-        tmpdir = tmp_path_factory.mktemp("certs")
-        with _build_server(tmpdir, "localhost") as cfg:
-            server, ca, ca_cert_path = cfg
-            client_cert = ca.issue_cert("localhost")
-            client_cert_path = str(tmpdir / "client.pem")
-            client_key_path = str(tmpdir / "client.key")
-            client_cert.cert_chain_pems[0].write_to_path(client_cert_path)
-            client_cert.private_key_pem.write_to_path(client_key_path)
-
-            hosts = [
-                {"host": "localhost", "port": server.port},
-            ]
-            client_options = {
-                "use_ssl": True,
-                "verify_certs": True,
-                "ca_certs": ca_cert_path,
-                "client_cert": client_cert_path,
-                "client_key": client_key_path,
-            }
-            f = client.EsClientFactory(hosts, client_options)
-            es = f.create()
-            assert es.info() == {"version": {"number": "8.0.0"}}
 
 
 class TestRequestContextManager:
