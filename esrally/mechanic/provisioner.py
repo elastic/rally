@@ -26,7 +26,7 @@ import jinja2
 
 from esrally import exceptions
 from esrally.mechanic import java_resolver, team
-from esrally.utils import console, convert, io, process, versions
+from esrally.utils import console, convert, io, process
 
 
 def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
