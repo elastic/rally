@@ -215,17 +215,7 @@ class BareProvisioner:
         plugin_variables = {}
         mandatory_plugins = []
         for installer in self.plugin_installers:
-            # For Elasticsearch < 6.3 more specific plugin names are required for mandatory plugin check
-            # Details in: https://github.com/elastic/elasticsearch/pull/28710
-            # TODO: Remove this section with Elasticsearch <6.3 becomes EOL.
-            try:
-                major, minor, _, _ = versions.components(self.distribution_version)
-                if (major == 6 and minor < 3) or major < 6:
-                    mandatory_plugins.append(installer.sub_plugin_name)
-                else:
-                    mandatory_plugins.append(installer.plugin_name)
-            except (TypeError, exceptions.InvalidSyntax):
-                mandatory_plugins.append(installer.plugin_name)
+            mandatory_plugins.append(installer.plugin_name)
             plugin_variables.update(installer.variables)
 
         cluster_settings = {}

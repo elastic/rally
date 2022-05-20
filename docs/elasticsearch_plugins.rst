@@ -53,19 +53,12 @@ Rally will use several techniques to install and configure plugins:
 * First, Rally checks whether directory ``plugins/PLUGIN_NAME`` in the currently configured team repository exists. If this is the case, then plugin installation and configuration details will be read from this directory.
 * Next, Rally will use the provided plugin name when running the Elasticsearch plugin installer. With this approach we can avoid to create a plugin configuration directory in the team repository for very simple plugins that do not need any configuration.
 
-As mentioned above, Rally also allows you to specify a plugin configuration and you can even combine them. Here are some examples (requires Elasticsearch < 6.3.0 because with 6.3.0 x-pack has turned into a module of Elasticsearch which is treated as a "car" in Rally):
+As mentioned above, Rally also allows you to specify a plugin configuration and you can even combine them. Here are some examples:
 
-* Run a benchmark with the ``x-pack`` plugin in the ``security`` configuration: ``--elasticsearch-plugins=x-pack:security``
-* Run a benchmark with the ``x-pack`` plugin in the ``security`` and the ``graph`` configuration: ``--elasticsearch-plugins=x-pack:security+graph``
+* Run a benchmark with the ``transport-nio`` plugin in the ``http`` configuration: ``--elasticsearch-plugins=transport-nio:http``
+* Run a benchmark with the ``transport-nio`` plugin in the ``http`` and the ``transport`` configuration: ``--elasticsearch-plugins=transport-nio:http+transport``
 
-.. note::
-    To benchmark the ``security`` configuration of ``x-pack`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'"``
-
-You can also override plugin variables with ``--plugin-params`` which is needed for example if you want to use the ``monitoring-http`` configuration in order to export monitoring data. You can export monitoring data e.g. with the following configuration::
-
-    --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'http',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
-
-The ``monitoring_user`` and ``monitoring_password`` parameters are optional, the other parameters are mandatory. For more details on the configuration options check the `Monitoring plugin documentation <https://www.elastic.co/guide/en/x-pack/current/monitoring-production.html>`_.
+You can also override plugin variables with ``--plugin-params``.
 
 If you are behind a proxy, set the environment variable ``ES_JAVA_OPTS`` accordingly on each target machine as described in the `Elasticsearch plugin documentation <https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html#_proxy_settings>`_.
 

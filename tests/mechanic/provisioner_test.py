@@ -127,100 +127,15 @@ class TestBareProvisioner:
                 r.append("%s = [%s]" % (prop, repr(value)))
             return ", ".join(r)
 
-    @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-5.0.0"])
+    @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-6.8.0"])
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("esrally.mechanic.provisioner.PluginInstaller.install")
     @mock.patch("shutil.rmtree")
-    def test_prepare_distribution_lt_63_with_plugins(self, mock_rm, mock_ensure_dir, mock_install, mock_decompress):
-        """
-        Test that plugin.mandatory is set to the specific plugin name (e.g. `x-pack-security`) and not
-        the meta plugin name (e.g. `x-pack`) for Elasticsearch <6.3
-
-        See: https://github.com/elastic/elasticsearch/pull/28710
-        """
-        apply_config_calls = []
-
-        def null_apply_config(source_root_path, target_root_path, config_vars):
-            apply_config_calls.append((source_root_path, target_root_path, config_vars))
-
-        installer = provisioner.ElasticsearchInstaller(
-            car=team.Car(
-                names="unit-test-car",
-                root_path=None,
-                config_paths=[HOME_DIR + "/.rally/benchmarks/teams/default/my-car"],
-                variables={
-                    "heap": "4g",
-                    "runtime.jdk": "8",
-                    "runtime.jdk.bundled": "true",
-                },
-            ),
-            java_home="/usr/local/javas/java8",
-            node_name="rally-node-0",
-            node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
-            all_node_ips=["10.17.22.22", "10.17.22.23"],
-            all_node_names=["rally-node-0", "rally-node-1"],
-            ip="10.17.22.23",
-            http_port=9200,
-        )
-
-        p = provisioner.BareProvisioner(
-            es_installer=installer,
-            plugin_installers=[
-                provisioner.PluginInstaller(
-                    self.MockRallyTeamXPackPlugin(),
-                    java_home="/usr/local/javas/java8",
-                    hook_handler_class=self.NoopHookHandler,
-                )
-            ],
-            distribution_version="6.2.3",
-            apply_config=null_apply_config,
-        )
-
-        node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-5.0.0.tar.gz"})
-        assert node_config.car_runtime_jdks == "8"
-        assert node_config.binary_path == "/opt/elasticsearch-5.0.0"
-        assert node_config.data_paths == ["/opt/elasticsearch-5.0.0/data"]
-
-        assert len(apply_config_calls) == 1
-        source_root_path, target_root_path, config_vars = apply_config_calls[0]
-
-        assert source_root_path == HOME_DIR + "/.rally/benchmarks/teams/default/my-car"
-        assert target_root_path == "/opt/elasticsearch-5.0.0"
-
-        self.maxDiff = None
-
-        assert config_vars == {
-            "cluster_settings": {"plugin.mandatory": ["x-pack-security"]},
-            "heap": "4g",
-            "runtime.jdk": "8",
-            "runtime.jdk.bundled": "true",
-            "cluster_name": "rally-benchmark",
-            "node_name": "rally-node-0",
-            "data_paths": ["/opt/elasticsearch-5.0.0/data"],
-            "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
-            "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
-            "node_ip": "10.17.22.23",
-            "network_host": "10.17.22.23",
-            "http_port": "9200",
-            "transport_port": "9300",
-            "all_node_ips": '["10.17.22.22","10.17.22.23"]',
-            "all_node_names": '["rally-node-0","rally-node-1"]',
-            "minimum_master_nodes": 2,
-            "install_root_path": "/opt/elasticsearch-5.0.0",
-            "plugin_name": "x-pack-security",
-            "xpack_security_enabled": True,
-        }
-
-    @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-6.3.0"])
-    @mock.patch("esrally.utils.io.decompress")
-    @mock.patch("esrally.utils.io.ensure_dir")
-    @mock.patch("esrally.mechanic.provisioner.PluginInstaller.install")
-    @mock.patch("shutil.rmtree")
-    def test_prepare_distribution_ge_63_with_plugins(self, mock_rm, mock_ensure_dir, mock_install, mock_decompress):
+    def test_prepare_distribution_with_plugins(self, mock_rm, mock_ensure_dir, mock_install, mock_decompress):
         """
         Test that plugin.mandatory is set to the meta plugin name (e.g. `x-pack`) and not
-        the specific plugin name (e.g. `x-pack-security`) for Elasticsearch >=6.3.0
+        the specific plugin name (e.g. `x-pack-security`)
 
         See: https://github.com/elastic/elasticsearch/pull/28710
         """
@@ -258,20 +173,20 @@ class TestBareProvisioner:
                     hook_handler_class=self.NoopHookHandler,
                 )
             ],
-            distribution_version="6.3.0",
+            distribution_version="6.8.0",
             apply_config=null_apply_config,
         )
 
-        node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-6.3.0.tar.gz"})
+        node_config = p.prepare({"elasticsearch": "/opt/elasticsearch-6.8.0.tar.gz"})
         assert node_config.car_runtime_jdks == "8"
-        assert node_config.binary_path == "/opt/elasticsearch-6.3.0"
-        assert node_config.data_paths == ["/opt/elasticsearch-6.3.0/data"]
+        assert node_config.binary_path == "/opt/elasticsearch-6.8.0"
+        assert node_config.data_paths == ["/opt/elasticsearch-6.8.0/data"]
 
         assert len(apply_config_calls) == 1
         source_root_path, target_root_path, config_vars = apply_config_calls[0]
 
         assert source_root_path == HOME_DIR + "/.rally/benchmarks/teams/default/my-car"
-        assert target_root_path == "/opt/elasticsearch-6.3.0"
+        assert target_root_path == "/opt/elasticsearch-6.8.0"
 
         self.maxDiff = None
 
@@ -282,7 +197,7 @@ class TestBareProvisioner:
             "runtime.jdk.bundled": "true",
             "cluster_name": "rally-benchmark",
             "node_name": "rally-node-0",
-            "data_paths": ["/opt/elasticsearch-6.3.0/data"],
+            "data_paths": ["/opt/elasticsearch-6.8.0/data"],
             "log_path": HOME_DIR + "/.rally/benchmarks/races/unittest/logs/server",
             "heap_dump_path": HOME_DIR + "/.rally/benchmarks/races/unittest/heapdump",
             "node_ip": "10.17.22.23",
@@ -292,7 +207,7 @@ class TestBareProvisioner:
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
             "minimum_master_nodes": 2,
-            "install_root_path": "/opt/elasticsearch-6.3.0",
+            "install_root_path": "/opt/elasticsearch-6.8.0",
             "plugin_name": "x-pack-security",
             "xpack_security_enabled": True,
         }
