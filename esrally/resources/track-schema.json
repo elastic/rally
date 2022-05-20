@@ -258,7 +258,7 @@
           },
           "template-path": {
             "type": "string",
-            "description": "JSON Path to the template inside the file content."
+            "description": "JSON field inside the file content that contains the template."
           }
         },
         "required": [
@@ -293,7 +293,7 @@
           },
           "template-path": {
             "type": "string",
-            "description": "JSON Path to the template inside the file content."
+            "description": "JSON field inside the file content that contains the template."
           }
         },
         "required": [
