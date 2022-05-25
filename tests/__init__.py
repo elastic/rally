@@ -14,18 +14,3 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
-import asyncio
-
-
-def run_async(t):
-    """
-    A wrapper that ensures that a test is run in an asyncio context.
-
-    :param t: The test case to wrap.
-    """
-
-    def async_wrapper(*args, **kwargs):
-        asyncio.run(t(*args, **kwargs), debug=True)
-
-    return async_wrapper
