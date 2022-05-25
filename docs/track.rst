@@ -283,6 +283,7 @@ Each composable template in this list consists of the following properties:
 * ``index-pattern`` (mandatory): Index pattern that matches the composable template. This must match the definition in the template file.
 * ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern if the template is deleted.
 * ``template`` (mandatory): Composable template file name.
+* ``template-path`` (optional): JSON field inside the file content that contains the template.
 
 Example::
 
@@ -307,6 +308,7 @@ Each component template in this list consists of the following properties:
 
 * ``name`` (mandatory): Component template name.
 * ``template`` (mandatory): Component template file name.
+* ``template-path`` (optional): JSON field inside the file content that contains the template.
 
 Example::
 

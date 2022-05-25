@@ -33,7 +33,6 @@ from pytest_httpserver import HTTPServer
 from esrally import client, doc_link, exceptions
 from esrally.async_connection import AIOHttpConnection
 from esrally.utils import console
-from tests import run_async
 
 
 class TestEsClientFactory:
@@ -394,7 +393,7 @@ class TestEsClientAgainstHTTPSServer:
 
 
 class TestRequestContextManager:
-    @run_async
+    @pytest.mark.asyncio
     async def test_propagates_nested_context(self):
         test_client = client.RequestContextHolder()
         async with test_client.new_request_context() as top_level_ctx:
@@ -457,7 +456,7 @@ class TestRestLayer:
 
 
 class TestAsyncConnection:
-    @run_async
+    @pytest.mark.asyncio
     async def test_enable_cleanup_close(self):
         connection = AIOHttpConnection()
         # pylint: disable=protected-access
