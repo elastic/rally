@@ -3263,7 +3263,8 @@ class TestJvmStatsSummary:
                 mock.call("rally0", "node_young_gen_gc_count", 3980),
                 mock.call("rally0", "node_old_gen_gc_time", 1500, "ms"),
                 mock.call("rally0", "node_old_gen_gc_count", 1),
-            ]
+            ],
+            any_order=True,
         )
 
         metrics_store_cluster_level.assert_has_calls(
@@ -3272,7 +3273,8 @@ class TestJvmStatsSummary:
                 mock.call("node_total_young_gen_gc_count", 3980),
                 mock.call("node_total_old_gen_gc_time", 1500, "ms"),
                 mock.call("node_total_old_gen_gc_count", 1),
-            ]
+            ],
+            any_order=True,
         )
 
         metrics_store_put_doc.assert_has_calls(
@@ -3288,6 +3290,92 @@ class TestJvmStatsSummary:
                     node_name="rally0",
                 ),
             ]
+        )
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    def test_handles_optional_collectors(self, metrics_store_node_level, metrics_store_cluster_level, metrics_store_put_doc):
+        nodes_stats_at_start = {
+            "nodes": {
+                "3zCI85c3RWKuR8MeJ8ajQg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "jvm": {
+                        "mem": {
+                            "heap_used_in_bytes": 457179136,
+                            "heap_used_percent": 2,
+                            "heap_committed_in_bytes": 17179869184,
+                            "heap_max_in_bytes": 17179869184,
+                            "non_heap_used_in_bytes": 154359232,
+                            "non_heap_committed_in_bytes": 159907840,
+                            "pools": {},
+                        },
+                        "gc": {
+                            "collectors": {
+                                "ZGC Cycles": {"collection_count": 4, "collection_time_in_millis": 358},
+                                "ZGC Pauses": {"collection_count": 12, "collection_time_in_millis": 0},
+                            }
+                        },
+                    },
+                }
+            }
+        }
+
+        client = Client(nodes=SubClient(nodes_stats_at_start))
+        cfg = create_config()
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.JvmStatsSummary(client, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_start()
+        # now we'd need to change the node stats response
+        nodes_stats_at_end = {
+            "nodes": {
+                "3zCI85c3RWKuR8MeJ8ajQg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "jvm": {
+                        "mem": {
+                            "heap_used_in_bytes": 457179136,
+                            "heap_used_percent": 2,
+                            "heap_committed_in_bytes": 17179869184,
+                            "heap_max_in_bytes": 17179869184,
+                            "non_heap_used_in_bytes": 154359232,
+                            "non_heap_committed_in_bytes": 159907840,
+                            "pools": {},
+                        },
+                        "gc": {
+                            "collectors": {
+                                "ZGC Cycles": {"collection_count": 4, "collection_time_in_millis": 358},
+                                "ZGC Pauses": {"collection_count": 12, "collection_time_in_millis": 0},
+                            }
+                        },
+                    },
+                }
+            }
+        }
+        client.nodes = SubClient(nodes_stats_at_end)
+        t.on_benchmark_stop()
+
+        metrics_store_node_level.assert_has_calls(
+            [
+                mock.call("rally0", "node_zgc_cycles_gc_time", 0, "ms"),
+                mock.call("rally0", "node_zgc_cycles_gc_count", 0),
+                mock.call("rally0", "node_zgc_pauses_gc_time", 0, "ms"),
+                mock.call("rally0", "node_zgc_pauses_gc_count", 0),
+            ],
+            any_order=True,
+        )
+
+        metrics_store_cluster_level.assert_has_calls(
+            [
+                mock.call("node_total_zgc_cycles_gc_time", 0, "ms"),
+                mock.call("node_total_zgc_cycles_gc_count", 0),
+                mock.call("node_total_zgc_pauses_gc_time", 0, "ms"),
+                mock.call("node_total_zgc_pauses_gc_count", 0),
+            ],
+            any_order=True,
         )
 
 
