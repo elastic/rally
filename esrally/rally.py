@@ -661,7 +661,6 @@ def create_arg_parser():
     )
 
     for p in [
-        parser,
         list_parser,
         race_parser,
         compare_parser,
