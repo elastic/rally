@@ -95,7 +95,7 @@ task, operation, operation-type
 
 ``operation`` is the name of the operation (as specified in the track file) that ran when this metric has been gathered. It will only be set for metrics with name ``latency`` and ``throughput``.
 
-``operation-type`` is the more abstract type of an operation. During a race, multiple queries may be issued which are different ``operation``s but they all have the same ``operation-type`` (Search). For some metrics, only the operation type matters, e.g. it does not make any sense to attribute the CPU usage to an individual query but instead attribute it just to the operation type.
+``operation-type`` is the more abstract type of an operation. During a race, multiple queries may be issued which are different operations but they all have the same ``operation-type`` (search). For some metrics, only the operation type matters, e.g. it does not make any sense to attribute the CPU usage to an individual query but instead attribute it just to the operation type.
 
 meta
 ~~~~
