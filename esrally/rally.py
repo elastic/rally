@@ -1032,6 +1032,10 @@ def main():
     arg_parser = create_arg_parser()
     args = arg_parser.parse_args()
 
+    if args.subcommand is None:
+        arg_parser.print_help()
+        sys.exit(0)
+
     console.init(quiet=args.quiet)
     console.println(BANNER)
 
