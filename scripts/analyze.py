@@ -178,6 +178,8 @@ def plot_gc_times(raw_data, label_key):
     x_tick_labels = []
     old_gc_times = []
     young_gc_times = []
+    zgc_cycles_gc_times = []
+    zgc_pauses_gc_times = []
     width = 0.35
 
     for d in raw_data:
@@ -187,22 +189,41 @@ def plot_gc_times(raw_data, label_key):
 
         old_gc_times.append(d["results"]["old_gc_time"])
         young_gc_times.append(d["results"]["young_gc_time"])
+        zgc_cycles_gc_times.append(d["results"]["zgc_cycles_gc_time"])
+        zgc_pauses_gc_times.append(d["results"]["zgc_pauses_gc_time"])
 
     indices = range(len(old_gc_times))
 
-    old_bar = ax.bar(indices, old_gc_times, width)
+    bars = []
+    bar_labels = []
+    if any(old_gc_times):
+        bars.append(ax.bar(indices, old_gc_times, width))
+        bar_labels.append("Old GC")
+
+    if any(zgc_cycles_gc_times):
+        bars.append(ax.bar(indices, zgc_cycles_gc_times, width))
+        bar_labels.append("ZGC Cycles")
+
     ax.set_xticks([x + width / 2 for x in indices])
     ax.set_xticklabels(x_tick_labels)
     ax.set_ylabel("Total Duration [ms]")
     ax.set_title("GC Times")
 
     indices = [x + width for x in indices]
-    young_bar = ax.bar(indices, young_gc_times, width)
+
+    if any(young_gc_times):
+        bars.append(ax.bar(indices, young_gc_times, width))
+        bar_labels.append("Young GC")
+
+    if any(zgc_pauses_gc_times):
+        bars.append(ax.bar(indices, zgc_pauses_gc_times, width))
+        bar_labels.append("ZGC Pauses")
 
     box = ax.get_position()
     ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
 
-    ax.legend([old_bar[0], young_bar[0]], ["Old GC", "Young GC"], loc="center left", bbox_to_anchor=(1, 0.5))
+    if bars:
+        ax.legend([bar[0] for bar in bars], bar_labels, loc="center left", bbox_to_anchor=(1, 0.5))
     ax.set_ylim(ymin=0)
 
     present(plt, "gc_times")
