@@ -223,7 +223,7 @@ def plot_gc_times(raw_data, label_key):
     ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
 
     if bars:
-        ax.legend([bar[0] for bar in bars], bar_labels, loc="center left", bbox_to_anchor=(1, 0.5))
+        ax.legend([b[0] for b in bars], bar_labels, loc="center left", bbox_to_anchor=(1, 0.5))
     ax.set_ylim(ymin=0)
 
     present(plt, "gc_times")
