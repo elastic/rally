@@ -1690,25 +1690,11 @@ class TestStatsCalculator:
         store.put_value_cluster_level("latency", 220, unit="ms", task="index #1", operation_type=track.OperationType.Bulk)
         store.put_value_cluster_level("latency", 225, unit="ms", task="index #1", operation_type=track.OperationType.Bulk)
 
-        store.put_value_node_level("rally-node-0", f"node_young_gen_gc_time", 100, "ms")
-        store.put_value_node_level("rally-node-0", f"node_young_gen_gc_count", 1)
-        store.put_value_node_level("rally-node-0", f"node_old_gen_gc_time", 100, "ms")
-        store.put_value_node_level("rally-node-0", f"node_young_gen_gc_count", 1)
-
-        store.put_value_node_level("rally-node-0", f"node_zgc_cycles_gc_time", 100, "ms")
-        store.put_value_node_level("rally-node-0", f"node_zgc_cycles_gc_count", 1)
-        store.put_value_node_level("rally-node-0", f"node_zgc_pauses_gc_time", 100, "ms")
-        store.put_value_node_level("rally-node-0", f"node_zgc_pauses_gc_count", 1)
-
-        store.put_value_cluster_level(f"node_total_young_gen_gc_time", 100, "ms")
-        store.put_value_cluster_level(f"node_total_young_gen_gc_count", 1)
-        store.put_value_cluster_level(f"node_total_old_gen_gc_time", 100, "ms")
-        store.put_value_cluster_level(f"node_total_old_gen_gc_count", 1)
-
-        store.put_value_cluster_level(f"node_total_zgc_cycles_gc_time", 100, "ms")
-        store.put_value_cluster_level(f"node_total_zgc_cycles_gc_count", 1)
-        store.put_value_cluster_level(f"node_total_zgc_pauses_gc_time", 100, "ms")
-        store.put_value_cluster_level(f"node_total_zgc_pauses_gc_count", 1)
+        for collector in ("young_gen", "old_gen", "zgc_cycles", "zgc_pauses"):
+            store.put_value_node_level("rally-node-0", f"node_{collector}_gc_time", 100, "ms")
+            store.put_value_node_level("rally-node-0", f"node_{collector}_gc_count", 1)
+            store.put_value_cluster_level(f"node_total_{collector}_gc_time", 100, "ms")
+            store.put_value_cluster_level(f"node_total_{collector}_gc_count", 1)
 
         store.put_value_cluster_level(
             "service_time",

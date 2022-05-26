@@ -853,10 +853,10 @@ class ComparisonReporter:
         )
 
     def _report_gc_metrics(self, baseline_stats, contender_stats):
-        outer = self
+        line_method = self._line
 
         def _time_metric(metric_prefix, description):
-            return outer._line(
+            return line_method(
                 f"Total {description} GC time",
                 getattr(baseline_stats, f"{metric_prefix}_gc_time"),
                 getattr(contender_stats, f"{metric_prefix}_gc_time"),
@@ -867,7 +867,7 @@ class ComparisonReporter:
             )
 
         def _count_metric(metric_prefix, description):
-            return outer._line(
+            return line_method(
                 f"Total {description} GC count",
                 getattr(baseline_stats, f"{metric_prefix}_gc_count"),
                 getattr(contender_stats, f"{metric_prefix}_gc_count"),
