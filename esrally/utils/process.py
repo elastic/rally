@@ -28,11 +28,16 @@ def run_subprocess(command_line):
     return os.system(command_line)
 
 
-def run_subprocess_with_output(command_line):
+def run_subprocess_with_output(command_line, env_vars=None):
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
-    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as command_line_process:
+    kwargs = {}
+    if env_vars:
+        cmd_env = os.environ.copy()
+        cmd_env.update(env_vars)
+        kwargs["env"] = cmd_env
+    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs) as command_line_process:
         has_output = True
         lines = []
         while has_output:

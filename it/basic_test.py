@@ -33,3 +33,11 @@ def test_run_with_help(cfg):
     output = process.run_subprocess_with_output(cmd)
     expected = "usage: esrally [-h] [--version]"
     assert expected in "\n".join(output)
+
+
+@it.rally_in_mem
+def test_run_without_http_connection(cfg):
+    cmd = it.esrally_command_line_for(cfg, "list races")
+    output = process.run_subprocess_with_output(cmd, {"http_proxy": "http://non-existent-proxy-server.com"})
+    expected = "No Internet connection detected. Specify --offline"
+    assert expected in "\n".join(output)
