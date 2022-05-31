@@ -189,7 +189,7 @@ class TestCluster:
 
 
 class EsMetricsStore:
-    VERSION = os.getenv("it_es_version", "7.6.0")
+    VERSION = "7.6.0"
 
     def __init__(self):
         self.cluster = TestCluster("in-memory-it")
