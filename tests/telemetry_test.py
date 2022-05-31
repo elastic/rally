@@ -150,7 +150,7 @@ class TestStartupTime:
 
 
 class Client:
-    def __init__(self, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None):
+    def __init__(self, *, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
@@ -164,7 +164,7 @@ class Client:
 
 
 class SubClient:
-    def __init__(self, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, state=None):
+    def __init__(self, *, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, state=None):
         self._stats = wrap(stats)
         self._info = wrap(info)
         self._recovery = wrap(recovery)
@@ -212,7 +212,7 @@ raiseTransportError = TransportErrorSupplier()
 
 
 class TransportClient:
-    def __init__(self, response=None, force_error=False, error=elasticsearch.TransportError):
+    def __init__(self, *, response=None, force_error=False, error=elasticsearch.TransportError):
         self._response = response
         self._force_error = force_error
         self._error = error
@@ -3211,7 +3211,7 @@ class TestJvmStatsSummary:
             }
         }
 
-        client = Client(nodes=SubClient(nodes_stats_at_start))
+        client = Client(nodes=SubClient(stats=nodes_stats_at_start))
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -3254,7 +3254,7 @@ class TestJvmStatsSummary:
                 }
             }
         }
-        client.nodes = SubClient(nodes_stats_at_end)
+        client.nodes = SubClient(stats=nodes_stats_at_end)
         t.on_benchmark_stop()
 
         metrics_store_node_level.assert_has_calls(
@@ -3322,7 +3322,7 @@ class TestJvmStatsSummary:
             }
         }
 
-        client = Client(nodes=SubClient(nodes_stats_at_start))
+        client = Client(nodes=SubClient(stats=nodes_stats_at_start))
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -3355,7 +3355,7 @@ class TestJvmStatsSummary:
                 }
             }
         }
-        client.nodes = SubClient(nodes_stats_at_end)
+        client.nodes = SubClient(stats=nodes_stats_at_end)
         t.on_benchmark_stop()
 
         metrics_store_node_level.assert_has_calls(
@@ -3385,7 +3385,7 @@ class TestIndexStats:
     def test_stores_available_index_stats(self, metrics_store_cluster_value, metrics_store_put_doc):
         client = Client(
             indices=SubClient(
-                {
+                stats={
                     "_all": {
                         "primaries": {
                             "segments": {
@@ -3554,7 +3554,7 @@ class TestIndexStats:
             },
         }
 
-        client.indices = SubClient(response)
+        client.indices = SubClient(stats=response)
 
         t.on_benchmark_stop()
 
