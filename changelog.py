@@ -8,7 +8,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-# 	http://www.apache.org/licenses/LICENSE-2.0
+#	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -103,13 +103,11 @@ def main():
     print("### %s\n" % milestone_name)
 
     print_category("Highlights", prs(gh, milestone, with_labels="highlight"))
-    print_category(
-        "Enhancements", prs(gh, milestone, with_labels="enhancement", without_labels=[":Docs", "highlight", ":internal", ":misc"])
-    )
+    print_category("Enhancements", prs(gh, milestone, with_labels="enhancement", without_labels=[":Docs", "highlight", ":internal", ":misc"]))
     print_category("Bug Fixes", prs(gh, milestone, with_labels="bug", without_labels=[":Docs", "highlight", ":internal", ":misc"]))
     print_category("Doc Changes", prs(gh, milestone, with_labels=":Docs", without_labels=["highlight", ":misc"]))
     print_category("Miscellaneous Changes", prs(gh, milestone, with_labels=":misc", without_labels=[":internal"]))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -80,7 +80,7 @@ def plot_service_time(raw_data, label_key):
         data_series = data_series_name(d, label_key)
         for op_metrics in d["results"]["op_metrics"]:
             operation = op_metrics["operation"]
-            service_time_metrics = {k: v for k, v in op_metrics["service_time"].items() if k not in ("mean", "unit")}
+            service_time_metrics = op_metrics["service_time"]
             if operation not in service_time_per_op:
                 service_time_per_op[operation] = []
             service_time_per_op[operation].append(
