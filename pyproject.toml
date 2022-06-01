@@ -1,6 +1,7 @@
 [tool.black]
 line-length = 140
 target-version = ['py38']
+include = '((esrally|benchmarks|scripts|tests|it)/.*\.pyi?$)|setup.py'
 
 [tool.isort]
 profile = 'black'
