@@ -127,6 +127,30 @@ Total Old Gen GC count
 * **Definition**: The total number of old generation garbage collections across the whole cluster as reported by the node stats API.
 * **Corresponding metrics key**: ``node_total_old_gen_gc_count``
 
+Total ZGC Cycles GC time
+------------------------
+
+* **Definition**: The total time spent doing GC by the ZGC garbage collector across the whole cluster as reported by the node stats API.
+* **Corresponding metrics key**: ``node_total_zgc_cycles_gc_time``
+
+Total ZGC Cycles GC count
+-------------------------
+
+* **Definition**: The total number of garbage collections performed by ZGC across the whole cluster as reported by the node stats API.
+* **Corresponding metrics key**: ``node_total_zgc_cycles_gc_count``
+
+Total ZGC Pauses GC time
+------------------------
+
+* **Definition**: The total time spent in Stop-The-World pauses by the ZGC garbage collector across the whole cluster as reported by the node stats API.
+* **Corresponding metrics key**: ``node_total_zgc_pauses_gc_time``
+
+Total ZGC Pauses GC count
+-------------------------
+
+* **Definition**: The total number of Stop-The-World pauses performed by ZGC across the whole cluster as reported by the node stats API.
+* **Corresponding metrics key**: ``node_total_zgc_pauses_gc_count``
+
 Store size
 ----------
 
