@@ -1057,10 +1057,9 @@ def main():
     if not args.offline:
         probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
         if not net.has_internet_connection(probing_url):
-            console.warn("No Internet connection detected. Automatic download of track data sets etc. is disabled.", logger=logger)
-            cfg.add(config.Scope.applicationOverride, "system", "offline.mode", True)
-        else:
-            logger.info("Detected a working Internet connection.")
+            console.warn("No Internet connection detected. Specify --offline to run without it.", logger=logger)
+            sys.exit(0)
+        logger.info("Detected a working Internet connection.")
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 
