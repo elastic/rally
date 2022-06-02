@@ -129,6 +129,10 @@ Rally stores the following metrics:
 * ``node_total_young_gen_gc_count``: The total number of young generation garbage collections across the whole cluster as reported by the node stats API.
 * ``node_total_old_gen_gc_time``: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
 * ``node_total_old_gen_gc_count``: The total number of old generation garbage collections across the whole cluster as reported by the node stats API.
+* ``node_total_zgc_cycles_gc_time``: The total time spent doing GC by the ZGC garbage collector across the whole cluster as reported by the node stats API.
+* ``node_total_zgc_cycles_gc_count``: The total number of garbage collections performed by ZGC across the whole cluster as reported by the node stats API.
+* ``node_total_zgc_pauses_gc_time``: The total time spent in Stop-The-World pauses by the ZGC garbage collector across the whole cluster as reported by the node stats API.
+* ``node_total_zgc_pauses_gc_count``: The total number of Stop-The-World pauses performed by ZGC across the whole cluster as reported by the node stats API.
 * ``segments_count``: Total number of segments as reported by the index stats API.
 * ``segments_memory_in_bytes``: Number of bytes used for segments as reported by the index stats API.
 * ``segments_doc_values_memory_in_bytes``: Number of bytes used for doc values as reported by the index stats API.
