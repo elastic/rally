@@ -580,13 +580,16 @@ class Driver:
 
     def create_es_clients(self):
         all_hosts = self.config.opts("client", "hosts").all_hosts
+        distribution_version = self.config.opts("mechanic", "distribution.version", mandatory=False)
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
             all_client_options = self.config.opts("client", "options").all_client_options
             cluster_client_options = dict(all_client_options[cluster_name])
             # Use retries to avoid aborts on long living connections for telemetry devices
-            cluster_client_options["retry-on-timeout"] = True
-            es[cluster_name] = self.es_client_factory(cluster_hosts, cluster_client_options).create()
+            cluster_client_options["retry_on_timeout"] = True
+            es[cluster_name] = self.es_client_factory(
+                cluster_hosts, cluster_client_options, distribution_version=distribution_version
+            ).create()
         return es
 
     def prepare_telemetry(self, es, enable, index_names, data_stream_names):
@@ -1656,16 +1659,22 @@ class AsyncIoAdapter:
         self.logger.error("Uncaught exception in event loop: %s", context)
 
     async def run(self):
-        def es_clients(all_hosts, all_client_options):
+        def es_clients(all_hosts, all_client_options, distribution_version):
             es = {}
             for cluster_name, cluster_hosts in all_hosts.items():
-                es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async()
+                es[cluster_name] = client.EsClientFactory(
+                    cluster_hosts, all_client_options[cluster_name], distribution_version=distribution_version
+                ).create_async()
             return es
 
         # Properly size the internal connection pool to match the number of expected clients but allow the user
         # to override it if needed.
         client_count = len(self.task_allocations)
-        es = es_clients(self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options").with_max_connections(client_count))
+        es = es_clients(
+            self.cfg.opts("client", "hosts").all_hosts,
+            self.cfg.opts("client", "options").with_max_connections(client_count),
+            self.cfg.opts("mechanic", "distribution.version", mandatory=False),
+        )
 
         self.logger.info("Task assertions enabled: %s", str(self.assertions_enabled))
         runner.enable_assertions(self.assertions_enabled)
