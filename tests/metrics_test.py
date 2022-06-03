@@ -190,7 +190,7 @@ class TestEsClient:
 
     def test_raises_sytem_setup_error_on_authentication_problems(self):
         def raise_authentication_error():
-            raise elasticsearch.exceptions.AuthenticationException("unit-test")
+            raise elasticsearch.exceptions.AuthenticationException(meta=None, body=None, message="unit-test")
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -203,7 +203,7 @@ class TestEsClient:
 
     def test_raises_sytem_setup_error_on_authorization_problems(self):
         def raise_authorization_error():
-            raise elasticsearch.exceptions.AuthorizationException("unit-test")
+            raise elasticsearch.exceptions.AuthorizationException(meta=None, body=None, message="unit-test")
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -217,14 +217,14 @@ class TestEsClient:
 
     def test_raises_rally_error_on_unknown_problems(self):
         def raise_unknown_error():
-            raise elasticsearch.exceptions.SerializationError("unit-test")
+            raise elasticsearch.exceptions.SerializationError(message="unit-test")
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
         with pytest.raises(exceptions.RallyError) as ctx:
             client.guarded(raise_unknown_error)
         assert ctx.value.args[0] == (
-            "An unknown error occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
+            "A transport error occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
             "store on host [127.0.0.1] at port [9243]."
         )
 
