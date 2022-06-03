@@ -31,6 +31,7 @@ from enum import Enum, IntEnum
 from http.client import responses
 
 import tabulate
+from elasticsearch import ApiError, TransportError
 
 from esrally import client, config, exceptions, paths, time, version
 from esrally.utils import console, convert, io, versions
@@ -57,16 +58,17 @@ class EsClient:
             raise exceptions.RallyError(msg)
 
     def put_template(self, name, template):
-        return self.guarded(self._client.indices.put_template, name=name, body=template)
+        tmpl = json.loads(template)
+        return self.guarded(self._client.indices.put_template, name=name, **tmpl)
 
     def template_exists(self, name):
-        return self.guarded(self._client.indices.exists_template, name)
+        return self.guarded(self._client.indices.exists_template, name=name)
 
     def delete_template(self, name):
-        self.guarded(self._client.indices.delete_template, name)
+        self.guarded(self._client.indices.delete_template, name=name)
 
     def get_index(self, name):
-        return self.guarded(self._client.indices.get, name)
+        return self.guarded(self._client.indices.get, name=name)
 
     def create_index(self, index):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
@@ -146,12 +148,13 @@ class EsClient:
                 )
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
-            except elasticsearch.TransportError as e:
-                if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
+            # TODO: Refactor error handling to better account for TransportError/ApiError subtleties
+            except TransportError as e:
+                if e.message in (502, 503, 504, 429) and execution_count < max_execution_count:
                     self.logger.debug(
                         "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
-                        responses[e.status_code],
-                        e.status_code,
+                        responses[e.message],
+                        e.message,
                         execution_count,
                         max_execution_count,
                         time_to_sleep,
@@ -166,7 +169,7 @@ class EsClient:
                     self.logger.exception(msg)
                     raise exceptions.RallyError(msg)
 
-            except elasticsearch.exceptions.ElasticsearchException:
+            except ApiError:
                 node = self._client.transport.hosts[0]
                 msg = (
                     "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
