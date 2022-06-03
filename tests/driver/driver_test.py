@@ -23,6 +23,7 @@ import time
 import unittest.mock as mock
 from datetime import datetime
 
+import elastic_transport
 import elasticsearch
 import pytest
 
@@ -1528,7 +1529,7 @@ class TestAsyncExecutor:
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
         # one has been "consumed".
-        es.transport.perform_request.side_effect = perform_request
+        es.perform_request.side_effect = perform_request
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
@@ -1743,30 +1744,35 @@ class TestAsyncExecutor:
     async def test_execute_single_with_connection_error_always_aborts(self, on_error):
         es = None
         params = None
-        # ES client uses pseudo-status "N/A" in this case...
-        runner = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host", None))
+        runner = mock.AsyncMock(side_effect=elasticsearch.ConnectionError(message="Connection error"))
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error=on_error)
-        assert exc.value.args[0] == "Request returned an error. Error type: transport, Description: no route to host"
+        assert exc.value.args[0] == "Request returned an error. Error type: transport, Description: Connection error"
 
     @pytest.mark.asyncio
     async def test_execute_single_with_http_400_aborts_when_specified(self):
         es = None
         params = None
-        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
+        error_meta = elastic_transport.ApiResponseMeta(status=404, http_version="1.1", headers={}, duration=0.0, node=None)
+        runner = mock.AsyncMock(
+            side_effect=elasticsearch.NotFoundError(message="not found", meta=error_meta, body="the requested document could not be found")
+        )
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
         assert exc.value.args[0] == (
-            "Request returned an error. Error type: transport, Description: not found (the requested document could not be found)"
+            "Request returned an error. Error type: api, Description: not found (the requested document could not be found)"
         )
 
     @pytest.mark.asyncio
     async def test_execute_single_with_http_400(self):
         es = None
         params = None
-        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
+        error_meta = elastic_transport.ApiResponseMeta(status=404, http_version="1.1", headers={}, duration=0.0, node=None)
+        runner = mock.AsyncMock(
+            side_effect=elasticsearch.NotFoundError(message="not found", meta=error_meta, body="the requested document could not be found")
+        )
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
@@ -1774,7 +1780,7 @@ class TestAsyncExecutor:
         assert unit == "ops"
         assert request_meta_data == {
             "http-status": 404,
-            "error-type": "transport",
+            "error-type": "api",
             "error-description": "not found (the requested document could not be found)",
             "success": False,
         }
@@ -1783,7 +1789,8 @@ class TestAsyncExecutor:
     async def test_execute_single_with_http_413(self):
         es = None
         params = None
-        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(413, b"", b""))
+        error_meta = elastic_transport.ApiResponseMeta(status=413, http_version="1.1", headers={}, duration=0.0, node=None)
+        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(message="", meta=error_meta, body=""))
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
@@ -1791,7 +1798,7 @@ class TestAsyncExecutor:
         assert unit == "ops"
         assert request_meta_data == {
             "http-status": 413,
-            "error-type": "transport",
+            "error-type": "api",
             "error-description": "",
             "success": False,
         }
