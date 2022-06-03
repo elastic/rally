@@ -523,12 +523,12 @@ class EsClientFactory:
         import esrally.async_connection
 
         class LazyJSONSerializer(JSONSerializer):
-            def loads(self, s):
+            def loads(self, data):
                 meta = RallyAsyncElasticsearch.request_context.get()
                 if "raw_response" in meta:
-                    return io.BytesIO(s)
+                    return io.BytesIO(data)
                 else:
-                    return super().loads(s)
+                    return super().loads(data)
 
         async def on_request_start(session, trace_config_ctx, params):
             RallyAsyncElasticsearch.on_request_start()
