@@ -4,7 +4,7 @@ import logging
 from typing import List, Optional
 
 import aiohttp
-import elasticsearch
+import elastic_transport
 from aiohttp import BaseConnector, RequestInfo
 from aiohttp.client_proto import ResponseHandler
 from aiohttp.helpers import BaseTimerContext
@@ -168,47 +168,19 @@ class ResponseMatcher:
                 return body
 
 
-class AIOHttpConnection(elasticsearch.AIOHttpConnection):
-    def __init__(
-        self,
-        host="localhost",
-        port=None,
-        http_auth=None,
-        use_ssl=False,
-        ssl_assert_fingerprint=None,
-        headers=None,
-        ssl_context=None,
-        http_compress=None,
-        cloud_id=None,
-        api_key=None,
-        opaque_id=None,
-        loop=None,
-        trace_config=None,
-        **kwargs,
-    ):
-        super().__init__(
-            host=host,
-            port=port,
-            http_auth=http_auth,
-            use_ssl=use_ssl,
-            ssl_assert_fingerprint=ssl_assert_fingerprint,
-            # provided to the base class via `maxsize` to keep base class state consistent despite Rally
-            # calling the attribute differently.
-            maxsize=kwargs.get("max_connections", 0),
-            headers=headers,
-            ssl_context=ssl_context,
-            http_compress=http_compress,
-            cloud_id=cloud_id,
-            api_key=api_key,
-            opaque_id=opaque_id,
-            loop=loop,
-            **kwargs,
-        )
+class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
+    def __init__(self, config):
+        super().__init__(config)
 
-        self._trace_configs = [trace_config] if trace_config else None
-        self._enable_cleanup_closed = kwargs.get("enable_cleanup_closed", True)
+        self._loop = asyncio.get_running_loop()
+        self._limit = None
 
-        static_responses = kwargs.get("static_responses")
+        client_options = config._extras.get("_rally_client_options")
+        if client_options:
+            self._trace_configs = client_options.get("trace_config")
+            self._enable_cleanup_closed = client_options.get("enable_cleanup_closed")
+
+        static_responses = client_options.get("static_responses")
         self.use_static_responses = static_responses is not None
 
         if self.use_static_responses:
@@ -223,21 +195,22 @@ class AIOHttpConnection(elasticsearch.AIOHttpConnection):
             self._request_class = aiohttp.ClientRequest
             self._response_class = RawClientResponse
 
-    async def _create_aiohttp_session(self):
-        if self.loop is None:
-            self.loop = asyncio.get_running_loop()
-
+    def _create_aiohttp_session(self):
         if self.use_static_responses:
             connector = StaticConnector(limit=self._limit, enable_cleanup_closed=self._enable_cleanup_closed)
         else:
             connector = aiohttp.TCPConnector(
-                limit=self._limit, use_dns_cache=True, ssl_context=self._ssl_context, enable_cleanup_closed=self._enable_cleanup_closed
+                limit=self._limit,
+                use_dns_cache=True,
+                # May need to be just ssl=self._ssl_context
+                ssl_context=self._ssl_context,
+                enable_cleanup_closed=self._enable_cleanup_closed,
             )
 
         self.session = aiohttp.ClientSession(
             headers=self.headers,
             auto_decompress=True,
-            loop=self.loop,
+            loop=self._loop,
             cookie_jar=aiohttp.DummyCookieJar(),
             request_class=self._request_class,
             response_class=self._response_class,
