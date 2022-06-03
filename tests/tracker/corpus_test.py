@@ -31,6 +31,9 @@ def test_extract(client, mo):
     doc = {"field1": "stuff", "field2": "things"}
     doc_data = serialize_doc(doc)
     client.count.return_value = {"count": 1001}
+    # the scan helper calls client.options(), which returns a new client instance
+    # we override this behavior here to facilitate mocking
+    client.options.return_value = client
     client.search.return_value = {
         "_scroll_id": "uohialjrknf",
         "_shards": {
