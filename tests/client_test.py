@@ -31,7 +31,6 @@ import urllib3.exceptions
 from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
-from esrally.async_connection import AIOHttpConnection
 from esrally.utils import console
 
 
@@ -46,10 +45,9 @@ class TestEsClientFactory:
 
         f = client.EsClientFactory(hosts, client_options)
 
-        assert f.hosts == hosts
+        assert f.hosts == ["http://localhost:9200"]
         assert f.ssl_context is None
-        assert f.client_options["scheme"] == "http"
-        assert "http_auth" not in f.client_options
+        assert "basic_auth" not in f.client_options
 
         assert client_options == original_client_options
 
@@ -59,7 +57,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
@@ -79,14 +77,13 @@ class TestEsClientFactory:
             not mocked_load_cert_chain.called
         ), "ssl_context.load_cert_chain should not have been called as we have not supplied client certs"
 
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
+        assert f.client_options["verify_certs"]
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
         assert "ca_certs" not in f.client_options
 
         assert client_options == original_client_options
@@ -97,7 +94,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
             "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
             "client_cert": os.path.join(self.cwd, "utils/resources/certs/client.crt"),
             "client_key": os.path.join(self.cwd, "utils/resources/certs/client.key"),
@@ -121,14 +118,14 @@ class TestEsClientFactory:
             keyfile=client_options["client_key"],
         )
 
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
+        assert f.client_options["verify_certs"]
+
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
         assert "ca_certs" not in f.client_options
         assert "client_cert" not in f.client_options
         assert "client_key" not in f.client_options
@@ -141,7 +138,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
             "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
         }
         # make a copy so we can verify later that the factory did not modify it
@@ -161,14 +158,13 @@ class TestEsClientFactory:
         assert (
             not mocked_load_cert_chain.called
         ), "ssl_context.load_cert_chain should not have been called as we have not supplied client certs"
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
+        assert f.client_options["verify_certs"]
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
         assert "ca_certs" not in f.client_options
 
         assert client_options == original_client_options
@@ -178,7 +174,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
             "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
         }
 
@@ -233,14 +229,14 @@ class TestEsClientFactory:
             not mocked_load_cert_chain.called
         ), "ssl_context.load_cert_chain should not have been called as we have not supplied client certs"
 
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert not f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_NONE
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
+        assert not f.client_options["verify_certs"]
+
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
         assert "basic_auth_user" not in f.client_options
         assert "basic_auth_password" not in f.client_options
 
@@ -252,7 +248,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": False,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
             "client_cert": os.path.join(self.cwd, "utils/resources/certs/client.crt"),
             "client_key": os.path.join(self.cwd, "utils/resources/certs/client.key"),
         }
@@ -274,14 +270,13 @@ class TestEsClientFactory:
             keyfile=client_options["client_key"],
         )
 
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert not f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_NONE
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
+        assert not f.client_options["verify_certs"]
         assert "basic_auth_user" not in f.client_options
         assert "basic_auth_password" not in f.client_options
         assert "ca_certs" not in f.client_options
@@ -313,7 +308,7 @@ class TestEsClientFactory:
         }
 
         f = client.EsClientFactory(hosts, client_options)
-        assert f.hosts == hosts
+        assert f.hosts == ["https://127.0.0.1:9200"]
         assert f.ssl_context.check_hostname is False
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
@@ -413,10 +408,7 @@ class TestRequestContextManager:
 class TestRestLayer:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_successfully_waits_for_rest_layer(self, es):
-        es.transport.hosts = [
-            {"host": "node-a.example.org", "port": 9200},
-            {"host": "node-b.example.org", "port": 9200},
-        ]
+        es.transport.node_pool.__len__ = mock.Mock(return_value=2)
         assert client.wait_for_rest_layer(es, max_attempts=3)
         es.cluster.health.assert_has_calls(
             [
@@ -447,21 +439,8 @@ class TestRestLayer:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_ssl_error(self, es):
         es.cluster.health.side_effect = elasticsearch.ConnectionError(
-            "N/A",
-            "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)",
-            urllib3.exceptions.SSLError("[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)"),
+            message="N/A",
+            errors=[urllib3.exceptions.SSLError("[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)")],
         )
         with pytest.raises(exceptions.SystemSetupError, match="Could not connect to cluster via https. Is this an https endpoint?"):
             client.wait_for_rest_layer(es, max_attempts=3)
-
-
-class TestAsyncConnection:
-    @pytest.mark.asyncio
-    async def test_enable_cleanup_close(self):
-        connection = AIOHttpConnection()
-        # pylint: disable=protected-access
-        assert connection._enable_cleanup_closed is True
-
-        connection = AIOHttpConnection(enable_cleanup_closed=False)
-        # pylint: disable=protected-access
-        assert connection._enable_cleanup_closed is False
