@@ -30,7 +30,7 @@ from sphinx.config import ConfigError
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ["sphinx.ext.ifconfig"]
+extensions = ["sphinx.ext.ifconfig",]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -52,7 +52,7 @@ def read_min_python_version():
         raise ConfigError(f"Failed building docs as required key [{e}] couldn't be found in the file [{CI_VARS}].")
 
 
-GLOBAL_SUBSTITUTIONS = {"{MIN_PY_VER}": read_min_python_version()}
+GLOBAL_SUBSTITUTIONS = {"{MIN_PY_VER}": read_min_python_version(),}
 
 
 # inspiration from https://github.com/sphinx-doc/sphinx/issues/4054#issuecomment-329097229
@@ -164,19 +164,19 @@ htmlhelp_basename = "Rallydoc"
 latex_elements = {}
 
 latex_documents = [
-    (master_doc, "Rally.tex", "Rally Documentation", "Daniel Mitterdorfer", "manual"),
+    (master_doc, "Rally.tex", "Rally Documentation", "Daniel Mitterdorfer", "manual",),
 ]
 
 # -- Options for manual page output ---------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "esrally", "Rally Documentation", [author], 1)]
+man_pages = [(master_doc, "esrally", "Rally Documentation", [author], 1,)]
 
 # If true, show URL addresses after external links.
 # man_show_urls = False
 
 # -- Options for Texinfo output -------------------------------------------
 texinfo_documents = [
-    (master_doc, "Rally", "Rally Documentation", author, "Rally", "Macrobenchmarking framework for Elasticsearch.", "Miscellaneous"),
+    (master_doc, "Rally", "Rally Documentation", author, "Rally", "Macrobenchmarking framework for Elasticsearch.", "Miscellaneous",),
 ]
