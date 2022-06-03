@@ -137,6 +137,48 @@ class RequestContextHolder:
         ctx["raw_response"] = True
 
 
+def _mimetype_header_to_compat(header, request_headers):
+    # Converts all parts of a Accept/Content-Type headers
+    # from application/X -> application/vnd.elasticsearch+X
+    mimetype = request_headers.get(header, None)
+    if mimetype:
+        request_headers[header] = _COMPAT_MIMETYPE_RE.sub(_COMPAT_MIMETYPE_SUB, mimetype)
+
+
+def _escape(value: Any) -> str:
+    """
+    Escape a single value of a URL string or a query parameter. If it is a list
+    or tuple, turn it into a comma-separated string first.
+    """
+
+    # make sequences into comma-separated stings
+    if isinstance(value, (list, tuple)):
+        value = ",".join([_escape(item) for item in value])
+
+    # dates and datetimes into isoformat
+    elif isinstance(value, (date, datetime)):
+        value = value.isoformat()
+
+    # make bools into true/false strings
+    elif isinstance(value, bool):
+        value = str(value).lower()
+
+    elif isinstance(value, bytes):
+        return value.decode("utf-8", "surrogatepass")
+
+    if not isinstance(value, str):
+        return str(value)
+    return value
+
+
+def _quote(value: Any) -> str:
+    return percent_encode(_escape(value), ",*")
+
+
+def _quote_query(query: Mapping[str, Any]) -> str:
+    return "&".join([f"{k}={_quote(v)}" for k, v in query.items()])
+
+
 class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created and customizes the client for backwards
@@ -373,12 +415,14 @@ class EsClientFactory:
                 body: Optional[Any] = None,
             ) -> ApiResponse[Any]:
 
+                # We need to ensure that we provide content-type and accept headers
                 if body is not None:
                     if headers is None:
                         headers = {"content-type": "application/json", "accept": "application/json"}
                     else:
                         if headers.get("content-type") is None:
                             headers["content-type"] = "application/json"
+                        if headers.get("accept") is None:
                             headers["accept"] = "application/json"
 
                 if headers:
@@ -397,50 +441,11 @@ class EsClientFactory:
                     if self._verified_elasticsearch is not True:
                         _ProductChecker.raise_error(self._verified_elasticsearch, info_meta, info_body)
 
-                def mimetype_header_to_compat(header: str) -> None:
-                    # Converts all parts of a Accept/Content-Type headers
-                    # from application/X -> application/vnd.elasticsearch+X
-                    nonlocal request_headers
-                    mimetype = request_headers.get(header, None)
-                    if mimetype:
-                        request_headers[header] = _COMPAT_MIMETYPE_RE.sub(_COMPAT_MIMETYPE_SUB, mimetype)
-
                 # Custom behavior for backwards compatibility with versions of ES that do not
                 # recognize the compatible-with header.
                 if self.distribution_version is not None and self.distribution_version >= versions.Version.from_string("8.0.0"):
-                    mimetype_header_to_compat("Accept")
-                    mimetype_header_to_compat("Content-Type")
-
-                def _escape(value: Any) -> str:
-                    """
-                    Escape a single value of a URL string or a query parameter. If it is a list
-                    or tuple, turn it into a comma-separated string first.
-                    """
-
-                    # make sequences into comma-separated stings
-                    if isinstance(value, (list, tuple)):
-                        value = ",".join([_escape(item) for item in value])
-
-                    # dates and datetimes into isoformat
-                    elif isinstance(value, (date, datetime)):
-                        value = value.isoformat()
-
-                    # make bools into true/false strings
-                    elif isinstance(value, bool):
-                        value = str(value).lower()
-
-                    elif isinstance(value, bytes):
-                        return value.decode("utf-8", "surrogatepass")
-
-                    if not isinstance(value, str):
-                        return str(value)
-                    return value
-
-                def _quote(value: Any) -> str:
-                    return percent_encode(_escape(value), ",*")
-
-                def _quote_query(query: Mapping[str, Any]) -> str:
-                    return "&".join([f"{k}={_quote(v)}" for k, v in query.items()])
+                    _mimetype_header_to_compat("Accept", request_headers)
+                    _mimetype_header_to_compat("Content-Type", request_headers)
 
                 if params:
                     target = f"{path}?{_quote_query(params)}"
@@ -592,12 +597,14 @@ class EsClientFactory:
                 body: Optional[Any] = None,
             ) -> ApiResponse[Any]:
 
+                # We need to ensure that we provide content-type and accept headers
                 if body is not None:
                     if headers is None:
                         headers = {"content-type": "application/json", "accept": "application/json"}
                     else:
                         if headers.get("content-type") is None:
                             headers["content-type"] = "application/json"
+                        if headers.get("accept") is None:
                             headers["accept"] = "application/json"
 
                 if headers:
@@ -606,48 +613,9 @@ class EsClientFactory:
                 else:
                     request_headers = self._headers
 
-                def mimetype_header_to_compat(header: str) -> None:
-                    # Converts all parts of a Accept/Content-Type headers
-                    # from application/X -> application/vnd.elasticsearch+X
-                    nonlocal request_headers
-                    mimetype = request_headers.get(header, None)
-                    if mimetype:
-                        request_headers[header] = _COMPAT_MIMETYPE_RE.sub(_COMPAT_MIMETYPE_SUB, mimetype)
-
                 if self.distribution_version is not None and self.distribution_version >= versions.Version.from_string("8.0.0"):
-                    mimetype_header_to_compat("Accept")
-                    mimetype_header_to_compat("Content-Type")
-
-                def _escape(value: Any) -> str:
-                    """
-                    Escape a single value of a URL string or a query parameter. If it is a list
-                    or tuple, turn it into a comma-separated string first.
-                    """
-
-                    # make sequences into comma-separated stings
-                    if isinstance(value, (list, tuple)):
-                        value = ",".join([_escape(item) for item in value])
-
-                    # dates and datetimes into isoformat
-                    elif isinstance(value, (date, datetime)):
-                        value = value.isoformat()
-
-                    # make bools into true/false strings
-                    elif isinstance(value, bool):
-                        value = str(value).lower()
-
-                    elif isinstance(value, bytes):
-                        return value.decode("utf-8", "surrogatepass")
-
-                    if not isinstance(value, str):
-                        return str(value)
-                    return value
-
-                def _quote(value: Any) -> str:
-                    return percent_encode(_escape(value), ",*")
-
-                def _quote_query(query: Mapping[str, Any]) -> str:
-                    return "&".join([f"{k}={_quote(v)}" for k, v in query.items()])
+                    _mimetype_header_to_compat("Accept", request_headers)
+                    _mimetype_header_to_compat("Content-Type", request_headers)
 
                 if params:
                     target = f"{path}?{_quote_query(params)}"
