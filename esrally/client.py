@@ -741,7 +741,7 @@ def wait_for_rest_layer(es, max_attempts=40):
     # assume that at least the hosts that we expect to contact should be available. Note that this is not 100%
     # bullet-proof as a cluster could have e.g. dedicated masters which are not contained in our list of target hosts
     # but this is still better than just checking for any random node's REST API being reachable.
-    expected_node_count = len(es.transport.hosts)
+    expected_node_count = len(es.transport.node_pool)
     logger = logging.getLogger(__name__)
     for attempt in range(max_attempts):
         logger.debug("REST API is available after %s attempts", attempt)
@@ -760,12 +760,13 @@ def wait_for_rest_layer(es, max_attempts=40):
             else:
                 logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
                 time.sleep(3)
+        # TODO: distinguish between TransportError and ApiError
         except elasticsearch.TransportError as e:
             # cluster block, x-pack not initialized yet, our wait condition is not reached
-            if e.status_code in (503, 401, 408):
-                logger.debug("Got status code [%s] on attempt [%s]. Sleeping...", e.status_code, attempt)
+            if e.message in (503, 401, 408):
+                logger.debug("Got status code [%s] on attempt [%s]. Sleeping...", e.message, attempt)
                 time.sleep(3)
             else:
-                logger.warning("Got unexpected status code [%s] on attempt [%s].", e.status_code, attempt)
+                logger.warning("Got unexpected status code [%s] on attempt [%s].", e.message, attempt)
                 raise e
     return False
