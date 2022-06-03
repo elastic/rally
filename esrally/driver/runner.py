@@ -200,6 +200,7 @@ class Runner:
         # filter Nones
         return dict(filter(lambda kv: kv[1] is not None, full_result.items()))
 
+    # TODO: have this function call options() on the es instance?
     def _transport_request_params(self, params):
         request_params = params.get("request-params", {})
         request_timeout = params.get("request-timeout")
@@ -726,7 +727,7 @@ class NodeStats(Runner):
 
     async def __call__(self, es, params):
         request_timeout = params.get("request-timeout")
-        await es.nodes.stats(metric="_all", request_timeout=request_timeout)
+        await es.options(request_timeout=request_timeout).nodes.stats(metric="_all")
 
     def __repr__(self, *args, **kwargs):
         return "node-stats"
@@ -823,6 +824,9 @@ class Query(Runner):
 
     async def __call__(self, es, params):
         request_params, headers = self._transport_request_params(params)
+        request_timeout = request_params.pop("request_timeout", None)
+        if request_timeout is not None:
+            es.options(request_timeout=request_timeout)
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
