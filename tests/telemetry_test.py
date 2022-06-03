@@ -212,7 +212,7 @@ raiseTransportError = TransportErrorSupplier()
 
 
 class TransportClient:
-    def __init__(self, response=None, force_error=False, error=elasticsearch.TransportError):
+    def __init__(self, response=None, force_error=False, error=elasticsearch.TransportError(message="transport error")):
         self._response = response
         self._force_error = force_error
         self._error = error
@@ -4242,14 +4242,14 @@ class TestDiskUsageStats:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         tc = TransportClient(response={"_shards": {"failed": 0}})
-        es = Client(transport_client=tc)
-        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
+        c = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats({}, c, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [
-            ("POST", "/foo/_disk_usage"),
-            ("POST", "/bar/_disk_usage"),
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
         ]
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -4262,9 +4262,9 @@ class TestDiskUsageStats:
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [
-            ("POST", "/foo/_disk_usage"),
-            ("POST", "/bar/_disk_usage"),
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
         ]
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -4279,7 +4279,10 @@ class TestDiskUsageStats:
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+        ]
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_indices_param_if_specified_instead_of_data_stream_names(self, es):
@@ -4293,7 +4296,10 @@ class TestDiskUsageStats:
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+        ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
@@ -4302,7 +4308,7 @@ class TestDiskUsageStats:
         es = Client(
             transport_client=TransportClient(
                 force_error=True,
-                error=elasticsearch.RequestError,
+                error=elasticsearch.RequestError(message="400", meta=None, body=None),
             )
         )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
@@ -4319,7 +4325,7 @@ class TestDiskUsageStats:
         es = Client(
             transport_client=TransportClient(
                 force_error=True,
-                error=elasticsearch.RequestError,
+                error=elasticsearch.RequestError(message="400", meta=None, body=None),
             )
         )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=[])
@@ -4333,10 +4339,7 @@ class TestDiskUsageStats:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es = Client(
-            transport_client=TransportClient(
-                force_error=True,
-                error=elasticsearch.RequestError,
-            )
+            transport_client=TransportClient(force_error=True, error=elasticsearch.RequestError(message="400", meta=None, body=None))
         )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
@@ -4365,7 +4368,7 @@ class TestDiskUsageStats:
 
         not_found_transport_client = TransportClient(
             force_error=True,
-            error=elasticsearch.NotFoundError,
+            error=elasticsearch.NotFoundError(message="404", meta=None, body=None),
         )
         successful_client = TransportClient(
             response={
