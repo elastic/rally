@@ -1533,7 +1533,7 @@ class CreateMlDatafeed(Runner):
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
         try:
-            await es.xpack.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
+            await es.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
         except elasticsearch.TransportError as e:
             # fallback to old path
             if e.status_code == 400:
@@ -1562,7 +1562,7 @@ class DeleteMlDatafeed(Runner):
         force = params.get("force", False)
         try:
             # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
-            await es.xpack.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
+            await es.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1593,7 +1593,7 @@ class StartMlDatafeed(Runner):
         end = params.get("end")
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
+            await es.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1622,7 +1622,7 @@ class StopMlDatafeed(Runner):
         force = params.get("force", False)
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
+            await es.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1651,7 +1651,7 @@ class CreateMlJob(Runner):
         job_id = mandatory(params, "job-id", self)
         body = mandatory(params, "body", self)
         try:
-            await es.xpack.ml.put_job(job_id=job_id, body=body)
+            await es.ml.put_job(job_id=job_id, body=body)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1680,7 +1680,7 @@ class DeleteMlJob(Runner):
         force = params.get("force", False)
         # we don't want to fail if a job does not exist, thus we ignore 404s.
         try:
-            await es.xpack.ml.delete_job(job_id=job_id, force=force, ignore=[404])
+            await es.ml.delete_job(job_id=job_id, force=force, ignore=[404])
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1707,7 +1707,7 @@ class OpenMlJob(Runner):
 
         job_id = mandatory(params, "job-id", self)
         try:
-            await es.xpack.ml.open_job(job_id=job_id)
+            await es.ml.open_job(job_id=job_id)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1735,7 +1735,7 @@ class CloseMlJob(Runner):
         force = params.get("force", False)
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.close_job(job_id=job_id, force=force, timeout=timeout)
+            await es.ml.close_job(job_id=job_id, force=force, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:

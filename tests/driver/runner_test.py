@@ -3187,19 +3187,19 @@ class TestCreateMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_datafeed(self, es):
-        es.xpack.ml.put_datafeed = mock.AsyncMock()
+        es.ml.put_datafeed = mock.AsyncMock()
 
         params = {"datafeed-id": "some-data-feed", "body": {"job_id": "total-requests", "indices": ["server-metrics"]}}
 
         r = runner.CreateMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.put_datafeed.assert_awaited_once_with(datafeed_id=params["datafeed-id"], body=params["body"])
+        es.ml.put_datafeed.assert_awaited_once_with(datafeed_id=params["datafeed-id"], body=params["body"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_datafeed_fallback(self, es):
-        es.xpack.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.transport.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
         body = {"job_id": "total-requests", "indices": ["server-metrics"]}
@@ -3215,7 +3215,7 @@ class TestDeleteMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_datafeed(self, es):
-        es.xpack.ml.delete_datafeed = mock.AsyncMock()
+        es.ml.delete_datafeed = mock.AsyncMock()
 
         datafeed_id = "some-data-feed"
         params = {"datafeed-id": datafeed_id}
@@ -3223,12 +3223,13 @@ class TestDeleteMlDatafeed:
         r = runner.DeleteMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.delete_datafeed.assert_awaited_once_with(datafeed_id=datafeed_id, force=False, ignore=[404])
+        es.ml.delete_datafeed.assert_awaited_once_with(datafeed_id=datafeed_id, force=False, ignore=[404])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_datafeed_fallback(self, es):
-        es.xpack.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+
         es.transport.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
         params = {
@@ -3247,20 +3248,20 @@ class TestStartMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_body(self, es):
-        es.xpack.ml.start_datafeed = mock.AsyncMock()
+        es.ml.start_datafeed = mock.AsyncMock()
         params = {"datafeed-id": "some-data-feed", "body": {"end": "now"}}
 
         r = runner.StartMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.start_datafeed.assert_awaited_once_with(
+        es.ml.start_datafeed.assert_awaited_once_with(
             datafeed_id=params["datafeed-id"], body=params["body"], start=None, end=None, timeout=None
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_body_fallback(self, es):
-        es.xpack.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.transport.perform_request = mock.AsyncMock()
         body = {"end": "now"}
         params = {"datafeed-id": "some-data-feed", "body": body}
@@ -3273,7 +3274,7 @@ class TestStartMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_params(self, es):
-        es.xpack.ml.start_datafeed = mock.AsyncMock()
+        es.ml.start_datafeed = mock.AsyncMock()
         params = {
             "datafeed-id": "some-data-feed",
             "start": "2017-01-01T01:00:00Z",
@@ -3284,7 +3285,7 @@ class TestStartMlDatafeed:
         r = runner.StartMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.start_datafeed.assert_awaited_once_with(
+        es.ml.start_datafeed.assert_awaited_once_with(
             datafeed_id=params["datafeed-id"], body=None, start=params["start"], end=params["end"], timeout=params["timeout"]
         )
 
@@ -3293,7 +3294,7 @@ class TestStopMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_stop_ml_datafeed(self, es):
-        es.xpack.ml.stop_datafeed = mock.AsyncMock()
+        es.ml.stop_datafeed = mock.AsyncMock()
         params = {
             "datafeed-id": "some-data-feed",
             "force": random.choice([False, True]),
@@ -3303,14 +3304,12 @@ class TestStopMlDatafeed:
         r = runner.StopMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.stop_datafeed.assert_awaited_once_with(
-            datafeed_id=params["datafeed-id"], force=params["force"], timeout=params["timeout"]
-        )
+        es.ml.stop_datafeed.assert_awaited_once_with(datafeed_id=params["datafeed-id"], force=params["force"], timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_stop_ml_datafeed_fallback(self, es):
-        es.xpack.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.transport.perform_request = mock.AsyncMock()
 
         params = {
@@ -3333,7 +3332,7 @@ class TestCreateMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_job(self, es):
-        es.xpack.ml.put_job = mock.AsyncMock()
+        es.ml.put_job = mock.AsyncMock()
 
         params = {
             "job-id": "an-ml-job",
@@ -3356,12 +3355,12 @@ class TestCreateMlJob:
         r = runner.CreateMlJob()
         await r(es, params)
 
-        es.xpack.ml.put_job.assert_awaited_once_with(job_id=params["job-id"], body=params["body"])
+        es.ml.put_job.assert_awaited_once_with(job_id=params["job-id"], body=params["body"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_job_fallback(self, es):
-        es.xpack.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.transport.perform_request = mock.AsyncMock()
 
         body = {
@@ -3390,7 +3389,7 @@ class TestDeleteMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_job(self, es):
-        es.xpack.ml.delete_job = mock.AsyncMock()
+        es.ml.delete_job = mock.AsyncMock()
 
         job_id = "an-ml-job"
         params = {"job-id": job_id}
@@ -3398,12 +3397,12 @@ class TestDeleteMlJob:
         r = runner.DeleteMlJob()
         await r(es, params)
 
-        es.xpack.ml.delete_job.assert_awaited_once_with(job_id=job_id, force=False, ignore=[404])
+        es.ml.delete_job.assert_awaited_once_with(job_id=job_id, force=False, ignore=[404])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_job_fallback(self, es):
-        es.xpack.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.transport.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -3421,7 +3420,7 @@ class TestOpenMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_open_ml_job(self, es):
-        es.xpack.ml.open_job = mock.AsyncMock()
+        es.ml.open_job = mock.AsyncMock()
 
         job_id = "an-ml-job"
         params = {"job-id": job_id}
@@ -3429,12 +3428,12 @@ class TestOpenMlJob:
         r = runner.OpenMlJob()
         await r(es, params)
 
-        es.xpack.ml.open_job.assert_awaited_once_with(job_id=job_id)
+        es.ml.open_job.assert_awaited_once_with(job_id=job_id)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_open_ml_job_fallback(self, es):
-        es.xpack.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.transport.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -3450,7 +3449,7 @@ class TestCloseMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_close_ml_job(self, es):
-        es.xpack.ml.close_job = mock.AsyncMock()
+        es.ml.close_job = mock.AsyncMock()
         params = {
             "job-id": "an-ml-job",
             "force": random.choice([False, True]),
@@ -3460,12 +3459,12 @@ class TestCloseMlJob:
         r = runner.CloseMlJob()
         await r(es, params)
 
-        es.xpack.ml.close_job.assert_awaited_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
+        es.ml.close_job.assert_awaited_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_close_ml_job_fallback(self, es):
-        es.xpack.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.transport.perform_request = mock.AsyncMock()
 
         params = {
