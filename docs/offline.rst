@@ -13,7 +13,7 @@ Command Line Usage
 
 Rally will automatically detect upon startup that no Internet connection is available and print the following warning::
 
-    [WARNING] No Internet connection detected. Automatic download of track data sets etc. is disabled.
+    [WARNING] No Internet connection detected. Specify --offline to run without it.
 
 It detects this by trying to connect to ``https://github.com``. If you want it to probe against a different HTTP endpoint (e.g. a company-internal git server) you need to add a configuration property named ``probing.url`` in the ``system`` section of Rally's configuration file at ``~/.rally/rally.ini``. Specify ``--offline`` if you want to disable probing entirely.
 

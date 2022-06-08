@@ -51,6 +51,8 @@ from esrally.mechanic import mechanic, team
 from esrally.tracker import tracker
 from esrally.utils import console, convert, io, net, opts, process, versions
 
+OFFLINE_SUBCOMMANDS = ("compare", "list", "start", "stop", "generate")
+
 
 class ExitStatus(Enum):
     SUCCESSFUL = 1
@@ -904,6 +906,20 @@ def configure_reporting_params(args, cfg):
     cfg.add(config.Scope.applicationOverride, "reporting", "numbers.align", args.report_numbers_align)
 
 
+def ensure_internet_connection(args, cfg):
+    if args.offline:
+        return
+    if args.subcommand in OFFLINE_SUBCOMMANDS:
+        # no need for rally to be online
+        return
+    probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
+    logger = logging.getLogger(__name__)
+    if not net.has_internet_connection(probing_url):
+        console.warn("No Internet connection detected. Specify --offline to run without it.", logger=logger)
+        sys.exit(0)
+    logger.info("Detected a working Internet connection.")
+
+
 def dispatch_sub_command(arg_parser, args, cfg):
     sub_command = args.subcommand
 
@@ -1062,12 +1078,7 @@ def main():
     logger.debug("Command line arguments: %s", args)
     # Configure networking
     net.init()
-    if not args.offline:
-        probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
-        if not net.has_internet_connection(probing_url):
-            console.warn("No Internet connection detected. Specify --offline to run without it.", logger=logger)
-            sys.exit(0)
-        logger.info("Detected a working Internet connection.")
+    ensure_internet_connection(args, cfg)
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 
