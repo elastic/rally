@@ -60,13 +60,13 @@ class EsClient:
         return self.guarded(self._client.indices.put_template, name=name, body=template)
 
     def template_exists(self, name):
-        return self.guarded(self._client.indices.exists_template, name)
+        return self.guarded(self._client.indices.exists_template, name=name)
 
     def delete_template(self, name):
-        self.guarded(self._client.indices.delete_template, name)
+        self.guarded(self._client.indices.delete_template, name=name)
 
     def get_index(self, name):
-        return self.guarded(self._client.indices.get, name)
+        return self.guarded(self._client.indices.get, name=name)
 
     def create_index(self, index):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index

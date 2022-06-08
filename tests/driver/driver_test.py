@@ -1528,7 +1528,7 @@ class TestAsyncExecutor:
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
         # one has been "consumed".
-        es.transport.perform_request.side_effect = perform_request
+        es.perform_request.side_effect = perform_request
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)

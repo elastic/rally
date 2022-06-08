@@ -162,6 +162,9 @@ class Client:
     def info(self):
         return self._info()
 
+    def perform_request(self, *args, **kwargs):
+        return self.transport.perform_request(*args, **kwargs)
+
 
 class SubClient:
     def __init__(self, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, state=None):
@@ -4247,9 +4250,9 @@ class TestDiskUsageStats:
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [
-            ("POST", "/foo/_disk_usage"),
-            ("POST", "/bar/_disk_usage"),
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
         ]
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -4262,9 +4265,9 @@ class TestDiskUsageStats:
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [
-            ("POST", "/foo/_disk_usage"),
-            ("POST", "/bar/_disk_usage"),
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
         ]
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -4279,7 +4282,10 @@ class TestDiskUsageStats:
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+        ]
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_indices_param_if_specified_instead_of_data_stream_names(self, es):
@@ -4293,7 +4299,10 @@ class TestDiskUsageStats:
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+        ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
