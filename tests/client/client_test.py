@@ -31,7 +31,7 @@ import urllib3.exceptions
 from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
-from esrally.async_connection import AIOHttpConnection
+from esrally.client.asynchronous import AIOHttpConnection
 from esrally.utils import console
 
 
@@ -64,7 +64,7 @@ class TestEsClientFactory:
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.client")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -98,14 +98,14 @@ class TestEsClientFactory:
             "use_ssl": True,
             "verify_certs": True,
             "http_auth": ("user", "password"),
-            "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
-            "client_cert": os.path.join(self.cwd, "utils/resources/certs/client.crt"),
-            "client_key": os.path.join(self.cwd, "utils/resources/certs/client.key"),
+            "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
+            "client_cert": os.path.join(self.cwd, "../utils/resources/certs/client.crt"),
+            "client_key": os.path.join(self.cwd, "../utils/resources/certs/client.key"),
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.client")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -142,12 +142,12 @@ class TestEsClientFactory:
             "use_ssl": True,
             "verify_certs": True,
             "http_auth": ("user", "password"),
-            "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
+            "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.client")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -179,10 +179,10 @@ class TestEsClientFactory:
             "use_ssl": True,
             "verify_certs": True,
             "http_auth": ("user", "password"),
-            "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
+            "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
         }
 
-        client_ssl_options = {"client_cert": "utils/resources/certs/client.crt", "client_key": "utils/resources/certs/client.key"}
+        client_ssl_options = {"client_cert": "../utils/resources/certs/client.crt", "client_key": "../utils/resources/certs/client.key"}
 
         random_client_ssl_option = random.choice(list(client_ssl_options.keys()))
         missing_client_ssl_option = list(set(client_ssl_options) - set([random_client_ssl_option]))[0]
@@ -218,7 +218,7 @@ class TestEsClientFactory:
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = dict(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.client")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -253,13 +253,13 @@ class TestEsClientFactory:
             "use_ssl": True,
             "verify_certs": False,
             "http_auth": ("user", "password"),
-            "client_cert": os.path.join(self.cwd, "utils/resources/certs/client.crt"),
-            "client_key": os.path.join(self.cwd, "utils/resources/certs/client.key"),
+            "client_cert": os.path.join(self.cwd, "../utils/resources/certs/client.crt"),
+            "client_key": os.path.join(self.cwd, "../utils/resources/certs/client.key"),
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.client")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(

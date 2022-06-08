@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import contextvars
 import logging
 import time
 
@@ -25,89 +24,6 @@ from urllib3.connection import is_ipaddress
 
 from esrally import doc_link, exceptions
 from esrally.utils import console, convert
-
-
-class RequestContextManager:
-    """
-    Ensures that request context span the defined scope and allow nesting of request contexts with proper propagation.
-    This means that we can span a top-level request context, open sub-request contexts that can be used to measure
-    individual timings and still measure the proper total time on the top-level request context.
-    """
-
-    def __init__(self, request_context_holder):
-        self.ctx_holder = request_context_holder
-        self.ctx = None
-        self.token = None
-
-    async def __aenter__(self):
-        self.ctx, self.token = self.ctx_holder.init_request_context()
-        return self
-
-    @property
-    def request_start(self):
-        return self.ctx["request_start"]
-
-    @property
-    def request_end(self):
-        return self.ctx["request_end"]
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        # propagate earliest request start and most recent request end to parent
-        request_start = self.request_start
-        request_end = self.request_end
-        self.ctx_holder.restore_context(self.token)
-        # don't attempt to restore these values on the top-level context as they don't exist
-        if self.token.old_value != contextvars.Token.MISSING:
-            self.ctx_holder.update_request_start(request_start)
-            self.ctx_holder.update_request_end(request_end)
-        self.token = None
-        return False
-
-
-class RequestContextHolder:
-    """
-    Holds request context variables. This class is only meant to be used together with RequestContextManager.
-    """
-
-    request_context = contextvars.ContextVar("rally_request_context")
-
-    def new_request_context(self):
-        return RequestContextManager(self)
-
-    @classmethod
-    def init_request_context(cls):
-        ctx = {}
-        token = cls.request_context.set(ctx)
-        return ctx, token
-
-    @classmethod
-    def restore_context(cls, token):
-        cls.request_context.reset(token)
-
-    @classmethod
-    def update_request_start(cls, new_request_start):
-        meta = cls.request_context.get()
-        # this can happen if multiple requests are sent on the wire for one logical request (e.g. scrolls)
-        if "request_start" not in meta:
-            meta["request_start"] = new_request_start
-
-    @classmethod
-    def update_request_end(cls, new_request_end):
-        meta = cls.request_context.get()
-        meta["request_end"] = new_request_end
-
-    @classmethod
-    def on_request_start(cls):
-        cls.update_request_start(time.perf_counter())
-
-    @classmethod
-    def on_request_end(cls):
-        cls.update_request_end(time.perf_counter())
-
-    @classmethod
-    def return_raw_response(cls):
-        ctx = cls.request_context.get()
-        ctx["raw_response"] = True
 
 
 class EsClientFactory:
@@ -233,12 +149,7 @@ class EsClientFactory:
 
     def create(self):
         # pylint: disable=import-outside-toplevel
-        import elasticsearch
-
-        class RallySyncElasticsearch(elasticsearch.Elasticsearch):
-            def perform_request(self, *args, **kwargs):
-                kwargs["url"] = kwargs.pop("path")
-                return self.transport.perform_request(*args, **kwargs)
+        from esrally.client.synchronous import RallySyncElasticsearch
 
         return RallySyncElasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
@@ -247,10 +158,13 @@ class EsClientFactory:
         import io
 
         import aiohttp
-        import elasticsearch
         from elasticsearch.serializer import JSONSerializer
 
-        import esrally.async_connection
+        from esrally.client.asynchronous import (
+            AIOHttpConnection,
+            RallyAsyncElasticsearch,
+            VerifiedAsyncTransport,
+        )
 
         class LazyJSONSerializer(JSONSerializer):
             def loads(self, s):
@@ -276,23 +190,10 @@ class EsClientFactory:
         self.client_options["serializer"] = LazyJSONSerializer()
         self.client_options["trace_config"] = trace_config
 
-        class VerifiedAsyncTransport(elasticsearch.AsyncTransport):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                # skip verification at this point; we've already verified this earlier with the synchronous client.
-                # The async client is used in the hot code path and we use customized overrides (such as that we don't
-                # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
-                self._verified_elasticsearch = True
-
-        class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
-            def perform_request(self, *args, **kwargs):
-                kwargs["url"] = kwargs.pop("path")
-                return self.transport.perform_request(*args, **kwargs)
-
         return RallyAsyncElasticsearch(
             hosts=self.hosts,
             transport_class=VerifiedAsyncTransport,
-            connection_class=esrally.async_connection.AIOHttpConnection,
+            connection_class=AIOHttpConnection,
             ssl_context=self.ssl_context,
             **self.client_options,
         )
