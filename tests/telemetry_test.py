@@ -162,6 +162,9 @@ class Client:
     def info(self):
         return self._info()
 
+    def perform_request(self, *args, **kwargs):
+        return self.transport.perform_request(*args, **kwargs)
+
 
 class SubClient:
     def __init__(self, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, state=None):

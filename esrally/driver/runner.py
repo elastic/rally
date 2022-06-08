@@ -950,7 +950,7 @@ class Query(Runner):
                         took = props.get("took", 0)
                         all_results_collected = (size is not None and hits < size) or hits == 0
                     else:
-                        r = await es.transport.perform_request(
+                        r = await es.perform_request(
                             "GET", "/_search/scroll", body={"scroll_id": scroll_id, "scroll": "10s"}, params=request_params, headers=headers
                         )
                         props = parse(r, ["timed_out", "took"], ["hits.hits"])
@@ -1007,7 +1007,7 @@ class Query(Runner):
             components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
-        return await es.transport.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
+        return await es.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
 
     def _query_headers(self, params):
         # reduces overhead due to decompression of very large responses
@@ -1308,7 +1308,7 @@ class DeleteComponentTemplate(Runner):
             from elasticsearch.client import _make_path
 
             # currently not supported by client and hence custom request
-            return await es.transport.perform_request("HEAD", _make_path("_component_template", name))
+            return await es.perform_request("HEAD", _make_path("_component_template", name))
 
         ops_count = 0
         for template_name in template_names:
@@ -1537,7 +1537,7 @@ class CreateMlDatafeed(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path
             if e.status_code == 400:
-                await es.transport.perform_request(
+                await es.perform_request(
                     "PUT",
                     f"/_xpack/ml/datafeeds/{datafeed_id}",
                     body=body,
@@ -1566,7 +1566,7 @@ class DeleteMlDatafeed(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
+                await es.perform_request(
                     "DELETE",
                     f"/_xpack/ml/datafeeds/{datafeed_id}",
                     params={"force": escape(force), "ignore": 404},
@@ -1597,7 +1597,7 @@ class StartMlDatafeed(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
+                await es.perform_request(
                     "POST",
                     f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
                     body=body,
@@ -1631,7 +1631,7 @@ class StopMlDatafeed(Runner):
                 }
                 if timeout:
                     request_params["timeout"] = escape(timeout)
-                await es.transport.perform_request("POST", f"/_xpack/ml/datafeeds/{datafeed_id}/_stop", params=request_params)
+                await es.perform_request("POST", f"/_xpack/ml/datafeeds/{datafeed_id}/_stop", params=request_params)
             else:
                 raise e
 
@@ -1655,7 +1655,7 @@ class CreateMlJob(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
+                await es.perform_request(
                     "PUT",
                     f"/_xpack/ml/anomaly_detectors/{job_id}",
                     body=body,
@@ -1684,7 +1684,7 @@ class DeleteMlJob(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
+                await es.perform_request(
                     "DELETE",
                     f"/_xpack/ml/anomaly_detectors/{job_id}",
                     params={"force": escape(force), "ignore": 404},
@@ -1711,7 +1711,7 @@ class OpenMlJob(Runner):
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
+                await es.perform_request(
                     "POST",
                     f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
                 )
@@ -1745,7 +1745,7 @@ class CloseMlJob(Runner):
                 if timeout:
                     request_params["timeout"] = escape(timeout)
 
-                await es.transport.perform_request(
+                await es.perform_request(
                     "POST",
                     f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
                     params=request_params,
@@ -1770,7 +1770,7 @@ class RawRequest(Runner):
             # counter-intuitive, but preserves prior behavior
             headers = None
 
-        await es.transport.perform_request(
+        await es.perform_request(
             method=params.get("method", "GET"), url=path, headers=headers, body=params.get("body"), params=request_params
         )
 
@@ -2462,7 +2462,7 @@ class Sql(Runner):
 
         es.return_raw_response()
 
-        r = await es.transport.perform_request("POST", "/_sql", body=body)
+        r = await es.perform_request("POST", "/_sql", body=body)
         pages -= 1
         weight = 1
 
@@ -2474,7 +2474,7 @@ class Sql(Runner):
                     "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
                 )
 
-            r = await es.transport.perform_request("POST", "/_sql", body={"cursor": cursor})
+            r = await es.perform_request("POST", "/_sql", body={"cursor": cursor})
             pages -= 1
             weight += 1
 

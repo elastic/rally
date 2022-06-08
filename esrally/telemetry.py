@@ -460,9 +460,7 @@ class CcrStatsRecorder:
         try:
             ccr_stats_api_endpoint = "/_ccr/stats"
             filter_path = "follow_stats"
-            stats = self.client.transport.perform_request(
-                "GET", ccr_stats_api_endpoint, params={"human": "false", "filter_path": filter_path}
-            )
+            stats = self.client.perform_request("GET", ccr_stats_api_endpoint, params={"human": "false", "filter_path": filter_path})
         except elasticsearch.TransportError:
             msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on cluster [{}]".format(
                 ccr_stats_api_endpoint, filter_path, self.cluster_name
@@ -1233,7 +1231,7 @@ class SearchableSnapshotsStatsRecorder:
             # we don't use the existing client support (searchable_snapshots.stats())
             # as the API is deliberately undocumented and might change:
             # https://www.elastic.co/guide/en/elasticsearch/reference/current/searchable-snapshots-api-stats.html
-            stats = self.client.transport.perform_request("GET", stats_api_endpoint, params={"level": level})
+            stats = self.client.perform_request("GET", stats_api_endpoint, params={"level": level})
         except elasticsearch.NotFoundError as e:
             if "No searchable snapshots indices found" in e.info.get("error").get("reason"):
                 self.logger.info(
@@ -2276,7 +2274,7 @@ class DiskUsageStats(TelemetryDevice):
         for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
-                response = self.client.transport.perform_request("POST", f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
+                response = self.client.perform_request("POST", f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
             except elasticsearch.RequestError:
                 msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)

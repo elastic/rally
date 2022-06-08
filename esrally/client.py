@@ -235,7 +235,11 @@ class EsClientFactory:
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
-        return elasticsearch.Elasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
+        class RallySyncElasticsearch(elasticsearch.Elasticsearch):
+            def perform_request(self, *args, **kwargs):
+                return self.transport.perform_request(*args, **kwargs)
+
+        return RallySyncElasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
     def create_async(self):
         # pylint: disable=import-outside-toplevel
@@ -280,7 +284,8 @@ class EsClientFactory:
                 self._verified_elasticsearch = True
 
         class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
-            pass
+            def perform_request(self, *args, **kwargs):
+                return self.transport.perform_request(*args, **kwargs)
 
         return RallyAsyncElasticsearch(
             hosts=self.hosts,
