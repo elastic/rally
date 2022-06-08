@@ -951,7 +951,11 @@ class Query(Runner):
                         all_results_collected = (size is not None and hits < size) or hits == 0
                     else:
                         r = await es.perform_request(
-                            "GET", "/_search/scroll", body={"scroll_id": scroll_id, "scroll": "10s"}, params=request_params, headers=headers
+                            method="GET",
+                            path="/_search/scroll",
+                            body={"scroll_id": scroll_id, "scroll": "10s"},
+                            params=request_params,
+                            headers=headers,
                         )
                         props = parse(r, ["timed_out", "took"], ["hits.hits"])
                         timed_out = timed_out or props.get("timed_out", False)
@@ -1007,7 +1011,7 @@ class Query(Runner):
             components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
-        return await es.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
+        return await es.perform_request(method="GET", path="/" + path, params=params, body=body, headers=headers)
 
     def _query_headers(self, params):
         # reduces overhead due to decompression of very large responses
@@ -1179,7 +1183,7 @@ class CreateDataStream(Runner):
         data_streams = mandatory(params, "data-streams", self)
         request_params = mandatory(params, "request-params", self)
         for data_stream in data_streams:
-            await es.indices.create_data_stream(data_stream, params=request_params)
+            await es.indices.create_data_stream(name=data_stream, params=request_params)
         return {
             "weight": len(data_streams),
             "unit": "ops",
@@ -1254,11 +1258,11 @@ class DeleteDataStream(Runner):
 
         for data_stream in data_streams:
             if not only_if_exists:
-                await es.indices.delete_data_stream(data_stream, ignore=[404], params=request_params)
+                await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
                 ops += 1
             elif only_if_exists and await es.indices.exists(index=data_stream):
                 self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
-                await es.indices.delete_data_stream(data_stream, params=request_params)
+                await es.indices.delete_data_stream(name=data_stream, params=request_params)
                 ops += 1
 
         return {
@@ -1303,19 +1307,12 @@ class DeleteComponentTemplate(Runner):
         only_if_exists = mandatory(params, "only-if-exists", self)
         request_params = mandatory(params, "request-params", self)
 
-        async def _exists(name):
-            # pylint: disable=import-outside-toplevel
-            from elasticsearch.client import _make_path
-
-            # currently not supported by client and hence custom request
-            return await es.perform_request("HEAD", _make_path("_component_template", name))
-
         ops_count = 0
         for template_name in template_names:
             if not only_if_exists:
                 await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await _exists(template_name):
+            elif only_if_exists and await es.cluster.exists_component_template(name=template_name):
                 self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
                 await es.cluster.delete_component_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1365,7 +1362,7 @@ class DeleteComposableTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_index_template(template_name):
+            elif only_if_exists and await es.indices.exists_index_template(name=template_name):
                 self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_index_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1420,7 +1417,7 @@ class DeleteIndexTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_template(template_name):
+            elif only_if_exists and await es.indices.exists_template(name=template_name):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1461,7 +1458,7 @@ class ShrinkIndex(Runner):
 
     async def __call__(self, es, params):
         source_index = mandatory(params, "source-index", self)
-        source_indices_get = await es.indices.get(source_index)
+        source_indices_get = await es.indices.get(index=source_index)
         source_indices = list(source_indices_get.keys())
         source_indices_stem = commonprefix(source_indices)
 
@@ -1538,8 +1535,8 @@ class CreateMlDatafeed(Runner):
             # fallback to old path
             if e.status_code == 400:
                 await es.perform_request(
-                    "PUT",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}",
+                    method="PUT",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
                     body=body,
                 )
             else:
@@ -1567,8 +1564,8 @@ class DeleteMlDatafeed(Runner):
             # fallback to old path (ES < 7)
             if e.status_code == 400:
                 await es.perform_request(
-                    "DELETE",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}",
+                    method="DELETE",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
                     params={"force": escape(force), "ignore": 404},
                 )
             else:
@@ -1598,8 +1595,8 @@ class StartMlDatafeed(Runner):
             # fallback to old path (ES < 7)
             if e.status_code == 400:
                 await es.perform_request(
-                    "POST",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
+                    method="POST",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
                     body=body,
                 )
             else:
@@ -1631,7 +1628,11 @@ class StopMlDatafeed(Runner):
                 }
                 if timeout:
                     request_params["timeout"] = escape(timeout)
-                await es.perform_request("POST", f"/_xpack/ml/datafeeds/{datafeed_id}/_stop", params=request_params)
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
+                    params=request_params,
+                )
             else:
                 raise e
 
@@ -1656,8 +1657,8 @@ class CreateMlJob(Runner):
             # fallback to old path (ES < 7)
             if e.status_code == 400:
                 await es.perform_request(
-                    "PUT",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}",
+                    method="PUT",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
                     body=body,
                 )
             else:
@@ -1685,8 +1686,8 @@ class DeleteMlJob(Runner):
             # fallback to old path (ES < 7)
             if e.status_code == 400:
                 await es.perform_request(
-                    "DELETE",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}",
+                    method="DELETE",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
                     params={"force": escape(force), "ignore": 404},
                 )
             else:
@@ -1712,8 +1713,8 @@ class OpenMlJob(Runner):
             # fallback to old path (ES < 7)
             if e.status_code == 400:
                 await es.perform_request(
-                    "POST",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
+                    method="POST",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
                 )
             else:
                 raise e
@@ -1746,8 +1747,8 @@ class CloseMlJob(Runner):
                     request_params["timeout"] = escape(timeout)
 
                 await es.perform_request(
-                    "POST",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
+                    method="POST",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
                     params=request_params,
                 )
             else:
@@ -1771,7 +1772,7 @@ class RawRequest(Runner):
             headers = None
 
         await es.perform_request(
-            method=params.get("method", "GET"), url=path, headers=headers, body=params.get("body"), params=request_params
+            method=params.get("method", "GET"), path=path, headers=headers, body=params.get("body"), params=request_params
         )
 
     def __repr__(self, *args, **kwargs):
@@ -2462,7 +2463,7 @@ class Sql(Runner):
 
         es.return_raw_response()
 
-        r = await es.perform_request("POST", "/_sql", body=body)
+        r = await es.perform_request(method="POST", path="/_sql", body=body)
         pages -= 1
         weight = 1
 
@@ -2474,7 +2475,7 @@ class Sql(Runner):
                     "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
                 )
 
-            r = await es.perform_request("POST", "/_sql", body={"cursor": cursor})
+            r = await es.perform_request(method="POST", path="/_sql", body={"cursor": cursor})
             pages -= 1
             weight += 1
 

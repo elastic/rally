@@ -1526,7 +1526,7 @@ class TestQueryRunner:
         }
 
         es.perform_request.assert_awaited_once_with(
-            "GET", "/_all/_search", params={"request_cache": "true"}, body=params["body"], headers=None
+            method="GET", path="/_all/_search", params={"request_cache": "true"}, body=params["body"], headers=None
         )
         es.clear_scroll.assert_not_called()
 
@@ -1573,8 +1573,8 @@ class TestQueryRunner:
         }
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+            method="GET",
+            path="/_all/_search",
             params={"request_timeout": 3.0, "request_cache": "true"},
             body=params["body"],
             headers={"header1": "value1", "x-opaque-id": "test-id1"},
@@ -1626,8 +1626,8 @@ class TestQueryRunner:
         }
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+            method="GET",
+            path="/_all/_search",
             params={
                 "request_cache": "false",
                 "q": "user:kimchy",
@@ -1680,8 +1680,8 @@ class TestQueryRunner:
         assert "error-type" not in result
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+            method="GET",
+            path="/_all/_search",
             params={
                 "q": "user:kimchy",
             },
@@ -1734,8 +1734,8 @@ class TestQueryRunner:
         }
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+            method="GET",
+            path="/_all/_search",
             params={
                 "request_cache": "true",
             },
@@ -1791,8 +1791,8 @@ class TestQueryRunner:
         }
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/unittest/_search",
+            method="GET",
+            path="/unittest/_search",
             params={},
             body=params["body"],
             headers={
@@ -1847,8 +1847,8 @@ class TestQueryRunner:
         }
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/unittest/type/_search",
+            method="GET",
+            path="/unittest/type/_search",
             body=params["body"],
             params={},
             headers=None,
@@ -1905,8 +1905,8 @@ class TestQueryRunner:
         assert "error-type" not in results
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/unittest/_search",
+            method="GET",
+            path="/unittest/_search",
             params={
                 "request_cache": "true",
                 "sort": "_doc",
@@ -1968,8 +1968,8 @@ class TestQueryRunner:
         assert "error-type" not in results
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/unittest/_search",
+            method="GET",
+            path="/unittest/_search",
             params={"sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
             headers={"Accept-Encoding": "identity"},
@@ -2025,8 +2025,8 @@ class TestQueryRunner:
         assert "error-type" not in results
 
         es.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+            method="GET",
+            path="/_all/_search",
             params={
                 "sort": "_doc",
                 "scroll": "10s",
@@ -2623,8 +2623,8 @@ class TestCreateDataStreamRunner:
 
         es.indices.create_data_stream.assert_has_awaits(
             [
-                mock.call("data-stream-A", params=request_params),
-                mock.call("data-stream-B", params=request_params),
+                mock.call(name="data-stream-A", params=request_params),
+                mock.call(name="data-stream-B", params=request_params),
             ]
         )
 
@@ -2730,7 +2730,7 @@ class TestDeleteDataStreamRunner:
             "success": True,
         }
 
-        es.indices.delete_data_stream.assert_awaited_once_with("data-stream-B", params={})
+        es.indices.delete_data_stream.assert_awaited_once_with(name="data-stream-B", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -2756,8 +2756,8 @@ class TestDeleteDataStreamRunner:
 
         es.indices.delete_data_stream.assert_has_awaits(
             [
-                mock.call("data-stream-A", ignore=[404], params=params["request-params"]),
-                mock.call("data-stream-B", ignore=[404], params=params["request-params"]),
+                mock.call(name="data-stream-A", ignore=[404], params=params["request-params"]),
+                mock.call(name="data-stream-B", ignore=[404], params=params["request-params"]),
             ]
         )
         assert es.indices.exists.await_count == 0
@@ -2976,11 +2976,10 @@ class TestDeleteComponentTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        async def _side_effect(http_method, path):
-            if http_method == "HEAD":
-                return path == "/_component_template/templateB"
+        async def _side_effect(name):
+            return name == "templateB"
 
-        es.perform_request = mock.AsyncMock(side_effect=_side_effect)
+        es.cluster.exists_component_template = mock.AsyncMock(side_effect=_side_effect)
         es.cluster.delete_component_template = mock.AsyncMock()
 
         r = runner.DeleteComponentTemplate()
@@ -3208,7 +3207,7 @@ class TestCreateMlDatafeed:
         r = runner.CreateMlDatafeed()
         await r(es, params)
 
-        es.perform_request.assert_awaited_once_with("PUT", f"/_xpack/ml/datafeeds/{datafeed_id}", body=body)
+        es.perform_request.assert_awaited_once_with(method="PUT", path=f"/_xpack/ml/datafeeds/{datafeed_id}", body=body)
 
 
 class TestDeleteMlDatafeed:
@@ -3240,7 +3239,7 @@ class TestDeleteMlDatafeed:
         await r(es, params)
 
         es.perform_request.assert_awaited_once_with(
-            "DELETE", f"/_xpack/ml/datafeeds/{datafeed_id}", params={"force": "false", "ignore": 404}
+            method="DELETE", path=f"/_xpack/ml/datafeeds/{datafeed_id}", params={"force": "false", "ignore": 404}
         )
 
 
@@ -3269,7 +3268,7 @@ class TestStartMlDatafeed:
         r = runner.StartMlDatafeed()
         await r(es, params)
 
-        es.perform_request.assert_awaited_once_with("POST", f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_start", body=body)
+        es.perform_request.assert_awaited_once_with(method="POST", path=f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_start", body=body)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -3322,8 +3321,8 @@ class TestStopMlDatafeed:
         await r(es, params)
 
         es.perform_request.assert_awaited_once_with(
-            "POST",
-            f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_stop",
+            method="POST",
+            path=f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_stop",
             params={"force": str(params["force"]).lower(), "timeout": params["timeout"]},
         )
 
@@ -3382,7 +3381,7 @@ class TestCreateMlJob:
         r = runner.CreateMlJob()
         await r(es, params)
 
-        es.perform_request.assert_awaited_once_with("PUT", f"/_xpack/ml/anomaly_detectors/{params['job-id']}", body=body)
+        es.perform_request.assert_awaited_once_with(method="PUT", path=f"/_xpack/ml/anomaly_detectors/{params['job-id']}", body=body)
 
 
 class TestDeleteMlJob:
@@ -3412,7 +3411,7 @@ class TestDeleteMlJob:
         await r(es, params)
 
         es.perform_request.assert_awaited_once_with(
-            "DELETE", f"/_xpack/ml/anomaly_detectors/{params['job-id']}", params={"force": "false", "ignore": 404}
+            method="DELETE", path=f"/_xpack/ml/anomaly_detectors/{params['job-id']}", params={"force": "false", "ignore": 404}
         )
 
 
@@ -3442,7 +3441,7 @@ class TestOpenMlJob:
         r = runner.OpenMlJob()
         await r(es, params)
 
-        es.perform_request.assert_awaited_once_with("POST", f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_open")
+        es.perform_request.assert_awaited_once_with(method="POST", path=f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_open")
 
 
 class TestCloseMlJob:
@@ -3477,8 +3476,8 @@ class TestCloseMlJob:
         await r(es, params)
 
         es.perform_request.assert_awaited_once_with(
-            "POST",
-            f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_close",
+            method="POST",
+            path=f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_close",
             params={"force": str(params["force"]).lower(), "timeout": params["timeout"]},
         )
 
@@ -3509,7 +3508,7 @@ class TestRawRequestRunner:
         params = {"path": "/_cat/count"}
         await r(es, params)
 
-        es.perform_request.assert_called_once_with(method="GET", url="/_cat/count", headers=None, body=None, params={})
+        es.perform_request.assert_called_once_with(method="GET", path="/_cat/count", headers=None, body=None, params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -3528,7 +3527,7 @@ class TestRawRequestRunner:
         await r(es, params)
 
         es.perform_request.assert_called_once_with(
-            method="DELETE", url="/twitter", headers=None, body=None, params={"ignore": [400, 404], "pretty": "true"}
+            method="DELETE", path="/twitter", headers=None, body=None, params={"ignore": [400, 404], "pretty": "true"}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -3551,7 +3550,7 @@ class TestRawRequestRunner:
         await r(es, params)
 
         es.perform_request.assert_called_once_with(
-            method="POST", url="/twitter", headers=None, body={"settings": {"index": {"number_of_replicas": 0}}}, params={}
+            method="POST", path="/twitter", headers=None, body={"settings": {"index": {"number_of_replicas": 0}}}, params={}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -3574,7 +3573,7 @@ class TestRawRequestRunner:
 
         es.perform_request.assert_called_once_with(
             method="GET",
-            url="/_msearch",
+            path="/_msearch",
             headers={"Content-Type": "application/x-ndjson"},
             body=[
                 {"index": "test"},
@@ -3607,7 +3606,7 @@ class TestRawRequestRunner:
 
         es.perform_request.assert_called_once_with(
             method="GET",
-            url="/_msearch",
+            path="/_msearch",
             headers={"Content-Type": "application/x-ndjson", "x-opaque-id": "test-id1"},
             body=[
                 {"index": "test"},
@@ -4965,7 +4964,7 @@ class TestSqlRunner:
 
         assert result == {"success": True, "weight": 1, "unit": "ops"}
 
-        es.perform_request.assert_awaited_once_with("POST", "/_sql", body=params["body"])
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_sql", body=params["body"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -4982,9 +4981,9 @@ class TestSqlRunner:
 
         es.perform_request.assert_has_calls(
             [
-                mock.call("POST", "/_sql", body=params["body"]),
-                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
-                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+                mock.call(method="POST", path="/_sql", body=params["body"]),
+                mock.call(method="POST", path="/_sql", body={"cursor": self.default_response["cursor"]}),
+                mock.call(method="POST", path="/_sql", body={"cursor": self.default_response["cursor"]}),
             ]
         )
 
@@ -5012,8 +5011,8 @@ class TestSqlRunner:
 
         es.perform_request.assert_has_calls(
             [
-                mock.call("POST", "/_sql", body=params["body"]),
-                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+                mock.call(method="POST", path="/_sql", body=params["body"]),
+                mock.call(method="POST", path="/_sql", body={"cursor": self.default_response["cursor"]}),
             ]
         )
 
@@ -5252,8 +5251,8 @@ class TestQueryWithSearchAfterScroll:
         es.perform_request.assert_has_awaits(
             [
                 mock.call(
-                    "GET",
-                    "/_search",
+                    method="GET",
+                    path="/_search",
                     params={},
                     body={
                         "query": {
@@ -5274,8 +5273,8 @@ class TestQueryWithSearchAfterScroll:
                     headers=None,
                 ),
                 mock.call(
-                    "GET",
-                    "/_search",
+                    method="GET",
+                    path="/_search",
                     params={},
                     body={
                         "query": {
@@ -5356,8 +5355,8 @@ class TestQueryWithSearchAfterScroll:
         es.perform_request.assert_has_awaits(
             [
                 mock.call(
-                    "GET",
-                    "/test-index-1/_search",
+                    method="GET",
+                    path="/test-index-1/_search",
                     params={},
                     body={
                         "query": {
@@ -5371,8 +5370,8 @@ class TestQueryWithSearchAfterScroll:
                     headers=None,
                 ),
                 mock.call(
-                    "GET",
-                    "/test-index-1/_search",
+                    method="GET",
+                    path="/test-index-1/_search",
                     params={},
                     body={
                         "query": {
@@ -5607,8 +5606,8 @@ class TestComposite:
 
         es.perform_request.assert_has_awaits(
             [
-                mock.call(method="GET", url="/", headers=None, body={}, params={}),
-                mock.call("GET", "/test/_search", params={}, body={"query": {"match_all": {}}}, headers=None),
+                mock.call(method="GET", path="/", headers=None, body={}, params={}),
+                mock.call(method="GET", path="/test/_search", params={}, body={"query": {"match_all": {}}}, headers=None),
             ]
         )
 
@@ -5667,8 +5666,8 @@ class TestComposite:
         es.perform_request.assert_has_awaits(
             [
                 mock.call(
-                    "GET",
-                    "/test/_search",
+                    method="GET",
+                    path="/test/_search",
                     params={},
                     body={
                         "query": {

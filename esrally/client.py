@@ -237,6 +237,7 @@ class EsClientFactory:
 
         class RallySyncElasticsearch(elasticsearch.Elasticsearch):
             def perform_request(self, *args, **kwargs):
+                kwargs["url"] = kwargs.pop("path")
                 return self.transport.perform_request(*args, **kwargs)
 
         return RallySyncElasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
@@ -285,6 +286,7 @@ class EsClientFactory:
 
         class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
             def perform_request(self, *args, **kwargs):
+                kwargs["url"] = kwargs.pop("path")
                 return self.transport.perform_request(*args, **kwargs)
 
         return RallyAsyncElasticsearch(

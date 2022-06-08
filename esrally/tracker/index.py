@@ -65,7 +65,7 @@ def extract_index_mapping_and_settings(client, index_pattern):
     results = {}
     logger = logging.getLogger(__name__)
     # the response might contain multiple indices if a wildcard was provided
-    response = client.indices.get(index_pattern)
+    response = client.indices.get(index=index_pattern)
     for index, details in response.items():
         valid, reason = is_valid(index)
         if valid:
