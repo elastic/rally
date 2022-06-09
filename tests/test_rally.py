@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from esrally import rally
 
 
@@ -12,7 +14,7 @@ from esrally import rally
         (False, "http://invalid", "info", False),
         (False, "http://github.com", "list", True),
         (False, "http://invalid", "list", True),
-    ]
+    ],
 )
 def test_ensure_internet_connection(offline, probing_url, subcommand, expected):
     args = MagicMock(offline=offline, subcommand=subcommand)
