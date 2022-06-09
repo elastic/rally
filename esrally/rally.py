@@ -906,18 +906,19 @@ def configure_reporting_params(args, cfg):
     cfg.add(config.Scope.applicationOverride, "reporting", "numbers.align", args.report_numbers_align)
 
 
-def ensure_internet_connection(args, cfg):
+def ensure_internet_connection(args, cfg, logger):
     if args.offline:
-        return
+        return True
     if args.subcommand in OFFLINE_SUBCOMMANDS:
         # no need for rally to be online
-        return
+        return True
     probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
-    logger = logging.getLogger(__name__)
-    if not net.has_internet_connection(probing_url):
+    if net.has_internet_connection(probing_url):
+        logger.info("Detected a working Internet connection.")
+        return True
+    else:
         console.warn("No Internet connection detected. Specify --offline to run without it.", logger=logger)
-        sys.exit(0)
-    logger.info("Detected a working Internet connection.")
+        return False
 
 
 def dispatch_sub_command(arg_parser, args, cfg):
@@ -1078,7 +1079,9 @@ def main():
     logger.debug("Command line arguments: %s", args)
     # Configure networking
     net.init()
-    ensure_internet_connection(args, cfg)
+
+    if not ensure_internet_connection(args, cfg, logger):
+        sys.exit(0)
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 
