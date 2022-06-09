@@ -15,5 +15,5 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from .factory import EsClientFactory, wait_for_rest_layer
 from .context import RequestContextHolder, RequestContextManager
+from .factory import EsClientFactory, wait_for_rest_layer
