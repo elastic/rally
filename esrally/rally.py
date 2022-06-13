@@ -1062,12 +1062,6 @@ def main():
     logger.debug("Command line arguments: %s", args)
     # Configure networking
     net.init()
-    if not args.offline:
-        probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
-        if not net.has_internet_connection(probing_url):
-            console.warn("No Internet connection detected. Specify --offline to run without it.", logger=logger)
-            sys.exit(0)
-        logger.info("Detected a working Internet connection.")
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 

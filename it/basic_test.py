@@ -37,7 +37,7 @@ def test_run_with_help(cfg):
 
 @it.rally_in_mem
 def test_run_without_http_connection(cfg):
-    cmd = it.esrally_command_line_for(cfg, "list races")
+    cmd = it.esrally_command_line_for(cfg, "list tracks")
     output = process.run_subprocess_with_output(cmd, {"http_proxy": "http://invalid"})
-    expected = "No Internet connection detected. Specify --offline"
+    expected = "[ERROR] Cannot list"
     assert expected in "\n".join(output)
