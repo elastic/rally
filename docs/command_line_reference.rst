@@ -115,7 +115,7 @@ This will show the path to the default distribution::
 
 This subcommand can be used to install a single Elasticsearch node. Example::
 
-    esrally install --quiet --distribution-version=8.1.0 --node-name="rally-node-0" --cluster-name=rally-benchmark --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
+    esrally install --quiet --distribution-version=7.4.2 --node-name="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
 
 This will output the id of this installation::
 
@@ -279,7 +279,18 @@ Used to specify the current node's name in the cluster when it is setup via the 
 
     This command line parameter is experimental. Expect the functionality and the command line interface to change significantly even in patch releases.
 
-Used to specify the cluster name of the current node when it is setup via the ``install`` subcommand.
+This parameter is useful in benchmarks involved multiple Elasticsearch clusters. It's used to configure the cluster name of the current Elasticsearch node when it is setup via the ``install`` or ``race`` subcommand. The following example setups two Elasticsearch clusters: ``cluster-1`` and ``cluster-2``, and each has two nodes::
+
+    # install node-1 in cluster-1
+    esrally install --quiet --distribution-version=8.2.2 --node-name="node-1" --cluster-name=cluster-1 --network-host="192.168.1.1" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
+    # install node-2 in cluster-1
+    esrally install --quiet --distribution-version=8.2.2 --node-name="node-2" --cluster-name=cluster-1 --network-host="192.168.1.2" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
+    # install node-3 in cluster-2
+    esrally install --quiet --distribution-version=8.2.2 --node-name="node-3" --cluster-name=cluster-2 --network-host="192.168.1.3" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
+    # install node-4 in cluster-2
+    esrally install --quiet --distribution-version=8.2.2 --node-name="node-4" --cluster-name=cluster-2 --network-host="192.168.1.4" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
+
+If the ``cluster-name`` parameter is not specified, Rally will use ``rally-benchmark`` as the default cluster name.
 
 ``network-host``
 ~~~~~~~~~~~~~~~~
