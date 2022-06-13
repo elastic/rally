@@ -25,7 +25,7 @@ In this section we will setup a single Elasticsearch node locally, run a benchma
 
 First we need to install Elasticearch::
 
-    esrally install --quiet --distribution-version=8.1.0 --node-name="rally-node-0" --cluster-name=rally-benchmark --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
+    esrally install --quiet --distribution-version=7.4.2 --node-name="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
 
 The parameter ``--network-host`` defines the network interface this node will bind to and ``--http-port`` defines which port will be exposed for HTTP traffic. Rally will automatically choose the transport port range as 100 above (39300). The parameters ``--master-nodes`` and ``--seed-hosts`` are necessary for the discovery process. Please see the respective Elasticsearch documentation on `discovery <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery.html>`_ for more details.
 
@@ -67,11 +67,11 @@ Levelling Up: Benchmarking a Cluster
 This approach of being able to manage individual cluster nodes shows its power when we want to setup a cluster consisting of multiple nodes. At the moment Rally only supports a uniform cluster architecture but with this approach we can also setup arbitrarily complex clusters. The following examples shows how to setup a uniform three node cluster on three machines with the IPs ``192.168.14.77``, ``192.168.14.78`` and ``192.168.14.79``. On each machine we will issue the following command (pick the right one per machine)::
 
     # on 192.168.14.77
-    export INSTALLATION_ID=$(esrally install --quiet --distribution-version=8.1.0 --node-name="rally-node-0" --cluster-name=rally-benchmark --network-host="192.168.14.77" --http-port=39200 --master-nodes="rally-node-0,rally-node-1,rally-node-2" --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300" | jq --raw-output '.["installation-id"]')
+    export INSTALLATION_ID=$(esrally install --quiet --distribution-version=7.4.2 --node-name="rally-node-0" --network-host="192.168.14.77" --http-port=39200 --master-nodes="rally-node-0,rally-node-1,rally-node-2" --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300" | jq --raw-output '.["installation-id"]')
     # on 192.168.14.78
-    export INSTALLATION_ID=$(esrally install --quiet --distribution-version=8.1.0 --node-name="rally-node-1" --cluster-name=rally-benchmark --network-host="192.168.14.78" --http-port=39200 --master-nodes="rally-node-0,rally-node-1,rally-node-2" --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300" | jq --raw-output '.["installation-id"]')
+    export INSTALLATION_ID=$(esrally install --quiet --distribution-version=7.4.2 --node-name="rally-node-1" --network-host="192.168.14.78" --http-port=39200 --master-nodes="rally-node-0,rally-node-1,rally-node-2" --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300" | jq --raw-output '.["installation-id"]')
     # on 192.168.14.79
-    export INSTALLATION_ID=$(esrally install --quiet --distribution-version=8.1.0 --node-name="rally-node-2" --cluster-name=rally-benchmark --network-host="192.168.14.79" --http-port=39200 --master-nodes="rally-node-0,rally-node-1,rally-node-2" --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300" | jq --raw-output '.["installation-id"]')
+    export INSTALLATION_ID=$(esrally install --quiet --distribution-version=7.4.2 --node-name="rally-node-2" --network-host="192.168.14.79" --http-port=39200 --master-nodes="rally-node-0,rally-node-1,rally-node-2" --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300" | jq --raw-output '.["installation-id"]')
 
 Then we pick a random race id, e.g. ``fb38013d-5d06-4b81-b81a-b61c8c10f6e5`` and set it on each machine (including the machine where will generate load)::
 
