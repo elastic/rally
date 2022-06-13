@@ -279,7 +279,7 @@ Used to specify the current node's name in the cluster when it is setup via the 
 
     This command line parameter is experimental. Expect the functionality and the command line interface to change significantly even in patch releases.
 
-This parameter is useful in benchmarks involved multiple Elasticsearch clusters. It's used to configure the cluster name of the current Elasticsearch node when it is setup via the ``install`` or ``race`` subcommand. The following example setups two Elasticsearch clusters: ``cluster-1`` and ``cluster-2``, and each has two nodes::
+This parameter is useful in benchmarks involved multiple Elasticsearch clusters. It's used to configure the cluster name of the current Elasticsearch node when it is setup via the ``install`` or ``race`` subcommand. The following example sets up two Elasticsearch clusters: ``cluster-1`` and ``cluster-2``, and each has two nodes::
 
     # install node-1 in cluster-1
     esrally install --quiet --distribution-version=8.2.2 --node-name="node-1" --cluster-name=cluster-1 --network-host="192.168.1.1" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
