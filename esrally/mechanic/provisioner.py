@@ -31,6 +31,7 @@ from esrally.utils import console, convert, io, process, versions
 
 def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    cluster_name = cfg.opts("mechanic", "cluster.name")
 
     node_root_dir = os.path.join(target_root, node_name)
 
@@ -38,7 +39,9 @@ def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target
     runtime_jdk = car.mandatory_var("runtime.jdk")
     _, java_home = java_resolver.java_home(runtime_jdk, cfg.opts("mechanic", "runtime.jdk"), runtime_jdk_bundled)
 
-    es_installer = ElasticsearchInstaller(car, java_home, node_name, node_root_dir, all_node_ips, all_node_names, ip, http_port)
+    es_installer = ElasticsearchInstaller(
+        car, java_home, node_name, cluster_name, node_root_dir, all_node_ips, all_node_names, ip, http_port
+    )
     plugin_installers = [PluginInstaller(plugin, java_home) for plugin in plugins]
 
     return BareProvisioner(es_installer, plugin_installers, distribution_version=distribution_version)
@@ -46,11 +49,12 @@ def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target
 
 def docker(cfg, car, ip, http_port, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
+    cluster_name = cfg.opts("mechanic", "cluster.name")
     rally_root = cfg.opts("node", "rally.root")
 
     node_root_dir = os.path.join(target_root, node_name)
 
-    return DockerProvisioner(car, node_name, ip, http_port, node_root_dir, distribution_version, rally_root)
+    return DockerProvisioner(car, node_name, cluster_name, ip, http_port, node_root_dir, distribution_version, rally_root)
 
 
 class NodeConfiguration:
@@ -250,6 +254,7 @@ class ElasticsearchInstaller:
         car,
         java_home,
         node_name,
+        cluster_name,
         node_root_dir,
         all_node_ips,
         all_node_names,
@@ -260,6 +265,7 @@ class ElasticsearchInstaller:
         self.car = car
         self.java_home = java_home
         self.node_name = node_name
+        self.cluster_name = cluster_name
         self.node_root_dir = node_root_dir
         self.install_dir = os.path.join(node_root_dir, "install")
         self.node_log_dir = os.path.join(node_root_dir, "logs", "server")
@@ -303,7 +309,7 @@ class ElasticsearchInstaller:
         network_host = self.node_ip
 
         defaults = {
-            "cluster_name": "rally-benchmark",
+            "cluster_name": self.cluster_name,
             "node_name": self.node_name,
             "data_paths": self.data_paths,
             "log_path": self.node_log_dir,
@@ -404,9 +410,10 @@ class PluginInstaller:
 
 
 class DockerProvisioner:
-    def __init__(self, car, node_name, ip, http_port, node_root_dir, distribution_version, rally_root):
+    def __init__(self, car, node_name, cluster_name, ip, http_port, node_root_dir, distribution_version, rally_root):
         self.car = car
         self.node_name = node_name
+        self.cluster_name = cluster_name
         self.node_ip = ip
         self.http_port = http_port
         self.node_root_dir = node_root_dir
@@ -420,7 +427,7 @@ class DockerProvisioner:
         self.logger = logging.getLogger(__name__)
 
         provisioner_defaults = {
-            "cluster_name": "rally-benchmark",
+            "cluster_name": self.cluster_name,
             "node_name": self.node_name,
             # we bind-mount the directories below on the host to these ones.
             "install_root_path": "/usr/share/elasticsearch",
