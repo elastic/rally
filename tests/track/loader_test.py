@@ -3019,6 +3019,131 @@ class TestTrackSpecificationReader:
         }
         assert len(resulting_track.challenges) == 0
 
+    def test_parse_valid_track_specification_with_composable_template_path(self):
+        track_specification = {
+            "description": "description for unit test",
+            "composable-templates": [
+                {
+                    "name": "my-index-template",
+                    "index-pattern": "*",
+                    "template": "default-template.json",
+                    "template-path": "index_template",
+                },
+            ],
+            "component-templates": [
+                {
+                    "name": "my-component-template-1",
+                    "template": "component-template-1.json",
+                    "template-path": "component_template",
+                },
+                {
+                    "name": "my-component-template-2",
+                    "template": "component-template-2.json",
+                    "template-path": "component_template",
+                },
+            ],
+            "operations": [],
+            "challenges": [],
+        }
+        complete_track_params = loader.CompleteTrackParams()
+        reader = loader.TrackSpecificationReader(
+            track_params={"index_pattern": "logs-*", "number_of_replicas": 1},
+            complete_track_params=complete_track_params,
+            source=io.DictStringFileSourceFactory(
+                {
+                    "/mappings/default-template.json": [
+                        """
+                        {
+                            "index_template": {
+                                "index_patterns": [ "{{index_pattern}}"],
+                                "template": {
+                                    "settings": {
+                                        "number_of_shards": {{ number_of_shards | default(1) }}
+                                    }
+                                },
+                                "composed_of": ["my-component-template-1", "my-component-template-2"]
+                            }
+                        }
+                        """
+                    ],
+                    "/mappings/component-template-1.json": [
+                        """
+                        {
+                            "component_template": {
+                                "template": {
+                                    "settings": {
+                                      "index.number_of_shards": 2
+                                    }
+                                }
+                            }
+                        }
+                        """
+                    ],
+                    "/mappings/component-template-2.json": [
+                        """
+                        {
+                            "component_template": {
+                            "template": {
+                                "settings": {
+                                  "index.number_of_replicas": {{ number_of_replicas }}
+                                },
+                                "mappings": {
+                                  "properties": {
+                                    "@timestamp": {
+                                      "type": "date"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                        }
+                        """
+                    ],
+                }
+            ),
+        )
+        resulting_track = reader("unittest", track_specification, "/mappings")
+        assert ["index_pattern", "number_of_replicas", "number_of_shards"] == complete_track_params.sorted_track_defined_params
+        assert resulting_track.name == "unittest"
+        assert resulting_track.description == "description for unit test"
+        assert len(resulting_track.indices) == 0
+        assert len(resulting_track.composable_templates) == 1
+        assert len(resulting_track.component_templates) == 2
+        assert resulting_track.composable_templates[0].name == "my-index-template"
+        assert resulting_track.composable_templates[0].pattern == "*"
+        assert resulting_track.component_templates[0].name == "my-component-template-1"
+        assert resulting_track.component_templates[1].name == "my-component-template-2"
+        assert resulting_track.composable_templates[0].content == {
+            "index_patterns": ["logs-*"],
+            "template": {
+                "settings": {
+                    "number_of_shards": 1,
+                },
+            },
+            "composed_of": [
+                "my-component-template-1",
+                "my-component-template-2",
+            ],
+        }
+        assert resulting_track.component_templates[0].content == {
+            "template": {
+                "settings": {
+                    "index.number_of_shards": 2,
+                },
+            },
+        }
+        assert resulting_track.component_templates[1].content == {
+            "template": {
+                "settings": {"index.number_of_replicas": 1},
+                "mappings": {
+                    "properties": {
+                        "@timestamp": {"type": "date"},
+                    },
+                },
+            },
+        }
+        assert len(resulting_track.challenges) == 0
+
     def test_parse_invalid_track_specification_with_composable_template(self):
         track_specification = {
             "description": "description for unit test",

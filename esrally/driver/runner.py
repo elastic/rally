@@ -57,6 +57,7 @@ def register_default_runners():
     register_runner(track.OperationType.OpenPointInTime, OpenPointInTime(), async_runner=True)
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
+    register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -949,8 +950,12 @@ class Query(Runner):
                         took = props.get("took", 0)
                         all_results_collected = (size is not None and hits < size) or hits == 0
                     else:
-                        r = await es.transport.perform_request(
-                            "GET", "/_search/scroll", body={"scroll_id": scroll_id, "scroll": "10s"}, params=request_params, headers=headers
+                        r = await es.perform_request(
+                            method="GET",
+                            path="/_search/scroll",
+                            body={"scroll_id": scroll_id, "scroll": "10s"},
+                            params=request_params,
+                            headers=headers,
                         )
                         props = parse(r, ["timed_out", "took"], ["hits.hits"])
                         timed_out = timed_out or props.get("timed_out", False)
@@ -1006,7 +1011,7 @@ class Query(Runner):
             components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
-        return await es.transport.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
+        return await es.perform_request(method="GET", path="/" + path, params=params, body=body, headers=headers)
 
     def _query_headers(self, params):
         # reduces overhead due to decompression of very large responses
@@ -1178,7 +1183,7 @@ class CreateDataStream(Runner):
         data_streams = mandatory(params, "data-streams", self)
         request_params = mandatory(params, "request-params", self)
         for data_stream in data_streams:
-            await es.indices.create_data_stream(data_stream, params=request_params)
+            await es.indices.create_data_stream(name=data_stream, params=request_params)
         return {
             "weight": len(data_streams),
             "unit": "ops",
@@ -1253,11 +1258,11 @@ class DeleteDataStream(Runner):
 
         for data_stream in data_streams:
             if not only_if_exists:
-                await es.indices.delete_data_stream(data_stream, ignore=[404], params=request_params)
+                await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
                 ops += 1
             elif only_if_exists and await es.indices.exists(index=data_stream):
                 self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
-                await es.indices.delete_data_stream(data_stream, params=request_params)
+                await es.indices.delete_data_stream(name=data_stream, params=request_params)
                 ops += 1
 
         return {
@@ -1302,19 +1307,12 @@ class DeleteComponentTemplate(Runner):
         only_if_exists = mandatory(params, "only-if-exists", self)
         request_params = mandatory(params, "request-params", self)
 
-        async def _exists(name):
-            # pylint: disable=import-outside-toplevel
-            from elasticsearch.client import _make_path
-
-            # currently not supported by client and hence custom request
-            return await es.transport.perform_request("HEAD", _make_path("_component_template", name))
-
         ops_count = 0
         for template_name in template_names:
             if not only_if_exists:
                 await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await _exists(template_name):
+            elif only_if_exists and await es.cluster.exists_component_template(name=template_name):
                 self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
                 await es.cluster.delete_component_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1364,7 +1362,7 @@ class DeleteComposableTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_index_template(template_name):
+            elif only_if_exists and await es.indices.exists_index_template(name=template_name):
                 self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_index_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1419,7 +1417,7 @@ class DeleteIndexTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_template(template_name):
+            elif only_if_exists and await es.indices.exists_template(name=template_name):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1460,7 +1458,7 @@ class ShrinkIndex(Runner):
 
     async def __call__(self, es, params):
         source_index = mandatory(params, "source-index", self)
-        source_indices_get = await es.indices.get(source_index)
+        source_indices_get = await es.indices.get(index=source_index)
         source_indices = list(source_indices_get.keys())
         source_indices_stem = commonprefix(source_indices)
 
@@ -1532,13 +1530,13 @@ class CreateMlDatafeed(Runner):
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
         try:
-            await es.xpack.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
+            await es.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
         except elasticsearch.TransportError as e:
             # fallback to old path
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "PUT",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}",
+                await es.perform_request(
+                    method="PUT",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
                     body=body,
                 )
             else:
@@ -1561,13 +1559,13 @@ class DeleteMlDatafeed(Runner):
         force = params.get("force", False)
         try:
             # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
-            await es.xpack.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
+            await es.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "DELETE",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}",
+                await es.perform_request(
+                    method="DELETE",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
                     params={"force": escape(force), "ignore": 404},
                 )
             else:
@@ -1592,13 +1590,13 @@ class StartMlDatafeed(Runner):
         end = params.get("end")
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
+            await es.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "POST",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
                     body=body,
                 )
             else:
@@ -1621,7 +1619,7 @@ class StopMlDatafeed(Runner):
         force = params.get("force", False)
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
+            await es.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1630,7 +1628,11 @@ class StopMlDatafeed(Runner):
                 }
                 if timeout:
                     request_params["timeout"] = escape(timeout)
-                await es.transport.perform_request("POST", f"/_xpack/ml/datafeeds/{datafeed_id}/_stop", params=request_params)
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
+                    params=request_params,
+                )
             else:
                 raise e
 
@@ -1650,13 +1652,13 @@ class CreateMlJob(Runner):
         job_id = mandatory(params, "job-id", self)
         body = mandatory(params, "body", self)
         try:
-            await es.xpack.ml.put_job(job_id=job_id, body=body)
+            await es.ml.put_job(job_id=job_id, body=body)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "PUT",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}",
+                await es.perform_request(
+                    method="PUT",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
                     body=body,
                 )
             else:
@@ -1679,13 +1681,13 @@ class DeleteMlJob(Runner):
         force = params.get("force", False)
         # we don't want to fail if a job does not exist, thus we ignore 404s.
         try:
-            await es.xpack.ml.delete_job(job_id=job_id, force=force, ignore=[404])
+            await es.ml.delete_job(job_id=job_id, force=force, ignore=[404])
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "DELETE",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}",
+                await es.perform_request(
+                    method="DELETE",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
                     params={"force": escape(force), "ignore": 404},
                 )
             else:
@@ -1706,13 +1708,13 @@ class OpenMlJob(Runner):
 
         job_id = mandatory(params, "job-id", self)
         try:
-            await es.xpack.ml.open_job(job_id=job_id)
+            await es.ml.open_job(job_id=job_id)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "POST",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
                 )
             else:
                 raise e
@@ -1734,7 +1736,7 @@ class CloseMlJob(Runner):
         force = params.get("force", False)
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.close_job(job_id=job_id, force=force, timeout=timeout)
+            await es.ml.close_job(job_id=job_id, force=force, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1744,9 +1746,9 @@ class CloseMlJob(Runner):
                 if timeout:
                     request_params["timeout"] = escape(timeout)
 
-                await es.transport.perform_request(
-                    "POST",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
                     params=request_params,
                 )
             else:
@@ -1769,8 +1771,8 @@ class RawRequest(Runner):
             # counter-intuitive, but preserves prior behavior
             headers = None
 
-        await es.transport.perform_request(
-            method=params.get("method", "GET"), url=path, headers=headers, body=params.get("body"), params=request_params
+        await es.perform_request(
+            method=params.get("method", "GET"), path=path, headers=headers, body=params.get("body"), params=request_params
         )
 
     def __repr__(self, *args, **kwargs):
@@ -2343,6 +2345,7 @@ class Composite(Runner):
             "submit-async-search",
             "get-async-search",
             "delete-async-search",
+            "field-caps",
         ]
 
     async def run_stream(self, es, stream, connection_limit):
@@ -2460,7 +2463,7 @@ class Sql(Runner):
 
         es.return_raw_response()
 
-        r = await es.transport.perform_request("POST", "/_sql", body=body)
+        r = await es.perform_request(method="POST", path="/_sql", body=body)
         pages -= 1
         weight = 1
 
@@ -2472,7 +2475,7 @@ class Sql(Runner):
                     "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
                 )
 
-            r = await es.transport.perform_request("POST", "/_sql", body={"cursor": cursor})
+            r = await es.perform_request(method="POST", path="/_sql", body={"cursor": cursor})
             pages -= 1
             weight += 1
 
@@ -2480,6 +2483,28 @@ class Sql(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "sql"
+
+
+class FieldCaps(Runner):
+    """
+    Retrieve `the capabilities of fields among indices.
+    <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-field-caps.html>` _.
+    """
+
+    async def __call__(self, es, params):
+        index = params.get("index", "_all")
+        fields = params.get("fields", "*")
+        body = params.get("body", {})
+        index_filter = params.get("index_filter")
+        if index_filter:
+            body["index_filter"] = index_filter
+        request_params = params.get("request-params")
+        await es.field_caps(index=index, body=body, fields=fields, params=request_params)
+
+        return {"weight": 1, "unit": "ops", "success": True}
+
+    def __repr__(self, *args, **kwargs):
+        return "field-caps"
 
 
 class RequestTiming(Runner, Delegator):

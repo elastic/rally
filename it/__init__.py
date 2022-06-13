@@ -21,6 +21,7 @@ import json
 import os
 import random
 import socket
+import subprocess
 import time
 
 import pytest
@@ -79,7 +80,7 @@ def esrally(cfg, command_line):
     This method should be used for rally invocations of the all commands besides race.
     These commands may have different CLI options than race.
     """
-    return os.system(esrally_command_line_for(cfg, command_line))
+    return subprocess.call(esrally_command_line_for(cfg, command_line), shell=True)
 
 
 def race(cfg, command_line):
@@ -98,7 +99,7 @@ def shell_cmd(command_line):
     :return: (int) the exit code
     """
 
-    return os.system(command_line)
+    return subprocess.call(command_line, shell=True)
 
 
 def command_in_docker(command_line, python_version):

@@ -14,3 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+import elasticsearch
+
+
+class RallySyncElasticsearch(elasticsearch.Elasticsearch):
+    def perform_request(self, *args, **kwargs):
+        kwargs["url"] = kwargs.pop("path")
+        return self.transport.perform_request(*args, **kwargs)

@@ -51,6 +51,7 @@ install_requires = [
     #   urllib3: MIT
     #   aiohttp: Apache 2.0
     "elasticsearch[async]==7.14.0",
+    "urllib3==1.26.9",
     # License: BSD
     "psutil==5.8.0",
     # License: MIT
@@ -88,7 +89,7 @@ s3_require = [
     #   botocore: Apache 2.0
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
-    "boto3==1.10.32",
+    "boto3==1.18.46",
 ]
 
 tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-asyncio==0.18.1"]
@@ -104,6 +105,8 @@ develop_require = [
     "pylint==2.6.0",
     "black==22.3.0",
     "isort==5.8.0",
+    "trustme==0.9.0",
+    "pytest-httpserver==1.0.4",
 ]
 
 python_version_classifiers = ["Programming Language :: Python :: {}.{}".format(major, minor) for major, minor in supported_python_versions]

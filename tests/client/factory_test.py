@@ -16,6 +16,7 @@
 # under the License.
 
 import asyncio
+import contextlib
 import logging
 import os
 import random
@@ -25,19 +26,20 @@ from unittest import mock
 
 import elasticsearch
 import pytest
+import trustme
 import urllib3.exceptions
+from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
-from esrally.async_connection import AIOHttpConnection
+from esrally.client.asynchronous import AIOHttpConnection
 from esrally.utils import console
-from tests import run_async
 
 
 class TestEsClientFactory:
     cwd = os.path.dirname(__file__)
 
     def test_create_http_connection(self):
-        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        hosts = [{"host": "localhost", "port": 9200}]
         client_options = {}
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = dict(client_options)
@@ -53,7 +55,7 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_verify_server(self, mocked_load_cert_chain):
-        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        hosts = [{"host": "localhost", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
@@ -62,7 +64,7 @@ class TestEsClientFactory:
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.factory")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -91,19 +93,19 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_verify_self_signed_server_and_client_certificate(self, mocked_load_cert_chain):
-        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        hosts = [{"host": "localhost", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
             "http_auth": ("user", "password"),
-            "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
-            "client_cert": os.path.join(self.cwd, "utils/resources/certs/client.crt"),
-            "client_key": os.path.join(self.cwd, "utils/resources/certs/client.key"),
+            "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
+            "client_cert": os.path.join(self.cwd, "../utils/resources/certs/client.crt"),
+            "client_key": os.path.join(self.cwd, "../utils/resources/certs/client.key"),
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.factory")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -135,17 +137,17 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_only_verify_self_signed_server_certificate(self, mocked_load_cert_chain):
-        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        hosts = [{"host": "localhost", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
             "http_auth": ("user", "password"),
-            "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
+            "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.factory")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -172,15 +174,15 @@ class TestEsClientFactory:
         assert client_options == original_client_options
 
     def test_raises_error_when_only_one_of_client_cert_and_client_key_defined(self):
-        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        hosts = [{"host": "localhost", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
             "http_auth": ("user", "password"),
-            "ca_certs": os.path.join(self.cwd, "utils/resources/certs/ca.crt"),
+            "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
         }
 
-        client_ssl_options = {"client_cert": "utils/resources/certs/client.crt", "client_key": "utils/resources/certs/client.key"}
+        client_ssl_options = {"client_cert": "../utils/resources/certs/client.crt", "client_key": "../utils/resources/certs/client.key"}
 
         random_client_ssl_option = random.choice(list(client_ssl_options.keys()))
         missing_client_ssl_option = list(set(client_ssl_options) - set([random_client_ssl_option]))[0]
@@ -206,7 +208,7 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_unverified_certificate(self, mocked_load_cert_chain):
-        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        hosts = [{"host": "localhost", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": False,
@@ -216,7 +218,7 @@ class TestEsClientFactory:
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = dict(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.factory")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -246,18 +248,18 @@ class TestEsClientFactory:
 
     @mock.patch.object(ssl.SSLContext, "load_cert_chain")
     def test_create_https_connection_unverified_certificate_present_client_certificates(self, mocked_load_cert_chain):
-        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        hosts = [{"host": "localhost", "port": 9200}]
         client_options = {
             "use_ssl": True,
             "verify_certs": False,
             "http_auth": ("user", "password"),
-            "client_cert": os.path.join(self.cwd, "utils/resources/certs/client.crt"),
-            "client_key": os.path.join(self.cwd, "utils/resources/certs/client.key"),
+            "client_cert": os.path.join(self.cwd, "../utils/resources/certs/client.crt"),
+            "client_key": os.path.join(self.cwd, "../utils/resources/certs/client.key"),
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
 
-        logger = logging.getLogger("esrally.client")
+        logger = logging.getLogger("esrally.client.factory")
         with mock.patch.object(logger, "info") as mocked_info_logger:
             f = client.EsClientFactory(hosts, client_options)
         mocked_info_logger.assert_has_calls(
@@ -288,9 +290,110 @@ class TestEsClientFactory:
 
         assert client_options == original_client_options
 
+    def test_raises_error_when_verify_ssl_with_mixed_hosts(self):
+        hosts = [{"host": "127.0.0.1", "port": 9200}, {"host": "localhost", "port": 9200}]
+        client_options = {
+            "use_ssl": True,
+            "verify_certs": True,
+            "http_auth": ("user", "password"),
+        }
+
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match="Cannot verify certs with mixed IP addresses and hostnames",
+        ):
+            client.EsClientFactory(hosts, client_options)
+
+    def test_check_hostname_false_when_host_is_ip(self):
+        hosts = [{"host": "127.0.0.1", "port": 9200}]
+        client_options = {
+            "use_ssl": True,
+            "verify_certs": True,
+            "http_auth": ("user", "password"),
+        }
+
+        f = client.EsClientFactory(hosts, client_options)
+        assert f.hosts == hosts
+        assert f.ssl_context.check_hostname is False
+        assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
+
+
+@contextlib.contextmanager
+def _build_server(tmpdir, host):
+    ca = trustme.CA()
+    ca_cert_path = str(tmpdir / "ca.pem")
+    ca.cert_pem.write_to_path(ca_cert_path)
+
+    server_cert = ca.issue_cert(host)
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    server_crt = server_cert.cert_chain_pems[0]
+    server_key = server_cert.private_key_pem
+    with server_crt.tempfile() as crt_file, server_key.tempfile() as key_file:
+        context.load_cert_chain(crt_file, key_file)
+
+    server = HTTPServer(ssl_context=context)
+    # Fake what the client expects from Elasticsearch
+    server.expect_request("/").respond_with_json(
+        headers={
+            "x-elastic-product": "Elasticsearch",
+        },
+        response_json={
+            "version": {
+                "number": "8.0.0",
+            }
+        },
+    )
+    server.start()
+
+    yield server, ca, ca_cert_path
+
+    server.clear()
+    if server.is_running():
+        server.stop()
+
+
+class TestEsClientAgainstHTTPSServer:
+    def test_ip_address(self, tmp_path_factory: pytest.TempPathFactory):
+        tmpdir = tmp_path_factory.mktemp("certs")
+        with _build_server(tmpdir, "127.0.0.1") as cfg:
+            server, _ca, ca_cert_path = cfg
+            hosts = [{"host": "127.0.0.1", "port": server.port}]
+            client_options = {
+                "use_ssl": True,
+                "verify_certs": True,
+                "ca_certs": ca_cert_path,
+            }
+            f = client.EsClientFactory(hosts, client_options)
+            es = f.create()
+            assert es.info() == {"version": {"number": "8.0.0"}}
+
+    def test_client_cert(self, tmp_path_factory: pytest.TempPathFactory):
+        tmpdir = tmp_path_factory.mktemp("certs")
+        with _build_server(tmpdir, "localhost") as cfg:
+            server, ca, ca_cert_path = cfg
+            client_cert = ca.issue_cert("localhost")
+            client_cert_path = str(tmpdir / "client.pem")
+            client_key_path = str(tmpdir / "client.key")
+            client_cert.cert_chain_pems[0].write_to_path(client_cert_path)
+            client_cert.private_key_pem.write_to_path(client_key_path)
+
+            hosts = [
+                {"host": "localhost", "port": server.port},
+            ]
+            client_options = {
+                "use_ssl": True,
+                "verify_certs": True,
+                "ca_certs": ca_cert_path,
+                "client_cert": client_cert_path,
+                "client_key": client_key_path,
+            }
+            f = client.EsClientFactory(hosts, client_options)
+            es = f.create()
+            assert es.info() == {"version": {"number": "8.0.0"}}
+
 
 class TestRequestContextManager:
-    @run_async
+    @pytest.mark.asyncio
     async def test_propagates_nested_context(self):
         test_client = client.RequestContextHolder()
         async with test_client.new_request_context() as top_level_ctx:
@@ -353,7 +456,7 @@ class TestRestLayer:
 
 
 class TestAsyncConnection:
-    @run_async
+    @pytest.mark.asyncio
     async def test_enable_cleanup_close(self):
         connection = AIOHttpConnection()
         # pylint: disable=protected-access
