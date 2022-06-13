@@ -400,11 +400,12 @@ def create_arg_parser():
         help="A comma-separated list of the initial seed host IPs",
         default="",
     )
-    install_parser.add_argument(
-        "--cluster-name",
-        help="The name of this Elasticsearch cluster",
-        default="rally-benchmark",
-    )
+    for p in [race_parser, install_parser]:
+        p.add_argument(
+            "--cluster-name",
+            help="The name of this Elasticsearch cluster",
+            default="rally-benchmark",
+        )
 
     start_parser = subparsers.add_parser("start", help="Starts an Elasticsearch node locally")
     start_parser.add_argument(
@@ -534,11 +535,6 @@ def create_arg_parser():
         "--plugin-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables.",
         default="",
-    )
-    race_parser.add_argument(
-        "--cluster-name",
-        help="The name of this Elasticsearch cluster",
-        default="rally-benchmark",
     )
     race_parser.add_argument(
         "--target-hosts",
