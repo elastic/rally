@@ -89,4 +89,4 @@ def test_authenticated_proxy_user_can_connect(cfg, http_proxy, fresh_log_file):
     env = dict(os.environ)
     env["http_proxy"] = http_proxy.authenticated_url
     assert process.run_subprocess_with_logging(it.esrally_command_line_for(cfg, "list tracks"), env=env) == 0
-    assert_log_line_present(fresh_log_file, f"[INFO] SUCCESS")
+    assert_log_line_present(fresh_log_file, "[INFO] SUCCESS")
