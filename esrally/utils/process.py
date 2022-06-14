@@ -28,14 +28,10 @@ def run_subprocess(command_line):
     return subprocess.call(command_line, shell=True)
 
 
-def run_subprocess_with_output(command_line, env_vars=None):
+def run_subprocess_with_output(command_line, env=None):
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
-    env = None
-    if env_vars:
-        env = os.environ.copy()
-        env.update(env_vars)
     with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
         has_output = True
         lines = []
