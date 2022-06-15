@@ -553,6 +553,7 @@ class Driver:
         self.target = target
         self.config = config
         self.es_client_factory = es_client_factory_class
+        self.default_sync_es_client = None
         self.track = None
         self.challenge = None
         self.metrics_store = None
@@ -647,6 +648,7 @@ class Driver:
         )
 
         es_clients = self.create_es_clients()
+        self.default_sync_es_client = es_clients["default"]
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
