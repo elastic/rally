@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import json
 import logging
 import random
 import shlex
@@ -100,6 +100,33 @@ def test_cluster():
     cluster.start(race_id=race_id)
     yield cluster
     cluster.stop()
+
+
+@it.random_rally_config
+def test_multi_target_hosts(cfg, test_cluster):
+    hosts = ["127.0.0.1:{}".format(test_cluster.http_port)]
+    target_hosts = {
+        "remote": hosts,
+        "default": hosts,
+    }
+    client_options = {
+        "default": {"max_connections": 50},
+        "remote": {"max_connections": 100},
+    }
+
+    def race_params():
+        target_hosts_str = json.dumps(json.dumps(target_hosts))
+        client_options_str = json.dumps(json.dumps(client_options))
+        return (
+            f"--test-mode --pipeline=benchmark-only --track=geonames "
+            f"--target-hosts={target_hosts_str} "
+            f"--client-options={client_options_str} "
+        )
+
+    assert it.race(cfg, race_params()) == 0
+
+    target_hosts["extra_cluster"] = [hosts]
+    assert it.race(cfg, race_params()) != 0
 
 
 @it.random_rally_config
