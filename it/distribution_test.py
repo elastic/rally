@@ -128,6 +128,7 @@ def test_multi_target_hosts(cfg, test_cluster):
     target_hosts["extra_cluster"] = [hosts]
     assert it.race(cfg, generate_cmd()) != 0
 
+
 @it.random_rally_config
 def test_eventdata_frozen(cfg, test_cluster):
     challenges = ["frozen-data-generation", "frozen-querying"]
