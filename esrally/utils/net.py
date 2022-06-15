@@ -32,7 +32,11 @@ __HTTPS = None
 
 
 def __proxy_manager_from_env(env_var, logger):
-    proxy_url = os.getenv(env_var.lower()) or os.getenv(env_var.upper())
+    proxy_url = os.getenv(env_var.lower())
+    if not env_var == "http_proxy":
+        # http_proxy can only be lowercase
+        # see https://curl.se/mail/archive-2001-12/0034.html
+        proxy_url = os.getenv(env_var.upper())
     if not proxy_url:
         env_var = "all_proxy"
         proxy_url = os.getenv(env_var) or os.getenv(env_var.upper())
