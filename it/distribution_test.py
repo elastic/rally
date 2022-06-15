@@ -110,11 +110,11 @@ def test_multi_target_hosts(cfg, test_cluster):
         "default": hosts,
     }
     client_options = {
-        "default": {"timeout": random.choice([60, 120])},
-        "remote": {"timeout": random.choice([60, 120])},
+        "default": {"max_connections": 50},
+        "remote": {"max_connections": 100},
     }
 
-    def generate_cmd():
+    def race_params():
         target_hosts_str = json.dumps(json.dumps(target_hosts))
         client_options_str = json.dumps(json.dumps(client_options))
         return (
@@ -123,10 +123,10 @@ def test_multi_target_hosts(cfg, test_cluster):
             f"--client-options=${client_options_str} "
         )
 
-    assert it.race(cfg, generate_cmd()) == 0
+    assert it.race(cfg, race_params()) == 0
 
     target_hosts["extra_cluster"] = [hosts]
-    assert it.race(cfg, generate_cmd()) != 0
+    assert it.race(cfg, race_params()) != 0
 
 
 @it.random_rally_config
