@@ -23,7 +23,7 @@ import urllib3
 from urllib3.connection import is_ipaddress
 
 from esrally import doc_link, exceptions
-from esrally.utils import console, convert
+from esrally.utils import console, convert, versions
 
 
 class EsClientFactory:
@@ -238,3 +238,76 @@ def wait_for_rest_layer(es, max_attempts=40):
                 logger.warning("Got unexpected status code [%s] on attempt [%s].", e.status_code, attempt)
                 raise e
     return False
+
+
+def create_api_key(es, client_id, max_attempts=5):
+    """
+    Creates an API key for the provided ``client_id``.
+
+    :param es: Elasticsearch client to use for connecting.
+    :param client_id: ID of the client for which the API key is being created.
+    :param max_attempts: The maximum number of attempts to create the API key.
+    :return: A dict with at least the following keys: ``id``, ``name``, ``api_key``.
+    """
+    logger = logging.getLogger(__name__)
+
+    for attempt in range(1, max_attempts + 1):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            api_key = es.security.create_api_key({"name": f"rally-client-{client_id}"})
+            return api_key
+        except elasticsearch.TransportError as e:
+            logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
+            time.sleep(1)
+
+
+def delete_api_keys(es, ids, max_attempts=5):
+    """
+    Deletes the provided list of API key IDs.
+
+    :param es: Elasticsearch client to use for connecting.
+    :param ids: List of API key IDs to delete.
+    :param max_attempts: The maximum number of attempts to delete the API keys.
+    :return: True iff all provided key IDs were successfully deleted.
+    """
+    logger = logging.getLogger(__name__)
+
+    # Before ES 7.10, deleting API keys by ID had to be done individually.
+    # After ES 7.10, a list of API key IDs can be deleted in one request.
+    current_version = versions.Version.from_string(es.info()["version"]["number"])
+    minimum_version = versions.Version.from_string("7.10.0")
+
+    def legacy_delete(es, ids):
+        while ids:
+            es.security.invalidate_api_key({"id": ids[0]})
+            ids.pop(0)
+
+    def delete(es, ids):
+        es.security.invalidate_api_key({"ids": ids})
+
+    if current_version >= minimum_version:
+        func = delete
+    else:
+        func = legacy_delete
+
+    for attempt in range(max_attempts + 1):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            func(es, ids)
+            return True
+        except elasticsearch.TransportError as e:
+            if attempt < max_attempts:
+                logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
+                time.sleep(1)
+            else:
+                raise exceptions.RallyError(f"Could not delete API keys with the following IDs: {ids}") from e
+        except BaseException as e:
+            if attempt < max_attempts:
+                logger.debug("Got error on attempt [%s] of [%s]. Sleeping...", attempt, max_attempts)
+                time.sleep(1)
+            else:
+                raise exceptions.RallyError(f"Could not delete API keys with the following IDs: {ids}") from e
