@@ -32,7 +32,7 @@ import urllib3.exceptions
 from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
-from esrally.client.asynchronous import AIOHttpConnection
+from esrally.client.asynchronous import AIOHttpConnection, VerifiedAsyncTransport
 from esrally.utils import console
 
 
@@ -317,6 +317,36 @@ class TestEsClientFactory:
         assert f.hosts == hosts
         assert f.ssl_context.check_hostname is False
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
+
+    @mock.patch("esrally.client.asynchronous.RallyAsyncElasticsearch")
+    def test_create_async_client_with_api_key_auth_override(self, es):
+        hosts = [{"host": "localhost", "port": 9200}]
+        client_options = {
+            "use_ssl": True,
+            "verify_certs": True,
+            "http_auth": ("user", "password"),
+        }
+        # make a copy so we can verify later that the factory did not modify it
+        original_client_options = deepcopy(client_options)
+        api_key = ("id", "secret")
+
+        f = client.EsClientFactory(hosts, client_options)
+
+        assert f.create_async(api_key=api_key)
+        assert "http_auth" not in f.client_options
+        assert f.client_options["api_key"] == api_key
+        assert client_options == original_client_options
+
+        es.assert_called_once_with(
+            hosts=hosts,
+            transport_class=VerifiedAsyncTransport,
+            connection_class=AIOHttpConnection,
+            ssl_context=f.ssl_context,
+            scheme="https",
+            serializer=f.client_options["serializer"],
+            trace_config=f.client_options["trace_config"],
+            api_key=api_key,
+        )
 
 
 @contextlib.contextmanager

@@ -107,6 +107,30 @@ class EsClientFactory:
             self.logger.info("SSL support: off")
             self.client_options["scheme"] = "http"
 
+        if self._is_set(self.client_options, "create_api_key_per_client"):
+            basic_auth_user = self.client_options.get("basic_auth_user", False)
+            basic_auth_password = self.client_options.get("basic_auth_password", False)
+            provided_auth = {"basic_auth_user": basic_auth_user, "basic_auth_password": basic_auth_password}
+            missing_auth = [k for k, v in provided_auth.items() if not v]
+            if missing_auth:
+                console.println(
+                    (
+                        "Basic auth credentials are required in order to create API keys.\n"
+                        f"Missing basic auth client options are: {missing_auth}\n"
+                        f"Read the documentation at {console.format.link(doc_link('command_line_reference.html#client-options'))}"
+                    )
+                )
+                raise exceptions.SystemSetupError(
+                    (
+                        "You must provide the 'basic_auth_user' and 'basic_auth_password' client options in addition "
+                        "to 'create_api_key_per_client' in order to create client API keys."
+                    )
+                )
+            else:
+                self.logger.info("Automatic creation of client API keys: on")
+        else:
+            self.logger.info("Automatic creation of client API keys: off")
+
         if self._is_set(self.client_options, "basic_auth_user") and self._is_set(self.client_options, "basic_auth_password"):
             self.logger.info("HTTP basic authentication: on")
             self.client_options["http_auth"] = (self.client_options.pop("basic_auth_user"), self.client_options.pop("basic_auth_password"))
@@ -153,7 +177,7 @@ class EsClientFactory:
 
         return RallySyncElasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
-    def create_async(self):
+    def create_async(self, api_key=None):
         # pylint: disable=import-outside-toplevel
         import io
 
@@ -189,6 +213,10 @@ class EsClientFactory:
         # override the builtin JSON serializer
         self.client_options["serializer"] = LazyJSONSerializer()
         self.client_options["trace_config"] = trace_config
+
+        if api_key is not None:
+            self.client_options.pop("http_auth")
+            self.client_options["api_key"] = api_key
 
         return RallyAsyncElasticsearch(
             hosts=self.hosts,
