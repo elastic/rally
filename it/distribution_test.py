@@ -108,8 +108,7 @@ def test_multi_target_hosts(cfg, test_cluster):
     client_options = '{{"default": {"max_connections": 50}, "remote": {"max_connections": 100}}}'
 
     race_params = (
-        f"--test-mode --pipeline=benchmark-only --track=geonames --target-hosts=${target_hosts} "
-        f"--client-options=${client_options} "
+        f"--test-mode --pipeline=benchmark-only --track=geonames --target-hosts=${target_hosts} --client-options=${client_options} "
     )
 
     assert it.race(cfg, race_params) == 0
