@@ -41,6 +41,7 @@ def test_run_without_http_connection(cfg):
     cmd = it.esrally_command_line_for(cfg, "list tracks")
     env = dict(os.environ)
     env["http_proxy"] = "http://invalid"
+    env["https_proxy"] = "http://invalid"
     output = process.run_subprocess_with_output(cmd, env=env)
     expected = "[ERROR] Cannot list"
     assert expected in "\n".join(output)

@@ -78,6 +78,7 @@ def test_run_with_direct_internet_connection(cfg, http_proxy, fresh_log_file):
 def test_anonymous_proxy_no_connection(cfg, http_proxy):
     env = dict(os.environ)
     env["http_proxy"] = http_proxy.anonymous_url
+    env["https_proxy"] = http_proxy.anonymous_url
     lines = process.run_subprocess_with_output(it.esrally_command_line_for(cfg, "list tracks"), env=env)
     output = "\n".join(lines)
     assert "[WARNING] Could not update tracks." in output
@@ -88,6 +89,7 @@ def test_anonymous_proxy_no_connection(cfg, http_proxy):
 def test_authenticated_proxy_user_can_connect(cfg, http_proxy):
     env = dict(os.environ)
     env["http_proxy"] = http_proxy.authenticated_url
+    env["https_proxy"] = http_proxy.authenticated_url
     lines = process.run_subprocess_with_output(it.esrally_command_line_for(cfg, "list tracks"), env=env)
     output = "\n".join(lines)
     assert "[WARNING] Could not update tracks." not in output
