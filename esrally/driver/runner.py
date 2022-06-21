@@ -938,7 +938,7 @@ class Query(Runner):
                     composite_agg_body["size"] = size
                 
                 self.logger.info("Using body [%s]", body.copy())
-                response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
+                response = await self._raw_search(es, doc_type=None, index=index, body=deepcopy(body), params=request_params, headers=headers)
                 parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, results.get("hits"))
                 results["pages"] = page
                 results["weight"] = page

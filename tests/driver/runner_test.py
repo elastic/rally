@@ -5475,7 +5475,7 @@ class TestCompositeAgg:
                     "vendor_filter": {
                         "filter": { "term": { "vendor": "vendorX" } },
                         "aggs": {
-                            "vendor_payment": { 
+                            "vendor_payment": {
                                 "composite": {
                                     "sources": [
                                         { "vendor_id": { "terms": { "field": "vendor_id" } } },
@@ -5569,7 +5569,7 @@ class TestCompositeAgg:
                             "vendor_filter": {
                                 "filter": { "term": { "vendor": "vendorX" } },
                                 "aggs": {
-                                    "vendor_payment": { 
+                                    "vendor_payment": {
                                         "composite": {
                                             "sources": [
                                                 { "vendor_id": { "terms": { "field": "vendor_id" } } },
@@ -5593,7 +5593,7 @@ class TestCompositeAgg:
                             "vendor_filter": {
                                 "filter": { "term": { "vendor": "vendorX" } },
                                 "aggs": {
-                                    "vendor_payment": { 
+                                    "vendor_payment": {
                                         "composite": {
                                             "sources": [
                                                 { "vendor_id": { "terms": { "field": "vendor_id" } } },
@@ -5608,6 +5608,181 @@ class TestCompositeAgg:
                                     }
                                 }
                             },
+                        },
+                    },
+                    headers=None,
+                ),
+            ]
+        )
+
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_composite_agg_with_pit(self, es):
+        pit_op = "open-point-in-time1"
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "composite-agg-with-pit",
+            "index": "test-index",
+            "operation-type": "composite-agg",
+            "with-point-in-time-from": pit_op,
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "aggs": {
+                    "vendor_filter": {
+                        "filter": { "term": { "vendor": "vendorX" } },
+                        "aggs": {
+                            "vendor_payment": {
+                                "composite": {
+                                    "sources": [
+                                        { "vendor_id": { "terms": { "field": "vendor_id" } } },
+                                        { "payment_type": { "terms": { "field": "payment_type" } } }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                }
+            },
+        }
+
+        page_1 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {
+                            "vendor_id": "2",
+                            "payment_type": "5"
+                        },
+                        "buckets": [
+                            {
+                                "key": {
+                                    "vendor_id": "2",
+                                    "payment_type": "1"
+                                },
+                                "doc_count": 135454
+                            },
+                            {
+                                "key": {
+                                    "vendor_id": "2",
+                                    "payment_type": "2"
+                                },
+                                "doc_count": 137223
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+
+        page_2 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "buckets": [
+                            {
+                                "key": {
+                                    "vendor_id": "3",
+                                    "payment_type": "1"
+                                },
+                                "doc_count": 135434
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
+
+        r = runner.Query()
+
+        async with runner.CompositeContext():
+            runner.CompositeContext.put(pit_op, pit_id)
+            await r(es, params)
+            # make sure pit_id is updated afterward
+            assert runner.CompositeContext.get(pit_op) == "fedcba9876543210"
+
+        es.perform_request.assert_has_awaits(
+            [
+                mock.call(
+                    method="GET",
+                    path="/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": { "term": { "vendor": "vendorX" } },
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                { "vendor_id": { "terms": { "field": "vendor_id" } } },
+                                                { "payment_type": { "terms": { "field": "payment_type" } } }
+                                            ],
+                                            "size": 2
+                                        }
+                                    }
+                                }
+                            },
+                        },
+                        "pit": {
+                            "id": "0123456789abcdef",
+                            "keep_alive": "1m",
+                        },
+                    },
+                    headers=None,
+                ),
+                mock.call(
+                    method="GET",
+                    path="/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": { "term": { "vendor": "vendorX" } },
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "after": {
+                                                "vendor_id": "2",
+                                                "payment_type": "5"
+                                            },
+                                            "sources": [
+                                                { "vendor_id": { "terms": { "field": "vendor_id" } } },
+                                                { "payment_type": { "terms": { "field": "payment_type" } } }
+                                            ],
+                                            "size": 2
+                                        }
+                                    }
+                                }
+                            },
+                        },
+                        "pit": {
+                            "id": "fedcba9876543210",
+                            "keep_alive": "1m",
                         },
                     },
                     headers=None,
