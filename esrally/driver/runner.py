@@ -875,7 +875,7 @@ class Query(Runner):
                     body.pop(item, None)
                 index = None
             # explicitly convert to int to provoke an error otherwise
-            total_pages = sys.maxsize if params.get("pages", "all") == "all" else int(mandatory(params, "pages", self))
+            total_pages = sys.maxsize if params.get("pages") == "all" else int(mandatory(params, "pages", self))
             for page in range(1, total_pages + 1):
                 if pit_op:
                     pit_id = CompositeContext.get(pit_op)
@@ -1142,7 +1142,7 @@ class SearchAfterExtractor:
         properties = ["timed_out", "took"]
         if get_point_in_time:
             properties.append("pit_id")
-# we only need to parse these the first time, subsequent responses should have the same values
+        # we only need to parse these the first time, subsequent responses should have the same values
         if hits_total is None:
             properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
 
