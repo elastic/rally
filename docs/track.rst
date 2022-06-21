@@ -1158,7 +1158,7 @@ Properties
         2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 * ``body`` (mandatory): The query body.
-* ``pages`` (optional): Number of pages to retrieve (at most) for this search. If a composite aggregations yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all". Defaults to "all"
+* ``pages`` (optional): Number of pages to retrieve (at most) for this search. If the composite aggregation yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all". Defaults to "all"
 * ``results-per-page`` (optional): Number of results to retrieve per page. This maps to the composite aggregation's API's ``size`` parameter.
 * ``with-point-in-time-from`` (optional): The ``name`` of an ``open-point-in-time`` operation. Causes the search to use the generated `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_.
 
