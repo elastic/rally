@@ -30,9 +30,11 @@ Installation Instructions for Development
 IDE Setup
 ---------
 
-Rally uses automatic code formatters. They're enforced by ``make lint`` and you can apply then by running ``make format``.
+Rally uses automatic code formatters. They're enforced by ``make lint`` which also applies formatting for you.
 
 However, consider using editor integrations to do it automatically: you'll need to configure `black <https://black.readthedocs.io/en/stable/integrations/editors.html>`_ and `isort <https://github.com/PyCQA/isort/wiki/isort-Plugins>`_.
+
+Also consider running `pre-commit install` to run lint as part of your git commits.
 
 Automatic Updates
 ~~~~~~~~~~~~~~~~~
