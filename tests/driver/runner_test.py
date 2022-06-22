@@ -5459,7 +5459,6 @@ class TestSearchAfterExtractor:
         assert last_sort == expected_sort_value
 
 class TestCompositeAgg:
-    
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -5849,14 +5848,16 @@ class TestCompositeAggExtractor:
 
     def test_extract_all_properties(self):
         target = runner.CompositeAggExtractor()
-        props = target(response=self.response, get_point_in_time=True, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None)
-        expected_props = {"hits.total.relation": "gte", "hits.total.value": 10000, "pit_id": "fedcba9876543210", "timed_out": False, 
+        props = target(response=self.response, get_point_in_time=True,
+            path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None)
+        expected_props = {"hits.total.relation": "gte", "hits.total.value": 10000, "pit_id": "fedcba9876543210", "timed_out": False,
             "took": 132, "after_key": {"vendor_id": "1", "payment_type": "5"}}
         assert props == expected_props
 
     def test_extract_ignore_point_in_time(self):
         target = runner.CompositeAggExtractor()
-        props = target(response=self.response, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None)
+        props = target(response=self.response, get_point_in_time=False,
+            path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None)
         expected_props = {"hits.total.relation": "gte", "hits.total.value": 10000, "timed_out": False, "took": 132,
             "after_key": {"vendor_id": "1", "payment_type": "5"}}
         assert props == expected_props
@@ -5864,7 +5865,8 @@ class TestCompositeAggExtractor:
     def test_extract_uses_provided_hits_total(self):
         target = runner.CompositeAggExtractor()
         # we use an incorrect hits_total just to prove we didn't extract it from the response
-        props = target(response=self.response, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=10)
+        props = target(response=self.response, get_point_in_time=False,
+            path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=10)
         expected_props = {"hits.total.relation": "eq", "hits.total.value": 10, "timed_out": False, "took": 132,
             "after_key": {"vendor_id": "1", "payment_type": "5"}}
         assert props == expected_props
@@ -5875,7 +5877,8 @@ class TestCompositeAggExtractor:
         response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
         target = runner.CompositeAggExtractor()
         with pytest.raises(exceptions.RallyAssertionError) as exc:
-            target(response=response_copy_bytesio, get_point_in_time=True, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None)
+            target(response=response_copy_bytesio, get_point_in_time=True,
+                path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None)
         assert exc.value.args[0] == "Paginated query failure: pit_id was expected but not found in the response."
 
     def test_extract_missing_ignored_point_in_time(self):
@@ -5883,7 +5886,8 @@ class TestCompositeAggExtractor:
         del response_copy["pit_id"]
         response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
         target = runner.CompositeAggExtractor()
-        props = target(response=response_copy_bytesio, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None)
+        props = target(response=response_copy_bytesio, get_point_in_time=False,
+            path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None)
         expected_props = {"hits.total.relation": "gte", "hits.total.value": 10000, "timed_out": False, "took": 132,
             "after_key": {"vendor_id": "1", "payment_type": "5"}}
         assert props == expected_props
@@ -5891,10 +5895,10 @@ class TestCompositeAggExtractor:
     def test_no_after_key_found(self):
         target = runner.CompositeAggExtractor()
         props = target(response=self.response, get_point_in_time=True, path_to_composite_agg=["foo"], hits_total=None)
-        expected_props = {"hits.total.relation": "gte", "hits.total.value": 10000, "pit_id": "fedcba9876543210", "timed_out": False, 
+        expected_props = {"hits.total.relation": "gte", "hits.total.value": 10000, "pit_id": "fedcba9876543210", "timed_out": False,
             "took": 132, "after_key": None}
         assert props == expected_props
-        
+
 class TestCompositeContext:
     def test_cannot_be_used_outside_of_composite(self):
         with pytest.raises(exceptions.RallyAssertionError) as exc:
