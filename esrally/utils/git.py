@@ -62,31 +62,30 @@ def fetch(src, remote="origin"):
 
 
 @probed
-def checkout(src_dir, branch="master"):
+def checkout(src_dir, *, branch):
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), branch)):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
 @probed
-def rebase(src_dir, remote="origin", branch="master"):
-    checkout(src_dir, branch)
+def rebase(src_dir, remote="origin", *, branch):
+    checkout(src_dir, branch=branch)
     if process.run_subprocess_with_logging("git -C {0} rebase {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
         raise exceptions.SupplyError("Could not rebase on branch [%s]" % branch)
 
 
 @probed
-def pull(src_dir, remote="origin", branch="master"):
+def pull(src_dir, remote="origin", *, branch):
     fetch(src_dir, remote)
-    rebase(src_dir, remote, branch)
+    rebase(src_dir, remote, branch=branch)
 
 
 @probed
-def pull_ts(src_dir, ts):
+def pull_ts(src_dir, ts, remote="origin", *, branch):
     fetch(src_dir)
     clean_src = io.escape_path(src_dir)
-    revision = process.run_subprocess_with_output(
-        'git -C {0} rev-list -n 1 --before="{1}" --date=iso8601 origin/master'.format(clean_src, ts)
-    )[0].strip()
+    rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
+    revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(clean_src, revision)):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
 
