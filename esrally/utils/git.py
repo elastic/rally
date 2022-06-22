@@ -68,7 +68,7 @@ def checkout(src_dir, *, branch):
 
 
 @probed
-def rebase(src_dir, remote="origin", *, branch):
+def rebase(src_dir, *, remote, branch):
     checkout(src_dir, branch=branch)
     if process.run_subprocess_with_logging("git -C {0} rebase {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
         raise exceptions.SupplyError("Could not rebase on branch [%s]" % branch)
@@ -77,7 +77,7 @@ def rebase(src_dir, remote="origin", *, branch):
 @probed
 def pull(src_dir, remote="origin", *, branch):
     fetch(src_dir, remote=remote)
-    rebase(src_dir, remote, branch=branch)
+    rebase(src_dir, remote=remote, branch=branch)
 
 
 @probed

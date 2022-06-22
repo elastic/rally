@@ -168,7 +168,7 @@ class TestRallyRepository:
         r.update(distribution_version="1.7.3")
 
         branches.assert_called_with("/rally-resources/unit-test", remote=True)
-        rebase.assert_called_with("/rally-resources/unit-test", branch="1")
+        rebase.assert_called_with("/rally-resources/unit-test", remote="origin", branch="1")
         checkout.assert_called_with("/rally-resources/unit-test", branch="1")
 
     @mock.patch("esrally.utils.git.head_revision")

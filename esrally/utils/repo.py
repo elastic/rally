@@ -69,7 +69,7 @@ class RallyRepository:
                     git.checkout(self.repo_dir, branch=branch)
                     self.logger.info("Rebasing on [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
                     try:
-                        git.rebase(self.repo_dir, branch=branch)
+                        git.rebase(self.repo_dir, remote="origin", branch=branch)
                         self.revision = git.head_revision(self.repo_dir)
                     except exceptions.SupplyError:
                         self.logger.exception("Cannot rebase due to local changes in [%s]", self.repo_dir)
