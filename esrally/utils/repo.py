@@ -43,7 +43,7 @@ class RallyRepository:
                 git.clone(src=self.repo_dir, remote=self.url)
             else:
                 try:
-                    git.fetch(src=self.repo_dir)
+                    git.fetch(src=self.repo_dir, remote="origin")
                 except exceptions.SupplyError:
                     console.warn("Could not update %s. Continuing with your locally available state." % self.resource_name)
         else:

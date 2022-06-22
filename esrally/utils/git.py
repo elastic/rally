@@ -56,7 +56,7 @@ def clone(src, *, remote):
 
 
 @probed
-def fetch(src, remote="origin"):
+def fetch(src, *, remote):
     if process.run_subprocess_with_logging("git -C {0} fetch --prune --tags {1}".format(io.escape_path(src), remote)):
         raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
 
@@ -76,13 +76,13 @@ def rebase(src_dir, remote="origin", *, branch):
 
 @probed
 def pull(src_dir, remote="origin", *, branch):
-    fetch(src_dir, remote)
+    fetch(src_dir, remote=remote)
     rebase(src_dir, remote, branch=branch)
 
 
 @probed
 def pull_ts(src_dir, ts, remote="origin", *, branch):
-    fetch(src_dir)
+    fetch(src_dir, remote=remote)
     clean_src = io.escape_path(src_dir)
     rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
     revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
@@ -91,8 +91,8 @@ def pull_ts(src_dir, ts, remote="origin", *, branch):
 
 
 @probed
-def pull_revision(src_dir, revision):
-    fetch(src_dir)
+def pull_revision(src_dir, revision, remote="origin"):
+    fetch(src_dir, remote=remote)
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 
