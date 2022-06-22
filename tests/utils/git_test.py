@@ -88,7 +88,7 @@ class TestGit:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_checkout_successful(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
-        git.checkout("/src", "feature-branch")
+        git.checkout("/src", branch="feature-branch")
         run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -96,7 +96,7 @@ class TestGit:
         # first call is to check the git version (0 -> succeeds), the second call is the failing checkout (1 -> fails)
         run_subprocess_with_logging.side_effect = [0, 1]
         with pytest.raises(exceptions.SupplyError) as exc:
-            git.checkout("/src", "feature-branch")
+            git.checkout("/src", branch="feature-branch")
         assert exc.value.args[0] == "Could not checkout [feature-branch]. Do you have uncommitted changes?"
         run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
@@ -136,7 +136,7 @@ class TestGit:
         run_subprocess_with_logging.return_value = 0
         run_subprocess_with_output.return_value = ["3694a07"]
         run_subprocess.side_effect = [False, False]
-        git.pull_ts("/src", "20160101T110000Z")
+        git.pull_ts("/src", "20160101T110000Z", branch="master")
 
         run_subprocess_with_output.assert_called_with('git -C /src rev-list -n 1 --before="20160101T110000Z" --date=iso8601 origin/master')
         run_subprocess.has_calls(

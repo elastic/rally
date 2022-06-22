@@ -350,4 +350,4 @@ class TestRallyRepository:
 
         r.checkout("abcdef123")
 
-        checkout.assert_called_with("/rally-resources/unit-test", "abcdef123")
+        checkout.assert_called_with("/rally-resources/unit-test", branch="abcdef123")

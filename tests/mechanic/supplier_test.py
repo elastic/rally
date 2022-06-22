@@ -69,7 +69,7 @@ class TestSourceRepository:
 
         mock_is_working_copy.assert_called_with("/src")
         mock_clone.assert_called_with("/src", "some-github-url")
-        mock_pull.assert_called_with("/src")
+        mock_pull.assert_called_with("/src", branch="master")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
@@ -104,7 +104,7 @@ class TestSourceRepository:
         mock_is_working_copy.assert_called_with("/src")
         assert mock_clone.call_count == 0
         assert mock_pull.call_count == 0
-        mock_checkout.assert_called_with("/src", "67c2f42")
+        mock_checkout.assert_called_with("/src", branch="67c2f42")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
@@ -118,7 +118,7 @@ class TestSourceRepository:
         s.fetch("@2015-01-01-01:00:00")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00")
+        mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", branch="master")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
