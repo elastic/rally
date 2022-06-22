@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import os
+import tempfile
 
 import it
 from esrally.utils import process
@@ -39,9 +40,12 @@ def test_run_with_help(cfg):
 @it.rally_in_mem
 def test_run_without_http_connection(cfg):
     cmd = it.esrally_command_line_for(cfg, "list tracks")
-    env = dict(os.environ)
-    env["http_proxy"] = "http://invalid"
-    env["https_proxy"] = "http://invalid"
-    output = process.run_subprocess_with_output(cmd, env=env)
-    expected = "[ERROR] Cannot list"
-    assert expected in "\n".join(output)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        env = dict(os.environ)
+        env["http_proxy"] = "http://invalid"
+        env["https_proxy"] = "http://invalid"
+        # make sure we don't have any saved state
+        env["RALLY_HOME"] = tmpdir
+        output = process.run_subprocess_with_output(cmd, env=env)
+        expected = "[ERROR] Cannot list"
+        assert expected in "\n".join(output)
