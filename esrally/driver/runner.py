@@ -748,11 +748,11 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: Lis
     parser = ijson.parse(text)
     parsed = {}
     parsed_lists = {}
-    parsed_objects = {}
-    in_object = None
     current_object = None
     current_list = None
     expect_end_array = False
+    parsed_objects = {}
+    in_object = None
     try:
         for prefix, event, value in parser:
             if expect_end_array:
