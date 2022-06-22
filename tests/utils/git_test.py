@@ -136,7 +136,7 @@ class TestGit:
         run_subprocess_with_logging.return_value = 0
         run_subprocess_with_output.return_value = ["3694a07"]
         run_subprocess.side_effect = [False, False]
-        git.pull_ts("/src", "20160101T110000Z", branch="master")
+        git.pull_ts("/src", "20160101T110000Z", remote="origin", branch="master")
 
         run_subprocess_with_output.assert_called_with('git -C /src rev-list -n 1 --before="20160101T110000Z" --date=iso8601 origin/master')
         run_subprocess.has_calls(
@@ -151,7 +151,7 @@ class TestGit:
     def test_pull_revision(self, run_subprocess_with_logging, run_subprocess):
         run_subprocess_with_logging.return_value = 0
         run_subprocess.side_effect = [False, False]
-        git.pull_revision("/src", "3694a07")
+        git.pull_revision("/src", remote="origin", revision="3694a07")
         run_subprocess.has_calls(
             [
                 mock.call("git -C /src fetch --prune --tags --quiet origin"),

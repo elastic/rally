@@ -69,7 +69,7 @@ class TestSourceRepository:
 
         mock_is_working_copy.assert_called_with("/src")
         mock_clone.assert_called_with("/src", remote="some-github-url")
-        mock_pull.assert_called_with("/src", branch="master")
+        mock_pull.assert_called_with("/src", remote="origin", branch="master")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
@@ -118,7 +118,7 @@ class TestSourceRepository:
         s.fetch("@2015-01-01-01:00:00")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", branch="master")
+        mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", remote="origin", branch="master")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
@@ -132,7 +132,7 @@ class TestSourceRepository:
         s.fetch("67c2f42")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_revision.assert_called_with("/src", "67c2f42")
+        mock_pull_revision.assert_called_with("/src", remote="origin", revision="67c2f42")
         mock_head_revision.assert_called_with("/src")
 
     def test_is_commit_hash(self):

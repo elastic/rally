@@ -75,13 +75,13 @@ def rebase(src_dir, *, remote, branch):
 
 
 @probed
-def pull(src_dir, remote="origin", *, branch):
+def pull(src_dir, *, remote, branch):
     fetch(src_dir, remote=remote)
     rebase(src_dir, remote=remote, branch=branch)
 
 
 @probed
-def pull_ts(src_dir, ts, remote="origin", *, branch):
+def pull_ts(src_dir, ts, *, remote, branch):
     fetch(src_dir, remote=remote)
     clean_src = io.escape_path(src_dir)
     rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
@@ -91,7 +91,7 @@ def pull_ts(src_dir, ts, remote="origin", *, branch):
 
 
 @probed
-def pull_revision(src_dir, revision, remote="origin"):
+def pull_revision(src_dir, *, remote, revision):
     fetch(src_dir, remote=remote)
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
