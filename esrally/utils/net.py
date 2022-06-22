@@ -42,11 +42,7 @@ def __proxy_manager_from_env(env_var, logger):
         proxy_url = os.getenv(env_var) or os.getenv(env_var.upper())
     if proxy_url and len(proxy_url) > 0:
         parsed_url = urllib3.util.parse_url(proxy_url)
-        logger.info(
-            "Connecting via proxy URL [%s] to the Internet (picked up from the env variable [%s]).",
-            proxy_url,
-            env_var
-        )
+        logger.info("Connecting via proxy URL [%s] to the Internet (picked up from the env variable [%s]).", proxy_url, env_var)
         return urllib3.ProxyManager(
             proxy_url,
             cert_reqs="CERT_REQUIRED",

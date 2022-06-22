@@ -44,8 +44,11 @@ class RallyRepository:
             else:
                 try:
                     git.fetch(src=self.repo_dir)
-                except exceptions.SupplyError:
-                    console.warn("Could not update %s. Continuing with your locally available state." % self.resource_name)
+                except exceptions.SupplyError as e:
+                    console.warn(
+                        "Could not update %s. Continuing with your locally available state. Original error: %s\n"
+                        % (self.resource_name, e.message)
+                    )
         else:
             if not git.is_working_copy(self.repo_dir):
                 if io.exists(self.repo_dir):

@@ -16,6 +16,9 @@
 # under the License.
 
 
+MSG_NO_CONNECTION = "You may need to specify --offline if running without Internet connection."
+
+
 class RallyError(Exception):
     """
     Base class for all Rally exceptions
@@ -31,6 +34,20 @@ class RallyError(Exception):
 
     def __str__(self):
         return self.message
+
+    @property
+    def full_message(self):
+        msg = str(self.message)
+        nesting = 0
+        current_exc = self
+        while hasattr(current_exc, "cause") and current_exc.cause:
+            nesting += 1
+            current_exc = current_exc.cause
+            if hasattr(current_exc, "message"):
+                msg += "\n%s%s" % ("\t" * nesting, current_exc.message)
+            else:
+                msg += "\n%s%s" % ("\t" * nesting, str(current_exc))
+        return msg
 
 
 class LaunchError(RallyError):
@@ -68,7 +85,10 @@ class DataError(RallyError):
 
 
 class SupplyError(RallyError):
-    pass
+    def __init__(self, message, cause=None):
+        super().__init__(message, cause)
+        if MSG_NO_CONNECTION not in self.full_message:
+            self.message += f" {MSG_NO_CONNECTION}"
 
 
 class BuildError(RallyError):
