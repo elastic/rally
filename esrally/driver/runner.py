@@ -771,11 +771,13 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: Lis
                 in_object = prefix
                 current_object = {}
             elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
-                current_object[prefix[len(in_object)+1:]] = value
+                current_object[prefix[len(in_object) + 1 :]] = value
             # found all necessary properties
-            if (len(parsed) == len(props) and
-               (lists is None or len(parsed_lists) == len(lists)) and
-               (objects is None or len(parsed_objects) == len(objects))):
+            if (
+                len(parsed) == len(props)
+                and (lists is None or len(parsed_lists) == len(lists))
+                and (objects is None or len(parsed_objects) == len(objects))
+            ):
                 break
 
     except ijson.IncompleteJSONError:
@@ -969,10 +971,10 @@ class Query(Runner):
 
         def select_aggs(obj):
             if isinstance(obj, dict):
-                if 'aggs' in obj:
-                    return obj['aggs']
-                if 'aggregations' in obj:
-                    return obj['aggregations']
+                if "aggs" in obj:
+                    return obj["aggs"]
+                if "aggregations" in obj:
+                    return obj["aggregations"]
             return None
 
         def paths_to_composite_agg(obj, parent_key_path):
@@ -982,8 +984,8 @@ class Query(Runner):
                 for key in aggs.keys():
                     subobj = aggs[key]
                     if isinstance(subobj, dict):
-                        if 'composite' in subobj.keys():
-                            if isinstance(subobj['composite'], dict):
+                        if "composite" in subobj.keys():
+                            if isinstance(subobj["composite"], dict):
                                 paths = paths + [parent_key_path + [key]]
                     paths = paths + paths_to_composite_agg(subobj, parent_key_path + [key])
             return paths
@@ -991,7 +993,7 @@ class Query(Runner):
         def resolve_composite_agg(obj, key_path):
             if isinstance(obj, dict):
                 if len(key_path) == 0:
-                    return obj['composite']
+                    return obj["composite"]
                 else:
                     aggs = select_aggs(obj)
                     if isinstance(aggs, dict):
@@ -1003,13 +1005,13 @@ class Query(Runner):
             if isinstance(obj, dict):
                 obj = obj.copy()
                 if len(key_path) == 0:
-                    obj['composite'] = obj['composite'].copy()
+                    obj["composite"] = obj["composite"].copy()
                 else:
                     aggs = None
-                    if 'aggs' in obj:
-                        aggs = obj['aggs'] = obj['aggs'].copy()
-                    elif 'aggregations' in obj:
-                        aggs = obj['aggregations'] = obj['aggregations'].copy()
+                    if "aggs" in obj:
+                        aggs = obj["aggs"] = obj["aggs"].copy()
+                    elif "aggregations" in obj:
+                        aggs = obj["aggregations"] = obj["aggregations"].copy()
                     else:
                         raise Exception("Could not find composite agg - parser inconsistency")
                     aggs[key_path[0]] = tree_copy_composite_agg(aggs[key_path[0]], key_path[1:])
@@ -1187,8 +1189,8 @@ class SearchAfterExtractor:
         else:
             return None
 
-class CompositeAggExtractor:
 
+class CompositeAggExtractor:
     def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: List, hits_total: Optional[int]) -> dict:
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
