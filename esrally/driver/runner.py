@@ -931,14 +931,14 @@ class Query(Runner):
                 if not paths_to_composite or len(paths_to_composite) != 1:
                     raise Exception("Unique path to composite agg required")
                 path_to_composite = paths_to_composite[0]
-                composite_agg_body = resolve_aggs(body, path_to_composite)["composite"]
+                composite_agg_body = resolve_composite_agg(body, path_to_composite)
                 if not composite_agg_body:
                     raise Exception("Could not find composite agg - parser inconsistency")
                 if size:
                     composite_agg_body["size"] = size
                 
-                self.logger.info("Using body [%s]", body.copy())
-                response = await self._raw_search(es, doc_type=None, index=index, body=deepcopy(body), params=request_params, headers=headers)
+                body_to_send = tree_copy_composite_agg(body, path_to_composite)
+                response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
                 parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, results.get("hits"))
                 results["pages"] = page
                 results["weight"] = page
@@ -982,20 +982,37 @@ class Query(Runner):
                     if type(subobj) is dict:
                         if 'composite' in subobj.keys():
                             if type(subobj['composite']) is dict:
-                                # composite agg found
                                 paths = paths + [parent_key_path + [key]]
                     paths = paths + paths_to_composite_agg(subobj, parent_key_path + [key])
             return paths
 
-        def resolve_aggs(obj, key_path):
+        def resolve_composite_agg(obj, key_path):
             if type(obj) is dict:
-                if key_path is None or len(key_path) == 0:
-                    return obj
-                aggs = select_aggs(obj)
-                if type(aggs) is dict:
-                    if key_path[0] in aggs:
-                        return resolve_aggs(aggs[key_path[0]], key_path[1:])
-            return None
+                if len(key_path) == 0:
+                    return obj['composite']
+                else:
+                    aggs = select_aggs(obj)
+                    if type(aggs) is dict:
+                        if key_path[0] in aggs:
+                            return resolve_composite_agg(aggs[key_path[0]], key_path[1:])
+            raise Exception("Could not find composite agg - parser inconsistency")
+        
+        def tree_copy_composite_agg(obj, key_path):
+            if type(obj) is dict:
+                obj = obj.copy()
+                if len(key_path) == 0:
+                    obj['composite'] = obj['composite'].copy()
+                else:
+                    aggs = None
+                    if 'aggs' in obj:
+                        aggs = obj['aggs'] = obj['aggs'].copy()
+                    elif 'aggregations' in obj:
+                        aggs = obj['aggregations'] = obj['aggregations'].copy()
+                    else:
+                        raise Exception("Could not find composite agg - parser inconsistency")
+                    aggs[key_path[0]] = tree_copy_composite_agg(aggs[key_path[0]], key_path[1:])
+                return obj
+            raise Exception("Could not find composite agg - parser inconsistency")
 
         async def _request_body_query(es, params):
             doc_type = params.get("type")
@@ -1175,7 +1192,7 @@ class CompositeAggExtractor:
         properties = ["timed_out", "took"]
         if get_point_in_time:
             properties.append("pit_id")
-# we only need to parse these the first time, subsequent responses should have the same values
+        # we only need to parse these the first time, subsequent responses should have the same values
         if hits_total is None:
             properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
 
