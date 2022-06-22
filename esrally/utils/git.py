@@ -48,7 +48,7 @@ def is_working_copy(src):
     return os.path.exists(src) and os.path.exists(os.path.join(src, ".git"))
 
 
-def clone(src, remote):
+def clone(src, *, remote):
     io.ensure_dir(src)
     # Don't swallow subprocess output, user might need to enter credentials...
     if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src))):

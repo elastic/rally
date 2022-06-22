@@ -612,7 +612,7 @@ class SourceRepository:
         if not git.is_working_copy(self.src_dir):
             if self.has_remote():
                 self.logger.info("Downloading sources for %s from %s to %s.", self.name, self.remote_url, self.src_dir)
-                git.clone(self.src_dir, self.remote_url)
+                git.clone(self.src_dir, remote=self.remote_url)
             elif os.path.isdir(self.src_dir) and may_skip_init:
                 self.logger.info("Skipping repository initialization for %s.", self.name)
             else:

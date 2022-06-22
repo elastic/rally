@@ -51,7 +51,7 @@ class TestGit:
         src = "/src"
         remote = "http://github.com/some/project"
 
-        git.clone(src, remote)
+        git.clone(src, remote=remote)
 
         ensure_dir.assert_called_with(src)
         run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
@@ -64,7 +64,7 @@ class TestGit:
         remote = "http://github.com/some/project"
 
         with pytest.raises(exceptions.SupplyError) as exc:
-            git.clone(src, remote)
+            git.clone(src, remote=remote)
         assert exc.value.args[0] == "Could not clone from [http://github.com/some/project] to [/src]"
 
         ensure_dir.assert_called_with(src)

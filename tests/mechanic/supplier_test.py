@@ -68,7 +68,7 @@ class TestSourceRepository:
         s.fetch("latest")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_clone.assert_called_with("/src", "some-github-url")
+        mock_clone.assert_called_with("/src", remote="some-github-url")
         mock_pull.assert_called_with("/src", branch="master")
         mock_head_revision.assert_called_with("/src")
 
