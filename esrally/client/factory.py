@@ -284,8 +284,7 @@ def create_api_key(es, client_id, max_attempts=5):
         import elasticsearch
 
         try:
-            api_key = es.security.create_api_key({"name": f"rally-client-{client_id}"})
-            return api_key
+            return es.security.create_api_key({"name": f"rally-client-{client_id}"})
         except elasticsearch.TransportError as e:
             logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
             time.sleep(1)
