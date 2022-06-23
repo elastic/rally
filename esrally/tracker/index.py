@@ -45,11 +45,11 @@ def update_index_setting_parameters(settings):
             orig_value = settings[s]
             settings[s] = param.format(orig=orig_value)
 
-
+allowed_list_hidden_indices = [".ds-metrics-kubernetes", ".ds-metrics-system", ".ds-metrics-elastic_agent", ".ds-logs-kubernetes", ".ds-logs-elastic_agent"]
 def is_valid(index_name):
     if len(index_name) == 0:
         return False, "Index name is empty"
-    if index_name.startswith("."):
+    if index_name.startswith(".") and not index_name.startswith(tuple(allowed_list_hidden_indices)):
         return False, f"Index [{index_name}] is hidden"
     return True, None
 
@@ -65,7 +65,7 @@ def extract_index_mapping_and_settings(client, index_pattern):
     results = {}
     logger = logging.getLogger(__name__)
     # the response might contain multiple indices if a wildcard was provided
-    response = client.indices.get(index=index_pattern)
+    response = client.indices.get(index=index_pattern, params={"expand_wildcards": "all"})
     for index, details in response.items():
         valid, reason = is_valid(index)
         if valid:
