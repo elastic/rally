@@ -612,7 +612,7 @@ class SourceRepository:
         if not git.is_working_copy(self.src_dir):
             if self.has_remote():
                 self.logger.info("Downloading sources for %s from %s to %s.", self.name, self.remote_url, self.src_dir)
-                git.clone(self.src_dir, self.remote_url)
+                git.clone(self.src_dir, remote=self.remote_url)
             elif os.path.isdir(self.src_dir) and may_skip_init:
                 self.logger.info("Skipping repository initialization for %s.", self.name)
             else:
@@ -621,17 +621,17 @@ class SourceRepository:
     def _update(self, revision):
         if self.has_remote() and revision == "latest":
             self.logger.info("Fetching latest sources for %s from origin.", self.name)
-            git.pull(self.src_dir, branch="master")
+            git.pull(self.src_dir, remote="origin", branch="master")
         elif revision == "current":
             self.logger.info("Skip fetching sources for %s.", self.name)
         elif self.has_remote() and revision.startswith("@"):
             # convert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
             git_ts_revision = revision[1:]
             self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
-            git.pull_ts(self.src_dir, git_ts_revision, branch="master")
+            git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch="master")
         elif self.has_remote():  # assume a git commit hash
             self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
-            git.pull_revision(self.src_dir, revision)
+            git.pull_revision(self.src_dir, remote="origin", revision=revision)
         else:
             self.logger.info("Checking out local revision [%s] for %s.", revision, self.name)
             git.checkout(self.src_dir, branch=revision)
