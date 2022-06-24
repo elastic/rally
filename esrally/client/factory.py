@@ -307,9 +307,12 @@ def delete_api_keys(es, ids, max_attempts=5):
     minimum_version = versions.Version.from_string("7.10.0")
 
     if current_version >= minimum_version:
+
         def delete(es, ids):
             es.security.invalidate_api_key({"ids": ids})
+
     else:
+
         def delete(es, ids):
             while ids:
                 es.security.invalidate_api_key({"id": ids[0]})
