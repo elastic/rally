@@ -182,8 +182,14 @@ def create_arg_parser():
     create_track_parser.add_argument(
         "--indices",
         type=non_empty_list,
-        required=True,
+        required=False,
         help="Comma-separated list of indices to include in the track",
+    )
+    create_track_parser.add_argument(
+        "--datastreams",
+        type=non_empty_list,
+        required=False,
+        help="Comma-separated list of data-streams to include in the track",
     )
     create_track_parser.add_argument(
         "--target-hosts",
@@ -987,9 +993,18 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             generate(cfg)
         elif sub_command == "create-track":
-            cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
-            cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-            cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            if args.datastreams is not None and args.indices is None:
+                cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
+                cfg.add(config.Scope.applicationOverride, "generator", "datastreams", args.datastreams)
+                cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            elif args.indices is not None:
+                cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
+                cfg.add(config.Scope.applicationOverride, "generator", "datastreams", args.datastreams)
+                cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            else:
+                raise exceptions.SystemSetupError("Following arguments are required: --indices or specify --datastream ", sub_command)
             configure_connection_params(arg_parser, args, cfg)
 
             tracker.create_track(cfg)
@@ -1043,7 +1058,6 @@ def main():
     if args.subcommand is None:
         arg_parser.print_help()
         sys.exit(0)
-
     console.init(quiet=args.quiet)
     console.println(BANNER)
 

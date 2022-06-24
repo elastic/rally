@@ -45,7 +45,16 @@ def update_index_setting_parameters(settings):
             orig_value = settings[s]
             settings[s] = param.format(orig=orig_value)
 
-allowed_list_hidden_indices = [".ds-metrics-kubernetes", ".ds-metrics-system", ".ds-metrics-elastic_agent", ".ds-logs-kubernetes", ".ds-logs-elastic_agent"]
+
+allowed_list_hidden_indices = [
+    ".ds-metrics-kubernetes",
+    ".ds-metrics-system",
+    ".ds-metrics-elastic_agent",
+    ".ds-logs-kubernetes",
+    ".ds-logs-elastic_agent",
+]
+
+
 def is_valid(index_name):
     if len(index_name) == 0:
         return False, "Index name is empty"
@@ -103,4 +112,21 @@ def extract(client, outdir, index_pattern):
                 "filename": filename,
             }
         )
+    return results
+
+
+def datastreamextract(client, datastream_pattern):
+    """
+    Calls Elasticsearch client get_data_stream function to retrieve list of indexes
+    :param client: Elasticsearch client
+    :param index_pattern: name of datastream
+    :return: index creation dictionary
+    """
+    results = []
+    # the response might contain multiple indices if a wildcard was provided
+    params_defined = {"expand_wildcards": "all", "filter_path": "data_streams.name"}
+    results_datastreams = client.indices.get_data_stream(name=datastream_pattern, params=params_defined)
+
+    for indices in results_datastreams["data_streams"]:
+        results.append(indices.get("name"))
     return results

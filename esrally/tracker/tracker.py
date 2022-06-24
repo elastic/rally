@@ -35,6 +35,19 @@ def process_template(templates_path, template_filename, template_vars, output_pa
         f.write(template.render(template_vars))
 
 
+def extract_indexes_from_datastreams(client, datastreams_to_extract):
+    indices = []
+    # first extract index metadata (which is cheap) and defer extracting data to reduce the potential for
+    # errors due to invalid index names late in the process.
+    for datastream_name in datastreams_to_extract:
+        try:
+            indices += index.datastreamextract(client, datastream_name)
+        except ElasticsearchException:
+            logging.getLogger(__name__).exception("Failed to extract indexes from datastream [%s]", datastream_name)
+
+    return indices
+
+
 def extract_mappings_and_corpora(client, output_path, indices_to_extract):
     indices = []
     corpora = []
@@ -63,8 +76,7 @@ def create_track(cfg):
     root_path = cfg.opts("generator", "output.path")
     target_hosts = cfg.opts("client", "hosts")
     client_options = cfg.opts("client", "options")
-
-    logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
+    datastreams = cfg.opts("generator", "datastreams")
 
     client = EsClientFactory(
         hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT], client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]
@@ -75,6 +87,14 @@ def create_track(cfg):
 
     output_path = os.path.abspath(os.path.join(io.normalize_path(root_path), track_name))
     io.ensure_dir(output_path)
+
+    if datastreams is None:
+        logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
+    else:
+        logger.info("Creating track [%s] matching datastreams [%s]", track_name, datastreams)
+        extracted_indices = extract_indexes_from_datastreams(client, datastreams)
+        indices = extracted_indices
+        console.info(f"##### List datastreams to extract [{indices}]", logger=logger)
 
     indices, corpora = extract_mappings_and_corpora(client, output_path, indices)
     if len(indices) == 0:
