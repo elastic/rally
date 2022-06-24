@@ -306,25 +306,21 @@ def delete_api_keys(es, ids, max_attempts=5):
     current_version = versions.Version.from_string(es.info()["version"]["number"])
     minimum_version = versions.Version.from_string("7.10.0")
 
-    def legacy_delete(es, ids):
-        while ids:
-            es.security.invalidate_api_key({"id": ids[0]})
-            ids.pop(0)
-
-    def delete(es, ids):
-        es.security.invalidate_api_key({"ids": ids})
-
     if current_version >= minimum_version:
-        func = delete
+        def delete(es, ids):
+            es.security.invalidate_api_key({"ids": ids})
     else:
-        func = legacy_delete
+        def delete(es, ids):
+            while ids:
+                es.security.invalidate_api_key({"id": ids[0]})
+                ids.pop(0)
 
     for attempt in range(max_attempts + 1):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
         try:
-            func(es, ids)
+            delete(es, ids)
             return True
         except elasticsearch.TransportError as e:
             if attempt < max_attempts:
