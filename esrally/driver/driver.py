@@ -744,7 +744,7 @@ class Driver:
 
                         if create_api_keys:
                             resp = self.create_api_key(self.default_sync_es_client, client_id)
-                            client_context.api_key = ApiKey(resp["id"], resp["api_key"])
+                            client_context.api_key = ApiKey(id=resp["id"], secret=resp["api_key"])
 
                         worker_client_contexts[client_id] = client_context
                         self.client_contexts[worker_id] = worker_client_contexts
