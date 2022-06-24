@@ -1918,6 +1918,32 @@ class TestNodeStatsRecorder:
                         }
                     },
                 },
+                "os": {
+                    "timestamp": 1655950949872,
+                    "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                    "mem": {
+                        "total_in_bytes": 62277025792,
+                        "free_in_bytes": 4934840320,
+                        "used_in_bytes": 57342185472,
+                        "free_percent": 8,
+                        "used_percent": 92,
+                    },
+                    "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                    "cgroup": {
+                        "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                        "cpu": {
+                            "control_group": "/",
+                            "cfs_period_micros": 100000,
+                            "cfs_quota_micros": 793162,
+                            "stat": {
+                                "number_of_elapsed_periods": 41092415,
+                                "number_of_times_throttled": 41890,
+                                "time_throttled_nanos": 29380593023188,
+                            },
+                        },
+                        "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                    },
+                },
                 "process": {
                     "timestamp": 1526045135857,
                     "open_file_descriptors": 312,
@@ -2045,6 +2071,11 @@ class TestNodeStatsRecorder:
             "jvm_gc_collectors_young_collection_time_in_millis": 309,
             "jvm_gc_collectors_old_collection_count": 2,
             "jvm_gc_collectors_old_collection_time_in_millis": 229,
+            "os_mem_total_in_bytes": 62277025792,
+            "os_mem_free_in_bytes": 4934840320,
+            "os_mem_used_in_bytes": 57342185472,
+            "os_mem_free_percent": 8,
+            "os_mem_used_percent": 92,
             "process_cpu_percent": 10,
             "process_cpu_total_in_millis": 56520,
             "breakers_parent_limit_size_in_bytes": 726571417,
@@ -2270,6 +2301,32 @@ class TestNodeStatsRecorder:
                             "total_virtual_in_bytes": 2472173568,
                         },
                     },
+                    "os": {
+                        "timestamp": 1655950949872,
+                        "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                        "mem": {
+                            "total_in_bytes": 62277025792,
+                            "free_in_bytes": 4934840320,
+                            "used_in_bytes": 57342185472,
+                            "free_percent": 8,
+                            "used_percent": 92,
+                        },
+                        "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                        "cgroup": {
+                            "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                            "cpu": {
+                                "control_group": "/",
+                                "cfs_period_micros": 100000,
+                                "cfs_quota_micros": 793162,
+                                "stat": {
+                                    "number_of_elapsed_periods": 41092415,
+                                    "number_of_times_throttled": 41890,
+                                    "time_throttled_nanos": 29380593023188,
+                                },
+                            },
+                            "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                        },
+                    },
                     "thread_pool": {
                         "generic": {
                             "threads": 4,
@@ -2402,6 +2459,11 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_mem_total_in_bytes": 62277025792,
+                "os_mem_free_in_bytes": 4934840320,
+                "os_mem_used_in_bytes": 57342185472,
+                "os_mem_free_percent": 8,
+                "os_mem_used_percent": 92,
                 "transport_rx_count": 77,
                 "transport_rx_size_in_bytes": 98723498,
                 "transport_server_open": 12,
@@ -2568,6 +2630,32 @@ class TestNodeStatsRecorder:
                             }
                         },
                     },
+                    "os": {
+                        "timestamp": 1655950949872,
+                        "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                        "mem": {
+                            "total_in_bytes": 62277025792,
+                            "free_in_bytes": 4934840320,
+                            "used_in_bytes": 57342185472,
+                            "free_percent": 8,
+                            "used_percent": 92,
+                        },
+                        "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                        "cgroup": {
+                            "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                            "cpu": {
+                                "control_group": "/",
+                                "cfs_period_micros": 100000,
+                                "cfs_quota_micros": 793162,
+                                "stat": {
+                                    "number_of_elapsed_periods": 41092415,
+                                    "number_of_times_throttled": 41890,
+                                    "time_throttled_nanos": 29380593023188,
+                                },
+                            },
+                            "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                        },
+                    },
                     "process": {
                         "timestamp": 1526045135857,
                         "open_file_descriptors": 312,
@@ -2682,6 +2770,11 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_mem_total_in_bytes": 62277025792,
+                "os_mem_free_in_bytes": 4934840320,
+                "os_mem_used_in_bytes": 57342185472,
+                "os_mem_free_percent": 8,
+                "os_mem_used_percent": 92,
                 "transport_rx_count": 77,
                 "transport_rx_size_in_bytes": 98723498,
                 "transport_server_open": 12,
