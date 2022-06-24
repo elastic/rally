@@ -520,7 +520,7 @@ class TestApiKeys:
         else:
             calls = [mock.call({"ids": ids})]
         assert client.delete_api_keys(es, ids, max_attempts=3)
-        es.security.invalidate_api_key.assert_has_calls(calls)
+        es.security.invalidate_api_key.assert_has_calls(calls, any_order=True)
 
     @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
     @mock.patch("time.sleep")
@@ -561,12 +561,12 @@ class TestApiKeys:
             elasticsearch.TransportError(401, "Unauthorized"),
         ]
 
-        deleted = ["foo", "bar"]
-        failed_to_delete = ["baz", "qux"]
+        deleted = ["baz", "qux"]
+        failed_to_delete = ["foo", "bar"]
         with pytest.raises(exceptions.RallyError, match=re.escape(f"Could not delete API keys with the following IDs: {failed_to_delete}")):
             client.delete_api_keys(es, ids, max_attempts=3)
 
-        es.security.invalidate_api_key.assert_has_calls([mock.call({"id": i}) for i in deleted])
+        es.security.invalidate_api_key.assert_has_calls([mock.call({"id": i}) for i in deleted], any_order=True)
 
 
 class TestAsyncConnection:

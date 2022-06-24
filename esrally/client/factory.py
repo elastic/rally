@@ -306,25 +306,19 @@ def delete_api_keys(es, ids, max_attempts=5):
     current_version = versions.Version.from_string(es.info()["version"]["number"])
     minimum_version = versions.Version.from_string("7.10.0")
 
-    if current_version >= minimum_version:
-
-        def delete(es, ids):
-            es.security.invalidate_api_key({"ids": ids})
-
-    else:
-
-        def delete(es, ids):
-            while ids:
-                es.security.invalidate_api_key({"id": ids[0]})
-                ids.pop(0)
-
     for attempt in range(max_attempts + 1):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
         try:
-            delete(es, ids)
+            if current_version >= minimum_version:
+                es.security.invalidate_api_key({"ids": ids})
+            else:
+                while ids:
+                    es.security.invalidate_api_key({"id": ids[-1]})
+                    ids.pop()
             return True
+
         except elasticsearch.TransportError as e:
             if attempt < max_attempts:
                 logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
