@@ -653,11 +653,15 @@ class Driver:
 
     def create_api_key(self, es, client_id):
         self.logger.debug("Creating ES API key for client [%s].", client_id)
-        api_key = client.create_api_key(es, client_id)
-        self.logger.debug("ES API key created for client [%s].", client_id)
-        # Store the API key ID for deletion upon benchmark completion
-        self.generated_api_key_ids.append(api_key["id"])
-        return api_key
+        try:
+            api_key = client.create_api_key(es, client_id)
+            self.logger.debug("ES API key created for client [%s].", client_id)
+            # Store the API key ID for deletion upon benchmark completion
+            self.generated_api_key_ids.append(api_key["id"])
+            return api_key
+        except Exception as e:
+            self.logger.error("Unable to create API keys. Stopping benchmark.")
+            raise exceptions.SystemSetupError(e.message)
 
     def prepare_benchmark(self, t):
         self.track = t

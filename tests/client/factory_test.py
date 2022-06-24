@@ -497,6 +497,18 @@ class TestApiKeys:
             ]
         )
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_api_key_creation_fails_on_405_and_raises_system_setup_error(self, es):
+        client_id = 0
+        es.security.create_api_key.side_effect = elasticsearch.TransportError(405, "Incorrect HTTP method")
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match=re.escape(f"Got status code 405 when attempting to create API keys. Is Elasticsearch Security enabled?"),
+        ):
+            client.create_api_key(es, client_id, max_attempts=5)
+
+        es.security.create_api_key.assert_called_once_with({"name": f"rally-client-{client_id}"})
+
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
     def test_retries_api_key_creation_on_transport_errors(self, es, sleep):

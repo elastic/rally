@@ -286,8 +286,14 @@ def create_api_key(es, client_id, max_attempts=5):
         try:
             return es.security.create_api_key({"name": f"rally-client-{client_id}"})
         except elasticsearch.TransportError as e:
-            logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
-            time.sleep(1)
+            if e.status_code == 405:
+                # We don't retry on 405 since it indicates a misconfigured benchmark candidate and isn't recoverable
+                raise exceptions.SystemSetupError(
+                    "Got status code 405 when attempting to create API keys. Is Elasticsearch Security enabled?", e
+                )
+            else:
+                logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
+                time.sleep(1)
 
 
 def delete_api_keys(es, ids, max_attempts=5):
