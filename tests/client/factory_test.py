@@ -545,7 +545,7 @@ class TestApiKeys:
         es.security.invalidate_api_key.side_effect = [
             elasticsearch.TransportError(503, "Service Unavailable"),
             elasticsearch.TransportError(401, "Unauthorized"),
-            BaseException("Whoops!"),
+            Exception("Whoops!"),
         ]
 
         with pytest.raises(exceptions.RallyError, match=re.escape(f"Could not delete API keys with the following IDs: {ids}")):
