@@ -491,11 +491,8 @@ class TestApiKeys:
     def test_successfully_creates_api_keys(self, es):
         client_id = 0
         assert client.create_api_key(es, client_id, max_attempts=3)
-        es.security.create_api_key.assert_has_calls(
-            [
-                mock.call({"name": f"rally-client-{client_id}"}),
-            ]
-        )
+        # even though max_attempts is 3, this should only be called once
+        es.security.create_api_key.assert_called_once_with({"name": f"rally-client-{client_id}"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_api_key_creation_fails_on_405_and_raises_system_setup_error(self, es):
@@ -503,7 +500,7 @@ class TestApiKeys:
         es.security.create_api_key.side_effect = elasticsearch.TransportError(405, "Incorrect HTTP method")
         with pytest.raises(
             exceptions.SystemSetupError,
-            match=re.escape(f"Got status code 405 when attempting to create API keys. Is Elasticsearch Security enabled?"),
+            match=re.escape("Got status code 405 when attempting to create API keys. Is Elasticsearch Security enabled?"),
         ):
             client.create_api_key(es, client_id, max_attempts=5)
 
@@ -513,14 +510,17 @@ class TestApiKeys:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_retries_api_key_creation_on_transport_errors(self, es, sleep):
         client_id = 0
-        es.cluster.health.side_effect = [
+        es.security.create_api_key.side_effect = [
             elasticsearch.TransportError(503, "Service Unavailable"),
             elasticsearch.TransportError(401, "Unauthorized"),
             elasticsearch.TransportError(408, "Timed Out"),
             elasticsearch.TransportError(408, "Timed Out"),
             {"id": "abc", "name": f"rally-client-{client_id}", "api_key": "123"},
         ]
+        calls = [mock.call({"name": "rally-client-0"}) for _ in range(5)]
+
         assert client.create_api_key(es, client_id, max_attempts=5)
+        assert es.security.create_api_key.call_args_list == calls
 
     @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
     @mock.patch("elasticsearch.Elasticsearch")
@@ -528,26 +528,53 @@ class TestApiKeys:
         ids = ["foo", "bar", "baz"]
         es.info.return_value = {"version": {"number": version}}
         if version == "7.9.0":
-            calls = [mock.call({"id": i}) for i in ids]
+            calls = [
+                mock.call({"id": "baz"}),
+                mock.call({"id": "bar"}),
+                mock.call({"id": "foo"}),
+            ]
         else:
             calls = [mock.call({"ids": ids})]
+
         assert client.delete_api_keys(es, ids, max_attempts=3)
-        es.security.invalidate_api_key.assert_has_calls(calls, any_order=True)
+        assert es.security.invalidate_api_key.call_args_list == calls
 
     @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_retries_api_key_deletion_on_transport_errors(self, es, sleep, version):
+    def test_retries_api_keys_deletion_on_transport_errors(self, es, sleep, version):
+        max_attempts = 5
         es.info.return_value = {"version": {"number": version}}
         ids = ["foo", "bar", "baz"]
-        es.cluster.health.side_effect = [
-            elasticsearch.TransportError(503, "Service Unavailable"),
-            elasticsearch.TransportError(401, "Unauthorized"),
-            elasticsearch.TransportError(408, "Timed Out"),
-            elasticsearch.TransportError(408, "Timed Out"),
-            {"invalidated_api_keys": ["foo", "bar", "baz"]},
-        ]
-        assert client.delete_api_keys(es, ids, max_attempts=5)
+        if version == "7.9.0":
+            es.security.invalidate_api_key.side_effect = [
+                {"invalidated_api_keys": ["baz"]},
+                {"invalidated_api_keys": ["bar"]},
+                elasticsearch.TransportError(503, "Service Unavailable"),
+                elasticsearch.TransportError(401, "Unauthorized"),
+                {"invalidated_api_keys": ["foo"]},
+            ]
+            calls = [
+                # baz and bar are deleted successfully, leaving only foo
+                mock.call({"id": "baz"}),
+                mock.call({"id": "bar"}),
+                # two exceptions are thrown, so it should take 3 attempts to delete foo
+                mock.call({"id": "foo"}),
+                mock.call({"id": "foo"}),
+                mock.call({"id": "foo"}),
+            ]
+        else:
+            es.security.invalidate_api_key.side_effect = [
+                elasticsearch.TransportError(503, "Service Unavailable"),
+                elasticsearch.TransportError(401, "Unauthorized"),
+                elasticsearch.TransportError(408, "Timed Out"),
+                elasticsearch.TransportError(408, "Timed Out"),
+                {"invalidated_api_keys": ["foo", "bar", "baz"]},
+            ]
+            calls = [mock.call({"ids": ids}) for _ in range(max_attempts)]
+
+        assert client.delete_api_keys(es, ids, max_attempts=max_attempts)
+        assert es.security.invalidate_api_key.call_args_list == calls
 
     @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
     @mock.patch("elasticsearch.Elasticsearch")
@@ -568,17 +595,17 @@ class TestApiKeys:
         es.info.return_value = {"version": {"number": "7.9.0"}}
         ids = ["foo", "bar", "baz", "qux"]
         es.security.invalidate_api_key.side_effect = [
-            True,
-            True,
+            {"invalidated_api_keys": ["qux"]},
+            {"invalidated_api_keys": ["baz"]},
             elasticsearch.TransportError(401, "Unauthorized"),
         ]
-
-        deleted = ["baz", "qux"]
+        deleted = ["qux", "baz"]
         failed_to_delete = ["foo", "bar"]
+
         with pytest.raises(exceptions.RallyError, match=re.escape(f"Could not delete API keys with the following IDs: {failed_to_delete}")):
             client.delete_api_keys(es, ids, max_attempts=3)
 
-        es.security.invalidate_api_key.assert_has_calls([mock.call({"id": i}) for i in deleted], any_order=True)
+        es.security.invalidate_api_key.assert_has_calls([mock.call({"id": i}) for i in deleted])
 
 
 class TestAsyncConnection:
