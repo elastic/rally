@@ -737,12 +737,15 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: Lis
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
-    contain elements (respective key will be ``False``).
+    contain elements (respective key will be ``False``). If ``objects`` is specified, it will in addition extract
+    the JSON objects under the given keys. These JSON objects must be flat dicts, only containing primitive types
+    within.
 
     :param text: A text to parse.
     :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
     :param lists: An optional list of property paths to JSON lists in the provided text.
-    :return: A dict containing all properties and lists that have been found in the provided text.
+    :param objects: An optional list of property paths to flat JSON objects in the provided text.
+    :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
     text.seek(0)
     parser = ijson.parse(text)
@@ -933,11 +936,11 @@ class Query(Runner):
 
                 paths_to_composite = paths_to_composite_agg(body, [])
                 if not paths_to_composite or len(paths_to_composite) != 1:
-                    raise Exception("Unique path to composite agg required")
+                    raise exceptions.DataError("Unique path to composite agg required")
                 path_to_composite = paths_to_composite[0]
                 composite_agg_body = resolve_composite_agg(body, path_to_composite)
                 if not composite_agg_body:
-                    raise Exception("Could not find composite agg - parser inconsistency")
+                    raise exceptions.DataError("Could not find composite agg - parser inconsistency")
                 if size:
                     composite_agg_body["size"] = size
 
@@ -958,7 +961,6 @@ class Query(Runner):
                     CompositeContext.put(pit_op, parsed.get("pit_id"))
 
                 after_key = parsed["after_key"]
-                self.logger.info("Afer key is [%s]", after_key)
                 if isinstance(after_key, dict):
                     composite_agg_body["after"] = after_key
                 else:
@@ -971,52 +973,38 @@ class Query(Runner):
 
         def select_aggs(obj):
             if isinstance(obj, dict):
-                if "aggs" in obj:
-                    return obj["aggs"]
-                if "aggregations" in obj:
-                    return obj["aggregations"]
+                return obj.get("aggs") or obj.get("aggregations")
             return None
 
         def paths_to_composite_agg(obj, parent_key_path):
             aggs = select_aggs(obj)
             paths = []
             if isinstance(aggs, dict):
-                for key in aggs.keys():
-                    subobj = aggs[key]
-                    if isinstance(subobj, dict):
-                        if "composite" in subobj.keys():
-                            if isinstance(subobj["composite"], dict):
-                                paths = paths + [parent_key_path + [key]]
+                for key, subobj in aggs.items():
+                    if isinstance(subobj, dict) and isinstance(subobj.get("composite"), dict):
+                        paths = paths + [parent_key_path + [key]]
                     paths = paths + paths_to_composite_agg(subobj, parent_key_path + [key])
             return paths
 
         def resolve_composite_agg(obj, key_path):
-            if isinstance(obj, dict):
-                if len(key_path) == 0:
-                    return obj["composite"]
-                else:
-                    aggs = select_aggs(obj)
-                    if isinstance(aggs, dict):
-                        if key_path[0] in aggs:
-                            return resolve_composite_agg(aggs[key_path[0]], key_path[1:])
-            raise Exception("Could not find composite agg - parser inconsistency")
+            if len(key_path) == 0:
+                return obj.get("composite")
+            else:
+                aggs = select_aggs(obj)
+                return resolve_composite_agg(aggs[key_path[0]], key_path[1:])
 
         def tree_copy_composite_agg(obj, key_path):
-            if isinstance(obj, dict):
-                obj = obj.copy()
-                if len(key_path) == 0:
-                    obj["composite"] = obj["composite"].copy()
-                else:
-                    aggs = None
-                    if "aggs" in obj:
-                        aggs = obj["aggs"] = obj["aggs"].copy()
-                    elif "aggregations" in obj:
-                        aggs = obj["aggregations"] = obj["aggregations"].copy()
-                    else:
-                        raise Exception("Could not find composite agg - parser inconsistency")
-                    aggs[key_path[0]] = tree_copy_composite_agg(aggs[key_path[0]], key_path[1:])
-                return obj
-            raise Exception("Could not find composite agg - parser inconsistency")
+            obj = obj.copy()
+            if len(key_path) == 0:
+                obj["composite"] = obj["composite"].copy()
+            else:
+                aggs = None
+                if "aggs" in obj:
+                    aggs = obj["aggs"] = obj["aggs"].copy()
+                elif "aggregations" in obj:
+                    aggs = obj["aggregations"] = obj["aggregations"].copy()
+                aggs[key_path[0]] = tree_copy_composite_agg(aggs[key_path[0]], key_path[1:])
+            return obj
 
         async def _request_body_query(es, params):
             doc_type = params.get("type")
