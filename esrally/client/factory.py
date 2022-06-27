@@ -284,6 +284,7 @@ def create_api_key(es, client_id, max_attempts=5):
         import elasticsearch
 
         try:
+            logger.debug("Creating ES API key for client ID [%s]", client_id)
             return es.security.create_api_key({"name": f"rally-client-{client_id}"})
         except elasticsearch.TransportError as e:
             if e.status_code == 405:
