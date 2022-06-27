@@ -587,7 +587,6 @@ class TestApiKeys:
     def test_raises_exception_when_api_key_deletion_fails(self, es, version):
         es.info.return_value = {"version": {"number": version}}
         ids = ["foo", "bar", "baz", "qux"]
-        deleted = ["foo", "bar"]
         failed_to_delete = ["baz", "qux"]
         if version == "7.9.0":
             es.security.invalidate_api_key.side_effect = [
