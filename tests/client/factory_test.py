@@ -514,7 +514,7 @@ class TestApiKeys:
             elasticsearch.TransportError(503, "Service Unavailable"),
             elasticsearch.TransportError(401, "Unauthorized"),
             elasticsearch.TransportError(408, "Timed Out"),
-            elasticsearch.TransportError(408, "Timed Out"),
+            elasticsearch.TransportError(500, "Internal Server Error"),
             {"id": "abc", "name": f"rally-client-{client_id}", "api_key": "123"},
         ]
         calls = [mock.call({"name": "rally-client-0"}) for _ in range(5)]
@@ -568,7 +568,7 @@ class TestApiKeys:
                 elasticsearch.TransportError(503, "Service Unavailable"),
                 elasticsearch.TransportError(401, "Unauthorized"),
                 elasticsearch.TransportError(408, "Timed Out"),
-                elasticsearch.TransportError(408, "Timed Out"),
+                elasticsearch.TransportError(500, "Internal Server Error"),
                 {"invalidated_api_keys": ["foo", "bar", "baz"]},
             ]
             calls = [mock.call({"ids": ids}) for _ in range(max_attempts)]
