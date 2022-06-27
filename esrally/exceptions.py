@@ -25,15 +25,9 @@ class RallyError(Exception):
     """
 
     def __init__(self, message, cause=None):
-        super().__init__(message, cause)
+        super().__init__(message)
         self.message = message
         self.cause = cause
-
-    def __repr__(self):
-        return self.message
-
-    def __str__(self):
-        return self.message
 
     @property
     def full_message(self):
