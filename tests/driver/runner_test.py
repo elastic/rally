@@ -5459,6 +5459,429 @@ class TestSearchAfterExtractor:
         assert last_sort == expected_sort_value
 
 
+class TestCompositeAgg:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_composite_agg_without_pit(self, es):
+        params = {
+            "name": "composite-agg-without-pit",
+            "operation-type": "composite-agg",
+            "index": "test-index-1",
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "aggs": {
+                    "vendor_filter": {
+                        "filter": {"term": {"vendor": "vendorX"}},
+                        "aggs": {
+                            "vendor_payment": {
+                                "composite": {
+                                    "sources": [
+                                        {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                        {"payment_type": {"terms": {"field": "payment_type"}}},
+                                    ]
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        page_1 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {"vendor_id": "2", "payment_type": "5"},
+                        "buckets": [
+                            {"key": {"vendor_id": "2", "payment_type": "1"}, "doc_count": 135454},
+                            {"key": {"vendor_id": "2", "payment_type": "2"}, "doc_count": 137223},
+                        ],
+                    },
+                }
+            },
+        }
+
+        page_2 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {"buckets": [{"key": {"vendor_id": "3", "payment_type": "1"}, "doc_count": 135434}]},
+                }
+            },
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
+        r = runner.Query()
+        await r(es, params)
+
+        es.perform_request.assert_has_awaits(
+            [
+                mock.call(
+                    method="GET",
+                    path="/test-index-1/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                    },
+                    headers=None,
+                ),
+                mock.call(
+                    method="GET",
+                    path="/test-index-1/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                            "after": {"vendor_id": "2", "payment_type": "5"},
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                    },
+                    headers=None,
+                ),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_composite_agg_with_pit(self, es):
+        pit_op = "open-point-in-time1"
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "composite-agg-with-pit",
+            "index": "test-index",
+            "operation-type": "composite-agg",
+            "with-point-in-time-from": pit_op,
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "aggs": {
+                    "vendor_filter": {
+                        "filter": {"term": {"vendor": "vendorX"}},
+                        "aggs": {
+                            "vendor_payment": {
+                                "composite": {
+                                    "sources": [
+                                        {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                        {"payment_type": {"terms": {"field": "payment_type"}}},
+                                    ]
+                                }
+                            }
+                        },
+                    },
+                }
+            },
+        }
+
+        page_1 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {"vendor_id": "2", "payment_type": "5"},
+                        "buckets": [
+                            {"key": {"vendor_id": "2", "payment_type": "1"}, "doc_count": 135454},
+                            {"key": {"vendor_id": "2", "payment_type": "2"}, "doc_count": 137223},
+                        ],
+                    },
+                }
+            },
+        }
+
+        page_2 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {"buckets": [{"key": {"vendor_id": "3", "payment_type": "1"}, "doc_count": 135434}]},
+                }
+            },
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
+
+        r = runner.Query()
+
+        async with runner.CompositeContext():
+            runner.CompositeContext.put(pit_op, pit_id)
+            await r(es, params)
+            # make sure pit_id is updated afterward
+            assert runner.CompositeContext.get(pit_op) == "fedcba9876543210"
+
+        es.perform_request.assert_has_awaits(
+            [
+                mock.call(
+                    method="GET",
+                    path="/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                        "pit": {
+                            "id": "0123456789abcdef",
+                            "keep_alive": "1m",
+                        },
+                    },
+                    headers=None,
+                ),
+                mock.call(
+                    method="GET",
+                    path="/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "after": {"vendor_id": "2", "payment_type": "5"},
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                        "pit": {
+                            "id": "fedcba9876543210",
+                            "keep_alive": "1m",
+                        },
+                    },
+                    headers=None,
+                ),
+            ]
+        )
+
+
+class TestCompositeAggExtractor:
+    response_text = """
+        {
+            "pit_id": "fedcba9876543210",
+            "took": 132,
+            "timed_out": false,
+            "_shards": {
+                "total": 1,
+                "successful": 1,
+                "skipped": 0,
+                "failed": 0
+            },
+            "hits": {
+                "total": {
+                    "value": 10000,
+                    "relation": "gte"
+                },
+                "max_score": null,
+                "hits": []
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {
+                            "vendor_id": "1",
+                            "payment_type": "5"
+                        },
+                        "buckets": [
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "1"
+                            },
+                            "doc_count": 135454
+                            },
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "2"
+                            },
+                            "doc_count": 137223
+                            },
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "3"
+                            },
+                            "doc_count": 191
+                            }
+                        ]
+                    }
+                }
+            }
+        }"""
+    response = io.BytesIO(response_text.encode())
+
+    def test_extract_all_properties(self):
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=self.response, get_point_in_time=True, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "pit_id": "fedcba9876543210",
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_ignore_point_in_time(self):
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=self.response, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_uses_provided_hits_total(self):
+        target = runner.CompositeAggExtractor()
+        # we use an incorrect hits_total just to prove we didn't extract it from the response
+        props = target(
+            response=self.response, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=10
+        )
+        expected_props = {
+            "hits.total.relation": "eq",
+            "hits.total.value": 10,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_missing_required_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.CompositeAggExtractor()
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            target(
+                response=response_copy_bytesio,
+                get_point_in_time=True,
+                path_to_composite_agg=["vendor_filter", "vendor_payment"],
+                hits_total=None,
+            )
+        assert exc.value.args[0] == "Paginated query failure: pit_id was expected but not found in the response."
+
+    def test_extract_missing_ignored_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=response_copy_bytesio,
+            get_point_in_time=False,
+            path_to_composite_agg=["vendor_filter", "vendor_payment"],
+            hits_total=None,
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_no_after_key_found(self):
+        target = runner.CompositeAggExtractor()
+        props = target(response=self.response, get_point_in_time=True, path_to_composite_agg=["foo"], hits_total=None)
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "pit_id": "fedcba9876543210",
+            "timed_out": False,
+            "took": 132,
+            "after_key": None,
+        }
+        assert props == expected_props
+
+
 class TestCompositeContext:
     def test_cannot_be_used_outside_of_composite(self):
         with pytest.raises(exceptions.RallyAssertionError) as exc:
@@ -5871,7 +6294,7 @@ class TestComposite:
 
         assert exc.value.args[0] == (
             "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
-            "search, paginated-search, raw-request, sleep, submit-async-search, get-async-search, "
+            "search, paginated-search, composite-agg, raw-request, sleep, submit-async-search, get-async-search, "
             "delete-async-search, field-caps]."
         )
 

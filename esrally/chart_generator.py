@@ -1778,7 +1778,8 @@ class RaceConfig:
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
                 # which tasks / or types of operations should be used for which chart types.
                 if (
-                    sub_task.operation.type in ["search", "composite", "eql", "paginated-search", "scroll-search", "raw-request"]
+                    sub_task.operation.type
+                    in ["search", "composite", "eql", "paginated-search", "scroll-search", "raw-request", "composite-agg"]
                     or "target-throughput" in sub_task.params
                     or "target-interval" in sub_task.params
                 ):
