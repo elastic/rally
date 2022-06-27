@@ -308,33 +308,65 @@ def delete_api_keys(es, ids, max_attempts=5):
     """
     logger = logging.getLogger(__name__)
 
+    def raise_exception(failed_ids):
+        raise exceptions.RallyError(f"Could not delete API keys with the following IDs: {failed_ids}")
+
     # Before ES 7.10, deleting API keys by ID had to be done individually.
     # After ES 7.10, a list of API key IDs can be deleted in one request.
     current_version = versions.Version.from_string(es.info()["version"]["number"])
     minimum_version = versions.Version.from_string("7.10.0")
 
-    for attempt in range(max_attempts + 1):
+    deleted = []
+    remaining = ids
+
+    for attempt in range(1, max_attempts + 1):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
         try:
             if current_version >= minimum_version:
-                es.security.invalidate_api_key({"ids": ids})
+                resp = es.security.invalidate_api_key({"ids": remaining})
+                deleted += resp["invalidated_api_keys"]
+                remaining = [i for i in ids if i not in deleted]
+                # Like bulk indexing requests, we can get an HTTP 200, but the
+                # response body could still contain an array of individual errors.
+                # So, we have to handle the case were some keys weren't deleted, but
+                # the request overall succeeded (i.e. we didn't encounter an exception)
+                if attempt < max_attempts:
+                    if resp["error_count"] > 0:
+                        logger.debug(
+                            "Got the following errors on attempt [%s] of [%s]: [%s]. Sleeping...",
+                            attempt,
+                            max_attempts,
+                            resp["error_details"],
+                        )
+                else:
+                    if remaining:
+                        logger.warning(
+                            "Got the following errors on final attempt to delete API keys: [%s]",
+                            resp["error_details"],
+                        )
+                        raise_exception(remaining)
             else:
-                while ids:
-                    es.security.invalidate_api_key({"id": ids[-1]})
-                    ids.pop()
-            return True
+                for i in remaining:
+                    es.security.invalidate_api_key({"id": i})
+                    deleted.append(i)
+                    remaining = [i for i in ids if i not in deleted]
+
+            if remaining:
+                raise_exception(remaining)
+            else:
+                return True
 
         except elasticsearch.TransportError as e:
             if attempt < max_attempts:
                 logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
                 time.sleep(1)
             else:
-                raise exceptions.RallyError(f"Could not delete API keys with the following IDs: {ids}") from e
+                raise_exception(remaining)
         except Exception as e:
             if attempt < max_attempts:
                 logger.debug("Got error on attempt [%s] of [%s]. Sleeping...", attempt, max_attempts)
                 time.sleep(1)
             else:
-                raise exceptions.RallyError(f"Could not delete API keys with the following IDs: {ids}") from e
+                raise_exception(remaining)
