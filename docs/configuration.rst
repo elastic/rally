@@ -157,7 +157,7 @@ If the configuration is correct, git will clone this repository. You can delete 
 
 To verify that Rally will connect via the proxy server you can check the log file. If the proxy server is configured successfully, Rally will log the following line on startup::
 
-    Connecting via proxy URL [http://proxy.acme.org:3128/] to the Internet (picked up from the env variable [http_proxy]).
+    Connecting via proxy URL [http://proxy.acme.org:3128/] to the Internet (picked up from the environment variable [http_proxy]).
 
 
 .. note::

@@ -41,7 +41,7 @@ def test_run_with_help(cfg):
 def test_run_without_http_connection(cfg):
     cmd = it.esrally_command_line_for(cfg, "list tracks")
     with tempfile.TemporaryDirectory() as tmpdir:
-        env = dict(os.environ)
+        env = os.environ.copy()
         env["http_proxy"] = "http://invalid"
         env["https_proxy"] = "http://invalid"
         # make sure we don't have any saved state

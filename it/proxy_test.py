@@ -81,7 +81,9 @@ def test_anonymous_proxy_no_connection(cfg, http_proxy):
     env["https_proxy"] = http_proxy.anonymous_url
     lines = process.run_subprocess_with_output(it.esrally_command_line_for(cfg, "list tracks"), env=env)
     output = "\n".join(lines)
+    # there should be a warning because we can't connect
     assert "[WARNING] Could not update tracks." in output
+    # still, the command succeeds because of local state
     assert "[INFO] SUCCESS" in output
 
 
@@ -92,5 +94,7 @@ def test_authenticated_proxy_user_can_connect(cfg, http_proxy):
     env["https_proxy"] = http_proxy.authenticated_url
     lines = process.run_subprocess_with_output(it.esrally_command_line_for(cfg, "list tracks"), env=env)
     output = "\n".join(lines)
+    # rally should be able to connect, no warning
     assert "[WARNING] Could not update tracks." not in output
+    # the command should succeed
     assert "[INFO] SUCCESS" in output

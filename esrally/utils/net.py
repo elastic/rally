@@ -27,22 +27,18 @@ import urllib3
 from esrally import exceptions
 from esrally.utils import console, convert
 
-__HTTP = None
-__HTTPS = None
+_HTTP = None
+_HTTPS = None
 
 
 def __proxy_manager_from_env(env_var, logger):
-    proxy_url = os.getenv(env_var.lower())
-    if not env_var == "http_proxy":
-        # http_proxy can only be lowercase
-        # see https://curl.se/mail/archive-2001-12/0034.html
-        proxy_url = os.getenv(env_var.upper())
+    proxy_url = os.getenv(env_var.lower()) or os.getenv(env_var.upper())
     if not proxy_url:
         env_var = "all_proxy"
         proxy_url = os.getenv(env_var) or os.getenv(env_var.upper())
     if proxy_url and len(proxy_url) > 0:
         parsed_url = urllib3.util.parse_url(proxy_url)
-        logger.info("Connecting via proxy URL [%s] to the Internet (picked up from the env variable [%s]).", proxy_url, env_var)
+        logger.info("Connecting via proxy URL [%s] to the Internet (picked up from the environment variable [%s]).", proxy_url, env_var)
         return urllib3.ProxyManager(
             proxy_url,
             cert_reqs="CERT_REQUIRED",
@@ -57,9 +53,9 @@ def __proxy_manager_from_env(env_var, logger):
 
 def init():
     logger = logging.getLogger(__name__)
-    global __HTTP, __HTTPS
-    __HTTP = __proxy_manager_from_env("http_proxy", logger)
-    __HTTPS = __proxy_manager_from_env("https_proxy", logger)
+    global _HTTP, _HTTPS
+    _HTTP = __proxy_manager_from_env("http_proxy", logger)
+    _HTTPS = __proxy_manager_from_env("https_proxy", logger)
 
 
 class Progress:
@@ -187,7 +183,7 @@ def download_from_bucket(blobstore, url, local_path, expected_size_in_bytes=None
 
 
 def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
-    with __http(url).request(
+    with _request(
         "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
     ) as r, open(local_path, "wb") as out_file:
         if r.status > 299:
@@ -263,17 +259,16 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
 
 
 def retrieve_content_as_string(url):
-    with __http(url).request("GET", url, timeout=urllib3.Timeout(connect=45, read=240)) as response:
+    with _request("GET", url, timeout=urllib3.Timeout(connect=45, read=240)) as response:
         return response.read().decode("utf-8")
 
 
-def __http(url):
-    if not __HTTP or not __HTTPS:
+def _request(method, url, **kwargs):
+    if not _HTTP or not _HTTPS:
         init()
     parsed_url = urllib3.util.parse_url(url)
-    if parsed_url.scheme == "https":
-        return __HTTPS
-    return __HTTP
+    manager = _HTTPS if parsed_url.scheme == "https" else _HTTP
+    return manager.request(method, url, **kwargs)
 
 
 def resolve(hostname_or_ip):
