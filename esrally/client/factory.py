@@ -308,8 +308,12 @@ def delete_api_keys(es, ids, max_attempts=5):
     """
     logger = logging.getLogger(__name__)
 
-    def raise_exception(failed_ids):
-        raise exceptions.RallyError(f"Could not delete API keys with the following IDs: {failed_ids}")
+    def raise_exception(failed_ids, cause=None):
+        msg = f"Could not delete API keys with the following IDs: {failed_ids}"
+        if cause is not None:
+            raise exceptions.RallyError(msg) from cause
+        else:
+            raise exceptions.RallyError(msg)
 
     # Before ES 7.10, deleting API keys by ID had to be done individually.
     # After ES 7.10, a list of API key IDs can be deleted in one request.
@@ -363,10 +367,10 @@ def delete_api_keys(es, ids, max_attempts=5):
                 logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
                 time.sleep(1)
             else:
-                raise_exception(remaining)
+                raise_exception(remaining, cause=e)
         except Exception as e:
             if attempt < max_attempts:
                 logger.debug("Got error on attempt [%s] of [%s]. Sleeping...", attempt, max_attempts)
                 time.sleep(1)
             else:
-                raise_exception(remaining)
+                raise_exception(remaining, cause=e)
