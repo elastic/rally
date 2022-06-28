@@ -348,15 +348,15 @@ def delete_api_keys(es, ids, max_attempts=5):
                         )
                         raise_exception(remaining)
             else:
-                for i in remaining:
-                    es.security.invalidate_api_key({"id": i})
-                    deleted.append(i)
-                    remaining = [i for i in ids if i not in deleted]
-
-            if remaining:
-                raise_exception(remaining)
-            else:
-                return True
+                remaining = [i for i in ids if i not in deleted]
+                if attempt < max_attempts:
+                    for i in remaining:
+                        es.security.invalidate_api_key({"id": i})
+                        deleted.append(i)
+                else:
+                    if remaining:
+                        raise_exception(remaining)
+            return True
 
         except elasticsearch.TransportError as e:
             if attempt < max_attempts:
