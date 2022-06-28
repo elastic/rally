@@ -311,7 +311,7 @@ def create_arg_parser():
     install_parser.add_argument(
         "--revision",
         help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
-        " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
+        " 'latest' fetches the latest version on the main branch. It is also possible to specify a commit id or a timestamp."
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current).',
         default="current",
