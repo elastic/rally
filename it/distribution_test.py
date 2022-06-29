@@ -87,6 +87,23 @@ def test_interrupt(cfg):
     assert run_subprocess_and_interrupt(cmd, 2, 15) == 130
 
 
+@it.random_rally_config
+def test_create_api_key_per_client(cfg):
+    port = 19200
+    it.wait_until_port_is_free(port_number=port)
+    dist = it.DISTRIBUTIONS[-1]
+    opts = "use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password',create_api_key_per_client:true"
+    assert (
+        it.race(
+            cfg,
+            f'--distribution-version={dist} --track="geonames" '
+            f"--test-mode --car=4gheap,trial-license,x-pack-security --target-hosts=127.0.0.1:{port} "
+            f"--client-options={opts}",
+        )
+        == 0
+    )
+
+
 @pytest.fixture(scope="module")
 def test_cluster():
     cluster = it.TestCluster("in-memory-it")

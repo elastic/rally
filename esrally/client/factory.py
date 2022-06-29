@@ -23,7 +23,7 @@ import urllib3
 from urllib3.connection import is_ipaddress
 
 from esrally import doc_link, exceptions
-from esrally.utils import console, convert
+from esrally.utils import console, convert, versions
 
 
 class EsClientFactory:
@@ -107,6 +107,30 @@ class EsClientFactory:
             self.logger.info("SSL support: off")
             self.client_options["scheme"] = "http"
 
+        if self._is_set(self.client_options, "create_api_key_per_client"):
+            basic_auth_user = self.client_options.get("basic_auth_user", False)
+            basic_auth_password = self.client_options.get("basic_auth_password", False)
+            provided_auth = {"basic_auth_user": basic_auth_user, "basic_auth_password": basic_auth_password}
+            missing_auth = [k for k, v in provided_auth.items() if not v]
+            if missing_auth:
+                console.println(
+                    (
+                        "Basic auth credentials are required in order to create API keys.\n"
+                        f"Missing basic auth client options are: {missing_auth}\n"
+                        f"Read the documentation at {console.format.link(doc_link('command_line_reference.html#client-options'))}"
+                    )
+                )
+                raise exceptions.SystemSetupError(
+                    (
+                        "You must provide the 'basic_auth_user' and 'basic_auth_password' client options in addition "
+                        "to 'create_api_key_per_client' in order to create client API keys."
+                    )
+                )
+            else:
+                self.logger.info("Automatic creation of client API keys: on")
+        else:
+            self.logger.info("Automatic creation of client API keys: off")
+
         if self._is_set(self.client_options, "basic_auth_user") and self._is_set(self.client_options, "basic_auth_password"):
             self.logger.info("HTTP basic authentication: on")
             self.client_options["http_auth"] = (self.client_options.pop("basic_auth_user"), self.client_options.pop("basic_auth_password"))
@@ -153,7 +177,7 @@ class EsClientFactory:
 
         return RallySyncElasticsearch(hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options)
 
-    def create_async(self):
+    def create_async(self, api_key=None):
         # pylint: disable=import-outside-toplevel
         import io
 
@@ -189,6 +213,10 @@ class EsClientFactory:
         # override the builtin JSON serializer
         self.client_options["serializer"] = LazyJSONSerializer()
         self.client_options["trace_config"] = trace_config
+
+        if api_key is not None:
+            self.client_options.pop("http_auth")
+            self.client_options["api_key"] = api_key
 
         return RallyAsyncElasticsearch(
             hosts=self.hosts,
@@ -238,3 +266,111 @@ def wait_for_rest_layer(es, max_attempts=40):
                 logger.warning("Got unexpected status code [%s] on attempt [%s].", e.status_code, attempt)
                 raise e
     return False
+
+
+def create_api_key(es, client_id, max_attempts=5):
+    """
+    Creates an API key for the provided ``client_id``.
+
+    :param es: Elasticsearch client to use for connecting.
+    :param client_id: ID of the client for which the API key is being created.
+    :param max_attempts: The maximum number of attempts to create the API key.
+    :return: A dict with at least the following keys: ``id``, ``name``, ``api_key``.
+    """
+    logger = logging.getLogger(__name__)
+
+    for attempt in range(1, max_attempts + 1):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            logger.debug("Creating ES API key for client ID [%s]", client_id)
+            return es.security.create_api_key({"name": f"rally-client-{client_id}"})
+        except elasticsearch.TransportError as e:
+            if e.status_code == 405:
+                # We don't retry on 405 since it indicates a misconfigured benchmark candidate and isn't recoverable
+                raise exceptions.SystemSetupError(
+                    "Got status code 405 when attempting to create API keys. Is Elasticsearch Security enabled?", e
+                )
+            else:
+                logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
+                time.sleep(1)
+
+
+def delete_api_keys(es, ids, max_attempts=5):
+    """
+    Deletes the provided list of API key IDs.
+
+    :param es: Elasticsearch client to use for connecting.
+    :param ids: List of API key IDs to delete.
+    :param max_attempts: The maximum number of attempts to delete the API keys.
+    :return: True iff all provided key IDs were successfully deleted.
+    """
+    logger = logging.getLogger(__name__)
+
+    def raise_exception(failed_ids, cause=None):
+        msg = f"Could not delete API keys with the following IDs: {failed_ids}"
+        if cause is not None:
+            raise exceptions.RallyError(msg) from cause
+        else:
+            raise exceptions.RallyError(msg)
+
+    # Before ES 7.10, deleting API keys by ID had to be done individually.
+    # After ES 7.10, a list of API key IDs can be deleted in one request.
+    current_version = versions.Version.from_string(es.info()["version"]["number"])
+    minimum_version = versions.Version.from_string("7.10.0")
+
+    deleted = []
+    remaining = ids
+
+    for attempt in range(1, max_attempts + 1):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            if current_version >= minimum_version:
+                resp = es.security.invalidate_api_key({"ids": remaining})
+                deleted += resp["invalidated_api_keys"]
+                remaining = [i for i in ids if i not in deleted]
+                # Like bulk indexing requests, we can get an HTTP 200, but the
+                # response body could still contain an array of individual errors.
+                # So, we have to handle the case were some keys weren't deleted, but
+                # the request overall succeeded (i.e. we didn't encounter an exception)
+                if attempt < max_attempts:
+                    if resp["error_count"] > 0:
+                        logger.debug(
+                            "Got the following errors on attempt [%s] of [%s]: [%s]. Sleeping...",
+                            attempt,
+                            max_attempts,
+                            resp["error_details"],
+                        )
+                else:
+                    if remaining:
+                        logger.warning(
+                            "Got the following errors on final attempt to delete API keys: [%s]",
+                            resp["error_details"],
+                        )
+                        raise_exception(remaining)
+            else:
+                remaining = [i for i in ids if i not in deleted]
+                if attempt < max_attempts:
+                    for i in remaining:
+                        es.security.invalidate_api_key({"id": i})
+                        deleted.append(i)
+                else:
+                    if remaining:
+                        raise_exception(remaining)
+            return True
+
+        except elasticsearch.TransportError as e:
+            if attempt < max_attempts:
+                logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
+                time.sleep(1)
+            else:
+                raise_exception(remaining, cause=e)
+        except Exception as e:
+            if attempt < max_attempts:
+                logger.debug("Got error on attempt [%s] of [%s]. Sleeping...", attempt, max_attempts)
+                time.sleep(1)
+            else:
+                raise_exception(remaining, cause=e)

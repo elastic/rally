@@ -20,6 +20,7 @@ import contextlib
 import logging
 import os
 import random
+import re
 import ssl
 from copy import deepcopy
 from unittest import mock
@@ -31,7 +32,7 @@ import urllib3.exceptions
 from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
-from esrally.client.asynchronous import AIOHttpConnection
+from esrally.client.asynchronous import AIOHttpConnection, VerifiedAsyncTransport
 from esrally.utils import console
 
 
@@ -317,6 +318,36 @@ class TestEsClientFactory:
         assert f.ssl_context.check_hostname is False
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
+    @mock.patch("esrally.client.asynchronous.RallyAsyncElasticsearch")
+    def test_create_async_client_with_api_key_auth_override(self, es):
+        hosts = [{"host": "localhost", "port": 9200}]
+        client_options = {
+            "use_ssl": True,
+            "verify_certs": True,
+            "http_auth": ("user", "password"),
+        }
+        # make a copy so we can verify later that the factory did not modify it
+        original_client_options = deepcopy(client_options)
+        api_key = ("id", "secret")
+
+        f = client.EsClientFactory(hosts, client_options)
+
+        assert f.create_async(api_key=api_key)
+        assert "http_auth" not in f.client_options
+        assert f.client_options["api_key"] == api_key
+        assert client_options == original_client_options
+
+        es.assert_called_once_with(
+            hosts=hosts,
+            transport_class=VerifiedAsyncTransport,
+            connection_class=AIOHttpConnection,
+            ssl_context=f.ssl_context,
+            scheme="https",
+            serializer=f.client_options["serializer"],
+            trace_config=f.client_options["trace_config"],
+            api_key=api_key,
+        )
+
 
 @contextlib.contextmanager
 def _build_server(tmpdir, host):
@@ -453,6 +484,147 @@ class TestRestLayer:
         )
         with pytest.raises(exceptions.SystemSetupError, match="Could not connect to cluster via https. Is this an https endpoint?"):
             client.wait_for_rest_layer(es, max_attempts=3)
+
+
+class TestApiKeys:
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_successfully_creates_api_keys(self, es):
+        client_id = 0
+        assert client.create_api_key(es, client_id, max_attempts=3)
+        # even though max_attempts is 3, this should only be called once
+        es.security.create_api_key.assert_called_once_with({"name": f"rally-client-{client_id}"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_api_key_creation_fails_on_405_and_raises_system_setup_error(self, es):
+        client_id = 0
+        es.security.create_api_key.side_effect = elasticsearch.TransportError(405, "Incorrect HTTP method")
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match=re.escape("Got status code 405 when attempting to create API keys. Is Elasticsearch Security enabled?"),
+        ):
+            client.create_api_key(es, client_id, max_attempts=5)
+
+        es.security.create_api_key.assert_called_once_with({"name": f"rally-client-{client_id}"})
+
+    @mock.patch("time.sleep")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_retries_api_key_creation_on_transport_errors(self, es, sleep):
+        client_id = 0
+        es.security.create_api_key.side_effect = [
+            elasticsearch.TransportError(503, "Service Unavailable"),
+            elasticsearch.TransportError(401, "Unauthorized"),
+            elasticsearch.TransportError(408, "Timed Out"),
+            elasticsearch.TransportError(500, "Internal Server Error"),
+            {"id": "abc", "name": f"rally-client-{client_id}", "api_key": "123"},
+        ]
+        calls = [mock.call({"name": "rally-client-0"}) for _ in range(5)]
+
+        assert client.create_api_key(es, client_id, max_attempts=5)
+        assert es.security.create_api_key.call_args_list == calls
+
+    @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_successfully_deletes_api_keys(self, es, version):
+        ids = ["foo", "bar", "baz"]
+        es.info.return_value = {"version": {"number": version}}
+        if version == "7.9.0":
+            es.security.invalidate_api_key.return_value = [
+                {"invalidated_api_keys": ["foo"]},
+                {"invalidated_api_keys": ["bar"]},
+                {"invalidated_api_keys": ["baz"]},
+            ]
+            calls = [
+                mock.call({"id": "baz"}),
+                mock.call({"id": "bar"}),
+                mock.call({"id": "foo"}),
+            ]
+        else:
+            es.security.invalidate_api_key.return_value = {"invalidated_api_keys": ["foo", "bar", "baz"], "error_count": 0}
+            calls = [mock.call({"ids": ids})]
+
+        assert client.delete_api_keys(es, ids, max_attempts=3)
+        assert es.security.invalidate_api_key.has_calls(calls, any_order=True)
+
+    @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
+    @mock.patch("time.sleep")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_retries_api_keys_deletion_on_transport_errors(self, es, sleep, version):
+        max_attempts = 5
+        es.info.return_value = {"version": {"number": version}}
+        ids = ["foo", "bar", "baz"]
+        if version == "7.9.0":
+            es.security.invalidate_api_key.side_effect = [
+                {"invalidated_api_keys": ["foo"]},
+                {"invalidated_api_keys": ["bar"]},
+                elasticsearch.TransportError(401, "Unauthorized"),
+                elasticsearch.TransportError(503, "Service Unavailable"),
+                {"invalidated_api_keys": ["baz"]},
+            ]
+            calls = [
+                # foo and bar are deleted successfully, leaving only baz
+                mock.call({"id": "foo"}),
+                mock.call({"id": "bar"}),
+                # two exceptions are thrown, so it should take 3 attempts to delete baz
+                mock.call({"id": "baz"}),
+                mock.call({"id": "baz"}),
+                mock.call({"id": "baz"}),
+            ]
+        else:
+            es.security.invalidate_api_key.side_effect = [
+                elasticsearch.TransportError(503, "Service Unavailable"),
+                elasticsearch.TransportError(401, "Unauthorized"),
+                elasticsearch.TransportError(408, "Timed Out"),
+                elasticsearch.TransportError(500, "Internal Server Error"),
+                {"invalidated_api_keys": ["foo", "bar", "baz"], "error_count": 0},
+            ]
+            calls = [mock.call({"ids": ids}) for _ in range(max_attempts)]
+
+        assert client.delete_api_keys(es, ids, max_attempts=max_attempts)
+        assert es.security.invalidate_api_key.call_args_list == calls
+
+    @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_raises_exception_when_api_key_deletion_fails(self, es, version):
+        es.info.return_value = {"version": {"number": version}}
+        ids = ["foo", "bar", "baz", "qux"]
+        failed_to_delete = ["baz", "qux"]
+        if version == "7.9.0":
+            es.security.invalidate_api_key.side_effect = [
+                {"invalidated_api_keys": ["foo"]},
+                {"invalidated_api_keys": ["bar"]},
+                elasticsearch.TransportError(500, "Internal Server Error"),
+            ]
+
+            calls = [
+                mock.call({"id": "foo"}),
+                mock.call({"id": "bar"}),
+                mock.call({"id": "baz"}),
+            ]
+        else:
+            # Since there are two ways this version can fail, we interleave them
+            es.security.invalidate_api_key.side_effect = [
+                {
+                    "invalidated_api_keys": ["foo"],
+                    "error_count": 3,
+                },
+                elasticsearch.TransportError(500, "Internal Server Error"),
+                {
+                    "invalidated_api_keys": ["bar"],
+                    "error_count": 2,
+                },
+                elasticsearch.TransportError(500, "Internal Server Error"),
+            ]
+
+            calls = [
+                mock.call({"ids": ["foo", "bar", "baz", "qux"]}),
+                mock.call({"ids": ["bar", "baz", "qux"]}),
+                mock.call({"ids": ["bar", "baz", "qux"]}),
+            ]
+
+        with pytest.raises(exceptions.RallyError, match=re.escape(f"Could not delete API keys with the following IDs: {failed_to_delete}")):
+            client.delete_api_keys(es, ids, max_attempts=3)
+
+        es.security.invalidate_api_key.assert_has_calls(calls)
 
 
 class TestAsyncConnection:
