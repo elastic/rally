@@ -181,7 +181,7 @@ class BenchmarkCoordinator:
     def setup(self, sources=False):
         # to load the track we need to know the correct cluster distribution version. Usually, this value should be set
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
-        # to derive it ourselves. For source builds we always assume "master"
+        # to derive it ourselves. For source builds we always assume "main"
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
             distribution_version = mechanic.cluster_distribution_version(self.cfg)
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
