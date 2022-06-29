@@ -1,4 +1,4 @@
-FROM python:3.8.12-slim-bullseye
+FROM python:3.8.13-slim-bullseye
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
 
