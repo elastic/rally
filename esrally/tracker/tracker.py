@@ -94,7 +94,7 @@ def create_track(cfg):
         logger.info("Creating track [%s] matching datastreams [%s]", track_name, datastreams)
         extracted_indices = extract_indices_from_datastreams(client, datastreams)
         indices = extracted_indices
-        console.info(f"##### List datastreams to extract [{indices}]", logger=logger)
+        logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
 
     indices, corpora = extract_mappings_and_corpora(client, output_path, indices)
     if len(indices) == 0:
