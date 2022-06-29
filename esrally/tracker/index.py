@@ -32,6 +32,7 @@ ALLOWED_LIST_HIDDEN_INDICES = (
     ".ds-logs-elastic_agent",
 )
 
+
 def filter_ephemeral_index_settings(settings):
     """
     Some of the 'settings' reported by Elasticsearch for an index are
@@ -50,9 +51,6 @@ def update_index_setting_parameters(settings):
         if s in settings:
             orig_value = settings[s]
             settings[s] = param.format(orig=orig_value)
-
-
-
 
 
 def is_valid(index_name):
