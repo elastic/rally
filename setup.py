@@ -96,7 +96,7 @@ tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-as
 develop_require = [
     "tox==3.14.0",
     "sphinx==4.2.0",
-    "sphinx_rtd_theme==1.0.0",
+    "furo==2022.06.21",
     "twine==1.15.0",
     "wheel==0.33.6",
     "github3.py==1.3.0",
