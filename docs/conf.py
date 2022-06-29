@@ -40,7 +40,7 @@ templates_path = ["_templates"]
 # The suffix(es) of source filenames. You can specify multiple suffix as a list of string:
 # source_suffix = ['.rst', '.md']
 source_suffix = ".rst"
-master_doc = "index"
+root_doc = "index"
 language = None
 
 CI_VARS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".ci", "variables.json")
@@ -169,7 +169,7 @@ latex_elements = {}
 
 latex_documents = [
     (
-        master_doc,
+        root_doc,
         "Rally.tex",
         "Rally Documentation",
         "Daniel Mitterdorfer",
@@ -183,7 +183,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     (
-        master_doc,
+        root_doc,
         "esrally",
         "Rally Documentation",
         [author],
@@ -197,7 +197,7 @@ man_pages = [
 # -- Options for Texinfo output -------------------------------------------
 texinfo_documents = [
     (
-        master_doc,
+        root_doc,
         "Rally",
         "Rally Documentation",
         author,
