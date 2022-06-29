@@ -24,7 +24,13 @@ INDEX_SETTINGS_PARAMETERS = {
     "number_of_replicas": "{{{{number_of_replicas | default({orig})}}}}",
     "number_of_shards": "{{{{number_of_shards | default({orig})}}}}",
 }
-
+ALLOWED_LIST_HIDDEN_INDICES = (
+    ".ds-metrics-kubernetes",
+    ".ds-metrics-system",
+    ".ds-metrics-elastic_agent",
+    ".ds-logs-kubernetes",
+    ".ds-logs-elastic_agent",
+)
 
 def filter_ephemeral_index_settings(settings):
     """
@@ -46,19 +52,13 @@ def update_index_setting_parameters(settings):
             settings[s] = param.format(orig=orig_value)
 
 
-allowed_list_hidden_indices = [
-    ".ds-metrics-kubernetes",
-    ".ds-metrics-system",
-    ".ds-metrics-elastic_agent",
-    ".ds-logs-kubernetes",
-    ".ds-logs-elastic_agent",
-]
+
 
 
 def is_valid(index_name):
     if len(index_name) == 0:
         return False, "Index name is empty"
-    if index_name.startswith(".") and not index_name.startswith(tuple(allowed_list_hidden_indices)):
+    if index_name.startswith(".") and not index_name.startswith(ALLOWED_LIST_HIDDEN_INDICES):
         return False, f"Index [{index_name}] is hidden"
     return True, None
 
@@ -115,12 +115,12 @@ def extract(client, outdir, index_pattern):
     return results
 
 
-def datastreamextract(client, datastream_pattern):
+def extract_indices_from_datastream(client, datastream_pattern):
     """
     Calls Elasticsearch client get_data_stream function to retrieve list of indexes
     :param client: Elasticsearch client
-    :param index_pattern: name of datastream
-    :return: index creation dictionary
+    :param datastream_pattern: name of datastream
+    :return: list of index names
     """
     results = []
     # the response might contain multiple indices if a wildcard was provided
