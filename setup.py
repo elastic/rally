@@ -33,8 +33,6 @@ def str_from_file(name):
 raw_version = str_from_file("esrally/_version.py")
 version = re.match(r'__version__ = "(.+)"', raw_version).group(1)
 
-long_description = str_from_file("README.rst")
-
 # tuples of (major, minor) of supported Python versions ordered from lowest to highest
 supported_python_versions = [(3, 8), (3, 9), (3, 10)]
 
@@ -120,7 +118,8 @@ setup(
     maintainer_email="daniel.mitterdorfer@gmail.com",
     version=version,
     description="Macrobenchmarking framework for Elasticsearch",
-    long_description=long_description,
+    long_description=str_from_file("README.md"),
+    long_description_content_type="text/markdown",
     url="https://github.com/elastic/rally",
     license="Apache License, Version 2.0",
     packages=find_packages(where=".", exclude=("tests*", "benchmarks*", "it*")),
