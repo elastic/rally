@@ -88,3 +88,56 @@ def test_create_track(cfg, tmp_path, test_cluster):
     # and also run a normal (short) benchmark using the created track
     cmd = f"--pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track-path={track_path}"
     assert it.race(cfg, cmd) == 0
+
+
+@it.rally_in_mem
+def test_create_track_with_datastream(cfg, tmp_path, test_cluster):
+    # use 0.05% of geonames corpus to generate data. We need something small but >1000 docs to properly test
+    # the -1k corpus too.
+    cmd = (
+        f"--pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track=geonames "
+        f'--challenge=append-no-conflicts-index-only --track-params="ingest_percentage:0.05" --on-error=abort '
+        f'--include-tasks="delete-index,create-index,check-cluster-health,index-append" --quiet'
+    )
+    assert it.race(cfg, cmd) == 0
+
+    # create the track
+    track_name = f"test-track-{uuid.uuid4()}"
+    track_path = tmp_path / track_name
+
+    assert (
+        it.esrally(
+            cfg,
+            f"create-track --target-hosts=127.0.0.1:{test_cluster.http_port} --datastreams=geonames "
+            f"--track={track_name} --output-path={tmp_path}",
+        )
+        == 0
+    )
+
+    base_generated_corpora = "geonames-documents"
+    expected_files = [
+        "track.json",
+        "geonames.json",
+        f"{base_generated_corpora}-1k.json",
+        f"{base_generated_corpora}.json",
+        f"{base_generated_corpora}-1k.json.bz2",
+        f"{base_generated_corpora}.json.bz2",
+    ]
+
+    for f in expected_files:
+        full_path = track_path / f
+        assert full_path.exists(), f"Expected file to exist at path [{full_path}]"
+
+    with open(track_path / f"{base_generated_corpora}-1k.json", "rt") as f:
+        num_lines = sum(1 for line in f)
+    assert (
+        num_lines == 1000
+    ), f"Corpora [{base_generated_corpora}-1k.json] used by test-mode is [{num_lines}] lines but should be 1000 lines"
+
+    # run a benchmark in test mode with the created track
+    cmd = f"--test-mode --pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track-path={track_path}"
+    assert it.race(cfg, cmd) == 0
+
+    # and also run a normal (short) benchmark using the created track
+    cmd = f"--pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track-path={track_path}"
+    assert it.race(cfg, cmd) == 0

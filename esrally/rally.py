@@ -994,7 +994,9 @@ def dispatch_sub_command(arg_parser, args, cfg):
             generate(cfg)
         elif sub_command == "create-track":
             if args.datastreams is None and args.indices is None:
-                raise exceptions.SystemSetupError("Missing Arguments! Following arguments are required: --indices or specify --datastream ", sub_command)
+                raise exceptions.SystemSetupError(
+                    "Missing Arguments! Following arguments are required: --indices or specify --datastream ", sub_command
+                )
             if args.datastreams is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
                 cfg.add(config.Scope.applicationOverride, "generator", "datastreams", args.datastreams)
