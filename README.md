@@ -1,4 +1,4 @@
-<p align="center"><img alt="Rally logo" src="https://raw.githubusercontent.com/elastic/rally/master/docs/_static/rally-logo.svg" width="350px"></p>
+<p align="center"><img alt="Rally logo" src="https://raw.githubusercontent.com/elastic/rally/master/docs/rally-logo.svg" width="350px"></p>
 
 <h1 align="center">Rally</h1>
 
