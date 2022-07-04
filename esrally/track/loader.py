@@ -105,7 +105,7 @@ def tracks(cfg):
     different versions, this will be reflected in the output.
 
     :param cfg: The config object.
-    :return: A list of tracks that are available for the provided distribution version or else for the master version.
+    :return: A list of tracks that are available for the provided distribution version or else for the main version.
     """
     repo = track_repo(cfg)
     return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]

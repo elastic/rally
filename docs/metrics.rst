@@ -95,7 +95,7 @@ task, operation, operation-type
 
 ``operation`` is the name of the operation (as specified in the track file) that ran when this metric has been gathered. It will only be set for metrics with name ``latency`` and ``throughput``.
 
-``operation-type`` is the more abstract type of an operation. During a race, multiple queries may be issued which are different ``operation``s but they all have the same ``operation-type`` (Search). For some metrics, only the operation type matters, e.g. it does not make any sense to attribute the CPU usage to an individual query but instead attribute it just to the operation type.
+``operation-type`` is the more abstract type of an operation. During a race, multiple queries may be issued which are different operations but they all have the same ``operation-type`` (search). For some metrics, only the operation type matters, e.g. it does not make any sense to attribute the CPU usage to an individual query but instead attribute it just to the operation type.
 
 meta
 ~~~~
@@ -129,6 +129,10 @@ Rally stores the following metrics:
 * ``node_total_young_gen_gc_count``: The total number of young generation garbage collections across the whole cluster as reported by the node stats API.
 * ``node_total_old_gen_gc_time``: The total runtime of the old generation garbage collector across the whole cluster as reported by the node stats API.
 * ``node_total_old_gen_gc_count``: The total number of old generation garbage collections across the whole cluster as reported by the node stats API.
+* ``node_total_zgc_cycles_gc_time``: The total time spent doing GC by the ZGC garbage collector across the whole cluster as reported by the node stats API.
+* ``node_total_zgc_cycles_gc_count``: The total number of garbage collections performed by ZGC across the whole cluster as reported by the node stats API.
+* ``node_total_zgc_pauses_gc_time``: The total time spent in Stop-The-World pauses by the ZGC garbage collector across the whole cluster as reported by the node stats API.
+* ``node_total_zgc_pauses_gc_count``: The total number of Stop-The-World pauses performed by ZGC across the whole cluster as reported by the node stats API.
 * ``segments_count``: Total number of segments as reported by the index stats API.
 * ``segments_memory_in_bytes``: Number of bytes used for segments as reported by the index stats API.
 * ``segments_doc_values_memory_in_bytes``: Number of bytes used for doc values as reported by the index stats API.

@@ -1690,6 +1690,12 @@ class TestStatsCalculator:
         store.put_value_cluster_level("latency", 220, unit="ms", task="index #1", operation_type=track.OperationType.Bulk)
         store.put_value_cluster_level("latency", 225, unit="ms", task="index #1", operation_type=track.OperationType.Bulk)
 
+        for collector in ("young_gen", "old_gen", "zgc_cycles", "zgc_pauses"):
+            store.put_value_node_level("rally-node-0", f"node_{collector}_gc_time", 100, "ms")
+            store.put_value_node_level("rally-node-0", f"node_{collector}_gc_count", 1)
+            store.put_value_cluster_level(f"node_total_{collector}_gc_time", 100, "ms")
+            store.put_value_cluster_level(f"node_total_{collector}_gc_count", 1)
+
         store.put_value_cluster_level(
             "service_time",
             250,
@@ -1810,6 +1816,15 @@ class TestStatsCalculator:
             }
         ]
         assert opm2["duration"] == 600 * 1000
+
+        assert stats.young_gc_time == 100
+        assert stats.young_gc_count == 1
+        assert stats.old_gc_time == 100
+        assert stats.old_gc_count == 1
+        assert stats.zgc_cycles_gc_time == 100
+        assert stats.zgc_cycles_gc_count == 1
+        assert stats.zgc_pauses_gc_time == 100
+        assert stats.zgc_pauses_gc_count == 1
 
     def test_calculate_system_stats(self):
         cfg = config.Config()
@@ -1982,6 +1997,10 @@ class TestGlobalStats:
             "young_gc_count": 7,
             "old_gc_time": 0,
             "old_gc_count": 0,
+            "zgc_cycles_gc_time": 100,
+            "zgc_cycles_gc_count": 1,
+            "zgc_pauses_gc_time": 50,
+            "zgc_pauses_gc_count": 1,
             "merge_time": 3702,
             "merge_time_per_shard": {
                 "min": 40,
@@ -2150,6 +2169,32 @@ class TestGlobalStats:
             "name": "old_gc_count",
             "value": {
                 "single": 0,
+            },
+        }
+
+        assert select(metric_list, "zgc_cycles_gc_time") == {
+            "name": "zgc_cycles_gc_time",
+            "value": {
+                "single": 100,
+            },
+        }
+        assert select(metric_list, "zgc_cycles_gc_count") == {
+            "name": "zgc_cycles_gc_count",
+            "value": {
+                "single": 1,
+            },
+        }
+
+        assert select(metric_list, "zgc_pauses_gc_time") == {
+            "name": "zgc_pauses_gc_time",
+            "value": {
+                "single": 50,
+            },
+        }
+        assert select(metric_list, "zgc_pauses_gc_count") == {
+            "name": "zgc_pauses_gc_count",
+            "value": {
+                "single": 1,
             },
         }
 

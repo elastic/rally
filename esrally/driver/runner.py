@@ -48,6 +48,7 @@ def register_default_runners():
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
     register_runner(track.OperationType.Search, Query(), async_runner=True)
     register_runner(track.OperationType.PaginatedSearch, Query(), async_runner=True)
+    register_runner(track.OperationType.CompositeAgg, Query(), async_runner=True)
     register_runner(track.OperationType.ScrollSearch, Query(), async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
@@ -732,23 +733,29 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: List[str], lists: List[str] = None) -> dict:
+def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: List[str] = None) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
-    contain elements (respective key will be ``False``).
+    contain elements (respective key will be ``False``). If ``objects`` is specified, it will in addition extract
+    the JSON objects under the given keys. These JSON objects must be flat dicts, only containing primitive types
+    within.
 
     :param text: A text to parse.
     :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
     :param lists: An optional list of property paths to JSON lists in the provided text.
-    :return: A dict containing all properties and lists that have been found in the provided text.
+    :param objects: An optional list of property paths to flat JSON objects in the provided text.
+    :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
     text.seek(0)
     parser = ijson.parse(text)
     parsed = {}
     parsed_lists = {}
+    current_object = {}
     current_list = None
     expect_end_array = False
+    parsed_objects = {}
+    in_object = None
     try:
         for prefix, event, value in parser:
             if expect_end_array:
@@ -760,14 +767,28 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None) -> dict:
             elif lists is not None and prefix in lists and event == "start_array":
                 current_list = prefix
                 expect_end_array = True
+            elif objects is not None and event == "end_map" and prefix in objects:
+                parsed_objects[in_object] = current_object
+                in_object = None
+            elif objects is not None and event == "start_map" and prefix in objects:
+                in_object = prefix
+                current_object = {}
+            elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
+                current_object[prefix[len(in_object) + 1 :]] = value
             # found all necessary properties
-            if len(parsed) == len(props) and (lists is None or len(parsed_lists) == len(lists)):
+            if (
+                len(parsed) == len(props)
+                and (lists is None or len(parsed_lists) == len(lists))
+                and (objects is None or len(parsed_objects) == len(objects))
+            ):
                 break
+
     except ijson.IncompleteJSONError:
         # did not find all properties
         pass
 
     parsed.update(parsed_lists)
+    parsed.update(parsed_objects)
     return parsed
 
 
@@ -777,7 +798,7 @@ class Query(Runner):
 
     It expects at least the following keys in the `params` hash:
 
-    * `operation-type`: One of `search`, `paginated-search`, or `scroll-search`.
+    * `operation-type`: One of `search`, `paginated-search`, `scroll-search`, or `composite-agg`
     * `index`: The index or indices against which to issue the query.
     * `type`: See `index`
     * `cache`: True iff the request cache should be used.
@@ -788,7 +809,7 @@ class Query(Runner):
     * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
                                                corresponding response in more detail, this might incur additional
                                                overhead which can skew measurement results. This flag is ineffective
-                                               for scroll queries (detailed meta-data are always returned).
+                                               for scroll queries or composite aggs (detailed meta-data are always returned).
     * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present,
                            defaults to ``None`` and potentially falls back to the global timeout setting.
     * `results-per-page`: Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and
@@ -805,7 +826,7 @@ class Query(Runner):
     The following meta data are always returned:
 
     * ``weight``: operation-agnostic representation of the "weight" of an operation (used internally by Rally for throughput calculation).
-                  Always 1 for normal queries and the number of retrieved pages for scroll queries.
+                  Always 1 for normal queries and the number of retrieved pages for scroll queries or composite aggs.
     * ``unit``: The unit in which to interpret ``weight``. Always "ops".
     * ``hits``: Total number of hits for this operation.
     * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
@@ -819,7 +840,8 @@ class Query(Runner):
 
     def __init__(self):
         super().__init__()
-        self._extractor = SearchAfterExtractor()
+        self._search_after_extractor = SearchAfterExtractor()
+        self._composite_agg_extractor = CompositeAggExtractor()
 
     async def __call__(self, es, params):
         request_params, headers = self._transport_request_params(params)
@@ -830,7 +852,7 @@ class Query(Runner):
         body = mandatory(params, "body", self)
         operation_type = params.get("operation-type")
         size = params.get("results-per-page")
-        if size:
+        if size and operation_type != "composite-agg":
             body["size"] = size
         detailed_results = params.get("detailed-results", False)
         encoding_header = self._query_headers(params)
@@ -867,7 +889,7 @@ class Query(Runner):
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = self._extractor(response, bool(pit_op), results.get("hits"))
+                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), results.get("hits"))
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -890,6 +912,99 @@ class Query(Runner):
                     break
 
             return results
+
+        async def _composite_agg(es, params):
+            index = params.get("index", "_all")
+            pit_op = params.get("with-point-in-time-from")
+            results = {
+                "unit": "pages",
+                "success": True,
+                "timed_out": False,
+                "took": 0,
+            }
+            if pit_op:
+                # these are disallowed as they are encoded in the pit_id
+                for item in ["index", "routing", "preference"]:
+                    body.pop(item, None)
+                index = None
+            # explicitly convert to int to provoke an error otherwise
+            total_pages = sys.maxsize if params.get("pages", "all") == "all" else int(mandatory(params, "pages", self))
+            for page in range(1, total_pages + 1):
+                if pit_op:
+                    pit_id = CompositeContext.get(pit_op)
+                    body["pit"] = {"id": pit_id, "keep_alive": "1m"}
+
+                paths_to_composite = paths_to_composite_agg(body, [])
+                if not paths_to_composite or len(paths_to_composite) != 1:
+                    raise exceptions.DataError("Unique path to composite agg required")
+                path_to_composite = paths_to_composite[0]
+                composite_agg_body = resolve_composite_agg(body, path_to_composite)
+                if not composite_agg_body:
+                    raise exceptions.DataError("Could not find composite agg - parser inconsistency")
+                if size:
+                    composite_agg_body["size"] = size
+
+                body_to_send = tree_copy_composite_agg(body, path_to_composite)
+                response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
+                parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, results.get("hits"))
+                results["pages"] = page
+                results["weight"] = page
+                if results.get("hits") is None:
+                    results["hits"] = parsed.get("hits.total.value")
+                    results["hits_relation"] = parsed.get("hits.total.relation")
+                results["took"] += parsed.get("took")
+                # when this evaluates to True, keep it for the final result
+                if not results["timed_out"]:
+                    results["timed_out"] = parsed.get("timed_out")
+                if pit_op:
+                    # per the documentation the response pit id is most up-to-date
+                    CompositeContext.put(pit_op, parsed.get("pit_id"))
+
+                after_key = parsed["after_key"]
+                if isinstance(after_key, dict):
+                    composite_agg_body["after"] = after_key
+                else:
+                    # body needs to be un-mutated for the next iteration (preferring to do this over a deepcopy at the start)
+                    body.pop("pit", None)
+                    composite_agg_body.pop("after", None)
+                    break
+
+            return results
+
+        def select_aggs(obj):
+            if isinstance(obj, dict):
+                return obj.get("aggs") or obj.get("aggregations")
+            return None
+
+        def paths_to_composite_agg(obj, parent_key_path):
+            aggs = select_aggs(obj)
+            paths = []
+            if isinstance(aggs, dict):
+                for key, subobj in aggs.items():
+                    if isinstance(subobj, dict) and isinstance(subobj.get("composite"), dict):
+                        paths = paths + [parent_key_path + [key]]
+                    paths = paths + paths_to_composite_agg(subobj, parent_key_path + [key])
+            return paths
+
+        def resolve_composite_agg(obj, key_path):
+            if len(key_path) == 0:
+                return obj.get("composite")
+            else:
+                aggs = select_aggs(obj)
+                return resolve_composite_agg(aggs[key_path[0]], key_path[1:])
+
+        def tree_copy_composite_agg(obj, key_path):
+            obj = obj.copy()
+            if len(key_path) == 0:
+                obj["composite"] = obj["composite"].copy()
+            else:
+                aggs = None
+                if "aggs" in obj:
+                    aggs = obj["aggs"] = obj["aggs"].copy()
+                elif "aggregations" in obj:
+                    aggs = obj["aggregations"] = obj["aggregations"].copy()
+                aggs[key_path[0]] = tree_copy_composite_agg(aggs[key_path[0]], key_path[1:])
+            return obj
 
         async def _request_body_query(es, params):
             doc_type = params.get("type")
@@ -950,8 +1065,12 @@ class Query(Runner):
                         took = props.get("took", 0)
                         all_results_collected = (size is not None and hits < size) or hits == 0
                     else:
-                        r = await es.transport.perform_request(
-                            "GET", "/_search/scroll", body={"scroll_id": scroll_id, "scroll": "10s"}, params=request_params, headers=headers
+                        r = await es.perform_request(
+                            method="GET",
+                            path="/_search/scroll",
+                            body={"scroll_id": scroll_id, "scroll": "10s"},
+                            params=request_params,
+                            headers=headers,
                         )
                         props = parse(r, ["timed_out", "took"], ["hits.hits"])
                         timed_out = timed_out or props.get("timed_out", False)
@@ -987,6 +1106,8 @@ class Query(Runner):
             return await _search_after_query(es, params)
         elif operation_type == "scroll-search":
             return await _scroll_query(es, params)
+        elif operation_type == "composite-agg":
+            return await _composite_agg(es, params)
         elif operation_type == "search":
             if "pages" in params:
                 logging.getLogger(__name__).warning(
@@ -1007,7 +1128,7 @@ class Query(Runner):
             components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
-        return await es.transport.perform_request("GET", "/" + path, params=params, body=body, headers=headers)
+        return await es.perform_request(method="GET", path="/" + path, params=params, body=body, headers=headers)
 
     def _query_headers(self, params):
         # reduces overhead due to decompression of very large responses
@@ -1055,6 +1176,30 @@ class SearchAfterExtractor:
             return json.loads(last_sort_str.group(1))
         else:
             return None
+
+
+class CompositeAggExtractor:
+    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: List, hits_total: Optional[int]) -> dict:
+        # not a class member as we would want to mutate over the course of execution for efficiency
+        properties = ["timed_out", "took"]
+        if get_point_in_time:
+            properties.append("pit_id")
+        # we only need to parse these the first time, subsequent responses should have the same values
+        if hits_total is None:
+            properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
+
+        after_key = "aggregations." + (".".join(path_to_composite_agg)) + ".after_key"
+
+        parsed = parse(response, properties, None, [after_key])
+
+        if get_point_in_time and not parsed.get("pit_id"):
+            raise exceptions.RallyAssertionError("Paginated query failure: pit_id was expected but not found in the response.")
+        # standardize these before returning...
+        parsed["hits.total.value"] = parsed.pop("hits.total.value", parsed.pop("hits.total", hits_total))
+        parsed["hits.total.relation"] = parsed.get("hits.total.relation", "eq")
+        parsed["after_key"] = parsed.pop(after_key, None)
+
+        return parsed
 
 
 class ClusterHealth(Runner):
@@ -1179,7 +1324,7 @@ class CreateDataStream(Runner):
         data_streams = mandatory(params, "data-streams", self)
         request_params = mandatory(params, "request-params", self)
         for data_stream in data_streams:
-            await es.indices.create_data_stream(data_stream, params=request_params)
+            await es.indices.create_data_stream(name=data_stream, params=request_params)
         return {
             "weight": len(data_streams),
             "unit": "ops",
@@ -1254,11 +1399,11 @@ class DeleteDataStream(Runner):
 
         for data_stream in data_streams:
             if not only_if_exists:
-                await es.indices.delete_data_stream(data_stream, ignore=[404], params=request_params)
+                await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
                 ops += 1
             elif only_if_exists and await es.indices.exists(index=data_stream):
                 self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
-                await es.indices.delete_data_stream(data_stream, params=request_params)
+                await es.indices.delete_data_stream(name=data_stream, params=request_params)
                 ops += 1
 
         return {
@@ -1303,19 +1448,12 @@ class DeleteComponentTemplate(Runner):
         only_if_exists = mandatory(params, "only-if-exists", self)
         request_params = mandatory(params, "request-params", self)
 
-        async def _exists(name):
-            # pylint: disable=import-outside-toplevel
-            from elasticsearch.client import _make_path
-
-            # currently not supported by client and hence custom request
-            return await es.transport.perform_request("HEAD", _make_path("_component_template", name))
-
         ops_count = 0
         for template_name in template_names:
             if not only_if_exists:
                 await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await _exists(template_name):
+            elif only_if_exists and await es.cluster.exists_component_template(name=template_name):
                 self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
                 await es.cluster.delete_component_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1365,7 +1503,7 @@ class DeleteComposableTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_index_template(template_name):
+            elif only_if_exists and await es.indices.exists_index_template(name=template_name):
                 self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_index_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1420,7 +1558,7 @@ class DeleteIndexTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_template(template_name):
+            elif only_if_exists and await es.indices.exists_template(name=template_name):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1461,7 +1599,7 @@ class ShrinkIndex(Runner):
 
     async def __call__(self, es, params):
         source_index = mandatory(params, "source-index", self)
-        source_indices_get = await es.indices.get(source_index)
+        source_indices_get = await es.indices.get(index=source_index)
         source_indices = list(source_indices_get.keys())
         source_indices_stem = commonprefix(source_indices)
 
@@ -1533,13 +1671,13 @@ class CreateMlDatafeed(Runner):
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
         try:
-            await es.xpack.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
+            await es.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
         except elasticsearch.TransportError as e:
             # fallback to old path
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "PUT",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}",
+                await es.perform_request(
+                    method="PUT",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
                     body=body,
                 )
             else:
@@ -1562,13 +1700,13 @@ class DeleteMlDatafeed(Runner):
         force = params.get("force", False)
         try:
             # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
-            await es.xpack.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
+            await es.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "DELETE",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}",
+                await es.perform_request(
+                    method="DELETE",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
                     params={"force": escape(force), "ignore": 404},
                 )
             else:
@@ -1593,13 +1731,13 @@ class StartMlDatafeed(Runner):
         end = params.get("end")
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
+            await es.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "POST",
-                    f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
                     body=body,
                 )
             else:
@@ -1622,7 +1760,7 @@ class StopMlDatafeed(Runner):
         force = params.get("force", False)
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
+            await es.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1631,7 +1769,11 @@ class StopMlDatafeed(Runner):
                 }
                 if timeout:
                     request_params["timeout"] = escape(timeout)
-                await es.transport.perform_request("POST", f"/_xpack/ml/datafeeds/{datafeed_id}/_stop", params=request_params)
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
+                    params=request_params,
+                )
             else:
                 raise e
 
@@ -1651,13 +1793,13 @@ class CreateMlJob(Runner):
         job_id = mandatory(params, "job-id", self)
         body = mandatory(params, "body", self)
         try:
-            await es.xpack.ml.put_job(job_id=job_id, body=body)
+            await es.ml.put_job(job_id=job_id, body=body)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "PUT",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}",
+                await es.perform_request(
+                    method="PUT",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
                     body=body,
                 )
             else:
@@ -1680,13 +1822,13 @@ class DeleteMlJob(Runner):
         force = params.get("force", False)
         # we don't want to fail if a job does not exist, thus we ignore 404s.
         try:
-            await es.xpack.ml.delete_job(job_id=job_id, force=force, ignore=[404])
+            await es.ml.delete_job(job_id=job_id, force=force, ignore=[404])
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "DELETE",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}",
+                await es.perform_request(
+                    method="DELETE",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
                     params={"force": escape(force), "ignore": 404},
                 )
             else:
@@ -1707,13 +1849,13 @@ class OpenMlJob(Runner):
 
         job_id = mandatory(params, "job-id", self)
         try:
-            await es.xpack.ml.open_job(job_id=job_id)
+            await es.ml.open_job(job_id=job_id)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
-                await es.transport.perform_request(
-                    "POST",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
                 )
             else:
                 raise e
@@ -1735,7 +1877,7 @@ class CloseMlJob(Runner):
         force = params.get("force", False)
         timeout = params.get("timeout")
         try:
-            await es.xpack.ml.close_job(job_id=job_id, force=force, timeout=timeout)
+            await es.ml.close_job(job_id=job_id, force=force, timeout=timeout)
         except elasticsearch.TransportError as e:
             # fallback to old path (ES < 7)
             if e.status_code == 400:
@@ -1745,9 +1887,9 @@ class CloseMlJob(Runner):
                 if timeout:
                     request_params["timeout"] = escape(timeout)
 
-                await es.transport.perform_request(
-                    "POST",
-                    f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
                     params=request_params,
                 )
             else:
@@ -1770,8 +1912,8 @@ class RawRequest(Runner):
             # counter-intuitive, but preserves prior behavior
             headers = None
 
-        await es.transport.perform_request(
-            method=params.get("method", "GET"), url=path, headers=headers, body=params.get("body"), params=request_params
+        await es.perform_request(
+            method=params.get("method", "GET"), path=path, headers=headers, body=params.get("body"), params=request_params
         )
 
     def __repr__(self, *args, **kwargs):
@@ -2339,6 +2481,7 @@ class Composite(Runner):
             "close-point-in-time",
             "search",
             "paginated-search",
+            "composite-agg",
             "raw-request",
             "sleep",
             "submit-async-search",
@@ -2462,7 +2605,7 @@ class Sql(Runner):
 
         es.return_raw_response()
 
-        r = await es.transport.perform_request("POST", "/_sql", body=body)
+        r = await es.perform_request(method="POST", path="/_sql", body=body)
         pages -= 1
         weight = 1
 
@@ -2474,7 +2617,7 @@ class Sql(Runner):
                     "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
                 )
 
-            r = await es.transport.perform_request("POST", "/_sql", body={"cursor": cursor})
+            r = await es.perform_request(method="POST", path="/_sql", body={"cursor": cursor})
             pages -= 1
             weight += 1
 

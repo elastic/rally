@@ -91,12 +91,12 @@ tox-env-clean:
 
 lint: check-venv
 	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it setup.py -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
-	@. $(VENV_ACTIVATE_FILE); black --check esrally benchmarks scripts tests it setup.py
-	@. $(VENV_ACTIVATE_FILE); isort --check esrally benchmarks scripts tests it setup.py
+	@. $(VENV_ACTIVATE_FILE); black --check --diff .
+	@. $(VENV_ACTIVATE_FILE); isort --check --diff .
 
 format: check-venv
-	@. $(VENV_ACTIVATE_FILE); black esrally benchmarks scripts tests it setup.py
-	@. $(VENV_ACTIVATE_FILE); isort esrally benchmarks scripts tests it setup.py
+	@. $(VENV_ACTIVATE_FILE); black .
+	@. $(VENV_ACTIVATE_FILE); isort .
 
 docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html

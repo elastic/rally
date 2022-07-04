@@ -1496,7 +1496,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1525,8 +1525,8 @@ class TestQueryRunner:
             "took": 5,
         }
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET", "/_all/_search", params={"request_cache": "true"}, body=params["body"], headers=None
+        es.perform_request.assert_awaited_once_with(
+            method="GET", path="/_all/_search", params={"request_cache": "true"}, body=params["body"], headers=None
         )
         es.clear_scroll.assert_not_called()
 
@@ -1544,7 +1544,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1572,9 +1572,9 @@ class TestQueryRunner:
             "took": 5,
         }
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/_all/_search",
             params={"request_timeout": 3.0, "request_cache": "true"},
             body=params["body"],
             headers={"header1": "value1", "x-opaque-id": "test-id1"},
@@ -1598,7 +1598,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
 
         query_runner = runner.Query()
         params = {
@@ -1625,9 +1625,9 @@ class TestQueryRunner:
             "took": 62,
         }
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/_all/_search",
             params={
                 "request_cache": "false",
                 "q": "user:kimchy",
@@ -1654,7 +1654,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
 
         query_runner = runner.Query()
         params = {
@@ -1679,9 +1679,9 @@ class TestQueryRunner:
         assert "took" not in result
         assert "error-type" not in result
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/_all/_search",
             params={
                 "q": "user:kimchy",
             },
@@ -1704,7 +1704,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1733,9 +1733,9 @@ class TestQueryRunner:
             "took": 5,
         }
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/_all/_search",
             params={
                 "request_cache": "true",
             },
@@ -1761,7 +1761,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1790,9 +1790,9 @@ class TestQueryRunner:
             "took": 5,
         }
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/unittest/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/unittest/_search",
             params={},
             body=params["body"],
             headers={
@@ -1816,7 +1816,7 @@ class TestQueryRunner:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
 
         query_runner = runner.Query()
 
@@ -1846,9 +1846,9 @@ class TestQueryRunner:
             "took": 5,
         }
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/unittest/type/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/unittest/type/_search",
             body=params["body"],
             params={},
             headers=None,
@@ -1872,7 +1872,7 @@ class TestQueryRunner:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
         es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
@@ -1904,9 +1904,9 @@ class TestQueryRunner:
         }
         assert "error-type" not in results
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/unittest/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/unittest/_search",
             params={
                 "request_cache": "true",
                 "sort": "_doc",
@@ -1935,7 +1935,7 @@ class TestQueryRunner:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
         es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
@@ -1967,9 +1967,9 @@ class TestQueryRunner:
         }
         assert "error-type" not in results
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/unittest/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/unittest/_search",
             params={"sort": "_doc", "scroll": "10s", "size": 100},
             body=params["body"],
             headers={"Accept-Encoding": "identity"},
@@ -1993,7 +1993,7 @@ class TestQueryRunner:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
         es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
@@ -2024,9 +2024,9 @@ class TestQueryRunner:
         }
         assert "error-type" not in results
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "GET",
-            "/_all/_search",
+        es.perform_request.assert_awaited_once_with(
+            method="GET",
+            path="/_all/_search",
             params={
                 "sort": "_doc",
                 "scroll": "10s",
@@ -2071,7 +2071,7 @@ class TestQueryRunner:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(
+        es.perform_request = mock.AsyncMock(
             side_effect=[
                 io.StringIO(json.dumps(search_response)),
                 io.StringIO(json.dumps(scroll_response)),
@@ -2127,7 +2127,7 @@ class TestQueryRunner:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
         es.clear_scroll = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout())
 
         query_runner = runner.Query()
@@ -2190,7 +2190,7 @@ class TestQueryRunner:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(
+        es.perform_request = mock.AsyncMock(
             side_effect=[
                 io.StringIO(json.dumps(search_response)),
                 io.StringIO(json.dumps(scroll_response)),
@@ -2246,7 +2246,7 @@ class TestQueryRunner:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
         es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
 
         query_runner = runner.Query()
@@ -2623,8 +2623,8 @@ class TestCreateDataStreamRunner:
 
         es.indices.create_data_stream.assert_has_awaits(
             [
-                mock.call("data-stream-A", params=request_params),
-                mock.call("data-stream-B", params=request_params),
+                mock.call(name="data-stream-A", params=request_params),
+                mock.call(name="data-stream-B", params=request_params),
             ]
         )
 
@@ -2730,7 +2730,7 @@ class TestDeleteDataStreamRunner:
             "success": True,
         }
 
-        es.indices.delete_data_stream.assert_awaited_once_with("data-stream-B", params={})
+        es.indices.delete_data_stream.assert_awaited_once_with(name="data-stream-B", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -2756,8 +2756,8 @@ class TestDeleteDataStreamRunner:
 
         es.indices.delete_data_stream.assert_has_awaits(
             [
-                mock.call("data-stream-A", ignore=[404], params=params["request-params"]),
-                mock.call("data-stream-B", ignore=[404], params=params["request-params"]),
+                mock.call(name="data-stream-A", ignore=[404], params=params["request-params"]),
+                mock.call(name="data-stream-B", ignore=[404], params=params["request-params"]),
             ]
         )
         assert es.indices.exists.await_count == 0
@@ -2976,11 +2976,10 @@ class TestDeleteComponentTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        async def _side_effect(http_method, path):
-            if http_method == "HEAD":
-                return path == "/_component_template/templateB"
+        async def _side_effect(name):
+            return name == "templateB"
 
-        es.transport.perform_request = mock.AsyncMock(side_effect=_side_effect)
+        es.cluster.exists_component_template = mock.AsyncMock(side_effect=_side_effect)
         es.cluster.delete_component_template = mock.AsyncMock()
 
         r = runner.DeleteComponentTemplate()
@@ -3187,20 +3186,20 @@ class TestCreateMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_datafeed(self, es):
-        es.xpack.ml.put_datafeed = mock.AsyncMock()
+        es.ml.put_datafeed = mock.AsyncMock()
 
         params = {"datafeed-id": "some-data-feed", "body": {"job_id": "total-requests", "indices": ["server-metrics"]}}
 
         r = runner.CreateMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.put_datafeed.assert_awaited_once_with(datafeed_id=params["datafeed-id"], body=params["body"])
+        es.ml.put_datafeed.assert_awaited_once_with(datafeed_id=params["datafeed-id"], body=params["body"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_datafeed_fallback(self, es):
-        es.xpack.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request = mock.AsyncMock()
+        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
         body = {"job_id": "total-requests", "indices": ["server-metrics"]}
         params = {"datafeed-id": datafeed_id, "body": body}
@@ -3208,14 +3207,14 @@ class TestCreateMlDatafeed:
         r = runner.CreateMlDatafeed()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with("PUT", f"/_xpack/ml/datafeeds/{datafeed_id}", body=body)
+        es.perform_request.assert_awaited_once_with(method="PUT", path=f"/_xpack/ml/datafeeds/{datafeed_id}", body=body)
 
 
 class TestDeleteMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_datafeed(self, es):
-        es.xpack.ml.delete_datafeed = mock.AsyncMock()
+        es.ml.delete_datafeed = mock.AsyncMock()
 
         datafeed_id = "some-data-feed"
         params = {"datafeed-id": datafeed_id}
@@ -3223,13 +3222,14 @@ class TestDeleteMlDatafeed:
         r = runner.DeleteMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.delete_datafeed.assert_awaited_once_with(datafeed_id=datafeed_id, force=False, ignore=[404])
+        es.ml.delete_datafeed.assert_awaited_once_with(datafeed_id=datafeed_id, force=False, ignore=[404])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_datafeed_fallback(self, es):
-        es.xpack.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request = mock.AsyncMock()
+        es.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+
+        es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
         params = {
             "datafeed-id": datafeed_id,
@@ -3238,8 +3238,8 @@ class TestDeleteMlDatafeed:
         r = runner.DeleteMlDatafeed()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "DELETE", f"/_xpack/ml/datafeeds/{datafeed_id}", params={"force": "false", "ignore": 404}
+        es.perform_request.assert_awaited_once_with(
+            method="DELETE", path=f"/_xpack/ml/datafeeds/{datafeed_id}", params={"force": "false", "ignore": 404}
         )
 
 
@@ -3247,33 +3247,33 @@ class TestStartMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_body(self, es):
-        es.xpack.ml.start_datafeed = mock.AsyncMock()
+        es.ml.start_datafeed = mock.AsyncMock()
         params = {"datafeed-id": "some-data-feed", "body": {"end": "now"}}
 
         r = runner.StartMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.start_datafeed.assert_awaited_once_with(
+        es.ml.start_datafeed.assert_awaited_once_with(
             datafeed_id=params["datafeed-id"], body=params["body"], start=None, end=None, timeout=None
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_body_fallback(self, es):
-        es.xpack.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request = mock.AsyncMock()
+        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.perform_request = mock.AsyncMock()
         body = {"end": "now"}
         params = {"datafeed-id": "some-data-feed", "body": body}
 
         r = runner.StartMlDatafeed()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with("POST", f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_start", body=body)
+        es.perform_request.assert_awaited_once_with(method="POST", path=f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_start", body=body)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_params(self, es):
-        es.xpack.ml.start_datafeed = mock.AsyncMock()
+        es.ml.start_datafeed = mock.AsyncMock()
         params = {
             "datafeed-id": "some-data-feed",
             "start": "2017-01-01T01:00:00Z",
@@ -3284,7 +3284,7 @@ class TestStartMlDatafeed:
         r = runner.StartMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.start_datafeed.assert_awaited_once_with(
+        es.ml.start_datafeed.assert_awaited_once_with(
             datafeed_id=params["datafeed-id"], body=None, start=params["start"], end=params["end"], timeout=params["timeout"]
         )
 
@@ -3293,7 +3293,7 @@ class TestStopMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_stop_ml_datafeed(self, es):
-        es.xpack.ml.stop_datafeed = mock.AsyncMock()
+        es.ml.stop_datafeed = mock.AsyncMock()
         params = {
             "datafeed-id": "some-data-feed",
             "force": random.choice([False, True]),
@@ -3303,15 +3303,13 @@ class TestStopMlDatafeed:
         r = runner.StopMlDatafeed()
         await r(es, params)
 
-        es.xpack.ml.stop_datafeed.assert_awaited_once_with(
-            datafeed_id=params["datafeed-id"], force=params["force"], timeout=params["timeout"]
-        )
+        es.ml.stop_datafeed.assert_awaited_once_with(datafeed_id=params["datafeed-id"], force=params["force"], timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_stop_ml_datafeed_fallback(self, es):
-        es.xpack.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request = mock.AsyncMock()
+        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.perform_request = mock.AsyncMock()
 
         params = {
             "datafeed-id": "some-data-feed",
@@ -3322,9 +3320,9 @@ class TestStopMlDatafeed:
         r = runner.StopMlDatafeed()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "POST",
-            f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_stop",
+        es.perform_request.assert_awaited_once_with(
+            method="POST",
+            path=f"/_xpack/ml/datafeeds/{params['datafeed-id']}/_stop",
             params={"force": str(params["force"]).lower(), "timeout": params["timeout"]},
         )
 
@@ -3333,7 +3331,7 @@ class TestCreateMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_job(self, es):
-        es.xpack.ml.put_job = mock.AsyncMock()
+        es.ml.put_job = mock.AsyncMock()
 
         params = {
             "job-id": "an-ml-job",
@@ -3356,13 +3354,13 @@ class TestCreateMlJob:
         r = runner.CreateMlJob()
         await r(es, params)
 
-        es.xpack.ml.put_job.assert_awaited_once_with(job_id=params["job-id"], body=params["body"])
+        es.ml.put_job.assert_awaited_once_with(job_id=params["job-id"], body=params["body"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_job_fallback(self, es):
-        es.xpack.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request = mock.AsyncMock()
+        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.perform_request = mock.AsyncMock()
 
         body = {
             "description": "Total sum of requests",
@@ -3383,14 +3381,14 @@ class TestCreateMlJob:
         r = runner.CreateMlJob()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with("PUT", f"/_xpack/ml/anomaly_detectors/{params['job-id']}", body=body)
+        es.perform_request.assert_awaited_once_with(method="PUT", path=f"/_xpack/ml/anomaly_detectors/{params['job-id']}", body=body)
 
 
 class TestDeleteMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_job(self, es):
-        es.xpack.ml.delete_job = mock.AsyncMock()
+        es.ml.delete_job = mock.AsyncMock()
 
         job_id = "an-ml-job"
         params = {"job-id": job_id}
@@ -3398,13 +3396,13 @@ class TestDeleteMlJob:
         r = runner.DeleteMlJob()
         await r(es, params)
 
-        es.xpack.ml.delete_job.assert_awaited_once_with(job_id=job_id, force=False, ignore=[404])
+        es.ml.delete_job.assert_awaited_once_with(job_id=job_id, force=False, ignore=[404])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_job_fallback(self, es):
-        es.xpack.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request = mock.AsyncMock()
+        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
         params = {"job-id": job_id}
@@ -3412,8 +3410,8 @@ class TestDeleteMlJob:
         r = runner.DeleteMlJob()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "DELETE", f"/_xpack/ml/anomaly_detectors/{params['job-id']}", params={"force": "false", "ignore": 404}
+        es.perform_request.assert_awaited_once_with(
+            method="DELETE", path=f"/_xpack/ml/anomaly_detectors/{params['job-id']}", params={"force": "false", "ignore": 404}
         )
 
 
@@ -3421,7 +3419,7 @@ class TestOpenMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_open_ml_job(self, es):
-        es.xpack.ml.open_job = mock.AsyncMock()
+        es.ml.open_job = mock.AsyncMock()
 
         job_id = "an-ml-job"
         params = {"job-id": job_id}
@@ -3429,13 +3427,13 @@ class TestOpenMlJob:
         r = runner.OpenMlJob()
         await r(es, params)
 
-        es.xpack.ml.open_job.assert_awaited_once_with(job_id=job_id)
+        es.ml.open_job.assert_awaited_once_with(job_id=job_id)
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_open_ml_job_fallback(self, es):
-        es.xpack.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request = mock.AsyncMock()
+        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
         params = {"job-id": job_id}
@@ -3443,14 +3441,14 @@ class TestOpenMlJob:
         r = runner.OpenMlJob()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with("POST", f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_open")
+        es.perform_request.assert_awaited_once_with(method="POST", path=f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_open")
 
 
 class TestCloseMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_close_ml_job(self, es):
-        es.xpack.ml.close_job = mock.AsyncMock()
+        es.ml.close_job = mock.AsyncMock()
         params = {
             "job-id": "an-ml-job",
             "force": random.choice([False, True]),
@@ -3460,13 +3458,13 @@ class TestCloseMlJob:
         r = runner.CloseMlJob()
         await r(es, params)
 
-        es.xpack.ml.close_job.assert_awaited_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
+        es.ml.close_job.assert_awaited_once_with(job_id=params["job-id"], force=params["force"], timeout=params["timeout"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_close_ml_job_fallback(self, es):
-        es.xpack.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
-        es.transport.perform_request = mock.AsyncMock()
+        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        es.perform_request = mock.AsyncMock()
 
         params = {
             "job-id": "an-ml-job",
@@ -3477,9 +3475,9 @@ class TestCloseMlJob:
         r = runner.CloseMlJob()
         await r(es, params)
 
-        es.transport.perform_request.assert_awaited_once_with(
-            "POST",
-            f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_close",
+        es.perform_request.assert_awaited_once_with(
+            method="POST",
+            path=f"/_xpack/ml/anomaly_detectors/{params['job-id']}/_close",
             params={"force": str(params["force"]).lower(), "timeout": params["timeout"]},
         )
 
@@ -3488,7 +3486,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_raises_missing_slash(self, es):
-        es.transport.perform_request = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
         params = {"path": "_cat/count"}
@@ -3504,18 +3502,18 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_request_with_defaults(self, es):
-        es.transport.perform_request = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
         params = {"path": "/_cat/count"}
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with(method="GET", url="/_cat/count", headers=None, body=None, params={})
+        es.perform_request.assert_called_once_with(method="GET", path="/_cat/count", headers=None, body=None, params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_delete_index(self, es):
-        es.transport.perform_request = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
         params = {
@@ -3528,14 +3526,14 @@ class TestRawRequestRunner:
         }
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with(
-            method="DELETE", url="/twitter", headers=None, body=None, params={"ignore": [400, 404], "pretty": "true"}
+        es.perform_request.assert_called_once_with(
+            method="DELETE", path="/twitter", headers=None, body=None, params={"ignore": [400, 404], "pretty": "true"}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_create_index(self, es):
-        es.transport.perform_request = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
         params = {
@@ -3551,14 +3549,14 @@ class TestRawRequestRunner:
         }
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with(
-            method="POST", url="/twitter", headers=None, body={"settings": {"index": {"number_of_replicas": 0}}}, params={}
+        es.perform_request.assert_called_once_with(
+            method="POST", path="/twitter", headers=None, body={"settings": {"index": {"number_of_replicas": 0}}}, params={}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_msearch(self, es):
-        es.transport.perform_request = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
         params = {
@@ -3573,9 +3571,9 @@ class TestRawRequestRunner:
         }
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with(
+        es.perform_request.assert_called_once_with(
             method="GET",
-            url="/_msearch",
+            path="/_msearch",
             headers={"Content-Type": "application/x-ndjson"},
             body=[
                 {"index": "test"},
@@ -3589,7 +3587,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_raw_with_timeout_and_opaqueid(self, es):
-        es.transport.perform_request = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
         params = {
@@ -3606,9 +3604,9 @@ class TestRawRequestRunner:
         }
         await r(es, params)
 
-        es.transport.perform_request.assert_called_once_with(
+        es.perform_request.assert_called_once_with(
             method="GET",
-            url="/_msearch",
+            path="/_msearch",
             headers={"Content-Type": "application/x-ndjson", "x-opaque-id": "test-id1"},
             body=[
                 {"index": "test"},
@@ -4948,7 +4946,7 @@ class TestSqlRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_fetch_one_page(self, es):
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
 
         sql_runner = runner.Sql()
         params = {
@@ -4966,12 +4964,12 @@ class TestSqlRunner:
 
         assert result == {"success": True, "weight": 1, "unit": "ops"}
 
-        es.transport.perform_request.assert_awaited_once_with("POST", "/_sql", body=params["body"])
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_sql", body=params["body"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_fetch_all_pages(self, es):
-        es.transport.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
 
         sql_runner = runner.Sql()
         params = {"operation-type": "sql", "body": {"query": "SELECT first_name FROM emp"}, "pages": 3}
@@ -4981,18 +4979,18 @@ class TestSqlRunner:
 
         assert result == {"success": True, "weight": 3, "unit": "ops"}
 
-        es.transport.perform_request.assert_has_calls(
+        es.perform_request.assert_has_calls(
             [
-                mock.call("POST", "/_sql", body=params["body"]),
-                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
-                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+                mock.call(method="POST", path="/_sql", body=params["body"]),
+                mock.call(method="POST", path="/_sql", body={"cursor": self.default_response["cursor"]}),
+                mock.call(method="POST", path="/_sql", body={"cursor": self.default_response["cursor"]}),
             ]
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_failure_on_too_few_pages(self, es):
-        es.transport.perform_request = mock.AsyncMock(
+        es.perform_request = mock.AsyncMock(
             side_effect=[io.StringIO(json.dumps(self.default_response)), io.StringIO(json.dumps({"rows": [["John"]]}))]
         )
 
@@ -5011,10 +5009,10 @@ class TestSqlRunner:
 
         assert ctx.value.message == "Result set has been exhausted before all pages have been fetched, 1 page(s) remaining."
 
-        es.transport.perform_request.assert_has_calls(
+        es.perform_request.assert_has_calls(
             [
-                mock.call("POST", "/_sql", body=params["body"]),
-                mock.call("POST", "/_sql", body={"cursor": self.default_response["cursor"]}),
+                mock.call(method="POST", path="/_sql", body=params["body"]),
+                mock.call(method="POST", path="/_sql", body={"cursor": self.default_response["cursor"]}),
             ]
         )
 
@@ -5235,7 +5233,7 @@ class TestQueryWithSearchAfterScroll:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(
+        es.perform_request = mock.AsyncMock(
             side_effect=[
                 io.BytesIO(json.dumps(page_1).encode()),
                 io.BytesIO(json.dumps(page_2).encode()),
@@ -5250,11 +5248,11 @@ class TestQueryWithSearchAfterScroll:
             # make sure pit_id is updated afterward
             assert runner.CompositeContext.get(pit_op) == "fedcba9876543211"
 
-        es.transport.perform_request.assert_has_awaits(
+        es.perform_request.assert_has_awaits(
             [
                 mock.call(
-                    "GET",
-                    "/_search",
+                    method="GET",
+                    path="/_search",
                     params={},
                     body={
                         "query": {
@@ -5275,8 +5273,8 @@ class TestQueryWithSearchAfterScroll:
                     headers=None,
                 ),
                 mock.call(
-                    "GET",
-                    "/_search",
+                    method="GET",
+                    path="/_search",
                     params={},
                     body={
                         "query": {
@@ -5345,7 +5343,7 @@ class TestQueryWithSearchAfterScroll:
             },
         }
 
-        es.transport.perform_request = mock.AsyncMock(
+        es.perform_request = mock.AsyncMock(
             side_effect=[
                 io.BytesIO(json.dumps(page_1).encode()),
                 io.BytesIO(json.dumps(page_2).encode()),
@@ -5354,11 +5352,11 @@ class TestQueryWithSearchAfterScroll:
         r = runner.Query()
         await r(es, params)
 
-        es.transport.perform_request.assert_has_awaits(
+        es.perform_request.assert_has_awaits(
             [
                 mock.call(
-                    "GET",
-                    "/test-index-1/_search",
+                    method="GET",
+                    path="/test-index-1/_search",
                     params={},
                     body={
                         "query": {
@@ -5372,8 +5370,8 @@ class TestQueryWithSearchAfterScroll:
                     headers=None,
                 ),
                 mock.call(
-                    "GET",
-                    "/test-index-1/_search",
+                    method="GET",
+                    path="/test-index-1/_search",
                     params={},
                     body={
                         "query": {
@@ -5461,6 +5459,429 @@ class TestSearchAfterExtractor:
         assert last_sort == expected_sort_value
 
 
+class TestCompositeAgg:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_composite_agg_without_pit(self, es):
+        params = {
+            "name": "composite-agg-without-pit",
+            "operation-type": "composite-agg",
+            "index": "test-index-1",
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "aggs": {
+                    "vendor_filter": {
+                        "filter": {"term": {"vendor": "vendorX"}},
+                        "aggs": {
+                            "vendor_payment": {
+                                "composite": {
+                                    "sources": [
+                                        {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                        {"payment_type": {"terms": {"field": "payment_type"}}},
+                                    ]
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        page_1 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {"vendor_id": "2", "payment_type": "5"},
+                        "buckets": [
+                            {"key": {"vendor_id": "2", "payment_type": "1"}, "doc_count": 135454},
+                            {"key": {"vendor_id": "2", "payment_type": "2"}, "doc_count": 137223},
+                        ],
+                    },
+                }
+            },
+        }
+
+        page_2 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {"buckets": [{"key": {"vendor_id": "3", "payment_type": "1"}, "doc_count": 135434}]},
+                }
+            },
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
+        r = runner.Query()
+        await r(es, params)
+
+        es.perform_request.assert_has_awaits(
+            [
+                mock.call(
+                    method="GET",
+                    path="/test-index-1/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                    },
+                    headers=None,
+                ),
+                mock.call(
+                    method="GET",
+                    path="/test-index-1/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                            "after": {"vendor_id": "2", "payment_type": "5"},
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                    },
+                    headers=None,
+                ),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_composite_agg_with_pit(self, es):
+        pit_op = "open-point-in-time1"
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "composite-agg-with-pit",
+            "index": "test-index",
+            "operation-type": "composite-agg",
+            "with-point-in-time-from": pit_op,
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "aggs": {
+                    "vendor_filter": {
+                        "filter": {"term": {"vendor": "vendorX"}},
+                        "aggs": {
+                            "vendor_payment": {
+                                "composite": {
+                                    "sources": [
+                                        {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                        {"payment_type": {"terms": {"field": "payment_type"}}},
+                                    ]
+                                }
+                            }
+                        },
+                    },
+                }
+            },
+        }
+
+        page_1 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {"vendor_id": "2", "payment_type": "5"},
+                        "buckets": [
+                            {"key": {"vendor_id": "2", "payment_type": "1"}, "doc_count": 135454},
+                            {"key": {"vendor_id": "2", "payment_type": "2"}, "doc_count": 137223},
+                        ],
+                    },
+                }
+            },
+        }
+
+        page_2 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {"buckets": [{"key": {"vendor_id": "3", "payment_type": "1"}, "doc_count": 135434}]},
+                }
+            },
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
+
+        r = runner.Query()
+
+        async with runner.CompositeContext():
+            runner.CompositeContext.put(pit_op, pit_id)
+            await r(es, params)
+            # make sure pit_id is updated afterward
+            assert runner.CompositeContext.get(pit_op) == "fedcba9876543210"
+
+        es.perform_request.assert_has_awaits(
+            [
+                mock.call(
+                    method="GET",
+                    path="/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                        "pit": {
+                            "id": "0123456789abcdef",
+                            "keep_alive": "1m",
+                        },
+                    },
+                    headers=None,
+                ),
+                mock.call(
+                    method="GET",
+                    path="/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "after": {"vendor_id": "2", "payment_type": "5"},
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                        "pit": {
+                            "id": "fedcba9876543210",
+                            "keep_alive": "1m",
+                        },
+                    },
+                    headers=None,
+                ),
+            ]
+        )
+
+
+class TestCompositeAggExtractor:
+    response_text = """
+        {
+            "pit_id": "fedcba9876543210",
+            "took": 132,
+            "timed_out": false,
+            "_shards": {
+                "total": 1,
+                "successful": 1,
+                "skipped": 0,
+                "failed": 0
+            },
+            "hits": {
+                "total": {
+                    "value": 10000,
+                    "relation": "gte"
+                },
+                "max_score": null,
+                "hits": []
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {
+                            "vendor_id": "1",
+                            "payment_type": "5"
+                        },
+                        "buckets": [
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "1"
+                            },
+                            "doc_count": 135454
+                            },
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "2"
+                            },
+                            "doc_count": 137223
+                            },
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "3"
+                            },
+                            "doc_count": 191
+                            }
+                        ]
+                    }
+                }
+            }
+        }"""
+    response = io.BytesIO(response_text.encode())
+
+    def test_extract_all_properties(self):
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=self.response, get_point_in_time=True, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "pit_id": "fedcba9876543210",
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_ignore_point_in_time(self):
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=self.response, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_uses_provided_hits_total(self):
+        target = runner.CompositeAggExtractor()
+        # we use an incorrect hits_total just to prove we didn't extract it from the response
+        props = target(
+            response=self.response, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=10
+        )
+        expected_props = {
+            "hits.total.relation": "eq",
+            "hits.total.value": 10,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_missing_required_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.CompositeAggExtractor()
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            target(
+                response=response_copy_bytesio,
+                get_point_in_time=True,
+                path_to_composite_agg=["vendor_filter", "vendor_payment"],
+                hits_total=None,
+            )
+        assert exc.value.args[0] == "Paginated query failure: pit_id was expected but not found in the response."
+
+    def test_extract_missing_ignored_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=response_copy_bytesio,
+            get_point_in_time=False,
+            path_to_composite_agg=["vendor_filter", "vendor_payment"],
+            hits_total=None,
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_no_after_key_found(self):
+        target = runner.CompositeAggExtractor()
+        props = target(response=self.response, get_point_in_time=True, path_to_composite_agg=["foo"], hits_total=None)
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "pit_id": "fedcba9876543210",
+            "timed_out": False,
+            "took": 132,
+            "after_key": None,
+        }
+        assert props == expected_props
+
+
 class TestCompositeContext:
     def test_cannot_be_used_outside_of_composite(self):
         with pytest.raises(exceptions.RallyAssertionError) as exc:
@@ -5543,7 +5964,7 @@ class TestComposite:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_execute_multiple_streams(self, es):
-        es.transport.perform_request = mock.AsyncMock(
+        es.perform_request = mock.AsyncMock(
             side_effect=[
                 # raw-request
                 None,
@@ -5606,17 +6027,17 @@ class TestComposite:
         r = runner.Composite()
         await r(es, params)
 
-        es.transport.perform_request.assert_has_awaits(
+        es.perform_request.assert_has_awaits(
             [
-                mock.call(method="GET", url="/", headers=None, body={}, params={}),
-                mock.call("GET", "/test/_search", params={}, body={"query": {"match_all": {}}}, headers=None),
+                mock.call(method="GET", path="/", headers=None, body={}, params={}),
+                mock.call(method="GET", path="/test/_search", params={}, body={"query": {"match_all": {}}}, headers=None),
             ]
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_propagates_violated_assertions(self, es):
-        es.transport.perform_request = mock.AsyncMock(
+        es.perform_request = mock.AsyncMock(
             side_effect=[
                 # search
                 io.StringIO(
@@ -5665,11 +6086,11 @@ class TestComposite:
         with pytest.raises(exceptions.RallyTaskAssertionError, match=r"Expected \[hits\] to be > \[0\] but was \[0\]."):
             await r(es, params)
 
-        es.transport.perform_request.assert_has_awaits(
+        es.perform_request.assert_has_awaits(
             [
                 mock.call(
-                    "GET",
-                    "/test/_search",
+                    method="GET",
+                    path="/test/_search",
                     params={},
                     body={
                         "query": {
@@ -5684,7 +6105,7 @@ class TestComposite:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_executes_tasks_in_specified_order(self, es):
-        es.transport.perform_request = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
 
         params = {
             "requests": [
@@ -5873,7 +6294,7 @@ class TestComposite:
 
         assert exc.value.args[0] == (
             "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
-            "search, paginated-search, raw-request, sleep, submit-async-search, get-async-search, "
+            "search, paginated-search, composite-agg, raw-request, sleep, submit-async-search, get-async-search, "
             "delete-async-search, field-caps]."
         )
 

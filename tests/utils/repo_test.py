@@ -108,7 +108,7 @@ class TestRallyRepository:
             offline=False,
         )
 
-        fetch.assert_called_with(src="/rally-resources/unit-test")
+        fetch.assert_called_with(src="/rally-resources/unit-test", remote="origin")
 
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch")
@@ -144,7 +144,7 @@ class TestRallyRepository:
         # no exception during the call - we reach this here
         assert r.remote
 
-        fetch.assert_called_with(src="/rally-resources/unit-test")
+        fetch.assert_called_with(src="/rally-resources/unit-test", remote="origin")
 
     @mock.patch("esrally.utils.git.head_revision")
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
@@ -168,7 +168,7 @@ class TestRallyRepository:
         r.update(distribution_version="1.7.3")
 
         branches.assert_called_with("/rally-resources/unit-test", remote=True)
-        rebase.assert_called_with("/rally-resources/unit-test", branch="1")
+        rebase.assert_called_with("/rally-resources/unit-test", remote="origin", branch="1")
         checkout.assert_called_with("/rally-resources/unit-test", branch="1")
 
     @mock.patch("esrally.utils.git.head_revision")
@@ -350,4 +350,4 @@ class TestRallyRepository:
 
         r.checkout("abcdef123")
 
-        checkout.assert_called_with("/rally-resources/unit-test", "abcdef123")
+        checkout.assert_called_with("/rally-resources/unit-test", branch="abcdef123")

@@ -118,7 +118,7 @@ Custom Team Repositories
 
 Rally provides a default team repository that is hosted on `Github <https://github.com/elastic/rally-teams>`_. You can also add your own team repositories although this requires a bit of additional work. First of all, team repositories need to be managed by git. The reason is that Rally can benchmark multiple versions of Elasticsearch and we use git branches in the track repository to determine the best match. The versioning scheme is as follows:
 
-* The `master` branch needs to work with the latest `master` branch of Elasticsearch.
+* The ``master`` branch needs to work with the latest ``main`` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
 Rally implements a branch matching logic similar to the one used for :ref:`track-repositories <track-repositories-branch-logic>`.

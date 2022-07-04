@@ -35,7 +35,7 @@ Custom Track Repositories
 
 Alternatively, you can store Rally tracks also in a dedicated git repository which we call a "track repository". Rally provides a default track repository that is hosted on `Github <https://github.com/elastic/rally-tracks>`_. You can also add your own track repositories although this requires a bit of additional work. First of all, track repositories need to be managed by git. The reason is that Rally can benchmark multiple versions of Elasticsearch and we use git branches in the track repository to determine the best match for each track (based on the command line parameter ``--distribution-version``). The versioning scheme is as follows:
 
-* The ``master`` branch needs to work with the latest ``master`` branch of Elasticsearch.
+* The ``master`` branch needs to work with the latest ``main`` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
 .. _track-repositories-branch-logic:
@@ -1120,6 +1120,69 @@ Example::
       "body": {
         "query": {
           "match_all": {}
+        }
+      },
+      "request-params": {
+        "_source_include": "some_field",
+        "analyze_wildcard": "false"
+      }
+    }
+
+Throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
+
+Meta-data
+"""""""""
+
+* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
+* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
+* ``success``: A boolean indicating whether the query has succeeded.
+* ``hits``: Total number of hits for this query.
+* ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
+* ``timed_out``: Whether any of the issued queries has timed out.
+* ``took``: The sum of all ``took`` values in query responses.
+
+composite-agg
+~~~~~~~~~~~~~
+
+The operation type ``composite-agg`` allows paginating through `composite aggregations <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-composite-aggregation.html#_pagination>`_.
+
+Properties
+""""""""""
+
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
+
+    .. note::
+        1. Parameters that are implicitly set by Rally (e.g. ``body`` or ``request_cache``) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+* ``body`` (mandatory): The query body.
+* ``pages`` (optional): Number of pages to retrieve (at most) for this search. If the composite aggregation yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all". Defaults to "all"
+* ``results-per-page`` (optional): Number of results to retrieve per page. This maps to the composite aggregation's API's ``size`` parameter.
+* ``with-point-in-time-from`` (optional): The ``name`` of an ``open-point-in-time`` operation. Causes the search to use the generated `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_.
+
+    .. note::
+        This parameter requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
+
+* ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
+
+Example::
+
+    {
+      "name": "default",
+      "operation-type": "composite-agg",
+      "pages": 10,
+      "body": {
+        "aggs": {
+          "my_buckets": {
+            "composite": {
+              "sources": [
+                { "date": { "date_histogram": { "field": "timestamp", "calendar_interval": "1d" } } },
+                { "product": { "terms": { "field": "product" } } }
+              ]
+            }
+          }
         }
       },
       "request-params": {
