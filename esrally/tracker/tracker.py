@@ -39,7 +39,7 @@ def extract_indices_from_data_streams(client, data_streams_to_extract):
     indices = []
     # first extract index metadata (which is cheap) and defer extracting data to reduce the potential for
     # errors due to invalid index names late in the process.
-    for data_stream_name in datas_treams_to_extract:
+    for data_stream_name in data_streams_to_extract:
         try:
             indices += index.extract_indices_from_data_stream(client, data_stream_name)
         except ElasticsearchException:
