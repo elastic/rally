@@ -179,17 +179,16 @@ def create_arg_parser():
         required=True,
         help="Name of the generated track",
     )
-    create_track_parser.add_argument(
+    indices_or_data_streams_group = create_track_parser.add_mutually_exclusive_group(required=True)
+    indices_or_data_streams_group.add_argument(
         "--indices",
         type=non_empty_list,
-        required=False,
         help="Comma-separated list of indices to include in the track",
     )
-    create_track_parser.add_argument(
+    indices_or_data_streams_group.add_argument(
         "--datastreams",
         type=non_empty_list,
-        required=False,
-        help="Comma-separated list of data-streams to include in the track",
+        help="Comma-separated list of data streams to include in the track",
     )
     create_track_parser.add_argument(
         "--target-hosts",
@@ -993,23 +992,16 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             generate(cfg)
         elif sub_command == "create-track":
-            if args.datastreams is None and args.indices is None:
-                raise exceptions.SystemSetupError(
-                    "Missing Arguments! Following arguments are required: --indices or specify --datastream ", sub_command
-                )
             if args.datastreams is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
                 cfg.add(config.Scope.applicationOverride, "generator", "datastreams", args.datastreams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
-            elif args.indices is not None and args.datastreams is None:
+            elif args.indices is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
                 cfg.add(config.Scope.applicationOverride, "generator", "datastreams", args.datastreams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
-            else:
-                logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
-                raise exceptions.SystemSetupError(f"Error for subcommand [{sub_command}]")
             configure_connection_params(arg_parser, args, cfg)
 
             tracker.create_track(cfg)
