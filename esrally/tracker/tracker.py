@@ -88,13 +88,11 @@ def create_track(cfg):
     output_path = os.path.abspath(os.path.join(io.normalize_path(root_path), track_name))
     io.ensure_dir(output_path)
 
-    if indices is not None:
-        logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
-    elif data_streams is not None:
+    if data_streams is not None:
         logger.info("Creating track [%s] matching data streams [%s]", track_name, data_streams)
         extracted_indices = extract_indices_from_data_streams(client, data_streams)
         indices = extracted_indices
-        logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
+    logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
 
     indices, corpora = extract_mappings_and_corpora(client, output_path, indices)
     if len(indices) == 0:
