@@ -113,18 +113,18 @@ def extract(client, outdir, index_pattern):
     return results
 
 
-def extract_indices_from_datastream(client, datastream_pattern):
+def extract_indices_from_data_stream(client, data_stream_pattern):
     """
-    Calls Elasticsearch client get_data_stream function to retrieve list of indexes
+    Calls Elasticsearch client get_data_stream function to retrieve list of indices
     :param client: Elasticsearch client
-    :param datastream_pattern: name of datastream
+    :param data_stream_pattern: name of data stream
     :return: list of index names
     """
     results = []
     # the response might contain multiple indices if a wildcard was provided
     params_defined = {"expand_wildcards": "all", "filter_path": "data_streams.name"}
-    results_datastreams = client.indices.get_data_stream(name=datastream_pattern, params=params_defined)
+    results_data_streams = client.indices.get_data_stream(name=data_stream_pattern, params=params_defined)
 
-    for indices in results_datastreams["data_streams"]:
+    for indices in results_data_streams["data_streams"]:
         results.append(indices.get("name"))
     return results

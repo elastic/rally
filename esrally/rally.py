@@ -186,7 +186,7 @@ def create_arg_parser():
         help="Comma-separated list of indices to include in the track",
     )
     indices_or_data_streams_group.add_argument(
-        "--datastreams",
+        "--data-streams",
         type=non_empty_list,
         help="Comma-separated list of data streams to include in the track",
     )
@@ -992,14 +992,14 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             generate(cfg)
         elif sub_command == "create-track":
-            if args.datastreams is not None:
+            if args.data_streams is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
-                cfg.add(config.Scope.applicationOverride, "generator", "datastreams", args.datastreams)
+                cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
             elif args.indices is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
-                cfg.add(config.Scope.applicationOverride, "generator", "datastreams", args.datastreams)
+                cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
             configure_connection_params(arg_parser, args, cfg)
