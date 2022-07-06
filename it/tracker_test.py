@@ -88,5 +88,3 @@ def test_create_track(cfg, tmp_path, test_cluster):
     # and also run a normal (short) benchmark using the created track
     cmd = f"--pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track-path={track_path}"
     assert it.race(cfg, cmd) == 0
-
-
