@@ -228,7 +228,9 @@ def _load_single_track(cfg, track_repository, track_name, install_dependencies=F
         tpr = TrackProcessorRegistry(cfg)
         if install_dependencies:
             _install_dependencies(current_track.dependencies)
-        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
+        has_plugins = load_track_plugins(
+            cfg, track_name, install_dependencies=install_dependencies, register_track_processor=tpr.register_track_processor
+        )
         current_track.has_plugins = has_plugins
         for processor in tpr.processors:
             processor.on_after_load_track(current_track)
@@ -271,7 +273,7 @@ def load_track_plugins(
     plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
 
     if plugin_reader.can_load():
-        plugin_reader.load()
+        plugin_reader.load(install_dependencies=install_dependencies)
         return True
     else:
         return False
@@ -1121,10 +1123,11 @@ class TrackPluginReader:
     def can_load(self):
         return self.loader.can_load()
 
-    def load(self):
-        # get dependent libraries installed in a prior step. ensure dir exists to make sure loading works correctly.
-        os.makedirs(paths.libs(), exist_ok=True)
-        sys.path.insert(0, paths.libs())
+    def load(self, install_dependencies):
+        if install_dependencies:
+            # get dependent libraries installed in a prior step. ensure dir exists to make sure loading works correctly.
+            os.makedirs(paths.libs(), exist_ok=True)
+            sys.path.insert(0, paths.libs())
         root_module = self.loader.load()
         try:
             # every module needs to have a register() method
