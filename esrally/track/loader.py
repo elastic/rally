@@ -202,6 +202,9 @@ def _install_dependencies(dependencies):
         shutil.rmtree(paths.libs(), onerror=_trap)
 
     def _trap(function, path, exc_info):
+        if exc_info[0].__name__ == FileNotFoundError.__name__:
+            # couldn't delete because it was already clean
+            return
         logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
         raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
 
