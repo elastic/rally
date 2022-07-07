@@ -24,13 +24,6 @@ INDEX_SETTINGS_PARAMETERS = {
     "number_of_replicas": "{{{{number_of_replicas | default({orig})}}}}",
     "number_of_shards": "{{{{number_of_shards | default({orig})}}}}",
 }
-ALLOWED_LIST_HIDDEN_INDICES = (
-    ".ds-metrics-kubernetes",
-    ".ds-metrics-system",
-    ".ds-metrics-elastic_agent",
-    ".ds-logs-kubernetes",
-    ".ds-logs-elastic_agent",
-)
 
 
 def filter_ephemeral_index_settings(settings):
@@ -53,15 +46,15 @@ def update_index_setting_parameters(settings):
             settings[s] = param.format(orig=orig_value)
 
 
-def is_valid(index_name):
+def is_valid(index_name, flag_data_streams):
     if len(index_name) == 0:
         return False, "Index name is empty"
-    if index_name.startswith(".") and not index_name.startswith(ALLOWED_LIST_HIDDEN_INDICES):
+    if index_name.startswith(".") and not flag_data_streams:
         return False, f"Index [{index_name}] is hidden"
     return True, None
 
 
-def extract_index_mapping_and_settings(client, index_pattern):
+def extract_index_mapping_and_settings(client, index_pattern, flag_data_streams):
     """
     Calls index GET to retrieve mapping + settings, filtering settings
     so they can be used to re-create this index
@@ -74,7 +67,7 @@ def extract_index_mapping_and_settings(client, index_pattern):
     # the response might contain multiple indices if a wildcard was provided
     response = client.indices.get(index=index_pattern, params={"expand_wildcards": "all"})
     for index, details in response.items():
-        valid, reason = is_valid(index)
+        valid, reason = is_valid(index, flag_data_streams)
         if valid:
             mappings = details["mappings"]
             index_settings = filter_ephemeral_index_settings(details["settings"]["index"])
@@ -86,7 +79,7 @@ def extract_index_mapping_and_settings(client, index_pattern):
     return results
 
 
-def extract(client, outdir, index_pattern):
+def extract(client, outdir, index_pattern, flag_data_streams):
     """
     Request index information to format in "index.json" for Rally
     :param client: Elasticsearch client
@@ -96,7 +89,7 @@ def extract(client, outdir, index_pattern):
     """
     results = []
 
-    index_obj = extract_index_mapping_and_settings(client, index_pattern)
+    index_obj = extract_index_mapping_and_settings(client, index_pattern, flag_data_streams)
     for index, details in index_obj.items():
         filename = f"{index}.json"
         outpath = os.path.join(outdir, filename)
