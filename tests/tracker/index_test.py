@@ -145,5 +145,5 @@ def test_extract_index_create(client):
             },
         },
     }
-    res = extract_index_mapping_and_settings(client, "_all")
+    res = extract_index_mapping_and_settings(client, "_all", False)
     assert res == expected

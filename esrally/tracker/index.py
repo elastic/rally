@@ -60,6 +60,7 @@ def extract_index_mapping_and_settings(client, index_pattern, flag_data_streams)
     so they can be used to re-create this index
     :param client: Elasticsearch client
     :param index_pattern: name of index
+    :param flag_data_streams: boolean variable denotes whether flag data-streams is used
     :return: index creation dictionary
     """
     results = {}
@@ -85,6 +86,7 @@ def extract(client, outdir, index_pattern, flag_data_streams):
     :param client: Elasticsearch client
     :param outdir: destination directory
     :param index_pattern: name of index
+    :param flag_data_streams: boolean variable denotes whether flag data-streams is used
     :return: Dict of template variables representing the index for use in track
     """
     results = []
