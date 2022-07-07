@@ -686,6 +686,7 @@ class OperationType(Enum):
     Sql = 16
     FieldCaps = 17
     CompositeAgg = 18
+    WaitForCurrentSnapshotsCreate = 19
 
     # administrative actions
     ForceMerge = 1001
