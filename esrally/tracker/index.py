@@ -49,8 +49,10 @@ def update_index_setting_parameters(settings):
 def is_valid(index_name, index_pattern):
     if len(index_name) == 0:
         return False, "Index name is empty"
-    # If index pattern is "_all" then we do not return hidden indices
-    if index_pattern == "_all" and index_name.startswith("."):
+    # When the indices are requested directly (with --data-streams or --indices) then we honor the
+    # request, even if it includes hidden indices. But when asking for all indices we skip hidden
+    # indices as they could be system indices and restoring them to another cluster would break it.
+    if index_pattern in ("_all", "*") and index_name.startswith("."):
         return False, f"Index [{index_name}] is hidden"
     return True, None
 
