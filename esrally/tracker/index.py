@@ -46,21 +46,18 @@ def update_index_setting_parameters(settings):
             settings[s] = param.format(orig=orig_value)
 
 
-def is_valid(index_name, flag_data_streams):
+def is_valid(index_name):
     if len(index_name) == 0:
         return False, "Index name is empty"
-    if index_name.startswith(".") and not flag_data_streams:
-        return False, f"Index [{index_name}] is hidden"
     return True, None
 
 
-def extract_index_mapping_and_settings(client, index_pattern, flag_data_streams):
+def extract_index_mapping_and_settings(client, index_pattern):
     """
     Calls index GET to retrieve mapping + settings, filtering settings
     so they can be used to re-create this index
     :param client: Elasticsearch client
     :param index_pattern: name of index
-    :param flag_data_streams: boolean variable denotes whether flag data-streams is used
     :return: index creation dictionary
     """
     results = {}
@@ -68,7 +65,7 @@ def extract_index_mapping_and_settings(client, index_pattern, flag_data_streams)
     # the response might contain multiple indices if a wildcard was provided
     response = client.indices.get(index=index_pattern, params={"expand_wildcards": "all"})
     for index, details in response.items():
-        valid, reason = is_valid(index, flag_data_streams)
+        valid, reason = is_valid(index)
         if valid:
             mappings = details["mappings"]
             index_settings = filter_ephemeral_index_settings(details["settings"]["index"])
@@ -76,22 +73,20 @@ def extract_index_mapping_and_settings(client, index_pattern, flag_data_streams)
             results[index] = {"mappings": mappings, "settings": {"index": index_settings}}
         else:
             logger.info("Skipping index [%s] (reason: %s).", index, reason)
-
     return results
 
 
-def extract(client, outdir, index_pattern, flag_data_streams):
+def extract(client, outdir, index_pattern):
     """
     Request index information to format in "index.json" for Rally
     :param client: Elasticsearch client
     :param outdir: destination directory
     :param index_pattern: name of index
-    :param flag_data_streams: boolean variable denotes whether flag data-streams is used
     :return: Dict of template variables representing the index for use in track
     """
     results = []
 
-    index_obj = extract_index_mapping_and_settings(client, index_pattern, flag_data_streams)
+    index_obj = extract_index_mapping_and_settings(client, index_pattern)
     for index, details in index_obj.items():
         filename = f"{index}.json"
         outpath = os.path.join(outdir, filename)

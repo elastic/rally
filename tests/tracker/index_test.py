@@ -98,7 +98,6 @@ def test_extract_index_create(client):
                 }
             },
         },
-        # should be filtered
         ".security": {
             "mappings": {},
             "settings": {
@@ -136,6 +135,14 @@ def test_extract_index_create(client):
                 }
             },
         },
+        ".security": {
+            "mappings": {},
+            "settings": {
+                "index": {
+                    "number_of_shards": "{{number_of_shards | default(1)}}",
+                },
+            },
+        },
         "geodata": {
             "mappings": {},
             "settings": {
@@ -145,5 +152,5 @@ def test_extract_index_create(client):
             },
         },
     }
-    res = extract_index_mapping_and_settings(client, "_all", False)
+    res = extract_index_mapping_and_settings(client, "_all")
     assert res == expected

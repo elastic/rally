@@ -48,14 +48,14 @@ def extract_indices_from_data_streams(client, data_streams_to_extract):
     return indices
 
 
-def extract_mappings_and_corpora(client, output_path, indices_to_extract, flag_data_streams):
+def extract_mappings_and_corpora(client, output_path, indices_to_extract):
     indices = []
     corpora = []
     # first extract index metadata (which is cheap) and defer extracting data to reduce the potential for
     # errors due to invalid index names late in the process.
     for index_name in indices_to_extract:
         try:
-            indices += index.extract(client, output_path, index_name, flag_data_streams)
+            indices += index.extract(client, output_path, index_name)
         except ElasticsearchException:
             logging.getLogger(__name__).exception("Failed to extract index [%s]", index_name)
 
@@ -77,7 +77,6 @@ def create_track(cfg):
     target_hosts = cfg.opts("client", "hosts")
     client_options = cfg.opts("client", "options")
     data_streams = cfg.opts("generator", "data_streams")
-    flag_data_streams = False
 
     client = EsClientFactory(
         hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT], client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]
@@ -90,13 +89,12 @@ def create_track(cfg):
     io.ensure_dir(output_path)
 
     if data_streams is not None:
-        flag_data_streams = True
         logger.info("Creating track [%s] matching data streams [%s]", track_name, data_streams)
         extracted_indices = extract_indices_from_data_streams(client, data_streams)
         indices = extracted_indices
     logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
 
-    indices, corpora = extract_mappings_and_corpora(client, output_path, indices, flag_data_streams)
+    indices, corpora = extract_mappings_and_corpora(client, output_path, indices)
     if len(indices) == 0:
         raise RuntimeError("Failed to extract any indices for track!")
 
