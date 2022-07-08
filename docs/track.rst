@@ -2412,6 +2412,27 @@ Meta-data
 * ``duration``: The time it took (in milliseconds) to create the snapshot.
 * ``file_count``: The total number of files in the snapshot.
 
+wait-for-current-snapshots-create
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``wait-for-current-snapshots-create`` you can wait until all currently running snapshots within a defined repository have completed.
+This operation is useful after issuing many ``create-snapshots``, to benchmark snapshotting performance and related limitations in Elasticsearch.
+
+It exits when ``total`` in the response body of `GET _snapshot <https://www.elastic.co/guide/en/elasticsearch/reference/current/get-snapshot-api.html>`_ equals ``0``.
+
+Properties
+""""""""""
+
+* ``repository`` (mandatory): The name of the snapshot repository to use.
+* ``completion-recheck-wait-period`` (optional, defaults to 1 second): Time in seconds to wait in between consecutive attempts.
+
+This operation is :ref:`retryable <track_operations>`.
+
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 restore-snapshot
 ~~~~~~~~~~~~~~~~
 

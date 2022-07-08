@@ -4131,7 +4131,7 @@ class TestWaitForCurrentSnapshotsCreate:
             method="GET",
             path=f"_snapshot/{repository}/_current",
             headers={"Content-Type": "application/json"},
-            params={"index_names": False, "verbose": False},
+            params={"index_names": "false", "verbose": "false"},
         )
 
         assert es.perform_request.await_count == 2

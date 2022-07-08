@@ -2044,7 +2044,7 @@ class WaitForCurrentSnapshotsCreate(Runner):
 
     async def __call__(self, es, params):
         repository = mandatory(params, "repository", repr(self))
-        wait_period = params.get("completion-recheck-wait-period", 5)
+        wait_period = params.get("completion-recheck-wait-period", 1)
         es_info = await es.info()
         es_version = tuple([int(part) for part in es_info["version"]["number"].split(".")[:2]])
         api = es.snapshot.get
@@ -2056,8 +2056,8 @@ class WaitForCurrentSnapshotsCreate(Runner):
 
             # significantly reduce response size when lots of snapshots have been taken
             # https://github.com/elastic/elasticsearch/pull/86269
-            request_params["index_names"] = False
-            request_params["verbose"] = False
+            request_params["index_names"] = "false"
+            request_params["verbose"] = "false"
 
             request_args = {
                 "method": "GET",
