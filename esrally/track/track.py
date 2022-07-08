@@ -810,6 +810,8 @@ class OperationType(Enum):
             return OperationType.CreateSnapshot
         elif v == "wait-for-snapshot-create":
             return OperationType.WaitForSnapshotCreate
+        elif v == "wait-for-current-snapshots-create":
+            return OperationType.WaitForCurrentSnapshotsCreate
         elif v == "restore-snapshot":
             return OperationType.RestoreSnapshot
         elif v == "wait-for-recovery":
