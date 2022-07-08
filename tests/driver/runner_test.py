@@ -3983,7 +3983,7 @@ class TestWaitForCurrentSnapshotsCreate:
                     "build_snapshot": False,
                     "lucene_version": "8.11.1",
                     "minimum_wire_compatibility_version": "6.8.0",
-                    "minimum_index_compatibility_version": "6.0.0-beta1"
+                    "minimum_index_compatibility_version": "6.0.0-beta1",
                 },
                 "tagline": "You Know, for Search",
             },
@@ -4024,16 +4024,12 @@ class TestWaitForCurrentSnapshotsCreate:
                             "data_streams": [],
                             "state": "IN_PROGRESS",
                             "indices": ["j", "k", "l"],
-                        }
+                        },
                     ],
                     "total": 4,
-                    "remaining": 0
+                    "remaining": 0,
                 },
-                {
-                    "snapshots": [],
-                    "total": 0,
-                    "remaining": 0
-                },
+                {"snapshots": [], "total": 0, "remaining": 0},
             ],
         )
 
@@ -4068,7 +4064,7 @@ class TestWaitForCurrentSnapshotsCreate:
                     "build_snapshot": True,
                     "lucene_version": "9.3.0",
                     "minimum_wire_compatibility_version": "7.17.0",
-                    "minimum_index_compatibility_version": "7.0.0"
+                    "minimum_index_compatibility_version": "7.0.0",
                 },
                 "tagline": "You Know, for Search",
             },
@@ -4111,16 +4107,12 @@ class TestWaitForCurrentSnapshotsCreate:
                             "repository": "many-shards",
                             "data_streams": [],
                             "state": "IN_PROGRESS",
-                        }
+                        },
                     ],
                     "total": 4,
-                    "remaining": 0
+                    "remaining": 0,
                 },
-                {
-                    "snapshots": [],
-                    "total": 0,
-                    "remaining": 0
-                },
+                {"snapshots": [], "total": 0, "remaining": 0},
             ],
         )
 
