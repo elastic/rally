@@ -2079,8 +2079,8 @@ class WaitForCurrentSnapshotsCreate(Runner):
                 continue
             break
 
-        # getting details stats per snapshot can be very expensive.
-        # return nothing and rely on Rally's own service_time measurement for the duration
+        # getting detailed stats per snapshot using the snapshot status api can be very expensive.
+        # return nothing and rely on Rally's own service_time measurement for the duration.
 
     def __repr__(self, *args, **kwargs):
         return "wait-for-current-snapshots-create"
