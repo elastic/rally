@@ -670,8 +670,9 @@ We support the following data types:
 * Strings: Have to be enclosed in single quotes. Example: ``ca_certs:'/path/to/CA_certs'``
 * Numbers: There is nothing special about numbers. Example: ``sniffer_timeout:60``
 * Booleans: Specify either ``true`` or ``false``. Example: ``use_ssl:true``
+* None: Specify ``None`` without quotes.``'None'`` will be treated as string. Example: ``timeout:None``
 
-Default value: ``timeout:60`` (applies any time ``timeout`` is not specified)
+Default value: ``timeout:60`` (applies any time ``timeout`` is not specified. Set ``timeout:None`` to omit any timeouts)
 
 Rally recognizes the following client options in addition:
 
