@@ -72,7 +72,6 @@ class TestConfigHelperFunction:
         assert opts.kv_to_map(["k:none"]) == {"k": None}
         assert opts.kv_to_map(["k:NONE"]) == {"k": None}
 
-
     def test_to_dict_with_inline_json(self):
         assert opts.to_dict('{"default": ["127.0.0.1:9200","10.17.0.5:19200"]}') == {"default": ["127.0.0.1:9200", "10.17.0.5:19200"]}
 
