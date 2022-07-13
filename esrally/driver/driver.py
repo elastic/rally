@@ -1752,7 +1752,7 @@ class AsyncIoAdapter:
                 for es in c.values():
                     await es.close()
             transport_close_end = time.perf_counter()
-            self.logger.info("Total time to close transports: %f seconds.", (shutdown_asyncgens_end - transport_close_end))
+            self.logger.info("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
 
 
 class AsyncProfiler:
