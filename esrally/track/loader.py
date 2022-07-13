@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -238,7 +237,6 @@ def load_track_plugins(
     register_runner=None,
     register_scheduler=None,
     register_track_processor=None,
-    install_dependencies=False,
     force_update=False,
 ):
     """
@@ -249,7 +247,6 @@ def load_track_plugins(
     :param register_runner: An optional function where runners can be registered.
     :param register_scheduler: An optional function where custom schedulers can be registered.
     :param register_track_processor: An optional function where track processors can be registered.
-    :param install_dependencies: If set to ``True``, install declared dependencies from the track.py. Defaults to ``False``.
     :param force_update: If set to ``True`` this ensures that the track is first updated from the remote repository.
                          Defaults to ``False``.
     :return: True iff this track defines plugins and they have been loaded.
