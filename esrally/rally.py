@@ -20,6 +20,7 @@ import datetime
 import logging
 import os
 import platform
+import shutil
 import sys
 import time
 import uuid
@@ -1068,6 +1069,17 @@ def main():
             console.warn("No Internet connection detected. Specify --offline to run without it.", logger=logger)
             sys.exit(0)
         logger.info("Detected a working Internet connection.")
+
+    def _trap(function, path, exc_info):
+        if exc_info[0] == FileNotFoundError:
+            # couldn't delete because it was already clean
+            return
+        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
+        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
+
+    # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
+    logging.info("Cleaning track dependency directory [%s]...", paths.libs())
+    shutil.rmtree(paths.libs(), onerror=_trap)
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 

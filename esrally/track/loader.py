@@ -195,21 +195,7 @@ def load_track(cfg, install_dependencies=False):
 
 
 def _install_dependencies(dependencies):
-    def _cleanup():
-        # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
-        console.info("Cleaning track dependency directory...")
-        logging.info("Cleaning track dependency directory [%s]...", paths.libs())
-        shutil.rmtree(paths.libs(), onerror=_trap)
-
-    def _trap(function, path, exc_info):
-        if exc_info[0] == FileNotFoundError:
-            # couldn't delete because it was already clean
-            return
-        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
-        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
-
     if dependencies:
-        _cleanup()
         log_path = os.path.join(paths.logs(), "dependency.log")
         console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
         try:
