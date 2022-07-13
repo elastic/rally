@@ -105,7 +105,7 @@ def tracks(cfg):
     different versions, this will be reflected in the output.
 
     :param cfg: The config object.
-    :return: A list of tracks that are available for the provided distribution version or else for the master version.
+    :return: A list of tracks that are available for the provided distribution version or else for the main version.
     """
     repo = track_repo(cfg)
     return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]
@@ -1259,6 +1259,7 @@ class TrackSpecificationReader:
     def _create_component_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
         template_file = self._r(tpl_spec, "template")
+        template_path = self._r(tpl_spec, "template-path", mandatory=False)
         template_file = os.path.join(mapping_dir, template_file)
         idx_tmpl_src = TemplateSource(mapping_dir, template_file, self.source)
         with self.source(template_file, "rt") as f:
@@ -1266,11 +1267,15 @@ class TrackSpecificationReader:
             template_content = self._load_template(
                 idx_tmpl_src.assembled_source, f"definition for component template {name} in {template_file}"
             )
+        if template_path:
+            for field in template_path.split("."):
+                template_content = template_content[field]
         return track.ComponentTemplate(name, template_content)
 
     def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
         template_file = self._r(tpl_spec, "template")
+        template_path = self._r(tpl_spec, "template-path", mandatory=False)
         index_pattern = self._r(tpl_spec, "index-pattern")
         delete_matching_indices = self._r(tpl_spec, "delete-matching-indices", mandatory=False, default_value=True)
         template_file = os.path.join(mapping_dir, template_file)
@@ -1280,6 +1285,9 @@ class TrackSpecificationReader:
             template_content = self._load_template(
                 idx_tmpl_src.assembled_source, "definition for index template {} in {}".format(name, template_file)
             )
+        if template_path:
+            for field in template_path.split("."):
+                template_content = template_content[field]
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):

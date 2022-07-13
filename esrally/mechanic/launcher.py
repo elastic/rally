@@ -209,7 +209,8 @@ class ProcessLauncher:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
         os.chdir(binary_path)
         cmd = [io.escape_path(os.path.join(".", "bin", "elasticsearch"))]
-        cmd.extend(["-d", "-p", "pid"])
+        pid_path = io.escape_path(os.path.join(".", "pid"))
+        cmd.extend(["-d", "-p", pid_path])
         try:
             ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
         except subprocess.CalledProcessError as e:
@@ -226,7 +227,7 @@ class ProcessLauncher:
             )
             raise exceptions.LaunchError("Daemon startup failed with exit code [%s]. See logs for more information." % e.returncode, e)
 
-        return wait_for_pidfile(io.escape_path(os.path.join(".", "pid")))
+        return wait_for_pidfile(pid_path)
 
     def stop(self, nodes, metrics_store):
         self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))

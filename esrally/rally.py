@@ -179,11 +179,16 @@ def create_arg_parser():
         required=True,
         help="Name of the generated track",
     )
-    create_track_parser.add_argument(
+    indices_or_data_streams_group = create_track_parser.add_mutually_exclusive_group(required=True)
+    indices_or_data_streams_group.add_argument(
         "--indices",
         type=non_empty_list,
-        required=True,
         help="Comma-separated list of indices to include in the track",
+    )
+    indices_or_data_streams_group.add_argument(
+        "--data-streams",
+        type=non_empty_list,
+        help="Comma-separated list of data streams to include in the track",
     )
     create_track_parser.add_argument(
         "--target-hosts",
@@ -311,7 +316,7 @@ def create_arg_parser():
     install_parser.add_argument(
         "--revision",
         help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
-        " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
+        " 'latest' fetches the latest version on the main branch. It is also possible to specify a commit id or a timestamp."
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current).',
         default="current",
@@ -400,6 +405,12 @@ def create_arg_parser():
         help="A comma-separated list of the initial seed host IPs",
         default="",
     )
+    for p in [race_parser, install_parser]:
+        p.add_argument(
+            "--cluster-name",
+            help="The name of this Elasticsearch cluster",
+            default="rally-benchmark",
+        )
 
     start_parser = subparsers.add_parser("start", help="Starts an Elasticsearch node locally")
     start_parser.add_argument(
@@ -887,7 +898,7 @@ def configure_connection_params(arg_parser, args, cfg):
     cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
     client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
     cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
-    if list(target_hosts.all_hosts) != list(client_options.all_client_options):
+    if set(target_hosts.all_hosts) != set(client_options.all_client_options):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
 
 
@@ -927,6 +938,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "cluster.name", args.cluster_name)
             cfg.add(config.Scope.applicationOverride, "mechanic", "master.nodes", opts.csv_to_list(args.master_nodes))
             cfg.add(config.Scope.applicationOverride, "mechanic", "seed.hosts", opts.csv_to_list(args.seed_hosts))
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
@@ -970,6 +982,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
             cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
             cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", convert.to_bool(args.skip_rest_api_check))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "cluster.name", args.cluster_name)
 
             configure_reporting_params(args, cfg)
             race(cfg, args.kill_running_processes)
@@ -979,9 +992,16 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             generate(cfg)
         elif sub_command == "create-track":
-            cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
-            cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-            cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            if args.data_streams is not None:
+                cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
+                cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
+                cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            elif args.indices is not None:
+                cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
+                cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
+                cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
             configure_connection_params(arg_parser, args, cfg)
 
             tracker.create_track(cfg)
@@ -1032,6 +1052,10 @@ def main():
     arg_parser = create_arg_parser()
     args = arg_parser.parse_args()
 
+    if args.subcommand is None:
+        arg_parser.print_help()
+        sys.exit(0)
+
     console.init(quiet=args.quiet)
     console.println(BANNER)
 
@@ -1053,10 +1077,9 @@ def main():
     if not args.offline:
         probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
         if not net.has_internet_connection(probing_url):
-            console.warn("No Internet connection detected. Automatic download of track data sets etc. is disabled.", logger=logger)
-            cfg.add(config.Scope.applicationOverride, "system", "offline.mode", True)
-        else:
-            logger.info("Detected a working Internet connection.")
+            console.warn("No Internet connection detected. Specify --offline to run without it.", logger=logger)
+            sys.exit(0)
+        logger.info("Detected a working Internet connection.")
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 

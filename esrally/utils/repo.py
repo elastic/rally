@@ -43,7 +43,7 @@ class RallyRepository:
                 git.clone(src=self.repo_dir, remote=self.url)
             else:
                 try:
-                    git.fetch(src=self.repo_dir)
+                    git.fetch(src=self.repo_dir, remote="origin")
                 except exceptions.SupplyError:
                     console.warn("Could not update %s. Continuing with your locally available state." % self.resource_name)
         else:
@@ -69,7 +69,7 @@ class RallyRepository:
                     git.checkout(self.repo_dir, branch=branch)
                     self.logger.info("Rebasing on [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
                     try:
-                        git.rebase(self.repo_dir, branch=branch)
+                        git.rebase(self.repo_dir, remote="origin", branch=branch)
                         self.revision = git.head_revision(self.repo_dir)
                     except exceptions.SupplyError:
                         self.logger.exception("Cannot rebase due to local changes in [%s]", self.repo_dir)
@@ -123,7 +123,7 @@ class RallyRepository:
 
     def checkout(self, revision):
         self.logger.info("Checking out revision [%s] in [%s].", revision, self.repo_dir)
-        git.checkout(self.repo_dir, revision)
+        git.checkout(self.repo_dir, branch=revision)
 
     def correct_revision(self, revision):
         return git.head_revision(self.repo_dir) == revision

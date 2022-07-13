@@ -370,7 +370,7 @@ class ElasticsearchSourceSupplier:
         self.template_renderer = template_renderer
 
     def fetch(self):
-        return SourceRepository("Elasticsearch", self.remote_url, self.src_dir).fetch(self.revision)
+        return SourceRepository("Elasticsearch", self.remote_url, self.src_dir, branch="main").fetch(self.revision)
 
     def prepare(self):
         if self.builder:
@@ -442,7 +442,7 @@ class ExternalPluginSourceSupplier:
     def fetch(self):
         # optional (but then source code is assumed to be available locally)
         plugin_remote_url = self.src_config.get("plugin.%s.remote.repo.url" % self.plugin.name)
-        return SourceRepository(self.plugin.name, plugin_remote_url, self.plugin_src_dir).fetch(self.revision)
+        return SourceRepository(self.plugin.name, plugin_remote_url, self.plugin_src_dir, branch="master").fetch(self.revision)
 
     def prepare(self):
         if self.builder:
@@ -476,7 +476,7 @@ class CorePluginSourceSupplier:
 
     def fetch(self):
         # Just retrieve the current revision *number* and assume that Elasticsearch has prepared the source tree.
-        return SourceRepository("Elasticsearch", None, self.es_src_dir).fetch(revision="current")
+        return SourceRepository("Elasticsearch", None, self.es_src_dir, branch="main").fetch(revision="current")
 
     def prepare(self):
         if self.builder:
@@ -594,10 +594,11 @@ class SourceRepository:
     Supplier fetches the benchmark candidate source tree from the remote repository.
     """
 
-    def __init__(self, name, remote_url, src_dir):
+    def __init__(self, name, remote_url, src_dir, *, branch):
         self.name = name
         self.remote_url = remote_url
         self.src_dir = src_dir
+        self.branch = branch
         self.logger = logging.getLogger(__name__)
 
     def fetch(self, revision):
@@ -612,7 +613,7 @@ class SourceRepository:
         if not git.is_working_copy(self.src_dir):
             if self.has_remote():
                 self.logger.info("Downloading sources for %s from %s to %s.", self.name, self.remote_url, self.src_dir)
-                git.clone(self.src_dir, self.remote_url)
+                git.clone(self.src_dir, remote=self.remote_url)
             elif os.path.isdir(self.src_dir) and may_skip_init:
                 self.logger.info("Skipping repository initialization for %s.", self.name)
             else:
@@ -621,20 +622,20 @@ class SourceRepository:
     def _update(self, revision):
         if self.has_remote() and revision == "latest":
             self.logger.info("Fetching latest sources for %s from origin.", self.name)
-            git.pull(self.src_dir)
+            git.pull(self.src_dir, remote="origin", branch=self.branch)
         elif revision == "current":
             self.logger.info("Skip fetching sources for %s.", self.name)
         elif self.has_remote() and revision.startswith("@"):
             # convert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
             git_ts_revision = revision[1:]
             self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
-            git.pull_ts(self.src_dir, git_ts_revision)
+            git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=self.branch)
         elif self.has_remote():  # assume a git commit hash
             self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
-            git.pull_revision(self.src_dir, revision)
+            git.pull_revision(self.src_dir, remote="origin", revision=revision)
         else:
             self.logger.info("Checking out local revision [%s] for %s.", revision, self.name)
-            git.checkout(self.src_dir, revision)
+            git.checkout(self.src_dir, branch=revision)
         if git.is_working_copy(self.src_dir):
             git_revision = git.head_revision(self.src_dir)
             self.logger.info("User-specified revision [%s] for [%s] results in git revision [%s]", revision, self.name, git_revision)

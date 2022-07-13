@@ -28,8 +28,8 @@ import pytest
 
 from esrally import config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
+from esrally.driver.driver import ApiKey, ClientContext
 from esrally.track import params
-from tests import run_async
 
 
 class DriverTestParamSource:
@@ -73,6 +73,12 @@ class TestDriver:
             self.es = TestDriver.StaticClientFactory.PATCHER.start()
             self.es.indices.stats.return_value = {"mocked": True}
             self.es.cat.master.return_value = {"mocked": True}
+            self.es.security.create_api_key.side_effect = [
+                {"id": "abc", "api_key": "123"},
+                {"id": "def", "api_key": "456"},
+                {"id": "ghi", "api_key": "789"},
+                {"id": "jkl", "api_key": "012"},
+            ]
 
         def create(self):
             return self.es
@@ -233,6 +239,47 @@ class TestDriver:
         # target.on_task_finished.assert_called_once()
         assert target.on_task_finished.call_count == 1
         assert target.drive_at.call_count == 4
+
+    @mock.patch("esrally.driver.driver.delete_api_keys")
+    def test_creates_api_keys_on_start_and_deletes_on_end(self, delete):
+        client_opts = {
+            "create_api_key_per_client": True,
+        }
+        self.cfg.add(config.Scope.application, "client", "options", self.Holder(all_client_options={"default": client_opts}))
+        target = self.create_test_driver_target()
+        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        d.prepare_benchmark(t=self.track)
+        d.start_benchmark()
+
+        # Did the driver generate and keep track of each worker's client API keys?
+        expected_client_contexts = {
+            0: {0: ClientContext(client_id=0, parent_worker_id=0, api_key=ApiKey(id="abc", secret="123"))},
+            1: {1: ClientContext(client_id=1, parent_worker_id=1, api_key=ApiKey(id="def", secret="456"))},
+            2: {2: ClientContext(client_id=2, parent_worker_id=2, api_key=ApiKey(id="ghi", secret="789"))},
+            3: {3: ClientContext(client_id=3, parent_worker_id=3, api_key=ApiKey(id="jkl", secret="012"))},
+        }
+        assert d.client_contexts == expected_client_contexts
+        assert d.generated_api_key_ids == ["abc", "def", "ghi", "jkl"]
+
+        # Were workers started with the correct client API keys?
+        expected_context_kwargs = [ctx for _, ctx in expected_client_contexts.items()]
+        actual_context_kwargs = [kwargs["client_contexts"] for _, kwargs in target.start_worker.call_args_list]
+        assert target.start_worker.call_count == 4
+        assert expected_context_kwargs == actual_context_kwargs
+
+        # Set up some state so that one call to joinpoint_reached() will consider the benchmark done
+        d.currently_completed = 3
+        d.current_step = 0
+
+        # Don't attempt to mutate the metrics store on benchmark completion
+        d.metrics_store = mock.Mock()
+
+        # Complete the benchmark
+        d.joinpoint_reached(
+            worker_id=0, worker_local_timestamp=10, task_allocations=[driver.ClientAllocation(client_id=0, task=driver.JoinPoint(id=1))]
+        )
+        # Were the right API keys deleted?
+        delete.assert_called_once_with(d.default_sync_es_client, d.generated_api_key_ids)
 
 
 def op(name, operation_type):
@@ -904,7 +951,7 @@ class TestScheduler:
         assert schedule.sched.parameter_source is not None, "Parameter source has not been injected into scheduler"
         assert schedule.sched.parameter_source == param_source
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_search_task_one_client(self):
         task = track.Task(
             "search",
@@ -930,7 +977,7 @@ class TestScheduler:
         ]
         await self.assert_schedule(expected_schedule, schedule)
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_search_task_two_clients(self):
         task = track.Task(
             "search",
@@ -954,7 +1001,7 @@ class TestScheduler:
         ]
         await self.assert_schedule(expected_schedule, schedule)
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_schedule_param_source_determines_iterations_no_warmup(self):
         # we neither define any time-period nor any iteration count on the task.
         task = track.Task(
@@ -982,7 +1029,7 @@ class TestScheduler:
             schedule,
         )
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_schedule_param_source_determines_iterations_including_warmup(self):
         task = track.Task(
             "bulk-index",
@@ -1012,7 +1059,7 @@ class TestScheduler:
             schedule,
         )
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_schedule_defaults_to_iteration_based(self):
         # no time-period and no iterations specified on the task. Also, the parameter source does not define a size.
         task = track.Task(
@@ -1038,7 +1085,7 @@ class TestScheduler:
             schedule,
         )
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_schedule_for_warmup_time_based(self):
         task = track.Task(
             "time-based",
@@ -1074,7 +1121,7 @@ class TestScheduler:
             schedule,
         )
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_infinite_schedule_without_progress_indication(self):
         task = track.Task(
             "time-based",
@@ -1105,7 +1152,7 @@ class TestScheduler:
             infinite_schedule=True,
         )
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_finite_schedule_with_progress_indication(self):
         task = track.Task(
             "time-based",
@@ -1136,7 +1183,7 @@ class TestScheduler:
             infinite_schedule=False,
         )
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_schedule_with_progress_determined_by_runner(self):
         task = track.Task(
             "time-based",
@@ -1163,7 +1210,7 @@ class TestScheduler:
             infinite_schedule=True,
         )
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_schedule_for_time_based(self):
         task = track.Task(
             "time-based",
@@ -1203,7 +1250,7 @@ class TestScheduler:
             assert runner is not None
             assert params == {"body": ["a"], "operation-type": "bulk", "size": 11}
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_schedule_for_time_based_with_multiple_clients(self):
         task = track.Task(
             "time-based",
@@ -1321,7 +1368,7 @@ class TestAsyncExecutor:
         runner.register_runner("override-throughput", self.runner_overriding_throughput, async_runner=True)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_schedule_in_throughput_mode(self, es):
         task_start = time.perf_counter()
         es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
@@ -1392,7 +1439,7 @@ class TestAsyncExecutor:
             assert sample.total_ops_unit == "docs"
 
     @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_schedule_with_progress_determined_by_runner(self, es):
         task_start = time.perf_counter()
         es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
@@ -1460,7 +1507,7 @@ class TestAsyncExecutor:
             assert sample.total_ops_unit == "ops"
 
     @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_schedule_runner_overrides_times(self, es):
         task_start = time.perf_counter()
         es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
@@ -1521,7 +1568,7 @@ class TestAsyncExecutor:
         assert sample.time_period is not None
 
     @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_schedule_throughput_throttled(self, es):
         async def perform_request(*args, **kwargs):
             return None
@@ -1529,7 +1576,7 @@ class TestAsyncExecutor:
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
         # one has been "consumed".
-        es.transport.perform_request.side_effect = perform_request
+        es.perform_request.side_effect = perform_request
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
@@ -1586,7 +1633,7 @@ class TestAsyncExecutor:
             assert complete.is_set(), "Executor should auto-complete a task that terminates its parent"
 
     @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
+    @pytest.mark.asyncio
     async def test_cancel_execute_schedule(self, es):
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         es.bulk = mock.AsyncMock(return_value=io.StringIO('{"errors": false, "took": 8}'))
@@ -1637,7 +1684,7 @@ class TestAsyncExecutor:
             assert sample_size == 0
 
     @mock.patch("elasticsearch.Elasticsearch")
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_schedule_aborts_on_error(self, es):
         class ExpectedUnitTestException(Exception):
             def __str__(self):
@@ -1692,7 +1739,7 @@ class TestAsyncExecutor:
 
         assert es.call_count == 0
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_single_no_return_value(self):
         es = None
         params = None
@@ -1704,7 +1751,7 @@ class TestAsyncExecutor:
         assert unit == "ops"
         assert request_meta_data == {"success": True}
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_single_tuple(self):
         es = None
         params = None
@@ -1716,7 +1763,7 @@ class TestAsyncExecutor:
         assert unit == "MB"
         assert request_meta_data == {"success": True}
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_single_dict(self):
         es = None
         params = None
@@ -1751,7 +1798,7 @@ class TestAsyncExecutor:
             await driver.execute_single(self.context_managed(runner), es, params, on_error=on_error)
         assert exc.value.args[0] == "Request returned an error. Error type: transport, Description: no route to host"
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_single_with_http_400_aborts_when_specified(self):
         es = None
         params = None
@@ -1763,7 +1810,7 @@ class TestAsyncExecutor:
             "Request returned an error. Error type: transport, Description: not found (the requested document could not be found)"
         )
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_single_with_http_400(self):
         es = None
         params = None
@@ -1780,7 +1827,7 @@ class TestAsyncExecutor:
             "success": False,
         }
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_single_with_http_413(self):
         es = None
         params = None
@@ -1797,7 +1844,7 @@ class TestAsyncExecutor:
             "success": False,
         }
 
-    @run_async
+    @pytest.mark.asyncio
     async def test_execute_single_with_key_error(self):
         class FailingRunner:
             async def __call__(self, *args):
@@ -1821,7 +1868,7 @@ class TestAsyncExecutor:
 
 
 class TestAsyncProfiler:
-    @run_async
+    @pytest.mark.asyncio
     async def test_profiler_is_a_transparent_wrapper(self):
         async def f(x):
             await asyncio.sleep(x)

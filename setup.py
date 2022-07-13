@@ -33,8 +33,6 @@ def str_from_file(name):
 raw_version = str_from_file("esrally/_version.py")
 version = re.match(r'__version__ = "(.+)"', raw_version).group(1)
 
-long_description = str_from_file("README.rst")
-
 # tuples of (major, minor) of supported Python versions ordered from lowest to highest
 supported_python_versions = [(3, 8), (3, 9), (3, 10)]
 
@@ -51,6 +49,7 @@ install_requires = [
     #   urllib3: MIT
     #   aiohttp: Apache 2.0
     "elasticsearch[async]==7.14.0",
+    "urllib3==1.26.9",
     # License: BSD
     "psutil==5.8.0",
     # License: MIT
@@ -88,7 +87,7 @@ s3_require = [
     #   botocore: Apache 2.0
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
-    "boto3==1.10.32",
+    "boto3==1.18.46",
 ]
 
 tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-asyncio==0.18.1"]
@@ -97,13 +96,15 @@ tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-as
 develop_require = [
     "tox==3.14.0",
     "sphinx==4.2.0",
-    "sphinx_rtd_theme==1.0.0",
+    "furo==2022.06.21",
     "twine==1.15.0",
     "wheel==0.33.6",
     "github3.py==1.3.0",
     "pylint==2.6.0",
     "black==22.3.0",
     "isort==5.8.0",
+    "trustme==0.9.0",
+    "pytest-httpserver==1.0.4",
 ]
 
 python_version_classifiers = ["Programming Language :: Python :: {}.{}".format(major, minor) for major, minor in supported_python_versions]
@@ -117,7 +118,8 @@ setup(
     maintainer_email="daniel.mitterdorfer@gmail.com",
     version=version,
     description="Macrobenchmarking framework for Elasticsearch",
-    long_description=long_description,
+    long_description=str_from_file("README.md"),
+    long_description_content_type="text/markdown",
     url="https://github.com/elastic/rally",
     license="Apache License, Version 2.0",
     packages=find_packages(where=".", exclude=("tests*", "benchmarks*", "it*")),

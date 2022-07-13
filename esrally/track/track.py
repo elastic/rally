@@ -684,6 +684,8 @@ class OperationType(Enum):
     OpenPointInTime = 14
     ClosePointInTime = 15
     Sql = 16
+    FieldCaps = 17
+    CompositeAgg = 18
 
     # administrative actions
     ForceMerge = 1001
@@ -751,6 +753,8 @@ class OperationType(Enum):
             return OperationType.ScrollSearch
         elif v == "paginated-search":
             return OperationType.PaginatedSearch
+        elif v == "composite-agg":
+            return OperationType.CompositeAgg
         elif v == "cluster-health":
             return OperationType.ClusterHealth
         elif v == "bulk":
@@ -843,6 +847,8 @@ class OperationType(Enum):
             return OperationType.DeleteIlmPolicy
         elif v == "sql":
             return OperationType.Sql
+        elif v == "field-caps":
+            return OperationType.FieldCaps
         else:
             raise KeyError(f"No enum value for [{v}]")
 

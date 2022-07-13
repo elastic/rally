@@ -288,6 +288,10 @@ class SummaryReporter:
             self._line("Total Young Gen GC count", "", stats.young_gc_count, ""),
             self._line("Total Old Gen GC time", "", stats.old_gc_time, "s", convert.ms_to_seconds),
             self._line("Total Old Gen GC count", "", stats.old_gc_count, ""),
+            self._line("Total ZGC Cycles GC time", "", stats.zgc_cycles_gc_time, "s", convert.ms_to_seconds),
+            self._line("Total ZGC Cycles GC count", "", stats.zgc_cycles_gc_count, ""),
+            self._line("Total ZGC Pauses GC time", "", stats.zgc_pauses_gc_time, "s", convert.ms_to_seconds),
+            self._line("Total ZGC Pauses GC count", "", stats.zgc_pauses_gc_count, ""),
         )
 
     def _report_disk_usage(self, stats):
@@ -412,7 +416,9 @@ class ComparisonReporter:
         metrics_table.extend(self._report_ingest_pipeline_counts(baseline_stats, contender_stats))
         metrics_table.extend(self._report_ingest_pipeline_times(baseline_stats, contender_stats))
         metrics_table.extend(self._report_ingest_pipeline_failed(baseline_stats, contender_stats))
-        metrics_table.extend(self._report_disk_usage_stats_per_field(baseline_stats, contender_stats))
+        # Skip disk usage stats comparison if the disk_usage_total field does not exist
+        if baseline_stats.disk_usage_total and contender_stats.disk_usage_total:
+            metrics_table.extend(self._report_disk_usage_stats_per_field(baseline_stats, contender_stats))
 
         for t in baseline_stats.tasks():
             if t in contender_stats.tasks():
@@ -650,19 +656,18 @@ class ComparisonReporter:
         best = {}
         for index, total, field in total_disk_usage_per_field(baseline_stats):
             best.setdefault(index, {})[field] = total
+        collated_baseline = collate_disk_usage_stats(baseline_stats)
         for index, total, field in total_disk_usage_per_field(contender_stats):
             for_idx = best.setdefault(index, {})
             prev = for_idx.get(field, 0)
             if prev < total:
                 for_idx[field] = total
+        collated_contender = collate_disk_usage_stats(contender_stats)
         totals = []
         for index, for_idx in best.items():
             for field, total in for_idx.items():
                 totals.append([index, total, field])
         totals.sort()
-
-        collated_baseline = collate_disk_usage_stats(baseline_stats)
-        collated_contender = collate_disk_usage_stats(contender_stats)
 
         lines = []
         for index, _total, field in totals:
@@ -848,41 +853,38 @@ class ComparisonReporter:
         )
 
     def _report_gc_metrics(self, baseline_stats, contender_stats):
+        line_method = self._line
+
+        def _time_metric(metric_prefix, description):
+            return line_method(
+                f"Total {description} GC time",
+                getattr(baseline_stats, f"{metric_prefix}_gc_time"),
+                getattr(contender_stats, f"{metric_prefix}_gc_time"),
+                "",
+                "s",
+                treat_increase_as_improvement=False,
+                formatter=convert.ms_to_seconds,
+            )
+
+        def _count_metric(metric_prefix, description):
+            return line_method(
+                f"Total {description} GC count",
+                getattr(baseline_stats, f"{metric_prefix}_gc_count"),
+                getattr(contender_stats, f"{metric_prefix}_gc_count"),
+                "",
+                "",
+                treat_increase_as_improvement=False,
+            )
+
         return self._join(
-            self._line(
-                "Total Young Gen GC time",
-                baseline_stats.young_gc_time,
-                contender_stats.young_gc_time,
-                "",
-                "s",
-                treat_increase_as_improvement=False,
-                formatter=convert.ms_to_seconds,
-            ),
-            self._line(
-                "Total Young Gen GC count",
-                baseline_stats.young_gc_count,
-                contender_stats.young_gc_count,
-                "",
-                "",
-                treat_increase_as_improvement=False,
-            ),
-            self._line(
-                "Total Old Gen GC time",
-                baseline_stats.old_gc_time,
-                contender_stats.old_gc_time,
-                "",
-                "s",
-                treat_increase_as_improvement=False,
-                formatter=convert.ms_to_seconds,
-            ),
-            self._line(
-                "Total Old Gen GC count",
-                baseline_stats.old_gc_count,
-                contender_stats.old_gc_count,
-                "",
-                "",
-                treat_increase_as_improvement=False,
-            ),
+            _time_metric("young", "Young Gen"),
+            _count_metric("young", "Young Gen"),
+            _time_metric("old", "Old Gen"),
+            _count_metric("old", "Old Gen"),
+            _time_metric("zgc_cycles", "ZGC Cycles"),
+            _count_metric("zgc_cycles", "ZGC Cycles"),
+            _time_metric("zgc_pauses", "ZGC Pauses"),
+            _count_metric("zgc_pauses", "ZGC Pauses"),
         )
 
     def _report_disk_usage(self, baseline_stats, contender_stats):

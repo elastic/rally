@@ -868,6 +868,32 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.mean"}],
+                        "point_size": "3",
+                        "seperate_axis": 1,
+                        "split_mode": "filters",
+                        "stacked": "none",
+                        "filter": "",
+                        "split_filters": [
+                            {
+                                "filter": "ml_processing_time",
+                                "label": "Mean ML processing time",
+                                "color": color_scheme_rgba[1],
+                                "id": str(uuid.uuid4()),
+                            }
+                        ],
+                        "label": "ML Mean Time",
+                        "value_template": "{{value}}",
+                        "steps": 0,
+                    },
+                    {
+                        "axis_position": "left",
+                        "chart_type": "line",
+                        "color": "#68BC00",
+                        "fill": "0",
+                        "formatter": "number",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
                         "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.median"}],
                         "point_size": "3",
                         "seperate_axis": 1,
@@ -878,14 +904,14 @@ class TimeSeriesCharts:
                             {
                                 "filter": "ml_processing_time",
                                 "label": "Median ML processing time",
-                                "color": "rgba(0,191,179,1)",
+                                "color": color_scheme_rgba[0],
                                 "id": str(uuid.uuid4()),
                             }
                         ],
-                        "label": "ML Time",
+                        "label": "ML Median Time",
                         "value_template": "{{value}}",
                         "steps": 0,
-                    }
+                    },
                 ],
                 "show_legend": 1,
                 "show_grid": 1,
@@ -1752,7 +1778,8 @@ class RaceConfig:
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
                 # which tasks / or types of operations should be used for which chart types.
                 if (
-                    sub_task.operation.type in ["search", "composite", "eql", "paginated-search", "scroll-search"]
+                    sub_task.operation.type
+                    in ["search", "composite", "eql", "paginated-search", "scroll-search", "raw-request", "composite-agg"]
                     or "target-throughput" in sub_task.params
                     or "target-interval" in sub_task.params
                 ):
