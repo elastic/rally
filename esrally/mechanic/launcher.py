@@ -18,12 +18,13 @@ import logging
 import os
 import shlex
 import subprocess
+from textwrap import indent
 
 import psutil
 
 from esrally import exceptions, telemetry, time
 from esrally.mechanic import cluster, java_resolver
-from esrally.utils import io, opts, process
+from esrally.utils import console, io, opts, process
 
 
 class DockerLauncher:
@@ -214,18 +215,8 @@ class ProcessLauncher:
         try:
             ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
         except subprocess.CalledProcessError as e:
-            logging.error(
-                """Daemon startup failed with exit code [%s].
-                ===================STDOUT=============================
-                %s
-                ===================STDERR=============================
-                %s
-                """,
-                e.returncode,
-                e.stdout,
-                e.stderr,
-            )
-            raise exceptions.LaunchError("Daemon startup failed with exit code [%s]. See logs for more information." % e.returncode, e)
+            console.error("Daemon startup failed with exit code [%s]. STDERR:\n\n%s\n" % (e.returncode, indent(e.stderr, "\t")))
+            raise e
 
         return wait_for_pidfile(pid_path)
 
