@@ -90,7 +90,7 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: check-venv
-	pre-commit run --all-files
+	@. $(VENV_ACTIVATE_FILE); pre-commit run --all-files
 
 docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
