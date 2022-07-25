@@ -1,3 +1,20 @@
+### 2.6.0
+
+#### Highlights
+
+* [#1532](https://github.com/elastic/rally/pull/1532): Use main branch of Elasticsearch for source builds
+* [#1520](https://github.com/elastic/rally/pull/1520): Create and use a unique ES API key for each simulated client
+
+#### Enhancements
+
+* [#1535](https://github.com/elastic/rally/pull/1535): Use new logo on GitHub, PyPI and Read the Docs
+* [#1530](https://github.com/elastic/rally/pull/1530): Add OS mem stats to node-stats telemetry device
+* [#1526](https://github.com/elastic/rally/pull/1526): Add runner for paging through composite aggregations
+
+#### Bug Fixes
+
+* [#1522](https://github.com/elastic/rally/pull/1522): Fix pyenv install on Apple Silicons Macs
+
 ### 2.5.0
 
 #### Highlights

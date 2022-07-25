@@ -472,7 +472,7 @@ class TrackPreparationActor(actor.RallyActor):
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         # this instance of load_track occurs once per host, so install dependencies if necessary
-        load_track(self.cfg, install_dependencies=True)
+        load_track(self.cfg, install_dependencies=False)
         self.send(sender, ReadyForWork())
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
@@ -1751,7 +1751,7 @@ class AsyncIoAdapter:
                 for es in c.values():
                     await es.close()
             transport_close_end = time.perf_counter()
-            self.logger.info("Total time to close transports: %f seconds.", (shutdown_asyncgens_end - transport_close_end))
+            self.logger.info("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
 
 
 class AsyncProfiler:
