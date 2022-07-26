@@ -915,6 +915,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
 
     cfg.add(config.Scope.application, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.application, "system", "offline.mode", args.offline)
+    logger = logging.getLogger(__name__)
 
     try:
         if sub_command == "compare":
@@ -1013,27 +1014,17 @@ def dispatch_sub_command(arg_parser, args, cfg):
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return ExitStatus.SUCCESSFUL
     except (exceptions.UserInterrupted, KeyboardInterrupt) as e:
-        logging.getLogger(__name__).info("User has cancelled the subcommand [%s].", sub_command, exc_info=e)
+        logger.info("User has cancelled the subcommand [%s].", sub_command, exc_info=e)
         console.info("Aborted %s. %s" % (sub_command, e))
         return ExitStatus.INTERRUPTED
     except exceptions.RallyError as e:
-        logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
-        msg = str(e.message)
-        nesting = 0
-        while hasattr(e, "cause") and e.cause:
-            nesting += 1
-            e = e.cause
-            if hasattr(e, "message"):
-                msg += "\n%s%s" % ("\t" * nesting, e.message)
-            else:
-                msg += "\n%s%s" % ("\t" * nesting, str(e))
-
-        console.error("Cannot %s. %s" % (sub_command, msg))
+        logger.exception("Cannot run subcommand [%s].", sub_command)
+        console.error("Cannot %s. %s" % (sub_command, e.full_message))
         console.println("")
         print_help_on_errors()
         return ExitStatus.ERROR
     except BaseException as e:
-        logging.getLogger(__name__).exception("A fatal error occurred while running subcommand [%s].", sub_command)
+        logger.exception("A fatal error occurred while running subcommand [%s].", sub_command)
         console.error("Cannot %s. %s." % (sub_command, e))
         console.println("")
         print_help_on_errors()
@@ -1075,12 +1066,6 @@ def main():
     logger.debug("Command line arguments: %s", args)
     # Configure networking
     net.init()
-    if not args.offline:
-        probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
-        if not net.has_internet_connection(probing_url):
-            console.warn("No Internet connection detected. Specify --offline to run without it.", logger=logger)
-            sys.exit(0)
-        logger.info("Detected a working Internet connection.")
 
     def _trap(function, path, exc_info):
         if exc_info[0] == FileNotFoundError:

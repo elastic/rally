@@ -19,7 +19,6 @@ system
 This section contains global information for the current benchmark environment. This information should be identical on all machines where Rally is installed.
 
 * ``env.name`` (default: "local"): The name of this benchmark environment. It is used as meta-data in metrics documents if an Elasticsearch metrics store is configured. Only alphanumeric characters are allowed.
-* ``probing.url`` (default: "https://github.com"): This URL is used by Rally to check for a working Internet connection. It's useful to change this to an internal server if all data are hosted inside the corporate network and connections to the outside world are prohibited.
 * ``available.cores`` (default: number of logical CPU cores): Determines the number of available CPU cores. Rally aims to create one asyncio event loop per core and will distribute clients evenly across event loops.
 * ``async.debug`` (default: false): Enables debug mode on Rally's internal `asyncio event loop <https://docs.python.org/3/library/asyncio-eventloop.html#enabling-debug-mode>`_. This setting is mainly intended for troubleshooting.
 * ``passenv`` (default: "PATH"): A comma-separated list of environment variable names that should be passed to the Elasticsearch process.
@@ -140,7 +139,7 @@ Rally downloads all necessary data automatically for you:
 * Track meta-data from Github
 * Track data from an S3 bucket
 
-Hence, it needs to connect via http(s) to the outside world. If you are behind a corporate proxy you need to configure Rally and git. As many other Unix programs, Rally relies that the HTTP proxy URL is available in the environment variable ``http_proxy`` (note that this is in lower-case). Hence, you should add this line to your shell profile, e.g. ``~/.bash_profile``::
+Hence, it needs to connect via http(s) to the outside world. If you are behind a corporate proxy you need to configure Rally and git. As many other Unix programs, Rally relies that the proxy URL is available in the environment variables ``http_proxy`` (lowercase only), ``https_proxy`` or ``HTTPS_PROXY``, ``all_proxy`` or ``ALL_PROXY``. Hence, you should add this line to your shell profile, e.g. ``~/.bash_profile``::
 
     export http_proxy=http://proxy.acme.org:8888/
 
@@ -158,7 +157,7 @@ If the configuration is correct, git will clone this repository. You can delete 
 
 To verify that Rally will connect via the proxy server you can check the log file. If the proxy server is configured successfully, Rally will log the following line on startup::
 
-    Rally connects via proxy URL [http://proxy.acme.org:3128/] to the Internet (picked up from the environment variable [http_proxy]).
+    Connecting via proxy URL [http://proxy.acme.org:3128/] to the Internet (picked up from the environment variable [http_proxy]).
 
 
 .. note::
