@@ -2,7 +2,7 @@ include CHANGELOG.md
 include CONTRIBUTING.md
 include LICENSE
 include MANIFEST.in
-include README.rst
+include README.md
 include setup.py
 include esrally/min-es-version.txt
 recursive-include docs *

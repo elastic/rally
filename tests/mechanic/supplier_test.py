@@ -64,12 +64,12 @@ class TestSourceRepository:
         mock_is_working_copy.side_effect = [False, True]
         mock_head_revision.return_value = "HEAD"
 
-        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src", branch="main")
         s.fetch("latest")
 
         mock_is_working_copy.assert_called_with("/src")
         mock_clone.assert_called_with("/src", remote="some-github-url")
-        mock_pull.assert_called_with("/src", remote="origin", branch="master")
+        mock_pull.assert_called_with("/src", remote="origin", branch="main")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
@@ -80,7 +80,7 @@ class TestSourceRepository:
         mock_is_working_copy.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src", branch="main")
         s.fetch("current")
 
         mock_is_working_copy.assert_called_with("/src")
@@ -98,7 +98,7 @@ class TestSourceRepository:
         mock_head_revision.return_value = "HEAD"
 
         # local only, we dont specify a remote
-        s = supplier.SourceRepository(name="Elasticsearch", remote_url=None, src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url=None, src_dir="/src", branch="main")
         s.fetch("67c2f42")
 
         mock_is_working_copy.assert_called_with("/src")
@@ -114,11 +114,11 @@ class TestSourceRepository:
         mock_is_working_copy.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src", branch="main")
         s.fetch("@2015-01-01-01:00:00")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", remote="origin", branch="master")
+        mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", remote="origin", branch="main")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
@@ -128,7 +128,7 @@ class TestSourceRepository:
         mock_is_working_copy.return_value = True
         mock_head_revision.return_value = "HEAD"
 
-        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src")
+        s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src", branch="main")
         s.fetch("67c2f42")
 
         mock_is_working_copy.assert_called_with("/src")

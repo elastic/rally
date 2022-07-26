@@ -40,7 +40,7 @@ templates_path = ["_templates"]
 # The suffix(es) of source filenames. You can specify multiple suffix as a list of string:
 # source_suffix = ['.rst', '.md']
 source_suffix = ".rst"
-master_doc = "index"
+root_doc = "index"
 language = None
 
 CI_VARS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".ci", "variables.json")
@@ -128,26 +128,10 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-# html_theme = 'alabaster'
+html_theme = "furo"
 
-on_rtd = os.environ.get("READTHEDOCS", None) == "True"
-
-if not on_rtd:  # only import and set the theme if we're building docs locally
-    import sphinx_rtd_theme
-
-    html_theme = "sphinx_rtd_theme"
-    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-
-# The name for this set of Sphinx documents.  If None, it defaults to
-# "<project> v<release> documentation".
-# html_title = None
-
-# A shorter title for the navigation bar.  Default is the same as html_title.
-# html_short_title = None
-
-# The name of an image file (relative to this directory) to place at the top
-# of the sidebar.
-# html_logo = None
+html_static_path = ["."]
+html_logo = "rally-logo.svg"
 
 # The name of an image file (relative to this directory) to use as a favicon of
 # the docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -169,7 +153,7 @@ latex_elements = {}
 
 latex_documents = [
     (
-        master_doc,
+        root_doc,
         "Rally.tex",
         "Rally Documentation",
         "Daniel Mitterdorfer",
@@ -183,7 +167,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     (
-        master_doc,
+        root_doc,
         "esrally",
         "Rally Documentation",
         [author],
@@ -197,7 +181,7 @@ man_pages = [
 # -- Options for Texinfo output -------------------------------------------
 texinfo_documents = [
     (
-        master_doc,
+        root_doc,
         "Rally",
         "Rally Documentation",
         author,

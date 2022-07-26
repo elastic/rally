@@ -571,7 +571,7 @@ If you actively develop Elasticsearch and want to benchmark a source build of El
 
 You can specify the revision in different formats:
 
-* ``--revision=latest``: Use the HEAD revision from origin/master.
+* ``--revision=latest``: Use the HEAD revision from origin/main.
 * ``--revision=current``: Use the current revision (i.e. don't alter the local source tree).
 * ``--revision=abc123``: Where ``abc123`` is some git revision hash.
 * ``--revision=@2013-07-27T10:37:00Z``: Determines the revision that is closest to the provided date. Rally logs to which git revision hash the date has been resolved and if you use Elasticsearch as metrics store (instead of the default in-memory one), :doc:`each metric record will contain the git revision hash also in the meta-data section </metrics>`.
@@ -670,14 +670,16 @@ We support the following data types:
 * Strings: Have to be enclosed in single quotes. Example: ``ca_certs:'/path/to/CA_certs'``
 * Numbers: There is nothing special about numbers. Example: ``sniffer_timeout:60``
 * Booleans: Specify either ``true`` or ``false``. Example: ``use_ssl:true``
+* None: Specify ``None`` without quotes.``'None'`` will be treated as string. Example: ``timeout:None``
 
-Default value: ``timeout:60`` (applies any time ``timeout`` is not specified)
+Default value: ``timeout:60`` (applies any time ``timeout`` is not specified. Set ``timeout:None`` to omit any timeouts)
 
 Rally recognizes the following client options in addition:
 
 * ``max_connections``: By default, Rally will choose the maximum allowed number of connections automatically (equal to the number of simulated clients but at least 256 connections). With this property it is possible to override that logic but a minimum of 256 is enforced internally.
 * ``enable_cleanup_closed`` (default: ``true``): In some cases, `Elasticsearch does not properly close SSL connections <https://github.com/elastic/elasticsearch/issues/76642>`_ and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections.
 * ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. See below for a specific example.
+* ``create_api_key_per_client`` (default: ``false``): If set to ``true``, Rally will create a unique `Elasticsearch API key <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html>`_ for each simulated client that issues requests against Elasticsearch during the benchmark. This is useful for simulating workloads where data is indexed by many distinct agents, each configured with its own API key, as is typical with Elastic Agent. Note that ``basic_auth_user`` and ``basic_auth_password`` must also be provided, and the ``basic_auth_user`` must have `sufficient privileges <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html#security-api-create-api-key-prereqs>`_ to create API keys. These basic auth credentials are used to create the API keys at the start of the benchmark and delete them at the end, but only the generated API keys will be used during benchmark execution.
 
 **Examples**
 
@@ -791,6 +793,10 @@ Save the above responses as ``responses.json`` and execute a benchmark as follow
 
 .. note::
    Use ``--pipeline=benchmark-only`` as Rally should not start any cluster when static responses are used.
+
+**Create an API key per client**
+
+* Enable API-key generation per client: ``--client-options="use_ssl:true,basic_auth_user:'user',basic_auth_password:'password',create_api_key_per_client:true"``
 
 .. _command_line_reference_on_error:
 

@@ -33,8 +33,6 @@ def str_from_file(name):
 raw_version = str_from_file("esrally/_version.py")
 version = re.match(r'__version__ = "(.+)"', raw_version).group(1)
 
-long_description = str_from_file("README.rst")
-
 # tuples of (major, minor) of supported Python versions ordered from lowest to highest
 supported_python_versions = [(3, 8), (3, 9), (3, 10)]
 
@@ -98,7 +96,7 @@ tests_require = ["ujson", "pytest==6.2.5", "pytest-benchmark==3.2.2", "pytest-as
 develop_require = [
     "tox==3.14.0",
     "sphinx==4.2.0",
-    "sphinx_rtd_theme==1.0.0",
+    "furo==2022.06.21",
     "twine==1.15.0",
     "wheel==0.33.6",
     "github3.py==1.3.0",
@@ -120,7 +118,8 @@ setup(
     maintainer_email="daniel.mitterdorfer@gmail.com",
     version=version,
     description="Macrobenchmarking framework for Elasticsearch",
-    long_description=long_description,
+    long_description=str_from_file("README.md"),
+    long_description_content_type="text/markdown",
     url="https://github.com/elastic/rally",
     license="Apache License, Version 2.0",
     packages=find_packages(where=".", exclude=("tests*", "benchmarks*", "it*")),

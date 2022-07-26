@@ -1,3 +1,20 @@
+### 2.6.0
+
+#### Highlights
+
+* [#1532](https://github.com/elastic/rally/pull/1532): Use main branch of Elasticsearch for source builds
+* [#1520](https://github.com/elastic/rally/pull/1520): Create and use a unique ES API key for each simulated client
+
+#### Enhancements
+
+* [#1535](https://github.com/elastic/rally/pull/1535): Use new logo on GitHub, PyPI and Read the Docs
+* [#1530](https://github.com/elastic/rally/pull/1530): Add OS mem stats to node-stats telemetry device
+* [#1526](https://github.com/elastic/rally/pull/1526): Add runner for paging through composite aggregations
+
+#### Bug Fixes
+
+* [#1522](https://github.com/elastic/rally/pull/1522): Fix pyenv install on Apple Silicons Macs
+
 ### 2.5.0
 
 #### Highlights
@@ -1253,10 +1270,10 @@ ourselves.
 
 Major changes:
 
-* Migrated the metrics data store from file-based to a dedicated Elasticsearch instance. Graphical reports can be created with 
-  Kibana (optional but recommended). It is necessary to setup an Elasticsearch cluster to store metrics data (a single node 
-  is sufficient). The cluster will be configured automatically by Rally. For details please see the [README](README.rst).
-  
-  Related issues: #8, #21, #46, 
-  
+* Migrated the metrics data store from file-based to a dedicated Elasticsearch instance. Graphical reports can be created with
+  Kibana (optional but recommended). It is necessary to setup an Elasticsearch cluster to store metrics data (a single node
+  is sufficient). The cluster will be configured automatically by Rally. For details please see the documentation.
+
+  Related issues: #8, #21, #46,
+
 [All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.0.3+is0X0P+0closed)

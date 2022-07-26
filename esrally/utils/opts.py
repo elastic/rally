@@ -53,6 +53,15 @@ def to_bool(v):
         raise ValueError("Could not convert value '%s'" % v)
 
 
+def to_none(v):
+    if v is None:
+        return None
+    elif v.lower() == "none":
+        return None
+    else:
+        raise ValueError("Could not convert value '%s'" % v)
+
+
 def kv_to_map(kvs):
     def convert(v):
         # string (specified explicitly)
@@ -76,6 +85,12 @@ def kv_to_map(kvs):
             return to_bool(v)
         except ValueError:
             pass
+
+        try:
+            return to_none(v)
+        except ValueError:
+            pass
+
         # treat it as string by default
         return v
 

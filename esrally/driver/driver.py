@@ -43,6 +43,7 @@ from esrally import (
     telemetry,
     track,
 )
+from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
 from esrally.utils import console, convert, net
@@ -139,17 +140,19 @@ class StartWorker:
     Starts a worker.
     """
 
-    def __init__(self, worker_id, config, track, client_allocations):
+    def __init__(self, worker_id, config, track, client_allocations, client_contexts):
         """
         :param worker_id: Unique (numeric) id of the worker.
         :param config: Rally internal configuration object.
         :param track: The track to use.
         :param client_allocations: A structure describing which clients need to run which tasks.
+        :param client_contexts: A dict ``ClientContext`` objects keyed by client ID
         """
         self.worker_id = worker_id
         self.config = config
         self.track = track
         self.client_allocations = client_allocations
+        self.client_contexts = client_contexts
 
 
 class Drive:
@@ -305,8 +308,8 @@ class DriverActor(actor.RallyActor):
         self.send(worker, Bootstrap(cfg))
         return worker
 
-    def start_worker(self, driver, worker_id, cfg, track, allocations):
-        self.send(driver, StartWorker(worker_id, cfg, track, allocations))
+    def start_worker(self, driver, worker_id, cfg, track, allocations, client_contexts=None):
+        self.send(driver, StartWorker(worker_id, cfg, track, allocations, client_contexts))
 
     def drive_at(self, driver, client_start_timestamp):
         self.send(driver, Drive(client_start_timestamp))
@@ -470,7 +473,7 @@ class TrackPreparationActor(actor.RallyActor):
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         # this instance of load_track occurs once per host, so install dependencies if necessary
-        load_track(self.cfg, install_dependencies=True)
+        load_track(self.cfg, install_dependencies=False)
         self.send(sender, ReadyForWork())
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
@@ -539,6 +542,16 @@ def num_cores(cfg):
     return int(cfg.opts("system", "available.cores", mandatory=False, default_value=multiprocessing.cpu_count()))
 
 
+ApiKey = collections.namedtuple("ApiKey", ["id", "secret"])
+
+
+@dataclass
+class ClientContext:
+    client_id: int
+    parent_worker_id: int
+    api_key: ApiKey = None
+
+
 class Driver:
     def __init__(self, target, config, es_client_factory_class=client.EsClientFactory):
         """
@@ -553,6 +566,7 @@ class Driver:
         self.target = target
         self.config = config
         self.es_client_factory = es_client_factory_class
+        self.default_sync_es_client = None
         self.track = None
         self.challenge = None
         self.metrics_store = None
@@ -560,6 +574,8 @@ class Driver:
         self.workers = []
         # which client ids are assigned to which workers?
         self.clients_per_worker = {}
+        self.client_contexts = {}
+        self.generated_api_key_ids = []
 
         self.progress_reporter = console.progress()
         self.progress_counter = 0
@@ -635,6 +651,18 @@ class Driver:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
+    def create_api_key(self, es, client_id):
+        self.logger.debug("Creating ES API key for client [%s].", client_id)
+        try:
+            api_key = client.create_api_key(es, client_id)
+            self.logger.debug("ES API key created for client [%s].", client_id)
+            # Store the API key ID for deletion upon benchmark completion
+            self.generated_api_key_ids.append(api_key["id"])
+            return api_key
+        except Exception as e:
+            self.logger.error("Unable to create API keys. Stopping benchmark.")
+            raise exceptions.SystemSetupError(e.message)
+
     def prepare_benchmark(self, t):
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
@@ -647,6 +675,7 @@ class Driver:
         )
 
         es_clients = self.create_es_clients()
+        self.default_sync_es_client = es_clients["default"]
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
@@ -699,6 +728,7 @@ class Driver:
         if allocator.clients < 128:
             self.logger.info("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
+        create_api_keys = self.config.opts("client", "options").all_client_options["default"].get("create_api_key_per_client", None)
         worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
         worker_id = 0
         for assignment in worker_assignments:
@@ -710,10 +740,21 @@ class Driver:
                     worker = self.target.create_client(host, self.config)
 
                     client_allocations = ClientAllocations()
+                    worker_client_contexts = {}
                     for client_id in clients:
                         client_allocations.add(client_id, self.allocations[client_id])
                         self.clients_per_worker[client_id] = worker_id
-                    self.target.start_worker(worker, worker_id, self.config, self.track, client_allocations)
+                        client_context = ClientContext(client_id=client_id, parent_worker_id=worker_id)
+
+                        if create_api_keys:
+                            resp = self.create_api_key(self.default_sync_es_client, client_id)
+                            client_context.api_key = ApiKey(id=resp["id"], secret=resp["api_key"])
+
+                        worker_client_contexts[client_id] = client_context
+                        self.client_contexts[worker_id] = worker_client_contexts
+                    self.target.start_worker(
+                        worker, worker_id, self.config, self.track, client_allocations, client_contexts=worker_client_contexts
+                    )
                     self.workers.append(worker)
                     worker_id += 1
 
@@ -754,6 +795,17 @@ class Driver:
                 self.metrics_store.close()
                 # immediately clear as we don't need it anymore and it can consume a significant amount of memory
                 self.metrics_store = None
+                if self.generated_api_key_ids:
+                    self.logger.debug("Deleting auto-generated client API keys...")
+                    try:
+                        delete_api_keys(self.default_sync_es_client, self.generated_api_key_ids)
+                    except exceptions.RallyError:
+                        console.warn(
+                            (
+                                "Unable to delete auto-generated API keys. You may need to manually delete them. "
+                                "Please check the logs for details."
+                            )
+                        )
                 self.logger.debug("Sending benchmark results...")
                 self.target.on_benchmark_complete(m)
             else:
@@ -1113,6 +1165,7 @@ class Worker(actor.RallyActor):
         self.config = None
         self.track = None
         self.client_allocations = None
+        self.client_contexts = None
         self.current_task_index = 0
         self.next_task_index = 0
         self.on_error = None
@@ -1144,6 +1197,7 @@ class Worker(actor.RallyActor):
         self.track = msg.track
         track.set_absolute_data_path(self.config, self.track)
         self.client_allocations = msg.client_allocations
+        self.client_contexts = msg.client_contexts
         self.current_task_index = 0
         self.cancel.clear()
         # we need to wake up more often in test mode
@@ -1270,7 +1324,7 @@ class Worker(actor.RallyActor):
                 self.logger.info("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
                 self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=self.sample_queue_size)
                 executor = AsyncIoAdapter(
-                    self.config, self.track, task_allocations, self.sampler, self.cancel, self.complete, self.on_error
+                    self.config, self.track, task_allocations, self.sampler, self.cancel, self.complete, self.on_error, self.client_contexts
                 )
 
                 self.executor_future = self.pool.submit(executor)
@@ -1623,7 +1677,7 @@ class ThroughputCalculator:
 
 
 class AsyncIoAdapter:
-    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error):
+    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts):
         self.cfg = cfg
         self.track = track
         self.task_allocations = task_allocations
@@ -1631,6 +1685,7 @@ class AsyncIoAdapter:
         self.cancel = cancel
         self.complete = complete
         self.abort_on_error = abort_on_error
+        self.client_contexts = client_contexts
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
         self.assertions_enabled = self.cfg.opts("driver", "assertions")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
@@ -1656,10 +1711,12 @@ class AsyncIoAdapter:
         self.logger.error("Uncaught exception in event loop: %s", context)
 
     async def run(self):
-        def es_clients(all_hosts, all_client_options):
+        def es_clients(client_id, all_hosts, all_client_options):
             es = {}
+            context = self.client_contexts.get(client_id)
+            api_key = context.api_key
             for cluster_name, cluster_hosts in all_hosts.items():
-                es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async()
+                es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async(api_key=api_key)
             return es
 
         self.logger.info("Task assertions enabled: %s", str(self.assertions_enabled))
@@ -1675,7 +1732,7 @@ class AsyncIoAdapter:
                 param_source = track.operation_parameters(self.track, task)
                 params_per_task[task] = param_source
             schedule = schedule_for(task_allocation, params_per_task[task])
-            es = es_clients(self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options"))
+            es = es_clients(client_id, self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options"))
             clients.append(es)
             async_executor = AsyncExecutor(
                 client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.abort_on_error)
@@ -1695,7 +1752,7 @@ class AsyncIoAdapter:
                 for es in c.values():
                     await es.close()
             transport_close_end = time.perf_counter()
-            self.logger.info("Total time to close transports: %f seconds.", (shutdown_asyncgens_end - transport_close_end))
+            self.logger.info("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
 
 
 class AsyncProfiler:

@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -105,7 +104,7 @@ def tracks(cfg):
     different versions, this will be reflected in the output.
 
     :param cfg: The config object.
-    :return: A list of tracks that are available for the provided distribution version or else for the master version.
+    :return: A list of tracks that are available for the provided distribution version or else for the main version.
     """
     repo = track_repo(cfg)
     return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]
@@ -195,18 +194,7 @@ def load_track(cfg, install_dependencies=False):
 
 
 def _install_dependencies(dependencies):
-    def _cleanup():
-        # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
-        console.info("Cleaning track dependency directory...")
-        logging.info("Cleaning track dependency directory [%s]...", paths.libs())
-        shutil.rmtree(paths.libs(), onerror=_trap)
-
-    def _trap(function, path, exc_info):
-        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
-        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
-
     if dependencies:
-        _cleanup()
         log_path = os.path.join(paths.logs(), "dependency.log")
         console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
         try:
@@ -249,7 +237,6 @@ def load_track_plugins(
     register_runner=None,
     register_scheduler=None,
     register_track_processor=None,
-    install_dependencies=False,
     force_update=False,
 ):
     """
@@ -260,7 +247,6 @@ def load_track_plugins(
     :param register_runner: An optional function where runners can be registered.
     :param register_scheduler: An optional function where custom schedulers can be registered.
     :param register_track_processor: An optional function where track processors can be registered.
-    :param install_dependencies: If set to ``True``, install declared dependencies from the track.py. Defaults to ``False``.
     :param force_update: If set to ``True`` this ensures that the track is first updated from the remote repository.
                          Defaults to ``False``.
     :return: True iff this track defines plugins and they have been loaded.

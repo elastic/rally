@@ -181,7 +181,7 @@ class BenchmarkCoordinator:
     def setup(self, sources=False):
         # to load the track we need to know the correct cluster distribution version. Usually, this value should be set
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
-        # to derive it ourselves. For source builds we always assume "master"
+        # to derive it ourselves. For source builds we always assume "main"
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
             distribution_version = mechanic.cluster_distribution_version(self.cfg)
             self.logger.info("Automatically derived distribution version [%s]", distribution_version)
@@ -191,7 +191,7 @@ class BenchmarkCoordinator:
             if specified_version < min_es_version:
                 raise exceptions.SystemSetupError(f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]")
 
-        self.current_track = track.load_track(self.cfg, install_dependencies=False)
+        self.current_track = track.load_track(self.cfg, install_dependencies=True)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
         challenge_name = self.cfg.opts("track", "challenge.name")
         self.current_challenge = self.current_track.find_challenge_or_default(challenge_name)

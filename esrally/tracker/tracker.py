@@ -35,6 +35,19 @@ def process_template(templates_path, template_filename, template_vars, output_pa
         f.write(template.render(template_vars))
 
 
+def extract_indices_from_data_streams(client, data_streams_to_extract):
+    indices = []
+    # first extract index metadata (which is cheap) and defer extracting data to reduce the potential for
+    # errors due to invalid index names late in the process.
+    for data_stream_name in data_streams_to_extract:
+        try:
+            indices += index.extract_indices_from_data_stream(client, data_stream_name)
+        except ElasticsearchException:
+            logging.getLogger(__name__).exception("Failed to extract indices from data stream [%s]", data_stream_name)
+
+    return indices
+
+
 def extract_mappings_and_corpora(client, output_path, indices_to_extract):
     indices = []
     corpora = []
@@ -63,8 +76,7 @@ def create_track(cfg):
     root_path = cfg.opts("generator", "output.path")
     target_hosts = cfg.opts("client", "hosts")
     client_options = cfg.opts("client", "options")
-
-    logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
+    data_streams = cfg.opts("generator", "data_streams")
 
     client = EsClientFactory(
         hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT], client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]
@@ -75,6 +87,12 @@ def create_track(cfg):
 
     output_path = os.path.abspath(os.path.join(io.normalize_path(root_path), track_name))
     io.ensure_dir(output_path)
+
+    if data_streams is not None:
+        logger.info("Creating track [%s] matching data streams [%s]", track_name, data_streams)
+        extracted_indices = extract_indices_from_data_streams(client, data_streams)
+        indices = extracted_indices
+    logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
 
     indices, corpora = extract_mappings_and_corpora(client, output_path, indices)
     if len(indices) == 0:
