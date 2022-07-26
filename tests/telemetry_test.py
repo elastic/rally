@@ -2973,6 +2973,7 @@ class TestClusterEnvironmentInfo:
             "version": {
                 "build_hash": "abc123",
                 "number": "6.0.0-alpha1",
+                "build_flavor": "oss",
             },
         }
 

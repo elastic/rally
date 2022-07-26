@@ -32,7 +32,7 @@ A Rally "car" is a specific configuration of Elasticsearch. You can list the ava
     x-pack-monitoring-local  mixin   X-Pack Monitoring (local exporter)
     x-pack-security          mixin   X-Pack Security
 
-You can specify the car that Rally should use with e.g. ``--car="4gheap"``. It is also possible to specify one or more "mixins" to further customize the configuration. For example, you can specify ``--car="4gheap,ea"`` to run with a 4GB heap and enable Java assertions (they are disabled by default) or ``--car="4gheap,x-pack-security"`` to benchmark Elasticsearch with X-Pack Security enabled (requires Elasticsearch 6.3.0 or better).
+You can specify the car that Rally should use with e.g. ``--car="4gheap"``. It is also possible to specify one or more "mixins" to further customize the configuration. For example, you can specify ``--car="4gheap,ea"`` to run with a 4GB heap and enable Java assertions (they are disabled by default) or ``--car="4gheap,x-pack-security"`` to benchmark Elasticsearch with X-Pack Security enabled.
 
 .. note::
     To benchmark ``x-pack-security`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'"``
