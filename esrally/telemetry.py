@@ -1755,7 +1755,7 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
             return
         revision = client_info["version"]["build_hash"]
         distribution_version = client_info["version"]["number"]
-        distribution_flavor = client_info["version"]["build_flavor"]
+        distribution_flavor = client_info["version"].get("build_flavor", "oss")
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)
