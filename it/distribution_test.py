@@ -34,10 +34,13 @@ import it
 def test_tar_distributions(cfg, dist, track):
     port = 19200
     it.wait_until_port_is_free(port_number=port)
+
+    enable_assertions = track != "http_logs"  # http_logs assertions fail in test mode
     assert (
         it.race(
             cfg,
             f'--distribution-version="{dist}" --track="{track}" --test-mode --car=4gheap,basic-license --target-hosts=127.0.0.1:{port}',
+            enable_assertions=enable_assertions,
         )
         == 0
     )

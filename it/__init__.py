@@ -83,12 +83,15 @@ def esrally(cfg, command_line):
     return subprocess.call(esrally_command_line_for(cfg, command_line), shell=True)
 
 
-def race(cfg, command_line):
+def race(cfg, command_line, enable_assertions=True):
     """
     This method should be used for rally invocations of the race command.
     It sets up some defaults for how the integration tests expect to run races.
     """
-    return esrally(cfg, f"race {command_line} --kill-running-processes --on-error='abort' --enable-assertions")
+    race_command = f"race {command_line} --kill-running-processes --on-error='abort'"
+    if enable_assertions:
+        race_command += " --enable-assertions"
+    return esrally(cfg, race_command)
 
 
 def shell_cmd(command_line):
