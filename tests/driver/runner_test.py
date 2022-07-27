@@ -6215,7 +6215,7 @@ class TestComposite:
         assert len(timings) == 3
 
         assert timings[0]["operation"] == "initial-call"
-        assert timings[0]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[0]["service_time"] == pytest.approx(0.1, abs=0.15)
 
         assert timings[1]["operation"] == "stream-a"
         assert timings[1]["service_time"] == pytest.approx(0.2, abs=0.1)

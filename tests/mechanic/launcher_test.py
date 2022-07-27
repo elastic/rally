@@ -97,6 +97,7 @@ class MockPopen:
         # mocking them as their optional functionality is disabled.
         self.returncode = 1
         self.stdout = io.StringIO()
+        self.args = None
 
     def communicate(self, input=None, timeout=None):
         return [b"", b""]

@@ -18,12 +18,13 @@ import logging
 import os
 import shlex
 import subprocess
+from textwrap import indent
 
 import psutil
 
 from esrally import exceptions, telemetry, time
 from esrally.mechanic import cluster, java_resolver
-from esrally.utils import io, opts, process
+from esrally.utils import console, io, opts, process
 
 
 class DockerLauncher:
@@ -199,13 +200,9 @@ class ProcessLauncher:
     @staticmethod
     def _run_subprocess(command_line, env):
         command_line_args = shlex.split(command_line)
-
-        with subprocess.Popen(
-            command_line_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, start_new_session=True
-        ) as command_line_process:
-            # wait for it to finish
-            command_line_process.wait()
-        return command_line_process.returncode
+        subprocess.run(
+            command_line_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, start_new_session=True, check=True, text=True
+        )
 
     @staticmethod
     def _start_process(binary_path, env):
@@ -215,11 +212,11 @@ class ProcessLauncher:
         cmd = [io.escape_path(os.path.join(".", "bin", "elasticsearch"))]
         pid_path = io.escape_path(os.path.join(".", "pid"))
         cmd.extend(["-d", "-p", pid_path])
-        ret = ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
-        if ret != 0:
-            msg = "Daemon startup failed with exit code [{}]".format(ret)
-            logging.error(msg)
-            raise exceptions.LaunchError(msg)
+        try:
+            ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
+        except subprocess.CalledProcessError as e:
+            console.error("Daemon startup failed with exit code [%s]. STDERR:\n\n%s\n" % (e.returncode, indent(e.stderr, "\t")))
+            raise e
 
         return wait_for_pidfile(pid_path)
 
