@@ -24,8 +24,9 @@ PIP_WRAPPER = $(PY_BIN) -m pip
 export PY38 = $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 = $(shell jq -r '.python_versions.PY39' .ci/variables.json)
 export PY310 = $(shell jq -r '.python_versions.PY310' .ci/variables.json)
+export HATCH_VERSION = $(shell jq -r '.prerequisite_versions.HATCH' .ci/variables.json)
+export HATCHLING_VERSION = $(shell jq -r '.prerequisite_versions.HATCHLING' .ci/variables.json)
 export PIP_VERSION = $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
-export SETUPTOOLS_VERSION = $(shell jq -r '.prerequisite_versions.SETUPTOOLS' .ci/variables.json)
 export WHEEL_VERSION = $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
 VIRTUAL_ENV ?= .venv
 VENV_ACTIVATE_FILE = $(VIRTUAL_ENV)/bin/activate
@@ -60,7 +61,7 @@ check-venv:
 	fi
 
 install-user: venv-create
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip==$(PIP_VERSION) setuptools==$(SETUPTOOLS_VERSION) wheel==$(WHEEL_VERSION)
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade hatch==$(HATCH_VERSION) hatchling==$(HATCHLING_VERSION) pip==$(PIP_VERSION) wheel==$(WHEEL_VERSION)
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 
 install: install-user
@@ -79,18 +80,8 @@ docs-clean:
 python-caches-clean:
 	-@find . -name "__pycache__" -prune -exec rm -rf -- \{\} \;
 
-# Force recreation of the virtual environment used by tox.
-#
-# See https://tox.readthedocs.io/en/latest/#system-overview:
-#
-# > Note pip will not update project dependencies (specified either in the install_requires or the extras
-# > section of the setup.py) if any version already exists in the virtual environment; therefore we recommend
-# > to recreate your environments whenever your project dependencies change.
-tox-env-clean:
-	rm -rf .tox
-
 lint: check-venv
-	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it setup.py -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
+	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
 	@. $(VENV_ACTIVATE_FILE); black --check --diff .
 	@. $(VENV_ACTIVATE_FILE); isort --check --diff .
 
@@ -110,7 +101,7 @@ test: check-venv
 precommit: lint
 
 # checks min and max python versions
-it: check-venv python-caches-clean tox-env-clean
+it: check-venv python-caches-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38
 	. $(VENV_ACTIVATE_FILE); tox -e py310
 
