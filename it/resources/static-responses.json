@@ -1,0 +1,44 @@
+[
+  {
+    "path": "*/_bulk",
+    "body": {
+      "errors": false,
+      "took": 1
+    },
+    "body-encoding": "raw"
+  },
+  {
+    "path": "/_cluster/health*",
+    "body": {
+      "status": "green",
+      "relocating_shards": 0
+    },
+    "body-encoding": "json"
+  },
+  {
+    "path": "/_cluster/settings",
+    "body": {
+      "persistent": {},
+      "transient": {}
+    },
+    "body-encoding": "json"
+  },
+  {
+    "path": "/_all/_stats/_all",
+    "body": {
+      "_all": {
+        "total": {
+          "merges": {
+            "current": 0
+          }
+        }
+      }
+    },
+    "body-encoding": "json"
+  },
+  {
+    "path": "*",
+    "body": {},
+    "body-encoding": "json"
+  }
+]
