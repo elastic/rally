@@ -111,17 +111,19 @@ precommit: lint
 
 # checks min and max python versions
 it: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38
-	. $(VENV_ACTIVATE_FILE); tox -e py310
+	. $(VENV_ACTIVATE_FILE); tox -e py38-unit
+	. $(VENV_ACTIVATE_FILE); tox -e py38-it
+	. $(VENV_ACTIVATE_FILE); tox -e py310-unit
+	. $(VENV_ACTIVATE_FILE); tox -e py310-it
 
 it38: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38
+	. $(VENV_ACTIVATE_FILE); tox -e py38-it
 
 it39: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py39
+	. $(VENV_ACTIVATE_FILE); tox -e py39-it
 
 it310: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py310
+	. $(VENV_ACTIVATE_FILE); tox -e py310-it
 
 check-all: lint test it
 
