@@ -2051,12 +2051,12 @@ class WaitForCurrentSnapshotsCreate(Runner):
         api = es.snapshot.get
         request_args = {"repository": repository, "snapshot": "_current", "verbose": False}
 
+        # significantly reduce response size when lots of snapshots have been taken
+        # only available since ES 8.3.0 (https://github.com/elastic/elasticsearch/pull/86269)
         if (es_version.major, es_version.minor) >= (8, 3):
             request_params, headers = self._transport_request_params(params)
             headers["Content-Type"] = "application/json"
 
-            # significantly reduce response size when lots of snapshots have been taken
-            # https://github.com/elastic/elasticsearch/pull/86269
             request_params["index_names"] = "false"
             request_params["verbose"] = "false"
 
