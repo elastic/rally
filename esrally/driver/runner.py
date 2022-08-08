@@ -35,6 +35,7 @@ from typing import List, Optional
 import ijson
 
 from esrally import exceptions, track
+from esrally.utils.versions import Version
 
 # Mapping from operation type to specific runner
 
@@ -2046,11 +2047,11 @@ class WaitForCurrentSnapshotsCreate(Runner):
         repository = mandatory(params, "repository", repr(self))
         wait_period = params.get("completion-recheck-wait-period", 1)
         es_info = await es.info()
-        es_version = tuple([int(part) for part in es_info["version"]["number"].split(".")[:2]])
+        es_version = Version.from_string(es_info["version"]["number"])
         api = es.snapshot.get
         request_args = {"repository": repository, "snapshot": "_current", "verbose": False}
 
-        if es_version >= (8, 3):
+        if (es_version.major, es_version.minor) >= (8, 3):
             request_params, headers = self._transport_request_params(params)
             headers["Content-Type"] = "application/json"
 
