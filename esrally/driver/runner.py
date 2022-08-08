@@ -2075,10 +2075,10 @@ class WaitForCurrentSnapshotsCreate(Runner):
         while True:
             response = await api(**request_args)
 
-            if int(response.get("total")) > 0:
-                await asyncio.sleep(wait_period)
-                continue
-            break
+            if int(response.get("total")) == 0:
+                break
+
+            await asyncio.sleep(wait_period)
 
         # getting detailed stats per snapshot using the snapshot status api can be very expensive.
         # return nothing and rely on Rally's own service_time measurement for the duration.
