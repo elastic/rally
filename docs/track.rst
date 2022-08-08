@@ -2416,7 +2416,7 @@ wait-for-current-snapshots-create
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 With the operation ``wait-for-current-snapshots-create`` you can wait until all currently running snapshots within a defined repository have completed.
-This operation is useful after issuing many ``create-snapshots``, to benchmark snapshotting performance and related limitations in Elasticsearch.
+This operation is useful after issuing many ``create-snapshot``, to benchmark snapshotting performance and related limitations in Elasticsearch.
 
 It exits when ``total`` in the response body of `GET _snapshot <https://www.elastic.co/guide/en/elasticsearch/reference/current/get-snapshot-api.html>`_ equals ``0``.
 
