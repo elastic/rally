@@ -1,7 +1,6 @@
 {
   "prerequisite_versions": {
     "PIP": "22.2",
-    "SETUPTOOLS": "63.2.0",
     "WHEEL": "0.37.1"
   },
   "python_versions": {

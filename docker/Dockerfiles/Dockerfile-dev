@@ -24,7 +24,7 @@ WORKDIR /rally
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN pip3 install --upgrade pip setuptools wheel
+RUN pip3 install --upgrade pip wheel
 RUN pip3 install /rally
 
 ################################################################################
