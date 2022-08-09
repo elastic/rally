@@ -1,0 +1,23 @@
+---
+
+- job:
+    name: "elastic+rally+{branch}+periodic"
+    display-name: "elastic / rally # {branch} - periodic"
+    description: "CI testing for rally"
+    project-type: multijob
+    concurrent: true
+    node: master
+    triggers:
+      - timed: "H H * * *"
+    parameters:
+      - string:
+          name: branch_specifier
+          default: "refs/heads/{branch}"
+          description: "the Git branch specifier to build (&lt;branchName&gt;, &lt;tagName&gt;, &lt;commitId&gt;, etc.)\n"
+    builders:
+      - multijob:
+          name: all CI tests
+          projects:
+            - name: elastic+rally+periodic+{branch}-precommit
+            - name: elastic+rally+periodic+{branch}-it-python38
+            - name: elastic+rally+periodic+{branch}-it-python310
