@@ -24,18 +24,54 @@ set -o pipefail
 # fail on any unset environment variables
 set -u
 
+# based on https://gist.github.com/sj26/88e1c6584397bb7c13bd11108a579746?permalink_comment_id=4155247#gistcomment-4155247
+function retry {
+  local retries=$1
+  shift
+  local cmd=($@)
+  local cmd_string="${@}"
+  local count=0
+
+  # be lenient with non-zero exit codes, to allow retries
+  set +o errexit
+  set +o pipefail
+  until "${cmd[@]}"; do
+    retcode=$?
+    wait=$(( 2 ** count ))
+    count=$(( count + 1))
+    if [[ $count -le $retries ]]; then
+      printf "Command [%s] failed. Retry [%d/%d] in [%d] seconds.\n" "$cmd_string" $count $retries $wait
+      sleep $wait
+    else
+      printf "Exhausted all [%s] retries for command [%s]. Exiting.\n" "$cmd_string" $retries
+      # restore settings to fail immediately on error
+      set -o errexit
+      set -o pipefail
+      return $retcode
+    fi
+  done
+  # restore settings to fail immediately on error
+  set -o errexit
+  set -o pipefail
+  return 0
+}
+
 function update_pyenv {
   # need to have the latest pyenv version to ensure latest patch releases are installable
   cd $HOME/.pyenv/plugins/python-build/../.. && git pull origin master --rebase && cd -
 }
 
-function build {
+function install_python_prereq
+{
+  retry 5 make prereq
+}
+
+function python_common {
   export THESPLOG_FILE="${THESPLOG_FILE:-${RALLY_HOME}/.rally/logs/actor-system-internal.log}"
   # this value is in bytes, the default is 50kB. We increase it to 200kiB.
   export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
   # adjust the default log level from WARNING
   export THESPLOG_THRESHOLD="INFO"
-
   # turn nounset off because some of the following commands fail if nounset is turned on
   set +u
 
@@ -47,11 +83,28 @@ function build {
   # ensure pyenv shims are added to PATH, see https://github.com/pyenv/pyenv/issues/1906
   eval "$(pyenv init --path)"
   eval "$(pyenv virtualenv-init -)"
+}
 
-  make prereq
+function install {
+  python_common
+  install_python_prereq
   make install
+}
+
+function precommit {
+  install
   make precommit
-  make it
+  make unit
+}
+
+function it38 {
+  install
+  make it38
+}
+
+function it310 {
+  install
+  make it310
 }
 
 function license-scan {
