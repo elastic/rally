@@ -35,6 +35,7 @@ from typing import List, Optional
 import ijson
 
 from esrally import exceptions, track
+from esrally.utils.versions import Version
 
 # Mapping from operation type to specific runner
 
@@ -91,6 +92,7 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteSnapshotRepository, Retry(DeleteSnapshotRepository()), async_runner=True)
     register_runner(track.OperationType.CreateSnapshotRepository, Retry(CreateSnapshotRepository()), async_runner=True)
     register_runner(track.OperationType.WaitForSnapshotCreate, Retry(WaitForSnapshotCreate()), async_runner=True)
+    register_runner(track.OperationType.WaitForCurrentSnapshotsCreate, Retry(WaitForCurrentSnapshotsCreate()), async_runner=True)
     register_runner(track.OperationType.WaitForRecovery, Retry(IndicesRecovery()), async_runner=True)
     register_runner(track.OperationType.PutSettings, Retry(PutSettings()), async_runner=True)
     register_runner(track.OperationType.CreateTransform, Retry(CreateTransform()), async_runner=True)
@@ -1982,6 +1984,10 @@ class CreateSnapshot(Runner):
 
 
 class WaitForSnapshotCreate(Runner):
+    """
+    Waits until a currently running <snapshot> on a given repository has finished successfully and returns detailed metrics.
+    """
+
     async def __call__(self, es, params):
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
@@ -2030,6 +2036,55 @@ class WaitForSnapshotCreate(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "wait-for-snapshot-create"
+
+
+class WaitForCurrentSnapshotsCreate(Runner):
+    """
+    Waits until all currently running snapshots on a given repository have completed
+    """
+
+    async def __call__(self, es, params):
+        repository = mandatory(params, "repository", repr(self))
+        wait_period = params.get("completion-recheck-wait-period", 1)
+        es_info = await es.info()
+        es_version = Version.from_string(es_info["version"]["number"])
+        api = es.snapshot.get
+        request_args = {"repository": repository, "snapshot": "_current", "verbose": False}
+
+        # significantly reduce response size when lots of snapshots have been taken
+        # only available since ES 8.3.0 (https://github.com/elastic/elasticsearch/pull/86269)
+        if (es_version.major, es_version.minor) >= (8, 3):
+            request_params, headers = self._transport_request_params(params)
+            headers["Content-Type"] = "application/json"
+
+            request_params["index_names"] = "false"
+            request_params["verbose"] = "false"
+
+            request_args = {
+                "method": "GET",
+                "path": f"_snapshot/{repository}/_current",
+                "headers": headers,
+                "params": request_params,
+            }
+
+            # TODO: Switch to native es.snapshot.get once `index_names` becomes supported in
+            #       `es.snapshot.get` of the elasticsearch-py client and we've upgraded the client in Rally, see:
+            #       https://elasticsearch-py.readthedocs.io/en/latest/api.html#elasticsearch.client.SnapshotClient.get
+            api = es.perform_request
+
+        while True:
+            response = await api(**request_args)
+
+            if int(response.get("total")) == 0:
+                break
+
+            await asyncio.sleep(wait_period)
+
+        # getting detailed stats per snapshot using the snapshot status api can be very expensive.
+        # return nothing and rely on Rally's own service_time measurement for the duration.
+
+    def __repr__(self, *args, **kwargs):
+        return "wait-for-current-snapshots-create"
 
 
 class RestoreSnapshot(Runner):
