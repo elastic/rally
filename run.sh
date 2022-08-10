@@ -35,7 +35,7 @@ install_esrally() {
     fi
 
     if [[ ${IN_VIRTUALENV} == 0 ]]; then
-        # workaround system pip conflicts, https://github.com/pypa/pip/issues/5599
+        # Workaround system pip conflicts, see https://github.com/pypa/pip/issues/5599
         python3 -m pip install --quiet --user --upgrade --editable .[develop]
     else
         python3 -m pip install --quiet --upgrade --editable .[develop]
