@@ -85,7 +85,27 @@ function python_common {
   eval "$(pyenv virtualenv-init -)"
 }
 
+function java_common {
+  JAVA_ROOT=$HOME/.java
+
+  export JAVA7_HOME=${JAVA_ROOT}/java7
+  export JAVA8_HOME=${JAVA_ROOT}/java8
+  export JAVA9_HOME=${JAVA_ROOT}/java9
+  export JAVA10_HOME=${JAVA_ROOT}/java10
+  export JAVA11_HOME=${JAVA_ROOT}/java11
+
+  # handle all Javas after that generically
+  for java in ${JAVA_ROOT}/openjdk??
+  do
+    version=${java##*openjdk}
+    export JAVA${version}_HOME=$java
+  done
+
+  export ES_JAVA_HOME=$JAVA17_HOME
+}
+
 function install {
+  java_common
   python_common
   install_python_prereq
   make install

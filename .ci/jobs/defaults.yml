@@ -64,16 +64,4 @@
       - inject:
           properties-content: |
             HOME=$JENKINS_HOME
-            JAVA7_HOME=$HOME/.java/java7
-            JAVA8_HOME=$HOME/.java/java8
-            JAVA9_HOME=$HOME/.java/java9
-            JAVA10_HOME=$HOME/.java/java10
-            JAVA11_HOME=$HOME/.java/java11
-            JAVA12_HOME=$HOME/.java/openjdk12
-            JAVA13_HOME=$HOME/.java/openjdk13
-            JAVA14_HOME=$HOME/.java/openjdk14
-            JAVA15_HOME=$HOME/.java/openjdk15
-            JAVA16_HOME=$HOME/.java/openjdk16
-            JAVA17_HOME=$HOME/.java/openjdk17
-            ES_JAVA_HOME=$JAVA17_HOME
             RALLY_HOME=$WORKSPACE
