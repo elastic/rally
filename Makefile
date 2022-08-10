@@ -80,6 +80,16 @@ docs-clean:
 python-caches-clean:
 	-@find . -name "__pycache__" -prune -exec rm -rf -- \{\} \;
 
+# Force recreation of the virtual environment used by tox.
+#
+# See https://tox.readthedocs.io/en/latest/#system-overview:
+#
+# > Note pip will not update project dependencies (specified either in the install_requires or the extras
+# > section of the setup.py) if any version already exists in the virtual environment; therefore we recommend
+# > to recreate your environments whenever your project dependencies change.
+tox-env-clean:
+	rm -rf .tox
+
 lint: check-venv
 	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
 	@. $(VENV_ACTIVATE_FILE); black --check --diff .
@@ -101,7 +111,7 @@ test: check-venv
 precommit: lint
 
 # checks min and max python versions
-it: check-venv python-caches-clean
+it: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38-unit
 	. $(VENV_ACTIVATE_FILE); tox -e py38-it
 	. $(VENV_ACTIVATE_FILE); tox -e py310-unit
