@@ -24,6 +24,8 @@ PIP_WRAPPER = $(PY_BIN) -m pip
 export PY38 = $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 = $(shell jq -r '.python_versions.PY39' .ci/variables.json)
 export PY310 = $(shell jq -r '.python_versions.PY310' .ci/variables.json)
+export HATCH_VERSION = $(shell jq -r '.prerequisite_versions.HATCH' .ci/variables.json)
+export HATCHLING_VERSION = $(shell jq -r '.prerequisite_versions.HATCHLING' .ci/variables.json)
 export PIP_VERSION = $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
 export WHEEL_VERSION = $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
 VIRTUAL_ENV ?= .venv
@@ -59,7 +61,7 @@ check-venv:
 	fi
 
 install-user: venv-create
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip==$(PIP_VERSION) wheel==$(WHEEL_VERSION)
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade hatch==$(HATCH_VERSION) hatchling==$(HATCHLING_VERSION) pip==$(PIP_VERSION) wheel==$(WHEEL_VERSION)
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 
 install: install-user
@@ -89,7 +91,7 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: check-venv
-	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it setup.py -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
+	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
 	@. $(VENV_ACTIVATE_FILE); black --check --diff .
 	@. $(VENV_ACTIVATE_FILE); isort --check --diff .
 

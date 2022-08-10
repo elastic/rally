@@ -12,7 +12,7 @@ RUN apt-get -y update && \
 RUN groupadd --gid 1000 rally && \
     useradd -d /rally -m -k /dev/null -g 1000 -N -u 1000 -l -s /bin/bash rally
 
-RUN pip3 install --upgrade pip wheel
+RUN pip3 install --upgrade hatch hatchling pip wheel
 RUN pip3 install esrally==$RALLY_VERSION
 
 WORKDIR /rally

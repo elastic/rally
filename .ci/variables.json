@@ -1,5 +1,7 @@
 {
   "prerequisite_versions": {
+    "HATCH": "1.3.1",
+    "HATCHLING": "1.6.0",
     "PIP": "22.2",
     "WHEEL": "0.37.1"
   },
