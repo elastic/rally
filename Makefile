@@ -24,8 +24,9 @@ PIP_WRAPPER = $(PY_BIN) -m pip
 export PY38 = $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 = $(shell jq -r '.python_versions.PY39' .ci/variables.json)
 export PY310 = $(shell jq -r '.python_versions.PY310' .ci/variables.json)
+export HATCH_VERSION = $(shell jq -r '.prerequisite_versions.HATCH' .ci/variables.json)
+export HATCHLING_VERSION = $(shell jq -r '.prerequisite_versions.HATCHLING' .ci/variables.json)
 export PIP_VERSION = $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
-export SETUPTOOLS_VERSION = $(shell jq -r '.prerequisite_versions.SETUPTOOLS' .ci/variables.json)
 export WHEEL_VERSION = $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
 VIRTUAL_ENV ?= .venv
 VENV_ACTIVATE_FILE = $(VIRTUAL_ENV)/bin/activate
@@ -60,7 +61,7 @@ check-venv:
 	fi
 
 install-user: venv-create
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade pip==$(PIP_VERSION) setuptools==$(SETUPTOOLS_VERSION) wheel==$(WHEEL_VERSION)
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade hatch==$(HATCH_VERSION) hatchling==$(HATCHLING_VERSION) pip==$(PIP_VERSION) wheel==$(WHEEL_VERSION)
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 
 install: install-user
@@ -90,7 +91,7 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: check-venv
-	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it setup.py -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
+	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
 	@. $(VENV_ACTIVATE_FILE); black --check --diff .
 	@. $(VENV_ACTIVATE_FILE); isort --check --diff .
 
@@ -109,19 +110,23 @@ test: check-venv
 
 precommit: lint
 
+unit: check-venv python-caches-clean tox-env-clean
+	. $(VENV_ACTIVATE_FILE); tox -e py38-unit
+	. $(VENV_ACTIVATE_FILE); tox -e py310-unit
+
 # checks min and max python versions
 it: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38
-	. $(VENV_ACTIVATE_FILE); tox -e py310
+	. $(VENV_ACTIVATE_FILE); tox -e py38-it
+	. $(VENV_ACTIVATE_FILE); tox -e py310-it
 
 it38: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38
+	. $(VENV_ACTIVATE_FILE); tox -e py38-it
 
 it39: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py39
+	. $(VENV_ACTIVATE_FILE); tox -e py39-it
 
 it310: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py310
+	. $(VENV_ACTIVATE_FILE); tox -e py310-it
 
 check-all: lint test it
 

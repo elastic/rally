@@ -11,10 +11,8 @@ RUN apt-get -y update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /rally/esrally
-COPY setup.py /rally/
-COPY setup.cfg /rally/
+COPY pyproject.toml /rally/
 COPY README.md /rally/
-COPY MANIFEST.in /rally/
 COPY esrally/ /rally/esrally/
 
 RUN python3 -m venv /rally/venv
@@ -24,7 +22,7 @@ WORKDIR /rally
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN pip3 install --upgrade pip setuptools wheel
+RUN pip3 install --upgrade hatch hatchling pip wheel
 RUN pip3 install /rally
 
 ################################################################################

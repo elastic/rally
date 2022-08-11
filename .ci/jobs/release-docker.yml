@@ -1,0 +1,34 @@
+---
+
+- job:
+    name: "elastic+rally-release-docker+master"
+    display-name: "elastic / rally # master - release docker"
+    description: "Release Docker Artifacts for Rally"
+    parameters:
+      - string:
+          name: branch_specifier
+          default: "refs/heads/master"
+          description: "the Git branch specifier to build (&lt;branchName&gt;, &lt;tagName&gt;, &lt;commitId&gt;, etc.)"
+      - string:
+          name: RELEASE_VERSION
+          default: ""
+          description: "The version to release e.g. '1.2.1'."
+    triggers: []
+    builders:
+      - shell: |
+          #!/usr/bin/env bash
+          set -eo pipefail
+          set +x
+          VAULT_TOKEN=$(vault write -field=token auth/approle/login role_id="$VAULT_ROLE_ID" secret_id="$VAULT_SECRET_ID")
+          export VAULT_TOKEN
+          unset VAULT_ROLE_ID VAULT_SECRET_ID
+          # login to docker registry
+          DOCKER_PASSWORD=$(vault read -field token secret/release/docker-hub-rally)
+          unset VAULT_TOKEN
+          source /usr/local/bin/bash_standard_lib.sh
+          retry 5 docker login -u elasticmachine -p $DOCKER_PASSWORD
+          unset DOCKER_PASSWORD
+          set -x
+          export TERM=dumb
+          export LC_ALL=en_US.UTF-8
+          ./release-docker.sh "$RELEASE_VERSION"
