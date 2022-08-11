@@ -663,7 +663,7 @@ By default, the command line reporter will print the results only on standard ou
 
 With this option you can customize Rally's internal Elasticsearch client.
 
-It accepts a list of comma-separated key-value pairs. The key-value pairs have to be delimited by a colon. These options are passed directly to the Elasticsearch Python client API. See `their documentation on a list of supported options <https://elasticsearch-py.readthedocs.io/en/v7.14.0/api.html#elasticsearch>`_.
+It accepts a list of comma-separated key-value pairs. The key-value pairs have to be delimited by a colon. These options are passed directly to the Elasticsearch Python client API. See `their documentation on a list of supported options <https://elasticsearch-py.readthedocs.io/en/v{ES_CLIENT_VER}/api.html#elasticsearch>`_.
 
 We support the following data types:
 
