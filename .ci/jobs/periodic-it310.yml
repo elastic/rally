@@ -1,0 +1,7 @@
+---
+
+jjbb-template: it.yml
+vars:
+  - jobname: periodic
+  - branch: master
+  - py_version: "310"
