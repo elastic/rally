@@ -3965,6 +3965,172 @@ class TestWaitForSnapshotCreate:
             )
 
 
+class TestWaitForCurrentSnapshotsCreate:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_wait_for_current_snapshots_create_before_8_3_0(self, es):
+        es.info = mock.AsyncMock(
+            return_value={
+                "name": "es01",
+                "cluster_name": "escluster",
+                "cluster_uuid": "4BgOtWNiQ6-zap9zDW2Q1A",
+                "version": {
+                    "number": "7.17.3",
+                    "build_flavor": "default",
+                    "build_type": "tar",
+                    "build_hash": "5ad023604c8d7416c9eb6c0eadb62b14e766caff",
+                    "build_date": "2022-04-19T08:11:19.070913226Z",
+                    "build_snapshot": False,
+                    "lucene_version": "8.11.1",
+                    "minimum_wire_compatibility_version": "6.8.0",
+                    "minimum_index_compatibility_version": "6.0.0-beta1",
+                },
+                "tagline": "You Know, for Search",
+            },
+        )
+
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                {
+                    "snapshots": [
+                        {
+                            "snapshot": "logging-test-0",
+                            "uuid": "xVb4cPSKTfyIz-HcN9mQcg",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                            "indices": ["a", "b", "c"],
+                        },
+                        {
+                            "snapshot": "logging-test-1",
+                            "uuid": "LEHRHopiTrqemFkGXQijHw",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                            "indices": ["d", "e", "f"],
+                        },
+                        {
+                            "snapshot": "logging-test-2",
+                            "uuid": "9DJcMb5JQruddQbO3qzxSA",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                            "indices": ["g", "h", "i"],
+                        },
+                        {
+                            "snapshot": "logging-test-3",
+                            "uuid": "5YmhlUBxRv6pQbswf4nsfw",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                            "indices": ["j", "k", "l"],
+                        },
+                    ],
+                    "total": 4,
+                    "remaining": 0,
+                },
+                {"snapshots": [], "total": 0, "remaining": 0},
+            ],
+        )
+
+        repository = "many-shards"
+        task_params = {
+            "repository": repository,
+            "completion-recheck-wait-period": 0,
+        }
+
+        r = runner.WaitForCurrentSnapshotsCreate()
+        result = await r(es, task_params)
+
+        es.snapshot.get.assert_awaited_with(repository=repository, snapshot="_current", verbose=False)
+
+        assert es.snapshot.get.await_count == 2
+
+        assert result is None
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_wait_for_current_snapshots_create_after_8_3_0(self, es):
+        es.info = mock.AsyncMock(
+            return_value={
+                "name": "elasticsearch-0",
+                "cluster_name": "rally-benchmark",
+                "cluster_uuid": "rs5Gdzm6TISd-L4KZWVW4w",
+                "version": {
+                    "number": "8.4.0-SNAPSHOT",
+                    "build_type": "tar",
+                    "build_hash": "4e18993f55431f6d3890049c9fea4c6c8218f070",
+                    "build_date": "2022-07-05T00:19:44.887353304Z",
+                    "build_snapshot": True,
+                    "lucene_version": "9.3.0",
+                    "minimum_wire_compatibility_version": "7.17.0",
+                    "minimum_index_compatibility_version": "7.0.0",
+                },
+                "tagline": "You Know, for Search",
+            },
+        )
+
+        repository = "many-shards"
+        task_params = {
+            "repository": repository,
+            "completion-recheck-wait-period": 0,
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                {
+                    "snapshots": [
+                        {
+                            "snapshot": "logging-test-0",
+                            "uuid": "xVb4cPSKTfyIz-HcN9mQcg",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                        },
+                        {
+                            "snapshot": "logging-test-1",
+                            "uuid": "LEHRHopiTrqemFkGXQijHw",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                        },
+                        {
+                            "snapshot": "logging-test-2",
+                            "uuid": "9DJcMb5JQruddQbO3qzxSA",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                        },
+                        {
+                            "snapshot": "logging-test-3",
+                            "uuid": "5YmhlUBxRv6pQbswf4nsfw",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                        },
+                    ],
+                    "total": 4,
+                    "remaining": 0,
+                },
+                {"snapshots": [], "total": 0, "remaining": 0},
+            ],
+        )
+
+        r = runner.WaitForCurrentSnapshotsCreate()
+        result = await r(es, task_params)
+
+        es.perform_request.assert_awaited_with(
+            method="GET",
+            path=f"_snapshot/{repository}/_current",
+            headers={"Content-Type": "application/json"},
+            params={"index_names": "false", "verbose": "false"},
+        )
+
+        assert es.perform_request.await_count == 2
+
+        assert result is None
+
+
 class TestRestoreSnapshot:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
