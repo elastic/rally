@@ -1626,6 +1626,9 @@ delete-data-stream
 
 With the operation ``delete-data-stream`` you can execute the `delete data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-data-stream.html>`_. It supports two modes: it deletes either all data streams that are specified in the track's ``data-streams`` section or it deletes one specific data stream (pattern) defined by this operation.
 
+.. note::
+    This operation is multi-cluster aware, and will run against all clusters specified via the ``--target-hosts`` parameter. See more on multiple cluster support in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
+
 Properties
 """"""""""
 

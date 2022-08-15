@@ -45,6 +45,59 @@ class TestRegisterRunner:
     def teardown_method(self, method):
         runner.remove_runner("unit_test")
 
+    @mock.patch("esrally.driver.runner._single_cluster_runner")
+    @mock.patch("esrally.driver.runner._multi_cluster_runner")
+    @pytest.mark.asyncio
+    async def test_register_retryable_runner_with_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
+        class Delegate:
+            multi_cluster = True
+
+            async def __call__(self, *args):
+                return args
+
+            def __repr__(self):
+                return "Delegate"
+
+        delegate = Delegate()
+        es = None
+        params = {}
+
+        single_cluster_runner.return_value = runner.MultiClientRunner(delegate, "deletegate", es, False)
+        multi_cluster_runner.return_value = runner.MultiClientRunner(delegate, "deletegate", es, False)
+
+        runner.register_runner(operation_type="unit_test", runner=runner.Retry(delegate), async_runner=True)
+        retrier = runner.Retry(delegate)
+
+        await retrier(es, params)
+
+        multi_cluster_runner.assert_called()
+        single_cluster_runner.assert_not_called()
+
+    @mock.patch("esrally.driver.runner._single_cluster_runner")
+    @mock.patch("esrally.driver.runner._multi_cluster_runner")
+    @pytest.mark.asyncio
+    async def test_register_retryable_runner_with_no_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
+        class Delegate:
+            async def __call__(self, *args):
+                return args
+
+            def __repr__(self):
+                return "Delegate"
+
+        delegate = Delegate()
+        es = None
+        params = {}
+
+        single_cluster_runner.return_value = runner.MultiClientRunner(delegate, "deletegate", es, False)
+        multi_cluster_runner.return_value = runner.MultiClientRunner(delegate, "deletegate", es, False)
+
+        runner.register_runner(operation_type="unit_test", runner=runner.Retry(delegate), async_runner=True)
+        retrier = runner.Retry(delegate)
+
+        await retrier(es, params)
+        multi_cluster_runner.assert_not_called()
+        single_cluster_runner.assert_called()
+
     @pytest.mark.asyncio
     async def test_runner_function_should_be_wrapped(self):
         async def runner_function(*args):
@@ -2712,31 +2765,48 @@ class TestDeleteIndexRunner:
 
 
 class TestDeleteDataStreamRunner:
+    @pytest.fixture
     @mock.patch("elasticsearch.Elasticsearch")
+    def setup_es_clients(self, es):
+        remote_es = es
+        default_es = copy.deepcopy(es)
+
+        multi_es = {
+            "remote-cluster": remote_es,
+            "default": default_es,
+        }
+        return multi_es
+
     @pytest.mark.asyncio
-    async def test_deletes_existing_data_streams(self, es):
-        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
-        es.indices.delete_data_stream = mock.AsyncMock()
+    async def test_deletes_existing_data_streams(self, setup_es_clients):
+        setup_es_clients["default"].indices.exists = mock.AsyncMock(side_effect=[False, True])
+        setup_es_clients["default"].indices.delete_data_stream = mock.AsyncMock()
+
+        setup_es_clients["remote-cluster"].indices.exists = mock.AsyncMock(side_effect=[False, True])
+        setup_es_clients["remote-cluster"].indices.delete_data_stream = mock.AsyncMock()
 
         r = runner.DeleteDataStream()
 
         params = {"data-streams": ["data-stream-A", "data-stream-B"], "only-if-exists": True, "request-params": {}}
 
-        result = await r(es, params)
+        result = await r(setup_es_clients, params)
 
         assert result == {
-            "weight": 1,
+            "weight": 2,
             "unit": "ops",
             "success": True,
         }
 
-        es.indices.delete_data_stream.assert_awaited_once_with(name="data-stream-B", params={})
+        setup_es_clients["default"].indices.delete_data_stream.assert_awaited_once_with(name="data-stream-B", params={})
+        setup_es_clients["remote-cluster"].indices.delete_data_stream.assert_awaited_once_with(name="data-stream-B", params={})
 
-    @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_deletes_all_data_streams(self, es):
-        es.indices.delete_data_stream = mock.AsyncMock()
-        es.indices.exists = mock.AsyncMock()
+    async def test_deletes_all_data_streams(self, setup_es_clients):
+        setup_es_clients["default"].indices.delete_data_stream = mock.AsyncMock()
+        setup_es_clients["default"].indices.exists = mock.AsyncMock()
+
+        setup_es_clients["remote-cluster"].indices.delete_data_stream = mock.AsyncMock()
+        setup_es_clients["remote-cluster"].indices.exists = mock.AsyncMock()
 
         r = runner.DeleteDataStream()
 
@@ -2746,21 +2816,29 @@ class TestDeleteDataStreamRunner:
             "request-params": {"ignore_unavailable": "true", "expand_wildcards": "none"},
         }
 
-        result = await r(es, params)
+        result = await r(setup_es_clients, params)
 
         assert result == {
-            "weight": 2,
+            "weight": 4,
             "unit": "ops",
             "success": True,
         }
 
-        es.indices.delete_data_stream.assert_has_awaits(
+        setup_es_clients["default"].indices.delete_data_stream.assert_has_awaits(
             [
                 mock.call(name="data-stream-A", ignore=[404], params=params["request-params"]),
                 mock.call(name="data-stream-B", ignore=[404], params=params["request-params"]),
             ]
         )
-        assert es.indices.exists.await_count == 0
+        setup_es_clients["default"].indices.delete_data_stream.assert_has_awaits(
+            [
+                mock.call(name="data-stream-A", ignore=[404], params=params["request-params"]),
+                mock.call(name="data-stream-B", ignore=[404], params=params["request-params"]),
+            ]
+        )
+
+        assert setup_es_clients["default"].indices.exists.await_count == 0
+        assert setup_es_clients["remote-cluster"].indices.exists.await_count == 0
 
 
 class TestCreateIndexTemplateRunner:
