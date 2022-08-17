@@ -121,6 +121,13 @@ def enable_assertions(enabled):
 
 
 def register_runner(operation_type, runner, **kwargs):
+    def is_multi_cluster(runner):
+        if getattr(runner, "multi_cluster", False):
+            return True
+        if hasattr(runner, "delegate"):
+            return hasattr(runner.delegate, "multi_cluster")
+        return False
+
     logger = logging.getLogger(__name__)
     async_runner = kwargs.get("async_runner", False)
     if isinstance(operation_type, track.OperationType):
@@ -130,8 +137,7 @@ def register_runner(operation_type, runner, **kwargs):
         raise exceptions.RallyAssertionError(
             "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner))
         )
-
-    if getattr(runner, "multi_cluster", False):
+    if is_multi_cluster(runner):
         if "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
