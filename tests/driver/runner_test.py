@@ -48,55 +48,64 @@ class TestRegisterRunner:
     @mock.patch("esrally.driver.runner._single_cluster_runner")
     @mock.patch("esrally.driver.runner._multi_cluster_runner")
     @pytest.mark.asyncio
-    async def test_register_retryable_runner_with_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
-        class Delegate:
-            multi_cluster = True
+    async def test_register_wrapped_runner_with_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
+        class Wrapper(runner.Delegator):
+            def __init__(self, delegate=None):
+                super().__init__(delegate=delegate)
 
             async def __call__(self, *args):
                 return args
 
-            def __repr__(self):
-                return "Delegate"
+        class BaseRunner:
+            multi_cluster = True
 
-        delegate = Delegate()
+            async def __call__(self, es, params):
+                pass
+
+        base_runner = BaseRunner()
+        wrapped_runner = Wrapper(base_runner)
+
         es = None
         params = {}
 
-        single_cluster_runner.return_value = runner.MultiClientRunner(delegate, "deletegate", es, False)
-        multi_cluster_runner.return_value = runner.MultiClientRunner(delegate, "deletegate", es, False)
+        single_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        multi_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        runner.register_runner(operation_type="unit_test", runner=wrapped_runner, async_runner=True)
 
-        runner.register_runner(operation_type="unit_test", runner=runner.Retry(delegate), async_runner=True)
-        retrier = runner.Retry(delegate)
+        await wrapped_runner(es, params)
 
-        await retrier(es, params)
-
-        multi_cluster_runner.assert_called()
+        multi_cluster_runner.assert_called_once()
         single_cluster_runner.assert_not_called()
 
     @mock.patch("esrally.driver.runner._single_cluster_runner")
     @mock.patch("esrally.driver.runner._multi_cluster_runner")
     @pytest.mark.asyncio
-    async def test_register_retryable_runner_with_no_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
-        class Delegate:
+    async def test_register_wrapped_runner_with_no_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
+        class Wrapper(runner.Delegator):
+            def __init__(self, delegate=None):
+                super().__init__(delegate=delegate)
+
             async def __call__(self, *args):
                 return args
 
-            def __repr__(self):
-                return "Delegate"
+        class BaseRunner:
+            async def __call__(self, es, params):
+                pass
 
-        delegate = Delegate()
+        base_runner = BaseRunner()
+        wrapped_runner = Wrapper(base_runner)
+
         es = None
         params = {}
 
-        single_cluster_runner.return_value = runner.MultiClientRunner(delegate, "deletegate", es, False)
-        multi_cluster_runner.return_value = runner.MultiClientRunner(delegate, "deletegate", es, False)
+        single_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        multi_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        runner.register_runner(operation_type="unit_test", runner=wrapped_runner, async_runner=True)
 
-        runner.register_runner(operation_type="unit_test", runner=runner.Retry(delegate), async_runner=True)
-        retrier = runner.Retry(delegate)
+        await wrapped_runner(es, params)
 
-        await retrier(es, params)
         multi_cluster_runner.assert_not_called()
-        single_cluster_runner.assert_called()
+        single_cluster_runner.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_runner_function_should_be_wrapped(self):
