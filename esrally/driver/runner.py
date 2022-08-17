@@ -121,22 +121,17 @@ def enable_assertions(enabled):
 
 
 def register_runner(operation_type, runner, **kwargs):
-    def is_multi_cluster(runner):
-        if getattr(runner, "multi_cluster", False):
-            return True
-        if hasattr(runner, "delegate"):
-            if getattr(runner.delegate, "multi_cluster", False):
-                return True
-
     logger = logging.getLogger(__name__)
     async_runner = kwargs.get("async_runner", False)
     if isinstance(operation_type, track.OperationType):
         operation_type = operation_type.to_hyphenated_string()
+
     if not async_runner:
         raise exceptions.RallyAssertionError(
             "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner))
         )
-    if is_multi_cluster(runner):
+
+    if getattr(runner, "multi_cluster", False):
         if "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
@@ -1397,23 +1392,21 @@ class DeleteDataStream(Runner):
     Execute the `delete data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-data-stream.html>`_.
     """
 
-    multi_cluster = True
-
-    async def __call__(self, multi_es, params):
+    async def __call__(self, es, params):
         ops = 0
-        for es in multi_es.values():
-            data_streams = mandatory(params, "data-streams", self)
-            only_if_exists = mandatory(params, "only-if-exists", self)
-            request_params = mandatory(params, "request-params", self)
 
-            for data_stream in data_streams:
-                if not only_if_exists:
-                    await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
-                    ops += 1
-                elif only_if_exists and await es.indices.exists(index=data_stream):
-                    self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
-                    await es.indices.delete_data_stream(name=data_stream, params=request_params)
-                    ops += 1
+        data_streams = mandatory(params, "data-streams", self)
+        only_if_exists = mandatory(params, "only-if-exists", self)
+        request_params = mandatory(params, "request-params", self)
+
+        for data_stream in data_streams:
+            if not only_if_exists:
+                await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
+                ops += 1
+            elif only_if_exists and await es.indices.exists(index=data_stream):
+                self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
+                await es.indices.delete_data_stream(name=data_stream, params=request_params)
+                ops += 1
 
         return {
             "weight": ops,
