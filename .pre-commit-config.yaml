@@ -1,4 +1,14 @@
 repos:
+  - repo: https://github.com/psf/black
+    rev: 22.3.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.8.0
+    hooks:
+      - id: isort
+
   - repo: local
     hooks:
       - id: pylint
@@ -14,14 +24,3 @@ repos:
           ]
         exclude: ^(docs/|changelog.py)
         require_serial: true
-
-  - repo: https://github.com/psf/black
-    rev: 22.3.0
-    hooks:
-      - id: black
-
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.8.0
-    hooks:
-      - id: isort
-
