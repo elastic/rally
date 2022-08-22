@@ -17,7 +17,7 @@
 
 import sys
 
-# we don't include matplotlib in setup.py as it's just a development dependency
+# we don't add matplotlib as a dependency as it's infrequently used and heavy
 try:
     import matplotlib
     import matplotlib.pyplot as plt

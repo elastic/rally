@@ -1,0 +1,23 @@
+---
+
+- job:
+    name: "elastic+rally+push+{branch}"
+    display-name: "elastic / rally # {branch} - push"
+    description: "CI testing for rally"
+    project-type: multijob
+    concurrent: true
+    node: master
+    triggers:
+      - github
+    parameters:
+      - string:
+          name: branch_specifier
+          default: "refs/heads/{branch}"
+          description: "the Git branch specifier to build (&lt;branchName&gt;, &lt;tagName&gt;, &lt;commitId&gt;, etc.)\n"
+    builders:
+      - multijob:
+          name: all CI tests
+          projects:
+            - name: elastic+rally+push+{branch}-precommit
+            - name: elastic+rally+push+{branch}-it-python38
+            - name: elastic+rally+push+{branch}-it-python310
