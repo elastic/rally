@@ -52,7 +52,7 @@ Once your changes and tests are ready to submit for review:
 
 1. Format your changes
 
-    Make sure that lint is passing by running `make lint`, applying any resulting formatting changes.
+    Make sure that lint is passing by running `make lint`. To format your code, run `make format`.
 
     Consider using editor integrations to do it automatically: you'll need to configure [black](https://black.readthedocs.io/en/stable/integrations/editors.html) and [isort](https://github.com/PyCQA/isort/wiki/isort-Plugins).
 
