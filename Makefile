@@ -93,6 +93,9 @@ tox-env-clean:
 lint: check-venv
 	@. $(VENV_ACTIVATE_FILE); pre-commit run --all-files
 
+# pre-commit run also formats files, but let's keep `make format` for convenience
+format: lint
+
 docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
 
