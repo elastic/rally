@@ -45,6 +45,68 @@ class TestRegisterRunner:
     def teardown_method(self, method):
         runner.remove_runner("unit_test")
 
+    @mock.patch("esrally.driver.runner._single_cluster_runner")
+    @mock.patch("esrally.driver.runner._multi_cluster_runner")
+    @pytest.mark.asyncio
+    async def test_register_wrapped_runner_with_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
+        class Wrapper(runner.Delegator):
+            def __init__(self, delegate=None):
+                super().__init__(delegate=delegate)
+
+            async def __call__(self, *args):
+                return args
+
+        class BaseRunner:
+            multi_cluster = True
+
+            async def __call__(self, es, params):
+                pass
+
+        base_runner = BaseRunner()
+        wrapped_runner = Wrapper(base_runner)
+
+        es = None
+        params = {}
+
+        single_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        multi_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        runner.register_runner(operation_type="unit_test", runner=wrapped_runner, async_runner=True)
+
+        await wrapped_runner(es, params)
+
+        multi_cluster_runner.assert_called_once()
+        single_cluster_runner.assert_not_called()
+
+    @mock.patch("esrally.driver.runner._single_cluster_runner")
+    @mock.patch("esrally.driver.runner._multi_cluster_runner")
+    @pytest.mark.asyncio
+    async def test_register_wrapped_runner_with_no_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
+        class Wrapper(runner.Delegator):
+            def __init__(self, delegate=None):
+                super().__init__(delegate=delegate)
+
+            async def __call__(self, *args):
+                return args
+
+        class BaseRunner:
+            async def __call__(self, es, params):
+                pass
+
+        base_runner = BaseRunner()
+        wrapped_runner = Wrapper(base_runner)
+
+        es = None
+        params = {}
+
+        single_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        multi_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        runner.register_runner(operation_type="unit_test", runner=wrapped_runner, async_runner=True)
+
+        await wrapped_runner(es, params)
+
+        multi_cluster_runner.assert_not_called()
+        single_cluster_runner.assert_called_once()
+
     @pytest.mark.asyncio
     async def test_runner_function_should_be_wrapped(self):
         async def runner_function(*args):
