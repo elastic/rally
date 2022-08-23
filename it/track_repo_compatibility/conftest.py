@@ -52,11 +52,11 @@ def pytest_cmdline_main(config):
         if repo == RALLY_TRACKS_DIR:
             try:
                 # this will perform the initial clone of rally-tracks
-                subprocess.run(shlex.split("esrally list tracks"), capture_output=True, check=True)
+                subprocess.run(shlex.split("esrally list tracks"), text=True, capture_output=True, check=True)
             except subprocess.CalledProcessError as e:
-                raise AssertionError(f"Unable to list tracks in {repo}") from e
+                raise AssertionError(f"Unable to list tracks in {repo}: {e.stderr}")
         else:
-            raise AssertionError(f"Directory {repo} does not exist.")
+            raise AssertionError(f"Track repository not found: [{repo}]")
 
     test_dir = config.option.track_repo_test_dir
     config.args.append(os.path.join(repo, test_dir))
