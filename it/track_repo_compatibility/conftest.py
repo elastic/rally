@@ -16,6 +16,8 @@
 # under the License.
 
 import os
+import shlex
+import subprocess
 
 import pytest
 
@@ -24,7 +26,7 @@ RALLY_CONFIG_DIR = os.path.join(RALLY_HOME, ".rally")
 RALLY_TRACKS_DIR = os.path.join(RALLY_CONFIG_DIR, "benchmarks", "tracks", "default")
 
 
-@pytest.hookimpl
+@pytest.hookimpl(tryfirst=True)
 def pytest_addoption(parser):
     group = parser.getgroup("rally")
     group.addoption(
@@ -43,9 +45,19 @@ def pytest_addoption(parser):
     )
 
 
-@pytest.hookimpl
+@pytest.hookimpl(tryfirst=True)
 def pytest_cmdline_main(config):
     repo = config.option.track_repository
+    if not os.path.isdir(repo):
+        if repo == RALLY_TRACKS_DIR:
+            try:
+                # this will perform the initial clone of rally-tracks
+                subprocess.run(shlex.split("esrally list tracks"), capture_output=True, check=True)
+            except subprocess.CalledProcessError as e:
+                raise AssertionError(f"Unable to list tracks in {repo}") from e
+        else:
+            raise AssertionError(f"Directory {repo} does not exist.")
+
     test_dir = config.option.track_repo_test_dir
     config.args.append(os.path.join(repo, test_dir))
 
