@@ -19,8 +19,8 @@ import os
 import random
 import re
 import textwrap
-import unittest.mock as mock
 import urllib.error
+from unittest import mock
 
 import pytest
 

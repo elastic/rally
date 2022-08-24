@@ -77,7 +77,7 @@ class TestsVersions:
     def test_components_ignores_invalid_versions(self):
         with pytest.raises(
             exceptions.InvalidSyntax,
-            match=re.escape(r"version string '5.0.0a' does not conform to pattern " r"'^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"),
+            match=re.escape(r"version string '5.0.0a' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"),
         ):
             versions.components("5.0.0a")
 
@@ -94,7 +94,7 @@ class TestsVersions:
     def test_versions_rejects_invalid_version_strings(self):
         with pytest.raises(
             exceptions.InvalidSyntax,
-            match=re.escape(r"version string '5.0.0a-SNAPSHOT' does not conform to pattern " r"'^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"),
+            match=re.escape(r"version string '5.0.0a-SNAPSHOT' does not conform to pattern '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$'"),
         ):
             versions.VersionVariants("5.0.0a-SNAPSHOT")
 

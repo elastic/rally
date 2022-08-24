@@ -126,8 +126,7 @@ class EsClientFactory:
                         "to 'create_api_key_per_client' in order to create client API keys."
                     )
                 )
-            else:
-                self.logger.info("Automatic creation of client API keys: on")
+            self.logger.info("Automatic creation of client API keys: on")
         else:
             self.logger.info("Automatic creation of client API keys: off")
 
@@ -254,9 +253,8 @@ def wait_for_rest_layer(es, max_attempts=40):
         except elasticsearch.ConnectionError as e:
             if "SSL: UNKNOWN_PROTOCOL" in str(e):
                 raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
-            else:
-                logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
-                time.sleep(3)
+            logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
+            time.sleep(3)
         except elasticsearch.TransportError as e:
             # cluster block, x-pack not initialized yet, our wait condition is not reached
             if e.status_code in (503, 401, 408):
@@ -292,9 +290,8 @@ def create_api_key(es, client_id, max_attempts=5):
                 raise exceptions.SystemSetupError(
                     "Got status code 405 when attempting to create API keys. Is Elasticsearch Security enabled?", e
                 )
-            else:
-                logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
-                time.sleep(1)
+            logger.debug("Got status code [%s] on attempt [%s] of [%s]. Sleeping...", e.status_code, attempt, max_attempts)
+            time.sleep(1)
 
 
 def delete_api_keys(es, ids, max_attempts=5):
@@ -312,8 +309,7 @@ def delete_api_keys(es, ids, max_attempts=5):
         msg = f"Could not delete API keys with the following IDs: {failed_ids}"
         if cause is not None:
             raise exceptions.RallyError(msg) from cause
-        else:
-            raise exceptions.RallyError(msg)
+        raise exceptions.RallyError(msg)
 
     # Before ES 7.10, deleting API keys by ID had to be done individually.
     # After ES 7.10, a list of API key IDs can be deleted in one request.

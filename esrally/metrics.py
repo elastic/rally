@@ -1722,7 +1722,8 @@ def percentiles_for_sample_size(sample_size):
     # if needed we can come up with something smarter but it'll do for now
     if sample_size < 1:
         raise AssertionError("Percentiles require at least one sample")
-    elif sample_size == 1:
+
+    if sample_size == 1:
         return [100]
     elif 1 < sample_size < 10:
         return [50, 100]
