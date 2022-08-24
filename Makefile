@@ -67,7 +67,7 @@ install-user: venv-create
 install: install-user
 	# Also install development dependencies
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop]
-#	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install git+https://github.com/elastic/pytest-rally.git
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install git+https://github.com/elastic/pytest-rally.git
 
 
 clean: nondocs-clean docs-clean
