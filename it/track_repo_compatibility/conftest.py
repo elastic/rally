@@ -26,6 +26,7 @@ RALLY_CONFIG_DIR = os.path.join(RALLY_HOME, ".rally")
 TRACK_REPO_PATH = os.path.join(RALLY_CONFIG_DIR, "benchmarks", "tracks", "rally-tracks-compat")
 REMOTE_TRACK_REPO = "https://github.com/elastic/rally-tracks"
 
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_addoption(parser):
     group = parser.getgroup("rally")
@@ -33,15 +34,20 @@ def pytest_addoption(parser):
         "--track-repository",
         action="store",
         default=TRACK_REPO_PATH,
-        help=("Path to a local track repository\n" f"(default: {TRACK_REPO_PATH})"),
+        help=f"Path to a local track repository\n(default: {TRACK_REPO_PATH})",
     )
-    group.addoption("--track-revision", action="store", default="master", help=("Track repository revision to test\n" "default: `master`"))
+    group.addoption(
+        "--track-revision",
+        action="store",
+        default="master",
+        help="Track repository revision to test\ndefault: `master`",
+    )
     group.addoption(
         "--track-repository-test-directory",
         action="store",
         dest="track_repo_test_dir",
         default="it",
-        help=("Name of the directory containing the track repo's integration tests\n" "(default: `it`)"),
+        help="Name of the directory containing the track repo's integration tests\n(default: `it`)",
     )
 
 
