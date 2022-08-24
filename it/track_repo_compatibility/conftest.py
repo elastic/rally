@@ -19,15 +19,12 @@ import os
 import shlex
 import subprocess
 
-import pytest
-
 RALLY_HOME = os.getenv("RALLY_HOME", os.path.expanduser("~"))
 RALLY_CONFIG_DIR = os.path.join(RALLY_HOME, ".rally")
 TRACK_REPO_PATH = os.path.join(RALLY_CONFIG_DIR, "benchmarks", "tracks", "rally-tracks-compat")
 REMOTE_TRACK_REPO = "https://github.com/elastic/rally-tracks"
 
 
-@pytest.hookimpl(tryfirst=True)
 def pytest_addoption(parser):
     group = parser.getgroup("rally")
     group.addoption(
@@ -51,7 +48,6 @@ def pytest_addoption(parser):
     )
 
 
-@pytest.hookimpl(tryfirst=True)
 def pytest_cmdline_main(config):
     repo = config.option.track_repository
     if not os.path.isdir(repo):
@@ -69,6 +65,5 @@ def pytest_cmdline_main(config):
     config.args.append(os.path.join(repo, test_dir))
 
 
-@pytest.hookimpl
 def pytest_report_header(config):
     return f"rally: track-repository={config.option.track_repository}, track-revision={config.option.track_revision}"
