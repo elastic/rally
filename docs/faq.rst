@@ -18,7 +18,7 @@ By that you are mimicking what Rally does. Fix any errors that show up here and 
 Where does Rally get the benchmark data from?
 ---------------------------------------------
 
-Rally comes with a set of tracks out of the box which we maintain in the `rally-tracks repository on Github <https://github.com/elastic/rally-tracks>`_. This repository contains the track descriptions. The actual data are stored as compressed files in an S3 bucket.
+Rally comes with a set of tracks out of the box which we maintain in the `rally-tracks repository on Github <https://github.com/elastic/rally-tracks>`_. This repository contains the track descriptions. The actual data are stored as compressed files in an S3 bucket. Each track is documented in README files, including parameters and example data.
 
 Will Rally destroy my existing indices?
 ---------------------------------------
