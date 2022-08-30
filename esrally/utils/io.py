@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+# pylint: disable=consider-using-with
+
 import bz2
 import gzip
 import logging

@@ -19,8 +19,8 @@ import collections
 import copy
 import logging
 import random
-import unittest.mock as mock
 from collections import namedtuple
+from unittest import mock
 from unittest.mock import call
 
 import elasticsearch
@@ -227,8 +227,7 @@ class TransportClient:
         self.kwargs.append(kwargs)
         if self._force_error:
             raise self._error
-        else:
-            return copy.deepcopy(self._response)
+        return copy.deepcopy(self._response)
 
 
 class TestJfr:
@@ -352,6 +351,7 @@ class TestSegmentStats:
         segment_stats = telemetry.SegmentStats("/var/log", es)
         segment_stats.on_benchmark_stop()
         es.cat.segments.assert_called_with(index="_all", v=True)
+        # pylint: disable=unnecessary-dunder-call
         file_mock.assert_has_calls(
             [
                 call("/var/log/segment_stats.log", "wt"),

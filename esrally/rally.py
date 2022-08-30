@@ -834,7 +834,8 @@ def with_actor_system(runnable, cfg):
                 raise exceptions.UserInterrupted(
                     f"User has cancelled the benchmark (shutdown not complete as user interrupted " f"{times_interrupted} times)."
                 ) from None
-            elif not shutdown_complete:
+
+            if not shutdown_complete:
                 console.warn(
                     "Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes."
                 )

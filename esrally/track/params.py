@@ -1200,13 +1200,13 @@ class Slice:
     def __next__(self):
         if self.current_line >= self.number_of_lines:
             raise StopIteration()
-        else:
-            # ensure we don't read past the allowed number of lines.
-            lines = self.source.readlines(min(self.bulk_size, self.number_of_lines - self.current_line))
-            self.current_line += len(lines)
-            if len(lines) == 0:
-                raise StopIteration()
-            return lines
+
+        # ensure we don't read past the allowed number of lines.
+        lines = self.source.readlines(min(self.bulk_size, self.number_of_lines - self.current_line))
+        self.current_line += len(lines)
+        if len(lines) == 0:
+            raise StopIteration()
+        return lines
 
     def __str__(self):
         return "%s[%d;%d]" % (self.source, self.offset, self.offset + self.number_of_lines)

@@ -23,8 +23,8 @@ import os
 import random
 import string
 import tempfile
-import unittest.mock as mock
 import uuid
+from unittest import mock
 
 import elasticsearch.exceptions
 import pytest

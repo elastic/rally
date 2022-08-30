@@ -2274,7 +2274,8 @@ class WaitForTransform(Runner):
             if state == "failed":
                 failure_reason = stats_response["transforms"][0].get("reason", "unknown")
                 raise exceptions.RallyAssertionError(f"Transform [{transform_id}] failed with [{failure_reason}].")
-            elif state == "stopped" or wait_for_completion is False:
+
+            if state == "stopped" or wait_for_completion is False:
                 self._completed = True
                 self._percent_completed = 1.0
             else:
@@ -2813,12 +2814,12 @@ class Retry(Runner, Delegator):
             except (socket.timeout, elasticsearch.exceptions.ConnectionError):
                 if last_attempt or not retry_on_timeout:
                     raise
-                else:
-                    await asyncio.sleep(sleep_time)
+                await asyncio.sleep(sleep_time)
             except elasticsearch.exceptions.TransportError as e:
                 if last_attempt or not retry_on_timeout:
                     raise e
-                elif e.status_code == 408:
+
+                if e.status_code == 408:
                     self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
                     await asyncio.sleep(sleep_time)
                 else:
