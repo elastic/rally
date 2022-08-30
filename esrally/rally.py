@@ -222,12 +222,6 @@ def create_arg_parser():
         "multiple files.",
     )
     generate_parser.add_argument(
-        "--chart-type",
-        help="Chart type to generate (default: time-series).",
-        choices=["time-series", "bar"],
-        default="time-series",
-    )
-    generate_parser.add_argument(
         "--output-path",
         help="Output file name (default: stdout).",
         default=None,
@@ -990,7 +984,6 @@ def dispatch_sub_command(arg_parser, args, cfg):
             race(cfg, args.kill_running_processes)
         elif sub_command == "generate":
             cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
-            cfg.add(config.Scope.applicationOverride, "generator", "chart.type", args.chart_type)
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             generate(cfg)
         elif sub_command == "create-track":
