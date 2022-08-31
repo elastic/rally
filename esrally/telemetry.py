@@ -874,7 +874,7 @@ class NodeStatsRecorder:
         if stats:
             return dict(iterate())
         else:
-            return dict()
+            return {}
 
     def indices_stats(self, node_name, node_stats, include):
         idx_stats = node_stats["indices"]

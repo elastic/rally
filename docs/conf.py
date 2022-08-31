@@ -41,7 +41,7 @@ templates_path = ["_templates"]
 # source_suffix = ['.rst', '.md']
 source_suffix = ".rst"
 root_doc = "index"
-language = None
+language = "en"
 
 CI_VARS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".ci", "variables.json")
 

@@ -672,7 +672,7 @@ If you use this idiom you can refer to the ``clients`` variable inside your snip
 Sharing your track with others
 ------------------------------
 
-So far the track is only available on your local machine. To share your track you could check it into version control. To avoid committing the potentially huge data file you can expose it via http (e.g. via an S3 bucket) and reference it in your track with the property ``base-url``. Rally expects that the URL points to the parent path and appends the document file name automatically.
+So far the track is only available on your local machine. To share your track you could check it into version control. To avoid committing the potentially huge data file you can expose it via HTTP (e.g. via a cloud bucket) and reference it in your track with the property ``base-url``. Rally expects that the URL points to the parent path and appends the document file name automatically.
 
 You should also compress your document corpus to save network bandwidth; `pbzip2 <https://linux.die.net/man/1/pbzip2>`_ works well, is backwards compatible with ``bzip2`` and makes use of all available cpu cores for compression and decompression. You can create a compressed archive with the following command::
 
