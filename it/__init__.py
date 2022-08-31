@@ -19,6 +19,7 @@ import errno
 import functools
 import json
 import os
+import platform
 import random
 import socket
 import subprocess
@@ -30,7 +31,10 @@ from esrally import client, config, version
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
-DISTRIBUTIONS = ["6.8.0", "8.4.0"]
+DISTRIBUTIONS = ["8.4.0"]
+# There are no ARM distribution artefacts for 6.8.0, which can't be tested on Apple Silicon
+if platform.machine() != "arm64":
+    DISTRIBUTIONS.insert(0, "6.8.0")
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
