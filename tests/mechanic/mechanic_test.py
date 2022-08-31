@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 
@@ -115,7 +115,9 @@ class TestMechanic:
 
     @mock.patch("esrally.mechanic.provisioner.cleanup")
     def test_start_stop_nodes(self, cleanup):
-        supplier = lambda: "/home/user/src/elasticsearch/es.tar.gz"
+        def supplier():
+            return "/home/user/src/elasticsearch/es.tar.gz"
+
         provisioners = [mock.Mock(), mock.Mock()]
         launcher = self.MockLauncher()
         cfg = config.Config()

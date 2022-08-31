@@ -46,19 +46,17 @@ then
 fi
 
 echo "Updating changelog"
-# For exit on error to work we have to separate 
+# For exit on error to work we have to separate
 #  CHANGELOG.md generation into two steps.
 CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
 printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
 git commit -a -m "Update changelog for Rally release $RELEASE_VERSION"
 
-# * Update version in `setup.py` and `docs/conf.py`
 echo "Updating release version number"
 printf '__version__ = "%s"\n' $RELEASE_VERSION > esrally/_version.py
 git commit -a -m "Bump version to $RELEASE_VERSION"
 
-# --upgrade is required for virtualenv
-python3 setup.py develop --upgrade
+pip install --editable .
 
 # Check version
 if ! [[ $(esrally --version) =~ "esrally ${RELEASE_VERSION} (git revision" ]]
@@ -68,7 +66,7 @@ then
 fi
 
 # Build new version
-python3 setup.py bdist_wheel
+hatch build -t wheel
 # Upload to PyPI with retries in case of authentication failure
 printf "\033[0;31mUploading to PyPI. Please enter your credentials ...\033[0m\n"
 for i in 1 2 3 4 5; do twine upload dist/esrally-${RELEASE_VERSION}-*.whl && break || sleep 1; done

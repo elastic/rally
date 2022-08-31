@@ -17,7 +17,7 @@
 
 import os
 import re
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 

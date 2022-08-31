@@ -32,7 +32,7 @@ This will show the following list::
     pmc            Full text benchmark with academic papers from PMC                                                                                                                                  574,199      5.5 GB             21.7 GB              append-no-conflicts      append-no-conflicts,append-no-conflicts-index-only,append-sorted-no-conflicts,append-fast-with-conflicts,indexing-querying
     so             Indexing benchmark using up to questions and answers from StackOverflow                                                                                                            36,062,278   8.9 GB             33.1 GB              append-no-conflicts      append-no-conflicts
 
-The first two columns show the name and a description of each track. A track also specifies one or more challenges which describe the workload to run.
+The first two columns show the name and a description of each track. A track also specifies one or more challenges which describe the workload to run. To get more details about a given track, `refer to the README files in the rally-tracks repository <https://github.com/elastic/rally-tracks/>`_.
 
 Starting a Race
 ---------------

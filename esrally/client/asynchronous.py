@@ -1,3 +1,20 @@
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# 	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import asyncio
 import json
 import logging
@@ -11,6 +28,7 @@ from aiohttp.helpers import BaseTimerContext
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
+from esrally.client.context import RequestContextHolder
 from esrally.utils import io
 
 
@@ -206,7 +224,7 @@ class AIOHttpConnection(elasticsearch.AIOHttpConnection):
         )
 
         self._trace_configs = [trace_config] if trace_config else None
-        self._enable_cleanup_closed = kwargs.get("enable_cleanup_closed", False)
+        self._enable_cleanup_closed = kwargs.get("enable_cleanup_closed", True)
 
         static_responses = kwargs.get("static_responses")
         self.use_static_responses = static_responses is not None
@@ -244,3 +262,18 @@ class AIOHttpConnection(elasticsearch.AIOHttpConnection):
             connector=connector,
             trace_configs=self._trace_configs,
         )
+
+
+class VerifiedAsyncTransport(elasticsearch.AsyncTransport):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # skip verification at this point; we've already verified this earlier with the synchronous client.
+        # The async client is used in the hot code path and we use customized overrides (such as that we don't
+        # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
+        self._verified_elasticsearch = True
+
+
+class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
+    def perform_request(self, *args, **kwargs):
+        kwargs["url"] = kwargs.pop("path")
+        return self.transport.perform_request(*args, **kwargs)

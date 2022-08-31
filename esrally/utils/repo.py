@@ -43,19 +43,21 @@ class RallyRepository:
                 git.clone(src=self.repo_dir, remote=self.url)
             else:
                 try:
-                    git.fetch(src=self.repo_dir)
-                except exceptions.SupplyError:
-                    console.warn("Could not update %s. Continuing with your locally available state." % self.resource_name)
+                    git.fetch(src=self.repo_dir, remote="origin")
+                except exceptions.SupplyError as e:
+                    console.warn(
+                        "Could not update %s. Continuing with your locally available state. Original error: %s\n"
+                        % (self.resource_name, e.message)
+                    )
         else:
             if not git.is_working_copy(self.repo_dir):
                 if io.exists(self.repo_dir):
                     raise exceptions.SystemSetupError(
                         "[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init".format(src=self.repo_dir)
                     )
-                else:
-                    raise exceptions.SystemSetupError(
-                        "Expected a git repository at [{src}] but the directory does not exist.".format(src=self.repo_dir)
-                    )
+                raise exceptions.SystemSetupError(
+                    "Expected a git repository at [{src}] but the directory does not exist.".format(src=self.repo_dir)
+                )
 
     def update(self, distribution_version):
         try:
@@ -69,7 +71,7 @@ class RallyRepository:
                     git.checkout(self.repo_dir, branch=branch)
                     self.logger.info("Rebasing on [%s] in [%s] for distribution version [%s].", branch, self.repo_dir, distribution_version)
                     try:
-                        git.rebase(self.repo_dir, branch=branch)
+                        git.rebase(self.repo_dir, remote="origin", branch=branch)
                         self.revision = git.head_revision(self.repo_dir)
                     except exceptions.SupplyError:
                         self.logger.exception("Cannot rebase due to local changes in [%s]", self.repo_dir)
@@ -123,7 +125,7 @@ class RallyRepository:
 
     def checkout(self, revision):
         self.logger.info("Checking out revision [%s] in [%s].", revision, self.repo_dir)
-        git.checkout(self.repo_dir, revision)
+        git.checkout(self.repo_dir, branch=revision)
 
     def correct_revision(self, revision):
         return git.head_revision(self.repo_dir) == revision

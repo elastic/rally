@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import urllib.error
@@ -29,7 +30,7 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import PROGRAM_NAME, config, exceptions, time, version
+from esrally import PROGRAM_NAME, config, exceptions, paths, time, version
 from esrally.track import params, track
 from esrally.utils import collections, console, convert, io, modules, net, opts, repo
 
@@ -103,7 +104,7 @@ def tracks(cfg):
     different versions, this will be reflected in the output.
 
     :param cfg: The config object.
-    :return: A list of tracks that are available for the provided distribution version or else for the master version.
+    :return: A list of tracks that are available for the provided distribution version or else for the main version.
     """
     repo = track_repo(cfg)
     return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]
@@ -180,7 +181,7 @@ def track_info(cfg):
             console.println("")
 
 
-def load_track(cfg):
+def load_track(cfg, install_dependencies=False):
     """
 
     Loads a track
@@ -189,15 +190,32 @@ def load_track(cfg):
     :return: The loaded track.
     """
     repo = track_repo(cfg)
-    return _load_single_track(cfg, repo, repo.track_name)
+    return _load_single_track(cfg, repo, repo.track_name, install_dependencies)
 
 
-def _load_single_track(cfg, track_repository, track_name):
+def _install_dependencies(dependencies):
+    if dependencies:
+        log_path = os.path.join(paths.logs(), "dependency.log")
+        console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
+        try:
+            with open(log_path, "ab") as install_log:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
+                    stdout=install_log,
+                    stderr=install_log,
+                )
+        except subprocess.CalledProcessError:
+            raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
+
+
+def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
     try:
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
         current_track = reader.read(track_name, track_repository.track_file(track_name), track_dir)
         tpr = TrackProcessorRegistry(cfg)
+        if install_dependencies:
+            _install_dependencies(current_track.dependencies)
         has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
         current_track.has_plugins = has_plugins
         for processor in tpr.processors:
@@ -213,7 +231,14 @@ def _load_single_track(cfg, track_repository, track_name):
         raise
 
 
-def load_track_plugins(cfg, track_name, register_runner=None, register_scheduler=None, register_track_processor=None, force_update=False):
+def load_track_plugins(
+    cfg,
+    track_name,
+    register_runner=None,
+    register_scheduler=None,
+    register_track_processor=None,
+    force_update=False,
+):
     """
     Loads plugins that are defined for the current track (as specified by the configuration).
 
@@ -497,13 +522,13 @@ class Downloader:
                 raise exceptions.DataError(
                     "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
                 ) from None
+
+            msg = f"Could not download [{data_url}] to [{target_path}]"
+            if e.reason:
+                msg += f" (HTTP status: {e.code}, reason: {e.reason})"
             else:
-                msg = f"Could not download [{data_url}] to [{target_path}]"
-                if e.reason:
-                    msg += f" (HTTP status: {e.code}, reason: {e.reason})"
-                else:
-                    msg += f" (HTTP status: {e.code})"
-                raise exceptions.DataError(msg) from e
+                msg += f" (HTTP status: {e.code})"
+            raise exceptions.DataError(msg) from e
         except urllib.error.URLError as e:
             raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
 
@@ -589,8 +614,7 @@ class DocumentSetPreparator:
                             f"size of [{expected_size}] bytes and it cannot be downloaded "
                             f"because no base URL is provided."
                         ) from None
-                    else:
-                        raise
+                    raise
 
         self.create_file_offset_table(doc_path, document_set.number_of_lines)
 
@@ -983,40 +1007,42 @@ class TrackFileReader:
         self.logger.info("Reading track specification file [%s].", track_spec_file)
         # render the track to a temporary file instead of dumping it into the logs. It is easier to check for error messages
         # involving lines numbers and it also does not bloat Rally's log file so much.
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        try:
-            rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
-            with open(tmp.name, "wt", encoding="utf-8") as f:
-                f.write(rendered)
-            self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
-            track_spec = json.loads(rendered)
-        except jinja2.exceptions.TemplateNotFound:
-            self.logger.exception("Could not load [%s]", track_spec_file)
-            raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
-        except json.JSONDecodeError as e:
-            self.logger.exception("Could not load [%s].", track_spec_file)
-            msg = "Could not load '{}': {}.".format(track_spec_file, str(e))
-            if e.doc and e.lineno > 0 and e.colno > 0:
-                line_idx = e.lineno - 1
-                lines = e.doc.split("\n")
-                ctx_line_count = 3
-                ctx_start = max(0, line_idx - ctx_line_count)
-                ctx_end = min(line_idx + ctx_line_count, len(lines))
-                erroneous_lines = lines[ctx_start:ctx_end]
-                erroneous_lines.insert(line_idx - ctx_start + 1, "-" * (e.colno - 1) + "^ Error is here")
-                msg += " Lines containing the error:\n\n{}\n\n".format("\n".join(erroneous_lines))
-            msg += "The complete track has been written to '{}' for diagnosis.".format(tmp.name)
-            raise TrackSyntaxError(msg)
-        except Exception as e:
-            self.logger.exception("Could not load [%s].", track_spec_file)
-            msg = "Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name)
-            raise TrackSyntaxError(msg, e)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
+            try:
+                rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
+                with open(tmp.name, "wt", encoding="utf-8") as f:
+                    f.write(rendered)
+                self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
+                track_spec = json.loads(rendered)
+            except jinja2.exceptions.TemplateNotFound:
+                self.logger.exception("Could not load [%s]", track_spec_file)
+                raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
+            except json.JSONDecodeError as e:
+                self.logger.exception("Could not load [%s].", track_spec_file)
+                msg = "Could not load '{}': {}.".format(track_spec_file, str(e))
+                if e.doc and e.lineno > 0 and e.colno > 0:
+                    line_idx = e.lineno - 1
+                    lines = e.doc.split("\n")
+                    ctx_line_count = 3
+                    ctx_start = max(0, line_idx - ctx_line_count)
+                    ctx_end = min(line_idx + ctx_line_count, len(lines))
+                    erroneous_lines = lines[ctx_start:ctx_end]
+                    erroneous_lines.insert(line_idx - ctx_start + 1, "-" * (e.colno - 1) + "^ Error is here")
+                    msg += " Lines containing the error:\n\n{}\n\n".format("\n".join(erroneous_lines))
+                msg += "The complete track has been written to '{}' for diagnosis.".format(tmp.name)
+                raise TrackSyntaxError(msg)
+            except Exception as e:
+                self.logger.exception("Could not load [%s].", track_spec_file)
+                msg = "Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name)
+                raise TrackSyntaxError(msg, e)
+
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
         try:
             track_version = int(raw_version)
         except ValueError:
             raise exceptions.InvalidSyntax("version identifier for track %s must be numeric but was [%s]" % (track_name, str(raw_version)))
+
         if TrackFileReader.MINIMUM_SUPPORTED_TRACK_VERSION > track_version:
             raise exceptions.RallyError(
                 "Track {} is on version {} but needs to be updated at least to version {} to work with the "
@@ -1027,6 +1053,7 @@ class TrackFileReader:
                 "Track {} requires a newer version of Rally. Please upgrade Rally (supported track version: {}, "
                 "required track version: {}).".format(track_name, TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION, track_version)
             )
+
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
@@ -1036,7 +1063,7 @@ class TrackFileReader:
                 )
             )
 
-        current_track = self.read_track(track_name, track_spec, mapping_dir)
+        current_track = self.read_track(track_name, track_spec, mapping_dir, track_spec_file)
 
         unused_user_defined_track_params = self.complete_track_params.unused_user_defined_track_params()
         if len(unused_user_defined_track_params) > 0:
@@ -1083,6 +1110,9 @@ class TrackPluginReader:
         return self.loader.can_load()
 
     def load(self):
+        # get dependent libraries installed in a prior step. ensure dir exists to make sure loading works correctly.
+        os.makedirs(paths.libs(), exist_ok=True)
+        sys.path.insert(0, paths.libs())
         root_module = self.loader.load()
         try:
             # every module needs to have a register() method
@@ -1122,14 +1152,16 @@ class TrackSpecificationReader:
 
     def __init__(self, track_params=None, complete_track_params=None, selected_challenge=None, source=io.FileSource):
         self.name = None
+        self.base_path = None
         self.track_params = track_params if track_params else {}
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
         self.source = source
         self.logger = logging.getLogger(__name__)
 
-    def __call__(self, track_name, track_specification, mapping_dir):
+    def __call__(self, track_name, track_specification, mapping_dir, spec_file=None):
         self.name = track_name
+        self.base_path = os.path.dirname(os.path.abspath(spec_file)) if spec_file else None
         description = self._r(track_specification, "description", mandatory=False, default_value="")
 
         meta_data = self._r(track_specification, "meta", mandatory=False)
@@ -1156,6 +1188,7 @@ class TrackSpecificationReader:
         ]
         corpora = self._create_corpora(self._r(track_specification, "corpora", mandatory=False, default_value=[]), indices, data_streams)
         challenges = self._create_challenges(track_specification)
+        dependencies = self._r(track_specification, "dependencies", mandatory=False)
         # at this point, *all* track params must have been referenced in the templates
         return track.Track(
             name=self.name,
@@ -1168,6 +1201,8 @@ class TrackSpecificationReader:
             composable_templates=composable_templates,
             component_templates=component_templates,
             corpora=corpora,
+            dependencies=dependencies,
+            root=self.base_path,
         )
 
     def _error(self, msg):
@@ -1212,6 +1247,7 @@ class TrackSpecificationReader:
     def _create_component_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
         template_file = self._r(tpl_spec, "template")
+        template_path = self._r(tpl_spec, "template-path", mandatory=False)
         template_file = os.path.join(mapping_dir, template_file)
         idx_tmpl_src = TemplateSource(mapping_dir, template_file, self.source)
         with self.source(template_file, "rt") as f:
@@ -1219,11 +1255,15 @@ class TrackSpecificationReader:
             template_content = self._load_template(
                 idx_tmpl_src.assembled_source, f"definition for component template {name} in {template_file}"
             )
+        if template_path:
+            for field in template_path.split("."):
+                template_content = template_content[field]
         return track.ComponentTemplate(name, template_content)
 
     def _create_index_template(self, tpl_spec, mapping_dir):
         name = self._r(tpl_spec, "name")
         template_file = self._r(tpl_spec, "template")
+        template_path = self._r(tpl_spec, "template-path", mandatory=False)
         index_pattern = self._r(tpl_spec, "index-pattern")
         delete_matching_indices = self._r(tpl_spec, "delete-matching-indices", mandatory=False, default_value=True)
         template_file = os.path.join(mapping_dir, template_file)
@@ -1233,6 +1273,9 @@ class TrackSpecificationReader:
             template_content = self._load_template(
                 idx_tmpl_src.assembled_source, "definition for index template {} in {}".format(name, template_file)
             )
+        if template_path:
+            for field in template_path.split("."):
+                template_content = template_content[field]
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):
@@ -1320,7 +1363,8 @@ class TrackSpecificationReader:
                         if target_ds and len(indices) > 0:
                             # if indices are in use we error
                             raise TrackSyntaxError("target-data-stream cannot be used when using indices")
-                        elif target_ds and target_type:
+
+                        if target_ds and target_type:
                             raise TrackSyntaxError("target-type cannot be used when using data-streams")
 
                         # need an index if we're using indices and no meta-data are present and we don't have a default

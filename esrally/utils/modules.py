@@ -60,7 +60,6 @@ class ComponentLoader:
     def _load_component(self, component_name, module_dirs):
         # precondition: A module with this name has to exist provided that the caller has called #can_load() before.
         root_module_name = "%s.%s" % (component_name, self.component_entry_point)
-
         for p in self._modules(module_dirs, component_name):
             self.logger.debug("Loading module [%s]", p)
             m = importlib.import_module(p)

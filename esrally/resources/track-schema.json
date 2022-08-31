@@ -255,6 +255,10 @@
           "template": {
             "type": "string",
             "description": "Component template file name."
+          },
+          "template-path": {
+            "type": "string",
+            "description": "JSON field inside the file content that contains the template."
           }
         },
         "required": [
@@ -286,6 +290,10 @@
           "template": {
             "type": "string",
             "description": "Composable template file name."
+          },
+          "template-path": {
+            "type": "string",
+            "description": "JSON field inside the file content that contains the template."
           }
         },
         "required": [
@@ -583,6 +591,14 @@
       "uniqueItems": true,
       "items": {
         "$ref": "#/definitions/challenge"
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
       }
     },
     "challenge": {

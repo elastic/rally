@@ -1,6 +1,134 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "esrally/_version.py"
+
+
+[project]
+name = "esrally"
+dynamic = ["version"]
+authors = [
+  {name="Daniel Mitterdorfer", email="daniel.mitterdorfer@gmail.com"},
+]
+description = "Macrobenchmarking framework for Elasticsearch"
+readme = "README.md"
+license = {text = "Apache License 2.0"}
+requires-python = ">=3.8"
+classifiers=[
+    "Topic :: System :: Benchmark",
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3 :: Only",
+]
+################################################################################################
+#
+# Adapt `create-notice.sh` whenever changing dependencies here.
+#
+# That script grabs all license files so we include them in the notice file.
+#
+################################################################################################
+dependencies = [
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   urllib3: MIT
+    #   aiohttp: Apache 2.0
+    "elasticsearch[async]==7.14.0",
+    "urllib3==1.26.9",
+    # License: BSD
+    "psutil==5.8.0",
+    # License: MIT
+    "py-cpuinfo==7.0.0",
+    # License: MIT
+    "tabulate==0.8.9",
+    # License: MIT
+    "jsonschema==3.1.1",
+    # License: BSD
+    # transitive dependency Markupsafe: BSD
+    "Jinja2==2.11.3",
+    "markupsafe==2.0.1",
+    # License: MIT
+    "thespian==3.10.1",
+    # recommended library for thespian to identify actors more easily with `ps`
+    # "setproctitle==1.1.10",
+    # always use the latest version, these are certificate files...
+    # License: MPL 2.0
+    "certifi",
+    # License: MIT
+    "yappi==1.3.3",
+    # License: BSD
+    "ijson==2.6.1",
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   google-crc32c: Apache 2.0
+    "google-resumable-media[requests]==1.1.0",
+    # License: Apache 2.0
+    "google-auth==1.22.1",
+]
+
+[project.optional-dependencies]
+s3 = [
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   botocore: Apache 2.0
+    #   jmespath: MIT
+    #   s3transfer: Apache 2.0
+    "boto3==1.18.46",
+]
+# These packages are only required when developing Rally
+develop = [
+    # s3
+    "boto3==1.18.46",
+    # tests
+    "ujson",
+    "pytest==7.1.2",
+    "pytest-benchmark==3.4.1",
+    "pytest-asyncio==0.19.0",
+    "pytest-httpserver==1.0.5",
+    "tox==3.25.0",
+    "sphinx==5.1.1",
+    "furo==2022.06.21",
+    "twine==4.0.1",
+    "wheel==0.37.1",
+    "github3.py==3.2.0",
+    "pre-commit==2.20.0",
+    "pylint==2.14.5",
+    "trustme==0.9.0",
+]
+
+[project.scripts]
+esrally = "esrally.rally:main"
+esrallyd = "esrally.rallyd:main"
+
+[project.urls]
+"Changelog" = "https://github.com/elastic/rally/blob/master/CHANGELOG.md"
+"Documentation" = "https://esrally.readthedocs.io/"
+"Code" = "https://github.com/elastic/rally"
+"Issue tracker" = "https://github.com/elastic/rally/issues"
+
+
 [tool.black]
 line-length = 140
 target-version = ['py38']
 
 [tool.isort]
 profile = 'black'
+
+[tool.pytest.ini_options]
+# set to true for more verbose output of tests
+log_cli = false
+log_level = "INFO"
+addopts = "--verbose --color=yes"
+testpaths = "tests"
+junit_family = "xunit2"
+junit_logging = "all"
+asyncio_mode = "strict"

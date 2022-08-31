@@ -17,7 +17,7 @@
 
 import json
 
-from esrally.async_connection import ResponseMatcher
+from esrally.client.asynchronous import ResponseMatcher
 
 
 class TestResponseMatcher:

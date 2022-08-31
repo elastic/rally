@@ -19,8 +19,8 @@ import collections
 import copy
 import logging
 import random
-import unittest.mock as mock
 from collections import namedtuple
+from unittest import mock
 from unittest.mock import call
 
 import elasticsearch
@@ -150,7 +150,7 @@ class TestStartupTime:
 
 
 class Client:
-    def __init__(self, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None):
+    def __init__(self, *, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
@@ -162,9 +162,12 @@ class Client:
     def info(self):
         return self._info()
 
+    def perform_request(self, *args, **kwargs):
+        return self.transport.perform_request(*args, **kwargs)
+
 
 class SubClient:
-    def __init__(self, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, state=None):
+    def __init__(self, *, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, state=None):
         self._stats = wrap(stats)
         self._info = wrap(info)
         self._recovery = wrap(recovery)
@@ -212,7 +215,7 @@ raiseTransportError = TransportErrorSupplier()
 
 
 class TransportClient:
-    def __init__(self, response=None, force_error=False, error=elasticsearch.TransportError):
+    def __init__(self, *, response=None, force_error=False, error=elasticsearch.TransportError):
         self._response = response
         self._force_error = force_error
         self._error = error
@@ -224,8 +227,7 @@ class TransportClient:
         self.kwargs.append(kwargs)
         if self._force_error:
             raise self._error
-        else:
-            return copy.deepcopy(self._response)
+        return copy.deepcopy(self._response)
 
 
 class TestJfr:
@@ -349,6 +351,7 @@ class TestSegmentStats:
         segment_stats = telemetry.SegmentStats("/var/log", es)
         segment_stats.on_benchmark_stop()
         es.cat.segments.assert_called_with(index="_all", v=True)
+        # pylint: disable=unnecessary-dunder-call
         file_mock.assert_has_calls(
             [
                 call("/var/log/segment_stats.log", "wt"),
@@ -1915,6 +1918,32 @@ class TestNodeStatsRecorder:
                         }
                     },
                 },
+                "os": {
+                    "timestamp": 1655950949872,
+                    "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                    "mem": {
+                        "total_in_bytes": 62277025792,
+                        "free_in_bytes": 4934840320,
+                        "used_in_bytes": 57342185472,
+                        "free_percent": 8,
+                        "used_percent": 92,
+                    },
+                    "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                    "cgroup": {
+                        "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                        "cpu": {
+                            "control_group": "/",
+                            "cfs_period_micros": 100000,
+                            "cfs_quota_micros": 793162,
+                            "stat": {
+                                "number_of_elapsed_periods": 41092415,
+                                "number_of_times_throttled": 41890,
+                                "time_throttled_nanos": 29380593023188,
+                            },
+                        },
+                        "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                    },
+                },
                 "process": {
                     "timestamp": 1526045135857,
                     "open_file_descriptors": 312,
@@ -2042,6 +2071,11 @@ class TestNodeStatsRecorder:
             "jvm_gc_collectors_young_collection_time_in_millis": 309,
             "jvm_gc_collectors_old_collection_count": 2,
             "jvm_gc_collectors_old_collection_time_in_millis": 229,
+            "os_mem_total_in_bytes": 62277025792,
+            "os_mem_free_in_bytes": 4934840320,
+            "os_mem_used_in_bytes": 57342185472,
+            "os_mem_free_percent": 8,
+            "os_mem_used_percent": 92,
             "process_cpu_percent": 10,
             "process_cpu_total_in_millis": 56520,
             "breakers_parent_limit_size_in_bytes": 726571417,
@@ -2267,6 +2301,32 @@ class TestNodeStatsRecorder:
                             "total_virtual_in_bytes": 2472173568,
                         },
                     },
+                    "os": {
+                        "timestamp": 1655950949872,
+                        "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                        "mem": {
+                            "total_in_bytes": 62277025792,
+                            "free_in_bytes": 4934840320,
+                            "used_in_bytes": 57342185472,
+                            "free_percent": 8,
+                            "used_percent": 92,
+                        },
+                        "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                        "cgroup": {
+                            "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                            "cpu": {
+                                "control_group": "/",
+                                "cfs_period_micros": 100000,
+                                "cfs_quota_micros": 793162,
+                                "stat": {
+                                    "number_of_elapsed_periods": 41092415,
+                                    "number_of_times_throttled": 41890,
+                                    "time_throttled_nanos": 29380593023188,
+                                },
+                            },
+                            "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                        },
+                    },
                     "thread_pool": {
                         "generic": {
                             "threads": 4,
@@ -2399,6 +2459,11 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_mem_total_in_bytes": 62277025792,
+                "os_mem_free_in_bytes": 4934840320,
+                "os_mem_used_in_bytes": 57342185472,
+                "os_mem_free_percent": 8,
+                "os_mem_used_percent": 92,
                 "transport_rx_count": 77,
                 "transport_rx_size_in_bytes": 98723498,
                 "transport_server_open": 12,
@@ -2565,6 +2630,32 @@ class TestNodeStatsRecorder:
                             }
                         },
                     },
+                    "os": {
+                        "timestamp": 1655950949872,
+                        "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                        "mem": {
+                            "total_in_bytes": 62277025792,
+                            "free_in_bytes": 4934840320,
+                            "used_in_bytes": 57342185472,
+                            "free_percent": 8,
+                            "used_percent": 92,
+                        },
+                        "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                        "cgroup": {
+                            "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                            "cpu": {
+                                "control_group": "/",
+                                "cfs_period_micros": 100000,
+                                "cfs_quota_micros": 793162,
+                                "stat": {
+                                    "number_of_elapsed_periods": 41092415,
+                                    "number_of_times_throttled": 41890,
+                                    "time_throttled_nanos": 29380593023188,
+                                },
+                            },
+                            "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                        },
+                    },
                     "process": {
                         "timestamp": 1526045135857,
                         "open_file_descriptors": 312,
@@ -2679,6 +2770,11 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_mem_total_in_bytes": 62277025792,
+                "os_mem_free_in_bytes": 4934840320,
+                "os_mem_used_in_bytes": 57342185472,
+                "os_mem_free_percent": 8,
+                "os_mem_used_percent": 92,
                 "transport_rx_count": 77,
                 "transport_rx_size_in_bytes": 98723498,
                 "transport_server_open": 12,
@@ -2877,6 +2973,7 @@ class TestClusterEnvironmentInfo:
             "version": {
                 "build_hash": "abc123",
                 "number": "6.0.0-alpha1",
+                "build_flavor": "oss",
             },
         }
 
@@ -3211,7 +3308,7 @@ class TestJvmStatsSummary:
             }
         }
 
-        client = Client(nodes=SubClient(nodes_stats_at_start))
+        client = Client(nodes=SubClient(stats=nodes_stats_at_start))
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -3254,7 +3351,7 @@ class TestJvmStatsSummary:
                 }
             }
         }
-        client.nodes = SubClient(nodes_stats_at_end)
+        client.nodes = SubClient(stats=nodes_stats_at_end)
         t.on_benchmark_stop()
 
         metrics_store_node_level.assert_has_calls(
@@ -3263,7 +3360,8 @@ class TestJvmStatsSummary:
                 mock.call("rally0", "node_young_gen_gc_count", 3980),
                 mock.call("rally0", "node_old_gen_gc_time", 1500, "ms"),
                 mock.call("rally0", "node_old_gen_gc_count", 1),
-            ]
+            ],
+            any_order=True,
         )
 
         metrics_store_cluster_level.assert_has_calls(
@@ -3272,7 +3370,8 @@ class TestJvmStatsSummary:
                 mock.call("node_total_young_gen_gc_count", 3980),
                 mock.call("node_total_old_gen_gc_time", 1500, "ms"),
                 mock.call("node_total_old_gen_gc_count", 1),
-            ]
+            ],
+            any_order=True,
         )
 
         metrics_store_put_doc.assert_has_calls(
@@ -3290,6 +3389,92 @@ class TestJvmStatsSummary:
             ]
         )
 
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
+    def test_handles_optional_collectors(self, metrics_store_node_level, metrics_store_cluster_level, metrics_store_put_doc):
+        nodes_stats_at_start = {
+            "nodes": {
+                "3zCI85c3RWKuR8MeJ8ajQg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "jvm": {
+                        "mem": {
+                            "heap_used_in_bytes": 457179136,
+                            "heap_used_percent": 2,
+                            "heap_committed_in_bytes": 17179869184,
+                            "heap_max_in_bytes": 17179869184,
+                            "non_heap_used_in_bytes": 154359232,
+                            "non_heap_committed_in_bytes": 159907840,
+                            "pools": {},
+                        },
+                        "gc": {
+                            "collectors": {
+                                "ZGC Cycles": {"collection_count": 4, "collection_time_in_millis": 358},
+                                "ZGC Pauses": {"collection_count": 12, "collection_time_in_millis": 0},
+                            }
+                        },
+                    },
+                }
+            }
+        }
+
+        client = Client(nodes=SubClient(stats=nodes_stats_at_start))
+        cfg = create_config()
+
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.JvmStatsSummary(client, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_start()
+        # now we'd need to change the node stats response
+        nodes_stats_at_end = {
+            "nodes": {
+                "3zCI85c3RWKuR8MeJ8ajQg": {
+                    "name": "rally0",
+                    "host": "127.0.0.1",
+                    "jvm": {
+                        "mem": {
+                            "heap_used_in_bytes": 457179136,
+                            "heap_used_percent": 2,
+                            "heap_committed_in_bytes": 17179869184,
+                            "heap_max_in_bytes": 17179869184,
+                            "non_heap_used_in_bytes": 154359232,
+                            "non_heap_committed_in_bytes": 159907840,
+                            "pools": {},
+                        },
+                        "gc": {
+                            "collectors": {
+                                "ZGC Cycles": {"collection_count": 4, "collection_time_in_millis": 358},
+                                "ZGC Pauses": {"collection_count": 12, "collection_time_in_millis": 0},
+                            }
+                        },
+                    },
+                }
+            }
+        }
+        client.nodes = SubClient(stats=nodes_stats_at_end)
+        t.on_benchmark_stop()
+
+        metrics_store_node_level.assert_has_calls(
+            [
+                mock.call("rally0", "node_zgc_cycles_gc_time", 0, "ms"),
+                mock.call("rally0", "node_zgc_cycles_gc_count", 0),
+                mock.call("rally0", "node_zgc_pauses_gc_time", 0, "ms"),
+                mock.call("rally0", "node_zgc_pauses_gc_count", 0),
+            ],
+            any_order=True,
+        )
+
+        metrics_store_cluster_level.assert_has_calls(
+            [
+                mock.call("node_total_zgc_cycles_gc_time", 0, "ms"),
+                mock.call("node_total_zgc_cycles_gc_count", 0),
+                mock.call("node_total_zgc_pauses_gc_time", 0, "ms"),
+                mock.call("node_total_zgc_pauses_gc_count", 0),
+            ],
+            any_order=True,
+        )
+
 
 class TestIndexStats:
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
@@ -3297,7 +3482,7 @@ class TestIndexStats:
     def test_stores_available_index_stats(self, metrics_store_cluster_value, metrics_store_put_doc):
         client = Client(
             indices=SubClient(
-                {
+                stats={
                     "_all": {
                         "primaries": {
                             "segments": {
@@ -3466,7 +3651,7 @@ class TestIndexStats:
             },
         }
 
-        client.indices = SubClient(response)
+        client.indices = SubClient(stats=response)
 
         t.on_benchmark_stop()
 
@@ -4150,28 +4335,68 @@ class TestIngestPipelineStats:
 
 class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_uses_indices_param_by_default(self, es):
+    def test_uses_indices_by_default(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         tc = TransportClient(response={"_shards": {"failed": 0}})
         es = Client(transport_client=tc)
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+        ]
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_uses_indices_param_if_specified(self, es):
+    def test_uses_data_streams_by_default(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         tc = TransportClient(response={"_shards": {"failed": 0}})
         es = Client(transport_client=tc)
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, ["baz"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=["foo", "bar"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.args == [("POST", "/foo/_disk_usage"), ("POST", "/bar/_disk_usage")]
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+        ]
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_if_specified_instead_of_index_names(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        tc = TransportClient(response={"_shards": {"failed": 0}})
+        es = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats(
+            {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=["baz"], data_stream_names=[]
+        )
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+        ]
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_if_specified_instead_of_data_stream_names(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        tc = TransportClient(response={"_shards": {"failed": 0}})
+        es = Client(transport_client=tc)
+        device = telemetry.DiskUsageStats(
+            {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=[], data_stream_names=["baz"]
+        )
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert tc.kwargs == [
+            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
+        ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
@@ -4183,11 +4408,27 @@ class TestDiskUsageStats:
                 error=elasticsearch.RequestError,
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
             t.on_benchmark_stop()
+        assert metrics_store_cluster_level.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_no_indices_fails(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                force_error=True,
+                error=elasticsearch.RequestError,
+            )
+        )
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=[])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        with pytest.raises(exceptions.RallyError):
+            t.on_benchmark_start()
         assert metrics_store_cluster_level.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
@@ -4200,7 +4441,7 @@ class TestDiskUsageStats:
                 error=elasticsearch.RequestError,
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4245,7 +4486,7 @@ class TestDiskUsageStats:
         )
 
         es = Client(transport_client=TwoTransportClients(not_found_transport_client, successful_client))
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo", "bar"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4262,7 +4503,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4279,7 +4520,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
@@ -4305,7 +4546,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4334,7 +4575,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4371,7 +4612,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4399,7 +4640,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
@@ -4429,7 +4670,7 @@ class TestDiskUsageStats:
                 }
             )
         )
-        device = telemetry.DiskUsageStats({}, es, metrics_store, ["foo"])
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()

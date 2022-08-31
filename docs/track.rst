@@ -35,7 +35,7 @@ Custom Track Repositories
 
 Alternatively, you can store Rally tracks also in a dedicated git repository which we call a "track repository". Rally provides a default track repository that is hosted on `Github <https://github.com/elastic/rally-tracks>`_. You can also add your own track repositories although this requires a bit of additional work. First of all, track repositories need to be managed by git. The reason is that Rally can benchmark multiple versions of Elasticsearch and we use git branches in the track repository to determine the best match for each track (based on the command line parameter ``--distribution-version``). The versioning scheme is as follows:
 
-* The ``master`` branch needs to work with the latest ``master`` branch of Elasticsearch.
+* The ``master`` branch needs to work with the latest ``main`` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
 .. _track-repositories-branch-logic:
@@ -126,17 +126,18 @@ We recommend the following path:
 Anatomy of a track
 ==================
 
-A track JSON file consists of the following sections:
+A track JSON file can include the following sections:
 
-* indices
-* templates
-* data-streams
-* composable-templates
-* component-templates
-* corpora
-* operations
-* schedule
-* challenges
+* :ref:`indices <track_indices>`
+* :ref:`templates <track_templates>`
+* :ref:`data-streams <track_data_streams>`
+* :ref:`composable-templates <track_composable_templates>`
+* :ref:`component-templates <track_component_templates>`
+* :ref:`corpora <track_corpora>`
+* :ref:`challenge(s) <track_challenge>`
+* :ref:`schedule <track_schedule>`
+* :ref:`operations <track_operations>`
+* :ref:`dependencies <track_dependencies>`
 
 In the ``indices`` and ``templates`` sections you define the relevant indices and index templates. These sections are optional but recommended if you want to create indices and index templates with the help of Rally. The index templates here represent the `legacy Elasticsearch index templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.9/indices-templates-v1.html>`_ which have been deprecated in Elasticsearch 7.9. Users should refer to the ``composable-templates`` and ``component-templates`` for new tracks.
 
@@ -200,6 +201,9 @@ If the ``meta`` structure contains the same key on different elements, more spec
 
 E.g. a key defined on a task, will override the same key defined on a challenge. All properties defined within the merged ``meta`` structure, will get copied into each metrics record.
 
+
+.. _track_indices:
+
 indices
 .......
 
@@ -220,6 +224,9 @@ Example::
           "types": ["docs"]
         }
     ]
+
+
+.. _track_templates:
 
 templates
 .........
@@ -242,6 +249,9 @@ Example::
         }
     ]
 
+
+.. _track_data_streams:
+
 data-streams
 ............
 
@@ -259,6 +269,9 @@ Example::
         }
     ]
 
+
+.. _track_composable_templates:
+
 composable-templates
 ....................
 
@@ -270,6 +283,7 @@ Each composable template in this list consists of the following properties:
 * ``index-pattern`` (mandatory): Index pattern that matches the composable template. This must match the definition in the template file.
 * ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern if the template is deleted.
 * ``template`` (mandatory): Composable template file name.
+* ``template-path`` (optional): JSON field inside the file content that contains the template.
 
 Example::
 
@@ -282,6 +296,9 @@ Example::
         }
     ]
 
+
+.. _track_component_templates:
+
 component-templates
 ....................
 
@@ -291,6 +308,7 @@ Each component template in this list consists of the following properties:
 
 * ``name`` (mandatory): Component template name.
 * ``template`` (mandatory): Component template file name.
+* ``template-path`` (optional): JSON field inside the file content that contains the template.
 
 Example::
 
@@ -300,6 +318,9 @@ Example::
             "template": "one-shard-template.json"
         }
     ]
+
+
+.. _track_corpora:
 
 corpora
 .......
@@ -335,8 +356,6 @@ Each entry in the ``documents`` list consists of the following properties:
 * ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true`` or if a ``target-data-stream`` is specified. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``target-data-stream``: Defines the name of the data stream which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``data-streams`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
-* ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
-* ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true``. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``meta`` (optional): A mapping of arbitrary key-value pairs with additional meta-data for a source file.
 
 To avoid repetition, you can specify default values on document corpus level for the following properties:
@@ -1099,6 +1118,69 @@ Example::
       "body": {
         "query": {
           "match_all": {}
+        }
+      },
+      "request-params": {
+        "_source_include": "some_field",
+        "analyze_wildcard": "false"
+      }
+    }
+
+Throughput will be reported as number of retrieved pages per second (``pages/s``). The rationale is that each HTTP request corresponds to one operation and we need to issue one HTTP request per result page. Note that if you use a dedicated Elasticsearch metrics store, you can also use other request-level meta-data such as the number of hits for your own analyses.
+
+Meta-data
+"""""""""
+
+* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
+* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
+* ``success``: A boolean indicating whether the query has succeeded.
+* ``hits``: Total number of hits for this query.
+* ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
+* ``timed_out``: Whether any of the issued queries has timed out.
+* ``took``: The sum of all ``took`` values in query responses.
+
+composite-agg
+~~~~~~~~~~~~~
+
+The operation type ``composite-agg`` allows paginating through `composite aggregations <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-composite-aggregation.html#_pagination>`_.
+
+Properties
+""""""""""
+
+* ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
+
+    .. note::
+        1. Parameters that are implicitly set by Rally (e.g. ``body`` or ``request_cache``) are not supported (i.e. you should not try to set them and if so expect unspecified behavior).
+        2. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
+
+* ``body`` (mandatory): The query body.
+* ``pages`` (optional): Number of pages to retrieve (at most) for this search. If the composite aggregation yields fewer results than the specified number of pages we will terminate earlier. To retrieve all result pages, use the value "all". Defaults to "all"
+* ``results-per-page`` (optional): Number of results to retrieve per page. This maps to the composite aggregation's API's ``size`` parameter.
+* ``with-point-in-time-from`` (optional): The ``name`` of an ``open-point-in-time`` operation. Causes the search to use the generated `point in time <https://www.elastic.co/guide/en/elasticsearch/reference/current/point-in-time-api.html>`_.
+
+    .. note::
+        This parameter requires usage of a ``composite`` operation containing both the ``open-point-in-time`` task and this search.
+
+* ``response-compression-enabled`` (optional, defaults to ``true``): Allows to disable HTTP compression of responses. As these responses are sometimes large and decompression may be a bottleneck on the client, it is possible to turn off response compression.
+
+Example::
+
+    {
+      "name": "default",
+      "operation-type": "composite-agg",
+      "pages": 10,
+      "body": {
+        "aggs": {
+          "my_buckets": {
+            "composite": {
+              "sources": [
+                { "date": { "date_histogram": { "field": "timestamp", "calendar_interval": "1d" } } },
+                { "product": { "terms": { "field": "product" } } }
+              ]
+            }
+          }
         }
       },
       "request-params": {
@@ -2328,6 +2410,27 @@ Meta-data
 * ``duration``: The time it took (in milliseconds) to create the snapshot.
 * ``file_count``: The total number of files in the snapshot.
 
+wait-for-current-snapshots-create
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the operation ``wait-for-current-snapshots-create`` you can wait until all currently running snapshots within a defined repository have completed.
+This operation is useful after issuing many ``create-snapshot``, to benchmark snapshotting performance and related limitations in Elasticsearch.
+
+It exits when ``total`` in the response body of `GET _snapshot <https://www.elastic.co/guide/en/elasticsearch/reference/current/get-snapshot-api.html>`_ equals ``0``.
+
+Properties
+""""""""""
+
+* ``repository`` (mandatory): The name of the snapshot repository to use.
+* ``completion-recheck-wait-period`` (optional, defaults to 1 second): Time in seconds to wait in between consecutive attempts.
+
+This operation is :ref:`retryable <track_operations>`.
+
+Meta-data
+"""""""""
+
+This operation returns no meta-data.
+
 restore-snapshot
 ~~~~~~~~~~~~~~~~
 
@@ -2514,12 +2617,16 @@ Properties
 
 The ``composite`` operation only supports the following operation-types:
 
+* ``open-point-in-time``
+* ``close-point-in-time``
+* ``search``
+* ``paginated-search``
 * ``raw-request``
 * ``sleep``
-* ``search``
 * ``submit-async-search``
 * ``get-async-search``
 * ``delete-async-search``
+* ``field-caps``
 
 **Examples**
 
@@ -2910,6 +3017,11 @@ Properties
 * ``body`` (mandatory): The request body passed to the _sql API with the initial request. Must contain the "query" key. Subsequent pagination requests will only include the cursor in the request body.
 * ``pages``: (optional, defaults to 1) Number of pages to retrieve at most for this search. If a query yields fewer results than the specified number of pages it will fail with an exception.
 
+    .. note::
+
+        If ``pages`` is greater than 1 the response body will be parsed to extract ``cursor`` for subsequent pagination requests.
+        This JSON parsing can be expensive and might have a significant impact on the measured latency if the response body is too large.
+
 **Example**
 
 Run an SQL query and fetch the first 10 pages with 100 records each::
@@ -2939,6 +3051,65 @@ The following meta data is always returned:
 
 * ``weight``: The number of fetched pages. Should always equal to the ``pages`` parameter.
 * ``unit``: The unit in which to interpret ``weight``. Always "ops".
+
+field-caps
+~~~~~~~~~~~~~~~~~~~
+
+Retrieve `the capabilities of fields among indices <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-field-caps.html>`_.
+
+Properties
+""""""""""
+
+* ``index`` (optional, defaults to ``_all``): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices should be targeted by this operation.
+* ``fields`` (optional, default to ``*``): Comma-separated list of fields to retrieve capabilities for.
+* ``index_filter`` (optional): An index_filter to limit this operation to target only indices that match this index_filter
+
+**Example**
+
+Retrieve the capabilities of fields starting with ``message`` of the ``log-*`` indices::
+
+    {
+      "operation": {
+        "operation-type": "field-caps",
+        "name": "field-caps-logs-indices",
+        "index": "log-*",
+        "fields": "message*"
+      },
+      "target-throughput": 10,
+      "clients": 2,
+      "warmup-iterations": 50,
+      "iterations": 100
+    }
+
+
+Meta-data
+"""""""""
+
+The operation returns no meta-data.
+
+
+.. _track_dependencies:
+
+dependencies
+............
+
+If your track code requires additional Python dependencies at runtime (for instance, for code included in :ref:`custom runners <adding_tracks_custom_runners>` or :ref:`parameter sources <adding_tracks_custom_param_sources>`) you can declare pip-installable packages in your track's ``dependencies`` section.
+``dependencies`` is an array of ``pip install`` targets, which Rally will manage when the benchmark begins::
+
+  "dependencies": [
+    "pytoml",
+    "git+https://github.com/elastic/apm-agent-python@main",
+    "eland<8.0.0"
+  ]
+
+
+Rally will manage the installation of the libraries in the target directory ``$RALLY_HOME/libs``, erasing its contents between races.
+
+.. warning::
+
+    Because modules will be loaded in the same environment as ``esrally`` itself, conflicts with Rally and its own dependencies are possible with the usage of Track Dependencies.
+    **It is highly recommended to use pinned versions and to carefully test dependencies for their impact on your benchmarks.**
+
 
 Examples
 ========

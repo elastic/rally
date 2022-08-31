@@ -19,6 +19,7 @@
 from unittest import mock
 
 from esrally import config, reporter
+from esrally.metrics import GlobalStats
 from esrally.utils import convert
 
 
@@ -77,3 +78,41 @@ class TestComparisonReporter:
     def test_diff_percent_ignore_formatter(self):
         formatted = self.reporter._diff(1, 0, False, formatter=convert.factor(100.0), as_percentage=True)
         assert formatted == "-100.00%"
+
+    def test_report_gc_metrics(self):
+        r1 = GlobalStats(
+            {
+                "young_gc_time": 100,
+                "young_gc_count": 1,
+                "old_gc_time": 200,
+                "old_gc_count": 1,
+                "zgc_cycles_gc_time": 300,
+                "zgc_cycles_gc_count": 1,
+                "zgc_pauses_gc_time": 400,
+                "zgc_pauses_gc_count": 1,
+            }
+        )
+
+        r2 = GlobalStats(
+            {
+                "young_gc_time": 200,
+                "young_gc_count": 2,
+                "old_gc_time": 300,
+                "old_gc_count": 2,
+                "zgc_cycles_gc_time": 400,
+                "zgc_cycles_gc_count": 2,
+                "zgc_pauses_gc_time": 500,
+                "zgc_pauses_gc_count": 2,
+            }
+        )
+        metrics = self.reporter._report_gc_metrics(r1, r2)
+        assert metrics == [
+            ["Total Young Gen GC time", "", 0.1, 0.2, "+0.10000", "s", "+100.00%"],
+            ["Total Young Gen GC count", "", 1, 2, "+1.00000", "", "+100.00%"],
+            ["Total Old Gen GC time", "", 0.2, 0.3, "+0.10000", "s", "+50.00%"],
+            ["Total Old Gen GC count", "", 1, 2, "+1.00000", "", "+100.00%"],
+            ["Total ZGC Cycles GC time", "", 0.3, 0.4, "+0.10000", "s", "+33.33%"],
+            ["Total ZGC Cycles GC count", "", 1, 2, "+1.00000", "", "+100.00%"],
+            ["Total ZGC Pauses GC time", "", 0.4, 0.5, "+0.10000", "s", "+25.00%"],
+            ["Total ZGC Pauses GC count", "", 1, 2, "+1.00000", "", "+100.00%"],
+        ]

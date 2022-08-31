@@ -315,6 +315,10 @@ class BarCharts:
         }
 
     @staticmethod
+    def disk_usage(title, environment, race_config):
+        return None
+
+    @staticmethod
     def ml_processing_time(title, environment, race_config):
         return None
 
@@ -570,6 +574,10 @@ class BarCharts:
     @staticmethod
     def ingest(title, environment, race_config):
         # TBD
+        return None
+
+    @staticmethod
+    def revisions_table(title, environment, race_config):
         return None
 
 
@@ -860,7 +868,7 @@ class TimeSeriesCharts:
                         "formatter": "number",
                         "id": str(uuid.uuid4()),
                         "line_width": "1",
-                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.max"}],
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.mean"}],
                         "point_size": "3",
                         "seperate_axis": 1,
                         "split_mode": "filters",
@@ -869,15 +877,41 @@ class TimeSeriesCharts:
                         "split_filters": [
                             {
                                 "filter": "ml_processing_time",
-                                "label": "Maximum ML processing time",
-                                "color": "rgba(0,191,179,1)",
+                                "label": "Mean ML processing time",
+                                "color": color_scheme_rgba[1],
                                 "id": str(uuid.uuid4()),
                             }
                         ],
-                        "label": "ML Time",
+                        "label": "ML Mean Time",
                         "value_template": "{{value}}",
                         "steps": 0,
-                    }
+                    },
+                    {
+                        "axis_position": "left",
+                        "chart_type": "line",
+                        "color": "#68BC00",
+                        "fill": "0",
+                        "formatter": "number",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "avg", "field": "value.median"}],
+                        "point_size": "3",
+                        "seperate_axis": 1,
+                        "split_mode": "filters",
+                        "stacked": "none",
+                        "filter": "",
+                        "split_filters": [
+                            {
+                                "filter": "ml_processing_time",
+                                "label": "Median ML processing time",
+                                "color": color_scheme_rgba[0],
+                                "id": str(uuid.uuid4()),
+                            }
+                        ],
+                        "label": "ML Median Time",
+                        "value_template": "{{value}}",
+                        "steps": 0,
+                    },
                 ],
                 "show_legend": 1,
                 "show_grid": 1,
@@ -998,6 +1032,82 @@ class TimeSeriesCharts:
                 "visState": json.dumps(vis_state),
                 "uiStateJSON": "{}",
                 "description": "io",
+                "version": 1,
+                "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
+            },
+        }
+
+    @staticmethod
+    def disk_usage(title, environment, race_config):
+        env_filter = TimeSeriesCharts.filter_string(environment, race_config)
+        annotations_query = f'((NOT _exists_:track) OR track:"{race_config.track}") AND ((NOT _exists_:chart) OR chart:disk_usage)'
+        vis_state = {
+            "title": title,
+            "type": "metrics",
+            "params": {
+                "axis_formatter": "number",
+                "axis_position": "left",
+                "id": str(uuid.uuid4()),
+                "index_pattern": "rally-results-*",
+                "interval": "1d",
+                "series": [
+                    {
+                        "axis_position": "left",
+                        "chart_type": "bar",
+                        "color": "#68BC00",
+                        "fill": "0.6",
+                        "formatter": "bytes",
+                        "id": str(uuid.uuid4()),
+                        "line_width": "1",
+                        "metrics": [{"id": str(uuid.uuid4()), "type": "sum", "field": "value.single"}],
+                        "point_size": 1,
+                        "seperate_axis": 1,
+                        "split_mode": "terms",
+                        "split_color_mode": "rainbow",
+                        "stacked": "stacked",
+                        "filter": "",
+                        "terms_size": "1000",
+                        "terms_order_by": "_key",
+                        "terms_direction": "asc",
+                        "terms_field": "field",
+                        "label": "Disk Usage",
+                        "value_template": "{{value}}",
+                        "steps": 0,
+                    }
+                ],
+                "show_legend": 1,
+                "show_grid": 1,
+                "drop_last_bucket": 0,
+                "time_field": "race-timestamp",
+                "type": "timeseries",
+                "filter": f"name:disk_usage_total {env_filter}",
+                "annotations": [
+                    {
+                        "fields": "message",
+                        "template": "{{message}}",
+                        "index_pattern": "rally-annotations",
+                        "query_string": annotations_query,
+                        "id": str(uuid.uuid4()),
+                        "color": "rgba(102,102,102,1)",
+                        "time_field": "race-timestamp",
+                        "icon": "fa-tag",
+                        "ignore_panel_filters": 1,
+                    }
+                ],
+                "axis_min": "0",
+            },
+            "aggs": [],
+            "listeners": {},
+        }
+
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(vis_state),
+                "uiStateJSON": "{}",
+                "description": "per field disk usage",
                 "version": 1,
                 "kibanaSavedObjectMeta": {"searchSourceJSON": '{"query":"*","filter":[]}'},
             },
@@ -1292,6 +1402,83 @@ class TimeSeriesCharts:
             },
         }
 
+    @staticmethod
+    def revisions_table(title, environment, race_config):
+        return {
+            "id": str(uuid.uuid4()),
+            "type": "visualization",
+            "attributes": {
+                "title": title,
+                "visState": json.dumps(
+                    {
+                        "title": title,
+                        "type": "table",
+                        "params": {
+                            "perPage": 15,
+                            "sort": {"columnIndex": 0, "direction": "desc"},
+                        },
+                        "aggs": [
+                            {"id": "1", "enabled": True, "type": "count", "params": {}, "schema": "metric"},
+                            {
+                                "id": "2",
+                                "enabled": True,
+                                "type": "date_histogram",
+                                "params": {
+                                    "field": "race-timestamp",
+                                    "interval": "d",
+                                    "customLabel": "day",
+                                },
+                                "schema": "bucket",
+                            },
+                            {
+                                "id": "3",
+                                "enabled": True,
+                                "type": "terms",
+                                "params": {
+                                    "field": "cluster.revision",
+                                    "size": 100,
+                                    "customLabel": "revision",
+                                },
+                                "schema": "bucket",
+                            },
+                            {
+                                "id": "4",
+                                "enabled": True,
+                                "type": "terms",
+                                "params": {
+                                    "field": "cluster.distribution-version",
+                                    "size": 100,
+                                    "customLabel": "version",
+                                },
+                                "schema": "bucket",
+                            },
+                        ],
+                        "listeners": {},
+                    }
+                ),
+                "uiStateJSON": "{}",
+                "description": "revisions",
+                "version": 1,
+                "kibanaSavedObjectMeta": {
+                    "searchSourceJSON": json.dumps(
+                        {
+                            "index": "rally-races-*",
+                            "query": {
+                                "query_string": {
+                                    "query": f'environment:"{environment}"'
+                                    f' AND track:"{race_config.track}"'
+                                    f' AND challenge:"{race_config.challenge}"'
+                                    f' AND car:"{race_config.car}"',
+                                    "analyze_wildcard": True,
+                                }
+                            },
+                            "filter": [],
+                        }
+                    )
+                },
+            },
+        }
+
 
 class RaceConfigTrack:
     def __init__(self, cfg, repository, name=None):
@@ -1373,6 +1560,19 @@ def generate_io(chart_type, race_configs, environment):
     return structures
 
 
+def generate_disk_usage(chart_type, race_configs, environment):
+    # output JSON structures
+    structures = []
+    for race_config in race_configs:
+        if "disk_usage" in race_config.charts:
+            title = chart_type.format_title(
+                environment, race_config.track, es_license=race_config.es_license, suffix="%s-disk-usage" % race_config.label
+            )
+            structures.append(chart_type.disk_usage(title, environment, race_config))
+
+    return structures
+
+
 def generate_gc(chart_type, race_configs, environment):
     structures = []
     for race_config in race_configs:
@@ -1425,6 +1625,19 @@ def generate_merge_count(chart_type, race_configs, environment):
             chart = chart_type.merge_count(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
+
+    return structures
+
+
+def generate_revisions(chart_type, race_configs, environment):
+    structures = []
+    for race_config in race_configs:
+        title = chart_type.format_title(
+            environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-revisions"
+        )
+        chart = chart_type.revisions_table(title, environment, race_config)
+        if chart is not None:
+            structures.append(chart)
 
     return structures
 
@@ -1565,7 +1778,8 @@ class RaceConfig:
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
                 # which tasks / or types of operations should be used for which chart types.
                 if (
-                    sub_task.operation.type in ["search", "composite", "eql", "paginated-search", "scroll-search"]
+                    sub_task.operation.type
+                    in ["search", "composite", "eql", "paginated-search", "scroll-search", "raw-request", "composite-agg"]
                     or "target-throughput" in sub_task.params
                     or "target-interval" in sub_task.params
                 ):
@@ -1632,11 +1846,13 @@ def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, log
         generate_index_ops(chart_type, race_configs, env, logger)
         + generate_ingest(chart_type, race_configs, env)
         + generate_io(chart_type, race_configs, env)
+        + generate_disk_usage(chart_type, race_configs, env)
         + generate_gc(chart_type, race_configs, env)
         + generate_merge_time(chart_type, race_configs, env)
         + generate_merge_count(chart_type, race_configs, env)
         + generate_ml_processing_time(chart_type, race_configs, env)
         + generate_queries(chart_type, race_configs, env)
+        + generate_revisions(chart_type, race_configs, env)
     )
 
     dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)

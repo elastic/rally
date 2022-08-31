@@ -324,6 +324,7 @@ class Heapdump(TelemetryDevice):
 
     def detach_from_node(self, node, running):
         if running:
+            io.ensure_dir(self.log_root)
             heap_dump_file = os.path.join(self.log_root, "heap_at_exit_{}.hprof".format(node.pid))
             console.info("{}: Writing heap dump to [{}]".format(self.human_name, heap_dump_file), logger=self.logger)
             cmd = "jmap -dump:format=b,file={} {}".format(heap_dump_file, node.pid)
@@ -459,8 +460,8 @@ class CcrStatsRecorder:
         try:
             ccr_stats_api_endpoint = "/_ccr/stats"
             filter_path = "follow_stats"
-            stats = self.client.transport.perform_request(
-                "GET", ccr_stats_api_endpoint, params={"human": "false", "filter_path": filter_path}
+            stats = self.client.perform_request(
+                method="GET", path=ccr_stats_api_endpoint, params={"human": "false", "filter_path": filter_path}
             )
         except elasticsearch.TransportError:
             msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on cluster [{}]".format(
@@ -836,6 +837,7 @@ class NodeStatsRecorder:
                 collected_node_stats.update(self.jvm_buffer_pool_stats(node_name, node_stats))
             if self.include_mem_stats:
                 collected_node_stats.update(self.jvm_mem_stats(node_name, node_stats))
+                collected_node_stats.update(self.os_mem_stats(node_name, node_stats))
             if self.include_gc_stats:
                 collected_node_stats.update(self.jvm_gc_stats(node_name, node_stats))
             if self.include_network:
@@ -872,7 +874,7 @@ class NodeStatsRecorder:
         if stats:
             return dict(iterate())
         else:
-            return dict()
+            return {}
 
     def indices_stats(self, node_name, node_stats, include):
         idx_stats = node_stats["indices"]
@@ -894,6 +896,9 @@ class NodeStatsRecorder:
 
     def jvm_mem_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_mem", stats=node_stats["jvm"]["mem"])
+
+    def os_mem_stats(self, node_name, node_stats):
+        return self.flatten_stats_fields(prefix="os_mem", stats=node_stats["os"]["mem"])
 
     def jvm_gc_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
@@ -1232,7 +1237,7 @@ class SearchableSnapshotsStatsRecorder:
             # we don't use the existing client support (searchable_snapshots.stats())
             # as the API is deliberately undocumented and might change:
             # https://www.elastic.co/guide/en/elasticsearch/reference/current/searchable-snapshots-api-stats.html
-            stats = self.client.transport.perform_request("GET", stats_api_endpoint, params={"level": level})
+            stats = self.client.perform_request(method="GET", path=stats_api_endpoint, params={"level": level})
         except elasticsearch.NotFoundError as e:
             if "No searchable snapshots indices found" in e.info.get("error").get("reason"):
                 self.logger.info(
@@ -1750,7 +1755,6 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
             return
         revision = client_info["version"]["build_hash"]
         distribution_version = client_info["version"]["number"]
-        # older versions (pre 6.3.0) don't expose a build_flavor property because the only (implicit) flavor was "oss".
         distribution_flavor = client_info["version"].get("build_flavor", "oss")
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
@@ -1843,28 +1847,25 @@ class JvmStatsSummary(InternalTelemetryDevice):
 
     def on_benchmark_stop(self):
         jvm_stats_at_end = self.jvm_stats()
-        total_old_gen_collection_time = 0
-        total_old_gen_collection_count = 0
-        total_young_gen_collection_time = 0
-        total_young_gen_collection_count = 0
+        total_collection_time = collections.defaultdict(int)
+        total_collection_count = collections.defaultdict(int)
 
         for node_name, jvm_stats_end in jvm_stats_at_end.items():
             if node_name in self.jvm_stats_per_node:
                 jvm_stats_start = self.jvm_stats_per_node[node_name]
-                young_gc_time = max(jvm_stats_end["young_gc_time"] - jvm_stats_start["young_gc_time"], 0)
-                young_gc_count = max(jvm_stats_end["young_gc_count"] - jvm_stats_start["young_gc_count"], 0)
-                old_gc_time = max(jvm_stats_end["old_gc_time"] - jvm_stats_start["old_gc_time"], 0)
-                old_gc_count = max(jvm_stats_end["old_gc_count"] - jvm_stats_start["old_gc_count"], 0)
+                collector_stats_start = jvm_stats_start["collectors"]
+                collector_stats_end = jvm_stats_end["collectors"]
+                for collector_name in collector_stats_start:
+                    gc_time_diff = max(collector_stats_end[collector_name]["gc_time"] - collector_stats_start[collector_name]["gc_time"], 0)
+                    gc_count_diff = max(
+                        collector_stats_end[collector_name]["gc_count"] - collector_stats_start[collector_name]["gc_count"], 0
+                    )
 
-                total_young_gen_collection_time += young_gc_time
-                total_young_gen_collection_count += young_gc_count
-                total_old_gen_collection_time += old_gc_time
-                total_old_gen_collection_count += old_gc_count
+                    total_collection_time[collector_name] += gc_time_diff
+                    total_collection_count[collector_name] += gc_count_diff
 
-                self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
-                self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_count", young_gc_count)
-                self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
-                self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_count", old_gc_count)
+                    self.metrics_store.put_value_node_level(node_name, f"node_{collector_name}_gc_time", gc_time_diff, "ms")
+                    self.metrics_store.put_value_node_level(node_name, f"node_{collector_name}_gc_count", gc_count_diff)
 
                 all_pool_stats = {"name": "jvm_memory_pool_stats"}
                 for pool_name, pool_stats in jvm_stats_end["pools"].items():
@@ -1874,10 +1875,10 @@ class JvmStatsSummary(InternalTelemetryDevice):
             else:
                 self.logger.warning("Cannot determine JVM stats for [%s] (not in the cluster at the start of the benchmark).", node_name)
 
-        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
-        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_count", total_young_gen_collection_count)
-        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
-        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_count", total_old_gen_collection_count)
+        for collector_name, value in total_collection_time.items():
+            self.metrics_store.put_value_cluster_level(f"node_total_{collector_name}_gc_time", value, "ms")
+        for collector_name, value in total_collection_count.items():
+            self.metrics_store.put_value_cluster_level(f"node_total_{collector_name}_gc_count", value)
 
         self.jvm_stats_per_node = None
 
@@ -1888,7 +1889,7 @@ class JvmStatsSummary(InternalTelemetryDevice):
         import elasticsearch
 
         try:
-            stats = self.client.nodes.stats(metric="_all")
+            stats = self.client.nodes.stats(metric="jvm")
         except elasticsearch.TransportError:
             self.logger.exception("Could not retrieve GC times.")
             return jvm_stats
@@ -1896,17 +1897,21 @@ class JvmStatsSummary(InternalTelemetryDevice):
         for node in nodes.values():
             node_name = node["name"]
             gc = node["jvm"]["gc"]["collectors"]
-            old_gen_collection_time = gc["old"]["collection_time_in_millis"]
-            old_gen_collection_count = gc["old"]["collection_count"]
-            young_gen_collection_time = gc["young"]["collection_time_in_millis"]
-            young_gen_collection_count = gc["young"]["collection_count"]
             jvm_stats[node_name] = {
-                "young_gc_time": young_gen_collection_time,
-                "young_gc_count": young_gen_collection_count,
-                "old_gc_time": old_gen_collection_time,
-                "old_gc_count": old_gen_collection_count,
                 "pools": {},
+                "collectors": {},
             }
+            for collector_name, collector_stats in gc.items():
+                collection_time = collector_stats.get("collection_time_in_millis", 0)
+                collection_count = collector_stats.get("collection_count", 0)
+                if collector_name in ("young", "old"):
+                    metric_prefix = f"{collector_name}_gen"
+                else:
+                    metric_prefix = collector_name.lower().replace(" ", "_")
+                jvm_stats[node_name]["collectors"][metric_prefix] = {
+                    "gc_time": collection_time,
+                    "gc_count": collection_count,
+                }
             pool_usage = node["jvm"]["mem"]["pools"]
             for pool_name, pool_stats in pool_usage.items():
                 jvm_stats[node_name]["pools"][pool_name] = {"peak": pool_stats["peak_used_in_bytes"]}
@@ -2238,7 +2243,7 @@ class DiskUsageStats(TelemetryDevice):
     human_name = "Disk usage of each field"
     help = "Runs the indices disk usage API after benchmarking"
 
-    def __init__(self, telemetry_params, client, metrics_store, index_names):
+    def __init__(self, telemetry_params, client, metrics_store, index_names, data_stream_names):
         """
         :param telemetry_params: The configuration object for telemetry_params.
             May specify:
@@ -2246,23 +2251,35 @@ class DiskUsageStats(TelemetryDevice):
                 usage to fetch. Default is all indices in the track.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
+        :param index_names: Names of indices defined by this track
+        :param data_stream_names: Names of data streams defined by this track
         """
         super().__init__()
         self.telemetry_params = telemetry_params
         self.client = client
         self.metrics_store = metrics_store
         self.index_names = index_names
+        self.data_stream_names = data_stream_names
+
+    def on_benchmark_start(self):
+        self.indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names + self.data_stream_names))
+        if not self.indices:
+            msg = (
+                "No indices defined for disk-usage-stats. Set disk-usage-stats-indices "
+                "telemetry param or add indices or data streams to the track config."
+            )
+            self.logger.exception(msg)
+            raise exceptions.RallyError(msg)
 
     def on_benchmark_stop(self):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
-        indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names))
         found = False
-        for index in indices.split(","):
+        for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
-                response = self.client.transport.perform_request("POST", f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
+                response = self.client.perform_request(method="POST", path=f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
             except elasticsearch.RequestError:
                 msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)
@@ -2274,7 +2291,7 @@ class DiskUsageStats(TelemetryDevice):
             found = True
             self.handle_telemetry_usage(response)
         if not found:
-            msg = f"Couldn't find any indices for disk usage {indices}"
+            msg = f"Couldn't find any indices for disk usage {self.indices}"
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 

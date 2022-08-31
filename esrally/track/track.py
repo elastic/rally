@@ -433,7 +433,9 @@ class Track:
         composable_templates=None,
         component_templates=None,
         corpora=None,
+        dependencies=None,
         has_plugins=False,
+        root=None,
     ):
         """
 
@@ -449,6 +451,7 @@ class Track:
         :param templates: A list of index templates for this track. May be None.
         :param corpora: A list of document corpus definitions for this track. May be None.
         :param has_plugins: True iff the track also defines plugins (e.g. custom runners or parameter sources).
+        :param root: The absolute path to the directory containing the track file(s).
         """
         self.name = name
         self.meta_data = meta_data if meta_data else {}
@@ -460,7 +463,9 @@ class Track:
         self.templates = templates if templates else []
         self.composable_templates = composable_templates if composable_templates else []
         self.component_templates = component_templates if component_templates else []
+        self.dependencies = dependencies if dependencies else []
         self.has_plugins = has_plugins
+        self.root = root
 
     @property
     def default_challenge(self):
@@ -532,6 +537,9 @@ class Track:
 
     def index_names(self):
         return [i.name for i in self.indices]
+
+    def data_stream_names(self):
+        return [i.name for i in self.data_streams]
 
     def __str__(self):
         return self.name
@@ -676,6 +684,9 @@ class OperationType(Enum):
     OpenPointInTime = 14
     ClosePointInTime = 15
     Sql = 16
+    FieldCaps = 17
+    CompositeAgg = 18
+    WaitForCurrentSnapshotsCreate = 19
 
     # administrative actions
     ForceMerge = 1001
@@ -743,6 +754,8 @@ class OperationType(Enum):
             return OperationType.ScrollSearch
         elif v == "paginated-search":
             return OperationType.PaginatedSearch
+        elif v == "composite-agg":
+            return OperationType.CompositeAgg
         elif v == "cluster-health":
             return OperationType.ClusterHealth
         elif v == "bulk":
@@ -797,6 +810,8 @@ class OperationType(Enum):
             return OperationType.CreateSnapshot
         elif v == "wait-for-snapshot-create":
             return OperationType.WaitForSnapshotCreate
+        elif v == "wait-for-current-snapshots-create":
+            return OperationType.WaitForCurrentSnapshotsCreate
         elif v == "restore-snapshot":
             return OperationType.RestoreSnapshot
         elif v == "wait-for-recovery":
@@ -835,6 +850,8 @@ class OperationType(Enum):
             return OperationType.DeleteIlmPolicy
         elif v == "sql":
             return OperationType.Sql
+        elif v == "field-caps":
+            return OperationType.FieldCaps
         else:
             raise KeyError(f"No enum value for [{v}]")
 

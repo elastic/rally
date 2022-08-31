@@ -1,0 +1,6 @@
+---
+
+jjbb-template: precommit.yml
+vars:
+  - jobname: periodic
+  - branch: master

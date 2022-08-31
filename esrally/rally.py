@@ -20,6 +20,7 @@ import datetime
 import logging
 import os
 import platform
+import shutil
 import sys
 import time
 import uuid
@@ -179,11 +180,16 @@ def create_arg_parser():
         required=True,
         help="Name of the generated track",
     )
-    create_track_parser.add_argument(
+    indices_or_data_streams_group = create_track_parser.add_mutually_exclusive_group(required=True)
+    indices_or_data_streams_group.add_argument(
         "--indices",
         type=non_empty_list,
-        required=True,
         help="Comma-separated list of indices to include in the track",
+    )
+    indices_or_data_streams_group.add_argument(
+        "--data-streams",
+        type=non_empty_list,
+        help="Comma-separated list of data streams to include in the track",
     )
     create_track_parser.add_argument(
         "--target-hosts",
@@ -311,7 +317,7 @@ def create_arg_parser():
     install_parser.add_argument(
         "--revision",
         help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
-        " 'latest' fetches the latest version on master. It is also possible to specify a commit id or a timestamp."
+        " 'latest' fetches the latest version on the main branch. It is also possible to specify a commit id or a timestamp."
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current).',
         default="current",
@@ -400,6 +406,12 @@ def create_arg_parser():
         help="A comma-separated list of the initial seed host IPs",
         default="",
     )
+    for p in [race_parser, install_parser]:
+        p.add_argument(
+            "--cluster-name",
+            help="The name of this Elasticsearch cluster",
+            default="rally-benchmark",
+        )
 
     start_parser = subparsers.add_parser("start", help="Starts an Elasticsearch node locally")
     start_parser.add_argument(
@@ -822,7 +834,8 @@ def with_actor_system(runnable, cfg):
                 raise exceptions.UserInterrupted(
                     f"User has cancelled the benchmark (shutdown not complete as user interrupted " f"{times_interrupted} times)."
                 ) from None
-            elif not shutdown_complete:
+
+            if not shutdown_complete:
                 console.warn(
                     "Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes."
                 )
@@ -887,7 +900,7 @@ def configure_connection_params(arg_parser, args, cfg):
     cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
     client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
     cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
-    if list(target_hosts.all_hosts) != list(client_options.all_client_options):
+    if set(target_hosts.all_hosts) != set(client_options.all_client_options):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
 
 
@@ -903,6 +916,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
 
     cfg.add(config.Scope.application, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.application, "system", "offline.mode", args.offline)
+    logger = logging.getLogger(__name__)
 
     try:
         if sub_command == "compare":
@@ -927,6 +941,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "cluster.name", args.cluster_name)
             cfg.add(config.Scope.applicationOverride, "mechanic", "master.nodes", opts.csv_to_list(args.master_nodes))
             cfg.add(config.Scope.applicationOverride, "mechanic", "seed.hosts", opts.csv_to_list(args.seed_hosts))
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
@@ -970,6 +985,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
             cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
             cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", convert.to_bool(args.skip_rest_api_check))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "cluster.name", args.cluster_name)
 
             configure_reporting_params(args, cfg)
             race(cfg, args.kill_running_processes)
@@ -979,9 +995,16 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             generate(cfg)
         elif sub_command == "create-track":
-            cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
-            cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-            cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            if args.data_streams is not None:
+                cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
+                cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
+                cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            elif args.indices is not None:
+                cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
+                cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
+                cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
+                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
             configure_connection_params(arg_parser, args, cfg)
 
             tracker.create_track(cfg)
@@ -992,27 +1015,17 @@ def dispatch_sub_command(arg_parser, args, cfg):
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return ExitStatus.SUCCESSFUL
     except (exceptions.UserInterrupted, KeyboardInterrupt) as e:
-        logging.getLogger(__name__).info("User has cancelled the subcommand [%s].", sub_command, exc_info=e)
+        logger.info("User has cancelled the subcommand [%s].", sub_command, exc_info=e)
         console.info("Aborted %s. %s" % (sub_command, e))
         return ExitStatus.INTERRUPTED
     except exceptions.RallyError as e:
-        logging.getLogger(__name__).exception("Cannot run subcommand [%s].", sub_command)
-        msg = str(e.message)
-        nesting = 0
-        while hasattr(e, "cause") and e.cause:
-            nesting += 1
-            e = e.cause
-            if hasattr(e, "message"):
-                msg += "\n%s%s" % ("\t" * nesting, e.message)
-            else:
-                msg += "\n%s%s" % ("\t" * nesting, str(e))
-
-        console.error("Cannot %s. %s" % (sub_command, msg))
+        logger.exception("Cannot run subcommand [%s].", sub_command)
+        console.error("Cannot %s. %s" % (sub_command, e.full_message))
         console.println("")
         print_help_on_errors()
         return ExitStatus.ERROR
     except BaseException as e:
-        logging.getLogger(__name__).exception("A fatal error occurred while running subcommand [%s].", sub_command)
+        logger.exception("A fatal error occurred while running subcommand [%s].", sub_command)
         console.error("Cannot %s. %s." % (sub_command, e))
         console.println("")
         print_help_on_errors()
@@ -1032,6 +1045,10 @@ def main():
     arg_parser = create_arg_parser()
     args = arg_parser.parse_args()
 
+    if args.subcommand is None:
+        arg_parser.print_help()
+        sys.exit(0)
+
     console.init(quiet=args.quiet)
     console.println(BANNER)
 
@@ -1050,13 +1067,17 @@ def main():
     logger.debug("Command line arguments: %s", args)
     # Configure networking
     net.init()
-    if not args.offline:
-        probing_url = cfg.opts("system", "probing.url", default_value="https://github.com", mandatory=False)
-        if not net.has_internet_connection(probing_url):
-            console.warn("No Internet connection detected. Automatic download of track data sets etc. is disabled.", logger=logger)
-            cfg.add(config.Scope.applicationOverride, "system", "offline.mode", True)
-        else:
-            logger.info("Detected a working Internet connection.")
+
+    def _trap(function, path, exc_info):
+        if exc_info[0] == FileNotFoundError:
+            # couldn't delete because it was already clean
+            return
+        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
+        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
+
+    # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
+    logging.info("Cleaning track dependency directory [%s]...", paths.libs())
+    shutil.rmtree(paths.libs(), onerror=_trap)
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 

@@ -6,7 +6,7 @@
 # not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#	http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
@@ -16,7 +16,8 @@
 # under the License.
 
 import sys
-# we don't include matplotlib in setup.py as it's just a development dependency
+
+# we don't add matplotlib as a dependency as it's infrequently used and heavy
 try:
     import matplotlib
     import matplotlib.pyplot as plt
@@ -58,14 +59,14 @@ def main():
     ax.set_title("Poisson schedule")
     ax.plot(tnp, yn, "o-")
 
-    plt.xlabel('time [s]')
+    plt.xlabel("time [s]")
 
     if len(sys.argv) == 2:
         output_file_path = sys.argv[1]
         print("Saving output to [%s]" % output_file_path)
-        plt.savefig(output_file_path, bbox_inches='tight')
+        plt.savefig(output_file_path, bbox_inches="tight")
     plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

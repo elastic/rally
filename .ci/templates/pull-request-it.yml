@@ -1,0 +1,28 @@
+---
+
+- job:
+    name: "elastic+rally+pull-request+it-python{py_version}"
+    display-name: "elastic / rally # pull-request+it-python{py_version}"
+    description: "Integration tests for rally pull requests (Python {py_version})"
+    scm:
+      - git:
+          refspec: "+refs/pull/*:refs/remotes/origin/pr/* +refs/heads/*:refs/remotes/origin/*"
+          branches:
+            - "${ghprbActualCommit}"
+    triggers:
+      - github-pull-request:
+          org-list:
+            - elastic
+          allow-whitelist-orgs-as-admins: true
+          trigger-phrase: '.*run\W+rally/it.*'
+          github-hooks: true
+          status-context: "rally/it-python{py_version}"
+          cancel-builds-on-update: true
+          black-list-labels:
+            - '>test-mute'
+    builders:
+      - shell: |
+          #!/usr/local/bin/runbld
+          set -o errexit
+          bash .ci/build.sh it{py_version}
+          bash .ci/build.sh archive
