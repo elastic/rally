@@ -16,7 +16,7 @@
 # under the License.
 
 import random
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 

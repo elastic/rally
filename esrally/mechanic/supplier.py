@@ -39,7 +39,7 @@ def create(cfg, sources, distribution, car, plugins=None):
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision", mandatory=sources))
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, plugins, revisions, distribution_version)
-    build_needed = any([build for _, _, build in supply_requirements.values()])
+    build_needed = any(build for _, _, build in supply_requirements.values())
     es_supplier_type, es_version, _ = supply_requirements["elasticsearch"]
     src_config = cfg.all_opts("source")
     suppliers = []
@@ -142,8 +142,7 @@ def _required_version(version):
             "Could not determine version. Please specify the Elasticsearch distribution "
             "to download with the command line parameter --distribution-version."
         )
-    else:
-        return version
+    return version
 
 
 def _required_revision(revisions, key, name=None):
@@ -183,10 +182,9 @@ def _supply_requirements(sources, distribution, plugins, revisions, distribution
                     plugin_revision = revisions.get("all")
                     if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
                         raise exceptions.SystemSetupError("No revision specified for plugin [%s]." % plugin.name)
-                    else:
-                        logging.getLogger(__name__).info(
-                            "Revision for [%s] is not explicitly defined. Using catch-all revision [%s].", plugin.name, plugin_revision
-                        )
+                    logging.getLogger(__name__).info(
+                        "Revision for [%s] is not explicitly defined. Using catch-all revision [%s].", plugin.name, plugin_revision
+                    )
                 supply_requirements[plugin.name] = ("source", plugin_revision, True)
             else:
                 supply_requirements[plugin.name] = (distribution, _required_version(distribution_version), False)
@@ -425,7 +423,8 @@ class ExternalPluginSourceSupplier:
         dir_cfg_key = "plugin.%s.src.dir" % self.plugin.name
         if dir_cfg_key in self.src_config and subdir_cfg_key in self.src_config:
             raise exceptions.SystemSetupError("Can only specify one of %s and %s but both are set." % (dir_cfg_key, subdir_cfg_key))
-        elif dir_cfg_key in self.src_config:
+
+        if dir_cfg_key in self.src_config:
             self.plugin_src_dir = _config_value(self.src_config, dir_cfg_key)
             # we must build directly in the plugin dir, not relative to Elasticsearch
             self.override_build_dir = self.plugin_src_dir
@@ -734,8 +733,7 @@ class DistributionRepository:
         except KeyError:
             if mandatory:
                 raise exceptions.SystemSetupError("Neither config key [{}] nor [{}] is defined.".format(user_defined_key, default_key))
-            else:
-                return None
+            return None
         return self.template_renderer.render(url_template)
 
     @property

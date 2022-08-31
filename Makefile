@@ -67,6 +67,8 @@ install-user: venv-create
 install: install-user
 	# Also install development dependencies
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop]
+	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install git+https://github.com/elastic/pytest-rally.git
+
 
 clean: nondocs-clean docs-clean
 
@@ -91,13 +93,10 @@ tox-env-clean:
 	rm -rf .tox
 
 lint: check-venv
-	@. $(VENV_ACTIVATE_FILE); find esrally benchmarks scripts tests it -name "*.py" -exec pylint -j0 -rn --rcfile=$(CURDIR)/.pylintrc \{\} +
-	@. $(VENV_ACTIVATE_FILE); black --check --diff .
-	@. $(VENV_ACTIVATE_FILE); isort --check --diff .
+	@. $(VENV_ACTIVATE_FILE); pre-commit run --all-files
 
-format: check-venv
-	@. $(VENV_ACTIVATE_FILE); black .
-	@. $(VENV_ACTIVATE_FILE); isort .
+# pre-commit run also formats files, but let's keep `make format` for convenience
+format: lint
 
 docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
@@ -127,6 +126,9 @@ it39: check-venv python-caches-clean tox-env-clean
 
 it310: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py310-it
+
+rally-tracks-compat: check-venv python-caches-clean tox-env-clean
+	. $(VENV_ACTIVATE_FILE); tox -e rally-tracks-compat
 
 check-all: lint test it
 

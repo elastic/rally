@@ -41,7 +41,7 @@ templates_path = ["_templates"]
 # source_suffix = ['.rst', '.md']
 source_suffix = ".rst"
 root_doc = "index"
-language = None
+language = "en"
 
 CI_VARS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".ci", "variables.json")
 
@@ -54,8 +54,15 @@ def read_min_python_version():
         raise ConfigError(f"Failed building docs as required key [{e}] couldn't be found in the file [{CI_VARS}].")
 
 
+def get_es_client_version():
+    import elasticsearch
+
+    return ".".join(map(str, elasticsearch.__version__))
+
+
 GLOBAL_SUBSTITUTIONS = {
     "{MIN_PY_VER}": read_min_python_version(),
+    "{ES_CLIENT_VER}": get_es_client_version(),
 }
 
 
@@ -82,6 +89,7 @@ rst_prolog = f"""
 .. |year| replace:: {year}
 .. |MIN_PY_VER| replace:: {read_min_python_version()}
 .. |min_es_version| replace:: {read_min_es_version()}
+.. |ES_CLIENT_VER| replace:: {get_es_client_version()}
 """
 
 # General information about the project.

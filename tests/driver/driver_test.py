@@ -20,8 +20,8 @@ import collections
 import io
 import threading
 import time
-import unittest.mock as mock
 from datetime import datetime
+from unittest import mock
 
 import elasticsearch
 import pytest
