@@ -28,20 +28,22 @@ import pytest
 import it
 
 
-@it.random_rally_config
-def test_tar_distributions(cfg):
+@pytest.mark.parametrize("dist", it.DISTRIBUTIONS)
+@pytest.mark.parametrize("track", it.TRACKS)
+@pytest.mark.parametrize("cfg", [random.choice(it.CONFIG_NAMES)])
+def test_tar_distributions(cfg, dist, track):
     port = 19200
-    for dist in it.DISTRIBUTIONS:
-        for track in it.TRACKS:
-            it.wait_until_port_is_free(port_number=port)
-            assert (
-                it.race(
-                    cfg,
-                    f'--distribution-version="{dist}" --track="{track}" '
-                    f"--test-mode --car=4gheap,basic-license --target-hosts=127.0.0.1:{port}",
-                )
-                == 0
-            )
+    it.wait_until_port_is_free(port_number=port)
+
+    enable_assertions = track != "http_logs"  # http_logs assertions fail in test mode
+    assert (
+        it.race(
+            cfg,
+            f'--distribution-version="{dist}" --track="{track}" --test-mode --car=4gheap,basic-license --target-hosts=127.0.0.1:{port}',
+            enable_assertions=enable_assertions,
+        )
+        == 0
+    )
 
 
 @it.random_rally_config
