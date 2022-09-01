@@ -53,534 +53,6 @@ def index_label(race_config):
     return label
 
 
-class BarCharts:
-    UI_STATE_JSON = json.dumps({"vis": {"colors": dict(zip(["bare", "docker", "ear"], color_scheme_rgba))}})
-
-    @staticmethod
-    # flavor's unused but we need the same signature used by the corresponding method in TimeSeriesCharts
-    def format_title(environment, track_name, flavor=None, es_license=None, suffix=None):
-        title = f"{environment}-{track_name}"
-
-        if suffix:
-            title += f"-{suffix}"
-
-        return title
-
-    @staticmethod
-    def filter_string(environment, race_config):
-        if race_config.name:
-            return f'environment:"{environment}" AND active:true AND user-tags.name:"{race_config.name}"'
-        else:
-            return (
-                f'environment:"{environment}" AND active:true AND track:"{race_config.track}"'
-                f' AND challenge:"{race_config.challenge}" AND car:"{race_config.car}" AND node-count:{race_config.node_count}'
-            )
-
-    @staticmethod
-    def gc(title, environment, race_config):
-        vis_state = {
-            "title": title,
-            "type": "histogram",
-            "params": {
-                "addLegend": True,
-                "addTimeMarker": False,
-                "addTooltip": True,
-                "categoryAxes": [
-                    {
-                        "id": "CategoryAxis-1",
-                        "labels": {"show": True, "truncate": 100},
-                        "position": "bottom",
-                        "scale": {"type": "linear"},
-                        "show": True,
-                        "style": {},
-                        "title": {"text": "filters"},
-                        "type": "category",
-                    }
-                ],
-                "defaultYExtents": False,
-                "drawLinesBetweenPoints": True,
-                "grid": {"categoryLines": False, "style": {"color": "#eee"}},
-                "interpolate": "linear",
-                "legendPosition": "right",
-                "radiusRatio": 9,
-                "scale": "linear",
-                "seriesParams": [
-                    {
-                        "data": {"id": "1", "label": "Total GC Duration [ms]"},
-                        "drawLinesBetweenPoints": True,
-                        "mode": "normal",
-                        "show": "True",
-                        "showCircles": True,
-                        "type": "histogram",
-                        "valueAxis": "ValueAxis-1",
-                    }
-                ],
-                "setYExtents": False,
-                "showCircles": True,
-                "times": [],
-                "valueAxes": [
-                    {
-                        "id": "ValueAxis-1",
-                        "labels": {"filter": False, "rotate": 0, "show": True, "truncate": 100},
-                        "name": "LeftAxis-1",
-                        "position": "left",
-                        "scale": {"mode": "normal", "type": "linear"},
-                        "show": True,
-                        "style": {},
-                        "title": {"text": "Total GC Duration [ms]"},
-                        "type": "value",
-                    }
-                ],
-            },
-            "aggs": [
-                {
-                    "id": "1",
-                    "enabled": True,
-                    "type": "median",
-                    "schema": "metric",
-                    "params": {"field": "value.single", "percents": [50], "customLabel": "Total GC Duration [ms]"},
-                },
-                {
-                    "id": "2",
-                    "enabled": True,
-                    "type": "filters",
-                    "schema": "segment",
-                    "params": {
-                        "filters": [
-                            {
-                                "input": {"query": {"query_string": {"query": "name:young_gc_time", "analyze_wildcard": True}}},
-                                "label": "Young GC",
-                            },
-                            {
-                                "input": {"query": {"query_string": {"query": "name:old_gc_time", "analyze_wildcard": True}}},
-                                "label": "Old GC",
-                            },
-                        ]
-                    },
-                },
-                {
-                    "id": "3",
-                    "enabled": True,
-                    "type": "terms",
-                    "schema": "split",
-                    "params": {"field": "distribution-version", "size": 10, "order": "asc", "orderBy": "_term", "row": False},
-                },
-                {
-                    "id": "4",
-                    "enabled": True,
-                    "type": "terms",
-                    "schema": "group",
-                    "params": {"field": "user-tags.setup", "size": 5, "order": "desc", "orderBy": "_term"},
-                },
-            ],
-            "listeners": {},
-        }
-
-        search_source = {
-            "index": "rally-results-*",
-            "query": {"query_string": {"query": BarCharts.filter_string(environment, race_config), "analyze_wildcard": True}},
-            "filter": [],
-        }
-
-        return {
-            "id": str(uuid.uuid4()),
-            "type": "visualization",
-            "attributes": {
-                "title": title,
-                "visState": json.dumps(vis_state),
-                "uiStateJSON": BarCharts.UI_STATE_JSON,
-                "description": "gc",
-                "version": 1,
-                "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps(search_source)},
-            },
-        }
-
-    @staticmethod
-    def io(title, environment, race_config):
-        vis_state = {
-            "title": title,
-            "type": "histogram",
-            "params": {
-                "addLegend": True,
-                "addTimeMarker": False,
-                "addTooltip": True,
-                "categoryAxes": [
-                    {
-                        "id": "CategoryAxis-1",
-                        "labels": {"show": True, "truncate": 100},
-                        "position": "bottom",
-                        "scale": {"type": "linear"},
-                        "show": True,
-                        "style": {},
-                        "title": {"text": "filters"},
-                        "type": "category",
-                    }
-                ],
-                "defaultYExtents": False,
-                "drawLinesBetweenPoints": True,
-                "grid": {"categoryLines": False, "style": {"color": "#eee"}},
-                "interpolate": "linear",
-                "legendPosition": "right",
-                "radiusRatio": 9,
-                "scale": "linear",
-                "seriesParams": [
-                    {
-                        "data": {"id": "1", "label": "[Bytes]"},
-                        "drawLinesBetweenPoints": True,
-                        "mode": "normal",
-                        "show": "True",
-                        "showCircles": True,
-                        "type": "histogram",
-                        "valueAxis": "ValueAxis-1",
-                    }
-                ],
-                "setYExtents": False,
-                "showCircles": True,
-                "times": [],
-                "valueAxes": [
-                    {
-                        "id": "ValueAxis-1",
-                        "labels": {"filter": False, "rotate": 0, "show": True, "truncate": 100},
-                        "name": "LeftAxis-1",
-                        "position": "left",
-                        "scale": {"mode": "normal", "type": "linear"},
-                        "show": True,
-                        "style": {},
-                        "title": {"text": "[Bytes]"},
-                        "type": "value",
-                    }
-                ],
-            },
-            "aggs": [
-                {
-                    "id": "1",
-                    "enabled": True,
-                    "type": "sum",
-                    "schema": "metric",
-                    "params": {"field": "value.single", "customLabel": "[Bytes]"},
-                },
-                {
-                    "id": "2",
-                    "enabled": True,
-                    "type": "filters",
-                    "schema": "segment",
-                    "params": {
-                        "filters": [
-                            {
-                                "input": {"query": {"query_string": {"analyze_wildcard": True, "query": "name:index_size"}}},
-                                "label": "Index size",
-                            },
-                            {
-                                "input": {"query": {"query_string": {"analyze_wildcard": True, "query": "name:bytes_written"}}},
-                                "label": "Bytes written",
-                            },
-                        ]
-                    },
-                },
-                {
-                    "id": "3",
-                    "enabled": True,
-                    "type": "terms",
-                    "schema": "split",
-                    "params": {"field": "distribution-version", "size": 10, "order": "asc", "orderBy": "_term", "row": False},
-                },
-                {
-                    "id": "4",
-                    "enabled": True,
-                    "type": "terms",
-                    "schema": "group",
-                    "params": {"field": "user-tags.setup", "size": 5, "order": "desc", "orderBy": "_term"},
-                },
-            ],
-            "listeners": {},
-        }
-
-        search_source = {
-            "index": "rally-results-*",
-            "query": {"query_string": {"query": BarCharts.filter_string(environment, race_config), "analyze_wildcard": True}},
-            "filter": [],
-        }
-
-        return {
-            "id": str(uuid.uuid4()),
-            "type": "visualization",
-            "attributes": {
-                "title": title,
-                "visState": json.dumps(vis_state),
-                "uiStateJSON": BarCharts.UI_STATE_JSON,
-                "description": "io",
-                "version": 1,
-                "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps(search_source)},
-            },
-        }
-
-    @staticmethod
-    def disk_usage(title, environment, race_config):
-        return None
-
-    @staticmethod
-    def ml_processing_time(title, environment, race_config):
-        return None
-
-    @staticmethod
-    def merge_count(title, environment, race_config):
-        return None
-
-    @staticmethod
-    def merge_time(title, environment, race_config):
-        return None
-
-    @staticmethod
-    def query(environment, race_config, q, iterations):
-        metric = "service_time"
-        if iterations < 100:
-            prefix = "p90"
-            field = "value.90_0"
-        else:
-            prefix = "p99"
-            field = "value.99_0"
-
-        title = BarCharts.format_title(environment, race_config.track, suffix=f"{race_config.label}-{q}-{prefix}-{metric}")
-        label = "Query Service Time [ms]"
-
-        vis_state = {
-            "title": title,
-            "type": "histogram",
-            "params": {
-                "addLegend": True,
-                "addTimeMarker": False,
-                "addTooltip": True,
-                "categoryAxes": [
-                    {
-                        "id": "CategoryAxis-1",
-                        "labels": {"show": True, "truncate": 100},
-                        "position": "bottom",
-                        "scale": {"type": "linear"},
-                        "show": True,
-                        "style": {},
-                        "title": {"text": "distribution-version: Ascending"},
-                        "type": "category",
-                    }
-                ],
-                "defaultYExtents": False,
-                "drawLinesBetweenPoints": True,
-                "grid": {"categoryLines": False, "style": {"color": "#eee"}},
-                "interpolate": "linear",
-                "legendPosition": "right",
-                "radiusRatio": 9,
-                "scale": "linear",
-                "seriesParams": [
-                    {
-                        "data": {"id": "1", "label": label},
-                        "drawLinesBetweenPoints": True,
-                        "mode": "normal",
-                        "show": "True",
-                        "showCircles": True,
-                        "type": "histogram",
-                        "valueAxis": "ValueAxis-1",
-                    }
-                ],
-                "setYExtents": False,
-                "showCircles": True,
-                "times": [],
-                "valueAxes": [
-                    {
-                        "id": "ValueAxis-1",
-                        "labels": {"filter": False, "rotate": 0, "show": True, "truncate": 100},
-                        "name": "LeftAxis-1",
-                        "position": "left",
-                        "scale": {"mode": "normal", "type": "linear"},
-                        "show": True,
-                        "style": {},
-                        "title": {"text": label},
-                        "type": "value",
-                    }
-                ],
-            },
-            "aggs": [
-                {
-                    "id": "1",
-                    "enabled": True,
-                    "type": "median",
-                    "schema": "metric",
-                    "params": {"field": field, "percents": [50], "customLabel": label},
-                },
-                {
-                    "id": "2",
-                    "enabled": True,
-                    "type": "terms",
-                    "schema": "segment",
-                    "params": {"field": "distribution-version", "size": 10, "order": "asc", "orderBy": "_term"},
-                },
-                {
-                    "id": "3",
-                    "enabled": True,
-                    "type": "terms",
-                    "schema": "group",
-                    "params": {"field": "user-tags.setup", "size": 10, "order": "desc", "orderBy": "_term"},
-                },
-            ],
-            "listeners": {},
-        }
-
-        search_source = {
-            "index": "rally-results-*",
-            "query": {
-                "query_string": {
-                    "query": 'name:"%s" AND task:"%s" AND %s' % (metric, q, BarCharts.filter_string(environment, race_config)),
-                    "analyze_wildcard": True,
-                }
-            },
-            "filter": [],
-        }
-
-        return {
-            "id": str(uuid.uuid4()),
-            "type": "visualization",
-            "attributes": {
-                "title": title,
-                "visState": json.dumps(vis_state),
-                "uiStateJSON": BarCharts.UI_STATE_JSON,
-                "description": "query",
-                "version": 1,
-                "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps(search_source)},
-            },
-        }
-
-    @staticmethod
-    def index(environment, race_configs, title):
-        filters = []
-        for race_config in race_configs:
-            label = index_label(race_config)
-            # the assumption is that we only have one bulk task
-            for bulk_task in race_config.bulk_tasks:
-                filters.append(
-                    {
-                        "input": {
-                            "query": {
-                                "query_string": {
-                                    "analyze_wildcard": True,
-                                    "query": 'task:"%s" AND %s' % (bulk_task, BarCharts.filter_string(environment, race_config)),
-                                }
-                            }
-                        },
-                        "label": label,
-                    }
-                )
-
-        vis_state = {
-            "aggs": [
-                {
-                    "enabled": True,
-                    "id": "1",
-                    "params": {"customLabel": "Median Indexing Throughput [docs/s]", "field": "value.median", "percents": [50]},
-                    "schema": "metric",
-                    "type": "median",
-                },
-                {
-                    "enabled": True,
-                    "id": "2",
-                    "params": {"field": "distribution-version", "order": "asc", "orderBy": "_term", "size": 10},
-                    "schema": "segment",
-                    "type": "terms",
-                },
-                {
-                    "enabled": True,
-                    "id": "3",
-                    "params": {"field": "user-tags.setup", "order": "desc", "orderBy": "_term", "size": 10},
-                    "schema": "group",
-                    "type": "terms",
-                },
-                {"enabled": True, "id": "4", "params": {"filters": filters}, "schema": "split", "type": "filters"},
-            ],
-            "listeners": {},
-            "params": {
-                "addLegend": True,
-                "addTimeMarker": False,
-                "addTooltip": True,
-                "categoryAxes": [
-                    {
-                        "id": "CategoryAxis-1",
-                        "labels": {"show": True, "truncate": 100},
-                        "position": "bottom",
-                        "scale": {"type": "linear"},
-                        "show": True,
-                        "style": {},
-                        "title": {"text": "distribution-version: Ascending"},
-                        "type": "category",
-                    }
-                ],
-                "defaultYExtents": False,
-                "drawLinesBetweenPoints": True,
-                "grid": {"categoryLines": False, "style": {"color": "#eee"}},
-                "interpolate": "linear",
-                "legendPosition": "right",
-                "radiusRatio": 9,
-                "scale": "linear",
-                "seriesParams": [
-                    {
-                        "data": {"id": "1", "label": "Median Indexing Throughput [docs/s]"},
-                        "drawLinesBetweenPoints": True,
-                        "mode": "normal",
-                        "show": "True",
-                        "showCircles": True,
-                        "type": "histogram",
-                        "valueAxis": "ValueAxis-1",
-                    }
-                ],
-                "setYExtents": False,
-                "showCircles": True,
-                "times": [],
-                "valueAxes": [
-                    {
-                        "id": "ValueAxis-1",
-                        "labels": {"filter": False, "rotate": 0, "show": True, "truncate": 100},
-                        "name": "LeftAxis-1",
-                        "position": "left",
-                        "scale": {"mode": "normal", "type": "linear"},
-                        "show": True,
-                        "style": {},
-                        "title": {"text": "Median Indexing Throughput [docs/s]"},
-                        "type": "value",
-                    }
-                ],
-                "row": True,
-            },
-            "title": title,
-            "type": "histogram",
-        }
-
-        search_source = {
-            "index": "rally-results-*",
-            "query": {
-                "query_string": {"analyze_wildcard": True, "query": 'environment:"%s" AND active:true AND name:"throughput"' % environment}
-            },
-            "filter": [],
-        }
-
-        return {
-            "id": str(uuid.uuid4()),
-            "type": "visualization",
-            "attributes": {
-                "title": title,
-                "visState": json.dumps(vis_state),
-                "uiStateJSON": BarCharts.UI_STATE_JSON,
-                "description": "index",
-                "version": 1,
-                "kibanaSavedObjectMeta": {"searchSourceJSON": json.dumps(search_source)},
-            },
-        }
-
-    @staticmethod
-    def ingest(title, environment, race_config):
-        # TBD
-        return None
-
-    @staticmethod
-    def revisions_table(title, environment, race_config):
-        return None
-
-
 class TimeSeriesCharts:
     @staticmethod
     def format_title(environment, track_name, flavor=None, es_license=None, suffix=None):
@@ -1508,7 +980,7 @@ class RaceConfigTrack:
         return self.cached_track
 
 
-def generate_index_ops(chart_type, race_configs, environment, logger):
+def generate_index_ops(race_configs, environment, logger):
     idx_race_configs = list(filter(lambda c: "indexing" in c.charts, race_configs))
     for race_conf in idx_race_configs:
         logger.debug(
@@ -1521,128 +993,128 @@ def generate_index_ops(chart_type, race_configs, environment, logger):
     charts = []
 
     if idx_race_configs:
-        title = chart_type.format_title(environment, race_configs[0].track, flavor=race_configs[0].flavor, suffix="indexing-throughput")
-        charts = [chart_type.index(environment, idx_race_configs, title)]
+        title = TimeSeriesCharts.format_title(
+            environment, race_configs[0].track, flavor=race_configs[0].flavor, suffix="indexing-throughput"
+        )
+        charts = [TimeSeriesCharts.index(environment, idx_race_configs, title)]
     return charts
 
 
-def generate_ingest(chart_type, race_configs, environment):
+def generate_ingest(race_configs, environment):
     structures = []
 
     for race_config in race_configs:
         if "ingest" in race_config.charts:
             title = f"{race_config.name}-ingest-time"
-            structures.append(chart_type.ingest(environment, race_config, title))
+            structures.append(TimeSeriesCharts.ingest(environment, race_config, title))
     return structures
 
 
-def generate_queries(chart_type, race_configs, environment):
+def generate_queries(race_configs, environment):
     # output JSON structures
     structures = []
 
     for race_config in race_configs:
         if "query" in race_config.charts:
             for q in race_config.throttled_tasks:
-                structures.append(chart_type.query(environment, race_config, q.name, q.params.get("iterations", 100)))
+                structures.append(TimeSeriesCharts.query(environment, race_config, q.name, q.params.get("iterations", 100)))
     return structures
 
 
-def generate_io(chart_type, race_configs, environment):
+def generate_io(race_configs, environment):
     # output JSON structures
     structures = []
     for race_config in race_configs:
         if "io" in race_config.charts:
-            title = chart_type.format_title(
+            title = TimeSeriesCharts.format_title(
                 environment, race_config.track, es_license=race_config.es_license, suffix="%s-io" % race_config.label
             )
-            structures.append(chart_type.io(title, environment, race_config))
+            structures.append(TimeSeriesCharts.io(title, environment, race_config))
 
     return structures
 
 
-def generate_disk_usage(chart_type, race_configs, environment):
+def generate_disk_usage(race_configs, environment):
     # output JSON structures
     structures = []
     for race_config in race_configs:
         if "disk_usage" in race_config.charts:
-            title = chart_type.format_title(
+            title = TimeSeriesCharts.format_title(
                 environment, race_config.track, es_license=race_config.es_license, suffix="%s-disk-usage" % race_config.label
             )
-            structures.append(chart_type.disk_usage(title, environment, race_config))
+            structures.append(TimeSeriesCharts.disk_usage(title, environment, race_config))
 
     return structures
 
 
-def generate_gc(chart_type, race_configs, environment):
+def generate_gc(race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "gc" in race_config.charts:
-            title = chart_type.format_title(
+            title = TimeSeriesCharts.format_title(
                 environment, race_config.track, es_license=race_config.es_license, suffix="%s-gc" % race_config.label
             )
-            structures.append(chart_type.gc(title, environment, race_config))
+            structures.append(TimeSeriesCharts.gc(title, environment, race_config))
 
     return structures
 
 
-def generate_merge_time(chart_type, race_configs, environment):
+def generate_merge_time(race_configs, environment):
     structures = []
-    if chart_type == BarCharts:
-        return structures
     for race_config in race_configs:
         if "merge_times" in race_config.charts:
-            title = chart_type.format_title(
+            title = TimeSeriesCharts.format_title(
                 environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-merge-times"
             )
-            chart = chart_type.merge_time(title, environment, race_config)
+            chart = TimeSeriesCharts.merge_time(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
 
     return structures
 
 
-def generate_ml_processing_time(chart_type, race_configs, environment):
+def generate_ml_processing_time(race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "ml_processing_time" in race_config.charts:
-            title = chart_type.format_title(
+            title = TimeSeriesCharts.format_title(
                 environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-ml-processing-time"
             )
-            chart = chart_type.ml_processing_time(title, environment, race_config)
+            chart = TimeSeriesCharts.ml_processing_time(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
 
     return structures
 
 
-def generate_merge_count(chart_type, race_configs, environment):
+def generate_merge_count(race_configs, environment):
     structures = []
     for race_config in race_configs:
         if "merge_count" in race_config.charts:
-            title = chart_type.format_title(
+            title = TimeSeriesCharts.format_title(
                 environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-merge-count"
             )
-            chart = chart_type.merge_count(title, environment, race_config)
+            chart = TimeSeriesCharts.merge_count(title, environment, race_config)
             if chart is not None:
                 structures.append(chart)
 
     return structures
 
 
-def generate_revisions(chart_type, race_configs, environment):
+def generate_revisions(race_configs, environment):
     structures = []
     for race_config in race_configs:
-        title = chart_type.format_title(
+        title = TimeSeriesCharts.format_title(
             environment, race_config.track, es_license=race_config.es_license, suffix=f"{race_config.label}-revisions"
         )
-        chart = chart_type.revisions_table(title, environment, race_config)
+        chart = TimeSeriesCharts.revisions_table(title, environment, race_config)
         if chart is not None:
             structures.append(chart)
 
     return structures
 
 
-def generate_dashboard(chart_type, environment, track, charts, flavor=None):
+def generate_dashboard(environment, track, charts, flavor=None):
     panels = []
 
     width = 24
@@ -1679,7 +1151,7 @@ def generate_dashboard(chart_type, environment, track, charts, flavor=None):
         "id": str(uuid.uuid4()),
         "type": "dashboard",
         "attributes": {
-            "title": chart_type.format_title(environment, track.name, flavor=flavor),
+            "title": TimeSeriesCharts.format_title(environment, track.name, flavor=flavor),
             "hits": 0,
             "description": "",
             "panelsJSON": json.dumps(panels),
@@ -1776,7 +1248,7 @@ class RaceConfig:
                 # available at https://github.com/elastic/rally-tracks/tree/master/eql.
                 #
                 # We should refactor the chart generator to make this classification logic more flexible so the user can specify
-                # which tasks / or types of operations should be used for which chart types.
+                # which tasks / or types of operations should be used.
                 if (
                     sub_task.operation.type
                     in ["search", "composite", "eql", "paginated-search", "scroll-search", "raw-request", "composite-agg"]
@@ -1787,7 +1259,7 @@ class RaceConfig:
         return task_names
 
 
-def load_race_configs(cfg, chart_type, chart_spec_path=None):
+def load_race_configs(cfg, chart_spec_path=None):
     def add_configs(race_configs_per_lic, flavor_name="oss", lic="oss", track_name=None):
         configs_per_lic = []
         for race_config in race_configs_per_lic:
@@ -1807,18 +1279,10 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
         return configs_per_lic
 
     def add_race_configs(license_configs, flavor_name, track_name):
-        if chart_type == BarCharts:
-            # Only one license config, "trial", is present in bar charts
-            _lic_conf = [license_config["configurations"] for license_config in license_configs if license_config["name"] == "trial"]
-            if _lic_conf:
-                race_configs_per_track.extend(add_configs(_lic_conf[0], track_name=track_name))
-        else:
-            for lic_config in license_configs:
-                race_configs_per_track.extend(add_configs(lic_config["configurations"], flavor_name, lic_config["name"], track_name))
+        for lic_config in license_configs:
+            race_configs_per_track.extend(add_configs(lic_config["configurations"], flavor_name, lic_config["name"], track_name))
 
     race_configs = {"oss": [], "default": []}
-    if chart_type == BarCharts:
-        race_configs = []
     chart_specs = glob.glob(io.normalize_path(chart_spec_path))
     if not chart_specs:
         raise exceptions.NotFound(f"Chart spec path [{chart_spec_path}] not found.")
@@ -1834,48 +1298,35 @@ def load_race_configs(cfg, chart_type, chart_spec_path=None):
                     add_race_configs(flavor["licenses"], _flavor_name, _track_name)
 
                     if race_configs_per_track:
-                        if chart_type == BarCharts:
-                            race_configs.append(race_configs_per_track)
-                        else:
-                            race_configs[_flavor_name].append(race_configs_per_track)
+                        race_configs[_flavor_name].append(race_configs_per_track)
     return race_configs
 
 
-def gen_charts_per_track_configs(race_configs, chart_type, env, flavor=None, logger=None):
+def gen_charts_per_track_configs(race_configs, env, flavor=None, logger=None):
     charts = (
-        generate_index_ops(chart_type, race_configs, env, logger)
-        + generate_ingest(chart_type, race_configs, env)
-        + generate_io(chart_type, race_configs, env)
-        + generate_disk_usage(chart_type, race_configs, env)
-        + generate_gc(chart_type, race_configs, env)
-        + generate_merge_time(chart_type, race_configs, env)
-        + generate_merge_count(chart_type, race_configs, env)
-        + generate_ml_processing_time(chart_type, race_configs, env)
-        + generate_queries(chart_type, race_configs, env)
-        + generate_revisions(chart_type, race_configs, env)
+        generate_index_ops(race_configs, env, logger)
+        + generate_ingest(race_configs, env)
+        + generate_io(race_configs, env)
+        + generate_disk_usage(race_configs, env)
+        + generate_gc(race_configs, env)
+        + generate_merge_time(race_configs, env)
+        + generate_merge_count(race_configs, env)
+        + generate_ml_processing_time(race_configs, env)
+        + generate_queries(race_configs, env)
+        + generate_revisions(race_configs, env)
     )
 
-    dashboard = generate_dashboard(chart_type, env, race_configs[0].track, charts, flavor)
+    dashboard = generate_dashboard(env, race_configs[0].track, charts, flavor)
 
     return charts, dashboard
 
 
-def gen_charts_per_track(race_configs, chart_type, env, flavor=None, logger=None):
-    structures = []
-    for race_configs_per_track in race_configs:
-        charts, dashboard = gen_charts_per_track_configs(race_configs_per_track, chart_type, env, flavor, logger)
-        structures.extend(charts)
-        structures.append(dashboard)
-
-    return structures
-
-
-def gen_charts_from_track_combinations(race_configs, chart_type, env, logger):
+def gen_charts_from_track_combinations(race_configs, env, logger):
     structures = []
     for flavor, race_configs_per_flavor in race_configs.items():
         for race_configs_per_track in race_configs_per_flavor:
             logger.debug("Generating charts for race_configs with name:[%s]/flavor:[%s]", race_configs_per_track[0].name, flavor)
-            charts, dashboard = gen_charts_per_track_configs(race_configs_per_track, chart_type, env, flavor, logger)
+            charts, dashboard = gen_charts_per_track_configs(race_configs_per_track, env, flavor, logger)
 
             structures.extend(charts)
             structures.append(dashboard)
@@ -1887,23 +1338,13 @@ def generate(cfg):
     logger = logging.getLogger(__name__)
 
     chart_spec_path = cfg.opts("generator", "chart.spec.path")
-    if cfg.opts("generator", "chart.type") == "time-series":
-        chart_type = TimeSeriesCharts
-    else:
-        chart_type = BarCharts
 
     console.info("Loading track data...", flush=True)
-    race_configs = load_race_configs(cfg, chart_type, chart_spec_path)
+    race_configs = load_race_configs(cfg, chart_spec_path)
     env = cfg.opts("system", "env.name")
 
-    structures = []
     console.info("Generating charts...", flush=True)
-
-    if chart_type == BarCharts:
-        # bar charts are flavor agnostic and split results based on a separate `user.setup` field
-        structures = gen_charts_per_track(race_configs, chart_type, env, logger=logger)
-    elif chart_type == TimeSeriesCharts:
-        structures = gen_charts_from_track_combinations(race_configs, chart_type, env, logger)
+    structures = gen_charts_from_track_combinations(race_configs, env, logger)
 
     output_path = cfg.opts("generator", "output.path")
     if output_path:
