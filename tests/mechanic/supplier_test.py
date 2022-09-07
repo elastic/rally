@@ -18,6 +18,8 @@
 
 import collections
 import datetime
+import getpass
+import os
 from unittest import mock
 
 import pytest
@@ -180,6 +182,182 @@ class TestBuilder:
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
+
+
+class TestDockerBuilder:
+    @mock.patch("__main__.__builtins__.open")
+    def test_build(self, mocked_open):
+        mock_docker_client = mock.MagicMock()
+        mock_docker_client.containers.run.return_value.wait.return_value = {"StatusCode": 0}
+        mock_docker_client.containers.run.return_value.commit.return_value = mock.MagicMock(id="test-image")
+        # Mock end of container log output
+        mocked_open.side_effect = StopIteration
+
+        user = getpass.getuser()
+        group_id = os.getgid()
+
+        builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
+        builder.build(["./gradlew clean", "./gradlew assemble"])
+
+        mock_docker_client.containers.run.assert_called_with(
+            detach=True,
+            name="esrally-source-builder",
+            user=user,
+            group_add=[group_id],
+            image="test-image",
+            command='/bin/bash -c "./gradlew clean; ./gradlew assemble"',
+            volumes=[f"/src:/home/{user}/elasticsearch"],
+            working_dir=f"/home/{user}/elasticsearch",
+        )
+
+    @mock.patch("__main__.__builtins__.open")
+    def test_run(self, mocked_open):
+        mock_docker_client = mock.MagicMock()
+        mock_docker_client.containers.run.return_value.wait.return_value = {"StatusCode": 0}
+        mock_docker_client.containers.run.return_value.commit.return_value = mock.MagicMock(id="test-image")
+        # Mock end of container log output
+        mocked_open.side_effect = StopIteration
+
+        builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
+        builder.run("test command")
+
+        mock_docker_client.containers.get.assert_has_calls(
+            [
+                mock.call(builder.build_container_name),
+                mock.call().stop(),
+                mock.call().remove,
+                mock.call(builder.image_builder_container_name),
+                mock.call().stop(),
+                mock.call().remove,
+            ]
+        )
+
+        # 'run()' first builds the image, then executes source build command container
+        mock_docker_client.containers.run.assert_has_calls(
+            [
+                mock.call(
+                    detach=True,
+                    name=builder.image_builder_container_name,
+                    image="openjdk:8-jdk-buster",
+                    command=(
+                        '/bin/bash -c "for i in {1..5}; do apt update -y; apt install git -y && break || sleep 15; done; '
+                        f"useradd --create-home -u {builder.user_id} {builder.user_name}; "
+                        f"groupadd -g {builder.group_id} {builder.group_name}; "
+                        f'usermod -g {builder.group_name} {builder.user_name}"'
+                    ),
+                ),
+                mock.call().logs(stream=True),
+                mock.call().wait(),
+                mock.call().commit(builder.image_name),
+                mock.call(
+                    detach=True,
+                    name=builder.build_container_name,
+                    image="test-image",
+                    user=builder.user_name,
+                    group_add=[builder.group_id],
+                    command='/bin/bash -c "test command"',
+                    volumes=[f"/src:/home/{builder.user_name}/elasticsearch"],
+                    working_dir=f"/home/{builder.user_name}/elasticsearch",
+                ),
+                mock.call().logs(stream=True),
+                mock.call().wait(),
+            ]
+        )
+
+    @mock.patch("__main__.__builtins__.open")
+    def test_create_base_container_image(self, mocked_open):
+        mock_docker_client = mock.MagicMock()
+        mocked_run = mock.MagicMock()
+        mock_docker_client.containers.run.return_value = mocked_run
+
+        mocked_run.wait.return_value = {"StatusCode": 0}
+        # Mock end of container log output
+        mocked_open.side_effect = StopIteration
+
+        builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
+        builder.create_base_container_image()
+
+        mock_docker_client.containers.run.assert_called_with(
+            detach=True,
+            name=builder.image_builder_container_name,
+            image="openjdk:8-jdk-buster",
+            command=(
+                '/bin/bash -c "for i in {1..5}; do apt update -y; apt install git -y && break || sleep 15; done; '
+                f"useradd --create-home -u {builder.user_id} {builder.user_name}; "
+                f"groupadd -g {builder.group_id} {builder.group_name}; "
+                f'usermod -g {builder.group_name} {builder.user_name}"'
+            ),
+        )
+
+        mocked_run.commit.assert_called_with(builder.image_name)
+
+    def test_resolve_jdk_build_container_image(self):
+        mock_docker_client = mock.MagicMock()
+        builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
+        # Temurin only maintains images for JDK 11, 17, 18 (at time of writing)
+        # older builds of ES may require specifics like JDK 14 etc, in which case we rely on the old OpenJDK images
+        image = builder.resolve_jdk_build_container_image(18)
+        assert image == "eclipse-temurin:18-jdk-jammy"
+
+        image = builder.resolve_jdk_build_container_image(17)
+        assert image == "eclipse-temurin:17-jdk-jammy"
+
+        image = builder.resolve_jdk_build_container_image(16)
+        assert image == "openjdk:16-jdk-buster"
+
+        image = builder.resolve_jdk_build_container_image(11)
+        assert image == "openjdk:11-jdk-buster"
+
+        image = builder.resolve_jdk_build_container_image(7)
+        assert image != "openjdk:11-jdk-buster"
+        # There is no Debian based OpenJDK JDK 12 image
+        image = builder.resolve_jdk_build_container_image(12)
+        assert image == "adoptopenjdk/openjdk12:debian"
+
+    def test_stop_containers(self):
+        mock_docker_client = mock.MagicMock()
+        builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
+
+        container_names = ["test-container-1", "test-container-2"]
+        builder.stop_containers(container_names)
+        mock_docker_client.containers.get.assert_has_calls(
+            [
+                mock.call("test-container-1"),
+                mock.call().stop(),
+                mock.call().remove,
+                mock.call("test-container-2"),
+                mock.call().stop(),
+                mock.call().remove,
+            ]
+        )
+
+    def test_tail_container_logs(self):
+        mock_docker_client = mock.MagicMock()
+        builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
+
+        text = b"This is docker log text"
+
+        def docker_log_output(text):
+            yield text
+
+        with mock.patch("builtins.open", mock.mock_open()) as file:
+            builder.tail_container_logs(output=docker_log_output(text), container_name="test-container-name")
+
+        file.assert_called_with("logs/build.log", "a+", encoding="utf-8")
+        file.return_value.write.assert_called_with(text.decode("utf-8"))
+
+    def test_check_container_return_code(self, caplog):
+        mock_docker_client = mock.MagicMock()
+        builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
+
+        completion = {"StatusCode": 0, "Error": None}
+        builder.check_container_return_code(completion, "test-container-name")
+        assert "Container [test-container-name] completed successfully." in caplog.text
+
+        completion = {"StatusCode": 1, "Error": "Vague error message"}
+        with pytest.raises(exceptions.SystemSetupError) as e:
+            builder.check_container_return_code(completion, "test-container-name")
+        assert "Docker container [test-container-name] failed with status code [1]: Error [Vague error message]" in str(e.value)
 
 
 class TestTemplateRenderer:
@@ -519,6 +697,60 @@ class TestElasticsearchSourceSupplier:
         binaries = {}
         es.add(binaries=binaries)
         assert binaries == {"elasticsearch": "elasticsearch.tar.gz"}
+
+    def test_resolve_build_jdk_major(self, caplog):
+        def text(build_java, runtime_java):
+
+            # based off of https://github.com/elastic/elasticsearch/blob/main/.ci/java-versions.properties
+            text = (
+                "# This file is used with all of the non-matrix tests in Jenkins.\n"
+                "\n"
+                "# This .properties file defines the versions of Java with which to\n"
+                "# build and test Elasticsearch for this branch. Valid Java versions\n"
+                "# are 'java' or 'openjdk' followed by the major release number.\n"
+                "\n"
+                f"ES_BUILD_JAVA={build_java}\n"
+                f"ES_RUNTIME_JAVA={runtime_java}\n"
+            )
+
+            return text
+
+        test_file_jdk18 = text("openjdk18", "openjdk18")
+        with mock.patch("builtins.open", mock.mock_open(read_data=test_file_jdk18)):
+            major_ver = supplier.ElasticsearchSourceSupplier.resolve_build_jdk_major("test")
+            assert major_ver == 18
+
+        test_file_jdk12 = text("openjdk12", "java8")
+        with mock.patch("builtins.open", mock.mock_open(read_data=test_file_jdk12)):
+            major_ver = supplier.ElasticsearchSourceSupplier.resolve_build_jdk_major("test")
+            assert major_ver == 12
+
+        test_file_jdk_11 = text("java11", "java8")
+
+        with mock.patch("builtins.open", mock.mock_open(read_data=test_file_jdk_11)):
+            major_ver = supplier.ElasticsearchSourceSupplier.resolve_build_jdk_major("test")
+            assert major_ver == 11
+
+        test_file_no_jdk = (
+            "# This file is used with all of the non-matrix tests in Jenkins.\n"
+            "\n"
+            "# This .properties file defines the versions of Java with which to\n"
+            "# build and test Elasticsearch for this branch. Valid Java versions\n"
+            "# are 'java' or 'openjdk' followed by the major release number.\n"
+            "\n"
+        )
+
+        with mock.patch("builtins.open", mock.mock_open(read_data=test_file_no_jdk)):
+            major_ver = supplier.ElasticsearchSourceSupplier.resolve_build_jdk_major("test")
+            assert major_ver == 17
+            assert "Unable to resolve build JDK major release version. Defaulting to version [17]." in caplog.text
+
+        with mock.patch("builtins.open", mock.mock_open()) as mocked_open:
+            mocked_open.side_effect = FileNotFoundError
+            major_ver = supplier.ElasticsearchSourceSupplier.resolve_build_jdk_major("test")
+            assert "File [test/.ci/java-versions.properties] not found." in caplog.text
+            assert "Unable to resolve build JDK major release version. Defaulting to version [17]." in caplog.text
+            assert major_ver == 17
 
 
 class TestExternalPluginSourceSupplier:
