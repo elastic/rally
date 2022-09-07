@@ -60,6 +60,7 @@ def register_default_runners():
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
+    register_runner(track.OperationType.Downsampling, Downsampling(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -2681,6 +2682,49 @@ class Sql(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "sql"
+
+
+class Downsampling(Runner):
+    """
+    Executes a downsampling operation creating the target index and aggregating data in the source index on the @timestamp field.
+    """
+
+    async def __call__(self, es, params):
+
+        request_params, request_headers = self._transport_request_params(params)
+        body = mandatory(params, "body", self)
+
+        fixed_interval = body.get("fixed-interval")
+        if fixed_interval is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.fixed-interval'. "
+                "Add it to your parameter source and try again."
+            )
+
+        source_index = body.get("source-index")
+        if source_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.source-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        target_index = body.get("target-index")
+        if target_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.target-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        path = "/" + source_index + "/_rollup/" + target_index
+
+        await es.perform_request(
+            method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
+        )
+
+        return {"weight": 1, "unit": "ops", "success": True}
+
+    def __repr__(self, *args, **kwargs):
+        return "downsampling"
 
 
 class FieldCaps(Runner):

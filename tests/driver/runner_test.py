@@ -5278,6 +5278,86 @@ class TestSqlRunner:
         )
 
 
+class TestDownsamplingRunner:
+    default_response = {}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_index_downsampling(self, es):
+        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+
+        sql_runner = runner.Downsampling()
+        params = {
+            "operation-type": "downsampling",
+            "body": {"fixed-interval": "1d", "source-index": "source-index", "target-index": "target-index"},
+        }
+
+        async with sql_runner:
+            result = await sql_runner(es, params)
+
+        assert result == {"success": True, "weight": 1, "unit": "ops"}
+
+        es.perform_request.assert_awaited_once_with(
+            method="POST",
+            path="/source-index/_rollup/target-index",
+            body={"fixed_interval": params.get("body").get("fixed-interval")},
+            params={},
+            headers={},
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_body_param(self, es):
+        sql_runner = runner.Downsampling()
+        params = {"operation-type": "downsampling"}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body'. "
+            "Add it to your parameter source and try again."
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_fixed_interval_in_body_param(self, es):
+        sql_runner = runner.Downsampling()
+        params = {"operation-type": "downsampling", "body": {"source-index": "source-index", "downsampling-index": "downsampling-index"}}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.fixed-interval'. "
+            "Add it to your parameter source and try again."
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_source_index_in_body_param(self, es):
+        sql_runner = runner.Downsampling()
+        params = {"operation-type": "downsampling", "body": {"fixed-interval": "1d", "target-index": "target-index"}}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.source-index'. "
+            "Add it to your parameter source and try again."
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_target_index_in_body_param(self, es):
+        sql_runner = runner.Downsampling()
+        params = {"operation-type": "downsampling", "body": {"fixed-interval": "1d", "source-index": "source-index"}}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.target-index'. "
+            "Add it to your parameter source and try again."
+        )
+
+
 class TestSubmitAsyncSearch:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
