@@ -3070,21 +3070,22 @@ Properties
 the ``source-index`` and the ``target-index``. The source index is an existing index which includes a ``@timestamp`` field. Write operations
 to the source index must be disabled. Tne target index is a new index that is created by the downsamplig operation and including aggregated data.
 
+
 **Example**
 
 Run a downsampling operation aggregating data in the source index (test-source-index) and creating a new target index (test-target-index) applying an aggregation
 interval of 1 minute on the @timestamp field.
 
-  {
-    "name": "downsampling",
-    "operation": {
-    "operation-type": "downsampling",
-    "body": {
-      "fixed-interval": "1m",
-      "source-index": "test-source-index",
-      "target-index": "tsdb-target-index"
-    }
+{
+  "name": "downsampling",
+  "operation": {
+  "operation-type": "downsampling",
+  "body": {
+    "fixed-interval": "1m",
+    "source-index": "test-source-index",
+    "target-index": "tsdb-target-index"
   }
+}
 
 Meta-data
 """""""""
