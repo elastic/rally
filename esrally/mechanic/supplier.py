@@ -16,16 +16,19 @@
 # under the License.
 
 import datetime
+import getpass
 import glob
+import grp
 import logging
 import os
 import re
 import shutil
 import urllib.error
 
+import docker
 from esrally import PROGRAM_NAME, exceptions, paths
 from esrally.exceptions import BuildError, SystemSetupError
-from esrally.utils import convert, git, io, jvm, net, process, sysstats
+from esrally.utils import console, convert, git, io, jvm, net, process, sysstats
 
 # e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
 REVISION_PATTERN = r"(\w.*?):(.*)"
@@ -37,6 +40,7 @@ def create(cfg, sources, distribution, car, plugins=None):
         plugins = []
     caching_enabled = cfg.opts("source", "cache", mandatory=False, default_value=True)
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision", mandatory=sources))
+    source_build_method = cfg.opts("mechanic", "source.build.method", mandatory=False, default_value="default")
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, plugins, revisions, distribution_version)
     build_needed = any(build for _, _, build in supply_requirements.values())
@@ -49,14 +53,22 @@ def create(cfg, sources, distribution, car, plugins=None):
     template_renderer = TemplateRenderer(version=es_version, os_name=target_os, arch=target_arch)
 
     if build_needed:
-        raw_build_jdk = car.mandatory_var("build.jdk")
-        try:
-            build_jdk = int(raw_build_jdk)
-        except ValueError:
-            raise exceptions.SystemSetupError(f"Car config key [build.jdk] is invalid: [{raw_build_jdk}] (must be int)")
-
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
-        builder = Builder(es_src_dir, build_jdk, paths.logs())
+
+        if source_build_method == "docker":
+            builder = DockerBuilder(src_dir=es_src_dir, log_dir=paths.logs(), client=docker.from_env())
+        else:
+            raw_build_jdk = car.mandatory_var("build.jdk")
+            try:
+                build_jdk = int(raw_build_jdk)
+            except ValueError:
+                raise exceptions.SystemSetupError(f"Car config key [build.jdk] is invalid: [{raw_build_jdk}] (must be int)")
+            builder = Builder(
+                build_jdk=build_jdk,
+                src_dir=es_src_dir,
+                log_dir=paths.logs(),
+            )
+
     else:
         builder = None
 
@@ -86,8 +98,8 @@ def create(cfg, sources, distribution, car, plugins=None):
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
 
         source_supplier = ElasticsearchSourceSupplier(
-            es_version,
-            es_src_dir,
+            revision=es_version,
+            es_src_dir=es_src_dir,
             remote_url=cfg.opts("source", "remote.repo.url"),
             car=car,
             builder=builder,
@@ -117,7 +129,16 @@ def create(cfg, sources, distribution, car, plugins=None):
                 plugin_supplier = CorePluginSourceSupplier(plugin, es_src_dir, builder)
             elif ExternalPluginSourceSupplier.can_handle(plugin):
                 logger.info("Adding external plugin source supplier for [%s].", plugin.name)
-                plugin_supplier = ExternalPluginSourceSupplier(plugin, plugin_version, _src_dir(cfg, mandatory=False), src_config, builder)
+                plugin_supplier = ExternalPluginSourceSupplier(
+                    plugin,
+                    plugin_version,
+                    _src_dir(cfg, mandatory=False),
+                    src_config,
+                    Builder(
+                        src_dir=es_src_dir,
+                        log_dir=paths.logs(),
+                    ),
+                )
             else:
                 raise exceptions.RallyError(
                     "Plugin %s can neither be treated as core nor as external plugin. Requirements: %s"
@@ -360,6 +381,7 @@ class CachedSourceSupplier:
 
 class ElasticsearchSourceSupplier:
     def __init__(self, revision, es_src_dir, remote_url, car, builder, template_renderer):
+        self.logger = logging.getLogger(__name__)
         self.revision = revision
         self.src_dir = es_src_dir
         self.remote_url = remote_url
@@ -372,6 +394,7 @@ class ElasticsearchSourceSupplier:
 
     def prepare(self):
         if self.builder:
+            self.builder.build_jdk = self.resolve_build_jdk_major(self.src_dir)
             self.builder.build(
                 [
                     self.template_renderer.render(self.car.mandatory_var("clean_command")),
@@ -381,6 +404,43 @@ class ElasticsearchSourceSupplier:
 
     def add(self, binaries):
         binaries["elasticsearch"] = self.resolve_binary()
+
+    @classmethod
+    def resolve_build_jdk_major(cls, src_dir: str) -> int:
+        """
+        Parses the build JDK major release version from the Elasticsearch repo
+        :param src_dir: The source directory for the Elasticsearch repository
+        :return: The build JDK major release version
+        """
+        logger = logging.getLogger(__name__)
+        # This .properties file defines the versions of Java with which to
+        # build and test Elasticsearch for this branch. Valid Java versions
+        # are 'java' or 'openjdk' followed by the major release number.
+        path = os.path.join(src_dir, ".ci", "java-versions.properties")
+        major_version = None
+        try:
+            with open(path, "rt", encoding="UTF-8") as f:
+                for line in f.readlines():
+                    if "ES_BUILD_JAVA" in line:
+                        java_version = line.split("=")[1].lstrip().rstrip("\n")
+                        # e.g. java11
+                        if "java" in java_version:
+                            major_version = java_version.split("java")[1]
+                        # e.g. openjdk16
+                        elif "openjdk" in java_version:
+                            major_version = java_version.split("openjdk")[1]
+                        break
+        except FileNotFoundError:
+            msg = f"File [{path}] not found."
+            console.warn(f"{msg}")
+            logger.warning("%s", msg)
+
+        if major_version:
+            logger.info("Setting build JDK major release version to [%s].", major_version)
+        else:
+            major_version = 17
+            logger.info("Unable to resolve build JDK major release version. Defaulting to version [%s].", major_version)
+        return int(major_version)
 
     def resolve_binary(self):
         try:
@@ -446,7 +506,8 @@ class ExternalPluginSourceSupplier:
     def prepare(self):
         if self.builder:
             command = _config_value(self.src_config, "plugin.{}.build.command".format(self.plugin.name))
-            self.builder.build([command], override_src_dir=self.override_build_dir)
+            build_cmd = f"export JAVA_HOME={self.builder.java_home}; cd {self.override_build_dir}; {command}"
+            self.builder.build([build_cmd])
 
     def add(self, binaries):
         binaries[self.plugin.name] = self.resolve_binary()
@@ -479,6 +540,7 @@ class CorePluginSourceSupplier:
 
     def prepare(self):
         if self.builder:
+            self.builder.build_jdk = ElasticsearchSourceSupplier.resolve_build_jdk_major(self.es_src_dir)
             self.builder.build(["./gradlew :plugins:{}:assemble".format(self.plugin.name)])
 
     def add(self, binaries):
@@ -680,6 +742,7 @@ class Builder:
 
         # we capture all output to a dedicated build log file
         build_cmd = "export JAVA_HOME={}; cd {}; {} > {} 2>&1".format(self.java_home, src_dir, command, log_file)
+        console.info("Creating installable binary from source files")
         self.logger.info("Running build command [%s]", build_cmd)
 
         if process.run_subprocess(build_cmd):
@@ -692,6 +755,155 @@ class Builder:
             msg += "The full build log is available at [{}].".format(log_file)
 
             raise BuildError(msg)
+
+
+class DockerBuilder:
+    def __init__(self, src_dir, build_jdk=None, log_dir=None, client=None):
+        self.client = client
+        self.src_dir = src_dir
+        self.build_jdk = build_jdk
+        self.log_dir = log_dir
+        io.ensure_dir(self.log_dir)
+        self.log_file = os.path.join(self.log_dir, "build.log")
+        self.logger = logging.getLogger(__name__)
+
+        try:
+            self.logger.info(self.client.version())
+        except docker.errors.APIError as e:
+            raise exceptions.SystemSetupError(self.err_msg(e))
+
+        self.user_id = os.geteuid()
+        self.user_name = getpass.getuser()
+        self.group_id = os.getgid()
+        try:
+            # we need to get the user's group id to add it to our container image for permissions on bind mount
+            self.group_name = grp.getgrgid(self.group_id)[0]
+        except KeyError:
+            raise SystemSetupError("Failed to retrieve current user's group name required for Docker source build method.")
+
+        self.build_container_name = "esrally-source-builder"
+        self.image_name = f"{self.build_container_name}-image"
+        self.image_builder_container_name = f"{self.build_container_name}-image-builder"
+
+    @staticmethod
+    def err_msg(err):
+        return (
+            f"Error communicating with Docker daemon: [{err}]. Please ensure Docker is installed and your user has the correct permissions."
+        )
+
+    def resolve_jdk_build_container_image(self, build_jdk: int) -> str:
+        """
+        Given a JDK major release version, find a suitable docker image to use for compiling ES & ES plugins from sources
+        :param build_jdk: The build JDK major version required to build Elasticsearch and plugins.
+        :return: The Docker image name and respective tag that satisfies the 'build_jdk' requirement.
+        """
+        logger = logging.getLogger(__name__)
+        # Temurin only maintains images for JDK 11, 17, 18 (at time of writing)
+        # older builds of ES may require specifics like JDK 14 etc, in which case we rely on the OpenJDK images
+        #
+        # We modify the base image (create user/group, install git), so we need to ensure the conatiner's base image
+        # is Debian based (apt required)
+        if build_jdk >= 17:
+            docker_image_name = f"eclipse-temurin:{build_jdk}-jdk-jammy"
+            logger.info("Build JDK version [%s] is >= 17, using Docker image [%s].", build_jdk, docker_image_name)
+        # There is no Debian based OpenJDK JDK 12 image
+        elif build_jdk == 12:
+            docker_image_name = "adoptopenjdk/openjdk12:debian"
+        else:
+            docker_image_name = f"openjdk:{build_jdk}-jdk-buster"
+            logger.info("Build JDK version [%s] is < 17, using Docker image [%s].", build_jdk, docker_image_name)
+        return docker_image_name
+
+    def stop_containers(self, container_names):
+        for c in container_names:
+            try:
+                existing_container = self.client.containers.get(c)
+                existing_container.stop()
+                existing_container.remove()
+            except docker.errors.NotFound:
+                pass
+            except docker.errors.APIError as e:
+                raise exceptions.SystemSetupError(self.err_msg(e))
+
+    def tail_container_logs(self, output, container_name):
+        try:
+            with open(self.log_file, "a+", encoding="utf-8") as f:
+                while True:
+                    line = next(output).decode("utf-8")
+                    f.write(line)
+                    f.flush()
+        except StopIteration:
+            self.logger.info("Log stream ended for [%s]", container_name)
+
+    def check_container_return_code(self, completion, container_name):
+        if completion["StatusCode"] != 0:
+            raise SystemSetupError(
+                f"Docker container [{container_name}] failed with status code [{completion['StatusCode']}]: Error [{completion['Error']}]"
+            )
+        self.logger.info("Container [%s] completed successfully.", container_name)
+
+    def create_base_container_image(self):
+        try:
+            # create a new image with the required users & git installed
+            image_container = self.client.containers.run(
+                detach=True,
+                name=self.image_builder_container_name,
+                image=self.resolve_jdk_build_container_image(self.build_jdk),
+                command=(
+                    # {1..5} is for retrying apt update/install in case of transient network issues
+                    '/bin/bash -c "for i in {1..5}; do apt update -y; apt install git -y && break || sleep 15; done; '
+                    f"useradd --create-home -u {self.user_id} {self.user_name}; "
+                    f"groupadd -g {self.group_id} {self.group_name}; "
+                    f'usermod -g {self.group_name} {self.user_name}"'
+                ),
+            )
+
+            output = image_container.logs(stream=True)
+            self.tail_container_logs(output, self.image_builder_container_name)
+
+            # wait for container to complete
+            completion = image_container.wait()
+            self.check_container_return_code(completion, self.image_builder_container_name)
+
+            # create the image (i.e. docker commit)
+            image = image_container.commit(self.image_name)
+
+            return image
+
+        except docker.errors.APIError as e:
+            raise exceptions.SystemSetupError(self.err_msg(e))
+
+    def build(self, commands):
+        build_command = "; ".join(commands)
+        self.run(build_command)
+
+    def run(self, command):
+        # stop & remove any pre-existing containers
+        self.stop_containers([self.build_container_name, self.image_builder_container_name])
+        # build our new base image
+        container_image = self.create_base_container_image()
+        try:
+            console.info("Using Docker to create installable binary from source files")
+            container = self.client.containers.run(
+                detach=True,
+                name=self.build_container_name,
+                image=container_image.id,
+                user=self.user_name,
+                group_add=[self.group_id],
+                command=f'/bin/bash -c "{command}"',
+                volumes=[f"{self.src_dir}:/home/{self.user_name}/elasticsearch"],
+                working_dir=f"/home/{self.user_name}/elasticsearch",
+            )
+
+            output = container.logs(stream=True)
+            self.tail_container_logs(output, self.build_container_name)
+
+            # wait for container to complete
+            completion = container.wait()
+            self.check_container_return_code(completion, self.build_container_name)
+
+        except docker.errors.APIError as e:
+            raise exceptions.SystemSetupError(self.err_msg(e))
 
 
 class DistributionRepository:
