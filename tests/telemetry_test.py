@@ -4680,5 +4680,28 @@ class TestDiskUsageStats:
             self._mock_store("disk_usage_points", 18, "station.country_code"),
         ]
 
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_indexed_vector(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {"title_vector": {"total_in_bytes": 64179820, "doc_values_in_bytes": 0, "knn_vectors_in_bytes": 64179820}}
+                    },
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.mock_calls == [
+            self._mock_store("disk_usage_total", 64179820, "title_vector"),
+            self._mock_store("disk_usage_knn_vectors", 64179820, "title_vector"),
+        ]
+
     def _mock_store(self, name, size, field):
         return mock.call(name, size, meta_data={"index": "foo", "field": field}, unit="byte")
