@@ -687,7 +687,7 @@ class OperationType(Enum):
     FieldCaps = 17
     CompositeAgg = 18
     WaitForCurrentSnapshotsCreate = 19
-    Downsampling = 20
+    Downsample = 20
 
     # administrative actions
     ForceMerge = 1001
@@ -853,8 +853,8 @@ class OperationType(Enum):
             return OperationType.Sql
         elif v == "field-caps":
             return OperationType.FieldCaps
-        elif v == "downsampling":
-            return OperationType.Downsampling
+        elif v == "downsample":
+            return OperationType.Downsample
         else:
             raise KeyError(f"No enum value for [{v}]")
 

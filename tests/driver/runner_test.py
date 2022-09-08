@@ -5278,17 +5278,17 @@ class TestSqlRunner:
         )
 
 
-class TestDownsamplingRunner:
+class TestDownsampleRunner:
     default_response = {}
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_index_downsampling(self, es):
+    async def test_index_downsample(self, es):
         es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
 
-        sql_runner = runner.Downsampling()
+        sql_runner = runner.Downsample()
         params = {
-            "operation-type": "downsampling",
+            "operation-type": "downsample",
             "body": {"fixed-interval": "1d", "source-index": "source-index", "target-index": "target-index"},
         }
 
@@ -5308,52 +5308,52 @@ class TestDownsamplingRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_body_param(self, es):
-        sql_runner = runner.Downsampling()
-        params = {"operation-type": "downsampling"}
+        sql_runner = runner.Dwnsample()
+        params = {"operation-type": "downsample"}
 
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
-            "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body'. "
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body'. "
             "Add it to your parameter source and try again."
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_fixed_interval_in_body_param(self, es):
-        sql_runner = runner.Downsampling()
-        params = {"operation-type": "downsampling", "body": {"source-index": "source-index", "downsampling-index": "downsampling-index"}}
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "body": {"source-index": "source-index", "target-index": "target-index"}}
 
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
-            "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.fixed-interval'. "
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.fixed-interval'. "
             "Add it to your parameter source and try again."
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_source_index_in_body_param(self, es):
-        sql_runner = runner.Downsampling()
-        params = {"operation-type": "downsampling", "body": {"fixed-interval": "1d", "target-index": "target-index"}}
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "body": {"fixed-interval": "1d", "target-index": "target-index"}}
 
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
-            "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.source-index'. "
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.source-index'. "
             "Add it to your parameter source and try again."
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_target_index_in_body_param(self, es):
-        sql_runner = runner.Downsampling()
-        params = {"operation-type": "downsampling", "body": {"fixed-interval": "1d", "source-index": "source-index"}}
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "body": {"fixed-interval": "1d", "source-index": "source-index"}}
 
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
-            "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.target-index'. "
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.target-index'. "
             "Add it to your parameter source and try again."
         )
 

@@ -60,7 +60,7 @@ def register_default_runners():
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
-    register_runner(track.OperationType.Downsampling, Downsampling(), async_runner=True)
+    register_runner(track.OperationType.Downsample, Downsample(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -2684,7 +2684,7 @@ class Sql(Runner):
         return "sql"
 
 
-class Downsampling(Runner):
+class Downsample(Runner):
     """
     Executes a downsampling operation creating the target index and aggregating data in the source index on the @timestamp field.
     """
@@ -2697,21 +2697,21 @@ class Downsampling(Runner):
         fixed_interval = body.get("fixed-interval")
         if fixed_interval is None:
             raise exceptions.DataError(
-                "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.fixed-interval'. "
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.fixed-interval'. "
                 "Add it to your parameter source and try again."
             )
 
         source_index = body.get("source-index")
         if source_index is None:
             raise exceptions.DataError(
-                "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.source-index'. "
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.source-index'. "
                 "Add it to your parameter source and try again."
             )
 
         target_index = body.get("target-index")
         if target_index is None:
             raise exceptions.DataError(
-                "Parameter source for operation 'downsampling' did not provide the mandatory parameter 'body.target-index'. "
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.target-index'. "
                 "Add it to your parameter source and try again."
             )
 
@@ -2724,7 +2724,7 @@ class Downsampling(Runner):
         return {"weight": 1, "unit": "ops", "success": True}
 
     def __repr__(self, *args, **kwargs):
-        return "downsampling"
+        return "downsample"
 
 
 class FieldCaps(Runner):

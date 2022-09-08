@@ -3070,13 +3070,13 @@ Properties
 
 **Example**
 
-Run a downsampling operation aggregating data in the source index (test-source-index) and creating a new target index (test-target-index) applying an aggregation
+Executes a downsampling operation aggregating data in the source index (test-source-index) and creating a new target index (test-target-index) applying an aggregation
 interval of 1 minute on the @timestamp field::
 
     {
-      "name": "downsampling",
+      "name": "downsample",
       "operation": {
-      "operation-type": "downsampling",
+      "operation-type": "downsample",
       "body": {
         "fixed-interval": "1m",
         "source-index": "test-source-index",
