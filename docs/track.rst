@@ -3065,7 +3065,9 @@ Executes a downsampling operation on an index producing a new index whose data i
 Properties
 """"""""""
 
-* ``body`` (mandatory): The ``body`` property must contain the ``fixed_interval`` key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals` the ``source-index`` and the ``target-index``. The source index is an existing index which includes a ``@timestamp`` field. Write operations to the source index must be disabled. Tne target index is a new index that is created by the downsamplig operation and including aggregated data.
+* ``fixed_interval``: The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
+* ``source-index``: The read-only index containing data to aggregate which includes a ``@timestamp`` field.
+* ``target-index``: Tne new target index created by the downsamplig operation and including aggregated data.
 
 
 **Example**
@@ -3077,11 +3079,9 @@ interval of 1 minute on the @timestamp field::
       "name": "downsample",
       "operation": {
       "operation-type": "downsample",
-      "body": {
-        "fixed-interval": "1m",
-        "source-index": "test-source-index",
-        "target-index": "tsdb-target-index"
-      }
+      "fixed-interval": "1m",
+      "source-index": "test-source-index",
+      "target-index": "tsdb-target-index"
     }
 
 Meta-data

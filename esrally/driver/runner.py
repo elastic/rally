@@ -2692,23 +2692,22 @@ class Downsample(Runner):
     async def __call__(self, es, params):
 
         request_params, request_headers = self._transport_request_params(params)
-        body = mandatory(params, "body", self)
 
-        fixed_interval = body.get("fixed-interval")
+        fixed_interval = mandatory(params, "fixed-interval", self)
         if fixed_interval is None:
             raise exceptions.DataError(
                 "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.fixed-interval'. "
                 "Add it to your parameter source and try again."
             )
 
-        source_index = body.get("source-index")
+        source_index = mandatory(params, "source-index", self)
         if source_index is None:
             raise exceptions.DataError(
                 "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.source-index'. "
                 "Add it to your parameter source and try again."
             )
 
-        target_index = body.get("target-index")
+        target_index = mandatory(params, "target-index", self)
         if target_index is None:
             raise exceptions.DataError(
                 "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.target-index'. "
