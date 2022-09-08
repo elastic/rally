@@ -890,7 +890,7 @@ class DockerBuilder:
                 image=container_image.id,
                 user=self.user_name,
                 group_add=[self.group_id],
-                command=f'/bin/bash -c "{command}"',
+                command=f'/bin/bash -c "git config --global --add safe.directory \'*\'; {command}"',
                 volumes=[f"{self.src_dir}:/home/{self.user_name}/elasticsearch"],
                 working_dir=f"/home/{self.user_name}/elasticsearch",
             )
