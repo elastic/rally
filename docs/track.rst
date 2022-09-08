@@ -3078,10 +3078,11 @@ interval of 1 minute on the @timestamp field::
     {
       "name": "downsample",
       "operation": {
-      "operation-type": "downsample",
-      "fixed-interval": "1m",
-      "source-index": "test-source-index",
-      "target-index": "tsdb-target-index"
+        "operation-type": "downsample",
+        "fixed-interval": "1m",
+        "source-index": "test-source-index",
+        "target-index": "tsdb-target-index"
+      }
     }
 
 Meta-data
