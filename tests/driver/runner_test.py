@@ -5316,7 +5316,7 @@ class TestDownsampleRunner:
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
-            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.fixed-interval'. "
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'fixed-interval'. "
             "Add it to your parameter source and try again."
         )
 
@@ -5329,7 +5329,7 @@ class TestDownsampleRunner:
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
-            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.source-index'. "
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'source-index'. "
             "Add it to your parameter source and try again."
         )
 
@@ -5342,7 +5342,7 @@ class TestDownsampleRunner:
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
-            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body.target-index'. "
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
             "Add it to your parameter source and try again."
         )
 
