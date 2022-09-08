@@ -60,7 +60,6 @@ def register_default_runners():
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
-    register_runner(track.OperationType.Downsample, Downsample(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -103,6 +102,7 @@ def register_default_runners():
     register_runner(track.OperationType.TransformStats, Retry(TransformStats()), async_runner=True)
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
+    register_runner(track.OperationType.Downsample, Retry(Downsample()), async_runner=True)
 
 
 def runner_for(operation_type):

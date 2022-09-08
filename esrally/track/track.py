@@ -687,7 +687,6 @@ class OperationType(Enum):
     FieldCaps = 17
     CompositeAgg = 18
     WaitForCurrentSnapshotsCreate = 19
-    Downsample = 20
 
     # administrative actions
     ForceMerge = 1001
@@ -726,6 +725,7 @@ class OperationType(Enum):
     TransformStats = 1034
     CreateIlmPolicy = 1035
     DeleteIlmPolicy = 1036
+    Downsample = 1037
 
     @property
     def admin_op(self):
