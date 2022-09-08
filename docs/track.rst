@@ -3057,7 +3057,7 @@ The following meta data is always returned:
 * ``unit``: The unit in which to interpret ``weight``. Always "ops".
 
 downsample
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~
 
 Executes a downsampling operation on an index producing a new index whose data is aggregated on the @timestamp field.
 
