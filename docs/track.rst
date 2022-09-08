@@ -3065,10 +3065,9 @@ Executes a downsampling operation on an index producing a new index whose data i
 Properties
 """"""""""
 
-* ``fixed_interval``: The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
-* ``source-index``: The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation.
-* ``target-index``: Tne new target index created by the downsampling operation and including aggregated data.
-
+* ``fixed_interval`` (optional, defaults to ``1h``): The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
+* ``source-index`` (optional, defaults to ``tsdb-index``): The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation.
+* ``target-index`` (optional, defaults to ``{source-index}-{fixed-interval}``): Tne new target index created by the downsampling operation and including aggregated data.
 
 **Example**
 
