@@ -2715,7 +2715,7 @@ class Downsampling(Runner):
                 "Add it to your parameter source and try again."
             )
 
-        path = "/" + source_index + "/_rollup/" + target_index
+        path = f"/{source_index}/_rollup/{target_index}"
 
         await es.perform_request(
             method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
