@@ -5301,8 +5301,8 @@ class TestDownsampleRunner:
 
         es.perform_request.assert_awaited_once_with(
             method="POST",
-            path="/source-index/_rollup/target-index",
-            body={"fixed_interval": params.get("body").get("fixed-interval")},
+            path="/source-index/_downsample/target-index",
+            body={"fixed_interval": params.get("fixed-interval")},
             params={},
             headers={},
         )
