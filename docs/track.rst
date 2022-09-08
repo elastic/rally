@@ -3056,7 +3056,7 @@ The following meta data is always returned:
 * ``weight``: The number of fetched pages. Should always equal to the ``pages`` parameter.
 * ``unit``: The unit in which to interpret ``weight``. Always "ops".
 
-downsampling
+downsample
 ~~~~~~~~~~~~~~~~~~~
 
 Executes a downsampling operation on an index producing a new index whose data is aggregated on the @timestamp field.
