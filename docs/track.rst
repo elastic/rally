@@ -3066,7 +3066,7 @@ Properties
 """"""""""
 
 * ``fixed_interval``: The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
-* ``source-index``: The read-only index containing data to aggregate which includes a ``@timestamp`` field.
+* ``source-index``: The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation.
 * ``target-index``: Tne new target index created by the downsampling operation and including aggregated data.
 
 
