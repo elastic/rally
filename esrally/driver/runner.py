@@ -66,6 +66,7 @@ def register_default_runners():
     # these requests should not be retried as they are not idempotent
     register_runner(track.OperationType.CreateSnapshot, CreateSnapshot(), async_runner=True)
     register_runner(track.OperationType.RestoreSnapshot, RestoreSnapshot(), async_runner=True)
+    register_runner(track.OperationType.Downsample, Downsample(), async_runner=True)
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth, Retry(ClusterHealth()), async_runner=True)
     register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
@@ -102,7 +103,6 @@ def register_default_runners():
     register_runner(track.OperationType.TransformStats, Retry(TransformStats()), async_runner=True)
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
-    register_runner(track.OperationType.Downsample, Retry(Downsample()), async_runner=True)
 
 
 def runner_for(operation_type):
