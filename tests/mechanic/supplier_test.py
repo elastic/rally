@@ -205,7 +205,7 @@ class TestDockerBuilder:
             user=user,
             group_add=[group_id],
             image="test-image",
-            command='/bin/bash -c "git config --global --add safe.directory \'*\'; ./gradlew clean; ./gradlew assemble"',
+            command="/bin/bash -c \"git config --global --add safe.directory '*'; ./gradlew clean; ./gradlew assemble\"",
             volumes=[f"/src:/home/{user}/elasticsearch"],
             working_dir=f"/home/{user}/elasticsearch",
         )
@@ -255,7 +255,7 @@ class TestDockerBuilder:
                     image="test-image",
                     user=builder.user_name,
                     group_add=[builder.group_id],
-                    command='/bin/bash -c "git config --global --add safe.directory \'*\'; test command"',
+                    command="/bin/bash -c \"git config --global --add safe.directory '*'; test command\"",
                     volumes=[f"/src:/home/{builder.user_name}/elasticsearch"],
                     working_dir=f"/home/{builder.user_name}/elasticsearch",
                 ),
