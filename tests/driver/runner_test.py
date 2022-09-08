@@ -5289,7 +5289,9 @@ class TestDownsampleRunner:
         sql_runner = runner.Downsample()
         params = {
             "operation-type": "downsample",
-            "body": {"fixed-interval": "1d", "source-index": "source-index", "target-index": "target-index"},
+            "fixed-interval": "1d",
+            "source-index": "source-index",
+            "target-index": "target-index",
         }
 
         async with sql_runner:
@@ -5307,22 +5309,9 @@ class TestDownsampleRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_mandatory_body_param(self, es):
-        sql_runner = runner.Dwnsample()
-        params = {"operation-type": "downsample"}
-
-        with pytest.raises(exceptions.DataError) as exc:
-            await sql_runner(es, params)
-        assert exc.value.args[0] == (
-            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'body'. "
-            "Add it to your parameter source and try again."
-        )
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.asyncio
     async def test_mandatory_fixed_interval_in_body_param(self, es):
         sql_runner = runner.Downsample()
-        params = {"operation-type": "downsample", "body": {"source-index": "source-index", "target-index": "target-index"}}
+        params = {"operation-type": "downsample", "source-index": "source-index", "target-index": "target-index"}
 
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
@@ -5335,7 +5324,7 @@ class TestDownsampleRunner:
     @pytest.mark.asyncio
     async def test_mandatory_source_index_in_body_param(self, es):
         sql_runner = runner.Downsample()
-        params = {"operation-type": "downsample", "body": {"fixed-interval": "1d", "target-index": "target-index"}}
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "target-index": "target-index"}
 
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
@@ -5348,7 +5337,7 @@ class TestDownsampleRunner:
     @pytest.mark.asyncio
     async def test_mandatory_target_index_in_body_param(self, es):
         sql_runner = runner.Downsample()
-        params = {"operation-type": "downsample", "body": {"fixed-interval": "1d", "source-index": "source-index"}}
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "source-index": "source-index"}
 
         with pytest.raises(exceptions.DataError) as exc:
             await sql_runner(es, params)
