@@ -14,8 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import json
 import it
+
+from esrally.utils import process
 
 
 @it.random_rally_config
@@ -65,3 +67,43 @@ def test_sources(cfg):
         )
         == 0
     )
+
+
+@it.random_rally_config
+def test_build_es_and_plugin_with_docker(cfg):
+    assert (
+        it.esrally(
+            cfg,
+            "build --source-build-method=docker --revision=latest --target-arch aarch64 --target-os linux "
+            "--elasticsearch-plugins=analysis-icu --quiet",
+        )
+        == 0
+    )
+
+
+@it.random_rally_config
+def test_build_es(cfg):
+    assert (
+        it.esrally(
+            cfg,
+            "build --revision=latest --target-arch aarch64 --target-os linux --quiet",
+        )
+        == 0
+    )
+
+
+def test_build_es_linux_aarch64_output():
+    def run_command(target_os, target_arch):
+        try:
+            output = process.run_subprocess_with_output(
+                f"esrally build --revision=latest --target-arch {target_arch} --target-os {target_os} --quiet"
+            )
+            print(output)
+            elasticsearch = json.loads("".join(output))["elasticsearch"]
+            assert f"{target_os}-{target_arch}" in elasticsearch
+
+        except BaseException as e:
+            raise AssertionError(f"Failed to build Elasticsearch for [{target_os}, {target_arch}].", e)
+
+    run_command("linux", "aarch64")
+    run_command("linux", "x86_64")
