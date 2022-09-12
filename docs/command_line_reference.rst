@@ -83,6 +83,28 @@ This subcommand is needed for :doc:`tournament mode </tournament>` and its usage
 
 This subcommand creates a basic track from data in an existing cluster. See the :ref:`track tutorial <add_track_create_track>` for a complete walkthrough.
 
+``build``
+~~~~~~~~~~~~~
+
+.. warning::
+
+    This subcommand is unsupported and intended only for Elasticsearch developer use. Expect the functionality and the command line interface to change significantly even in patch releases.
+
+This subcommand can be used to build Elasticsearch (and plugins) from specific revisions. Example::
+
+    esrally build --revision="@2022-07-21" --elasticsearch-plugins=analysis-icu --target-arch aarch64 --target-os linux  --quiet
+
+This will build Elasticsearch and the plugin ``analysis-icu`` for an ARM equipped Linux system, from the last commit on 2022-07-21. See :ref:`revision for more information<clr_revision>`.
+
+Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has built it::
+
+    [INFO] Using Docker to create installable binary from source files
+    {
+      "elasticsearch": "/.rally/benchmarks/distributions/src/elasticsearch-ec774626230-linux-aarch64.tar.gz",
+      "analysis-icu": "file:///.rally/benchmarks/distributions/src/analysis-icu-ec774626230.zip"
+    }
+
+
 ``download``
 ~~~~~~~~~~~~~
 
