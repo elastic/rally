@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 import json
-import it
 
+import it
 from esrally.utils import process
 
 
