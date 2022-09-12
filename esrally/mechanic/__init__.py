@@ -24,6 +24,7 @@ from .mechanic import (
     StartEngine,
     StopEngine,
     cluster_distribution_version,
+    build,
     download,
     install,
     start,
