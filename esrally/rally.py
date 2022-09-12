@@ -400,6 +400,12 @@ def create_arg_parser():
         help="A comma-separated list of the initial seed host IPs",
         default="",
     )
+    install_parser.add_argument(
+        "--source-build-method",
+        help="Method with which to build Elasticsearch and plugins from source",
+        choices=["docker", "default"],
+        default="default",
+    )
     for p in [race_parser, install_parser]:
         p.add_argument(
             "--cluster-name",
@@ -643,6 +649,12 @@ def create_arg_parser():
         action="store_true",
         default=False,
         help="If any processes is running, it is going to kill them and allow Rally to continue to run.",
+    )
+    race_parser.add_argument(
+        "--source-build-method",
+        help="Method with which to build Elasticsearch and plugins from source",
+        choices=["docker", "default"],
+        default="default",
     )
 
     ###############################################################################
@@ -932,6 +944,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
             cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
@@ -975,6 +988,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             configure_mechanic_params(args, cfg)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
             cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
