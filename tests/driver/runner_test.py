@@ -2787,12 +2787,12 @@ class TestDeleteDataStreamRunner:
         result = await r(es, params)
 
         assert result == {
-            "weight": 1,
+            "weight": 2,
             "unit": "ops",
             "success": True,
         }
 
-        es.indices.delete_data_stream.assert_awaited_once_with(name="data-stream-B", params={})
+        es.indices.delete_data_stream.assert_awaited_with(name="data-stream-B", ignore=[404], params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
