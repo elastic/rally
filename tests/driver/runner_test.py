@@ -2734,7 +2734,7 @@ class TestDeleteIndexRunner:
                 mock.call(body={"transient": {"action.destructive_requires_name": True}}),
             ]
         )
-        es.indices.delete.assert_awaited_with(index="indexB", params={'ignore_unavailable': 'false'})
+        es.indices.delete.assert_awaited_with(index="indexB", params={"ignore_unavailable": "false"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio

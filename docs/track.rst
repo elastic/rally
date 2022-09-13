@@ -1631,13 +1631,11 @@ Properties
 
 If you want it to delete all data streams that have been declared in the ``data-streams`` section, you can specify the following properties:
 
-* ``only-if-exists`` (optional, defaults to ``true``): Defines whether a data stream should only be deleted if it exists.
 * ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 If you want it to delete one specific data stream (pattern) instead, you can specify the following properties:
 
 * ``data-stream`` (mandatory): One or more names of the data streams that should be deleted. If only one data stream should be deleted, you can use a string otherwise this needs to be a list of strings.
-* ``only-if-exists`` (optional, defaults to ``true``): Defines whether a data stream should only be deleted if it exists.
 * ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete data stream API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters (see example below).
 
 **Examples**
@@ -1654,8 +1652,7 @@ With the following snippet we will delete all ``ds-logs-*`` data streams::
     {
       "name": "delete-data-streams",
       "operation-type": "delete-data-stream",
-      "data-stream": "ds-logs-*",
-      "only-if-exists": false
+      "data-stream": "ds-logs-*"
     }
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
