@@ -2723,7 +2723,7 @@ class TestDeleteIndexRunner:
         result = await r(es, params)
 
         assert result == {
-            "weight": 1,
+            "weight": 2,
             "unit": "ops",
             "success": True,
         }
@@ -2734,7 +2734,7 @@ class TestDeleteIndexRunner:
                 mock.call(body={"transient": {"action.destructive_requires_name": True}}),
             ]
         )
-        es.indices.delete.assert_awaited_once_with(index="indexB", params={})
+        es.indices.delete.assert_awaited_with(index="indexB", params={'ignore_unavailable': 'false'})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio

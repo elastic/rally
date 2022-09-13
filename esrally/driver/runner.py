@@ -1363,18 +1363,14 @@ class DeleteIndex(Runner):
         ops = 0
 
         indices = mandatory(params, "indices", self)
-        only_if_exists = params.get("only-if-exists", False)
         request_params = params.get("request-params", {})
+        ignore_unavailable = not params.get("only-if-exists", False)
+        request_params["ignore_unavailable"] = str(ignore_unavailable).lower()
         prior_destructive_setting = await set_destructive_requires_name(es, False)
         try:
             for index_name in indices:
-                if not only_if_exists:
-                    await es.indices.delete(index=index_name, params=request_params)
-                    ops += 1
-                elif only_if_exists and await es.indices.exists(index=index_name):
-                    self.logger.info("Index [%s] already exists. Deleting it.", index_name)
-                    await es.indices.delete(index=index_name, params=request_params)
-                    ops += 1
+                await es.indices.delete(index=index_name, params=request_params)
+                ops += 1
         finally:
             await set_destructive_requires_name(es, prior_destructive_setting)
         return {
