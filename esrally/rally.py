@@ -953,8 +953,10 @@ def configure_mechanic_params(args, cfg, command_requires_car=True):
 
     if command_requires_car:
         if hasattr(args, "distribution_version"):
-            cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
-        if hasattr(args, "distribution_version"):
+            # subcommand has the arg, but let's check it's actually set
+            if args.distribution_version:
+                cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
+        if hasattr(args, "distribution_repository"):
             cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
         cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", opts.csv_to_list(args.car))
         cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
