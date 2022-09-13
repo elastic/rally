@@ -98,7 +98,6 @@ This will build Elasticsearch and the plugin ``analysis-icu`` for an ARM equippe
 
 Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has built it::
 
-    [INFO] Creating installable binary from source files
     {
       "elasticsearch": "/.rally/benchmarks/distributions/src/elasticsearch-ec774626230-linux-aarch64.tar.gz",
       "analysis-icu": "file:///.rally/benchmarks/distributions/src/analysis-icu-ec774626230.zip"
