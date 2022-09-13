@@ -182,7 +182,10 @@ def download_from_bucket(blobstore, url, local_path, expected_size_in_bytes=None
     return expected_size_in_bytes
 
 
-def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+HTTP_DOWNLOAD_RETRIES = 10
+
+
+def _download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
     with _request(
         "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
     ) as r, open(local_path, "wb") as out_file:
@@ -205,6 +208,20 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
             if progress_indicator and size_from_content_header:
                 progress_indicator(bytes_read, size_from_content_header)
         return expected_size_in_bytes
+
+
+def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    logger = logging.getLogger(__name__)
+    for i in range(HTTP_DOWNLOAD_RETRIES + 1):
+        try:
+            return _download_http(url, local_path, expected_size_in_bytes, progress_indicator)
+        except urllib3.exceptions.ProtocolError as exc:
+            if i == HTTP_DOWNLOAD_RETRIES:
+                raise
+            if isinstance(exc.args[1], urllib3.exceptions.IncompleteRead):
+                logger.warning("Retrying after %s", exc)
+                continue
+            raise
 
 
 def add_url_param_elastic_no_kpi(url):
