@@ -2712,7 +2712,7 @@ class TestDeleteIndexRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_existing_indices(self, es):
-        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete = mock.AsyncMock()
         es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
         es.cluster.put_settings = mock.AsyncMock()
@@ -2723,7 +2723,7 @@ class TestDeleteIndexRunner:
         result = await r(es, params)
 
         assert result == {
-            "weight": 2,
+            "weight": 1,
             "unit": "ops",
             "success": True,
         }
@@ -2734,7 +2734,7 @@ class TestDeleteIndexRunner:
                 mock.call(body={"transient": {"action.destructive_requires_name": True}}),
             ]
         )
-        es.indices.delete.assert_awaited_with(index="indexB", params={"ignore_unavailable": "false"})
+        es.indices.delete.assert_awaited_once_with(index="indexB", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -2777,7 +2777,7 @@ class TestDeleteDataStreamRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_existing_data_streams(self, es):
-        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete_data_stream = mock.AsyncMock()
 
         r = runner.DeleteDataStream()
@@ -2787,12 +2787,12 @@ class TestDeleteDataStreamRunner:
         result = await r(es, params)
 
         assert result == {
-            "weight": 2,
+            "weight": 1,
             "unit": "ops",
             "success": True,
         }
 
-        es.indices.delete_data_stream.assert_awaited_with(name="data-stream-B", ignore=[404], params={})
+        es.indices.delete_data_stream.assert_awaited_once_with(name="data-stream-B", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio

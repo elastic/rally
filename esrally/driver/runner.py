@@ -1363,14 +1363,20 @@ class DeleteIndex(Runner):
         ops = 0
 
         indices = mandatory(params, "indices", self)
+        only_if_exists = params.get("only-if-exists", False)
         request_params = params.get("request-params", {})
-        ignore_unavailable = not params.get("only-if-exists", False)
-        request_params["ignore_unavailable"] = str(ignore_unavailable).lower()
         prior_destructive_setting = await set_destructive_requires_name(es, False)
         try:
             for index_name in indices:
-                await es.indices.delete(index=index_name, params=request_params)
-                ops += 1
+                if not only_if_exists:
+                    await es.indices.delete(index=index_name, params=request_params)
+                    ops += 1
+                elif only_if_exists:
+                    get_response = await es.indices.get(index=index_name, ignore=[404])
+                    if not get_response.get("status") == 404:
+                        self.logger.info("Index [%s] already exists. Deleting it.", index_name)
+                        await es.indices.delete(index=index_name, params=request_params)
+                        ops += 1
         finally:
             await set_destructive_requires_name(es, prior_destructive_setting)
         return {
@@ -1392,11 +1398,19 @@ class DeleteDataStream(Runner):
         ops = 0
 
         data_streams = mandatory(params, "data-streams", self)
+        only_if_exists = mandatory(params, "only-if-exists", self)
         request_params = mandatory(params, "request-params", self)
 
         for data_stream in data_streams:
-            await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
-            ops += 1
+            if not only_if_exists:
+                await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
+                ops += 1
+            elif only_if_exists:
+                get_response = await es.indices.get(index=data_stream)
+                if not get_response.get("status") == 404:
+                    self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
+                    await es.indices.delete_data_stream(name=data_stream, params=request_params)
+                    ops += 1
 
         return {
             "weight": ops,
