@@ -1370,6 +1370,7 @@ class DeleteIndex(Runner):
         try:
             for index_name in indices:
                 if not only_if_exists:
+                    request_params["ignore_unavailable"] = "true"
                     await es.indices.delete(index=index_name, params=request_params)
                     ops += 1
                 elif only_if_exists and await es.indices.exists(index=index_name):
