@@ -218,10 +218,8 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
         except urllib3.exceptions.ProtocolError as exc:
             if i == HTTP_DOWNLOAD_RETRIES:
                 raise
-            if isinstance(exc.args[1], urllib3.exceptions.IncompleteRead):
-                logger.warning("Retrying after %s", exc)
-                continue
-            raise
+            logger.warning("Retrying after %s", exc)
+            continue
 
 
 def add_url_param_elastic_no_kpi(url):
