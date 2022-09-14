@@ -1406,7 +1406,7 @@ class DeleteDataStream(Runner):
                 await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
                 ops += 1
             elif only_if_exists:
-                get_response = await es.indices.get(index=data_stream)
+                get_response = await es.indices.get(index=data_stream, ignore=[404])
                 if not get_response.get("status") == 404:
                     self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
                     await es.indices.delete_data_stream(name=data_stream, params=request_params)
