@@ -2907,7 +2907,7 @@ class TestDeleteIndexTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.exists_template = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
 
@@ -3038,10 +3038,7 @@ class TestDeleteComponentTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        async def _side_effect(name):
-            return name == "templateB"
-
-        es.cluster.exists_component_template = mock.AsyncMock(side_effect=_side_effect)
+        es.cluster.get_component_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.cluster.delete_component_template = mock.AsyncMock()
 
         r = runner.DeleteComponentTemplate()
@@ -3201,7 +3198,7 @@ class TestDeleteComposableTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.exists_index_template = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get_index_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete_index_template = mock.AsyncMock()
 
         r = runner.DeleteComposableTemplate()
