@@ -18,6 +18,7 @@ import functools
 import logging
 import os
 import socket
+import time
 import urllib.error
 from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 
@@ -210,7 +211,7 @@ def _download_http(url, local_path, expected_size_in_bytes=None, progress_indica
         return expected_size_in_bytes
 
 
-def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None, *, sleep=time.sleep):
     logger = logging.getLogger(__name__)
     for i in range(HTTP_DOWNLOAD_RETRIES + 1):
         try:
@@ -219,6 +220,7 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
             if i == HTTP_DOWNLOAD_RETRIES:
                 raise
             logger.warning("Retrying after %s", exc)
+            sleep(5)
             continue
 
 

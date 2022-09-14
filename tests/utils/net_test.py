@@ -124,7 +124,11 @@ def test_download_http(httpserver, tmp_path):
     httpserver.expect_request("/foobar").respond_with_data(data)
     local_path = str(tmp_path / "file.txt")
 
-    net.download_http(httpserver.url_for("/foobar"), local_path=local_path)
+    def raise_error(seconds):
+        # Make sure we don't sleep in the success case
+        raise ValueError()
+
+    net.download_http(httpserver.url_for("/foobar"), local_path=local_path, sleep=raise_error)
     with open(local_path, "rb") as f:
         assert f.read() == data
 
@@ -137,9 +141,15 @@ def test_download_http_retry_incomplete_read_retry_failure(httpserver, tmp_path)
 
     httpserver.expect_request("/foobar").respond_with_response(short_resp)
     local_path = str(tmp_path / "file.txt")
+    retries = 0
+
+    def sleep(seconds):
+        nonlocal retries
+        retries += 1
 
     with pytest.raises(urllib3.exceptions.ProtocolError):
-        net.download_http(httpserver.url_for("/foobar"), local_path=local_path)
+        net.download_http(httpserver.url_for("/foobar"), local_path=local_path, sleep=sleep)
+    assert retries == 10
 
 
 def test_download_http_retry_incomplete_read_retry_success(httpserver, tmp_path):
@@ -155,6 +165,13 @@ def test_download_http_retry_incomplete_read_retry_success(httpserver, tmp_path)
     httpserver.expect_ordered_request("/foobar").respond_with_data(data)
 
     local_path = str(tmp_path / "file.txt")
-    net.download_http(httpserver.url_for("/foobar"), local_path=local_path)
+    retries = 0
+
+    def sleep(seconds):
+        nonlocal retries
+        retries += 1
+
+    net.download_http(httpserver.url_for("/foobar"), local_path=local_path, sleep=sleep)
     with open(local_path, "rb") as f:
         assert f.read() == data
+    assert retries == 10
