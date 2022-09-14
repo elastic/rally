@@ -2907,7 +2907,7 @@ class TestDeleteIndexTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.get_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
+        es.indices.get_template = mock.AsyncMock(side_effect=[False, True])
         es.indices.delete_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
 

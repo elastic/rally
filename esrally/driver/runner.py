@@ -1580,15 +1580,13 @@ class DeleteIndexTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
-            elif only_if_exists:
-                # here we use .get() and check for 404 instead of exists_template due to a bug in some versions
-                # of elasticsearch-py/elastic-transport with HEAD calls.
-                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
-                template_exists = await es.indices.get_template(name=template_name, ignore=[404])
-                if not template_exists.get("status") == 404:
-                    self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
-                    await es.indices.delete_template(name=template_name, params=request_params)
-                    ops_count += 1
+            # here we use .get_template() and check for empty instead of exists_template due to a bug in some versions
+            # of elasticsearch-py/elastic-transport with HEAD calls.
+            # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+            elif only_if_exists and await es.indices.get_template(name=template_name, ignore=[404]):
+                self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
+                await es.indices.delete_template(name=template_name, params=request_params)
+                ops_count += 1
             # ensure that we do not provide an empty index pattern by accident
             if delete_matching_indices and index_pattern:
                 await es.indices.delete(index=index_pattern)
