@@ -2820,5 +2820,4 @@ class TestDownsampleParamSource:
         p = source.params()
 
         assert p["fixed-interval"] == "1h"
-        assert p["source-index"] != ""
         assert p["target-index"] == f"{p['source-index']}-{p['fixed-interval']}"
