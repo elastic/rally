@@ -2778,7 +2778,7 @@ class TestDownsampleParamSource:
     def test_downsample_all_params(self):
         source = params.DownsampleParamSource(
             track.Track(name="unit-test"),
-            params={"index": "test-source-index", "target-index": "test-target-index", "fixed-interval": "1m"},
+            params={"source-index": "test-source-index", "target-index": "test-target-index", "fixed-interval": "1m"},
         )
 
         p = source.params()
@@ -2790,7 +2790,7 @@ class TestDownsampleParamSource:
     def test_downsample_target_index_param(self):
         source = params.DownsampleParamSource(
             track.Track(name="unit-test"),
-            params={"index": "tsdb", "fixed-interval": "1m"},
+            params={"source-index": "tsdb", "fixed-interval": "1m"},
         )
 
         p = source.params()
