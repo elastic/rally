@@ -3066,7 +3066,7 @@ Properties
 """"""""""
 
 * ``fixed_interval`` (optional, defaults to ``1h``): The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
-* ``source-index`` (optional, defaults to ``tsdb-index``): The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation.
+* ``source-index`` (optional): The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation. If there is only one index defined in the ``indices`` of the track definition, that will be used as the default.
 * ``target-index`` (optional, defaults to ``{source-index}-{fixed-interval}``): Tne new target index created by the downsampling operation and including aggregated data.
 
 **Example**
