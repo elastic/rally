@@ -33,6 +33,14 @@ from esrally.utils import console, net
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
 
+def build(cfg):
+    car, plugins = load_team(cfg, external=False)
+
+    s = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=plugins)
+    binaries = s()
+    console.println(json.dumps(binaries, indent=2), force=True)
+
+
 def download(cfg):
     car, plugins = load_team(cfg, external=False)
 

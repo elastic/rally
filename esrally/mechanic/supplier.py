@@ -395,12 +395,20 @@ class ElasticsearchSourceSupplier:
     def prepare(self):
         if self.builder:
             self.builder.build_jdk = self.resolve_build_jdk_major(self.src_dir)
-            self.builder.build(
-                [
+
+            # There are no 'x86_64' specific gradle build commands
+            if self.template_renderer.arch != "x86_64":
+                commands = [
+                    self.template_renderer.render(self.car.mandatory_var("clean_command")),
+                    self.template_renderer.render(self.car.mandatory_var("system.build_command.arch")),
+                ]
+            else:
+                commands = [
                     self.template_renderer.render(self.car.mandatory_var("clean_command")),
                     self.template_renderer.render(self.car.mandatory_var("system.build_command")),
                 ]
-            )
+
+            self.builder.build(commands)
 
     def add(self, binaries):
         binaries["elasticsearch"] = self.resolve_binary()
@@ -444,7 +452,12 @@ class ElasticsearchSourceSupplier:
 
     def resolve_binary(self):
         try:
-            path = os.path.join(self.src_dir, self.template_renderer.render(self.car.mandatory_var("system.artifact_path_pattern")))
+            # There are no 'x86_64' specific gradle build commands,
+            if self.template_renderer.arch != "x86_64":
+                system_artifact_path = self.car.mandatory_var("system.artifact_path_pattern.arch")
+            else:
+                system_artifact_path = self.car.mandatory_var("system.artifact_path_pattern")
+            path = os.path.join(self.src_dir, self.template_renderer.render(system_artifact_path))
             return glob.glob(path)[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources'.")
