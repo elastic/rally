@@ -2787,17 +2787,29 @@ class TestDownsampleParamSource:
         assert p["source-index"] == "test-source-index"
         assert p["target-index"] == "test-target-index"
 
-    def test_downsample_target_index_param(self):
+    def test_downsample_default_index_param(self):
         source = params.DownsampleParamSource(
-            track.Track(name="unit-test"),
-            params={"source-index": "tsdb", "fixed-interval": "1m"},
+            track.Track(name="unit-test", indices=[track.Index(name="test-source-index", body="index.json")]),
+            params={"fixed-interval": "1m", "target-index": "test-target-index"},
         )
 
         p = source.params()
 
         assert p["fixed-interval"] == "1m"
-        assert p["source-index"] == "tsdb"
-        assert p["target-index"] == "tsdb-1m"
+        assert p["source-index"] == "test-source-index"
+        assert p["target-index"] == "test-target-index"
+
+    def test_downsample_source_index_override_default_index_param(self):
+        source = params.DownsampleParamSource(
+            track.Track(name="unit-test", indices=[track.Index(name="test-source-index", body="index.json")]),
+            params={"source-index": "another-index", "fixed-interval": "1m", "target-index": "test-target-index"},
+        )
+
+        p = source.params()
+
+        assert p["fixed-interval"] == "1m"
+        assert p["source-index"] == "another-index"
+        assert p["target-index"] == "test-target-index"
 
     def test_downsample_empty_params(self):
         source = params.DownsampleParamSource(
