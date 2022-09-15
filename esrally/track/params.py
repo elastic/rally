@@ -842,7 +842,7 @@ class DownsampleParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
         self._fixed_interval = params.get("fixed-interval", "1h")
-        self._source_index = params.get("source-index", "tsdb-index")
+        self._source_index = params.get_target(track, params)
         self._target_index = params.get("target-index", f"{self._source_index}-{self._fixed_interval}")
 
     def params(self):
