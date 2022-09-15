@@ -2331,3 +2331,7 @@ class DiskUsageStats(TelemetryDevice):
                 term_vectors = field_info.get("term_vectors_in_bytes", 0)
                 if term_vectors > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_term_vectors", term_vectors, meta_data=meta, unit="byte")
+
+                knn_vectors = field_info.get("knn_vectors_in_bytes", 0)
+                if knn_vectors > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_knn_vectors", knn_vectors, meta_data=meta, unit="byte")

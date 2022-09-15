@@ -261,6 +261,64 @@ def create_arg_parser():
         default=True,
     )
 
+    build_parser = subparsers.add_parser("build", help="Builds an artifact")
+    build_parser.add_argument(
+        "--revision",
+        help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
+        " 'latest' fetches the latest version on the main branch. It is also possible to specify a commit id or a timestamp."
+        ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
+        'e.g. "@2013-07-27T10:37:00Z" (default: current).',
+        default="current",
+    )  # optimized for local usage, don't fetch sources
+    build_parser.add_argument(
+        "--target-os",
+        help="The name of the target operating system for which an artifact should be downloaded (default: current OS)",
+    )
+    build_parser.add_argument(
+        "--target-arch",
+        help="The name of the CPU architecture for which an artifact should be downloaded (default: current architecture)",
+    )
+    build_parser.add_argument(
+        "--team-repository",
+        help="Define the repository from where Rally will load teams and cars (default: default).",
+        default="default",
+    )
+    build_parser.add_argument(
+        "--team-revision",
+        help="Define a specific revision in the team repository that Rally should use.",
+        default=None,
+    )
+    build_parser.add_argument(
+        "--team-path",
+        help="Define the path to the car and plugin configurations to use.",
+    )
+    build_parser.add_argument(
+        "--car",
+        help=f"Define the car to use. List possible cars with `{PROGRAM_NAME} list cars` (default: defaults).",
+        default="defaults",
+    )  # optimized for local usage
+    build_parser.add_argument(
+        "--car-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim as variables for the car.",
+        default="",
+    )
+    build_parser.add_argument(
+        "--elasticsearch-plugins",
+        help="Define the Elasticsearch plugins to install. (default: install no plugins).",
+        default="",
+    )
+    build_parser.add_argument(
+        "--plugin-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to all plugins as variables.",
+        default="",
+    )
+    build_parser.add_argument(
+        "--source-build-method",
+        help="Method with which to build Elasticsearch and plugins from source",
+        choices=["docker", "default"],
+        default="default",
+    )
+
     download_parser = subparsers.add_parser("download", help="Downloads an artifact")
     download_parser.add_argument(
         "--team-repository",
@@ -399,6 +457,12 @@ def create_arg_parser():
         "--seed-hosts",
         help="A comma-separated list of the initial seed host IPs",
         default="",
+    )
+    install_parser.add_argument(
+        "--source-build-method",
+        help="Method with which to build Elasticsearch and plugins from source",
+        choices=["docker", "default"],
+        default="default",
     )
     for p in [race_parser, install_parser]:
         p.add_argument(
@@ -644,6 +708,12 @@ def create_arg_parser():
         default=False,
         help="If any processes is running, it is going to kill them and allow Rally to continue to run.",
     )
+    race_parser.add_argument(
+        "--source-build-method",
+        help="Method with which to build Elasticsearch and plugins from source",
+        choices=["docker", "default"],
+        default="default",
+    )
 
     ###############################################################################
     #
@@ -670,6 +740,7 @@ def create_arg_parser():
         list_parser,
         race_parser,
         compare_parser,
+        build_parser,
         download_parser,
         install_parser,
         start_parser,
@@ -881,9 +952,12 @@ def configure_mechanic_params(args, cfg, command_requires_car=True):
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.revision", args.team_revision)
 
     if command_requires_car:
-        if args.distribution_version:
-            cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
-        cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
+        if hasattr(args, "distribution_version"):
+            # subcommand has the arg, but let's check it's actually set
+            if args.distribution_version:
+                cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.version", args.distribution_version)
+        if hasattr(args, "distribution_repository"):
+            cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.repository", args.distribution_repository)
         cfg.add(config.Scope.applicationOverride, "mechanic", "car.names", opts.csv_to_list(args.car))
         cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
 
@@ -922,6 +996,15 @@ def dispatch_sub_command(arg_parser, args, cfg):
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
+        elif sub_command == "build":
+            cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "target.os", args.target_os)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "target.arch", args.target_arch)
+            configure_mechanic_params(args, cfg)
+            mechanic.build(cfg)
         elif sub_command == "download":
             cfg.add(config.Scope.applicationOverride, "mechanic", "target.os", args.target_os)
             cfg.add(config.Scope.applicationOverride, "mechanic", "target.arch", args.target_arch)
@@ -932,6 +1015,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
             cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
@@ -975,6 +1059,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             configure_mechanic_params(args, cfg)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
             cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
