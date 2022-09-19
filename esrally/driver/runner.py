@@ -66,6 +66,7 @@ def register_default_runners():
     # these requests should not be retried as they are not idempotent
     register_runner(track.OperationType.CreateSnapshot, CreateSnapshot(), async_runner=True)
     register_runner(track.OperationType.RestoreSnapshot, RestoreSnapshot(), async_runner=True)
+    register_runner(track.OperationType.Downsample, Downsample(), async_runner=True)
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth, Retry(ClusterHealth()), async_runner=True)
     register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
@@ -2704,6 +2705,48 @@ class Sql(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "sql"
+
+
+class Downsample(Runner):
+    """
+    Executes a downsampling operation creating the target index and aggregating data in the source index on the @timestamp field.
+    """
+
+    async def __call__(self, es, params):
+
+        request_params, request_headers = self._transport_request_params(params)
+
+        fixed_interval = mandatory(params, "fixed-interval", self)
+        if fixed_interval is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'fixed-interval'. "
+                "Add it to your parameter source and try again."
+            )
+
+        source_index = mandatory(params, "source-index", self)
+        if source_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'source-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        target_index = mandatory(params, "target-index", self)
+        if target_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        path = f"/{source_index}/_downsample/{target_index}"
+
+        await es.perform_request(
+            method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
+        )
+
+        return {"weight": 1, "unit": "ops", "success": True}
+
+    def __repr__(self, *args, **kwargs):
+        return "downsample"
 
 
 class FieldCaps(Runner):
