@@ -235,14 +235,18 @@ class TestAssertingRunner:
     @pytest.mark.asyncio
     async def test_asserts_text_equal_succeeds(self):
         es = None
-        response = io.BytesIO(json.dumps({
-            "hits": {
-                "hits": {
-                    "value": 5,
-                    "relation": "eq",
-                },
-            },
-        }).encode())
+        response = io.BytesIO(
+            json.dumps(
+                {
+                    "hits": {
+                        "hits": {
+                            "value": 5,
+                            "relation": "eq",
+                        },
+                    },
+                }
+            ).encode()
+        )
         delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
         async with r:
@@ -290,14 +294,18 @@ class TestAssertingRunner:
     @pytest.mark.asyncio
     async def test_asserts_text_equal_fails(self):
         es = None
-        response = io.BytesIO(json.dumps({
-            "hits": {
-                "hits": {
-                    "value": 10000,
-                    "relation": "gte",
-                },
-            },
-        }).encode())
+        response = io.BytesIO(
+            json.dumps(
+                {
+                    "hits": {
+                        "hits": {
+                            "value": 10000,
+                            "relation": "gte",
+                        },
+                    },
+                }
+            ).encode()
+        )
         delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
         with pytest.raises(

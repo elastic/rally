@@ -371,7 +371,7 @@ class AssertingRunner(Runner, Delegator):
     def equal(self, expected, actual):
         return actual == expected
 
-    def check_assertion(self, op_name, assertion, properties, dot_expand_keys = True):
+    def check_assertion(self, op_name, assertion, properties, dot_expand_keys=True):
         path = assertion["property"]
         predicate_name = assertion["condition"]
         expected_value = assertion["value"]
