@@ -92,7 +92,7 @@ def pull_ts(src_dir, ts, *, remote, branch):
 
 @probed
 def pull_revision(src_dir, *, remote, revision):
-    fetch(src_dir, remote=remote)
+    pull(src_dir, remote=remote, branch=revision)
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 
