@@ -650,7 +650,23 @@ class TestElasticsearchSourceSupplier:
             variables={"clean_command": "./gradlew clean", "system.build_command": "./gradlew assemble"},
         )
         builder = mock.create_autospec(supplier.Builder)
-        renderer = supplier.TemplateRenderer(version="abc")
+        renderer = supplier.TemplateRenderer(version="abc", arch="x86_64")
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
+        )
+        es.prepare()
+
+        builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
+
+    def test_build_arm(self):
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "system.build_command.arch": "./gradlew assemble"},
+        )
+        builder = mock.create_autospec(supplier.Builder)
+        renderer = supplier.TemplateRenderer(version="abc", arch="aarch64")
         es = supplier.ElasticsearchSourceSupplier(
             revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
         )
@@ -668,7 +684,7 @@ class TestElasticsearchSourceSupplier:
                 # system.build_command is not defined
             },
         )
-        renderer = supplier.TemplateRenderer(version="abc")
+        renderer = supplier.TemplateRenderer(version="abc", arch="x86_64")
         builder = mock.create_autospec(supplier.Builder)
         es = supplier.ElasticsearchSourceSupplier(
             revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
@@ -690,7 +706,27 @@ class TestElasticsearchSourceSupplier:
                 "system.artifact_path_pattern": "distribution/archives/tar/build/distributions/*.tar.gz",
             },
         )
-        renderer = supplier.TemplateRenderer(version="abc")
+        renderer = supplier.TemplateRenderer(version="abc", arch="x86_64")
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None, template_renderer=renderer
+        )
+        binaries = {}
+        es.add(binaries=binaries)
+        assert binaries == {"elasticsearch": "elasticsearch.tar.gz"}
+
+    @mock.patch("glob.glob", lambda p: ["elasticsearch.tar.gz"])
+    def test_add_elasticsearch_binary_arm(self):
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={
+                "clean_command": "./gradlew clean",
+                "system.build_command.arch": "./gradlew assemble",
+                "system.artifact_path_pattern.arch": "distribution/archives/tar/build/distributions/*.tar.gz",
+            },
+        )
+        renderer = supplier.TemplateRenderer(version="abc", arch="aarch64")
         es = supplier.ElasticsearchSourceSupplier(
             revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None, template_renderer=renderer
         )
