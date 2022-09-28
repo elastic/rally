@@ -331,7 +331,7 @@ class TestAssertingRunner:
         r = runner.AssertingRunner(delegate)
         with pytest.raises(
             exceptions.DataError,
-            match=r"Cannot check assertion in \[test-task\] as \[<AsyncMock id='\d+'>\] does not return a dict.",
+            match=r"Cannot check assertion in \[test-task\] as \[<AsyncMock id='\d+'>\] did not return a dict.",
         ):
             async with r:
                 await r(
