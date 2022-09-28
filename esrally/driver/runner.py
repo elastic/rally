@@ -404,7 +404,7 @@ class AssertingRunner(Runner, Delegator):
                     props = parse(return_value, assertion["property"])
                     self.check_assertion(op_name, assertion, props, props_expand_keys=False)
             else:
-                raise exceptions.DataError(f"Cannot check assertion in [{op_name}] as [{repr(self.delegate)}] does not return a dict.")
+                raise exceptions.DataError(f"Cannot check assertion in [{op_name}] as [{repr(self.delegate)}] did not return a dict.")
         return return_value
 
     def __repr__(self, *args, **kwargs):
