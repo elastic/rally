@@ -41,6 +41,8 @@ This section contains more details about the source tree.
 * ``cache`` (default: true): Enables Rally's internal :ref:`source artifact <pipelines_from-sources>` cache (``elasticsearch*.tar.gz`` and optionally ``*.zip`` files for plugins). Artifacts are cached based on their git revision.
 * ``cache.days`` (default: 7): The number of days for which an artifact should be kept in the source artifact cache.
 
+.. _configuration_source:
+
 benchmarks
 ~~~~~~~~~~
 

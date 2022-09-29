@@ -124,9 +124,9 @@ class TestSourceRepository:
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
-    @mock.patch("esrally.utils.git.pull_revision", autospec=True)
+    @mock.patch("esrally.utils.git.pull", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
-    def test_checkout_revision(self, mock_is_working_copy, mock_pull_revision, mock_head_revision):
+    def test_checkout_revision(self, mock_is_working_copy, mock_pull, mock_head_revision):
         mock_is_working_copy.return_value = True
         mock_head_revision.return_value = "HEAD"
 
@@ -134,7 +134,7 @@ class TestSourceRepository:
         s.fetch("67c2f42")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_revision.assert_called_with("/src", remote="origin", revision="67c2f42")
+        mock_pull.assert_called_with("/src", remote="origin", branch="67c2f42")
         mock_head_revision.assert_called_with("/src")
 
     def test_is_commit_hash(self):
