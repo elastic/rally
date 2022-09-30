@@ -233,37 +233,6 @@ class TestAssertingRunner:
         assert final_response == response
 
     @pytest.mark.asyncio
-    async def test_asserts_text_equal_succeeds(self):
-        es = None
-        response = io.BytesIO(
-            json.dumps(
-                {
-                    "hits": {
-                        "hits": {
-                            "value": 5,
-                            "relation": "eq",
-                        },
-                    },
-                }
-            ).encode()
-        )
-        delegate = mock.AsyncMock(return_value=response)
-        r = runner.AssertingRunner(delegate)
-        async with r:
-            final_response = await r(
-                es,
-                {
-                    "name": "test-task",
-                    "assertions": [
-                        {"property": "hits.hits.value", "condition": "==", "value": 5},
-                        {"property": "hits.hits.relation", "condition": "==", "value": "eq"},
-                    ],
-                },
-            )
-
-        assert final_response == response
-
-    @pytest.mark.asyncio
     async def test_asserts_equal_fails(self):
         es = None
         response = {
@@ -274,38 +243,6 @@ class TestAssertingRunner:
                 },
             },
         }
-        delegate = mock.AsyncMock(return_value=response)
-        r = runner.AssertingRunner(delegate)
-        with pytest.raises(
-            exceptions.RallyTaskAssertionError, match=r"Expected \[hits.hits.relation\] in \[test-task\] to be == \[eq\] but was \[gte\]."
-        ):
-            async with r:
-                await r(
-                    es,
-                    {
-                        "name": "test-task",
-                        "assertions": [
-                            {"property": "hits.hits.value", "condition": "==", "value": 10000},
-                            {"property": "hits.hits.relation", "condition": "==", "value": "eq"},
-                        ],
-                    },
-                )
-
-    @pytest.mark.asyncio
-    async def test_asserts_text_equal_fails(self):
-        es = None
-        response = io.BytesIO(
-            json.dumps(
-                {
-                    "hits": {
-                        "hits": {
-                            "value": 10000,
-                            "relation": "gte",
-                        },
-                    },
-                }
-            ).encode()
-        )
         delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
         with pytest.raises(
