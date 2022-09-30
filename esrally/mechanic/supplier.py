@@ -201,7 +201,7 @@ def _supply_requirements(sources, distribution, plugins, revisions, distribution
                 except KeyError:
                     # maybe we can use the catch-all revision (only if it's not a git revision)
                     plugin_revision = revisions.get("all")
-                    if not plugin_revision or SourceRepository.is_branch(plugin_revision):
+                    if not plugin_revision or SourceRepository.is_commit_hash(plugin_revision):
                         raise exceptions.SystemSetupError("No revision specified for plugin [%s]." % plugin.name)
                     logging.getLogger(__name__).info(
                         "Revision for [%s] is not explicitly defined. Using catch-all revision [%s].", plugin.name, plugin_revision
@@ -680,14 +680,6 @@ class SourceRepository:
         self._try_init(may_skip_init=revision == "current")
         return self._update(revision)
 
-    @classmethod
-    def is_branch(cls, identifier, src_dir=None):
-        # if we don't have a src dir (i.e. git repo) to run actual git commands in, then just check if the identifier is shorthand
-        if not src_dir:
-            return identifier == "latest" or identifier == "current" or identifier.startswith("@")
-
-        return git.is_branch(src_dir, identifier)
-
     def has_remote(self):
         return self.remote_url is not None
 
@@ -713,7 +705,7 @@ class SourceRepository:
             self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
             git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=self.branch)
         elif self.has_remote():  # we can have either a commit hash or branch name
-            if self.is_branch(identifier=revision, src_dir=self.src_dir):
+            if git.is_branch(src_dir=self.src_dir, identifier=revision):
                 self.logger.info("Fetching from remote and checking out branch [%s] for %s.", revision, self.name)
                 git.fetch(self.src_dir, remote="origin")
                 git.checkout_remote(self.src_dir, remote="origin", branch=revision)
@@ -730,6 +722,10 @@ class SourceRepository:
         else:
             self.logger.info("Skipping git revision resolution for %s (%s is not a git repository).", self.name, self.src_dir)
             return None
+
+    @classmethod
+    def is_commit_hash(cls, revision):
+        return revision != "latest" and revision != "current" and not revision.startswith("@")
 
 
 class Builder:

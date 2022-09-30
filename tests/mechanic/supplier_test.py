@@ -139,18 +139,13 @@ class TestSourceRepository:
         mock_pull_revision.assert_called_with("/src", remote="origin", revision="67c2f42")
         mock_head_revision.assert_called_with("/src")
 
-    @mock.patch("esrally.utils.git.is_branch")
-    def test_branch(self, mocked_is_branch):
-        branch = "test-branch"
-        src = "/src"
-        supplier.SourceRepository.is_branch(branch, src)
+    def test_is_commit_hash(self):
+        assert supplier.SourceRepository.is_commit_hash("67c2f42")
 
-        mocked_is_branch.assert_called_with(src, branch)
-
-    def test_is_branch_shorthand(self):
-        assert supplier.SourceRepository.is_branch(identifier="latest") is True
-        assert supplier.SourceRepository.is_branch(identifier="current") is True
-        assert supplier.SourceRepository.is_branch(identifier="@2015-01-01-01:00:00") is True
+    def test_is_not_commit_hash(self):
+        assert not supplier.SourceRepository.is_commit_hash("latest")
+        assert not supplier.SourceRepository.is_commit_hash("current")
+        assert not supplier.SourceRepository.is_commit_hash("@2015-01-01-01:00:00")
 
 
 class TestBuilder:
