@@ -17,7 +17,6 @@
 
 import logging
 import os
-from itertools import groupby
 
 from esrally import exceptions
 from esrally.utils import io, process
@@ -50,25 +49,11 @@ def is_working_copy(src):
 
 
 def is_branch(src_dir, identifier):
-    def all_equal(iterable):
-        "Returns True if all the elements are equal to each other"
-        g = groupby(iterable)
-        return next(g, True) and not next(g, False)
-
     name_rev_command = f"git -C {io.escape_path(src_dir)} name-rev {identifier}"
-
     # git name-rev returns the symbolic name for a given revision
-    #
-    # for example, if the identifier is a branch:
-    #        $ git name-rev test-branch
-    #          test-branch test-branch
-    #
-    # and if the identifier is a commit hash:
-    #       $ git name-rev e9ff502b0c3
-    #         e9ff502b0c3 test-branch~6
-
-    names = process.run_subprocess_with_output(name_rev_command)[0].split()
-    return all_equal(names)
+    # for branches the symbolic name is the name
+    _, symbolic_name = process.run_subprocess_with_output(name_rev_command)[0].split()
+    return identifier == symbolic_name
 
 
 def clone(src, *, remote):
