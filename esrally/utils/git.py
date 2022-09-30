@@ -110,13 +110,6 @@ def pull(src_dir, *, remote, branch):
 
 
 @probed
-def pull_revision(src_dir, *, remote, revision):
-    fetch(src_dir, remote=remote)
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
-        raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
-
-
-@probed
 def pull_ts(src_dir, ts, *, remote, branch):
     fetch(src_dir, remote=remote)
     clean_src = io.escape_path(src_dir)
@@ -124,6 +117,13 @@ def pull_ts(src_dir, ts, *, remote, branch):
     revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(clean_src, revision)):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
+
+
+@probed
+def pull_revision(src_dir, *, remote, revision):
+    fetch(src_dir, remote=remote)
+    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
+        raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 
 
 @probed
