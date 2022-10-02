@@ -18,6 +18,7 @@
 import csv
 import io
 import logging
+from pickle import NONE
 import sys
 from functools import partial
 
@@ -355,8 +356,25 @@ class SummaryReporter:
             lines.append(line)
 
     def _line(self, k, task, v, unit, converter=lambda x: x, force=False):
+        
         if v is not None or force or self.report_all_values:
-            u = unit if v is not None else None
+            # Convert unit to time if the time is less than a minute.
+            if unit == "min":
+                if (v < 1.0):
+                    v *= 60
+                    u = "s"
+                elif (v > 1.0):
+                    v /= 60
+                    u = "hr"
+                elif v == NONE:
+                    u = None
+            # Case for ms
+            if unit == "ms":
+                if (v > 1000):
+                    v = v / 1,000
+                    u = "s"
+                elif v == None:
+                    u = NONE
             return [k, task, converter(v), u]
         else:
             return []
