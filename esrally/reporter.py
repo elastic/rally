@@ -367,7 +367,7 @@ class SummaryReporter:
                 if (v < 1.0):
                     v *= 60
                     u = "s"
-                elif (v > 1.0):
+                elif (v > 60.0):
                     v /= 60
                     u = "hr"
                 elif v == NONE:
