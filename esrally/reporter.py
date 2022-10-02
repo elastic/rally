@@ -358,6 +358,10 @@ class SummaryReporter:
     def _line(self, k, task, v, unit, converter=lambda x: x, force=False):
         
         if v is not None or force or self.report_all_values:
+            
+            # Ensure that the unit has a value.
+            u = unit if v is not NONE else NONE
+
             # Convert unit to time if the time is less than a minute.
             if unit == "min":
                 if (v < 1.0):
@@ -375,10 +379,10 @@ class SummaryReporter:
                     u = "s"
                 elif v == None:
                     u = NONE
+            
             return [k, task, converter(v), u]
         else:
             return []
-
 
 class ComparisonReporter:
     def __init__(self, config):
