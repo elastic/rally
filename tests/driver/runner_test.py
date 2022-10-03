@@ -316,7 +316,7 @@ class TestAssertingRunner:
 
 class TestSelectiveJsonParser:
     def doc_as_text(self, doc):
-        return io.StringIO(json.dumps(doc))
+        return io.BytesIO(json.dumps(doc).encode())
 
     def test_parse_all_expected(self):
         doc = self.doc_as_text(
@@ -411,7 +411,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -440,7 +440,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -480,7 +480,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -519,7 +519,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -568,7 +568,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -605,7 +605,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -647,7 +647,7 @@ class TestBulkIndexRunner:
             ],
         }
 
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -719,7 +719,7 @@ class TestBulkIndexRunner:
             ],
         }
 
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -815,7 +815,7 @@ class TestBulkIndexRunner:
                 },
             ],
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -1558,7 +1558,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1606,7 +1606,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1660,7 +1660,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
 
         query_runner = runner.Query()
         params = {
@@ -1716,7 +1716,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
 
         query_runner = runner.Query()
         params = {
@@ -1766,7 +1766,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1823,7 +1823,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1878,7 +1878,7 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1934,8 +1934,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1997,8 +1997,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2055,8 +2055,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2135,12 +2135,12 @@ class TestQueryRunner:
 
         es.perform_request = mock.AsyncMock(
             side_effect=[
-                io.StringIO(json.dumps(search_response)),
-                io.StringIO(json.dumps(scroll_response)),
+                io.BytesIO(json.dumps(search_response).encode()),
+                io.BytesIO(json.dumps(scroll_response).encode()),
             ]
         )
 
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2189,7 +2189,7 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
         es.clear_scroll = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout())
 
         query_runner = runner.Query()
@@ -2254,11 +2254,11 @@ class TestQueryRunner:
 
         es.perform_request = mock.AsyncMock(
             side_effect=[
-                io.StringIO(json.dumps(search_response)),
-                io.StringIO(json.dumps(scroll_response)),
+                io.BytesIO(json.dumps(search_response).encode()),
+                io.BytesIO(json.dumps(scroll_response).encode()),
             ]
         )
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2308,8 +2308,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -5171,7 +5171,7 @@ class TestSqlRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_fetch_one_page(self, es):
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Sql()
         params = {
@@ -5194,7 +5194,7 @@ class TestSqlRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_fetch_all_pages(self, es):
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Sql()
         params = {"operation-type": "sql", "body": {"query": "SELECT first_name FROM emp"}, "pages": 3}
@@ -5216,7 +5216,10 @@ class TestSqlRunner:
     @pytest.mark.asyncio
     async def test_failure_on_too_few_pages(self, es):
         es.perform_request = mock.AsyncMock(
-            side_effect=[io.StringIO(json.dumps(self.default_response)), io.StringIO(json.dumps({"rows": [["John"]]}))]
+            side_effect=[
+                io.BytesIO(json.dumps(self.default_response).encode()),
+                io.BytesIO(json.dumps({"rows": [["John"]]}).encode()),
+            ]
         )
 
         sql_runner = runner.Sql()
@@ -5281,7 +5284,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_index_downsample(self, es):
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Downsample()
         params = {
@@ -6263,7 +6266,7 @@ class TestComposite:
                 # raw-request
                 None,
                 # search
-                io.StringIO(
+                io.BytesIO(
                     json.dumps(
                         {
                             "hits": {
@@ -6273,7 +6276,7 @@ class TestComposite:
                                 },
                             },
                         },
-                    ),
+                    ).encode()
                 ),
             ]
         )
@@ -6334,7 +6337,7 @@ class TestComposite:
         es.perform_request = mock.AsyncMock(
             side_effect=[
                 # search
-                io.StringIO(
+                io.BytesIO(
                     json.dumps(
                         {
                             "hits": {
@@ -6344,7 +6347,7 @@ class TestComposite:
                                 },
                             }
                         }
-                    )
+                    ).encode()
                 )
             ]
         )
