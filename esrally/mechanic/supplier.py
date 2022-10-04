@@ -704,12 +704,11 @@ class SourceRepository:
             git_ts_revision = revision[1:]
             self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
             git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=self.branch)
-        elif self.has_remote():  # we can have either a commit hash or branch name
-            if git.is_branch(src_dir=self.src_dir, identifier=revision):
+        elif self.has_remote():  # we can have either a commit hash, branch name, or tag
+            if git.is_branch(self.src_dir, remote="origin", identifier=revision):
                 self.logger.info("Fetching from remote and checking out branch [%s] for %s.", revision, self.name)
-                git.fetch(self.src_dir, remote="origin")
                 git.checkout_remote(self.src_dir, remote="origin", branch=revision)
-            else:
+            else:  # tag or commit hash
                 self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
                 git.pull_revision(self.src_dir, remote="origin", revision=revision)
         else:
