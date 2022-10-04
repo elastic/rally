@@ -123,13 +123,11 @@ class TestSourceRepository:
         mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", remote="origin", branch="main")
         mock_head_revision.assert_called_with("/src")
 
-    @mock.patch("esrally.utils.git.is_branch", autospec=True)
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
     @mock.patch("esrally.utils.git.pull_revision", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
-    def test_checkout_revision(self, mock_is_working_copy, mock_pull_revision, mock_head_revision, mock_is_branch):
+    def test_checkout_revision(self, mock_is_working_copy, mock_pull_revision, mock_head_revision):
         mock_is_working_copy.return_value = True
-        mock_is_branch.return_value = False
         mock_head_revision.return_value = "HEAD"
 
         s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src", branch="main")
@@ -140,12 +138,23 @@ class TestSourceRepository:
         mock_head_revision.assert_called_with("/src")
 
     def test_is_commit_hash(self):
+        assert supplier.SourceRepository.is_commit_hash("6aa52")
+        assert supplier.SourceRepository.is_commit_hash("b65fb")
         assert supplier.SourceRepository.is_commit_hash("67c2f42")
+        assert supplier.SourceRepository.is_commit_hash("a0b8cdc1840")
+        assert supplier.SourceRepository.is_commit_hash("6aa5288e60f")
+        assert supplier.SourceRepository.is_commit_hash("6aa5288e60f7c66cc443805de1e266f2d5ec918e")
+        assert supplier.SourceRepository.is_commit_hash("b65fb17a48328dc91c66facda3f6b41e6f5a8efb")
 
     def test_is_not_commit_hash(self):
         assert not supplier.SourceRepository.is_commit_hash("latest")
         assert not supplier.SourceRepository.is_commit_hash("current")
         assert not supplier.SourceRepository.is_commit_hash("@2015-01-01-01:00:00")
+        assert not supplier.SourceRepository.is_commit_hash("my-test-branch")
+        assert not supplier.SourceRepository.is_commit_hash("testbranch")
+        assert not supplier.SourceRepository.is_commit_hash("remotes/origin/1.7")
+        assert not supplier.SourceRepository.is_commit_hash("remotes/origin/2017-11-17-remove-log-message-newline")
+        assert not supplier.SourceRepository.is_commit_hash("remotes/upstream/Adding-unit-to-the-max-value-of-http.max_content_length")
 
 
 class TestBuilder:

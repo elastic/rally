@@ -704,14 +704,15 @@ class SourceRepository:
             git_ts_revision = revision[1:]
             self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
             git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=self.branch)
-        elif self.has_remote():  # we can have either a commit hash or branch name
-            if git.is_branch(src_dir=self.src_dir, identifier=revision):
+        elif self.has_remote():
+            # we can have either a commit hash or branch name
+            if self.is_commit_hash(revision):
+                self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
+                git.pull_revision(self.src_dir, remote="origin", revision=revision)
+            else:
                 self.logger.info("Fetching from remote and checking out branch [%s] for %s.", revision, self.name)
                 git.fetch(self.src_dir, remote="origin")
                 git.checkout_remote(self.src_dir, remote="origin", branch=revision)
-            else:
-                self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
-                git.pull_revision(self.src_dir, remote="origin", revision=revision)
         else:
             self.logger.info("Checking out local revision [%s] for %s.", revision, self.name)
             git.checkout(self.src_dir, branch=revision)
@@ -725,7 +726,8 @@ class SourceRepository:
 
     @classmethod
     def is_commit_hash(cls, revision):
-        return revision != "latest" and revision != "current" and not revision.startswith("@")
+        sha1_pattern = re.compile("[0-9a-f]{5,40}")
+        return re.match(sha1_pattern, revision)
 
 
 class Builder:

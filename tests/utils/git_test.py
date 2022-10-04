@@ -33,22 +33,6 @@ class TestGit:
         assert git.is_working_copy(os.path.dirname(test_dir))
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    def test_is_branch(self, run_subprocess_with_output):
-        src = "/src"
-        branch = "test-branch"
-        run_subprocess_with_output.return_value = ["test-branch test-branch"]
-
-        assert git.is_branch(src, branch) is True
-
-    @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    def test_is_not_branch(self, run_subprocess_with_output):
-        src = "/src"
-        branch = "3694a07"
-        run_subprocess_with_output.return_value = ["3694a07 test-branch~2"]
-
-        assert git.is_branch(src, branch) is False
-
-    @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_git_version_too_old(self, run_subprocess_with_logging, run_subprocess):
         # any non-zero return value will do

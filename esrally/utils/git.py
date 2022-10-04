@@ -48,14 +48,6 @@ def is_working_copy(src):
     return os.path.exists(src) and os.path.exists(os.path.join(src, ".git"))
 
 
-def is_branch(src_dir, identifier):
-    name_rev_command = f"git -C {io.escape_path(src_dir)} name-rev {identifier}"
-    # git name-rev returns the symbolic name for a given revision
-    # for branches the symbolic name is the name
-    _, symbolic_name = process.run_subprocess_with_output(name_rev_command)[0].split()
-    return identifier == symbolic_name
-
-
 def clone(src, *, remote):
     io.ensure_dir(src)
     # Don't swallow subprocess output, user might need to enter credentials...
