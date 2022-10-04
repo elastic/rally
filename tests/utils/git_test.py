@@ -70,7 +70,7 @@ class TestGit:
         run_subprocess_with_logging.return_value = 0
         src = "/src"
         branch = "3694a07"
-        # True, True is for @Probed on is_branch, and fetch
+        # True, True is for @probed on is_branch, and fetch
         mock_exit_status_as_bool.side_effect = [True, True, False]
 
         assert not git.is_branch(src, remote="origin", identifier=branch)
