@@ -595,6 +595,7 @@ You can specify the revision in different formats:
 * ``--revision=latest``: Use the HEAD revision from origin/main.
 * ``--revision=current``: Use the current revision (i.e. don't alter the local source tree).
 * ``--revision=abc123``: Where ``abc123`` is some git revision hash.
+* ``--revision=v8.4.0``: Where ``v8.4.0`` is some git tag.
 * ``--revision=@2013-07-27T10:37:00Z``: Determines the revision that is closest to the provided date. Rally logs to which git revision hash the date has been resolved and if you use Elasticsearch as metrics store (instead of the default in-memory one), :doc:`each metric record will contain the git revision hash also in the meta-data section </metrics>`.
 * ``--revision=my-branch-name``: Where ``my-branch-name`` is the name of an existing branch name. If you are using a :ref:`remote source repository <configuration_source>`, Rally will fetch and checkout the remote branch.
 
