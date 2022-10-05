@@ -32,6 +32,49 @@ class TestGit:
         assert not git.is_working_copy(test_dir)
         assert git.is_working_copy(os.path.dirname(test_dir))
 
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
+    def test_is_branch(self, run_subprocess_with_output, run_subprocess_with_logging):
+        run_subprocess_with_logging.return_value = 0
+        src = "/src"
+        branch = "test-branch"
+
+        # only remote
+        run_subprocess_with_output.return_value = ["6aa5288e60f7c66cc443805de1e266f2d5ec918e refs/remotes/origin/test-branch"]
+        assert git.is_branch(src, identifier=branch)
+
+        # only local
+        run_subprocess_with_output.return_value = ["6aa5288e60f7c66cc443805de1e266f2d5ec918e refs/heads/test-branch"]
+        assert git.is_branch(src, identifier=branch)
+
+        # both remote, and local
+        run_subprocess_with_output.return_value = [
+            "30b52a48011d54cc591cc3427f01bfe1b6fd1e73 refs/heads/test-branch",
+            "636134644da20d96020c818e7eb6afa5bec15e8a refs/remotes/origin/test-branch",
+        ]
+        assert git.is_branch(src, identifier=branch)
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
+    def test_is_not_branch_tags(self, run_subprocess_with_output, run_subprocess_with_logging):
+        run_subprocess_with_logging.return_value = 0
+        src = "/src"
+        branch = "3694a07"
+        run_subprocess_with_output.return_value = ["30b52a48011d54cc591cc3427f01bfe1b6fd1e73 refs/tags/v7.12.0"]
+
+        assert not git.is_branch(src, identifier=branch)
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("esrally.utils.process.exit_status_as_bool")
+    def test_is_not_branch_commit_hash(self, mock_exit_status_as_bool, run_subprocess_with_logging):
+        run_subprocess_with_logging.return_value = 0
+        src = "/src"
+        branch = "3694a07"
+        # True is for @probed on is_branch
+        mock_exit_status_as_bool.side_effect = [True, False]
+
+        assert not git.is_branch(src, identifier=branch)
+
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_git_version_too_old(self, run_subprocess_with_logging, run_subprocess):
@@ -147,6 +190,20 @@ class TestGit:
                 # git version comes from the @probed decorator on 'git.fetch'
                 mock.call("git -C /src --version", level=10),
                 mock.call("git -C /src fetch --prune --tags origin"),
+                mock.call("git -C /src checkout 3694a07"),
+            ]
+        )
+
+    @mock.patch("esrally.utils.process.run_subprocess")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_checkout_revision(self, run_subprocess_with_logging, run_subprocess):
+        run_subprocess_with_logging.return_value = 0
+        run_subprocess.side_effect = [False, False]
+        git.checkout_revision("/src", revision="3694a07")
+        run_subprocess_with_logging.assert_has_calls(
+            [
+                # git version comes from the @probed decorator on 'git.checkout_revision'
+                mock.call("git -C /src --version", level=10),
                 mock.call("git -C /src checkout 3694a07"),
             ]
         )
