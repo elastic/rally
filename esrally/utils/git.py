@@ -49,8 +49,7 @@ def is_working_copy(src):
 
 
 @probed
-def is_branch(src_dir, remote, identifier):
-    fetch(src_dir, remote=remote)
+def is_branch(src_dir, identifier):
     show_ref_cmd = f"git -C {src_dir} show-ref {identifier}"
 
     # if we get an non-zero exit code, we know that the identifier is not a branch (local or remote)
@@ -85,7 +84,7 @@ def checkout(src_dir, *, branch):
 
 
 @probed
-def checkout_remote(src_dir, remote, branch):
+def checkout_branch(src_dir, remote, branch):
     if process.run_subprocess_with_logging("git -C {0} checkout {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
@@ -114,8 +113,7 @@ def pull_ts(src_dir, ts, *, remote, branch):
 
 
 @probed
-def pull_revision(src_dir, *, remote, revision):
-    fetch(src_dir, remote=remote)
+def checkout_revision(src_dir, *, revision):
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 

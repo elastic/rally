@@ -123,20 +123,22 @@ class TestSourceRepository:
         mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", remote="origin", branch="main")
         mock_head_revision.assert_called_with("/src")
 
+    @mock.patch("esrally.utils.git.fetch", autospec=True)
     @mock.patch("esrally.utils.git.is_branch", autospec=True)
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
-    @mock.patch("esrally.utils.git.pull_revision", autospec=True)
+    @mock.patch("esrally.utils.git.checkout_revision", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
-    def test_checkout_revision(self, mock_is_working_copy, mock_pull_revision, mock_head_revision, mock_is_branch):
+    def test_checkout_revision(self, mock_is_working_copy, mock_checkout_revision, mock_head_revision, mock_is_branch, mock_fetch):
         mock_is_working_copy.return_value = True
         mock_is_branch.return_value = False
         mock_head_revision.return_value = "HEAD"
+        mock_fetch.return_value = None
 
         s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src", branch="main")
         s.fetch("67c2f42")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_revision.assert_called_with("/src", remote="origin", revision="67c2f42")
+        mock_checkout_revision.assert_called_with("/src", revision="67c2f42")
         mock_head_revision.assert_called_with("/src")
 
     def test_is_commit_hash(self):
