@@ -3056,6 +3056,39 @@ The following meta data is always returned:
 * ``weight``: The number of fetched pages. Should always equal to the ``pages`` parameter.
 * ``unit``: The unit in which to interpret ``weight``. Always "ops".
 
+downsample
+~~~~~~~~~~
+
+Executes a downsampling operation on an index producing a new index whose data is aggregated on the @timestamp field.
+
+
+Properties
+""""""""""
+
+* ``fixed_interval`` (optional, defaults to ``1h``): The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
+* ``source-index`` (optional): The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation. If there is only one index defined in the ``indices`` of the track definition, that will be used as the default.
+* ``target-index`` (optional, defaults to ``{source-index}-{fixed-interval}``): Tne new target index created by the downsampling operation and including aggregated data.
+
+**Example**
+
+Executes a downsampling operation aggregating data in the source index (test-source-index) and creating a new target index (test-target-index) applying an aggregation
+interval of 1 minute on the @timestamp field::
+
+    {
+      "name": "downsample",
+      "operation": {
+        "operation-type": "downsample",
+        "fixed-interval": "1m",
+        "source-index": "test-source-index",
+        "target-index": "tsdb-target-index"
+      }
+    }
+
+Meta-data
+"""""""""
+
+The operation returns no meta-data.
+
 field-caps
 ~~~~~~~~~~~~~~~~~~~
 

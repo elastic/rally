@@ -395,12 +395,20 @@ class ElasticsearchSourceSupplier:
     def prepare(self):
         if self.builder:
             self.builder.build_jdk = self.resolve_build_jdk_major(self.src_dir)
-            self.builder.build(
-                [
+
+            # There are no 'x86_64' specific gradle build commands
+            if self.template_renderer.arch != "x86_64":
+                commands = [
+                    self.template_renderer.render(self.car.mandatory_var("clean_command")),
+                    self.template_renderer.render(self.car.mandatory_var("system.build_command.arch")),
+                ]
+            else:
+                commands = [
                     self.template_renderer.render(self.car.mandatory_var("clean_command")),
                     self.template_renderer.render(self.car.mandatory_var("system.build_command")),
                 ]
-            )
+
+            self.builder.build(commands)
 
     def add(self, binaries):
         binaries["elasticsearch"] = self.resolve_binary()
@@ -444,7 +452,12 @@ class ElasticsearchSourceSupplier:
 
     def resolve_binary(self):
         try:
-            path = os.path.join(self.src_dir, self.template_renderer.render(self.car.mandatory_var("system.artifact_path_pattern")))
+            # There are no 'x86_64' specific gradle build commands,
+            if self.template_renderer.arch != "x86_64":
+                system_artifact_path = self.car.mandatory_var("system.artifact_path_pattern.arch")
+            else:
+                system_artifact_path = self.car.mandatory_var("system.artifact_path_pattern")
+            path = os.path.join(self.src_dir, self.template_renderer.render(system_artifact_path))
             return glob.glob(path)[0]
         except IndexError:
             raise SystemSetupError("Couldn't find a tar.gz distribution. Please run Rally with the pipeline 'from-sources'.")
@@ -691,9 +704,14 @@ class SourceRepository:
             git_ts_revision = revision[1:]
             self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
             git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=self.branch)
-        elif self.has_remote():  # assume a git commit hash
-            self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
-            git.pull_revision(self.src_dir, remote="origin", revision=revision)
+        elif self.has_remote():  # we can have either a commit hash, branch name, or tag
+            git.fetch(self.src_dir, remote="origin")
+            if git.is_branch(self.src_dir, identifier=revision):
+                self.logger.info("Fetching from remote and checking out branch [%s] for %s.", revision, self.name)
+                git.checkout_branch(self.src_dir, remote="origin", branch=revision)
+            else:  # tag or commit hash
+                self.logger.info("Fetching from remote and checking out revision [%s] for %s.", revision, self.name)
+                git.checkout_revision(self.src_dir, revision=revision)
         else:
             self.logger.info("Checking out local revision [%s] for %s.", revision, self.name)
             git.checkout(self.src_dir, branch=revision)

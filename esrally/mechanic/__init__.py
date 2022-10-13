@@ -23,6 +23,7 @@ from .mechanic import (
     ResetRelativeTime,
     StartEngine,
     StopEngine,
+    build,
     cluster_distribution_version,
     download,
     install,

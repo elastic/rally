@@ -18,6 +18,7 @@ import functools
 import logging
 import os
 import socket
+import time
 import urllib.error
 from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 
@@ -182,18 +183,20 @@ def download_from_bucket(blobstore, url, local_path, expected_size_in_bytes=None
     return expected_size_in_bytes
 
 
-def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+HTTP_DOWNLOAD_RETRIES = 10
+
+
+def _download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
     with _request(
         "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
     ) as r, open(local_path, "wb") as out_file:
         if r.status > 299:
             raise urllib.error.HTTPError(url, r.status, "", None, None)
-        # noinspection PyBroadException
         try:
-            size_from_content_header = int(r.getheader("Content-Length"))
+            size_from_content_header = int(r.getheader("Content-Length", ""))
             if expected_size_in_bytes is None:
                 expected_size_in_bytes = size_from_content_header
-        except BaseException:
+        except ValueError:
             size_from_content_header = None
 
         chunk_size = 2**16
@@ -205,6 +208,19 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
             if progress_indicator and size_from_content_header:
                 progress_indicator(bytes_read, size_from_content_header)
         return expected_size_in_bytes
+
+
+def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None, *, sleep=time.sleep):
+    logger = logging.getLogger(__name__)
+    for i in range(HTTP_DOWNLOAD_RETRIES + 1):
+        try:
+            return _download_http(url, local_path, expected_size_in_bytes, progress_indicator)
+        except urllib3.exceptions.ProtocolError as exc:
+            if i == HTTP_DOWNLOAD_RETRIES:
+                raise
+            logger.warning("Retrying after %s", exc)
+            sleep(5)
+            continue
 
 
 def add_url_param_elastic_no_kpi(url):

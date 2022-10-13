@@ -66,6 +66,7 @@ def register_default_runners():
     # these requests should not be retried as they are not idempotent
     register_runner(track.OperationType.CreateSnapshot, CreateSnapshot(), async_runner=True)
     register_runner(track.OperationType.RestoreSnapshot, RestoreSnapshot(), async_runner=True)
+    register_runner(track.OperationType.Downsample, Downsample(), async_runner=True)
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth, Retry(ClusterHealth()), async_runner=True)
     register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
@@ -1371,10 +1372,15 @@ class DeleteIndex(Runner):
                 if not only_if_exists:
                     await es.indices.delete(index=index_name, params=request_params)
                     ops += 1
-                elif only_if_exists and await es.indices.exists(index=index_name):
-                    self.logger.info("Index [%s] already exists. Deleting it.", index_name)
-                    await es.indices.delete(index=index_name, params=request_params)
-                    ops += 1
+                elif only_if_exists:
+                    # here we use .get() and check for 404 instead of exists due to a bug in some versions
+                    # of elasticsearch-py/elastic-transport with HEAD calls.
+                    # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                    get_response = await es.indices.get(index=index_name, ignore=[404])
+                    if not get_response.get("status") == 404:
+                        self.logger.info("Index [%s] already exists. Deleting it.", index_name)
+                        await es.indices.delete(index=index_name, params=request_params)
+                        ops += 1
         finally:
             await set_destructive_requires_name(es, prior_destructive_setting)
         return {
@@ -1403,10 +1409,15 @@ class DeleteDataStream(Runner):
             if not only_if_exists:
                 await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
                 ops += 1
-            elif only_if_exists and await es.indices.exists(index=data_stream):
-                self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
-                await es.indices.delete_data_stream(name=data_stream, params=request_params)
-                ops += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                get_response = await es.indices.get(index=data_stream, ignore=[404])
+                if not get_response.get("status") == 404:
+                    self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
+                    await es.indices.delete_data_stream(name=data_stream, params=request_params)
+                    ops += 1
 
         return {
             "weight": ops,
@@ -1455,10 +1466,15 @@ class DeleteComponentTemplate(Runner):
             if not only_if_exists:
                 await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.cluster.exists_component_template(name=template_name):
-                self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
-                await es.cluster.delete_component_template(name=template_name, params=request_params)
-                ops_count += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists_component_template due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                component_template_exists = await es.cluster.get_component_template(name=template_name, ignore=[404])
+                if not component_template_exists.get("status") == 404:
+                    self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
+                    await es.cluster.delete_component_template(name=template_name, params=request_params)
+                    ops_count += 1
         return {
             "weight": ops_count,
             "unit": "ops",
@@ -1505,10 +1521,15 @@ class DeleteComposableTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_index_template(name=template_name):
-                self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
-                await es.indices.delete_index_template(name=template_name, params=request_params)
-                ops_count += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists_index_template due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                index_template_exists = await es.indices.get_index_template(name=template_name, ignore=[404])
+                if not index_template_exists.get("status") == 404:
+                    self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
+                    await es.indices.delete_index_template(name=template_name, params=request_params)
+                    ops_count += 1
             # ensure that we do not provide an empty index pattern by accident
             if delete_matching_indices and index_pattern:
                 await es.indices.delete(index=index_pattern)
@@ -1560,7 +1581,10 @@ class DeleteIndexTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_template(name=template_name):
+            # here we use .get_template() and check for empty instead of exists_template due to a bug in some versions
+            # of elasticsearch-py/elastic-transport with HEAD calls.
+            # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+            elif only_if_exists and await es.indices.get_template(name=template_name, ignore=[404]):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -2681,6 +2705,48 @@ class Sql(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "sql"
+
+
+class Downsample(Runner):
+    """
+    Executes a downsampling operation creating the target index and aggregating data in the source index on the @timestamp field.
+    """
+
+    async def __call__(self, es, params):
+
+        request_params, request_headers = self._transport_request_params(params)
+
+        fixed_interval = mandatory(params, "fixed-interval", self)
+        if fixed_interval is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'fixed-interval'. "
+                "Add it to your parameter source and try again."
+            )
+
+        source_index = mandatory(params, "source-index", self)
+        if source_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'source-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        target_index = mandatory(params, "target-index", self)
+        if target_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        path = f"/{source_index}/_downsample/{target_index}"
+
+        await es.perform_request(
+            method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
+        )
+
+        return {"weight": 1, "unit": "ops", "success": True}
+
+    def __repr__(self, *args, **kwargs):
+        return "downsample"
 
 
 class FieldCaps(Runner):

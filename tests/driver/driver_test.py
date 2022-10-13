@@ -1373,7 +1373,7 @@ class TestAsyncExecutor:
         task_start = time.perf_counter()
         es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
 
-        es.bulk = mock.AsyncMock(return_value=io.StringIO('{"errors": false, "took": 8}'))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(b'{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
@@ -1636,7 +1636,7 @@ class TestAsyncExecutor:
     @pytest.mark.asyncio
     async def test_cancel_execute_schedule(self, es):
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
-        es.bulk = mock.AsyncMock(return_value=io.StringIO('{"errors": false, "took": 8}'))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(b'{"errors": false, "took": 8}'))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)

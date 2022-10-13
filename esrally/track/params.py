@@ -838,6 +838,20 @@ class ForceMergeParamSource(ParamSource):
         return parsed_params
 
 
+class DownsampleParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self._fixed_interval = params.get("fixed-interval", "1h")
+        params["index"] = params.get("source-index")
+        self._source_index = get_target(track, params)
+        self._target_index = params.get("target-index", f"{self._source_index}-{self._fixed_interval}")
+
+    def params(self):
+        parsed_params = {"fixed-interval": self._fixed_interval, "source-index": self._source_index, "target-index": self._target_index}
+        parsed_params.update(self._client_params())
+        return parsed_params
+
+
 def get_target(track, params):
     if len(track.indices) == 1:
         default_target = track.indices[0].name
@@ -1342,6 +1356,7 @@ register_param_source_for_operation(track.OperationType.CreateComposableTemplate
 register_param_source_for_operation(track.OperationType.DeleteComposableTemplate, DeleteComposableTemplateParamSource)
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
 register_param_source_for_operation(track.OperationType.ForceMerge, ForceMergeParamSource)
+register_param_source_for_operation(track.OperationType.Downsample, DownsampleParamSource)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)

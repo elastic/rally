@@ -83,6 +83,27 @@ This subcommand is needed for :doc:`tournament mode </tournament>` and its usage
 
 This subcommand creates a basic track from data in an existing cluster. See the :ref:`track tutorial <add_track_create_track>` for a complete walkthrough.
 
+``build``
+~~~~~~~~~~~~~
+
+.. warning::
+
+    This subcommand is unsupported and intended only for Elasticsearch developer use. Expect the functionality and the command line interface to change significantly even in patch releases.
+
+This subcommand can be used to build Elasticsearch (and plugins) from specific revisions. Example::
+
+    esrally build --revision="@2022-07-21" --elasticsearch-plugins=analysis-icu --target-arch aarch64 --target-os linux  --quiet
+
+This will build Elasticsearch and the plugin ``analysis-icu`` for an ARM equipped Linux system, from the last commit on 2022-07-21. See :ref:`revision for more information<clr_revision>`.
+
+Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has built it::
+
+    {
+      "elasticsearch": "/.rally/benchmarks/distributions/src/elasticsearch-ec774626230-linux-aarch64.tar.gz",
+      "analysis-icu": "file:///.rally/benchmarks/distributions/src/analysis-icu-ec774626230.zip"
+    }
+
+
 ``download``
 ~~~~~~~~~~~~~
 
@@ -574,7 +595,9 @@ You can specify the revision in different formats:
 * ``--revision=latest``: Use the HEAD revision from origin/main.
 * ``--revision=current``: Use the current revision (i.e. don't alter the local source tree).
 * ``--revision=abc123``: Where ``abc123`` is some git revision hash.
+* ``--revision=v8.4.0``: Where ``v8.4.0`` is some git tag.
 * ``--revision=@2013-07-27T10:37:00Z``: Determines the revision that is closest to the provided date. Rally logs to which git revision hash the date has been resolved and if you use Elasticsearch as metrics store (instead of the default in-memory one), :doc:`each metric record will contain the git revision hash also in the meta-data section </metrics>`.
+* ``--revision=my-branch-name``: Where ``my-branch-name`` is the name of an existing branch name. If you are using a :ref:`remote source repository <configuration_source>`, Rally will fetch and checkout the remote branch.
 
 Supported date format: If you specify a date, it has to be ISO-8601 conformant and must start with an ``@`` sign to make it easier for Rally to determine that you actually mean a date.
 
