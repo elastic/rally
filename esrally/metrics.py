@@ -1270,12 +1270,14 @@ def list_races(cfg):
                 race.race_id,
                 time.to_iso8601(race.race_timestamp),
                 race.track,
-                format_dict(race.track_params),
                 race.challenge_name,
                 race.car_name,
-                format_dict(race.user_tags),
+                race.distribution_version,
+                race.revision,
+                race.rally_version,
                 race.track_revision,
                 race.team_revision,
+                format_dict(race.user_tags),
             ]
         )
 
@@ -1288,12 +1290,14 @@ def list_races(cfg):
                     "Race ID",
                     "Race Timestamp",
                     "Track",
-                    "Track Parameters",
                     "Challenge",
                     "Car",
-                    "User Tags",
+                    "ES Version",
+                    "Revision",
+                    "Rally Version",
                     "Track Revision",
                     "Team Revision",
+                    "User Tags",
                 ],
             )
         )

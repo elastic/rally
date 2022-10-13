@@ -60,6 +60,16 @@ class ExitStatus(Enum):
 
 
 def create_arg_parser():
+    def valid_date(v):
+        pattern = "%Y%m%d"
+        try:
+            datetime.datetime.strptime(v, pattern)
+            # don't convert, just check that the format is correct, we'll use the string value later on anyway
+            return v
+        except ValueError:
+            msg = "[{}] does not conform to the pattern [yyyyMMdd]".format(v)
+            raise argparse.ArgumentTypeError(msg)
+
     def positive_number(v):
         value = int(v)
         if value <= 0:
@@ -143,6 +153,23 @@ def create_arg_parser():
         "--limit",
         help="Limit the number of search results for recent races (default: 10).",
         default=10,
+    )
+    list_parser.add_argument(
+        "--track",
+        help="Show only records from this track",
+        default=None,
+    )
+    list_parser.add_argument(
+        "--from-date",
+        help="Show only records on or after this date (format: yyyyMMdd)",
+        type=valid_date,
+        default=None,
+    )
+    list_parser.add_argument(
+        "--to-date",
+        help="Show only records before or on this date (format: yyyyMMdd)",
+        type=valid_date,
+        default=None,
     )
     add_track_source(list_parser)
 
