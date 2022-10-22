@@ -310,7 +310,7 @@ def extract_user_tags_from_config(cfg):
     :param cfg: The current configuration object.
     :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
     """
-    user_tags = cfg.opts("race", "user.tag", mandatory=False)
+    user_tags = cfg.opts("race", "user.tags", mandatory=False)
     return extract_user_tags_from_string(user_tags)
 
 
