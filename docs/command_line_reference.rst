@@ -258,7 +258,7 @@ Example JSON file::
 
 All track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races``, it will show all track parameters::
 
-    Race Timestamp    Track    Track Parameters          Challenge            Car       User Tag
+    Race Timestamp    Track    Track Parameters          Challenge            Car       User Tags
     ----------------  -------  ------------------------- -------------------  --------  ---------
     20160518T122341Z  pmc      bulk_size=8000            append-no-conflicts  defaults
     20160518T112341Z  pmc      bulk_size=2000,clients=16 append-no-conflicts  defaults
@@ -902,8 +902,8 @@ Rally usually installs and launches an Elasticsearch cluster internally and wipe
 .. note::
    This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
 
-``user-tag``
-~~~~~~~~~~~~
+``user-tags/user-tag(deprecated)``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This is only relevant when you want to run :doc:`tournaments </tournament>`. You can use this flag to attach an arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
 
@@ -913,7 +913,7 @@ The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``valu
 
  ::
 
-   esrally race --track=pmc --user-tag="intention:github-issue-1234-baseline,gc:cms"
+   esrally race --track=pmc --user-tags="intention:github-issue-1234-baseline,gc:cms"
 
 You can also specify multiple tags. They need to be separated by a comma.
 
@@ -921,13 +921,13 @@ You can also specify multiple tags. They need to be separated by a comma.
 
  ::
 
-   esrally race --track=pmc --user-tag="disk:SSD,data_node_count:4"
+   esrally race --track=pmc --user-tags="disk:SSD,data_node_count:4"
 
 
 
-When you run ``esrally list races``, this will show up again::
+Wesrally list raceshen you run ``esrally list races``, this will show up again::
 
-    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tag
+    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tags
     ----------------  -------  ------------------ -------------------  --------  ------------------------------------
     20160518T122341Z  pmc                         append-no-conflicts  defaults  intention:github-issue-1234-baseline
     20160518T112341Z  pmc                         append-no-conflicts  defaults  disk:SSD,data_node_count:4

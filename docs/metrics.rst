@@ -108,7 +108,7 @@ Rally captures also some meta information for each metric record:
 * Node name: If Rally provisions the cluster, it will choose a unique name for each node.
 * Source revision: We always record the git hash of the version of Elasticsearch that is benchmarked. This is even done if you benchmark an official binary release.
 * Distribution version: We always record the distribution version of Elasticsearch that is benchmarked. This is even done if you benchmark a source release.
-* Custom tag: You can define one custom tag with the command line flag ``--user-tag``. The tag is prefixed by ``tag_`` in order to avoid accidental clashes with Rally internal tags.
+* Custom tags: You can define one custom tags with the command line flag ``--user-tags``. The tags are prefixed by ``tag_`` in order to avoid accidental clashes with Rally internal tags.
 * Operation-specific: The optional substructure ``operation`` contains additional information depending on the type of operation. For bulk requests, this may be the number of documents or for searches the number of hits.
 
 Note that depending on the "level" of a metric record, certain meta information might be missing. It makes no sense to record host level meta info for a cluster wide metric record, like a query latency (as it cannot be attributed to a single node).
