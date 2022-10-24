@@ -925,7 +925,7 @@ You can also specify multiple tags. They need to be separated by a comma.
 
 
 
-Wesrally list raceshen you run ``esrally list races``, this will show up again::
+When you run ``esrally list races``, this will show up again::
 
     Race Timestamp    Track    Track Parameters   Challenge            Car       User Tags
     ----------------  -------  ------------------ -------------------  --------  ------------------------------------

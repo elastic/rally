@@ -446,7 +446,7 @@ If you need lap functionality, the following shell script can be used instead::
 
     for lap in $(seq 1 ${RALLY_LAPS})
     do
-      esrally --pipeline=benchmark-only --user-tags lap:$lap
+      esrally --pipeline=benchmark-only --user-tag lap:$lap
     done
 
 
