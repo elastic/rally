@@ -1534,8 +1534,8 @@ class RaceStore:
     def _track(self):
         return self.cfg.opts("system", "list.races.track", mandatory=False)
 
-    def _name(self):
-        return self.cfg.opts("system", "list.races.name", mandatory=False)
+    def _benchmark_name(self):
+        return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
 
     def _from_date(self):
         return self.cfg.opts("system", "list.races.from_date", mandatory=False)
@@ -1594,7 +1594,7 @@ class FileRaceStore(RaceStore):
     def _to_races(self, results):
         races = []
         track = self._track()
-        name = self._name()
+        name = self._benchmark_name()
         pattern = "%Y%m%d"
         from_date = self._from_date()
         to_date = self._to_date()
@@ -1609,7 +1609,9 @@ class FileRaceStore(RaceStore):
         if track:
             races = filter(lambda r: r.track == track, races)
         if name:
-            races = filter(lambda r: r.user_tags.get("name") == name, races)
+            filtered_on_name = filter(lambda r: r.user_tags.get("name") == name, races)
+            filtered_on_benchmark_name = filter(lambda r: r.user_tags.get("benchmark-name") == name, races)
+            races = list(filtered_on_name) + list(filtered_on_benchmark_name)
         if from_date:
             races = filter(lambda r: r.race_timestamp.date() >= datetime.datetime.strptime(from_date, pattern).date(), races)
         if to_date:
@@ -1645,7 +1647,7 @@ class EsRaceStore(RaceStore):
 
     def list(self):
         track = self._track()
-        name = self._name()
+        name = self._benchmark_name()
         from_date = self._from_date()
         to_date = self._to_date()
 
@@ -1676,7 +1678,9 @@ class EsRaceStore(RaceStore):
         if track:
             query["query"]["bool"]["filter"].append({"term": {"track": track}})
         if name:
-            query["query"]["bool"]["filter"].append({"term": {"user-tags.name": name}})
+            query["query"]["bool"]["filter"].append(
+                {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}
+            )
 
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]

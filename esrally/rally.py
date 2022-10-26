@@ -160,8 +160,8 @@ def create_arg_parser():
         default=None,
     )
     list_parser.add_argument(
-        "--name",
-        help="Show only records from with corresponding 'name' user tag",
+        "--benchmark-name",
+        help="Show only records from with corresponding 'name' or 'benchmark-name' user tag",
         default=None,
     )
     list_parser.add_argument(
@@ -1026,7 +1026,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.track", args.track)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.name", args.name)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.from_date", args.from_date)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.to_date", args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)
