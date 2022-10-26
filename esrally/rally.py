@@ -160,6 +160,11 @@ def create_arg_parser():
         default=None,
     )
     list_parser.add_argument(
+        "--name",
+        help="Show only records from with corresponding 'name' user tag",
+        default=None,
+    )
+    list_parser.add_argument(
         "--from-date",
         help="Show only records on or after this date (format: yyyyMMdd)",
         type=valid_date,
@@ -1020,6 +1025,10 @@ def dispatch_sub_command(arg_parser, args, cfg):
         elif sub_command == "list":
             cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.track", args.track)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.name", args.name)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.from_date", args.from_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.to_date", args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)

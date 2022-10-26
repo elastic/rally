@@ -16,6 +16,7 @@
 # under the License.
 
 import collections
+import datetime
 import glob
 import json
 import logging
@@ -1530,6 +1531,18 @@ class RaceStore:
     def _max_results(self):
         return int(self.cfg.opts("system", "list.races.max_results"))
 
+    def _track(self):
+        return self.cfg.opts("system", "list.races.track", mandatory=False)
+
+    def _name(self):
+        return self.cfg.opts("system", "list.races.name", mandatory=False)
+
+    def _from_date(self):
+        return self.cfg.opts("system", "list.races.from_date", mandatory=False)
+
+    def _to_date(self):
+        return self.cfg.opts("system", "list.races.to_date", mandatory=False)
+
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
 class CompositeRaceStore:
@@ -1580,6 +1593,11 @@ class FileRaceStore(RaceStore):
 
     def _to_races(self, results):
         races = []
+        track = self._track()
+        name = self._name()
+        pattern = "%Y%m%d"
+        from_date = self._from_date()
+        to_date = self._to_date()
         for result in results:
             # noinspection PyBroadException
             try:
@@ -1587,6 +1605,16 @@ class FileRaceStore(RaceStore):
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
                 logging.getLogger(__name__).exception("Could not load race file [%s] (incompatible format?) Skipping...", result)
+
+        if track:
+            races = filter(lambda r: r.track == track, races)
+        if name:
+            races = filter(lambda r: r.user_tags.get("name") == name, races)
+        if from_date:
+            races = filter(lambda r: r.race_timestamp.date() >= datetime.datetime.strptime(from_date, pattern).date(), races)
+        if to_date:
+            races = filter(lambda r: r.race_timestamp.date() <= datetime.datetime.strptime(to_date, pattern).date(), races)
+
         return sorted(races, key=lambda r: r.race_timestamp, reverse=True)
 
 
@@ -1616,12 +1644,18 @@ class EsRaceStore(RaceStore):
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
     def list(self):
+        track = self._track()
+        name = self._name()
+        from_date = self._from_date()
+        to_date = self._to_date()
+
         filters = [
             {
                 "term": {
                     "environment": self.environment_name,
                 },
-            }
+            },
+            {"range": {"race-timestamp": {"gte": from_date, "lte": to_date, "format": "basic_date"}}},
         ]
 
         query = {
@@ -1639,6 +1673,11 @@ class EsRaceStore(RaceStore):
                 },
             ],
         }
+        if track:
+            query["query"]["bool"]["filter"].append({"term": {"track": track}})
+        if name:
+            query["query"]["bool"]["filter"].append({"term": {"user-tags.name": name}})
+
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
