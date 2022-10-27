@@ -1033,6 +1033,12 @@ def dispatch_sub_command(arg_parser, args, cfg):
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
+        elif sub_command == "delete":
+            cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
+            configure_mechanic_params(args, cfg, command_requires_car=False)
+            configure_track_params(arg_parser, args, cfg, command_requires_track=False)
+            dispatch_list(cfg)
         elif sub_command == "build":
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
