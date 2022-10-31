@@ -152,7 +152,6 @@ class ResponseMatcher:
 
     @staticmethod
     def always():
-        # pylint: disable=unused-variable
         def f(p):
             return True
 

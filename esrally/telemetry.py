@@ -1440,8 +1440,6 @@ class IngestPipelineStats(InternalTelemetryDevice):
         self.logger.info("Gathering Ingest Pipeline stats at benchmark end")
         end_stats = self.get_ingest_pipeline_stats()
 
-        # The nesting level is ok here given the structure of the Ingest Pipeline stats
-        # pylint: disable=too-many-nested-blocks
         for cluster_name, node in end_stats.items():
             if cluster_name not in self.start_stats:
                 self.logger.warning(
