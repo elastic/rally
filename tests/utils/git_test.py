@@ -61,7 +61,7 @@ class TestGit:
 
     @pytest.fixture
     def setup_teardown_head_revision(self):
-        # rev is 09980cd
+        # rev is 09980cd5
         git.checkout(TestGit.tmp_src_dir, branch="2.6.0")
         yield
         git.checkout(TestGit.tmp_src_dir, branch=TestGit.current_branch)
@@ -160,7 +160,7 @@ class TestGit:
         git.checkout_revision(TestGit.tmp_src_dir, revision="bd368741951c643f9eb1958072c316e493c15b96")
 
     def test_head_revision(self, setup_teardown_head_revision):
-        assert git.head_revision(TestGit.tmp_src_dir) == "09980cd"
+        assert git.head_revision(TestGit.tmp_src_dir) == "09980cd5"
 
     def test_list_remote_branches(self):
         assert TestGit.remote_branch in git.branches(TestGit.tmp_src_dir, remote=True)
