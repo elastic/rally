@@ -22,6 +22,11 @@ from esrally import exceptions
 from esrally.utils import io, process
 
 
+def with_retry(command):
+    # git has no native concept of retries
+    return f'/bin/bash -c "for i in {{1..5}}; do {command} && s=0 && break || s=1 && sleep 1; done; (exit $s)"'
+
+
 def probed(f):
     def probe(src, *args, **kwargs):
         # Probe for -C
@@ -67,13 +72,13 @@ def is_branch(src_dir, identifier):
 def clone(src, *, remote):
     io.ensure_dir(src)
     # Don't swallow subprocess output, user might need to enter credentials...
-    if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src))):
+    if process.run_subprocess_with_logging(with_retry("git clone %s %s" % (remote, io.escape_path(src)))):
         raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
 
 
 @probed
 def fetch(src, *, remote):
-    if process.run_subprocess_with_logging("git -C {0} fetch --prune --tags {1}".format(io.escape_path(src), remote)):
+    if process.run_subprocess_with_logging(with_retry("git -C {0} fetch --prune --tags {1}".format(io.escape_path(src), remote))):
         raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
 
 
@@ -92,7 +97,7 @@ def checkout_branch(src_dir, remote, branch):
 @probed
 def rebase(src_dir, *, remote, branch):
     checkout(src_dir, branch=branch)
-    if process.run_subprocess_with_logging("git -C {0} rebase {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
+    if process.run_subprocess_with_logging(with_retry("git -C {0} rebase {1}/{2}".format(io.escape_path(src_dir), remote, branch))):
         raise exceptions.SupplyError("Could not rebase on branch [%s]" % branch)
 
 
@@ -106,7 +111,7 @@ def pull(src_dir, *, remote, branch):
 def pull_ts(src_dir, ts, *, remote, branch):
     fetch(src_dir, remote=remote)
     clean_src = io.escape_path(src_dir)
-    rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
+    rev_list_command = with_retry(f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}')
     revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(clean_src, revision)):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
@@ -114,7 +119,7 @@ def pull_ts(src_dir, ts, *, remote, branch):
 
 @probed
 def checkout_revision(src_dir, *, revision):
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
+    if process.run_subprocess_with_logging(with_retry("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision))):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 
 
@@ -134,7 +139,9 @@ def branches(src_dir, remote=True):
     if remote:
         # alternatively: git for-each-ref refs/remotes/ --format='%(refname:short)'
         return _cleanup_remote_branch_names(
-            process.run_subprocess_with_output("git -C {src} for-each-ref refs/remotes/ --format='%(refname:short)'".format(src=clean_src))
+            process.run_subprocess_with_output(
+                with_retry("git -C {src} for-each-ref refs/remotes/ --format='%(refname:short)'".format(src=clean_src))
+            )
         )
     else:
         return _cleanup_local_branch_names(
