@@ -160,7 +160,9 @@ class TestGit:
         git.checkout_revision(TestGit.tmp_src_dir, revision="bd368741951c643f9eb1958072c316e493c15b96")
 
     def test_head_revision(self, setup_teardown_head_revision):
-        assert git.head_revision(TestGit.tmp_src_dir) == "09980cd5"
+        # Apple Git 'core.abbrev' defaults to return 7 char prefixes (09980cd)
+        # Linux defaults to return 8 char prefixes (09980cd5)
+        assert git.head_revision(TestGit.tmp_src_dir).startswith("09980cd")
 
     def test_list_remote_branches(self):
         assert TestGit.remote_branch in git.branches(TestGit.tmp_src_dir, remote=True)
