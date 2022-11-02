@@ -1191,7 +1191,7 @@ def main():
         raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
 
     # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
-    logging.info("Cleaning track dependency directory [%s]...", paths.libs())
+    logger.info("Cleaning track dependency directory [%s]...", paths.libs())
     shutil.rmtree(paths.libs(), onerror=_trap)
 
     result = dispatch_sub_command(arg_parser, args, cfg)
