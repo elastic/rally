@@ -230,7 +230,6 @@ class BenchmarkCoordinator:
             )
 
     def on_task_finished(self, new_metrics):
-        self.logger.info("Task has finished.")
         self.logger.info("Bulk adding request metrics to metrics store.")
         self.metrics_store.bulk_add(new_metrics)
 
