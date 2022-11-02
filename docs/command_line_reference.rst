@@ -902,20 +902,18 @@ Rally usually installs and launches an Elasticsearch cluster internally and wipe
 .. note::
    This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
 
-``user-tags/user-tag(deprecated)``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``user-tags``
+~~~~~~~~~~~~~
 
 This is only relevant when you want to run :doc:`tournaments </tournament>`. You can use this flag to attach an arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
 
-The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``value`` freely.
+The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``value`` freely. You can also specify multiple tags. They need to be separated by a comma.
 
 **Example**
 
  ::
 
    esrally race --track=pmc --user-tags="intention:github-issue-1234-baseline,gc:cms"
-
-You can also specify multiple tags. They need to be separated by a comma.
 
 **Example**
 
@@ -933,6 +931,9 @@ When you run ``esrally list races``, this will show up again::
     20160518T112341Z  pmc                         append-no-conflicts  defaults  disk:SSD,data_node_count:4
 
 This will help you recognize a specific race when running ``esrally compare``.
+
+.. note::
+   This option used to be named `--user-tag` without an s, which was confusing as multiple tags are supported. While users are now encouraged to use `--user-tags` for clarity, Rally will continue to honor `--user-tag` in the future to avoid breaking backwards-compatibility.
 
 ``indices``
 ~~~~~~~~~~~
