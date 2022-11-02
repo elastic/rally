@@ -965,7 +965,7 @@ def create_readers(
                 target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
                 if docs.target_data_stream:
                     target = docs.target_data_stream
-                logger.info(
+                logger.debug(
                     "Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
                     "from corpus [%s].",
                     start_client_index,
@@ -979,7 +979,7 @@ def create_readers(
                     docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
                 )
             else:
-                logger.info(
+                logger.debug(
                     "Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
                     start_client_index,
                     end_client_index,
