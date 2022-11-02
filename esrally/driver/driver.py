@@ -1761,12 +1761,12 @@ class AsyncIoAdapter:
             )
             await asyncio.get_event_loop().shutdown_asyncgens()
             shutdown_asyncgens_end = time.perf_counter()
-            self.logger.info("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
+            self.logger.debug("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
             for c in clients:
                 for es in c.values():
                     await es.close()
             transport_close_end = time.perf_counter()
-            self.logger.info("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
+            self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
 
 
 class AsyncProfiler:
@@ -2216,7 +2216,7 @@ def schedule_for(task_allocation, parameter_source):
     # guard all logging statements with the client index and only emit them for the first client. This information is
     # repetitive and may cause issues in thespian with many clients (an excessive number of actor messages is sent).
     if client_index == 0:
-        logger.info("Choosing [%s] for [%s].", sched, task)
+        logger.debug("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)
     params_for_op = parameter_source.partition(client_index, task.clients)
     if hasattr(sched, "parameter_source"):
@@ -2246,7 +2246,7 @@ def schedule_for(task_allocation, parameter_source):
         else:
             iterations = None
         if client_index == 0:
-            logger.info(
+            logger.debug(
                 "Creating iteration-count based schedule with [%s] distribution for [%s] with [%s] warmup "
                 "iterations and [%s] iterations.",
                 task.schedule,
@@ -2258,9 +2258,9 @@ def schedule_for(task_allocation, parameter_source):
 
     if client_index == 0:
         if loop_control.infinite:
-            logger.info("Parameter source will determine when the schedule for [%s] terminates.", task.name)
+            logger.debug("Parameter source will determine when the schedule for [%s] terminates.", task.name)
         else:
-            logger.info("%s schedule will determine when the schedule for [%s] terminates.", str(loop_control), task.name)
+            logger.debug("%s schedule will determine when the schedule for [%s] terminates.", str(loop_control), task.name)
 
     return ScheduleHandle(task_allocation, sched, loop_control, runner_for_op, params_for_op)
 
