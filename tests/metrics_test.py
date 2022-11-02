@@ -886,6 +886,7 @@ class TestEsRaceStore:
 
     def setup_method(self, method):
         self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
         self.cfg.add(config.Scope.application, "system", "time.start", self.RACE_TIMESTAMP)
         self.cfg.add(config.Scope.application, "system", "race.id", self.RACE_ID)
@@ -1023,6 +1024,36 @@ class TestEsRaceStore:
             },
         }
         self.es_mock.index.assert_called_with(index="rally-races-2016-01", id=self.RACE_ID, item=expected_doc)
+
+    def test_filter_race(self):
+        self.es_mock.search.return_value = {"hits": {"total": 0}}
+        self.cfg.add(config.Scope.application, "system", "list.races.track", "unittest")
+        self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
+        self.cfg.add(config.Scope.application, "system", "list.races.to_date", "20160131")
+        self.cfg.add(config.Scope.application, "system", "list.races.from_date", "20160230")
+        self.race_store.list()
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"environment": "unittest-env"}},
+                        {"range": {"race-timestamp": {"gte": "20160230", "lte": "20160131", "format": "basic_date"}}},
+                        {"term": {"track": "unittest"}},
+                        {
+                            "bool": {
+                                "should": [
+                                    {"term": {"user-tags.benchmark-name": "unittest-test"}},
+                                    {"term": {"user-tags.name": "unittest-test"}},
+                                ]
+                            }
+                        },
+                    ]
+                }
+            },
+            "size": 100,
+            "sort": [{"race-timestamp": {"order": "desc"}}],
+        }
+        self.es_mock.search.assert_called_with(index="rally-races-*", body=expected_query)
 
 
 class TestEsResultsStore:
@@ -1654,6 +1685,46 @@ class TestFileRaceStore:
         retrieved_race = self.race_store.find_by_race_id(race_id=self.RACE_ID)
         assert race.race_id == retrieved_race.race_id
         assert race.race_timestamp == retrieved_race.race_timestamp
+        assert len(self.race_store.list()) == 1
+
+    def test_filter_race(self):
+        t = track.Track(
+            name="unittest",
+            indices=[track.Index(name="tests", types=["_doc"])],
+            challenges=[track.Challenge(name="index", default=True)],
+        )
+
+        race = metrics.Race(
+            rally_version="0.4.4",
+            rally_revision="123abc",
+            environment_name="unittest",
+            race_id=self.RACE_ID,
+            race_timestamp=self.RACE_TIMESTAMP,
+            pipeline="from-sources",
+            user_tags={"name": "unittest-test"},
+            track=t,
+            track_params={"clients": 12},
+            challenge=t.default_challenge,
+            car="4gheap",
+            car_params=None,
+            plugin_params=None,
+        )
+
+        self.race_store.store_race(race)
+        assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.races.track", "unittest-2")
+        assert len(self.race_store.list()) == 0
+        self.cfg.add(config.Scope.application, "system", "list.races.track", "unittest")
+        assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test-2")
+        assert len(self.race_store.list()) == 0
+        self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
+        assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.races.to_date", "20160129")
+        assert len(self.race_store.list()) == 0
+        self.cfg.add(config.Scope.application, "system", "list.races.to_date", "20160131")
+        assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.races.from_date", "20160131")
         assert len(self.race_store.list()) == 1
 
 
