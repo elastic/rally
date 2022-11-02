@@ -255,15 +255,15 @@ class DriverActor(actor.RallyActor):
         if msg.childAddress in self.coordinator.workers:
             worker_index = self.coordinator.workers.index(msg.childAddress)
             if self.status == "exiting":
-                self.logger.info("Worker [%d] has exited.", worker_index)
+                self.logger.debug("Worker [%d] has exited.", worker_index)
             else:
                 self.logger.error("Worker [%d] has exited prematurely. Aborting benchmark.", worker_index)
                 self.send(self.start_sender, actor.BenchmarkFailure("Worker [{}] has exited prematurely.".format(worker_index)))
         else:
-            self.logger.info("A track preparator has exited.")
+            self.logger.debug("A track preparator has exited.")
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("Main driver received unknown message [%s] (ignoring).", str(msg))
+        self.logger.debug("Main driver received unknown message [%s] (ignoring).", str(msg))
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareBenchmark(self, msg, sender):
@@ -479,7 +479,7 @@ class TrackPreparationActor(actor.RallyActor):
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.info("ActorExitRequest received. Forwarding to children")
+        self.logger.debug("ActorExitRequest received. Forwarding to children")
         for child in self.children:
             self.send(child, msg)
 
@@ -727,7 +727,7 @@ class Driver:
         self.logger.info("Benchmark consists of [%d] steps executed by [%d] clients.", self.number_of_steps, len(self.allocations))
         # avoid flooding the log if there are too many clients
         if allocator.clients < 128:
-            self.logger.info("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
+            self.logger.debug("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
         create_api_keys = self.config.opts("client", "options").all_client_options["default"].get("create_api_key_per_client", None)
         worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
@@ -764,7 +764,7 @@ class Driver:
     def joinpoint_reached(self, worker_id, worker_local_timestamp, task_allocations):
         self.currently_completed += 1
         self.workers_completed_current_step[worker_id] = (worker_local_timestamp, time.perf_counter())
-        self.logger.info(
+        self.logger.debug(
             "[%d/%d] workers reached join point [%d/%d].",
             self.currently_completed,
             len(self.workers),
@@ -834,7 +834,7 @@ class Driver:
         for worker_id, worker in enumerate(self.workers):
             worker_ended_task_at, master_received_msg_at = workers_curr_step[worker_id]
             worker_start_timestamp = worker_ended_task_at + (start_next_task - master_received_msg_at)
-            self.logger.info(
+            self.logger.debug(
                 "Scheduling next task for worker id [%d] at their timestamp [%f] (master timestamp [%f])",
                 worker_id,
                 worker_start_timestamp,
@@ -1212,7 +1212,7 @@ class Worker(actor.RallyActor):
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Drive(self, msg, sender):
         sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
-        self.logger.info(
+        self.logger.debug(
             "Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
             self.worker_id,
             self.current_task_index,
@@ -1259,7 +1259,7 @@ class Worker(actor.RallyActor):
                     # deserialized on the receiver so we convert it here to a plain string.
                     self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.worker_id), str(e)))
                 else:
-                    self.logger.info("Worker[%s] is ready for the next task.", str(self.worker_id))
+                    self.logger.debug("Worker[%s] is ready for the next task.", str(self.worker_id))
                     self.executor_future = None
                     self.drive()
             else:
@@ -1282,18 +1282,18 @@ class Worker(actor.RallyActor):
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.info("Worker[%s] has received ActorExitRequest.", str(self.worker_id))
+        self.logger.debug("Worker[%s] has received ActorExitRequest.", str(self.worker_id))
         if self.executor_future is not None and self.executor_future.running():
             self.cancel.set()
         self.pool.shutdown()
-        self.logger.info("Worker[%s] is exiting due to ActorExitRequest.", str(self.worker_id))
+        self.logger.debug("Worker[%s] is exiting due to ActorExitRequest.", str(self.worker_id))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our no_retry infrastructure; forward to master
         self.send(self.master, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
+        self.logger.debug("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
 
     def drive(self):
         task_allocations = self.current_tasks_and_advance()
@@ -1302,7 +1302,7 @@ class Worker(actor.RallyActor):
             task_allocations = self.current_tasks_and_advance()
 
         if self.at_joinpoint():
-            self.logger.info("Worker[%d] reached join point at index [%d].", self.worker_id, self.current_task_index)
+            self.logger.debug("Worker[%d] reached join point at index [%d].", self.worker_id, self.current_task_index)
             # clients that don't execute tasks don't need to care about waiting
             if self.executor_future is not None:
                 self.executor_future.result()
