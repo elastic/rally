@@ -25,7 +25,7 @@ from esrally.utils import process
 def test_run_without_arguments(cfg):
     cmd = it.esrally_command_line_for(cfg, "")
     output = process.run_subprocess_with_output(cmd)
-    expected = "FAIL DELIBERATELY! usage: esrally [-h] [--version]"
+    expected = "usage: esrally [-h] [--version]"
     assert expected in "\n".join(output)
 
 
