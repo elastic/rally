@@ -66,9 +66,9 @@ class TestEsClientFactory:
         original_client_options = deepcopy(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: on"),
@@ -107,9 +107,9 @@ class TestEsClientFactory:
         original_client_options = deepcopy(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: on"),
@@ -149,9 +149,9 @@ class TestEsClientFactory:
         original_client_options = deepcopy(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: on"),
@@ -220,9 +220,9 @@ class TestEsClientFactory:
         original_client_options = dict(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: off"),
@@ -261,9 +261,9 @@ class TestEsClientFactory:
         original_client_options = deepcopy(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL certificate verification: off"),
                 mock.call("SSL client authentication: on"),
