@@ -261,7 +261,7 @@ class TestAssertingRunner:
                 )
 
     @pytest.mark.asyncio
-    async def test_skips_asserts_for_non_dicts(self):
+    async def test_raise_asserts_for_non_dicts(self):
         es = None
         response = (1, "ops")
         delegate = mock.AsyncMock(return_value=response)
