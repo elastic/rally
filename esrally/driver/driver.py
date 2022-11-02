@@ -1729,7 +1729,8 @@ class AsyncIoAdapter:
                 es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async(api_key=api_key)
             return es
 
-        self.logger.info("Task assertions enabled: %s", str(self.assertions_enabled))
+        if self.assertions_enabled:
+            self.logger.info("Task assertions enabled")
         runner.enable_assertions(self.assertions_enabled)
 
         clients = []
