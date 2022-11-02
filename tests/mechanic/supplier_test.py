@@ -123,18 +123,22 @@ class TestSourceRepository:
         mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", remote="origin", branch="main")
         mock_head_revision.assert_called_with("/src")
 
+    @mock.patch("esrally.utils.git.fetch", autospec=True)
+    @mock.patch("esrally.utils.git.is_branch", autospec=True)
     @mock.patch("esrally.utils.git.head_revision", autospec=True)
-    @mock.patch("esrally.utils.git.pull_revision", autospec=True)
+    @mock.patch("esrally.utils.git.checkout_revision", autospec=True)
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
-    def test_checkout_revision(self, mock_is_working_copy, mock_pull_revision, mock_head_revision):
+    def test_checkout_revision(self, mock_is_working_copy, mock_checkout_revision, mock_head_revision, mock_is_branch, mock_fetch):
         mock_is_working_copy.return_value = True
+        mock_is_branch.return_value = False
         mock_head_revision.return_value = "HEAD"
+        mock_fetch.return_value = None
 
         s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src", branch="main")
         s.fetch("67c2f42")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_revision.assert_called_with("/src", remote="origin", revision="67c2f42")
+        mock_checkout_revision.assert_called_with("/src", revision="67c2f42")
         mock_head_revision.assert_called_with("/src")
 
     def test_is_commit_hash(self):
@@ -650,7 +654,23 @@ class TestElasticsearchSourceSupplier:
             variables={"clean_command": "./gradlew clean", "system.build_command": "./gradlew assemble"},
         )
         builder = mock.create_autospec(supplier.Builder)
-        renderer = supplier.TemplateRenderer(version="abc")
+        renderer = supplier.TemplateRenderer(version="abc", arch="x86_64")
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
+        )
+        es.prepare()
+
+        builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
+
+    def test_build_arm(self):
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "system.build_command.arch": "./gradlew assemble"},
+        )
+        builder = mock.create_autospec(supplier.Builder)
+        renderer = supplier.TemplateRenderer(version="abc", arch="aarch64")
         es = supplier.ElasticsearchSourceSupplier(
             revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
         )
@@ -668,7 +688,7 @@ class TestElasticsearchSourceSupplier:
                 # system.build_command is not defined
             },
         )
-        renderer = supplier.TemplateRenderer(version="abc")
+        renderer = supplier.TemplateRenderer(version="abc", arch="x86_64")
         builder = mock.create_autospec(supplier.Builder)
         es = supplier.ElasticsearchSourceSupplier(
             revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
@@ -690,7 +710,27 @@ class TestElasticsearchSourceSupplier:
                 "system.artifact_path_pattern": "distribution/archives/tar/build/distributions/*.tar.gz",
             },
         )
-        renderer = supplier.TemplateRenderer(version="abc")
+        renderer = supplier.TemplateRenderer(version="abc", arch="x86_64")
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None, template_renderer=renderer
+        )
+        binaries = {}
+        es.add(binaries=binaries)
+        assert binaries == {"elasticsearch": "elasticsearch.tar.gz"}
+
+    @mock.patch("glob.glob", lambda p: ["elasticsearch.tar.gz"])
+    def test_add_elasticsearch_binary_arm(self):
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={
+                "clean_command": "./gradlew clean",
+                "system.build_command.arch": "./gradlew assemble",
+                "system.artifact_path_pattern.arch": "distribution/archives/tar/build/distributions/*.tar.gz",
+            },
+        )
+        renderer = supplier.TemplateRenderer(version="abc", arch="aarch64")
         es = supplier.ElasticsearchSourceSupplier(
             revision="abc", es_src_dir="/src", remote_url="", car=car, builder=None, template_renderer=renderer
         )

@@ -48,6 +48,22 @@ def is_working_copy(src):
     return os.path.exists(src) and os.path.exists(os.path.join(src, ".git"))
 
 
+@probed
+def is_branch(src_dir, identifier):
+    show_ref_cmd = f"git -C {src_dir} show-ref {identifier}"
+
+    # if we get an non-zero exit code, we know that the identifier is not a branch (local or remote)
+    if not process.exit_status_as_bool(lambda: process.run_subprocess_with_logging(show_ref_cmd)):
+        return False
+
+    # it's possible the identifier could be a tag, so we explicitly check that here
+    ref = process.run_subprocess_with_output(show_ref_cmd)
+    if "refs/tags" in ref[0]:
+        return False
+
+    return True
+
+
 def clone(src, *, remote):
     io.ensure_dir(src)
     # Don't swallow subprocess output, user might need to enter credentials...
@@ -64,6 +80,12 @@ def fetch(src, *, remote):
 @probed
 def checkout(src_dir, *, branch):
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), branch)):
+        raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
+
+
+@probed
+def checkout_branch(src_dir, remote, branch):
+    if process.run_subprocess_with_logging("git -C {0} checkout {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
@@ -91,8 +113,7 @@ def pull_ts(src_dir, ts, *, remote, branch):
 
 
 @probed
-def pull_revision(src_dir, *, remote, revision):
-    fetch(src_dir, remote=remote)
+def checkout_revision(src_dir, *, revision):
     if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 

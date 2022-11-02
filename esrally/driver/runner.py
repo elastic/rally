@@ -371,16 +371,13 @@ class AssertingRunner(Runner, Delegator):
     def equal(self, expected, actual):
         return actual == expected
 
-    def check_assertion(self, op_name, assertion, properties, *, props_expand_keys=True):
+    def check_assertion(self, op_name, assertion, properties):
         path = assertion["property"]
         predicate_name = assertion["condition"]
         expected_value = assertion["value"]
         actual_value = properties
-        if props_expand_keys:
-            for k in path.split("."):
-                actual_value = actual_value[k]
-        else:
-            actual_value = actual_value[path]
+        for k in path.split("."):
+            actual_value = actual_value[k]
         predicate = self.predicates[predicate_name]
         success = predicate(expected_value, actual_value)
         if not success:
@@ -399,10 +396,6 @@ class AssertingRunner(Runner, Delegator):
             if isinstance(return_value, dict):
                 for assertion in params["assertions"]:
                     self.check_assertion(op_name, assertion, return_value)
-            elif isinstance(return_value, BytesIO):
-                for assertion in params["assertions"]:
-                    props = parse(return_value, assertion["property"])
-                    self.check_assertion(op_name, assertion, props, props_expand_keys=False)
             else:
                 raise exceptions.DataError(f"Cannot check assertion in [{op_name}] as [{repr(self.delegate)}] did not return a dict.")
         return return_value
@@ -1945,7 +1938,7 @@ class RawRequest(Runner):
             # counter-intuitive, but preserves prior behavior
             headers = None
 
-        return await es.perform_request(
+        await es.perform_request(
             method=params.get("method", "GET"), path=path, headers=headers, body=params.get("body"), params=request_params
         )
 
