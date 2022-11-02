@@ -119,9 +119,9 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             current = capabilities.get(name, None)
             if current != value:
                 # A mismatch by is not a problem by itself as long as at least one actor system instance matches the requirements.
-                logger.info("Checking capabilities [%s] against requirements [%s] failed.", capabilities, requirements)
+                logger.debug("Checking capabilities [%s] against requirements [%s] failed.", capabilities, requirements)
                 return False
-        logger.info("Capabilities [%s] match requirements [%s].", capabilities, requirements)
+        logger.debug("Capabilities [%s] match requirements [%s].", capabilities, requirements)
         return True
 
     def transition_when_all_children_responded(self, sender, msg, expected_status, new_status, transition):
@@ -176,7 +176,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         :param new_status: The new status.
         """
         if self.is_current_status_expected(expected_status):
-            self.logger.info("Transitioning from [%s] to [%s].", self.status, new_status)
+            self.logger.debug("Transitioning from [%s] to [%s].", self.status, new_status)
             self.status = new_status
             for m in filter(None, self.children):
                 self.send(m, msg)
@@ -225,10 +225,10 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
     try:
         if try_join:
             if actor_system_already_running():
-                logger.info("Joining already running actor system with system base [%s].", system_base)
+                logger.debug("Joining already running actor system with system base [%s].", system_base)
                 return thespian.actors.ActorSystem(system_base)
             else:
-                logger.info("Creating new actor system with system base [%s] on coordinator node.", system_base)
+                logger.debug("Creating new actor system with system base [%s] on coordinator node.", system_base)
                 # if we try to join we can only run on the coordinator...
                 return thespian.actors.ActorSystem(system_base, logDefs=log.load_configuration(), capabilities={"coordinator": True})
         elif prefer_local_only:
