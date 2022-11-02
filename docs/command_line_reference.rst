@@ -957,6 +957,29 @@ Use index patterns::
 .. note::
    If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
 
+``data-streams``
+~~~~~~~~~~~~~~~~
+
+A comma-separated list of data stream patterns to target when generating a track with the ``create-track`` subcommand.
+
+**Examples**
+
+Target a single data stream::
+
+    esrally create-track --track=acme --data-streams="metrics-system.cpu-default" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+Target multiple data streams::
+
+    esrally create-track --track=acme --data-streams="logs-aws.vpcflow-default,metrics-system.cpu-default" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+Use index patterns::
+
+    esrally create-track --track=my-logs --data-streams="logs-*,metrics-*" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+
+.. note::
+   If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
+
 .. _command_line_reference_advanced_topics:
 
 Advanced topics
