@@ -12,7 +12,6 @@
       - shell: |
           #!/usr/local/bin/runbld
           archive_logs() {
-            # archive logs for ^^ google-cloud-storage uploader
             bash .ci/build.sh archive
           }
             
