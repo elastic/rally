@@ -737,7 +737,7 @@ class Driver:
             for clients in assignment["workers"]:
                 # don't assign workers without any clients
                 if len(clients) > 0:
-                    self.logger.info("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
+                    self.logger.debug("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
                     worker = self.target.create_client(host, self.config)
 
                     client_allocations = ClientAllocations()
@@ -1322,10 +1322,18 @@ class Worker(actor.RallyActor):
                     self.current_task_index,
                 )
             else:
-                self.logger.info("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
+                self.logger.debug("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
                 self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=self.sample_queue_size)
                 executor = AsyncIoAdapter(
-                    self.config, self.track, task_allocations, self.sampler, self.cancel, self.complete, self.on_error, self.client_contexts
+                    self.config,
+                    self.track,
+                    task_allocations,
+                    self.sampler,
+                    self.cancel,
+                    self.complete,
+                    self.on_error,
+                    self.client_contexts,
+                    self.worker_id,
                 )
 
                 self.executor_future = self.pool.submit(executor)
@@ -1678,7 +1686,7 @@ class ThroughputCalculator:
 
 
 class AsyncIoAdapter:
-    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts):
+    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
         self.cfg = cfg
         self.track = track
         self.task_allocations = task_allocations
@@ -1687,6 +1695,7 @@ class AsyncIoAdapter:
         self.complete = complete
         self.abort_on_error = abort_on_error
         self.client_contexts = client_contexts
+        self.parent_worker_id = worker_id
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
         self.assertions_enabled = self.cfg.opts("driver", "assertions")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
@@ -1740,12 +1749,16 @@ class AsyncIoAdapter:
             )
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
             aws.append(final_executor())
+        task_names = [t.task.task.name for t in self.task_allocations]
+        self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
         run_start = time.perf_counter()
         try:
             _ = await asyncio.gather(*aws)
         finally:
             run_end = time.perf_counter()
-            self.logger.info("Total run duration: %f seconds.", (run_end - run_start))
+            self.logger.info(
+                "Worker[%s] finished executing tasks %s in %f seconds", self.parent_worker_id, task_names, (run_end - run_start)
+            )
             await asyncio.get_event_loop().shutdown_asyncgens()
             shutdown_asyncgens_end = time.perf_counter()
             self.logger.info("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
