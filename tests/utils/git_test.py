@@ -191,7 +191,7 @@ class TestGit:
 
     def test_pull_ts(self, setup_teardown_remote):
         # results in commit 28474f4f097106ff3507be35958db0c3c8be0fc6
-        git.pull_ts(TestGit.tmp_src_dir, "20160101T110000Z", remote="esrally", branch="master")
+        git.pull_ts(TestGit.tmp_src_dir, "2016-01-01T110000Z", remote="esrally", branch="master")
         assert git.head_revision(TestGit.tmp_src_dir).startswith("28474f4")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
