@@ -304,37 +304,6 @@ def metrics_store_class(cfg):
         return InMemoryMetricsStore
 
 
-def extract_user_tags_from_config(cfg):
-    """
-    Extracts user tags into a structured dict
-
-    :param cfg: The current configuration object.
-    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
-    """
-    user_tags = cfg.opts("race", "user.tags", mandatory=False)
-    return extract_user_tags_from_string(user_tags)
-
-
-def extract_user_tags_from_string(user_tags):
-    """
-    Extracts user tags into a structured dict
-
-    :param user_tags: A string containing user tags (tags separated by comma, key and value separated by colon).
-    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
-    """
-    user_tags_dict = {}
-    if user_tags and user_tags.strip() != "":
-        try:
-            for user_tag in user_tags.split(","):
-                user_tag_key, user_tag_value = user_tag.split(":")
-                user_tags_dict[user_tag_key] = user_tag_value
-        except ValueError:
-            msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
-            logging.getLogger(__name__).exception(msg)
-            raise exceptions.SystemSetupError(msg)
-    return user_tags_dict
-
-
 class SampleType(IntEnum):
     Warmup = 0
     Normal = 1
@@ -414,7 +383,7 @@ class MetricsStore:
             self._car,
         )
 
-        user_tags = extract_user_tags_from_config(self._config)
+        user_tags = self._config.opts("race", "user.tags", default_value={}, mandatory=False)
         for k, v in user_tags.items():
             # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
             self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % k, v)
@@ -1312,7 +1281,7 @@ def create_race(cfg, track, challenge, track_revision=None):
     environment = cfg.opts("system", "env.name")
     race_id = cfg.opts("system", "race.id")
     race_timestamp = cfg.opts("system", "time.start")
-    user_tags = extract_user_tags_from_config(cfg)
+    user_tags = cfg.opts("race", "user.tags", default_value={}, mandatory=False)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
     car_params = cfg.opts("mechanic", "car.params")
