@@ -905,7 +905,7 @@ Rally usually installs and launches an Elasticsearch cluster internally and wipe
 ``user-tags``
 ~~~~~~~~~~~~~
 
-You can use this flag to attach a arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
+You can use this flag to attach arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
 
 The required format is in ``key`` ":" ``value`` pairs which can be defined as string (separated by comma), inline json or referenced from a json file.
 
