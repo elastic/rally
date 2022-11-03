@@ -15,8 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# add assertions to git tests
-
 import logging
 import os
 import shutil
