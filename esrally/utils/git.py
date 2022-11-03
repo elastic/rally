@@ -90,7 +90,7 @@ def checkout(src_dir, *, branch):
 
 @probed
 def checkout_branch(src_dir, remote, branch):
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
+    if process.run_subprocess_with_logging(with_retry("git -C {0} checkout {1}/{2}".format(io.escape_path(src_dir), remote, branch))):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
