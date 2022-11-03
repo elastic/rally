@@ -190,8 +190,9 @@ class TestGit:
         assert git.head_revision(TestGit.tmp_src_dir).startswith("09980cd")
 
     def test_pull_ts(self, setup_teardown_remote):
+        # results in commit 28474f4f097106ff3507be35958db0c3c8be0fc6
         git.pull_ts(TestGit.tmp_src_dir, "20160101T110000Z", remote="esrally", branch="master")
-        assert "28474f4f097106ff3507be35958db0c3c8be0fc6" == git.head_revision(TestGit.tmp_src_dir)
+        assert git.head_revision(TestGit.tmp_src_dir).startswith("28474f4")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_rebase(self, run_subprocess_with_logging):
