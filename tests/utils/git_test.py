@@ -71,10 +71,10 @@ class TestGit:
         process.run_subprocess_with_logging(f"git -C {TestGit.tmp_src_dir} branch -D {TestGit.local_branch}")
 
     @pytest.fixture
-    def setup_teardown_checkout_branch(self):
+    def setup_teardown_remote(self):
         """
-        The test branch we use is only available at elastic/rally.git, and because 'origin' is relative to where the test
-        is invoked we call this fixture to add a consistently named remote for both CI and local test invocations.
+        Because 'origin' is relative to where the test is invoked we call this fixture to add a consistently named
+        remote for both CI and local test invocations.
         """
         process.run_subprocess_with_logging(f"git -C {TestGit.tmp_src_dir} remote add esrally git@github.com:elastic/rally.git")
         git.fetch(TestGit.tmp_src_dir, remote="esrally")
@@ -172,12 +172,16 @@ class TestGit:
         assert exc.value.args[0] == f"Could not checkout [{branch}]. Do you have uncommitted changes?"
 
     def test_checkout_revision(self):
+        # Apple Git 'core.abbrev' defaults to return 7 char prefixes (09980cd)
+        # Linux defaults to return 8 char prefixes (09980cd5)
         git.checkout_revision(TestGit.tmp_src_dir, revision="bd368741951c643f9eb1958072c316e493c15b96")
-        assert "bd368741951c643f9eb1958072c316e493c15b96" == git.head_revision(TestGit.tmp_src_dir)
+        assert git.head_revision(TestGit.tmp_src_dir).startswith("bd36874")
 
-    def test_checkout_branch(self, setup_teardown_checkout_branch):
+    def test_checkout_branch(self, setup_teardown_remote):
+        # Apple Git 'core.abbrev' defaults to return 7 char prefixes (09980cd)
+        # Linux defaults to return 8 char prefixes (09980cd5)
         git.checkout_branch(TestGit.tmp_src_dir, remote="esrally", branch=TestGit.remote_branch)
-        assert "be3eeda86e12616fa744f6cde7fcfe41b3a1c963" == git.head_revision(TestGit.tmp_src_dir)
+        assert git.head_revision(TestGit.tmp_src_dir).startswith("be3eeda")
 
     def test_head_revision(self):
         # Apple Git 'core.abbrev' defaults to return 7 char prefixes (09980cd)
@@ -185,8 +189,8 @@ class TestGit:
         git.checkout(TestGit.tmp_src_dir, branch="2.6.0")
         assert git.head_revision(TestGit.tmp_src_dir).startswith("09980cd")
 
-    def test_pull_ts(self):
-        git.pull_ts(TestGit.tmp_src_dir, "20160101T110000Z", remote="origin", branch="master")
+    def test_pull_ts(self, setup_teardown_remote):
+        git.pull_ts(TestGit.tmp_src_dir, "20160101T110000Z", remote="esrally", branch="master")
         assert "28474f4f097106ff3507be35958db0c3c8be0fc6" == git.head_revision(TestGit.tmp_src_dir)
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
