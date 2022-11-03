@@ -97,7 +97,7 @@ class TestGit:
         git.clone(src, remote=remote)
 
         ensure_dir.assert_called_with(src)
-        run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src", level=logging.DEBUG)
+        run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
 
     @mock.patch("esrally.utils.io.ensure_dir")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -111,13 +111,13 @@ class TestGit:
         assert exc.value.args[0] == "Could not clone from [http://github.com/some/project] to [/src]"
 
         ensure_dir.assert_called_with(src)
-        run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src", level=logging.DEBUG)
+        run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_fetch_successful(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
         git.fetch("/src", remote="my-origin")
-        run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin", level=logging.DEBUG)
+        run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_fetch_with_error(self, run_subprocess_with_logging):
@@ -126,13 +126,13 @@ class TestGit:
         with pytest.raises(exceptions.SupplyError) as exc:
             git.fetch("/src", remote="my-origin")
         assert exc.value.args[0] == "Could not fetch source tree from [my-origin]"
-        run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin", level=logging.DEBUG)
+        run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_checkout_successful(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
         git.checkout("/src", branch="feature-branch")
-        run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch", level=logging.DEBUG)
+        run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_checkout_with_error(self, run_subprocess_with_logging):
@@ -141,15 +141,15 @@ class TestGit:
         with pytest.raises(exceptions.SupplyError) as exc:
             git.checkout("/src", branch="feature-branch")
         assert exc.value.args[0] == "Could not checkout [feature-branch]. Do you have uncommitted changes?"
-        run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch", level=logging.DEBUG)
+        run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_rebase(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
         git.rebase("/src", remote="my-origin", branch="feature-branch")
         calls = [
-            mock.call("git -C /src checkout feature-branch", level=logging.DEBUG),
-            mock.call("git -C /src rebase my-origin/feature-branch", level=logging.DEBUG),
+            mock.call("git -C /src checkout feature-branch"),
+            mock.call("git -C /src rebase my-origin/feature-branch"),
         ]
         run_subprocess_with_logging.assert_has_calls(calls)
 
@@ -162,13 +162,13 @@ class TestGit:
             mock.call("git -C /src --version", level=logging.DEBUG),
             # fetch
             mock.call("git -C /src --version", level=logging.DEBUG),
-            mock.call("git -C /src fetch --prune --tags my-origin", level=logging.DEBUG),
+            mock.call("git -C /src fetch --prune --tags my-origin"),
             # rebase
             mock.call("git -C /src --version", level=logging.DEBUG),
             # checkout
             mock.call("git -C /src --version", level=logging.DEBUG),
-            mock.call("git -C /src checkout feature-branch", level=logging.DEBUG),
-            mock.call("git -C /src rebase my-origin/feature-branch", level=logging.DEBUG),
+            mock.call("git -C /src checkout feature-branch"),
+            mock.call("git -C /src rebase my-origin/feature-branch"),
         ]
         run_subprocess_with_logging.assert_has_calls(calls)
 
@@ -186,11 +186,11 @@ class TestGit:
         run_subprocess_with_logging.assert_has_calls(
             [
                 # git version comes from the @probed decorator on 'git.pull_ts'
-                mock.call("git -C /src --version", level=logging.DEBUG),
+                mock.call("git -C /src --version", level=10),
                 # git version comes from the @probed decorator on 'git.fetch'
-                mock.call("git -C /src --version", level=logging.DEBUG),
-                mock.call("git -C /src fetch --prune --tags origin", level=logging.DEBUG),
-                mock.call("git -C /src checkout 3694a07", level=logging.DEBUG),
+                mock.call("git -C /src --version", level=10),
+                mock.call("git -C /src fetch --prune --tags origin"),
+                mock.call("git -C /src checkout 3694a07"),
             ]
         )
 
@@ -203,7 +203,7 @@ class TestGit:
         run_subprocess_with_logging.assert_has_calls(
             [
                 # git version comes from the @probed decorator on 'git.checkout_revision'
-                mock.call("git -C /src --version", level=logging.DEBUG),
+                mock.call("git -C /src --version", level=10),
                 mock.call("git -C /src checkout 3694a07"),
             ]
         )

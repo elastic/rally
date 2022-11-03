@@ -67,19 +67,19 @@ def is_branch(src_dir, identifier):
 def clone(src, *, remote):
     io.ensure_dir(src)
     # Don't swallow subprocess output, user might need to enter credentials...
-    if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src)), level=logging.DEBUG):
+    if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src))):
         raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
 
 
 @probed
 def fetch(src, *, remote):
-    if process.run_subprocess_with_logging("git -C {0} fetch --prune --tags {1}".format(io.escape_path(src), remote), level=logging.DEBUG):
+    if process.run_subprocess_with_logging("git -C {0} fetch --prune --tags {1}".format(io.escape_path(src), remote)):
         raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
 
 
 @probed
 def checkout(src_dir, *, branch):
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), branch), level=logging.DEBUG):
+    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), branch)):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
@@ -92,9 +92,7 @@ def checkout_branch(src_dir, remote, branch):
 @probed
 def rebase(src_dir, *, remote, branch):
     checkout(src_dir, branch=branch)
-    if process.run_subprocess_with_logging(
-        "git -C {0} rebase {1}/{2}".format(io.escape_path(src_dir), remote, branch), level=logging.DEBUG
-    ):
+    if process.run_subprocess_with_logging("git -C {0} rebase {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
         raise exceptions.SupplyError("Could not rebase on branch [%s]" % branch)
 
 
@@ -110,7 +108,7 @@ def pull_ts(src_dir, ts, *, remote, branch):
     clean_src = io.escape_path(src_dir)
     rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
     revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(clean_src, revision), level=logging.DEBUG):
+    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(clean_src, revision)):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
 
 
