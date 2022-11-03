@@ -397,7 +397,7 @@ class AssertingRunner(Runner, Delegator):
                 for assertion in params["assertions"]:
                     self.check_assertion(op_name, assertion, return_value)
             else:
-                self.logger.debug("Skipping assertion check in [%s] as [%s] does not return a dict.", op_name, repr(self.delegate))
+                raise exceptions.DataError(f"Cannot check assertion in [{op_name}] as [{repr(self.delegate)}] did not return a dict.")
         return return_value
 
     def __repr__(self, *args, **kwargs):
@@ -1220,7 +1220,6 @@ class ClusterHealth(Runner):
 
             def __lt__(self, other):
                 if self.__class__ is other.__class__:
-                    # pylint: disable=comparison-with-callable
                     return self.value < other.value
                 return NotImplemented
 

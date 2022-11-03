@@ -221,7 +221,7 @@ class TestProcessLauncher:
         assert env["ES_JAVA_OPTS"] == (
             "-XX:+ExitOnOutOfMemoryError -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints "
             "-XX:+UnlockCommercialFeatures -XX:+FlightRecorder "
-            "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr "  # pylint: disable=line-too-long
+            "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/tmp/telemetry/profile.jfr "
             "-XX:StartFlightRecording=defaultrecording=true"
         )
 

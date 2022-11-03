@@ -729,15 +729,12 @@ class OperationType(Enum):
 
     @property
     def admin_op(self):
-        # pylint: disable=comparison-with-callable
         return self.value > 1000
 
     def to_hyphenated_string(self):
         """
         Turns enum constants into hyphenated names, e.g. ``WaitForTransform`` becomes ``wait-for-transform``.
         """
-        # Pylint complains that self.name is not iterable
-        # pylint: disable=not-an-iterable
         return "".join(["-" + c.lower() if c.isupper() else c for c in self.name]).lstrip("-")
 
     # pylint: disable=too-many-return-statements

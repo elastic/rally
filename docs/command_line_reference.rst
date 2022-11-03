@@ -258,7 +258,7 @@ Example JSON file::
 
 All track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races``, it will show all track parameters::
 
-    Race Timestamp    Track    Track Parameters          Challenge            Car       User Tag
+    Race Timestamp    Track    Track Parameters          Challenge            Car       User Tags
     ----------------  -------  ------------------------- -------------------  --------  ---------
     20160518T122341Z  pmc      bulk_size=8000            append-no-conflicts  defaults
     20160518T112341Z  pmc      bulk_size=2000,clients=16 append-no-conflicts  defaults
@@ -902,37 +902,38 @@ Rally usually installs and launches an Elasticsearch cluster internally and wipe
 .. note::
    This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
 
-``user-tag``
-~~~~~~~~~~~~
+``user-tags``
+~~~~~~~~~~~~~
 
 This is only relevant when you want to run :doc:`tournaments </tournament>`. You can use this flag to attach an arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
 
-The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``value`` freely.
+The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``value`` freely. You can also specify multiple tags. They need to be separated by a comma.
 
 **Example**
 
  ::
 
-   esrally race --track=pmc --user-tag="intention:github-issue-1234-baseline,gc:cms"
-
-You can also specify multiple tags. They need to be separated by a comma.
+   esrally race --track=pmc --user-tags="intention:github-issue-1234-baseline,gc:cms"
 
 **Example**
 
  ::
 
-   esrally race --track=pmc --user-tag="disk:SSD,data_node_count:4"
+   esrally race --track=pmc --user-tags="disk:SSD,data_node_count:4"
 
 
 
 When you run ``esrally list races``, this will show up again::
 
-    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tag
+    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tags
     ----------------  -------  ------------------ -------------------  --------  ------------------------------------
     20160518T122341Z  pmc                         append-no-conflicts  defaults  intention:github-issue-1234-baseline
     20160518T112341Z  pmc                         append-no-conflicts  defaults  disk:SSD,data_node_count:4
 
 This will help you recognize a specific race when running ``esrally compare``.
+
+.. note::
+   This option used to be named `--user-tag` without an s, which was confusing as multiple tags are supported. While users are now encouraged to use `--user-tags` for clarity, Rally will continue to honor `--user-tag` in the future to avoid breaking backwards-compatibility.
 
 ``indices``
 ~~~~~~~~~~~
@@ -952,6 +953,29 @@ Target multiple indices::
 Use index patterns::
 
     esrally create-track --track=my-logs --indices="logs-*" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+
+.. note::
+   If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
+
+``data-streams``
+~~~~~~~~~~~~~~~~
+
+A comma-separated list of data stream patterns to target when generating a track with the ``create-track`` subcommand.
+
+**Examples**
+
+Target a single data stream::
+
+    esrally create-track --track=acme --data-streams="metrics-system.cpu-default" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+Target multiple data streams::
+
+    esrally create-track --track=acme --data-streams="logs-aws.vpcflow-default,metrics-system.cpu-default" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+Use index patterns::
+
+    esrally create-track --track=my-logs --data-streams="logs-*,metrics-*" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
 
 
 .. note::

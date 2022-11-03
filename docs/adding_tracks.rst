@@ -15,6 +15,10 @@ If you already have a cluster with data in it you can use the ``create-track`` s
 
     esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --indices="products,companies" --output-path=~/tracks
 
+Alternatively, to create a Rally track with data from the data streams ``logs-*`` and ``metrics-*``, issue the following command::
+
+    esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --data-streams="metrics-*,logs-*" --output-path=~/tracks
+
 If you want to connect to a cluster with TLS and basic authentication enabled, for example via Elastic Cloud, also specify :ref:`--client-options <clr_client_options>` and change ``basic_auth_user`` and ``basic_auth_password`` accordingly::
 
     esrally create-track --track=acme --target-hosts=abcdef123.us-central-1.gcp.cloud.es.io:9243 --client-options="use_ssl:true,verify_certs:true,basic_auth_user:'elastic',basic_auth_password:'secret-password'" --indices="products,companies" --output-path=~/tracks

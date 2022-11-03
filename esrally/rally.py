@@ -60,6 +60,16 @@ class ExitStatus(Enum):
 
 
 def create_arg_parser():
+    def valid_date(v):
+        pattern = "%Y%m%d"
+        try:
+            datetime.datetime.strptime(v, pattern)
+            # don't convert, just check that the format is correct, we'll use the string value later on anyway
+            return v
+        except ValueError:
+            msg = "[{}] does not conform to the pattern [yyyyMMdd]".format(v)
+            raise argparse.ArgumentTypeError(msg)
+
     def positive_number(v):
         value = int(v)
         if value <= 0:
@@ -143,6 +153,28 @@ def create_arg_parser():
         "--limit",
         help="Limit the number of search results for recent races (default: 10).",
         default=10,
+    )
+    list_parser.add_argument(
+        "--track",
+        help="Show only records from this track",
+        default=None,
+    )
+    list_parser.add_argument(
+        "--benchmark-name",
+        help="Show only records from with corresponding 'name' or 'benchmark-name' user tag",
+        default=None,
+    )
+    list_parser.add_argument(
+        "--from-date",
+        help="Show only records on or after this date (format: yyyyMMdd)",
+        type=valid_date,
+        default=None,
+    )
+    list_parser.add_argument(
+        "--to-date",
+        help="Show only records before or on this date (format: yyyyMMdd)",
+        type=valid_date,
+        default=None,
     )
     add_track_source(list_parser)
 
@@ -651,6 +683,7 @@ def create_arg_parser():
     )
     race_parser.add_argument(
         "--user-tag",
+        "--user-tags",
         help="Define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
         "Example: intention:baseline-ticket-12345",
         default="",
@@ -993,6 +1026,10 @@ def dispatch_sub_command(arg_parser, args, cfg):
         elif sub_command == "list":
             cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.track", args.track)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.from_date", args.from_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.to_date", args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
@@ -1047,7 +1084,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             # use the race id implicitly also as the install id.
             cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
             cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
-            cfg.add(config.Scope.applicationOverride, "race", "user.tag", args.user_tag)
+            cfg.add(config.Scope.applicationOverride, "race", "user.tags", args.user_tag)
             cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
             cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
             cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)

@@ -261,27 +261,29 @@ class TestAssertingRunner:
                 )
 
     @pytest.mark.asyncio
-    async def test_skips_asserts_for_non_dicts(self):
+    async def test_raise_asserts_for_non_dicts(self):
         es = None
         response = (1, "ops")
         delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
-        async with r:
-            final_response = await r(
-                es,
-                {
-                    "name": "test-task",
-                    "assertions": [
-                        {
-                            "property": "hits.hits.value",
-                            "condition": "==",
-                            "value": 5,
-                        },
-                    ],
-                },
-            )
-        # still passes response as is
-        assert final_response == response
+        with pytest.raises(
+            exceptions.DataError,
+            match=r"Cannot check assertion in \[test-task\] as \[<AsyncMock id='\d+'>\] did not return a dict.",
+        ):
+            async with r:
+                await r(
+                    es,
+                    {
+                        "name": "test-task",
+                        "assertions": [
+                            {
+                                "property": "hits.hits.value",
+                                "condition": "==",
+                                "value": 5,
+                            },
+                        ],
+                    },
+                )
 
     def test_predicates(self):
         r = runner.AssertingRunner(delegate=None)
