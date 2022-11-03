@@ -1084,7 +1084,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             # use the race id implicitly also as the install id.
             cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
             cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
-            cfg.add(config.Scope.applicationOverride, "race", "user.tags", args.user_tag)
+            cfg.add(config.Scope.applicationOverride, "race", "user.tags", opts.to_dict(args.user_tag))
             cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
             cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
             cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
