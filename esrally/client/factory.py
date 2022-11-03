@@ -126,8 +126,7 @@ class EsClientFactory:
                         "to 'create_api_key_per_client' in order to create client API keys."
                     )
                 )
-            else:
-                self.logger.debug("Automatic creation of client API keys: on")
+            self.logger.debug("Automatic creation of client API keys: on")
         else:
             self.logger.debug("Automatic creation of client API keys: off")
 
