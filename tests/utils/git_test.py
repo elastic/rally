@@ -71,6 +71,17 @@ class TestGit:
         process.run_subprocess_with_logging(f"git -C {TestGit.tmp_src_dir} branch -D {TestGit.local_branch}")
 
     @pytest.fixture
+    def setup_teardown_checkout_branch(self):
+        """
+        The test branch we use is only available at elastic/rally.git, and because 'origin' is relative to where the test
+        is invoked we call this fixture to add a consistently named remote for both CI and local test invocations.
+        """
+        process.run_subprocess_with_logging(f"git -C {TestGit.tmp_src_dir} remote add esrally git@github.com:elastic/rally.git")
+        git.fetch(TestGit.tmp_src_dir, remote="esrally")
+        yield
+        process.run_subprocess_with_logging(f"git -C {TestGit.tmp_src_dir} remote remove esrally")
+
+    @pytest.fixture
     def delete_local_tags(self):
         # delete tags, locally
         process.run_subprocess(f"git -C {TestGit.tmp_src_dir} tag | xargs git -C {TestGit.tmp_src_dir} tag -d")
@@ -164,8 +175,8 @@ class TestGit:
         git.checkout_revision(TestGit.tmp_src_dir, revision="bd368741951c643f9eb1958072c316e493c15b96")
         assert "bd368741951c643f9eb1958072c316e493c15b96" == git.head_revision(TestGit.tmp_src_dir)
 
-    def test_checkout_branch(self):
-        git.checkout_branch(TestGit.tmp_src_dir, remote="upstream", branch=TestGit.remote_branch)
+    def test_checkout_branch(self, setup_teardown_checkout_branch):
+        git.checkout_branch(TestGit.tmp_src_dir, remote="esrally", branch=TestGit.remote_branch)
         assert "be3eeda86e12616fa744f6cde7fcfe41b3a1c963" == git.head_revision(TestGit.tmp_src_dir)
 
     def test_head_revision(self):
