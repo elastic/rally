@@ -104,6 +104,11 @@ class TestGit:
         yield
         # undo rebase
         process.run_subprocess_with_logging(f"git -C {TestGit.local_tmp_src_dir} reset --hard ORIG_HEAD")
+
+        # checkout starting branches
+        git.checkout(TestGit.local_tmp_src_dir, branch=TestGit.starting_branch)
+        git.checkout(TestGit.remote_tmp_src_dir, branch=TestGit.starting_branch)
+
         # delete branches
         process.run_subprocess_with_logging(f"git -C {TestGit.local_tmp_src_dir} branch -D {TestGit.rebase_branch}")
         process.run_subprocess_with_logging(f"git -C {TestGit.remote_tmp_src_dir} branch -D {TestGit.rebase_branch}")
