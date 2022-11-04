@@ -11,6 +11,13 @@
     builders:
       - shell: |
           #!/usr/local/bin/runbld
-          set -o errexit
+          archive_logs() {
+            bash .ci/build.sh archive
+          }
+            
+          # need to additionally trap errtrace otherwise functions don't inherit the trap
+          # https://stackoverflow.com/a/35800451
+          set -o errexit -o errtrace 
+          trap archive_logs ERR
+            
           bash .ci/build.sh it{py_version}
-          bash .ci/build.sh archive

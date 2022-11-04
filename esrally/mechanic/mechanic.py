@@ -158,7 +158,6 @@ def stop(cfg):
 
         metrics_store.close()
 
-    # TODO: Do we need to expose this as a separate command as well?
     provisioner.cleanup(
         preserve=cfg.opts("mechanic", "preserve.install"), install_dir=node_config.binary_path, data_paths=node_config.data_paths
     )

@@ -32,6 +32,7 @@ import pytest
 from esrally import config, exceptions, metrics, paths, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
+from esrally.utils import opts
 
 
 class MockClientFactory:
@@ -107,31 +108,6 @@ class TransportErrors:
         side_effect_list.append("success")
 
         return side_effect_list
-
-
-class TestExtractUserTags:
-    def test_no_tags_returns_empty_dict(self):
-        cfg = config.Config()
-        assert len(metrics.extract_user_tags_from_config(cfg)) == 0
-
-    def test_missing_comma_raises_error(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "race", "user.tags", "invalid")
-        with pytest.raises(exceptions.SystemSetupError) as ctx:
-            metrics.extract_user_tags_from_config(cfg)
-        assert ctx.value.args[0] == "User tag keys and values have to separated by a ':'. Invalid value [invalid]"
-
-    def test_missing_value_raises_error(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "race", "user.tags", "invalid1,invalid2")
-        with pytest.raises(exceptions.SystemSetupError) as ctx:
-            metrics.extract_user_tags_from_config(cfg)
-        assert ctx.value.args[0] == "User tag keys and values have to separated by a ':'. Invalid value [invalid1,invalid2]"
-
-    def test_extracts_proper_user_tags(self):
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "race", "user.tags", "os:Linux,cpu:ARM")
-        assert metrics.extract_user_tags_from_config(cfg) == {"os": "Linux", "cpu": "ARM"}
 
 
 class TestEsClient:
@@ -364,7 +340,7 @@ class TestEsMetrics:
     def test_put_value_with_meta_info(self):
         throughput = 5000
         # add a user-defined tag
-        self.cfg.add(config.Scope.application, "race", "user.tags", "intention:testing,disk_type:hdd")
+        self.cfg.add(config.Scope.application, "race", "user.tags", opts.to_dict("intention:testing,disk_type:hdd"))
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
@@ -436,7 +412,7 @@ class TestEsMetrics:
 
     def test_put_doc_with_metadata(self):
         # add a user-defined tag
-        self.cfg.add(config.Scope.application, "race", "user.tags", "intention:testing,disk_type:hdd")
+        self.cfg.add(config.Scope.application, "race", "user.tags", opts.to_dict("intention:testing,disk_type:hdd"))
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
@@ -1738,7 +1714,7 @@ class TestStatsCalculator:
         cfg.add(config.Scope.application, "mechanic", "car.names", ["unittest_car"])
         cfg.add(config.Scope.application, "mechanic", "car.params", {})
         cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
-        cfg.add(config.Scope.application, "race", "user.tags", "")
+        cfg.add(config.Scope.application, "race", "user.tags", {})
         cfg.add(config.Scope.application, "race", "pipeline", "from-sources")
         cfg.add(config.Scope.application, "track", "params", {})
 
@@ -1906,7 +1882,7 @@ class TestStatsCalculator:
         cfg.add(config.Scope.application, "mechanic", "car.names", ["unittest_car"])
         cfg.add(config.Scope.application, "mechanic", "car.params", {})
         cfg.add(config.Scope.application, "mechanic", "plugin.params", {})
-        cfg.add(config.Scope.application, "race", "user.tags", "")
+        cfg.add(config.Scope.application, "race", "user.tags", {})
         cfg.add(config.Scope.application, "race", "pipeline", "from-sources")
         cfg.add(config.Scope.application, "track", "params", {})
 
