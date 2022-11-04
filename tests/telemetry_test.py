@@ -19,8 +19,8 @@ import collections
 import copy
 import logging
 import random
-import unittest.mock as mock
 from collections import namedtuple
+from unittest import mock
 from unittest.mock import call
 
 import elasticsearch
@@ -150,7 +150,7 @@ class TestStartupTime:
 
 
 class Client:
-    def __init__(self, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None):
+    def __init__(self, *, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
@@ -162,9 +162,12 @@ class Client:
     def info(self):
         return self._info()
 
+    def perform_request(self, *args, **kwargs):
+        return self.transport.perform_request(*args, **kwargs)
+
 
 class SubClient:
-    def __init__(self, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, state=None):
+    def __init__(self, *, stats=None, info=None, recovery=None, transform_stats=None, data_streams_stats=None, state=None):
         self._stats = wrap(stats)
         self._info = wrap(info)
         self._recovery = wrap(recovery)
@@ -224,8 +227,7 @@ class TransportClient:
         self.kwargs.append(kwargs)
         if self._force_error:
             raise self._error
-        else:
-            return copy.deepcopy(self._response)
+        return copy.deepcopy(self._response)
 
 
 class TestJfr:
@@ -349,6 +351,7 @@ class TestSegmentStats:
         segment_stats = telemetry.SegmentStats("/var/log", es)
         segment_stats.on_benchmark_stop()
         es.cat.segments.assert_called_with(index="_all", v=True)
+        # pylint: disable=unnecessary-dunder-call
         file_mock.assert_has_calls(
             [
                 call("/var/log/segment_stats.log", "wt"),
@@ -1915,6 +1918,32 @@ class TestNodeStatsRecorder:
                         }
                     },
                 },
+                "os": {
+                    "timestamp": 1655950949872,
+                    "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                    "mem": {
+                        "total_in_bytes": 62277025792,
+                        "free_in_bytes": 4934840320,
+                        "used_in_bytes": 57342185472,
+                        "free_percent": 8,
+                        "used_percent": 92,
+                    },
+                    "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                    "cgroup": {
+                        "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                        "cpu": {
+                            "control_group": "/",
+                            "cfs_period_micros": 100000,
+                            "cfs_quota_micros": 793162,
+                            "stat": {
+                                "number_of_elapsed_periods": 41092415,
+                                "number_of_times_throttled": 41890,
+                                "time_throttled_nanos": 29380593023188,
+                            },
+                        },
+                        "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                    },
+                },
                 "process": {
                     "timestamp": 1526045135857,
                     "open_file_descriptors": 312,
@@ -2042,6 +2071,11 @@ class TestNodeStatsRecorder:
             "jvm_gc_collectors_young_collection_time_in_millis": 309,
             "jvm_gc_collectors_old_collection_count": 2,
             "jvm_gc_collectors_old_collection_time_in_millis": 229,
+            "os_mem_total_in_bytes": 62277025792,
+            "os_mem_free_in_bytes": 4934840320,
+            "os_mem_used_in_bytes": 57342185472,
+            "os_mem_free_percent": 8,
+            "os_mem_used_percent": 92,
             "process_cpu_percent": 10,
             "process_cpu_total_in_millis": 56520,
             "breakers_parent_limit_size_in_bytes": 726571417,
@@ -2267,6 +2301,32 @@ class TestNodeStatsRecorder:
                             "total_virtual_in_bytes": 2472173568,
                         },
                     },
+                    "os": {
+                        "timestamp": 1655950949872,
+                        "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                        "mem": {
+                            "total_in_bytes": 62277025792,
+                            "free_in_bytes": 4934840320,
+                            "used_in_bytes": 57342185472,
+                            "free_percent": 8,
+                            "used_percent": 92,
+                        },
+                        "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                        "cgroup": {
+                            "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                            "cpu": {
+                                "control_group": "/",
+                                "cfs_period_micros": 100000,
+                                "cfs_quota_micros": 793162,
+                                "stat": {
+                                    "number_of_elapsed_periods": 41092415,
+                                    "number_of_times_throttled": 41890,
+                                    "time_throttled_nanos": 29380593023188,
+                                },
+                            },
+                            "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                        },
+                    },
                     "thread_pool": {
                         "generic": {
                             "threads": 4,
@@ -2399,6 +2459,11 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_mem_total_in_bytes": 62277025792,
+                "os_mem_free_in_bytes": 4934840320,
+                "os_mem_used_in_bytes": 57342185472,
+                "os_mem_free_percent": 8,
+                "os_mem_used_percent": 92,
                 "transport_rx_count": 77,
                 "transport_rx_size_in_bytes": 98723498,
                 "transport_server_open": 12,
@@ -2565,6 +2630,32 @@ class TestNodeStatsRecorder:
                             }
                         },
                     },
+                    "os": {
+                        "timestamp": 1655950949872,
+                        "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                        "mem": {
+                            "total_in_bytes": 62277025792,
+                            "free_in_bytes": 4934840320,
+                            "used_in_bytes": 57342185472,
+                            "free_percent": 8,
+                            "used_percent": 92,
+                        },
+                        "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                        "cgroup": {
+                            "cpuacct": {"control_group": "/", "usage_nanos": 1394207523870751},
+                            "cpu": {
+                                "control_group": "/",
+                                "cfs_period_micros": 100000,
+                                "cfs_quota_micros": 793162,
+                                "stat": {
+                                    "number_of_elapsed_periods": 41092415,
+                                    "number_of_times_throttled": 41890,
+                                    "time_throttled_nanos": 29380593023188,
+                                },
+                            },
+                            "memory": {"control_group": "/", "limit_in_bytes": "62277025792", "usage_in_bytes": "57342185472"},
+                        },
+                    },
                     "process": {
                         "timestamp": 1526045135857,
                         "open_file_descriptors": 312,
@@ -2679,6 +2770,11 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_mem_total_in_bytes": 62277025792,
+                "os_mem_free_in_bytes": 4934840320,
+                "os_mem_used_in_bytes": 57342185472,
+                "os_mem_free_percent": 8,
+                "os_mem_used_percent": 92,
                 "transport_rx_count": 77,
                 "transport_rx_size_in_bytes": 98723498,
                 "transport_server_open": 12,
@@ -2877,6 +2973,7 @@ class TestClusterEnvironmentInfo:
             "version": {
                 "build_hash": "abc123",
                 "number": "6.0.0-alpha1",
+                "build_flavor": "oss",
             },
         }
 
@@ -3211,7 +3308,7 @@ class TestJvmStatsSummary:
             }
         }
 
-        client = Client(nodes=SubClient(nodes_stats_at_start))
+        client = Client(nodes=SubClient(stats=nodes_stats_at_start))
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -3254,7 +3351,7 @@ class TestJvmStatsSummary:
                 }
             }
         }
-        client.nodes = SubClient(nodes_stats_at_end)
+        client.nodes = SubClient(stats=nodes_stats_at_end)
         t.on_benchmark_stop()
 
         metrics_store_node_level.assert_has_calls(
@@ -3322,7 +3419,7 @@ class TestJvmStatsSummary:
             }
         }
 
-        client = Client(nodes=SubClient(nodes_stats_at_start))
+        client = Client(nodes=SubClient(stats=nodes_stats_at_start))
         cfg = create_config()
 
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -3355,7 +3452,7 @@ class TestJvmStatsSummary:
                 }
             }
         }
-        client.nodes = SubClient(nodes_stats_at_end)
+        client.nodes = SubClient(stats=nodes_stats_at_end)
         t.on_benchmark_stop()
 
         metrics_store_node_level.assert_has_calls(
@@ -3385,7 +3482,7 @@ class TestIndexStats:
     def test_stores_available_index_stats(self, metrics_store_cluster_value, metrics_store_put_doc):
         client = Client(
             indices=SubClient(
-                {
+                stats={
                     "_all": {
                         "primaries": {
                             "segments": {
@@ -3554,7 +3651,7 @@ class TestIndexStats:
             },
         }
 
-        client.indices = SubClient(response)
+        client.indices = SubClient(stats=response)
 
         t.on_benchmark_stop()
 
@@ -4578,6 +4675,29 @@ class TestDiskUsageStats:
             self._mock_store("disk_usage_total", 346, "station.country_code"),
             self._mock_store("disk_usage_doc_values", 328, "station.country_code"),
             self._mock_store("disk_usage_points", 18, "station.country_code"),
+        ]
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_indexed_vector(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {"title_vector": {"total_in_bytes": 64179820, "doc_values_in_bytes": 0, "knn_vectors_in_bytes": 64179820}}
+                    },
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.mock_calls == [
+            self._mock_store("disk_usage_total", 64179820, "title_vector"),
+            self._mock_store("disk_usage_knn_vectors", 64179820, "title_vector"),
         ]
 
     def _mock_store(self, name, size, field):

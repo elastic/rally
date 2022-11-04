@@ -17,7 +17,7 @@
 
 import logging
 import os
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 
@@ -31,6 +31,49 @@ class TestGit:
         # this test is assuming that nobody stripped the git repo info in their Rally working copy
         assert not git.is_working_copy(test_dir)
         assert git.is_working_copy(os.path.dirname(test_dir))
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
+    def test_is_branch(self, run_subprocess_with_output, run_subprocess_with_logging):
+        run_subprocess_with_logging.return_value = 0
+        src = "/src"
+        branch = "test-branch"
+
+        # only remote
+        run_subprocess_with_output.return_value = ["6aa5288e60f7c66cc443805de1e266f2d5ec918e refs/remotes/origin/test-branch"]
+        assert git.is_branch(src, identifier=branch)
+
+        # only local
+        run_subprocess_with_output.return_value = ["6aa5288e60f7c66cc443805de1e266f2d5ec918e refs/heads/test-branch"]
+        assert git.is_branch(src, identifier=branch)
+
+        # both remote, and local
+        run_subprocess_with_output.return_value = [
+            "30b52a48011d54cc591cc3427f01bfe1b6fd1e73 refs/heads/test-branch",
+            "636134644da20d96020c818e7eb6afa5bec15e8a refs/remotes/origin/test-branch",
+        ]
+        assert git.is_branch(src, identifier=branch)
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("esrally.utils.process.run_subprocess_with_output")
+    def test_is_not_branch_tags(self, run_subprocess_with_output, run_subprocess_with_logging):
+        run_subprocess_with_logging.return_value = 0
+        src = "/src"
+        branch = "3694a07"
+        run_subprocess_with_output.return_value = ["30b52a48011d54cc591cc3427f01bfe1b6fd1e73 refs/tags/v7.12.0"]
+
+        assert not git.is_branch(src, identifier=branch)
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("esrally.utils.process.exit_status_as_bool")
+    def test_is_not_branch_commit_hash(self, mock_exit_status_as_bool, run_subprocess_with_logging):
+        run_subprocess_with_logging.return_value = 0
+        src = "/src"
+        branch = "3694a07"
+        # True is for @probed on is_branch
+        mock_exit_status_as_bool.side_effect = [True, False]
+
+        assert not git.is_branch(src, identifier=branch)
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -51,7 +94,7 @@ class TestGit:
         src = "/src"
         remote = "http://github.com/some/project"
 
-        git.clone(src, remote)
+        git.clone(src, remote=remote)
 
         ensure_dir.assert_called_with(src)
         run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
@@ -64,7 +107,7 @@ class TestGit:
         remote = "http://github.com/some/project"
 
         with pytest.raises(exceptions.SupplyError) as exc:
-            git.clone(src, remote)
+            git.clone(src, remote=remote)
         assert exc.value.args[0] == "Could not clone from [http://github.com/some/project] to [/src]"
 
         ensure_dir.assert_called_with(src)
@@ -88,7 +131,7 @@ class TestGit:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_checkout_successful(self, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
-        git.checkout("/src", "feature-branch")
+        git.checkout("/src", branch="feature-branch")
         run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -96,7 +139,7 @@ class TestGit:
         # first call is to check the git version (0 -> succeeds), the second call is the failing checkout (1 -> fails)
         run_subprocess_with_logging.side_effect = [0, 1]
         with pytest.raises(exceptions.SupplyError) as exc:
-            git.checkout("/src", "feature-branch")
+            git.checkout("/src", branch="feature-branch")
         assert exc.value.args[0] == "Could not checkout [feature-branch]. Do you have uncommitted changes?"
         run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
 
@@ -136,26 +179,32 @@ class TestGit:
         run_subprocess_with_logging.return_value = 0
         run_subprocess_with_output.return_value = ["3694a07"]
         run_subprocess.side_effect = [False, False]
-        git.pull_ts("/src", "20160101T110000Z")
+        git.pull_ts("/src", "20160101T110000Z", remote="origin", branch="master")
 
         run_subprocess_with_output.assert_called_with('git -C /src rev-list -n 1 --before="20160101T110000Z" --date=iso8601 origin/master')
-        run_subprocess.has_calls(
+
+        run_subprocess_with_logging.assert_has_calls(
             [
-                mock.call("git -C /src fetch --prune --tags --quiet origin"),
+                # git version comes from the @probed decorator on 'git.pull_ts'
+                mock.call("git -C /src --version", level=10),
+                # git version comes from the @probed decorator on 'git.fetch'
+                mock.call("git -C /src --version", level=10),
+                mock.call("git -C /src fetch --prune --tags origin"),
                 mock.call("git -C /src checkout 3694a07"),
             ]
         )
 
     @mock.patch("esrally.utils.process.run_subprocess")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_pull_revision(self, run_subprocess_with_logging, run_subprocess):
+    def test_checkout_revision(self, run_subprocess_with_logging, run_subprocess):
         run_subprocess_with_logging.return_value = 0
         run_subprocess.side_effect = [False, False]
-        git.pull_revision("/src", "3694a07")
-        run_subprocess.has_calls(
+        git.checkout_revision("/src", revision="3694a07")
+        run_subprocess_with_logging.assert_has_calls(
             [
-                mock.call("git -C /src fetch --prune --tags --quiet origin"),
-                mock.call("git -C /src checkout --quiet 3694a07"),
+                # git version comes from the @probed decorator on 'git.checkout_revision'
+                mock.call("git -C /src --version", level=10),
+                mock.call("git -C /src checkout 3694a07"),
             ]
         )
 

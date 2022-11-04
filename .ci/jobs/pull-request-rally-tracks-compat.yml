@@ -1,0 +1,27 @@
+---
+
+- job:
+    name: "elastic+rally+pull-request+rally-tracks-compat"
+    display-name: "elastic / rally # pull-request+rally-tracks-compat"
+    description: "rally-tracks integration tests using rally built from PR branch"
+    scm:
+      - git:
+          refspec: "+refs/pull/*:refs/remotes/origin/pr/* +refs/heads/*:refs/remotes/origin/*"
+          branches:
+            - "${ghprbActualCommit}"
+    triggers:
+      - github-pull-request:
+          org-list:
+            - elastic
+          allow-whitelist-orgs-as-admins: true
+          trigger-phrase: '.*run\W+rally/rally-tracks-compat.*'
+          github-hooks: true
+          status-context: "rally/rally-tracks-compat"
+          cancel-builds-on-update: true
+          black-list-labels:
+            - '>test-mute'
+    builders:
+      - shell: |
+          #!/usr/local/bin/runbld
+          set -o errexit
+          bash .ci/build.sh rally-tracks-compat

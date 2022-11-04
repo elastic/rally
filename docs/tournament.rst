@@ -5,13 +5,13 @@ Suppose, we want to analyze the impact of a performance improvement.
 
 First, we need a baseline measurement. For example::
 
-    esrally race --track=pmc --revision=latest --user-tag="intention:baseline_github_1234"
+    esrally race --track=pmc --revision=latest --user-tags="intention:baseline_github_1234"
 
-Above we run the baseline measurement based on the latest source code revision of Elasticsearch. We can use the command line parameter ``--user-tag`` to provide a key-value pair to document the intent of a race.
+Above we run the baseline measurement based on the latest source code revision of Elasticsearch. We can use the command line parameter ``--user-tags`` to provide a key-value pair to document the intent of a race.
 
 Then we implement our changes and finally we want to run another benchmark to see the performance impact of the change. In that case, we do not want Rally to change our source tree and thus specify the pseudo-revision ``current``::
 
-    esrally race --track=pmc --revision=current --user-tag="intention:reduce_alloc_1234"
+    esrally race --track=pmc --revision=current --user-tags="intention:reduce_alloc_1234"
 
 After we've run both races, we want to know about the performance impact. With Rally we can analyze differences of two given races easily. First of all, we need to find two races to compare by issuing ``esrally list races``::
 
@@ -32,7 +32,7 @@ After we've run both races, we want to know about the performance impact. With R
     0cfb3576-3025-4c17-b672-d6c9e811b93e  20160518T101957Z  pmc                          append-no-conflicts  defaults
 
 
-We can see that the user tag helps us to recognize races. We want to compare the two most recent races and have to provide the two race IDs in the next step::
+We can see that the user tags help us to recognize races. We want to compare the two most recent races and have to provide the two race IDs in the next step::
 
     $ esrally compare --baseline=0bfd4542-3821-4c79-81a2-0858636068ce --contender=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7
 

@@ -19,8 +19,10 @@ import errno
 import functools
 import json
 import os
+import platform
 import random
 import socket
+import subprocess
 import time
 
 import pytest
@@ -29,7 +31,10 @@ from esrally import client, config, version
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
-DISTRIBUTIONS = ["6.8.0", "7.6.0"]
+DISTRIBUTIONS = ["8.4.0"]
+# There are no ARM distribution artefacts for 6.8.0, which can't be tested on Apple Silicon
+if platform.machine() != "arm64":
+    DISTRIBUTIONS.insert(0, "6.8.0")
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -79,15 +84,18 @@ def esrally(cfg, command_line):
     This method should be used for rally invocations of the all commands besides race.
     These commands may have different CLI options than race.
     """
-    return os.system(esrally_command_line_for(cfg, command_line))
+    return subprocess.call(esrally_command_line_for(cfg, command_line), shell=True)
 
 
-def race(cfg, command_line):
+def race(cfg, command_line, enable_assertions=True):
     """
     This method should be used for rally invocations of the race command.
     It sets up some defaults for how the integration tests expect to run races.
     """
-    return esrally(cfg, f"race {command_line} --kill-running-processes --on-error='abort' --enable-assertions")
+    race_command = f"race {command_line} --kill-running-processes --on-error='abort'"
+    if enable_assertions:
+        race_command += " --enable-assertions"
+    return esrally(cfg, race_command)
 
 
 def shell_cmd(command_line):
@@ -98,7 +106,7 @@ def shell_cmd(command_line):
     :return: (int) the exit code
     """
 
-    return os.system(command_line)
+    return subprocess.call(command_line, shell=True)
 
 
 def command_in_docker(command_line, python_version):
@@ -159,7 +167,7 @@ class TestCluster:
             output = process.run_subprocess_with_output(
                 "esrally install --configuration-name={cfg} --quiet --distribution-version={dist} --build-type=tar "
                 "--http-port={http_port} --node={node_name} --master-nodes={node_name} --car={car} "
-                '--seed-hosts="127.0.0.1:{transport_port}"'.format(
+                '--seed-hosts="127.0.0.1:{transport_port}" --cluster-name={cfg}'.format(
                     cfg=self.cfg,
                     dist=distribution_version,
                     http_port=http_port,
@@ -178,6 +186,7 @@ class TestCluster:
             raise AssertionError("Failed to start Elasticsearch test cluster.")
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         client.wait_for_rest_layer(es)
+        assert es.info()["cluster_name"] == self.cfg
 
     def stop(self):
         if self.installation_id:
@@ -189,7 +198,7 @@ class TestCluster:
 
 
 class EsMetricsStore:
-    VERSION = "7.6.0"
+    VERSION = "7.17.0"
 
     def __init__(self):
         self.cluster = TestCluster("in-memory-it")

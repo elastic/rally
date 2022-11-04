@@ -838,6 +838,20 @@ class ForceMergeParamSource(ParamSource):
         return parsed_params
 
 
+class DownsampleParamSource(ParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, **kwargs)
+        self._fixed_interval = params.get("fixed-interval", "1h")
+        params["index"] = params.get("source-index")
+        self._source_index = get_target(track, params)
+        self._target_index = params.get("target-index", f"{self._source_index}-{self._fixed_interval}")
+
+    def params(self):
+        parsed_params = {"fixed-interval": self._fixed_interval, "source-index": self._source_index, "target-index": self._target_index}
+        parsed_params.update(self._client_params())
+        return parsed_params
+
+
 def get_target(track, params):
     if len(track.indices) == 1:
         default_target = track.indices[0].name
@@ -1200,13 +1214,13 @@ class Slice:
     def __next__(self):
         if self.current_line >= self.number_of_lines:
             raise StopIteration()
-        else:
-            # ensure we don't read past the allowed number of lines.
-            lines = self.source.readlines(min(self.bulk_size, self.number_of_lines - self.current_line))
-            self.current_line += len(lines)
-            if len(lines) == 0:
-                raise StopIteration()
-            return lines
+
+        # ensure we don't read past the allowed number of lines.
+        lines = self.source.readlines(min(self.bulk_size, self.number_of_lines - self.current_line))
+        self.current_line += len(lines)
+        if len(lines) == 0:
+            raise StopIteration()
+        return lines
 
     def __str__(self):
         return "%s[%d;%d]" % (self.source, self.offset, self.offset + self.number_of_lines)
@@ -1329,6 +1343,7 @@ register_param_source_for_operation(track.OperationType.Bulk, BulkIndexParamSour
 register_param_source_for_operation(track.OperationType.Search, SearchParamSource)
 register_param_source_for_operation(track.OperationType.ScrollSearch, SearchParamSource)
 register_param_source_for_operation(track.OperationType.PaginatedSearch, SearchParamSource)
+register_param_source_for_operation(track.OperationType.CompositeAgg, SearchParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndex, CreateIndexParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndexParamSource)
 register_param_source_for_operation(track.OperationType.CreateDataStream, CreateDataStreamParamSource)
@@ -1341,6 +1356,7 @@ register_param_source_for_operation(track.OperationType.CreateComposableTemplate
 register_param_source_for_operation(track.OperationType.DeleteComposableTemplate, DeleteComposableTemplateParamSource)
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
 register_param_source_for_operation(track.OperationType.ForceMerge, ForceMergeParamSource)
+register_param_source_for_operation(track.OperationType.Downsample, DownsampleParamSource)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)

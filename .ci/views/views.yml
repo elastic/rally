@@ -1,0 +1,4 @@
+- view:
+    name: "rally"
+    view-type: list
+    regex: '^elastic[-+]rally.*$'

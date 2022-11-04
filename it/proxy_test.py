@@ -36,7 +36,7 @@ def http_proxy():
         f"docker run --rm --name squid -d "
         f"-v {config_dir}/squidpasswords:/etc/squid/squidpasswords "
         f"-v {config_dir}/squid.conf:/etc/squid/squid.conf "
-        f"-p 3128:3128 datadog/squid"
+        f"-p 3128:3128 ubuntu/squid"
     )
     proxy_container_id = lines[-1].strip()
     proxy = HttpProxy(authenticated_url="http://testuser:testuser@127.0.0.1:3128", anonymous_url="http://127.0.0.1:3128")
@@ -75,20 +75,26 @@ def test_run_with_direct_internet_connection(cfg, http_proxy, fresh_log_file):
 
 
 @it.rally_in_mem
-def test_anonymous_proxy_no_connection(cfg, http_proxy, fresh_log_file):
+def test_anonymous_proxy_no_connection(cfg, http_proxy):
     env = dict(os.environ)
     env["http_proxy"] = http_proxy.anonymous_url
-    assert process.run_subprocess_with_logging(it.esrally_command_line_for(cfg, "list tracks"), env=env) == 0
-    assert_log_line_present(fresh_log_file, f"Connecting via proxy URL [{http_proxy.anonymous_url}] to the Internet")
-    # unauthenticated proxy access is prevented
-    assert_log_line_present(fresh_log_file, "No Internet connection detected. Specify --offline")
+    env["https_proxy"] = http_proxy.anonymous_url
+    lines = process.run_subprocess_with_output(it.esrally_command_line_for(cfg, "list tracks"), env=env)
+    output = "\n".join(lines)
+    # there should be a warning because we can't connect
+    assert "[WARNING] Could not update tracks." in output
+    # still, the command succeeds because of local state
+    assert "[INFO] SUCCESS" in output
 
 
 @it.rally_in_mem
-def test_authenticated_proxy_user_can_connect(cfg, http_proxy, fresh_log_file):
+def test_authenticated_proxy_user_can_connect(cfg, http_proxy):
     env = dict(os.environ)
     env["http_proxy"] = http_proxy.authenticated_url
-    assert process.run_subprocess_with_logging(it.esrally_command_line_for(cfg, "list tracks"), env=env) == 0
-    assert_log_line_present(fresh_log_file, f"Connecting via proxy URL [{http_proxy.authenticated_url}] to the Internet")
-    # authenticated proxy access is allowed
-    assert_log_line_present(fresh_log_file, "Detected a working Internet connection")
+    env["https_proxy"] = http_proxy.authenticated_url
+    lines = process.run_subprocess_with_output(it.esrally_command_line_for(cfg, "list tracks"), env=env)
+    output = "\n".join(lines)
+    # rally should be able to connect, no warning
+    assert "[WARNING] Could not update tracks." not in output
+    # the command should succeed
+    assert "[INFO] SUCCESS" in output

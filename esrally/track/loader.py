@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -105,7 +104,7 @@ def tracks(cfg):
     different versions, this will be reflected in the output.
 
     :param cfg: The config object.
-    :return: A list of tracks that are available for the provided distribution version or else for the master version.
+    :return: A list of tracks that are available for the provided distribution version or else for the main version.
     """
     repo = track_repo(cfg)
     return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]
@@ -195,18 +194,7 @@ def load_track(cfg, install_dependencies=False):
 
 
 def _install_dependencies(dependencies):
-    def _cleanup():
-        # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
-        console.info("Cleaning track dependency directory...")
-        logging.info("Cleaning track dependency directory [%s]...", paths.libs())
-        shutil.rmtree(paths.libs(), onerror=_trap)
-
-    def _trap(function, path, exc_info):
-        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
-        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
-
     if dependencies:
-        _cleanup()
         log_path = os.path.join(paths.logs(), "dependency.log")
         console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
         try:
@@ -249,7 +237,6 @@ def load_track_plugins(
     register_runner=None,
     register_scheduler=None,
     register_track_processor=None,
-    install_dependencies=False,
     force_update=False,
 ):
     """
@@ -260,7 +247,6 @@ def load_track_plugins(
     :param register_runner: An optional function where runners can be registered.
     :param register_scheduler: An optional function where custom schedulers can be registered.
     :param register_track_processor: An optional function where track processors can be registered.
-    :param install_dependencies: If set to ``True``, install declared dependencies from the track.py. Defaults to ``False``.
     :param force_update: If set to ``True`` this ensures that the track is first updated from the remote repository.
                          Defaults to ``False``.
     :return: True iff this track defines plugins and they have been loaded.
@@ -536,13 +522,13 @@ class Downloader:
                 raise exceptions.DataError(
                     "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
                 ) from None
+
+            msg = f"Could not download [{data_url}] to [{target_path}]"
+            if e.reason:
+                msg += f" (HTTP status: {e.code}, reason: {e.reason})"
             else:
-                msg = f"Could not download [{data_url}] to [{target_path}]"
-                if e.reason:
-                    msg += f" (HTTP status: {e.code}, reason: {e.reason})"
-                else:
-                    msg += f" (HTTP status: {e.code})"
-                raise exceptions.DataError(msg) from e
+                msg += f" (HTTP status: {e.code})"
+            raise exceptions.DataError(msg) from e
         except urllib.error.URLError as e:
             raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
 
@@ -628,8 +614,7 @@ class DocumentSetPreparator:
                             f"size of [{expected_size}] bytes and it cannot be downloaded "
                             f"because no base URL is provided."
                         ) from None
-                    else:
-                        raise
+                    raise
 
         self.create_file_offset_table(doc_path, document_set.number_of_lines)
 
@@ -1022,40 +1007,42 @@ class TrackFileReader:
         self.logger.info("Reading track specification file [%s].", track_spec_file)
         # render the track to a temporary file instead of dumping it into the logs. It is easier to check for error messages
         # involving lines numbers and it also does not bloat Rally's log file so much.
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        try:
-            rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
-            with open(tmp.name, "wt", encoding="utf-8") as f:
-                f.write(rendered)
-            self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
-            track_spec = json.loads(rendered)
-        except jinja2.exceptions.TemplateNotFound:
-            self.logger.exception("Could not load [%s]", track_spec_file)
-            raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
-        except json.JSONDecodeError as e:
-            self.logger.exception("Could not load [%s].", track_spec_file)
-            msg = "Could not load '{}': {}.".format(track_spec_file, str(e))
-            if e.doc and e.lineno > 0 and e.colno > 0:
-                line_idx = e.lineno - 1
-                lines = e.doc.split("\n")
-                ctx_line_count = 3
-                ctx_start = max(0, line_idx - ctx_line_count)
-                ctx_end = min(line_idx + ctx_line_count, len(lines))
-                erroneous_lines = lines[ctx_start:ctx_end]
-                erroneous_lines.insert(line_idx - ctx_start + 1, "-" * (e.colno - 1) + "^ Error is here")
-                msg += " Lines containing the error:\n\n{}\n\n".format("\n".join(erroneous_lines))
-            msg += "The complete track has been written to '{}' for diagnosis.".format(tmp.name)
-            raise TrackSyntaxError(msg)
-        except Exception as e:
-            self.logger.exception("Could not load [%s].", track_spec_file)
-            msg = "Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name)
-            raise TrackSyntaxError(msg, e)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
+            try:
+                rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
+                with open(tmp.name, "wt", encoding="utf-8") as f:
+                    f.write(rendered)
+                self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
+                track_spec = json.loads(rendered)
+            except jinja2.exceptions.TemplateNotFound:
+                self.logger.exception("Could not load [%s]", track_spec_file)
+                raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
+            except json.JSONDecodeError as e:
+                self.logger.exception("Could not load [%s].", track_spec_file)
+                msg = "Could not load '{}': {}.".format(track_spec_file, str(e))
+                if e.doc and e.lineno > 0 and e.colno > 0:
+                    line_idx = e.lineno - 1
+                    lines = e.doc.split("\n")
+                    ctx_line_count = 3
+                    ctx_start = max(0, line_idx - ctx_line_count)
+                    ctx_end = min(line_idx + ctx_line_count, len(lines))
+                    erroneous_lines = lines[ctx_start:ctx_end]
+                    erroneous_lines.insert(line_idx - ctx_start + 1, "-" * (e.colno - 1) + "^ Error is here")
+                    msg += " Lines containing the error:\n\n{}\n\n".format("\n".join(erroneous_lines))
+                msg += "The complete track has been written to '{}' for diagnosis.".format(tmp.name)
+                raise TrackSyntaxError(msg)
+            except Exception as e:
+                self.logger.exception("Could not load [%s].", track_spec_file)
+                msg = "Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name)
+                raise TrackSyntaxError(msg, e)
+
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
         raw_version = track_spec.get("version", TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION)
         try:
             track_version = int(raw_version)
         except ValueError:
             raise exceptions.InvalidSyntax("version identifier for track %s must be numeric but was [%s]" % (track_name, str(raw_version)))
+
         if TrackFileReader.MINIMUM_SUPPORTED_TRACK_VERSION > track_version:
             raise exceptions.RallyError(
                 "Track {} is on version {} but needs to be updated at least to version {} to work with the "
@@ -1066,6 +1053,7 @@ class TrackFileReader:
                 "Track {} requires a newer version of Rally. Please upgrade Rally (supported track version: {}, "
                 "required track version: {}).".format(track_name, TrackFileReader.MAXIMUM_SUPPORTED_TRACK_VERSION, track_version)
             )
+
         try:
             jsonschema.validate(track_spec, self.track_schema)
         except jsonschema.exceptions.ValidationError as ve:
@@ -1375,7 +1363,8 @@ class TrackSpecificationReader:
                         if target_ds and len(indices) > 0:
                             # if indices are in use we error
                             raise TrackSyntaxError("target-data-stream cannot be used when using indices")
-                        elif target_ds and target_type:
+
+                        if target_ds and target_type:
                             raise TrackSyntaxError("target-type cannot be used when using data-streams")
 
                         # need an index if we're using indices and no meta-data are present and we don't have a default

@@ -35,6 +35,7 @@ from typing import List, Optional
 import ijson
 
 from esrally import exceptions, track
+from esrally.utils.versions import Version
 
 # Mapping from operation type to specific runner
 
@@ -48,6 +49,7 @@ def register_default_runners():
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
     register_runner(track.OperationType.Search, Query(), async_runner=True)
     register_runner(track.OperationType.PaginatedSearch, Query(), async_runner=True)
+    register_runner(track.OperationType.CompositeAgg, Query(), async_runner=True)
     register_runner(track.OperationType.ScrollSearch, Query(), async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
@@ -64,6 +66,7 @@ def register_default_runners():
     # these requests should not be retried as they are not idempotent
     register_runner(track.OperationType.CreateSnapshot, CreateSnapshot(), async_runner=True)
     register_runner(track.OperationType.RestoreSnapshot, RestoreSnapshot(), async_runner=True)
+    register_runner(track.OperationType.Downsample, Downsample(), async_runner=True)
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth, Retry(ClusterHealth()), async_runner=True)
     register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
@@ -90,6 +93,7 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteSnapshotRepository, Retry(DeleteSnapshotRepository()), async_runner=True)
     register_runner(track.OperationType.CreateSnapshotRepository, Retry(CreateSnapshotRepository()), async_runner=True)
     register_runner(track.OperationType.WaitForSnapshotCreate, Retry(WaitForSnapshotCreate()), async_runner=True)
+    register_runner(track.OperationType.WaitForCurrentSnapshotsCreate, Retry(WaitForCurrentSnapshotsCreate()), async_runner=True)
     register_runner(track.OperationType.WaitForRecovery, Retry(IndicesRecovery()), async_runner=True)
     register_runner(track.OperationType.PutSettings, Retry(PutSettings()), async_runner=True)
     register_runner(track.OperationType.CreateTransform, Retry(CreateTransform()), async_runner=True)
@@ -128,7 +132,7 @@ def register_runner(operation_type, runner, **kwargs):
             "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner))
         )
 
-    if getattr(runner, "multi_cluster", False):
+    if hasattr(unwrap(runner), "multi_cluster"):
         if "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
@@ -394,7 +398,7 @@ class AssertingRunner(Runner, Delegator):
                 for assertion in params["assertions"]:
                     self.check_assertion(op_name, assertion, return_value)
             else:
-                self.logger.debug("Skipping assertion check in [%s] as [%s] does not return a dict.", op_name, repr(self.delegate))
+                raise exceptions.DataError(f"Cannot check assertion in [{op_name}] as [{repr(self.delegate)}] did not return a dict.")
         return return_value
 
     def __repr__(self, *args, **kwargs):
@@ -733,23 +737,29 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: List[str], lists: List[str] = None) -> dict:
+def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: List[str] = None) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
-    contain elements (respective key will be ``False``).
+    contain elements (respective key will be ``False``). If ``objects`` is specified, it will in addition extract
+    the JSON objects under the given keys. These JSON objects must be flat dicts, only containing primitive types
+    within.
 
     :param text: A text to parse.
     :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
     :param lists: An optional list of property paths to JSON lists in the provided text.
-    :return: A dict containing all properties and lists that have been found in the provided text.
+    :param objects: An optional list of property paths to flat JSON objects in the provided text.
+    :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
     text.seek(0)
     parser = ijson.parse(text)
     parsed = {}
     parsed_lists = {}
+    current_object = {}
     current_list = None
     expect_end_array = False
+    parsed_objects = {}
+    in_object = None
     try:
         for prefix, event, value in parser:
             if expect_end_array:
@@ -761,14 +771,28 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None) -> dict:
             elif lists is not None and prefix in lists and event == "start_array":
                 current_list = prefix
                 expect_end_array = True
+            elif objects is not None and event == "end_map" and prefix in objects:
+                parsed_objects[in_object] = current_object
+                in_object = None
+            elif objects is not None and event == "start_map" and prefix in objects:
+                in_object = prefix
+                current_object = {}
+            elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
+                current_object[prefix[len(in_object) + 1 :]] = value
             # found all necessary properties
-            if len(parsed) == len(props) and (lists is None or len(parsed_lists) == len(lists)):
+            if (
+                len(parsed) == len(props)
+                and (lists is None or len(parsed_lists) == len(lists))
+                and (objects is None or len(parsed_objects) == len(objects))
+            ):
                 break
+
     except ijson.IncompleteJSONError:
         # did not find all properties
         pass
 
     parsed.update(parsed_lists)
+    parsed.update(parsed_objects)
     return parsed
 
 
@@ -778,7 +802,7 @@ class Query(Runner):
 
     It expects at least the following keys in the `params` hash:
 
-    * `operation-type`: One of `search`, `paginated-search`, or `scroll-search`.
+    * `operation-type`: One of `search`, `paginated-search`, `scroll-search`, or `composite-agg`
     * `index`: The index or indices against which to issue the query.
     * `type`: See `index`
     * `cache`: True iff the request cache should be used.
@@ -789,7 +813,7 @@ class Query(Runner):
     * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
                                                corresponding response in more detail, this might incur additional
                                                overhead which can skew measurement results. This flag is ineffective
-                                               for scroll queries (detailed meta-data are always returned).
+                                               for scroll queries or composite aggs (detailed meta-data are always returned).
     * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present,
                            defaults to ``None`` and potentially falls back to the global timeout setting.
     * `results-per-page`: Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and
@@ -806,7 +830,7 @@ class Query(Runner):
     The following meta data are always returned:
 
     * ``weight``: operation-agnostic representation of the "weight" of an operation (used internally by Rally for throughput calculation).
-                  Always 1 for normal queries and the number of retrieved pages for scroll queries.
+                  Always 1 for normal queries and the number of retrieved pages for scroll queries or composite aggs.
     * ``unit``: The unit in which to interpret ``weight``. Always "ops".
     * ``hits``: Total number of hits for this operation.
     * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
@@ -820,7 +844,8 @@ class Query(Runner):
 
     def __init__(self):
         super().__init__()
-        self._extractor = SearchAfterExtractor()
+        self._search_after_extractor = SearchAfterExtractor()
+        self._composite_agg_extractor = CompositeAggExtractor()
 
     async def __call__(self, es, params):
         request_params, headers = self._transport_request_params(params)
@@ -834,7 +859,7 @@ class Query(Runner):
         body = mandatory(params, "body", self)
         operation_type = params.get("operation-type")
         size = params.get("results-per-page")
-        if size:
+        if size and operation_type != "composite-agg":
             body["size"] = size
         detailed_results = params.get("detailed-results", False)
         encoding_header = self._query_headers(params)
@@ -871,7 +896,7 @@ class Query(Runner):
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = self._extractor(response, bool(pit_op), results.get("hits"))
+                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), results.get("hits"))
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -894,6 +919,99 @@ class Query(Runner):
                     break
 
             return results
+
+        async def _composite_agg(es, params):
+            index = params.get("index", "_all")
+            pit_op = params.get("with-point-in-time-from")
+            results = {
+                "unit": "pages",
+                "success": True,
+                "timed_out": False,
+                "took": 0,
+            }
+            if pit_op:
+                # these are disallowed as they are encoded in the pit_id
+                for item in ["index", "routing", "preference"]:
+                    body.pop(item, None)
+                index = None
+            # explicitly convert to int to provoke an error otherwise
+            total_pages = sys.maxsize if params.get("pages", "all") == "all" else int(mandatory(params, "pages", self))
+            for page in range(1, total_pages + 1):
+                if pit_op:
+                    pit_id = CompositeContext.get(pit_op)
+                    body["pit"] = {"id": pit_id, "keep_alive": "1m"}
+
+                paths_to_composite = paths_to_composite_agg(body, [])
+                if not paths_to_composite or len(paths_to_composite) != 1:
+                    raise exceptions.DataError("Unique path to composite agg required")
+                path_to_composite = paths_to_composite[0]
+                composite_agg_body = resolve_composite_agg(body, path_to_composite)
+                if not composite_agg_body:
+                    raise exceptions.DataError("Could not find composite agg - parser inconsistency")
+                if size:
+                    composite_agg_body["size"] = size
+
+                body_to_send = tree_copy_composite_agg(body, path_to_composite)
+                response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
+                parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, results.get("hits"))
+                results["pages"] = page
+                results["weight"] = page
+                if results.get("hits") is None:
+                    results["hits"] = parsed.get("hits.total.value")
+                    results["hits_relation"] = parsed.get("hits.total.relation")
+                results["took"] += parsed.get("took")
+                # when this evaluates to True, keep it for the final result
+                if not results["timed_out"]:
+                    results["timed_out"] = parsed.get("timed_out")
+                if pit_op:
+                    # per the documentation the response pit id is most up-to-date
+                    CompositeContext.put(pit_op, parsed.get("pit_id"))
+
+                after_key = parsed["after_key"]
+                if isinstance(after_key, dict):
+                    composite_agg_body["after"] = after_key
+                else:
+                    # body needs to be un-mutated for the next iteration (preferring to do this over a deepcopy at the start)
+                    body.pop("pit", None)
+                    composite_agg_body.pop("after", None)
+                    break
+
+            return results
+
+        def select_aggs(obj):
+            if isinstance(obj, dict):
+                return obj.get("aggs") or obj.get("aggregations")
+            return None
+
+        def paths_to_composite_agg(obj, parent_key_path):
+            aggs = select_aggs(obj)
+            paths = []
+            if isinstance(aggs, dict):
+                for key, subobj in aggs.items():
+                    if isinstance(subobj, dict) and isinstance(subobj.get("composite"), dict):
+                        paths = paths + [parent_key_path + [key]]
+                    paths = paths + paths_to_composite_agg(subobj, parent_key_path + [key])
+            return paths
+
+        def resolve_composite_agg(obj, key_path):
+            if len(key_path) == 0:
+                return obj.get("composite")
+            else:
+                aggs = select_aggs(obj)
+                return resolve_composite_agg(aggs[key_path[0]], key_path[1:])
+
+        def tree_copy_composite_agg(obj, key_path):
+            obj = obj.copy()
+            if len(key_path) == 0:
+                obj["composite"] = obj["composite"].copy()
+            else:
+                aggs = None
+                if "aggs" in obj:
+                    aggs = obj["aggs"] = obj["aggs"].copy()
+                elif "aggregations" in obj:
+                    aggs = obj["aggregations"] = obj["aggregations"].copy()
+                aggs[key_path[0]] = tree_copy_composite_agg(aggs[key_path[0]], key_path[1:])
+            return obj
 
         async def _request_body_query(es, params):
             doc_type = params.get("type")
@@ -995,6 +1113,8 @@ class Query(Runner):
             return await _search_after_query(es, params)
         elif operation_type == "scroll-search":
             return await _scroll_query(es, params)
+        elif operation_type == "composite-agg":
+            return await _composite_agg(es, params)
         elif operation_type == "search":
             if "pages" in params:
                 logging.getLogger(__name__).warning(
@@ -1015,7 +1135,7 @@ class Query(Runner):
             components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
-        return await es.perform_request(method="GET", path=f"/{path}", params=params, body=body, headers=headers)
+        return await es.perform_request(method="GET", path="/" + path, params=params, body=body, headers=headers)
 
     def _query_headers(self, params):
         # reduces overhead due to decompression of very large responses
@@ -1065,6 +1185,30 @@ class SearchAfterExtractor:
             return None
 
 
+class CompositeAggExtractor:
+    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: List, hits_total: Optional[int]) -> dict:
+        # not a class member as we would want to mutate over the course of execution for efficiency
+        properties = ["timed_out", "took"]
+        if get_point_in_time:
+            properties.append("pit_id")
+        # we only need to parse these the first time, subsequent responses should have the same values
+        if hits_total is None:
+            properties.extend(["hits.total", "hits.total.value", "hits.total.relation"])
+
+        after_key = "aggregations." + (".".join(path_to_composite_agg)) + ".after_key"
+
+        parsed = parse(response, properties, None, [after_key])
+
+        if get_point_in_time and not parsed.get("pit_id"):
+            raise exceptions.RallyAssertionError("Paginated query failure: pit_id was expected but not found in the response.")
+        # standardize these before returning...
+        parsed["hits.total.value"] = parsed.pop("hits.total.value", parsed.pop("hits.total", hits_total))
+        parsed["hits.total.relation"] = parsed.get("hits.total.relation", "eq")
+        parsed["after_key"] = parsed.pop(after_key, None)
+
+        return parsed
+
+
 class ClusterHealth(Runner):
     """
     Get cluster health
@@ -1080,7 +1224,6 @@ class ClusterHealth(Runner):
 
             def __lt__(self, other):
                 if self.__class__ is other.__class__:
-                    # pylint: disable=comparison-with-callable
                     return self.value < other.value
                 return NotImplemented
 
@@ -1536,7 +1679,8 @@ class CreateMlDatafeed(Runner):
         try:
             await es.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
         except elasticsearch.BadRequestError:
-            # fallback to old path
+            # TODO: when we drop support for Elasticsearch 6.8, all Datafeed classes
+            # will be able to stop using this _xpack path
             await es.perform_request(
                 method="PUT",
                 path=f"/_xpack/ml/datafeeds/{datafeed_id}",
@@ -1620,7 +1764,11 @@ class StopMlDatafeed(Runner):
             }
             if timeout:
                 request_params["timeout"] = escape(timeout)
-            await es.perform_request(method="POST", path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop", params=request_params)
+            await es.perform_request(
+                method="POST",
+                path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
+                params=request_params,
+            )
 
     def __repr__(self, *args, **kwargs):
         return "stop-ml-datafeed"
@@ -1815,6 +1963,10 @@ class CreateSnapshot(Runner):
 
 
 class WaitForSnapshotCreate(Runner):
+    """
+    Waits until a currently running <snapshot> on a given repository has finished successfully and returns detailed metrics.
+    """
+
     async def __call__(self, es, params):
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
@@ -1863,6 +2015,55 @@ class WaitForSnapshotCreate(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "wait-for-snapshot-create"
+
+
+class WaitForCurrentSnapshotsCreate(Runner):
+    """
+    Waits until all currently running snapshots on a given repository have completed
+    """
+
+    async def __call__(self, es, params):
+        repository = mandatory(params, "repository", repr(self))
+        wait_period = params.get("completion-recheck-wait-period", 1)
+        es_info = await es.info()
+        es_version = Version.from_string(es_info["version"]["number"])
+        api = es.snapshot.get
+        request_args = {"repository": repository, "snapshot": "_current", "verbose": False}
+
+        # significantly reduce response size when lots of snapshots have been taken
+        # only available since ES 8.3.0 (https://github.com/elastic/elasticsearch/pull/86269)
+        if (es_version.major, es_version.minor) >= (8, 3):
+            request_params, headers = self._transport_request_params(params)
+            headers["Content-Type"] = "application/json"
+
+            request_params["index_names"] = "false"
+            request_params["verbose"] = "false"
+
+            request_args = {
+                "method": "GET",
+                "path": f"_snapshot/{repository}/_current",
+                "headers": headers,
+                "params": request_params,
+            }
+
+            # TODO: Switch to native es.snapshot.get once `index_names` becomes supported in
+            #       `es.snapshot.get` of the elasticsearch-py client and we've upgraded the client in Rally, see:
+            #       https://elasticsearch-py.readthedocs.io/en/latest/api.html#elasticsearch.client.SnapshotClient.get
+            api = es.perform_request
+
+        while True:
+            response = await api(**request_args)
+
+            if int(response.get("total")) == 0:
+                break
+
+            await asyncio.sleep(wait_period)
+
+        # getting detailed stats per snapshot using the snapshot status api can be very expensive.
+        # return nothing and rely on Rally's own service_time measurement for the duration.
+
+    def __repr__(self, *args, **kwargs):
+        return "wait-for-current-snapshots-create"
 
 
 class RestoreSnapshot(Runner):
@@ -2052,7 +2253,8 @@ class WaitForTransform(Runner):
             if state == "failed":
                 failure_reason = stats_response["transforms"][0].get("reason", "unknown")
                 raise exceptions.RallyAssertionError(f"Transform [{transform_id}] failed with [{failure_reason}].")
-            elif state == "stopped" or wait_for_completion is False:
+
+            if state == "stopped" or wait_for_completion is False:
                 self._completed = True
                 self._percent_completed = 1.0
             else:
@@ -2314,6 +2516,7 @@ class Composite(Runner):
             "close-point-in-time",
             "search",
             "paginated-search",
+            "composite-agg",
             "raw-request",
             "sleep",
             "submit-async-search",
@@ -2459,6 +2662,48 @@ class Sql(Runner):
         return "sql"
 
 
+class Downsample(Runner):
+    """
+    Executes a downsampling operation creating the target index and aggregating data in the source index on the @timestamp field.
+    """
+
+    async def __call__(self, es, params):
+
+        request_params, request_headers = self._transport_request_params(params)
+
+        fixed_interval = mandatory(params, "fixed-interval", self)
+        if fixed_interval is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'fixed-interval'. "
+                "Add it to your parameter source and try again."
+            )
+
+        source_index = mandatory(params, "source-index", self)
+        if source_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'source-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        target_index = mandatory(params, "target-index", self)
+        if target_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        path = f"/{source_index}/_downsample/{target_index}"
+
+        await es.perform_request(
+            method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
+        )
+
+        return {"weight": 1, "unit": "ops", "success": True}
+
+    def __repr__(self, *args, **kwargs):
+        return "downsample"
+
+
 class FieldCaps(Runner):
     """
     Retrieve `the capabilities of fields among indices.
@@ -2590,12 +2835,12 @@ class Retry(Runner, Delegator):
             except (socket.timeout, elasticsearch.exceptions.ConnectionError):
                 if last_attempt or not retry_on_timeout:
                     raise
-                else:
-                    await asyncio.sleep(sleep_time)
+                await asyncio.sleep(sleep_time)
             except elasticsearch.exceptions.TransportError as e:
                 if last_attempt or not retry_on_timeout:
                     raise e
-                elif e.status_code == 408:
+
+                if e.status_code == 408:
                     self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
                     await asyncio.sleep(sleep_time)
                 else:

@@ -87,10 +87,8 @@ def create_reader(bulk_size):
     disable_gc=True,
 )
 def test_index_data_reader_100(benchmark):
-    reader = create_reader(bulk_size=100)
-    reader.__enter__()
-    benchmark(reader.__next__)
-    reader.__exit__(None, None, None)
+    with create_reader(bulk_size=100) as reader:
+        benchmark(reader.__next__)
 
 
 @pytest.mark.benchmark(
@@ -100,10 +98,8 @@ def test_index_data_reader_100(benchmark):
     disable_gc=True,
 )
 def test_index_data_reader_1000(benchmark):
-    reader = create_reader(bulk_size=1000)
-    reader.__enter__()
-    benchmark(reader.__next__)
-    reader.__exit__(None, None, None)
+    with create_reader(bulk_size=1000) as reader:
+        benchmark(reader.__next__)
 
 
 @pytest.mark.benchmark(
@@ -113,10 +109,8 @@ def test_index_data_reader_1000(benchmark):
     disable_gc=True,
 )
 def test_index_data_reader_10000(benchmark):
-    reader = create_reader(bulk_size=10000)
-    reader.__enter__()
-    benchmark(reader.__next__)
-    reader.__exit__(None, None, None)
+    with create_reader(bulk_size=10000) as reader:
+        benchmark(reader.__next__)
 
 
 @pytest.mark.benchmark(
@@ -126,7 +120,5 @@ def test_index_data_reader_10000(benchmark):
     disable_gc=True,
 )
 def test_index_data_reader_100000(benchmark):
-    reader = create_reader(bulk_size=100000)
-    reader.__enter__()
-    benchmark(reader.__next__)
-    reader.__exit__(None, None, None)
+    with create_reader(bulk_size=100000) as reader:
+        benchmark(reader.__next__)

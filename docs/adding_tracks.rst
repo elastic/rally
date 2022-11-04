@@ -15,6 +15,10 @@ If you already have a cluster with data in it you can use the ``create-track`` s
 
     esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --indices="products,companies" --output-path=~/tracks
 
+Alternatively, to create a Rally track with data from the data streams ``logs-*`` and ``metrics-*``, issue the following command::
+
+    esrally create-track --track=acme --target-hosts=127.0.0.1:9200 --data-streams="metrics-*,logs-*" --output-path=~/tracks
+
 If you want to connect to a cluster with TLS and basic authentication enabled, for example via Elastic Cloud, also specify :ref:`--client-options <clr_client_options>` and change ``basic_auth_user`` and ``basic_auth_password`` accordingly::
 
     esrally create-track --track=acme --target-hosts=abcdef123.us-central-1.gcp.cloud.es.io:9243 --client-options="use_ssl:true,verify_certs:true,basic_auth_user:'elastic',basic_auth_password:'secret-password'" --indices="products,companies" --output-path=~/tracks
@@ -672,7 +676,7 @@ If you use this idiom you can refer to the ``clients`` variable inside your snip
 Sharing your track with others
 ------------------------------
 
-So far the track is only available on your local machine. To share your track you could check it into version control. To avoid committing the potentially huge data file you can expose it via http (e.g. via an S3 bucket) and reference it in your track with the property ``base-url``. Rally expects that the URL points to the parent path and appends the document file name automatically.
+So far the track is only available on your local machine. To share your track you could check it into version control. To avoid committing the potentially huge data file you can expose it via HTTP (e.g. via a cloud bucket) and reference it in your track with the property ``base-url``. Rally expects that the URL points to the parent path and appends the document file name automatically.
 
 You should also compress your document corpus to save network bandwidth; `pbzip2 <https://linux.die.net/man/1/pbzip2>`_ works well, is backwards compatible with ``bzip2`` and makes use of all available cpu cores for compression and decompression. You can create a compressed archive with the following command::
 

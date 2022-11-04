@@ -32,7 +32,7 @@ A Rally "car" is a specific configuration of Elasticsearch. You can list the ava
     x-pack-monitoring-local  mixin   X-Pack Monitoring (local exporter)
     x-pack-security          mixin   X-Pack Security
 
-You can specify the car that Rally should use with e.g. ``--car="4gheap"``. It is also possible to specify one or more "mixins" to further customize the configuration. For example, you can specify ``--car="4gheap,ea"`` to run with a 4GB heap and enable Java assertions (they are disabled by default) or ``--car="4gheap,x-pack-security"`` to benchmark Elasticsearch with X-Pack Security enabled (requires Elasticsearch 6.3.0 or better).
+You can specify the car that Rally should use with e.g. ``--car="4gheap"``. It is also possible to specify one or more "mixins" to further customize the configuration. For example, you can specify ``--car="4gheap,ea"`` to run with a 4GB heap and enable Java assertions (they are disabled by default) or ``--car="4gheap,x-pack-security"`` to benchmark Elasticsearch with X-Pack Security enabled.
 
 .. note::
     To benchmark ``x-pack-security`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'"``
@@ -118,7 +118,7 @@ Custom Team Repositories
 
 Rally provides a default team repository that is hosted on `Github <https://github.com/elastic/rally-teams>`_. You can also add your own team repositories although this requires a bit of additional work. First of all, team repositories need to be managed by git. The reason is that Rally can benchmark multiple versions of Elasticsearch and we use git branches in the track repository to determine the best match. The versioning scheme is as follows:
 
-* The `master` branch needs to work with the latest `master` branch of Elasticsearch.
+* The ``master`` branch needs to work with the latest ``main`` branch of Elasticsearch.
 * All other branches need to match the version scheme of Elasticsearch, i.e. ``MAJOR.MINOR.PATCH-SUFFIX`` where all parts except ``MAJOR`` are optional.
 
 Rally implements a branch matching logic similar to the one used for :ref:`track-repositories <track-repositories-branch-logic>`.

@@ -22,7 +22,7 @@ import io
 import json
 import math
 import random
-import unittest.mock as mock
+from unittest import mock
 
 import elastic_transport
 import elasticsearch
@@ -45,6 +45,68 @@ class BaseUnitTestContextManagerRunner:
 class TestRegisterRunner:
     def teardown_method(self, method):
         runner.remove_runner("unit_test")
+
+    @mock.patch("esrally.driver.runner._single_cluster_runner")
+    @mock.patch("esrally.driver.runner._multi_cluster_runner")
+    @pytest.mark.asyncio
+    async def test_register_wrapped_runner_with_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
+        class Wrapper(runner.Delegator):
+            def __init__(self, delegate=None):
+                super().__init__(delegate=delegate)
+
+            async def __call__(self, *args):
+                return args
+
+        class BaseRunner:
+            multi_cluster = True
+
+            async def __call__(self, es, params):
+                pass
+
+        base_runner = BaseRunner()
+        wrapped_runner = Wrapper(base_runner)
+
+        es = None
+        params = {}
+
+        single_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        multi_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        runner.register_runner(operation_type="unit_test", runner=wrapped_runner, async_runner=True)
+
+        await wrapped_runner(es, params)
+
+        multi_cluster_runner.assert_called_once()
+        single_cluster_runner.assert_not_called()
+
+    @mock.patch("esrally.driver.runner._single_cluster_runner")
+    @mock.patch("esrally.driver.runner._multi_cluster_runner")
+    @pytest.mark.asyncio
+    async def test_register_wrapped_runner_with_no_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
+        class Wrapper(runner.Delegator):
+            def __init__(self, delegate=None):
+                super().__init__(delegate=delegate)
+
+            async def __call__(self, *args):
+                return args
+
+        class BaseRunner:
+            async def __call__(self, es, params):
+                pass
+
+        base_runner = BaseRunner()
+        wrapped_runner = Wrapper(base_runner)
+
+        es = None
+        params = {}
+
+        single_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        multi_cluster_runner.return_value = runner.MultiClientRunner(wrapped_runner, "delegate", es, False)
+        runner.register_runner(operation_type="unit_test", runner=wrapped_runner, async_runner=True)
+
+        await wrapped_runner(es, params)
+
+        multi_cluster_runner.assert_not_called()
+        single_cluster_runner.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_runner_function_should_be_wrapped(self):
@@ -200,27 +262,29 @@ class TestAssertingRunner:
                 )
 
     @pytest.mark.asyncio
-    async def test_skips_asserts_for_non_dicts(self):
+    async def test_raise_asserts_for_non_dicts(self):
         es = None
         response = (1, "ops")
         delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
-        async with r:
-            final_response = await r(
-                es,
-                {
-                    "name": "test-task",
-                    "assertions": [
-                        {
-                            "property": "hits.hits.value",
-                            "condition": "==",
-                            "value": 5,
-                        },
-                    ],
-                },
-            )
-        # still passes response as is
-        assert final_response == response
+        with pytest.raises(
+            exceptions.DataError,
+            match=r"Cannot check assertion in \[test-task\] as \[<AsyncMock id='\d+'>\] did not return a dict.",
+        ):
+            async with r:
+                await r(
+                    es,
+                    {
+                        "name": "test-task",
+                        "assertions": [
+                            {
+                                "property": "hits.hits.value",
+                                "condition": "==",
+                                "value": 5,
+                            },
+                        ],
+                    },
+                )
 
     def test_predicates(self):
         r = runner.AssertingRunner(delegate=None)
@@ -255,7 +319,7 @@ class TestAssertingRunner:
 
 class TestSelectiveJsonParser:
     def doc_as_text(self, doc):
-        return io.StringIO(json.dumps(doc))
+        return io.BytesIO(json.dumps(doc).encode())
 
     def test_parse_all_expected(self):
         doc = self.doc_as_text(
@@ -350,7 +414,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -379,7 +443,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -419,7 +483,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -458,7 +522,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -507,7 +571,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -544,7 +608,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -586,7 +650,7 @@ class TestBulkIndexRunner:
             ],
         }
 
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -658,7 +722,7 @@ class TestBulkIndexRunner:
             ],
         }
 
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -754,7 +818,7 @@ class TestBulkIndexRunner:
                 },
             ],
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -1497,7 +1561,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1545,7 +1609,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1576,7 +1640,6 @@ class TestQueryRunner:
         es.perform_request.assert_awaited_once_with(
             method="GET",
             path="/_all/_search",
-            # params={"request_timeout": 3.0, "request_cache": "true"},
             params={"request_cache": "true"},
             body=params["body"],
             headers={"header1": "value1", "x-opaque-id": "test-id1"},
@@ -1600,7 +1663,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
 
         query_runner = runner.Query()
         params = {
@@ -1656,7 +1719,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
 
         query_runner = runner.Query()
         params = {
@@ -1706,7 +1769,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1763,7 +1826,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1818,7 +1881,7 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1874,8 +1937,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1937,8 +2000,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1995,8 +2058,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2075,12 +2138,12 @@ class TestQueryRunner:
 
         es.perform_request = mock.AsyncMock(
             side_effect=[
-                io.StringIO(json.dumps(search_response)),
-                io.StringIO(json.dumps(scroll_response)),
+                io.BytesIO(json.dumps(search_response).encode()),
+                io.BytesIO(json.dumps(scroll_response).encode()),
             ]
         )
 
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2129,7 +2192,7 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
         es.clear_scroll = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
 
         query_runner = runner.Query()
@@ -2194,11 +2257,11 @@ class TestQueryRunner:
 
         es.perform_request = mock.AsyncMock(
             side_effect=[
-                io.StringIO(json.dumps(search_response)),
-                io.StringIO(json.dumps(scroll_response)),
+                io.BytesIO(json.dumps(search_response).encode()),
+                io.BytesIO(json.dumps(scroll_response).encode()),
             ]
         )
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2248,8 +2311,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2977,7 +3040,7 @@ class TestDeleteComponentTemplateRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_deletes_only_existing_index_templates(self, es):
+    async def test_deletes_only_existing_component_templates(self, es):
         es.cluster.exists_component_template = mock.AsyncMock(side_effect=[False, True])
         es.cluster.delete_component_template = mock.AsyncMock()
 
@@ -3972,6 +4035,172 @@ class TestWaitForSnapshotCreate:
             )
 
 
+class TestWaitForCurrentSnapshotsCreate:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_wait_for_current_snapshots_create_before_8_3_0(self, es):
+        es.info = mock.AsyncMock(
+            return_value={
+                "name": "es01",
+                "cluster_name": "escluster",
+                "cluster_uuid": "4BgOtWNiQ6-zap9zDW2Q1A",
+                "version": {
+                    "number": "7.17.3",
+                    "build_flavor": "default",
+                    "build_type": "tar",
+                    "build_hash": "5ad023604c8d7416c9eb6c0eadb62b14e766caff",
+                    "build_date": "2022-04-19T08:11:19.070913226Z",
+                    "build_snapshot": False,
+                    "lucene_version": "8.11.1",
+                    "minimum_wire_compatibility_version": "6.8.0",
+                    "minimum_index_compatibility_version": "6.0.0-beta1",
+                },
+                "tagline": "You Know, for Search",
+            },
+        )
+
+        es.snapshot.get = mock.AsyncMock(
+            side_effect=[
+                {
+                    "snapshots": [
+                        {
+                            "snapshot": "logging-test-0",
+                            "uuid": "xVb4cPSKTfyIz-HcN9mQcg",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                            "indices": ["a", "b", "c"],
+                        },
+                        {
+                            "snapshot": "logging-test-1",
+                            "uuid": "LEHRHopiTrqemFkGXQijHw",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                            "indices": ["d", "e", "f"],
+                        },
+                        {
+                            "snapshot": "logging-test-2",
+                            "uuid": "9DJcMb5JQruddQbO3qzxSA",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                            "indices": ["g", "h", "i"],
+                        },
+                        {
+                            "snapshot": "logging-test-3",
+                            "uuid": "5YmhlUBxRv6pQbswf4nsfw",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                            "indices": ["j", "k", "l"],
+                        },
+                    ],
+                    "total": 4,
+                    "remaining": 0,
+                },
+                {"snapshots": [], "total": 0, "remaining": 0},
+            ],
+        )
+
+        repository = "many-shards"
+        task_params = {
+            "repository": repository,
+            "completion-recheck-wait-period": 0,
+        }
+
+        r = runner.WaitForCurrentSnapshotsCreate()
+        result = await r(es, task_params)
+
+        es.snapshot.get.assert_awaited_with(repository=repository, snapshot="_current", verbose=False)
+
+        assert es.snapshot.get.await_count == 2
+
+        assert result is None
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_wait_for_current_snapshots_create_after_8_3_0(self, es):
+        es.info = mock.AsyncMock(
+            return_value={
+                "name": "elasticsearch-0",
+                "cluster_name": "rally-benchmark",
+                "cluster_uuid": "rs5Gdzm6TISd-L4KZWVW4w",
+                "version": {
+                    "number": "8.4.0-SNAPSHOT",
+                    "build_type": "tar",
+                    "build_hash": "4e18993f55431f6d3890049c9fea4c6c8218f070",
+                    "build_date": "2022-07-05T00:19:44.887353304Z",
+                    "build_snapshot": True,
+                    "lucene_version": "9.3.0",
+                    "minimum_wire_compatibility_version": "7.17.0",
+                    "minimum_index_compatibility_version": "7.0.0",
+                },
+                "tagline": "You Know, for Search",
+            },
+        )
+
+        repository = "many-shards"
+        task_params = {
+            "repository": repository,
+            "completion-recheck-wait-period": 0,
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                {
+                    "snapshots": [
+                        {
+                            "snapshot": "logging-test-0",
+                            "uuid": "xVb4cPSKTfyIz-HcN9mQcg",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                        },
+                        {
+                            "snapshot": "logging-test-1",
+                            "uuid": "LEHRHopiTrqemFkGXQijHw",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                        },
+                        {
+                            "snapshot": "logging-test-2",
+                            "uuid": "9DJcMb5JQruddQbO3qzxSA",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                        },
+                        {
+                            "snapshot": "logging-test-3",
+                            "uuid": "5YmhlUBxRv6pQbswf4nsfw",
+                            "repository": "many-shards",
+                            "data_streams": [],
+                            "state": "IN_PROGRESS",
+                        },
+                    ],
+                    "total": 4,
+                    "remaining": 0,
+                },
+                {"snapshots": [], "total": 0, "remaining": 0},
+            ],
+        )
+
+        r = runner.WaitForCurrentSnapshotsCreate()
+        result = await r(es, task_params)
+
+        es.perform_request.assert_awaited_with(
+            method="GET",
+            path=f"_snapshot/{repository}/_current",
+            headers={"Content-Type": "application/json"},
+            params={"index_names": "false", "verbose": "false"},
+        )
+
+        assert es.perform_request.await_count == 2
+
+        assert result is None
+
+
 class TestRestoreSnapshot:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -4953,7 +5182,7 @@ class TestSqlRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_fetch_one_page(self, es):
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Sql()
         params = {
@@ -4976,7 +5205,7 @@ class TestSqlRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_fetch_all_pages(self, es):
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Sql()
         params = {"operation-type": "sql", "body": {"query": "SELECT first_name FROM emp"}, "pages": 3}
@@ -4998,7 +5227,10 @@ class TestSqlRunner:
     @pytest.mark.asyncio
     async def test_failure_on_too_few_pages(self, es):
         es.perform_request = mock.AsyncMock(
-            side_effect=[io.StringIO(json.dumps(self.default_response)), io.StringIO(json.dumps({"rows": [["John"]]}))]
+            side_effect=[
+                io.BytesIO(json.dumps(self.default_response).encode()),
+                io.BytesIO(json.dumps({"rows": [["John"]]}).encode()),
+            ]
         )
 
         sql_runner = runner.Sql()
@@ -5053,6 +5285,75 @@ class TestSqlRunner:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
             "Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
+            "Add it to your parameter source and try again."
+        )
+
+
+class TestDownsampleRunner:
+    default_response = {}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_index_downsample(self, es):
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
+
+        sql_runner = runner.Downsample()
+        params = {
+            "operation-type": "downsample",
+            "fixed-interval": "1d",
+            "source-index": "source-index",
+            "target-index": "target-index",
+        }
+
+        async with sql_runner:
+            result = await sql_runner(es, params)
+
+        assert result == {"success": True, "weight": 1, "unit": "ops"}
+
+        es.perform_request.assert_awaited_once_with(
+            method="POST",
+            path="/source-index/_downsample/target-index",
+            body={"fixed_interval": params.get("fixed-interval")},
+            params={},
+            headers={},
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_fixed_interval_in_body_param(self, es):
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "source-index": "source-index", "target-index": "target-index"}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'fixed-interval'. "
+            "Add it to your parameter source and try again."
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_source_index_in_body_param(self, es):
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "target-index": "target-index"}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'source-index'. "
+            "Add it to your parameter source and try again."
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_target_index_in_body_param(self, es):
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "source-index": "source-index"}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
             "Add it to your parameter source and try again."
         )
 
@@ -5466,6 +5767,429 @@ class TestSearchAfterExtractor:
         assert last_sort == expected_sort_value
 
 
+class TestCompositeAgg:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_composite_agg_without_pit(self, es):
+        params = {
+            "name": "composite-agg-without-pit",
+            "operation-type": "composite-agg",
+            "index": "test-index-1",
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "aggs": {
+                    "vendor_filter": {
+                        "filter": {"term": {"vendor": "vendorX"}},
+                        "aggs": {
+                            "vendor_payment": {
+                                "composite": {
+                                    "sources": [
+                                        {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                        {"payment_type": {"terms": {"field": "payment_type"}}},
+                                    ]
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+        page_1 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {"vendor_id": "2", "payment_type": "5"},
+                        "buckets": [
+                            {"key": {"vendor_id": "2", "payment_type": "1"}, "doc_count": 135454},
+                            {"key": {"vendor_id": "2", "payment_type": "2"}, "doc_count": 137223},
+                        ],
+                    },
+                }
+            },
+        }
+
+        page_2 = {
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {"buckets": [{"key": {"vendor_id": "3", "payment_type": "1"}, "doc_count": 135434}]},
+                }
+            },
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
+        r = runner.Query()
+        await r(es, params)
+
+        es.perform_request.assert_has_awaits(
+            [
+                mock.call(
+                    method="GET",
+                    path="/test-index-1/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                    },
+                    headers=None,
+                ),
+                mock.call(
+                    method="GET",
+                    path="/test-index-1/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                            "after": {"vendor_id": "2", "payment_type": "5"},
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                    },
+                    headers=None,
+                ),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_composite_agg_with_pit(self, es):
+        pit_op = "open-point-in-time1"
+        pit_id = "0123456789abcdef"
+        params = {
+            "name": "composite-agg-with-pit",
+            "index": "test-index",
+            "operation-type": "composite-agg",
+            "with-point-in-time-from": pit_op,
+            "pages": "all",
+            "results-per-page": 2,
+            "body": {
+                "aggs": {
+                    "vendor_filter": {
+                        "filter": {"term": {"vendor": "vendorX"}},
+                        "aggs": {
+                            "vendor_payment": {
+                                "composite": {
+                                    "sources": [
+                                        {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                        {"payment_type": {"terms": {"field": "payment_type"}}},
+                                    ]
+                                }
+                            }
+                        },
+                    },
+                }
+            },
+        }
+
+        page_1 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {"vendor_id": "2", "payment_type": "5"},
+                        "buckets": [
+                            {"key": {"vendor_id": "2", "payment_type": "1"}, "doc_count": 135454},
+                            {"key": {"vendor_id": "2", "payment_type": "2"}, "doc_count": 137223},
+                        ],
+                    },
+                }
+            },
+        }
+
+        page_2 = {
+            "pit_id": "fedcba9876543210",
+            "took": 10,
+            "timed_out": False,
+            "hits": {
+                "total": {"value": 3, "relation": "eq"},
+                "hits": [],
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {"buckets": [{"key": {"vendor_id": "3", "payment_type": "1"}, "doc_count": 135434}]},
+                }
+            },
+        }
+
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(json.dumps(page_1).encode()),
+                io.BytesIO(json.dumps(page_2).encode()),
+            ]
+        )
+
+        r = runner.Query()
+
+        async with runner.CompositeContext():
+            runner.CompositeContext.put(pit_op, pit_id)
+            await r(es, params)
+            # make sure pit_id is updated afterward
+            assert runner.CompositeContext.get(pit_op) == "fedcba9876543210"
+
+        es.perform_request.assert_has_awaits(
+            [
+                mock.call(
+                    method="GET",
+                    path="/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                        "pit": {
+                            "id": "0123456789abcdef",
+                            "keep_alive": "1m",
+                        },
+                    },
+                    headers=None,
+                ),
+                mock.call(
+                    method="GET",
+                    path="/_search",
+                    params={},
+                    body={
+                        "aggs": {
+                            "vendor_filter": {
+                                "filter": {"term": {"vendor": "vendorX"}},
+                                "aggs": {
+                                    "vendor_payment": {
+                                        "composite": {
+                                            "after": {"vendor_id": "2", "payment_type": "5"},
+                                            "sources": [
+                                                {"vendor_id": {"terms": {"field": "vendor_id"}}},
+                                                {"payment_type": {"terms": {"field": "payment_type"}}},
+                                            ],
+                                            "size": 2,
+                                        }
+                                    }
+                                },
+                            },
+                        },
+                        "pit": {
+                            "id": "fedcba9876543210",
+                            "keep_alive": "1m",
+                        },
+                    },
+                    headers=None,
+                ),
+            ]
+        )
+
+
+class TestCompositeAggExtractor:
+    response_text = """
+        {
+            "pit_id": "fedcba9876543210",
+            "took": 132,
+            "timed_out": false,
+            "_shards": {
+                "total": 1,
+                "successful": 1,
+                "skipped": 0,
+                "failed": 0
+            },
+            "hits": {
+                "total": {
+                    "value": 10000,
+                    "relation": "gte"
+                },
+                "max_score": null,
+                "hits": []
+            },
+            "aggregations": {
+                "vendor_filter": {
+                    "doc_count": 9835454,
+                    "vendor_payment": {
+                        "after_key": {
+                            "vendor_id": "1",
+                            "payment_type": "5"
+                        },
+                        "buckets": [
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "1"
+                            },
+                            "doc_count": 135454
+                            },
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "2"
+                            },
+                            "doc_count": 137223
+                            },
+                            {
+                            "key": {
+                                "vendor_id": "2",
+                                "payment_type": "3"
+                            },
+                            "doc_count": 191
+                            }
+                        ]
+                    }
+                }
+            }
+        }"""
+    response = io.BytesIO(response_text.encode())
+
+    def test_extract_all_properties(self):
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=self.response, get_point_in_time=True, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "pit_id": "fedcba9876543210",
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_ignore_point_in_time(self):
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=self.response, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=None
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_uses_provided_hits_total(self):
+        target = runner.CompositeAggExtractor()
+        # we use an incorrect hits_total just to prove we didn't extract it from the response
+        props = target(
+            response=self.response, get_point_in_time=False, path_to_composite_agg=["vendor_filter", "vendor_payment"], hits_total=10
+        )
+        expected_props = {
+            "hits.total.relation": "eq",
+            "hits.total.value": 10,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_extract_missing_required_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.CompositeAggExtractor()
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            target(
+                response=response_copy_bytesio,
+                get_point_in_time=True,
+                path_to_composite_agg=["vendor_filter", "vendor_payment"],
+                hits_total=None,
+            )
+        assert exc.value.args[0] == "Paginated query failure: pit_id was expected but not found in the response."
+
+    def test_extract_missing_ignored_point_in_time(self):
+        response_copy = json.loads(self.response_text)
+        del response_copy["pit_id"]
+        response_copy_bytesio = io.BytesIO(json.dumps(response_copy).encode())
+        target = runner.CompositeAggExtractor()
+        props = target(
+            response=response_copy_bytesio,
+            get_point_in_time=False,
+            path_to_composite_agg=["vendor_filter", "vendor_payment"],
+            hits_total=None,
+        )
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "timed_out": False,
+            "took": 132,
+            "after_key": {"vendor_id": "1", "payment_type": "5"},
+        }
+        assert props == expected_props
+
+    def test_no_after_key_found(self):
+        target = runner.CompositeAggExtractor()
+        props = target(response=self.response, get_point_in_time=True, path_to_composite_agg=["foo"], hits_total=None)
+        expected_props = {
+            "hits.total.relation": "gte",
+            "hits.total.value": 10000,
+            "pit_id": "fedcba9876543210",
+            "timed_out": False,
+            "took": 132,
+            "after_key": None,
+        }
+        assert props == expected_props
+
+
 class TestCompositeContext:
     def test_cannot_be_used_outside_of_composite(self):
         with pytest.raises(exceptions.RallyAssertionError) as exc:
@@ -5553,7 +6277,7 @@ class TestComposite:
                 # raw-request
                 None,
                 # search
-                io.StringIO(
+                io.BytesIO(
                     json.dumps(
                         {
                             "hits": {
@@ -5563,7 +6287,7 @@ class TestComposite:
                                 },
                             },
                         },
-                    ),
+                    ).encode()
                 ),
             ]
         )
@@ -5624,7 +6348,7 @@ class TestComposite:
         es.perform_request = mock.AsyncMock(
             side_effect=[
                 # search
-                io.StringIO(
+                io.BytesIO(
                     json.dumps(
                         {
                             "hits": {
@@ -5634,7 +6358,7 @@ class TestComposite:
                                 },
                             }
                         }
-                    )
+                    ).encode()
                 )
             ]
         )
@@ -5878,7 +6602,7 @@ class TestComposite:
 
         assert exc.value.args[0] == (
             "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
-            "search, paginated-search, raw-request, sleep, submit-async-search, get-async-search, "
+            "search, paginated-search, composite-agg, raw-request, sleep, submit-async-search, get-async-search, "
             "delete-async-search, field-caps]."
         )
 

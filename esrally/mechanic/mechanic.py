@@ -33,6 +33,14 @@ from esrally.utils import console, net
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
 
+def build(cfg):
+    car, plugins = load_team(cfg, external=False)
+
+    s = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=plugins)
+    binaries = s()
+    console.println(json.dumps(binaries, indent=2), force=True)
+
+
 def download(cfg):
     car, plugins = load_team(cfg, external=False)
 
@@ -72,7 +80,7 @@ def install(cfg):
     elif build_type == "docker":
         if len(plugins) > 0:
             raise exceptions.SystemSetupError(
-                "You cannot specify any plugins for Docker clusters. Please remove " '"--elasticsearch-plugins" and try again.'
+                'You cannot specify any plugins for Docker clusters. Please remove "--elasticsearch-plugins" and try again.'
             )
         p = provisioner.docker(cfg=cfg, car=car, ip=ip, http_port=http_port, target_root=root_path, node_name=node_name)
         # there is no binary for Docker that can be downloaded / built upfront
@@ -150,7 +158,6 @@ def stop(cfg):
 
         metrics_store.close()
 
-    # TODO: Do we need to expose this as a separate command as well?
     provisioner.cleanup(
         preserve=cfg.opts("mechanic", "preserve.install"), install_dir=node_config.binary_path, data_paths=node_config.data_paths
     )
@@ -667,9 +674,12 @@ def create(
     elif docker:
         if len(plugins) > 0:
             raise exceptions.SystemSetupError(
-                "You cannot specify any plugins for Docker clusters. Please remove " '"--elasticsearch-plugins" and try again.'
+                'You cannot specify any plugins for Docker clusters. Please remove "--elasticsearch-plugins" and try again.'
             )
-        s = lambda: None
+
+        def s():
+            return None
+
         p = []
         for node_id in node_ids:
             node_name = "%s-%s" % (node_name_prefix, node_id)

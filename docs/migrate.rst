@@ -1,6 +1,14 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.5.1
+------------------------
+
+Elasticsearch development branch has moved
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Elasticsearch is `migrating its development branch from master to main <https://github.com/elastic/elasticsearch/issues/76950>`_. To account for this, Rally now checkouts the ``main`` branch when :ref:`building from sources<pipelines_from-sources>`. This will happen automatically unless you have made changes in ``~/.rally/benchmarks/src/elasticsearch``.
+
 Migrating to Rally 2.4.0
 ------------------------
 

@@ -460,7 +460,7 @@ class CcrStatsRecorder:
         try:
             ccr_stats_api_endpoint = "/_ccr/stats"
             filter_path = "follow_stats"
-            stats = self.client.transport.perform_request(
+            stats = self.client.perform_request(
                 method="GET", path=ccr_stats_api_endpoint, params={"human": "false", "filter_path": filter_path}
             )
         except elasticsearch.TransportError:
@@ -837,6 +837,7 @@ class NodeStatsRecorder:
                 collected_node_stats.update(self.jvm_buffer_pool_stats(node_name, node_stats))
             if self.include_mem_stats:
                 collected_node_stats.update(self.jvm_mem_stats(node_name, node_stats))
+                collected_node_stats.update(self.os_mem_stats(node_name, node_stats))
             if self.include_gc_stats:
                 collected_node_stats.update(self.jvm_gc_stats(node_name, node_stats))
             if self.include_network:
@@ -873,7 +874,7 @@ class NodeStatsRecorder:
         if stats:
             return dict(iterate())
         else:
-            return dict()
+            return {}
 
     def indices_stats(self, node_name, node_stats, include):
         idx_stats = node_stats["indices"]
@@ -895,6 +896,9 @@ class NodeStatsRecorder:
 
     def jvm_mem_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_mem", stats=node_stats["jvm"]["mem"])
+
+    def os_mem_stats(self, node_name, node_stats):
+        return self.flatten_stats_fields(prefix="os_mem", stats=node_stats["os"]["mem"])
 
     def jvm_gc_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
@@ -1233,7 +1237,7 @@ class SearchableSnapshotsStatsRecorder:
             # we don't use the existing client support (searchable_snapshots.stats())
             # as the API is deliberately undocumented and might change:
             # https://www.elastic.co/guide/en/elasticsearch/reference/current/searchable-snapshots-api-stats.html
-            stats = self.client.transport.perform_request(method="GET", path=stats_api_endpoint, params={"level": level})
+            stats = self.client.perform_request(method="GET", path=stats_api_endpoint, params={"level": level})
         except elasticsearch.NotFoundError as e:
             if "No searchable snapshots indices found" in e.info.get("error").get("reason"):
                 self.logger.info(
@@ -1436,8 +1440,6 @@ class IngestPipelineStats(InternalTelemetryDevice):
         self.logger.info("Gathering Ingest Pipeline stats at benchmark end")
         end_stats = self.get_ingest_pipeline_stats()
 
-        # The nesting level is ok here given the structure of the Ingest Pipeline stats
-        # pylint: disable=too-many-nested-blocks
         for cluster_name, node in end_stats.items():
             if cluster_name not in self.start_stats:
                 self.logger.warning(
@@ -1751,7 +1753,6 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
             return
         revision = client_info["version"]["build_hash"]
         distribution_version = client_info["version"]["number"]
-        # older versions (pre 6.3.0) don't expose a build_flavor property because the only (implicit) flavor was "oss".
         distribution_flavor = client_info["version"].get("build_flavor", "oss")
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
@@ -2276,9 +2277,7 @@ class DiskUsageStats(TelemetryDevice):
         for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
-                response = self.client.transport.perform_request(
-                    method="POST", path=f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"}
-                )
+                response = self.client.perform_request(method="POST", path=f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
             except elasticsearch.RequestError:
                 msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)
@@ -2330,3 +2329,7 @@ class DiskUsageStats(TelemetryDevice):
                 term_vectors = field_info.get("term_vectors_in_bytes", 0)
                 if term_vectors > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_term_vectors", term_vectors, meta_data=meta, unit="byte")
+
+                knn_vectors = field_info.get("knn_vectors_in_bytes", 0)
+                if knn_vectors > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_knn_vectors", knn_vectors, meta_data=meta, unit="byte")

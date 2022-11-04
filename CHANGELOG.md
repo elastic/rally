@@ -1,3 +1,105 @@
+### 2.7.0
+
+#### Highlights
+
+* [#1574](https://github.com/elastic/rally/pull/1574): Include a new downsampling operation
+* [#1531](https://github.com/elastic/rally/pull/1531): Support data streams in create-track
+* [#1517](https://github.com/elastic/rally/pull/1517): Remove the check for internet connection
+
+#### Enhancements
+
+* [#1599](https://github.com/elastic/rally/pull/1599): add `--user-tags` as alias for `--user-tag`
+* [#1597](https://github.com/elastic/rally/pull/1597): Add additional filter options to rally list races
+* [#1591](https://github.com/elastic/rally/pull/1591): Support checking out remote branches
+* [#1588](https://github.com/elastic/rally/pull/1588): Fail benchmark if assertion could not run
+* [#1576](https://github.com/elastic/rally/pull/1576): Add build subcommand
+* [#1573](https://github.com/elastic/rally/pull/1573): Add knn vectors to disk-usage-stats
+* [#1551](https://github.com/elastic/rally/pull/1551): Switch from setuptools to hatchling
+* [#1542](https://github.com/elastic/rally/pull/1542): Add new wait-for-current-snapshots-create operation
+* [#1541](https://github.com/elastic/rally/pull/1541): Update opts.py to allow for 'None' timeout-value in client_options
+
+#### Bug Fixes
+
+* [#1586](https://github.com/elastic/rally/pull/1586): Fix supplier tests for aarch64
+* [#1580](https://github.com/elastic/rally/pull/1580): Remove buggy indices.exists() calls from code
+* [#1578](https://github.com/elastic/rally/pull/1578): Correctly retry HTTP downloads after incomplete reads
+* [#1563](https://github.com/elastic/rally/pull/1563): Fix multi-cluster attribute check for wrapped runners
+* [#1540](https://github.com/elastic/rally/pull/1540): Don't load libs path if not using it
+
+#### Doc Changes
+
+* [#1600](https://github.com/elastic/rally/pull/1600): Add docs for create-track from data streams 
+* [#1572](https://github.com/elastic/rally/pull/1572): Mention that create/restore-snapshot is an administrative operation
+* [#1568](https://github.com/elastic/rally/pull/1568): Encourage users to read tracks documentation
+* [#1557](https://github.com/elastic/rally/pull/1557): Remove duplicate property descriptions from corpora docs
+* [#1554](https://github.com/elastic/rally/pull/1554): Link to the 7.14.0 ES Python client docs.
+* [#1552](https://github.com/elastic/rally/pull/1552): Fix broken links on README.md
+
+#### Miscellaneous Changes
+
+* [#1579](https://github.com/elastic/rally/pull/1579): Use narrower exception to avoid pylint ignore
+* [#1571](https://github.com/elastic/rally/pull/1571): Stop trying to test Elasticsearch 6.8.0 on ARM
+* [#1565](https://github.com/elastic/rally/pull/1565): Fix `make lint` on Python 3.10
+* [#1564](https://github.com/elastic/rally/pull/1564): Introduce rally-tracks compatibility testing
+* [#1555](https://github.com/elastic/rally/pull/1555): Add an integration test for static responses.
+* [#1553](https://github.com/elastic/rally/pull/1553): Run unit and integration tests in separate tox environments
+* [#1548](https://github.com/elastic/rally/pull/1548): Move most packaging metadata to pyproject.toml
+* [#1546](https://github.com/elastic/rally/pull/1546): Run lint with pre-commit
+* [#1539](https://github.com/elastic/rally/pull/1539): Correctly log how long it took to close transports
+* [#1498](https://github.com/elastic/rally/pull/1498): Bump upper tested version to 8.4.0
+* [#1497](https://github.com/elastic/rally/pull/1497): Remove Elasticsearch 6.3 logic
+
+### 2.6.0
+
+#### Highlights
+
+* [#1532](https://github.com/elastic/rally/pull/1532): Use main branch of Elasticsearch for source builds
+* [#1520](https://github.com/elastic/rally/pull/1520): Create and use a unique ES API key for each simulated client
+
+#### Enhancements
+
+* [#1535](https://github.com/elastic/rally/pull/1535): Use new logo on GitHub, PyPI and Read the Docs
+* [#1530](https://github.com/elastic/rally/pull/1530): Add OS mem stats to node-stats telemetry device
+* [#1526](https://github.com/elastic/rally/pull/1526): Add runner for paging through composite aggregations
+
+#### Bug Fixes
+
+* [#1522](https://github.com/elastic/rally/pull/1522): Fix pyenv install on Apple Silicons Macs
+
+### 2.5.0
+
+#### Highlights
+
+* [#1496](https://github.com/elastic/rally/pull/1496): Fix use_ssl: True on Python 3.10
+* [#1471](https://github.com/elastic/rally/pull/1471): Introduce field-caps operation-type
+
+#### Enhancements
+
+* [#1516](https://github.com/elastic/rally/pull/1516): Create an ES client per simulated client instead of per worker.
+* [#1503](https://github.com/elastic/rally/pull/1503): Explicit offline mode
+* [#1502](https://github.com/elastic/rally/pull/1502): Display ZGC collector stats in report
+* [#1499](https://github.com/elastic/rally/pull/1499): Flexible support of GC collectors in telemetry.
+* [#1492](https://github.com/elastic/rally/pull/1492): Support wrapped templates produced by elastic-package dump
+* [#1478](https://github.com/elastic/rally/pull/1478): Allow configuring Elasticsearch cluster name
+* [#1475](https://github.com/elastic/rally/pull/1475): Add raw-request op type for latency charts
+* [#1473](https://github.com/elastic/rally/pull/1473): Show both median and mean ML processing time in charts
+
+#### Bug Fixes
+
+* [#1521](https://github.com/elastic/rally/pull/1521): Retry incomplete HTTP downloads
+* [#1518](https://github.com/elastic/rally/pull/1518): Relax target-hosts check for multi clusters
+* [#1500](https://github.com/elastic/rally/pull/1500): When running rally with no options, print help and exit.
+* [#1489](https://github.com/elastic/rally/pull/1489): Support composable template without top-level `template`
+* [#1486](https://github.com/elastic/rally/pull/1486): Remove template key requirement from composable template param source
+* [#1482](https://github.com/elastic/rally/pull/1482): Allow compare to continue for missing disk usage stats
+* [#1472](https://github.com/elastic/rally/pull/1472): Ensure telemetry path exists for heapdump
+
+#### Miscellaneous Changes
+
+* [#1529](https://github.com/elastic/rally/pull/1529): Make git.clone remote kwarg-only
+* [#1527](https://github.com/elastic/rally/pull/1527): Make esrally.utils.git branch agnostic
+* [#1512](https://github.com/elastic/rally/pull/1512): Prepare switch to Elasticsearch Python client 8.2.0
+
 ### 2.4.0
 
 #### Highlights
@@ -1219,10 +1321,10 @@ ourselves.
 
 Major changes:
 
-* Migrated the metrics data store from file-based to a dedicated Elasticsearch instance. Graphical reports can be created with 
-  Kibana (optional but recommended). It is necessary to setup an Elasticsearch cluster to store metrics data (a single node 
-  is sufficient). The cluster will be configured automatically by Rally. For details please see the [README](README.rst).
-  
-  Related issues: #8, #21, #46, 
-  
+* Migrated the metrics data store from file-based to a dedicated Elasticsearch instance. Graphical reports can be created with
+  Kibana (optional but recommended). It is necessary to setup an Elasticsearch cluster to store metrics data (a single node
+  is sufficient). The cluster will be configured automatically by Rally. For details please see the documentation.
+
+  Related issues: #8, #21, #46,
+
 [All changes](https://github.com/elastic/rally/issues?q=milestone0X0P+00.0.3+is0X0P+0closed)

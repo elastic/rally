@@ -685,6 +685,9 @@ class OperationType(Enum):
     ClosePointInTime = 15
     Sql = 16
     FieldCaps = 17
+    CompositeAgg = 18
+    WaitForCurrentSnapshotsCreate = 19
+    Downsample = 20
 
     # administrative actions
     ForceMerge = 1001
@@ -726,15 +729,12 @@ class OperationType(Enum):
 
     @property
     def admin_op(self):
-        # pylint: disable=comparison-with-callable
         return self.value > 1000
 
     def to_hyphenated_string(self):
         """
         Turns enum constants into hyphenated names, e.g. ``WaitForTransform`` becomes ``wait-for-transform``.
         """
-        # Pylint complains that self.name is not iterable
-        # pylint: disable=not-an-iterable
         return "".join(["-" + c.lower() if c.isupper() else c for c in self.name]).lstrip("-")
 
     # pylint: disable=too-many-return-statements
@@ -752,6 +752,8 @@ class OperationType(Enum):
             return OperationType.ScrollSearch
         elif v == "paginated-search":
             return OperationType.PaginatedSearch
+        elif v == "composite-agg":
+            return OperationType.CompositeAgg
         elif v == "cluster-health":
             return OperationType.ClusterHealth
         elif v == "bulk":
@@ -806,6 +808,8 @@ class OperationType(Enum):
             return OperationType.CreateSnapshot
         elif v == "wait-for-snapshot-create":
             return OperationType.WaitForSnapshotCreate
+        elif v == "wait-for-current-snapshots-create":
+            return OperationType.WaitForCurrentSnapshotsCreate
         elif v == "restore-snapshot":
             return OperationType.RestoreSnapshot
         elif v == "wait-for-recovery":
@@ -846,6 +850,8 @@ class OperationType(Enum):
             return OperationType.Sql
         elif v == "field-caps":
             return OperationType.FieldCaps
+        elif v == "downsample":
+            return OperationType.Downsample
         else:
             raise KeyError(f"No enum value for [{v}]")
 

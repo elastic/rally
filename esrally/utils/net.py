@@ -18,6 +18,7 @@ import functools
 import logging
 import os
 import socket
+import time
 import urllib.error
 from urllib.parse import parse_qs, quote, urlencode, urlparse, urlunparse
 
@@ -27,17 +28,19 @@ import urllib3
 from esrally import exceptions
 from esrally.utils import console, convert
 
-__HTTP = None
+_HTTP = None
+_HTTPS = None
 
 
-def init():
-    logger = logging.getLogger(__name__)
-    global __HTTP
-    proxy_url = os.getenv("http_proxy")
+def __proxy_manager_from_env(env_var, logger):
+    proxy_url = os.getenv(env_var.lower()) or os.getenv(env_var.upper())
+    if not proxy_url:
+        env_var = "all_proxy"
+        proxy_url = os.getenv(env_var) or os.getenv(env_var.upper())
     if proxy_url and len(proxy_url) > 0:
         parsed_url = urllib3.util.parse_url(proxy_url)
-        logger.info("Connecting via proxy URL [%s] to the Internet (picked up from the env variable [http_proxy]).", proxy_url)
-        __HTTP = urllib3.ProxyManager(
+        logger.info("Connecting via proxy URL [%s] to the Internet (picked up from the environment variable [%s]).", proxy_url, env_var)
+        return urllib3.ProxyManager(
             proxy_url,
             cert_reqs="CERT_REQUIRED",
             ca_certs=certifi.where(),
@@ -45,8 +48,15 @@ def init():
             proxy_headers=urllib3.make_headers(proxy_basic_auth=parsed_url.auth),
         )
     else:
-        logger.info("Connecting directly to the Internet (no proxy support).")
-        __HTTP = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
+        logger.info("Connecting directly to the Internet (no proxy support) for [%s].", env_var)
+        return urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs=certifi.where())
+
+
+def init():
+    logger = logging.getLogger(__name__)
+    global _HTTP, _HTTPS
+    _HTTP = __proxy_manager_from_env("http_proxy", logger)
+    _HTTPS = __proxy_manager_from_env("https_proxy", logger)
 
 
 class Progress:
@@ -173,18 +183,20 @@ def download_from_bucket(blobstore, url, local_path, expected_size_in_bytes=None
     return expected_size_in_bytes
 
 
-def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
-    with __http().request("GET", url, preload_content=False, retries=10, timeout=urllib3.Timeout(connect=45, read=240)) as r, open(
-        local_path, "wb"
-    ) as out_file:
+HTTP_DOWNLOAD_RETRIES = 10
+
+
+def _download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+    with _request(
+        "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
+    ) as r, open(local_path, "wb") as out_file:
         if r.status > 299:
             raise urllib.error.HTTPError(url, r.status, "", None, None)
-        # noinspection PyBroadException
         try:
-            size_from_content_header = int(r.getheader("Content-Length"))
+            size_from_content_header = int(r.getheader("Content-Length", ""))
             if expected_size_in_bytes is None:
                 expected_size_in_bytes = size_from_content_header
-        except BaseException:
+        except ValueError:
             size_from_content_header = None
 
         chunk_size = 2**16
@@ -196,6 +208,19 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
             if progress_indicator and size_from_content_header:
                 progress_indicator(bytes_read, size_from_content_header)
         return expected_size_in_bytes
+
+
+def download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None, *, sleep=time.sleep):
+    logger = logging.getLogger(__name__)
+    for i in range(HTTP_DOWNLOAD_RETRIES + 1):
+        try:
+            return _download_http(url, local_path, expected_size_in_bytes, progress_indicator)
+        except urllib3.exceptions.ProtocolError as exc:
+            if i == HTTP_DOWNLOAD_RETRIES:
+                raise
+            logger.warning("Retrying after %s", exc)
+            sleep(5)
+            continue
 
 
 def add_url_param_elastic_no_kpi(url):
@@ -250,32 +275,16 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
 
 
 def retrieve_content_as_string(url):
-    with __http().request("GET", url, timeout=urllib3.Timeout(connect=45, read=240)) as response:
+    with _request("GET", url, timeout=urllib3.Timeout(connect=45, read=240)) as response:
         return response.read().decode("utf-8")
 
 
-def has_internet_connection(probing_url):
-    logger = logging.getLogger(__name__)
-    try:
-        # We try to connect to Github by default. We use that to avoid touching too much different remote endpoints.
-        logger.debug("Checking for internet connection against [%s]", probing_url)
-        # We do a HTTP request here to respect the HTTP proxy setting. If we'd open a plain socket connection we circumvent the
-        # proxy and erroneously conclude we don't have an Internet connection.
-        response = __http().request("GET", probing_url, timeout=10.0, retries=8)  # wait up to 90s, 9 requests in total
-        status = response.status
-        logger.debug("Probing result is HTTP status [%s]", str(status))
-        return status == 200
-    except KeyboardInterrupt:
-        raise
-    except BaseException:
-        logger.info("Could not detect a working Internet connection", exc_info=True)
-        return False
-
-
-def __http():
-    if not __HTTP:
+def _request(method, url, **kwargs):
+    if not _HTTP or not _HTTPS:
         init()
-    return __HTTP
+    parsed_url = urllib3.util.parse_url(url)
+    manager = _HTTPS if parsed_url.scheme == "https" else _HTTP
+    return manager.request(method, url, **kwargs)
 
 
 def resolve(hostname_or_ip):

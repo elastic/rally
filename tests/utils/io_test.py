@@ -20,7 +20,7 @@ import logging
 import os
 import subprocess
 import tempfile
-import unittest.mock as mock
+from unittest import mock
 
 from esrally.utils import io
 

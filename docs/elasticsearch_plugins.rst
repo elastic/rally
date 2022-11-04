@@ -36,7 +36,7 @@ To see which plugins are available, run ``esrally list elasticsearch-plugins``::
     repository-s3
     store-smb
 
-As the availability of plugins may change from release to release we recommend that you include the ``--distribution-version`` parameter when listing plugins. By default Rally assumes that you want to benchmark the latest master version of Elasticsearch.
+As the availability of plugins may change from release to release we recommend that you include the ``--distribution-version`` parameter when listing plugins. By default Rally assumes that you want to benchmark the latest ``main`` version of Elasticsearch.
 
 Running a benchmark with plugins
 --------------------------------
@@ -53,19 +53,12 @@ Rally will use several techniques to install and configure plugins:
 * First, Rally checks whether directory ``plugins/PLUGIN_NAME`` in the currently configured team repository exists. If this is the case, then plugin installation and configuration details will be read from this directory.
 * Next, Rally will use the provided plugin name when running the Elasticsearch plugin installer. With this approach we can avoid to create a plugin configuration directory in the team repository for very simple plugins that do not need any configuration.
 
-As mentioned above, Rally also allows you to specify a plugin configuration and you can even combine them. Here are some examples (requires Elasticsearch < 6.3.0 because with 6.3.0 x-pack has turned into a module of Elasticsearch which is treated as a "car" in Rally):
+As mentioned above, Rally also allows you to specify a plugin configuration and you can even combine them. Here are some examples:
 
-* Run a benchmark with the ``x-pack`` plugin in the ``security`` configuration: ``--elasticsearch-plugins=x-pack:security``
-* Run a benchmark with the ``x-pack`` plugin in the ``security`` and the ``graph`` configuration: ``--elasticsearch-plugins=x-pack:security+graph``
+* Run a benchmark with the ``transport-nio`` plugin in the ``http`` configuration: ``--elasticsearch-plugins=transport-nio:http``
+* Run a benchmark with the ``transport-nio`` plugin in the ``http`` and the ``transport`` configuration: ``--elasticsearch-plugins=transport-nio:http+transport``
 
-.. note::
-    To benchmark the ``security`` configuration of ``x-pack`` you need to add the following command line options: ``--client-options="use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password'"``
-
-You can also override plugin variables with ``--plugin-params`` which is needed for example if you want to use the ``monitoring-http`` configuration in order to export monitoring data. You can export monitoring data e.g. with the following configuration::
-
-    --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'http',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
-
-The ``monitoring_user`` and ``monitoring_password`` parameters are optional, the other parameters are mandatory. For more details on the configuration options check the `Monitoring plugin documentation <https://www.elastic.co/guide/en/x-pack/current/monitoring-production.html>`_.
+You can also override plugin variables with ``--plugin-params``.
 
 If you are behind a proxy, set the environment variable ``ES_JAVA_OPTS`` accordingly on each target machine as described in the `Elasticsearch plugin documentation <https://www.elastic.co/guide/en/elasticsearch/plugins/current/_other_command_line_parameters.html#_proxy_settings>`_.
 
@@ -90,7 +83,7 @@ To make this work, you need to manually edit Rally's configuration file in ``~/.
 Let's discuss these properties one by one:
 
 * ``plugin.my-plugin.remote.repo.url`` (optional): This is needed to let Rally checkout the source code of the plugin. If this is a private repo, credentials need to be setup properly. If the source code is already locally available you may not need to define this property. The remote's name is assumed to be "origin" and this is not configurable. Also, only git is supported as revision control system.
-* ``plugin.my-plugin.src.subdir`` (mandatory): This is the directory to which the plugin will be checked out relative to ``src.root.dir``. In order to allow to build the plugin alongside Elasticsearch, the plugin needs to reside in a subdirectory of ``elasticsearch-extra`` (see also the `Elasticsearch testing documentation <https://github.com/elastic/elasticsearch/blob/master/TESTING.asciidoc#building-with-extra-plugins>`_.
+* ``plugin.my-plugin.src.subdir`` (mandatory): This is the directory to which the plugin will be checked out relative to ``src.root.dir``. In order to allow to build the plugin alongside Elasticsearch, the plugin needs to reside in a subdirectory of ``elasticsearch-extra`` (see also the `Elasticsearch testing documentation <https://github.com/elastic/elasticsearch/blob/main/TESTING.asciidoc#building-with-extra-plugins>`_.
 * ``plugin.my-plugin.build.command`` (mandatory): The full build command to run in order to build the plugin artifact. Note that this command is run from the Elasticsearch source directory as Rally assumes that you want to build your plugin alongside Elasticsearch (otherwise, see the next section).
 * ``plugin.my-plugin.build.artifact.subdir`` (mandatory): This is the subdirectory relative to ``plugin.my-plugin.src.subdir`` in which the final plugin artifact is located.
 
@@ -104,7 +97,7 @@ In order to run a benchmark with ``my-plugin``, you'd invoke Rally as follows: `
 * If your plugin needs to be configured, create a proper plugin specification (see below).
 
 .. note::
-    Rally can build all `Elasticsearch core plugins <https://github.com/elastic/elasticsearch/tree/master/plugins>`_ out of the box without any further configuration.
+    Rally can build all `Elasticsearch core plugins <https://github.com/elastic/elasticsearch/tree/main/plugins>`_ out of the box without any further configuration.
 
 Plugins based on a released Elasticsearch version
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

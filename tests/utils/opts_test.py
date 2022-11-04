@@ -58,12 +58,19 @@ class TestConfigHelperFunction:
         assert opts.kv_to_map(["k:3"]) == {"k": 3}
         # implicit treatment as string
         assert opts.kv_to_map(["k:v"]) == {"k": "v"}
-        assert opts.kv_to_map(["k:'v'", "size:4", "empty:false", "temperature:0.5"]) == {
+        assert opts.kv_to_map(["k:'v'", "size:4", "empty:false", "temperature:0.5", "timeout:None"]) == {
             "k": "v",
             "size": 4,
             "empty": False,
             "temperature": 0.5,
+            "timeout": None,
         }
+        # When passing 'None' with quotes, treat it as string
+        assert opts.kv_to_map(["k:'None'"]) == {"k": "None"}
+        # When passing None without quotes, treat it as pythonic None
+        assert opts.kv_to_map(["k:None"]) == {"k": None}
+        assert opts.kv_to_map(["k:none"]) == {"k": None}
+        assert opts.kv_to_map(["k:NONE"]) == {"k": None}
 
     def test_to_dict_with_inline_json(self):
         assert opts.to_dict('{"default": ["127.0.0.1:9200","10.17.0.5:19200"]}') == {"default": ["127.0.0.1:9200", "10.17.0.5:19200"]}

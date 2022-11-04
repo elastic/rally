@@ -112,6 +112,7 @@ The node-stats telemetry device regularly calls the `cluster node-stats API <htt
 * Thread pool stats (key ``thread_pool`` in the node-stats API)
 * JVM buffer pool stats (key ``jvm.buffer_pools`` in the node-stats API)
 * JVM gc stats (key ``jvm.gc`` in the node-stats API)
+* OS mem stats (key ``os.mem`` in the node-stats API)
 * JVM mem stats (key ``jvm.mem`` in the node-stats API)
 * Circuit breaker stats (key ``breakers`` in the node-stats API)
 * Network-related stats (key ``transport`` in the node-stats API)
@@ -128,7 +129,7 @@ Supported telemetry parameters:
 * ``node-stats-include-buffer-pools`` (default: ``true``): A boolean indicating whether buffer pool stats should be included.
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
 * ``node-stats-include-gc`` (default: ``true``): A boolean indicating whether JVM gc stats should be included.
-* ``node-stats-include-mem`` (default: ``true``): A boolean indicating whether JVM heap stats should be included.
+* ``node-stats-include-mem`` (default: ``true``): A boolean indicating whether both JVM heap, and OS mem stats should be included.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
 * ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
 * ``node-stats-include-indexing-pressure`` (default: ``true``): A boolean indicating whether indexing pressuer stats should be included.

@@ -16,6 +16,7 @@
 # under the License.
 
 import collections
+import datetime
 import glob
 import json
 import logging
@@ -306,37 +307,6 @@ def metrics_store_class(cfg):
         return InMemoryMetricsStore
 
 
-def extract_user_tags_from_config(cfg):
-    """
-    Extracts user tags into a structured dict
-
-    :param cfg: The current configuration object.
-    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
-    """
-    user_tags = cfg.opts("race", "user.tag", mandatory=False)
-    return extract_user_tags_from_string(user_tags)
-
-
-def extract_user_tags_from_string(user_tags):
-    """
-    Extracts user tags into a structured dict
-
-    :param user_tags: A string containing user tags (tags separated by comma, key and value separated by colon).
-    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
-    """
-    user_tags_dict = {}
-    if user_tags and user_tags.strip() != "":
-        try:
-            for user_tag in user_tags.split(","):
-                user_tag_key, user_tag_value = user_tag.split(":")
-                user_tags_dict[user_tag_key] = user_tag_value
-        except ValueError:
-            msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
-            logging.getLogger(__name__).exception(msg)
-            raise exceptions.SystemSetupError(msg)
-    return user_tags_dict
-
-
 class SampleType(IntEnum):
     Warmup = 0
     Normal = 1
@@ -416,7 +386,7 @@ class MetricsStore:
             self._car,
         )
 
-        user_tags = extract_user_tags_from_config(self._config)
+        user_tags = self._config.opts("race", "user.tags", default_value={}, mandatory=False)
         for k, v in user_tags.items():
             # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
             self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % k, v)
@@ -1273,12 +1243,14 @@ def list_races(cfg):
                 race.race_id,
                 time.to_iso8601(race.race_timestamp),
                 race.track,
-                format_dict(race.track_params),
                 race.challenge_name,
                 race.car_name,
-                format_dict(race.user_tags),
+                race.distribution_version,
+                race.revision,
+                race.rally_version,
                 race.track_revision,
                 race.team_revision,
+                format_dict(race.user_tags),
             ]
         )
 
@@ -1291,12 +1263,14 @@ def list_races(cfg):
                     "Race ID",
                     "Race Timestamp",
                     "Track",
-                    "Track Parameters",
                     "Challenge",
                     "Car",
-                    "User Tags",
+                    "ES Version",
+                    "Revision",
+                    "Rally Version",
                     "Track Revision",
                     "Team Revision",
+                    "User Tags",
                 ],
             )
         )
@@ -1310,7 +1284,7 @@ def create_race(cfg, track, challenge, track_revision=None):
     environment = cfg.opts("system", "env.name")
     race_id = cfg.opts("system", "race.id")
     race_timestamp = cfg.opts("system", "time.start")
-    user_tags = extract_user_tags_from_config(cfg)
+    user_tags = cfg.opts("race", "user.tags", default_value={}, mandatory=False)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
     car_params = cfg.opts("mechanic", "car.params")
@@ -1529,6 +1503,18 @@ class RaceStore:
     def _max_results(self):
         return int(self.cfg.opts("system", "list.races.max_results"))
 
+    def _track(self):
+        return self.cfg.opts("system", "list.races.track", mandatory=False)
+
+    def _benchmark_name(self):
+        return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
+
+    def _from_date(self):
+        return self.cfg.opts("system", "list.races.from_date", mandatory=False)
+
+    def _to_date(self):
+        return self.cfg.opts("system", "list.races.to_date", mandatory=False)
+
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
 class CompositeRaceStore:
@@ -1579,6 +1565,11 @@ class FileRaceStore(RaceStore):
 
     def _to_races(self, results):
         races = []
+        track = self._track()
+        name = self._benchmark_name()
+        pattern = "%Y%m%d"
+        from_date = self._from_date()
+        to_date = self._to_date()
         for result in results:
             # noinspection PyBroadException
             try:
@@ -1586,6 +1577,18 @@ class FileRaceStore(RaceStore):
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
                 logging.getLogger(__name__).exception("Could not load race file [%s] (incompatible format?) Skipping...", result)
+
+        if track:
+            races = filter(lambda r: r.track == track, races)
+        if name:
+            filtered_on_name = filter(lambda r: r.user_tags.get("name") == name, races)
+            filtered_on_benchmark_name = filter(lambda r: r.user_tags.get("benchmark-name") == name, races)
+            races = list(filtered_on_name) + list(filtered_on_benchmark_name)
+        if from_date:
+            races = filter(lambda r: r.race_timestamp.date() >= datetime.datetime.strptime(from_date, pattern).date(), races)
+        if to_date:
+            races = filter(lambda r: r.race_timestamp.date() <= datetime.datetime.strptime(to_date, pattern).date(), races)
+
         return sorted(races, key=lambda r: r.race_timestamp, reverse=True)
 
 
@@ -1615,12 +1618,18 @@ class EsRaceStore(RaceStore):
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
     def list(self):
+        track = self._track()
+        name = self._benchmark_name()
+        from_date = self._from_date()
+        to_date = self._to_date()
+
         filters = [
             {
                 "term": {
                     "environment": self.environment_name,
                 },
-            }
+            },
+            {"range": {"race-timestamp": {"gte": from_date, "lte": to_date, "format": "basic_date"}}},
         ]
 
         query = {
@@ -1638,6 +1647,13 @@ class EsRaceStore(RaceStore):
                 },
             ],
         }
+        if track:
+            query["query"]["bool"]["filter"].append({"term": {"track": track}})
+        if name:
+            query["query"]["bool"]["filter"].append(
+                {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}
+            )
+
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
@@ -1725,7 +1741,8 @@ def percentiles_for_sample_size(sample_size):
     # if needed we can come up with something smarter but it'll do for now
     if sample_size < 1:
         raise AssertionError("Percentiles require at least one sample")
-    elif sample_size == 1:
+
+    if sample_size == 1:
         return [100]
     elif 1 < sample_size < 10:
         return [50, 100]

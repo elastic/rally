@@ -46,10 +46,13 @@ def update_index_setting_parameters(settings):
             settings[s] = param.format(orig=orig_value)
 
 
-def is_valid(index_name):
+def is_valid(index_name, index_pattern):
     if len(index_name) == 0:
         return False, "Index name is empty"
-    if index_name.startswith("."):
+    # When the indices are requested directly (with --data-streams or --indices) then we honor the
+    # request, even if it includes hidden indices. But when asking for all indices we skip hidden
+    # indices as they could be system indices and restoring them to another cluster would break it.
+    if index_pattern in ("_all", "*") and index_name.startswith("."):
         return False, f"Index [{index_name}] is hidden"
     return True, None
 
@@ -65,9 +68,9 @@ def extract_index_mapping_and_settings(client, index_pattern):
     results = {}
     logger = logging.getLogger(__name__)
     # the response might contain multiple indices if a wildcard was provided
-    response = client.indices.get(index=index_pattern)
+    response = client.indices.get(index=index_pattern, params={"expand_wildcards": "all"})
     for index, details in response.items():
-        valid, reason = is_valid(index)
+        valid, reason = is_valid(index, index_pattern)
         if valid:
             mappings = details["mappings"]
             index_settings = filter_ephemeral_index_settings(details["settings"]["index"])
@@ -103,4 +106,21 @@ def extract(client, outdir, index_pattern):
                 "filename": filename,
             }
         )
+    return results
+
+
+def extract_indices_from_data_stream(client, data_stream_pattern):
+    """
+    Calls Elasticsearch client get_data_stream function to retrieve list of indices
+    :param client: Elasticsearch client
+    :param data_stream_pattern: name of data stream
+    :return: list of index names
+    """
+    results = []
+    # the response might contain multiple indices if a wildcard was provided
+    params_defined = {"expand_wildcards": "all", "filter_path": "data_streams.name"}
+    results_data_streams = client.indices.get_data_stream(name=data_stream_pattern, params=params_defined)
+
+    for indices in results_data_streams["data_streams"]:
+        results.append(indices.get("name"))
     return results

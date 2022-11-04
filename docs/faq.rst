@@ -18,7 +18,7 @@ By that you are mimicking what Rally does. Fix any errors that show up here and 
 Where does Rally get the benchmark data from?
 ---------------------------------------------
 
-Rally comes with a set of tracks out of the box which we maintain in the `rally-tracks repository on Github <https://github.com/elastic/rally-tracks>`_. This repository contains the track descriptions. The actual data are stored as compressed files in an S3 bucket.
+Rally comes with a set of tracks out of the box which we maintain in the `rally-tracks repository on Github <https://github.com/elastic/rally-tracks>`_. This repository contains the track descriptions. The actual data are stored as compressed files in a cloud bucket. Each track is documented in README files, including parameters and example data.
 
 Will Rally destroy my existing indices?
 ---------------------------------------
@@ -95,6 +95,6 @@ No. Rally does not collect or send any usage data and also the complete source c
 Do I need an Internet connection?
 ---------------------------------
 
-You do NOT need Internet access on any node of your Elasticsearch cluster but the machine where you start Rally needs an Internet connection to download track data sets and Elasticsearch distributions. After it has downloaded all data, an Internet connection is not required anymore and you can specify ``--offline``. If Rally detects no active Internet connection, it will automatically enable offline mode and warn you.
+You do NOT need Internet access on any node of your Elasticsearch cluster but the machine where you start Rally needs an Internet connection to download track data sets and Elasticsearch distributions. After it has downloaded all data, an Internet connection is not required anymore and you can specify ``--offline``.
 
 We have a dedicated documentation page for :doc:`running Rally offline </offline>` which should cover all necessary details.

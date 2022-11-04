@@ -19,6 +19,7 @@ from unittest import mock
 
 from esrally.tracker.index import (
     extract_index_mapping_and_settings,
+    extract_indices_from_data_stream,
     filter_ephemeral_index_settings,
     update_index_setting_parameters,
 )
@@ -116,7 +117,9 @@ def test_extract_index_create(client):
             },
         },
     }
-    expected = {
+
+    res = extract_index_mapping_and_settings(client, "_all")
+    assert res == {
         "osmgeopoints": {
             "mappings": {
                 "dynamic": "strict",
@@ -145,5 +148,31 @@ def test_extract_index_create(client):
             },
         },
     }
-    res = extract_index_mapping_and_settings(client, "_all")
-    assert res == expected
+
+
+@mock.patch("elasticsearch.Elasticsearch")
+def test_extract_indices_from_data_stream(client):
+    data_streams_filter = ["metrics-kubernetes-*"]
+    client.indices.get_data_stream.return_value = {
+        "data_streams": [
+            {
+                "name": "metrics-kubernetes.event-default",
+                "timestamp_field": {"name": "@timestamp"},
+                "indices": [
+                    {"index_name": ".ds-metrics-kubernetes.event-default-2022.06.20-000001", "index_uuid": "0W8L56dKQoGXjkGQc8mfzg"}
+                ],
+                "generation": 1,
+                "_meta": {"description": "default metrics template installed by x-pack", "managed": "true"},
+                "status": "GREEN",
+                "template": "metrics",
+                "ilm_policy": "metrics",
+                "hidden": "false",
+                "system": "false",
+                "allow_custom_routing": "false",
+                "replicated": "false",
+            }
+        ]
+    }
+
+    res = extract_indices_from_data_stream(client, data_streams_filter)
+    assert res == ["metrics-kubernetes.event-default"]

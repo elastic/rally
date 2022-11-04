@@ -16,7 +16,7 @@
 # under the License.
 
 import os
-import unittest.mock as mock
+from unittest import mock
 
 import psutil
 
@@ -42,8 +42,7 @@ class Process:
     def status(self):
         if self.killed:
             raise psutil.NoSuchProcess(self.pid)
-        else:
-            return "running"
+        return "running"
 
 
 class TestProcess:
