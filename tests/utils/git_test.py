@@ -17,6 +17,7 @@
 
 import logging
 import os
+import re
 import shutil
 from unittest import mock
 
@@ -220,11 +221,17 @@ class TestGit:
         git.fetch(TestGit.local_tmp_src_dir, remote=TestGit.remote_repo)
         git.rebase(TestGit.local_tmp_src_dir, remote=TestGit.remote_repo, branch=TestGit.rebase_branch)
         ops = " ".join(process.run_subprocess_with_output(f"git -C {TestGit.local_tmp_src_dir} reflog --since=10.seconds.ago"))
-        assert f"rebase (start): checkout {TestGit.remote_repo}/{TestGit.rebase_branch}" in ops
-        assert f"rebase (finish): returning to refs/heads/{TestGit.rebase_branch}" in ops
+        # reflog format differs from Apple Git to Linux
+        finished_pattern = re.compile(f"rebase (\\(finish\\)|finished).*returning to refs\\/heads\\/{TestGit.rebase_branch}")
+        started_pattern = re.compile(f"rebase:? (\\(start\\)*.|checkout).*{TestGit.remote_repo}\\/{TestGit.rebase_branch}")
+        assert re.search(started_pattern, ops)
+        assert re.search(finished_pattern, ops)
 
-    def test_pull(self, setup_teardown_rebase):
+    def test_pull_rebase(self, setup_teardown_rebase):
         git.pull(TestGit.local_tmp_src_dir, remote=TestGit.remote_repo, branch=TestGit.rebase_branch)
         ops = " ".join(process.run_subprocess_with_output(f"git -C {TestGit.local_tmp_src_dir} reflog --since=10.seconds.ago"))
-        assert f"rebase (start): checkout {TestGit.remote_repo}/{TestGit.rebase_branch}" in ops
-        assert f"rebase (finish): returning to refs/heads/{TestGit.rebase_branch}" in ops
+        # reflog format differs from Apple Git to Linux
+        finished_pattern = re.compile(f"rebase (\\(finish\\)|finished).*returning to refs\\/heads\\/{TestGit.rebase_branch}")
+        started_pattern = re.compile(f"rebase:? (\\(start\\)*.|checkout).*{TestGit.remote_repo}\\/{TestGit.rebase_branch}")
+        assert re.search(started_pattern, ops)
+        assert re.search(finished_pattern, ops)
