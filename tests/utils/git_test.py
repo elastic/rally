@@ -33,6 +33,7 @@ class TestGit:
         cls.remote_repo = "esrally"
         cls.local_branch = "rally-unit-test-local-only-branch"
         cls.remote_branch = "rally-unit-test-remote-only-branch"
+        cls.rebase_branch = "rally-unit-test-rebase-branch"
 
         # this is assuming that nobody stripped the git repo info in their Rally working copy
         cls.original_src_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -91,6 +92,21 @@ class TestGit:
         yield
         # reinstate local tags from remote
         git.fetch(TestGit.local_tmp_src_dir, remote=TestGit.remote_repo)
+
+    @pytest.fixture
+    def setup_teardown_rebase(self):
+        # create branches on local and remote
+        process.run_subprocess_with_logging(f"git -C {TestGit.local_tmp_src_dir} branch {TestGit.rebase_branch}")
+        process.run_subprocess_with_logging(f"git -C {TestGit.remote_tmp_src_dir} checkout -b {TestGit.rebase_branch}")
+        # create remote commit from which to rebase on in local
+        process.run_subprocess_with_logging(f"git -C {TestGit.remote_tmp_src_dir} commit --allow-empty -m 'Rally rebase/pull test'")
+        # run rebase
+        yield
+        # undo rebase
+        process.run_subprocess_with_logging(f"git -C {TestGit.local_tmp_src_dir} reset --hard ORIG_HEAD")
+        # delete branches
+        process.run_subprocess_with_logging(f"git -C {TestGit.local_tmp_src_dir} branch -D {TestGit.rebase_branch}")
+        process.run_subprocess_with_logging(f"git -C {TestGit.remote_tmp_src_dir} branch -D {TestGit.rebase_branch}")
 
     def test_is_git_working_copy(self):
         # this test is assuming that nobody stripped the git repo info in their Rally working copy
@@ -181,7 +197,7 @@ class TestGit:
 
     def test_checkout_branch(self):
         git.checkout_branch(TestGit.local_tmp_src_dir, remote=TestGit.remote_repo, branch=TestGit.remote_branch)
-        assert git.head_revision(TestGit.local_tmp_src_dir).startswith(TestGit.remote_branch_hash)
+        assert git.head_revision(TestGit.local_tmp_src_dir).startswith(TestGit.remote_branch_hash[0:7])
 
     def test_head_revision(self):
         # Apple Git 'core.abbrev' defaults to return 7 char prefixes (09980cd)
@@ -194,40 +210,16 @@ class TestGit:
         git.pull_ts(TestGit.local_tmp_src_dir, "2016-01-01T110000Z", remote=TestGit.remote_repo, branch="master")
         assert git.head_revision(TestGit.local_tmp_src_dir).startswith("28474f4")
 
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_rebase(self, run_subprocess_with_logging):
-        run_subprocess_with_logging.return_value = 0
-        git.rebase("/src", remote="my-origin", branch="feature-branch")
-        calls = [
-            mock.call("git -C /src checkout feature-branch"),
-            mock.call(
-                '/bin/bash -c "for i in {1..5}; do git -C /src rebase '
-                'my-origin/feature-branch && s=0 && break || s=1 && sleep 1; done; (exit $s)"'
-            ),
-        ]
-        run_subprocess_with_logging.assert_has_calls(calls)
+    def test_rebase(self, setup_teardown_rebase):
+        # fetch required first to get remote branch
+        git.fetch(TestGit.local_tmp_src_dir, remote=TestGit.remote_repo)
+        git.rebase(TestGit.local_tmp_src_dir, remote=TestGit.remote_repo, branch=TestGit.rebase_branch)
+        ops = " ".join(process.run_subprocess_with_output(f"git -C {TestGit.local_tmp_src_dir} reflog --since=10.seconds.ago"))
+        assert f"rebase (start): checkout {TestGit.remote_repo}/{TestGit.rebase_branch}" in ops
+        assert f"rebase (finish): returning to refs/heads/{TestGit.rebase_branch}" in ops
 
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_pull(self, run_subprocess_with_logging):
-        run_subprocess_with_logging.return_value = 0
-        git.pull("/src", remote="my-origin", branch="feature-branch")
-        calls = [
-            # pull
-            mock.call("git -C /src --version", level=logging.DEBUG),
-            # fetch
-            mock.call("git -C /src --version", level=logging.DEBUG),
-            mock.call(
-                '/bin/bash -c "for i in {1..5}; do git -C /src fetch --prune '
-                '--tags my-origin && s=0 && break || s=1 && sleep 1; done; (exit $s)"'
-            ),
-            # rebase
-            mock.call("git -C /src --version", level=logging.DEBUG),
-            # checkout
-            mock.call("git -C /src --version", level=logging.DEBUG),
-            mock.call("git -C /src checkout feature-branch"),
-            mock.call(
-                '/bin/bash -c "for i in {1..5}; do git -C /src rebase '
-                'my-origin/feature-branch && s=0 && break || s=1 && sleep 1; done; (exit $s)"'
-            ),
-        ]
-        run_subprocess_with_logging.assert_has_calls(calls)
+    def test_pull(self, setup_teardown_rebase):
+        git.pull(TestGit.local_tmp_src_dir, remote=TestGit.remote_repo, branch=TestGit.rebase_branch)
+        ops = " ".join(process.run_subprocess_with_output(f"git -C {TestGit.local_tmp_src_dir} reflog --since=10.seconds.ago"))
+        assert f"rebase (start): checkout {TestGit.remote_repo}/{TestGit.rebase_branch}" in ops
+        assert f"rebase (finish): returning to refs/heads/{TestGit.rebase_branch}" in ops
