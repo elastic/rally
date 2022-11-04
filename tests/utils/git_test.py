@@ -51,7 +51,7 @@ class TestGit:
         shutil.copytree(TestGit.original_src_dir, TestGit.local_tmp_src_dir)
         # stash any current changes in copied dir
         process.run_subprocess_with_logging(f"git -C {TestGit.local_tmp_src_dir} stash")
-        shutil.copytree(TestGit.local_tmp_src_dir, TestGit.remote_tmp_src_dir)
+        shutil.copytree(TestGit.original_src_dir, TestGit.remote_tmp_src_dir)
         # so we can restore the working tree after some tests
         cls.starting_branch = git.current_branch(TestGit.local_tmp_src_dir)
 
@@ -213,7 +213,7 @@ class TestGit:
 
     def test_pull_ts(self):
         # results in commit 28474f4f097106ff3507be35958db0c3c8be0fc6
-        git.pull_ts(TestGit.local_tmp_src_dir, "2016-01-01T110000Z", remote=TestGit.remote_repo, branch="master")
+        git.pull_ts(TestGit.local_tmp_src_dir, "2016-01-01T110000Z", remote=TestGit.remote_repo, branch=TestGit.remote_branch)
         assert git.head_revision(TestGit.local_tmp_src_dir).startswith("28474f4")
 
     def test_rebase(self, setup_teardown_rebase):
