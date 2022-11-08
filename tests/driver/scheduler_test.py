@@ -139,12 +139,10 @@ class TestUnitAwareScheduler:
 
 class TestSchedulerCategorization:
     class LegacyScheduler:
-        # pylint: disable=unused-variable
         def __init__(self, params):
             pass
 
     class LegacySchedulerWithAdditionalArgs:
-        # pylint: disable=unused-variable
         def __init__(self, params, my_default_param=True):
             pass
 
@@ -191,7 +189,6 @@ class TestSchedulerThrottling:
 
 class TestLegacyWrappingScheduler:
     class SimpleLegacyScheduler:
-        # pylint: disable=unused-variable
         def __init__(self, params):
             pass
 
