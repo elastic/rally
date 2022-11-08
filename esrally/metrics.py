@@ -66,6 +66,12 @@ class EsClient:
     def delete_template(self, name):
         self.guarded(self._client.indices.delete_template, name=name)
 
+    def delete_by_query(self, index, body):
+        return self.guarded(self._client.delete_by_query, index=index, body=body)
+
+    def delete(self, index, id):
+        return self.guarded(self._client.delete, index=index, doc_type="_doc", id=id,  ignore=404)
+
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
@@ -1225,6 +1231,18 @@ def results_store(cfg):
         return NoopResultsStore()
 
 
+def delete_race(cfg):
+    race_store(cfg).delete_race()
+
+
+def delete_annotation(cfg):
+    race_store(cfg).delete_annotation()
+
+
+def list_annotations(cfg):
+    race_store(cfg).list_annotations()
+
+
 def list_races(cfg):
     def format_dict(d):
         if d:
@@ -1494,6 +1512,15 @@ class RaceStore:
     def list(self):
         raise NotImplementedError("abstract method")
 
+    def delete_race(self):
+        raise NotImplementedError("abstract method")
+
+    def delete_annotation(self):
+        raise NotImplementedError("abstract method")
+
+    def list_annotations(self):
+        raise NotImplementedError("abstract method")
+
     def store_race(self, race):
         raise NotImplementedError("abstract method")
 
@@ -1511,6 +1538,12 @@ class RaceStore:
 
     def _to_date(self):
         return self.cfg.opts("system", "list.races.to_date", mandatory=False)
+
+    def _dry_run(self):
+        return self.cfg.opts("system", "delete.dry_run")
+
+    def _id(self):
+        return self.cfg.opts("system", "delete.id")
 
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
@@ -1531,6 +1564,15 @@ class CompositeRaceStore:
     def store_race(self, race):
         self.file_store.store_race(race)
         self.es_store.store_race(race)
+
+    def delete_race(self):
+        return self.es_store.delete_race()
+
+    def delete_annotation(self):
+        return self.es_store.delete_annotation()
+
+    def list_annotations(self):
+        return self.es_store.list_annotations()
 
     def list(self):
         return self.es_store.list()
@@ -1613,6 +1655,134 @@ class EsRaceStore(RaceStore):
     def index_name(self, race):
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+
+    def list_annotations(self):
+        limit = args.limit
+        environment = args.environment
+        track = args.track
+        from_date = args.from_date
+        to_date = args.to_date
+        output_format = args.output_format
+        query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "environment": environment
+                            }
+                        },
+                        {
+                            "range": {
+                                "race-timestamp": {
+                                    "gte": from_date,
+                                    "lte": to_date,
+                                    "format": "basic_date"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        if track:
+            query["query"]["bool"]["filter"].append({
+                "term": {
+                    "track": track
+                }
+            })
+
+        query["sort"] = [
+            {
+                "race-timestamp": "desc"
+            },
+            {
+                "track": "asc"
+            },
+            {
+                "chart": "asc"
+            }
+        ]
+
+        result = es.search(index="rally-annotations", body=query, size=limit)
+        headers = ["Annotation Id",
+                   "Timestamp",
+                   "Track",
+                   "Chart Type",
+                   "Chart Name",
+                   "Message"]
+        Annotation = namedtuple("Annotation", " ".join([snake_case(h) for h in headers]))
+        annotations = []
+
+        for hit in result["hits"]["hits"]:
+            src = hit["_source"]
+            annotation_data = Annotation(hit["_id"],
+                                         src["race-timestamp"],
+                                         src.get("track", ""),
+                                         src.get("chart", ""),
+                                         src.get("chart-name", ""),
+                                         src["message"])
+            annotations.append(annotation_data)
+
+        if annotations:
+            if output_format == "json":
+                print(json.dumps([a._asdict() for a in annotations], indent=2))
+            else:
+                print(tabulate.tabulate(annotations, headers=headers))
+        else:
+            print("No results")
+
+    def delete_annotation(self):
+        annotations = self._id().split(",")
+        environment = self.environment_name
+        if self._dry_run():
+            if len(annotations) == 1:
+                print(f"Would delete annotation with id [{annotations[0]}].")
+            else:
+                print(f"Would delete {len(annotations)} annotations: {annotations}.")
+        else:
+            for annotation_id in annotations:
+                result = self.client.delete(index="rally-annotations", id=annotation_id)
+                if result["result"] == "deleted":
+                    print(f"Successfully deleted [{annotation_id}].")
+                else:
+                    print(f"Did not find [{annotation_id}] in environment {environment}.")
+
+    def delete_race(self):
+        races = self._id().split(",")
+        environment = self.environment_name
+        if self._dry_run():
+            if len(races) == 1:
+                print(f"Would delete race with id {races[0]} in environment {environment}.")
+            else:
+                print(f"Would delete {len(races)} races: {races} in environment {environment}.")
+        else:
+            for race_id in races:
+                selector = {
+                    "query": {
+                        "bool": {
+                            "filter": [
+                                {
+                                    "term": {
+                                        "environment": environment
+                                    }
+                                },
+                                {
+                                    "term": {
+                                        "race-id": race_id
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+                self.client.delete_by_query(index="rally-races-*", body=selector)
+                self.client.delete_by_query(index="rally-metrics-*", body=selector)
+                result = self.client.delete_by_query(index="rally-results-*", body=selector)
+                if result["deleted"] > 0:
+                    print(f"Successfully deleted [{race_id}] in environment [{environment}].")
+                else:
+                    print(f"Did not find [{race_id}] in environment [{environment}].")
 
     def list(self):
         track = self._track()
