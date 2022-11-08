@@ -1657,12 +1657,11 @@ class EsRaceStore(RaceStore):
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
     def list_annotations(self):
-        limit = args.limit
-        environment = args.environment
-        track = args.track
-        from_date = args.from_date
-        to_date = args.to_date
-        output_format = args.output_format
+        limit = self._max_results()
+        environment = self.environment_name
+        track = self._track()
+        from_date = self._from_date()
+        to_date = self._to_date()
         query = {
             "query": {
                 "bool": {
