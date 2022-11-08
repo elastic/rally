@@ -147,7 +147,7 @@ def create_arg_parser():
         metavar="configuration",
         help="The configuration for which Rally should show the available options. "
         "Possible values are: telemetry, tracks, pipelines, races, cars, elasticsearch-plugins",
-        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins"],
+        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins", "annotations"],
     )
     list_parser.add_argument(
         "--limit",
@@ -836,6 +836,8 @@ def dispatch_list(cfg):
         racecontrol.list_pipelines()
     elif what == "races":
         metrics.list_races(cfg)
+    elif what == "annotations":
+        metrics.list_annotations(cfg)
     elif what == "cars":
         team.list_cars(cfg)
     elif what == "elasticsearch-plugins":
