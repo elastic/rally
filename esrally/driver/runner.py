@@ -629,13 +629,13 @@ class BulkIndex(Runner):
             error_details.add((data["status"], None))
 
     def error_description(self, error_details):
-        error_description = ""
+        error_descriptions = []
         for status, reason in error_details:
             if reason:
-                error_description += "HTTP status: %s, message: %s" % (str(status), reason)
+                error_descriptions.append(f"HTTP status: {status}, message: {reason}")
             else:
-                error_description += "HTTP status: %s" % str(status)
-        return error_description
+                error_descriptions.append(f"HTTP status: {status}")
+        return " | ".join(sorted(error_descriptions))
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"

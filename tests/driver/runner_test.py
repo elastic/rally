@@ -670,7 +670,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 5,
             "index": "test",
@@ -680,6 +679,7 @@ class TestBulkIndexRunner:
             "success-count": 1,
             "error-count": 2,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
         }
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
@@ -697,7 +697,7 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "1",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@1]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #1",
                     }
                 },
                 {
@@ -706,7 +706,7 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "2",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@2]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #2",
                     }
                 },
                 {
@@ -715,7 +715,7 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "3",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@3]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #3",
                     }
                 },
             ],
@@ -743,7 +743,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 20,
             "index": "test",
@@ -753,6 +752,7 @@ class TestBulkIndexRunner:
             "success-count": 0,
             "error-count": 3,
             "error-type": "bulk",
+            "error-description": " | ".join([f"HTTP status: 429, message: EsRejectedExecutionException #{i}" for i in (1, 2, 3)]),
         }
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
@@ -840,7 +840,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 30,
             "index": "test",
@@ -850,6 +849,7 @@ class TestBulkIndexRunner:
             "success-count": 2,
             "error-count": 2,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
         }
         assert "ingest_took" not in result, "ingest_took is not extracted with simple stats"
 
@@ -969,7 +969,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 30,
             "ingest_took": 20,
@@ -980,6 +979,7 @@ class TestBulkIndexRunner:
             "success-count": 3,
             "error-count": 3,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
             "ops": {
                 "index": collections.Counter({"item-count": 4, "created": 2, "noop": 2}),
                 "update": collections.Counter({"item-count": 2, "updated": 1, "noop": 1}),
