@@ -1584,7 +1584,7 @@ class FileRaceStore(RaceStore):
         return os.path.join(paths.race_root(cfg=self.cfg, race_id=race_id), "race.json")
 
     def delete_race(self):
-        raise NotImplementedError("Not supported.")
+        raise NotImplementedError("Not supported for in-memory datastore.")
 
     def list(self):
         results = glob.glob(self._race_file(race_id="*"))
