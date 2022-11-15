@@ -1715,9 +1715,7 @@ class TestFileRaceStore:
 
         with pytest.raises(NotImplementedError) as ctx:
             self.race_store.delete_race()
-        assert ctx.value.args[0] == (
-            "Not supported for in-memory datastore."
-        )
+        assert ctx.value.args[0] == ("Not supported for in-memory datastore.")
 
 
 class TestStatsCalculator:
