@@ -71,7 +71,7 @@ class EsClient:
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
     def delete(self, index, id):
-        return self.guarded(self._client.delete, index=index, doc_type="_doc", id=id,  ignore=404)
+        return self.guarded(self._client.delete, index=index, id=id,  ignore=404)
 
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
@@ -1246,6 +1246,10 @@ def list_annotations(cfg):
     race_store(cfg).list_annotations()
 
 
+def add_annotation(cfg):
+    race_store(cfg).add_annotation()
+
+
 def list_races(cfg):
     def format_dict(d):
         if d:
@@ -1524,6 +1528,9 @@ class RaceStore:
     def list_annotations(self):
         raise NotImplementedError("abstract method")
 
+    def add_annotation(self):
+        raise NotImplementedError("abstract method")
+
     def store_race(self, race):
         raise NotImplementedError("abstract method")
 
@@ -1588,6 +1595,9 @@ class CompositeRaceStore:
 
     def list_annotations(self):
         return self.es_store.list_annotations()
+
+    def add_annotation(self):
+        return self.es_store.add_annotation()
 
     def list(self):
         return self.es_store.list()
@@ -1670,6 +1680,42 @@ class EsRaceStore(RaceStore):
     def index_name(self, race):
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+
+    def add_annotation(self):
+        def _at_midnight(race_timestamp):
+            TIMESTAMP_FMT = "%Y%m%dT%H%S%MZ"
+            date = datetime.datetime.strptime(race_timestamp, TIMESTAMP_FMT)
+            date = date.replace(hour=0, minute=0, second=0, tzinfo=datetime.timezone.utc)
+            return date.strftime(TIMESTAMP_FMT)
+
+        environment = self.environment_name
+        # To line up annotations with chart data points, use midnight of day N as this is
+        # what the chart use too.
+        race_timestamp = _at_midnight(self._race_timestamp())
+        track = self._track()
+        chart_type = self._chart_type()
+        chart_name = self._chart_name()
+        message = self._message()
+        annotation_id = str(uuid.uuid4())
+        dry_run = self._dry_run()
+
+        if dry_run:
+            print(f"Would add annotation with message [{message}] for environment=[{environment}], race timestamp=[{race_timestamp}], "
+                  f"track=[{track}], chart type=[{chart_type}], chart name=[{chart_name}]")
+        else:
+            if not self.client.exists(index="rally-annotations"):
+                cwd = os.path.dirname(os.path.realpath(__file__))
+                body = open(os.path.join(cwd, "resources", "annotation-mapping.json"), "rt").read()
+                self.client.create_index(index="rally-annotations", body=body)
+            self.client.index(index="rally-annotations", id=annotation_id, item={
+                    "environment": environment,
+                    "race-timestamp": race_timestamp,
+                    "track": track,
+                    "chart": chart_type,
+                    "chart-name": chart_name,
+                    "message": message
+                })
+            print(f"Successfully added annotation [{annotation_id}].")
 
     def list_annotations(self):
         environment = self.environment_name
