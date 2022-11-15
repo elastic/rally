@@ -28,6 +28,7 @@ import statistics
 import sys
 import time
 import zlib
+import uuid
 from enum import Enum, IntEnum
 from http.client import responses
 
@@ -75,8 +76,10 @@ class EsClient:
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
-    def create_index(self, index):
+    def create_index(self, index, body=None):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
+        if body is not None:
+            return self.guarded(self._client.indices.create, index=index, body=body)
         return self.guarded(self._client.indices.create, index=index, ignore=400)
 
     def exists(self, index):
@@ -1525,22 +1528,34 @@ class RaceStore:
         raise NotImplementedError("abstract method")
 
     def _max_results(self):
-        return int(self.cfg.opts("system", "list.races.max_results"))
+        return int(self.cfg.opts("system", "list.max_results"))
 
     def _track(self):
-        return self.cfg.opts("system", "list.races.track", mandatory=False)
+        return self.cfg.opts("system", "admin.track", mandatory=False)
 
     def _benchmark_name(self):
         return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
 
+    def _race_timestamp(self):
+        return self.cfg.opts("system", "add.race_timestamp")
+
+    def _message(self):
+        return self.cfg.opts("system", "add.message")
+
+    def _chart_type(self):
+        return self.cfg.opts("system", "add.chart_type", mandatory=False)
+
+    def _chart_name(self):
+        return self.cfg.opts("system", "add.chart_name", mandatory=False)
+
     def _from_date(self):
-        return self.cfg.opts("system", "list.races.from_date", mandatory=False)
+        return self.cfg.opts("system", "list.from_date", mandatory=False)
 
     def _to_date(self):
-        return self.cfg.opts("system", "list.races.to_date", mandatory=False)
+        return self.cfg.opts("system", "list.to_date", mandatory=False)
 
     def _dry_run(self):
-        return self.cfg.opts("system", "delete.dry_run")
+        return self.cfg.opts("system", "admin.dry_run", mandatory=False)
 
     def _id(self):
         return self.cfg.opts("system", "delete.id")
@@ -1657,7 +1672,6 @@ class EsRaceStore(RaceStore):
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
     def list_annotations(self):
-        limit = self._max_results()
         environment = self.environment_name
         track = self._track()
         from_date = self._from_date()
@@ -1702,32 +1716,39 @@ class EsRaceStore(RaceStore):
                 "chart": "asc"
             }
         ]
+        query["size"] = self._max_results()
 
-        result = es.search(index="rally-annotations", body=query, size=limit)
-        headers = ["Annotation Id",
-                   "Timestamp",
-                   "Track",
-                   "Chart Type",
-                   "Chart Name",
-                   "Message"]
-        Annotation = namedtuple("Annotation", " ".join([snake_case(h) for h in headers]))
+        result = self.client.search(index="rally-annotations", body=query)
         annotations = []
 
         for hit in result["hits"]["hits"]:
             src = hit["_source"]
-            annotation_data = Annotation(hit["_id"],
-                                         src["race-timestamp"],
-                                         src.get("track", ""),
-                                         src.get("chart", ""),
-                                         src.get("chart-name", ""),
-                                         src["message"])
-            annotations.append(annotation_data)
+            annotations.append(
+                [
+                    hit["_id"],
+                    src["race-timestamp"],
+                    src.get("track", ""),
+                    src.get("chart", ""),
+                    src.get("chart-name", ""),
+                    src["message"],
+                ]
+            )
 
         if annotations:
-            if output_format == "json":
-                print(json.dumps([a._asdict() for a in annotations], indent=2))
-            else:
-                print(tabulate.tabulate(annotations, headers=headers))
+            console.println("\nAnnotations:\n")
+            console.println(
+                tabulate.tabulate(
+                    annotations,
+                    headers=[
+                        "Annotation Id",
+                        "Timestamp",
+                        "Track",
+                        "Chart Type",
+                        "Chart Name",
+                        "Message"
+                    ],
+                )
+            )
         else:
             print("No results")
 
