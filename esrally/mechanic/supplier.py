@@ -759,7 +759,7 @@ class Builder:
         log_file = os.path.join(self.log_dir, "build.log")
 
         # we capture all output to a dedicated build log file
-        build_cmd = "export JAVA_HOME={}; cd {}; {} > {} 2>&1".format(self.java_home, src_dir, command, log_file)
+        build_cmd = "export JAVA_HOME={}; cd {}; {} >> {} 2>&1".format(self.java_home, src_dir, command, log_file)
         console.info("Creating installable binary from source files")
         self.logger.info("Running build command [%s]", build_cmd)
 
