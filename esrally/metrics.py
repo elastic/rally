@@ -75,10 +75,8 @@ class EsClient:
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
-    def create_index(self, index, body=None):
+    def create_index(self, index):
         # ignore 400 cause by IndexAlreadyExistsException when creating an index
-        if body is not None:
-            return self.guarded(self._client.indices.create, index=index, body=body)
         return self.guarded(self._client.indices.create, index=index, ignore=400)
 
     def exists(self, index):
