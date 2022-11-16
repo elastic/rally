@@ -24,6 +24,7 @@ PIP_WRAPPER = $(PY_BIN) -m pip
 export PY38 = $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 = $(shell jq -r '.python_versions.PY39' .ci/variables.json)
 export PY310 = $(shell jq -r '.python_versions.PY310' .ci/variables.json)
+export PY311 = $(shell jq -r '.python_versions.PY311' .ci/variables.json)
 export HATCH_VERSION = $(shell jq -r '.prerequisite_versions.HATCH' .ci/variables.json)
 export HATCHLING_VERSION = $(shell jq -r '.prerequisite_versions.HATCHLING' .ci/variables.json)
 export PIP_VERSION = $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
@@ -40,6 +41,7 @@ prereq:
 	pyenv install --skip-existing $(PY38)
 	pyenv install --skip-existing $(PY39)
 	pyenv install --skip-existing $(PY310)
+	pyenv install --skip-existing $(PY311)
 	pyenv local $(PY38)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
@@ -111,12 +113,12 @@ precommit: lint
 
 unit: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38-unit
-	. $(VENV_ACTIVATE_FILE); tox -e py310-unit
+	. $(VENV_ACTIVATE_FILE); tox -e py311-unit
 
 # checks min and max python versions
 it: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38-it
-	. $(VENV_ACTIVATE_FILE); tox -e py310-it
+	. $(VENV_ACTIVATE_FILE); tox -e py311-it
 
 it38: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38-it
@@ -126,6 +128,9 @@ it39: check-venv python-caches-clean tox-env-clean
 
 it310: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py310-it
+
+it311: check-venv python-caches-clean tox-env-clean
+	. $(VENV_ACTIVATE_FILE); tox -e py311-it
 
 rally-tracks-compat: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e rally-tracks-compat
@@ -142,4 +147,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 it310 benchmark release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 it310 it311 benchmark release release-checks prereq venv-create check-env

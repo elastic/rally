@@ -122,9 +122,9 @@ function it38 {
   make it38
 }
 
-function it310 {
+function it311 {
   install
-  make it310
+  make it311
 }
 
 function rally-tracks-compat {
