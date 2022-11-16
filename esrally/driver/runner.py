@@ -1034,10 +1034,10 @@ class Query(Runner):
                 timed_out = props.get("timed_out", False)
                 took = props.get("took", 0)
 
-                shards_total = props.get("_shards.total")
-                shards_successful = props.get("_shards.successful")
-                shards_skipped = props.get("_shards.skipped")
-                shards_failed = props.get("_shards.failed")
+                shards_total = props.get("_shards.total", 0)
+                shards_successful = props.get("_shards.successful", 0)
+                shards_skipped = props.get("_shards.skipped", 0)
+                shards_failed = props.get("_shards.failed", 0)
 
                 return {
                     "weight": 1,
