@@ -17,7 +17,6 @@
 
 import logging
 import os
-import re
 import shutil
 from unittest import mock
 
@@ -87,6 +86,7 @@ class TestGit:
         process.run_subprocess_with_logging(f"git -C {self.remote_tmp_src_dir} checkout -b {self.rebase_branch}")
         # create remote commit from which to rebase on in local
         process.run_subprocess_with_logging(f"git -C {self.remote_tmp_src_dir} commit --allow-empty -m 'Rally rebase/pull test'")
+        self.remote_commit_hash = git.head_revision(self.remote_tmp_src_dir)
         # run rebase
         yield
         # undo rebase
@@ -201,18 +201,10 @@ class TestGit:
         # fetch required first to get remote branch
         git.fetch(self.local_tmp_src_dir, remote=self.remote_repo)
         git.rebase(self.local_tmp_src_dir, remote=self.remote_repo, branch=self.rebase_branch)
-        ops = " ".join(process.run_subprocess_with_output(f"git -C {self.local_tmp_src_dir} reflog --since=10.seconds.ago"))
-        # reflog format differs from Apple Git to Linux
-        finished_pattern = re.compile(f"rebase (\\(finish\\)|finished).*returning to refs\\/heads\\/{self.rebase_branch}")
-        started_pattern = re.compile(f"rebase:? (\\(start\\)*.|checkout).*{self.remote_repo}\\/{self.rebase_branch}")
-        assert re.search(started_pattern, ops)
-        assert re.search(finished_pattern, ops)
+        # minimum 'core.abbrev' is to return 7 char prefixes
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_commit_hash[0:7])
 
     def test_pull_rebase(self, setup_teardown_rebase):
         git.pull(self.local_tmp_src_dir, remote=self.remote_repo, branch=self.rebase_branch)
-        ops = " ".join(process.run_subprocess_with_output(f"git -C {self.local_tmp_src_dir} reflog --since=10.seconds.ago"))
-        # reflog format differs from Apple Git to Linux
-        finished_pattern = re.compile(f"rebase (\\(finish\\)|finished).*returning to refs\\/heads\\/{self.rebase_branch}")
-        started_pattern = re.compile(f"rebase:? (\\(start\\)*.|checkout).*{self.remote_repo}\\/{self.rebase_branch}")
-        assert re.search(started_pattern, ops)
-        assert re.search(finished_pattern, ops)
+        # minimum 'core.abbrev' is to return 7 char prefixes
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_commit_hash[0:7])
