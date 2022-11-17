@@ -160,11 +160,7 @@ class TestGit:
         assert exc.value.args[0] == f"Could not clone from [{remote}] to [{self.tmp_clone_dir}]"
 
     def test_fetch_successful(self):
-        before_time = os.path.getmtime(os.path.join(self.local_tmp_src_dir, ".git/FETCH_HEAD"))
         git.fetch(self.local_tmp_src_dir, remote=self.remote_repo)
-        after_time = os.path.getmtime(os.path.join(self.local_tmp_src_dir, ".git/FETCH_HEAD"))
-        fetch_head_modified = after_time > before_time
-        assert fetch_head_modified
 
     def test_fetch_with_error(self):
         with pytest.raises(exceptions.SupplyError) as exc:
