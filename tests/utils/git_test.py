@@ -182,8 +182,7 @@ class TestGit:
         assert exc.value.args[0] == f"Could not checkout [{branch}]. Do you have uncommitted changes?"
 
     def test_checkout_revision(self):
-        # Apple Git 'core.abbrev' defaults to return 7 char prefixes (09980cd)
-        # Linux defaults to return 8 char prefixes (09980cd5)
+        # minimum 'core.abbrev' is to return 7 char prefixes
         git.checkout_revision(self.local_tmp_src_dir, revision="bd368741951c643f9eb1958072c316e493c15b96")
         assert git.head_revision(self.local_tmp_src_dir).startswith("bd36874")
 
@@ -192,13 +191,13 @@ class TestGit:
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_branch_hash[0:7])
 
     def test_head_revision(self):
-        # Apple Git 'core.abbrev' defaults to return 7 char prefixes (09980cd)
-        # Linux defaults to return 8 char prefixes (09980cd5)
+        # minimum 'core.abbrev' is to return 7 char prefixes
         git.checkout(self.local_tmp_src_dir, branch="2.6.0")
         assert git.head_revision(self.local_tmp_src_dir).startswith("09980cd")
 
     def test_pull_ts(self):
         # results in commit 28474f4f097106ff3507be35958db0c3c8be0fc6
+        # minimum 'core.abbrev' is to return 7 char prefixes
         git.pull_ts(self.local_tmp_src_dir, "2016-01-01T110000Z", remote=self.remote_repo, branch=self.remote_branch)
         assert git.head_revision(self.local_tmp_src_dir).startswith("28474f4")
 
