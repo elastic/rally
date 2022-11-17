@@ -40,16 +40,11 @@ def setup(request, tmp_path_factory):
     request.cls.remote_tmp_src_dir = str(tmp_path_factory.mktemp("rally-unit-test-remote-dir"))
     request.cls.tmp_clone_dir = str(tmp_path_factory.mktemp("rally-unit-test-clone-dir"))
 
-    # # delete any pre-existing dirs (maybe last test setup cancelled early)
-    shutil.rmtree(request.cls.local_tmp_src_dir, ignore_errors=True)
-    shutil.rmtree(request.cls.remote_tmp_src_dir, ignore_errors=True)
-    shutil.rmtree(request.cls.tmp_clone_dir, ignore_errors=True)
-
     # create tmp git repos
-    shutil.copytree(request.cls.original_src_dir, request.cls.local_tmp_src_dir)
+    shutil.copytree(request.cls.original_src_dir, request.cls.local_tmp_src_dir, dirs_exist_ok=True)
     # stash any current changes in copied dir
     process.run_subprocess_with_logging(f"git -C {request.cls.local_tmp_src_dir} stash")
-    shutil.copytree(request.cls.original_src_dir, request.cls.remote_tmp_src_dir)
+    shutil.copytree(request.cls.original_src_dir, request.cls.remote_tmp_src_dir, dirs_exist_ok=True)
     # so we can restore the working tree after some tests
     request.cls.starting_branch = git.current_branch(request.cls.local_tmp_src_dir)
 
