@@ -195,6 +195,10 @@ def _supply_requirements(sources, distribution, plugins, revisions, distribution
         supply_requirements["elasticsearch"] = ("distribution", _required_version(distribution_version), False)
 
     for plugin in plugins:
+        if plugin.moved_to_module:
+            # TODO: https://github.com/elastic/rally/issues/1622
+            continue
+
         if plugin.core_plugin:
             # core plugins are entirely dependent upon Elasticsearch.
             supply_requirements[plugin.name] = supply_requirements["elasticsearch"]
