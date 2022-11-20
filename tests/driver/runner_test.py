@@ -6524,23 +6524,22 @@ class TestComposite:
         assert response["unit"] == "ops"
         timings = response["dependent_timing"]
         assert len(timings) == 3
+        assert timings[0]["dependent_timing"]["operation"] == "initial-call"
+        assert timings[0]["dependent_timing"]["service_time"] == pytest.approx(0.1, abs=0.1)
 
-        assert timings[0]["operation"] == "initial-call"
-        assert timings[0]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[1]["dependent_timing"]["operation"] == "stream-a"
+        assert timings[1]["dependent_timing"]["service_time"] == pytest.approx(0.2, abs=0.1)
 
-        assert timings[1]["operation"] == "stream-a"
-        assert timings[1]["service_time"] == pytest.approx(0.2, abs=0.1)
-
-        assert timings[2]["operation"] == "stream-b"
-        assert timings[2]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[2]["dependent_timing"]["operation"] == "stream-b"
+        assert timings[2]["dependent_timing"]["service_time"] == pytest.approx(0.1, abs=0.1)
 
         # common properties
         for timing in timings:
-            assert timing["operation-type"] == "sleep"
-            assert "absolute_time" in timing
-            assert "request_start" in timing
-            assert "request_end" in timing
-            assert timing["request_end"] > timing["request_start"]
+            assert timing["dependent_timing"]["operation-type"] == "sleep"
+            assert "absolute_time" in timing["dependent_timing"]
+            assert "request_start" in timing["dependent_timing"]
+            assert "request_end" in timing["dependent_timing"]
+            assert timing["dependent_timing"]["request_end"] > timing["dependent_timing"]["request_start"]
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio

@@ -2616,9 +2616,16 @@ class Composite(Runner):
                     async with connection_limit:
                         async with runner:
                             response = await runner({"default": es}, item)
-                            timing = response.get("dependent_timing") if response else None
-                            if timing:
-                                timings.append(timing)
+                            if response:
+                                # TODO: support calculating dependent's throughput
+                                # drop weight and unit metadata but keep the rest
+                                response.pop("weight")
+                                response.pop("unit")
+                                timing = response.get("dependent_timing")
+                                if timing:
+                                    timings.append(response)
+                            else:
+                                timings.append(None)
 
                 else:
                     raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
