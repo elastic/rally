@@ -1015,11 +1015,29 @@ class Query(Runner):
             r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
 
             if detailed_results:
-                props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+                props = parse(
+                    r,
+                    [
+                        "hits.total",
+                        "hits.total.value",
+                        "hits.total.relation",
+                        "timed_out",
+                        "took",
+                        "_shards.total",
+                        "_shards.successful",
+                        "_shards.skipped",
+                        "_shards.failed",
+                    ],
+                )
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
                 timed_out = props.get("timed_out", False)
                 took = props.get("took", 0)
+
+                shards_total = props.get("_shards.total", 0)
+                shards_successful = props.get("_shards.successful", 0)
+                shards_skipped = props.get("_shards.skipped", 0)
+                shards_failed = props.get("_shards.failed", 0)
 
                 return {
                     "weight": 1,
@@ -1029,6 +1047,12 @@ class Query(Runner):
                     "hits_relation": hits_relation,
                     "timed_out": timed_out,
                     "took": took,
+                    "shards": {
+                        "total": shards_total,
+                        "successful": shards_successful,
+                        "skipped": shards_skipped,
+                        "failed": shards_failed,
+                    },
                 }
             else:
                 return {

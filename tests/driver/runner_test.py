@@ -1549,6 +1549,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 1,
@@ -1587,6 +1588,7 @@ class TestQueryRunner:
             "hits_relation": "gte",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1600,6 +1602,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {"value": 1, "relation": "gte"},
                 "hits": [
@@ -1634,6 +1637,7 @@ class TestQueryRunner:
             "hits_relation": "gte",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1651,6 +1655,7 @@ class TestQueryRunner:
         response = {
             "timed_out": False,
             "took": 62,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 2,
@@ -1687,6 +1692,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 62,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1760,6 +1766,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": 2,
                 "hits": [
@@ -1795,6 +1802,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1814,6 +1822,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 2,
@@ -1852,6 +1861,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1871,6 +1881,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {"value": 2, "relation": "eq"},
                 "hits": [
@@ -1908,6 +1919,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
