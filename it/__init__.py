@@ -198,7 +198,7 @@ class TestCluster:
 
 
 class EsMetricsStore:
-    VERSION = "7.17.0"
+    VERSION = "8.5.1"
 
     def __init__(self):
         self.cluster = TestCluster("in-memory-it")
