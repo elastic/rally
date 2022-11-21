@@ -358,8 +358,7 @@ class TestDockerBuilder:
         assert "Container [test-container-name] completed successfully." in caplog.text
 
         completion = {"StatusCode": 1, "Error": "Vague error message"}
-        with mock.patch("builtins.open", mock.mock_open()) as file:
-            file.return_value.readlines.return_value = "my error"
+        with mock.patch("builtins.open", mock.mock_open()):
             with pytest.raises(exceptions.BuildError) as e:
                 builder.check_container_return_code(completion, "test-container-name")
             assert (
