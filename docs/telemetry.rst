@@ -60,8 +60,8 @@ To enable ``jfr``, invoke Rally with ``esrally race --track=pmc --telemetry jfr`
 Supported telemetry parameters:
 
 * ``recording-template``: The name of a custom flight recording template. It is up to you to correctly install these recording templates on each target machine. If none is specified, the default recording template of Java flight recorder is used.
-* ``delay``: (Optional) Length of time to wait before starting to record (INTEGER followed by 's' for seconds 'm' for minutes or 'h' for hours, 0s). It is up to you to correctly pass in the value.
-* ``duration``: (Optional) Length of time to record. Note that 0s means forever (INTEGER followed by 's' for seconds 'm' for minutes or 'h' for hours, 0s). It is up to you to correctly pass in the value.
+* ``jfr-delay``: (Optional) Length of time to wait before starting to record (INTEGER followed by 's' for seconds 'm' for minutes or 'h' for hours, 0s). It is up to you to correctly pass in the value.
+* ``jfr-duration``: (Optional) Length of time to record. Note that 0s means forever (INTEGER followed by 's' for seconds 'm' for minutes or 'h' for hours, 0s). It is up to you to correctly pass in the value.
 
 .. note::
 
