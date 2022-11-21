@@ -865,13 +865,13 @@ class DockerBuilder:
 
     def check_container_return_code(self, completion, container_name):
         if completion["StatusCode"] != 0:
-            msg = "Executing '{}' failed. The last 20 lines in the build log file are:\n".format(container_name)
+            msg = f"Executing '{container_name}' failed. The last 20 lines in the build log file are:\n"
             msg += "=========================================================================================================\n"
             with open(self.log_file, "r", encoding="utf-8") as f:
                 msg += "\t"
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"
-            msg += "The full build log is available at [{}]".format(self.log_file)
+            msg += f"The full build log is available at [{self.log_file}]"
             raise BuildError(
                 f"Docker container [{container_name}] failed with status code [{completion['StatusCode']}]: "
                 f"Error [{completion['Error']}]: Build log output [{msg}]"
