@@ -295,6 +295,142 @@ class TestJfr:
             "filename=/var/log/test-recording.jfr,settings=profile",
         ]
 
+    def test_sets_options_for_pre_java_9_custom_delay(self):
+        jfr = telemetry.FlightRecorder(telemetry_params={"delay": "10s"}, log_root="/var/log", java_major_version=random.randint(0, 8))
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:+UnlockCommercialFeatures",
+            "-XX:+FlightRecorder",
+            "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/var/log/test-recording.jfr",
+            "-XX:StartFlightRecording=defaultrecording=true,delay=10s",
+        ]
+
+    def test_sets_options_for_java_9_or_10_custom_delay(self):
+        jfr = telemetry.FlightRecorder(telemetry_params={"delay": "10s"}, log_root="/var/log", java_major_version=random.randint(9, 10))
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:+UnlockCommercialFeatures",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=/var/log/test-recording.jfr,delay=10s",
+        ]
+
+    def test_sets_options_for_java_11_or_above_custom_delay(self):
+        jfr = telemetry.FlightRecorder(telemetry_params={"delay": "10s"}, log_root="/var/log", java_major_version=random.randint(11, 999))
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=/var/log/test-recording.jfr,delay=10s",
+        ]
+
+    def test_sets_options_for_pre_java_9_custom_duration(self):
+        jfr = telemetry.FlightRecorder(telemetry_params={"duration": "20m"}, log_root="/var/log", java_major_version=random.randint(0, 8))
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:+UnlockCommercialFeatures",
+            "-XX:+FlightRecorder",
+            "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/var/log/test-recording.jfr",
+            "-XX:StartFlightRecording=defaultrecording=true,duration=20m",
+        ]
+
+    def test_sets_options_for_java_9_or_10_custom_duration(self):
+        jfr = telemetry.FlightRecorder(telemetry_params={"duration": "20m"}, log_root="/var/log", java_major_version=random.randint(9, 10))
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:+UnlockCommercialFeatures",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=/var/log/test-recording.jfr,duration=20m",
+        ]
+
+    def test_sets_options_for_java_11_or_above_custom_duration(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"duration": "20m"}, log_root="/var/log", java_major_version=random.randint(11, 999)
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename=/var/log/test-recording.jfr,duration=20m",
+        ]
+
+    def test_sets_options_for_pre_java_9_custom_delay_and_duration(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"delay": "10s", "duration": "20m"}, log_root="/var/log", java_major_version=random.randint(0, 8)
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:+UnlockCommercialFeatures",
+            "-XX:+FlightRecorder",
+            "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/var/log/test-recording.jfr",
+            "-XX:StartFlightRecording=defaultrecording=true,delay=10s,duration=20m",
+        ]
+
+    def test_sets_options_for_java_9_or_10_custom_delay_and_duration(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"delay": "10s", "duration": "20m"}, log_root="/var/log", java_major_version=random.randint(9, 10)
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:+UnlockCommercialFeatures",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,delay=10s,duration=20m",
+        ]
+
+    def test_sets_options_for_java_11_or_above_custom_delay_and_duration(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"delay": "10s", "duration": "20m"}, log_root="/var/log", java_major_version=random.randint(11, 999)
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,delay=10s,duration=20m",
+        ]
+
+    def test_sets_options_for_pre_java_9_custom_delay_duration_recording_template(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"recording-template": "profile", "duration": "20m", "delay": "10s"},
+            log_root="/var/log",
+            java_major_version=random.randint(0, 8),
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:+UnlockCommercialFeatures",
+            "-XX:+FlightRecorder",
+            "-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath=/var/log/test-recording.jfr",
+            "-XX:StartFlightRecording=defaultrecording=true,delay=10s,duration=20m,settings=profile",
+        ]
+
+    def test_sets_options_for_java_9_or_10_custom_delay_duration_recording_template(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"recording-template": "profile", "duration": "20m", "delay": "10s"},
+            log_root="/var/log",
+            java_major_version=random.randint(9, 10),
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:+UnlockCommercialFeatures",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,delay=10s,duration=20m,settings=profile",
+        ]
+
+    def test_sets_options_for_java_11_or_above_custom_delay_duration_recording_template(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"recording-template": "profile", "duration": "20m", "delay": "10s"},
+            log_root="/var/log",
+            java_major_version=random.randint(11, 999),
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,delay=10s,duration=20m,settings=profile",
+        ]
+
 
 class TestGc:
     def test_sets_options_for_pre_java_9(self):
