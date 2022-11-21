@@ -127,6 +127,13 @@ This will show the path to the default distribution::
       "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-6.8.0.tar.gz"
     }
 
+``delete``
+~~~~~~~~~~~
+
+The ``delete`` subcommand is used to delete records for different configuration options:
+
+* races: Will delete a race from Elasticsearch metric store. It will delete all records related to the races. ``--id`` is a required command line flag. Use ``list races`` to get the id of the race to be deleted.
+
 ``install``
 ~~~~~~~~~~~
 

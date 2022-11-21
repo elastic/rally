@@ -1656,9 +1656,9 @@ class EsRaceStore(RaceStore):
         environment = self.environment_name
         if self._dry_run():
             if len(races) == 1:
-                print(f"Would delete race with id {races[0]} in environment {environment}.")
+                console.println(f"Would delete race with id {races[0]} in environment {environment}.")
             else:
-                print(f"Would delete {len(races)} races: {races} in environment {environment}.")
+                console.println(f"Would delete {len(races)} races: {races} in environment {environment}.")
         else:
             for race_id in races:
                 selector = {"query": {"bool": {"filter": [{"term": {"environment": environment}}, {"term": {"race-id": race_id}}]}}}
@@ -1666,9 +1666,9 @@ class EsRaceStore(RaceStore):
                 self.client.delete_by_query(index="rally-metrics-*", body=selector)
                 result = self.client.delete_by_query(index="rally-results-*", body=selector)
                 if result["deleted"] > 0:
-                    print(f"Successfully deleted [{race_id}] in environment [{environment}].")
+                    console.println(f"Successfully deleted [{race_id}] in environment [{environment}].")
                 else:
-                    print(f"Did not find [{race_id}] in environment [{environment}].")
+                    console.println(f"Did not find [{race_id}] in environment [{environment}].")
 
     def list(self):
         track = self._track()

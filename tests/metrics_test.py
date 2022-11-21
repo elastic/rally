@@ -1001,12 +1001,14 @@ class TestEsRaceStore:
         }
         self.es_mock.index.assert_called_with(index="rally-races-2016-01", id=self.RACE_ID, item=expected_doc)
 
-    def test_delete_race(self):
+    @mock.patch("esrally.utils.console.println")
+    def test_delete_race(self, console):
         self.es_mock.delete_by_query.return_value = {"deleted": 0}
         self.cfg.add(config.Scope.application, "system", "delete.id", "0101")
         self.race_store.delete_race()
         expected_query = {"query": {"bool": {"filter": [{"term": {"environment": "unittest-env"}}, {"term": {"race-id": "0101"}}]}}}
         self.es_mock.delete_by_query.assert_called_with(index="rally-results-*", body=expected_query)
+        console.assert_called_with("Did not find [0101] in environment [unittest-env].")
 
     def test_filter_race(self):
         self.es_mock.search.return_value = {"hits": {"total": 0}}
