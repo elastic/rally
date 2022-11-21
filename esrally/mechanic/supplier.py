@@ -120,6 +120,13 @@ def create(cfg, sources, distribution, car, plugins=None):
         suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))
 
     for plugin in plugins:
+        if plugin.moved_to_module:
+            # TODO: https://github.com/elastic/rally/issues/1622
+            # If it is listed as a core plugin (i.e. a user has overriden the team's path or revision), then we will build
+            # We still need to use the post-install hooks to configure the keystore, so don't remove from list of plugins
+            logger.info("Plugin [%s] is now an Elasticsearch module and no longer needs to be built from source.", plugin.name)
+            continue
+
         supplier_type, plugin_version, _ = supply_requirements[plugin.name]
 
         if supplier_type == "source":
@@ -188,7 +195,10 @@ def _supply_requirements(sources, distribution, plugins, revisions, distribution
         supply_requirements["elasticsearch"] = ("distribution", _required_version(distribution_version), False)
 
     for plugin in plugins:
-        if plugin.core_plugin:
+        if plugin.moved_to_module:
+            # TODO: https://github.com/elastic/rally/issues/1622
+            continue
+        elif plugin.core_plugin:
             # core plugins are entirely dependent upon Elasticsearch.
             supply_requirements[plugin.name] = supply_requirements["elasticsearch"]
         else:

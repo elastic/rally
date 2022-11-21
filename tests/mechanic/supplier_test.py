@@ -1019,6 +1019,32 @@ class TestCreateSupplier:
         assert composite_supplier.suppliers[2].source_supplier.builder is not None
 
     @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
+    def test_create_suppliers_skips_plugins_converted_to_modules(self, caplog):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "mechanic", "source.revision", "current")
+        cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
+        cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
+        cfg.add(config.Scope.application, "source", "elasticsearch.src.subdir", "elasticsearch")
+        cfg.add(config.Scope.application, "source", "remote.repo.url", "https://github.com/elastic/elasticsearch.git")
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "build_command": "./gradlew assemble", "build.jdk": "11"},
+        )
+
+        plugins_moved_to_modules = ["repository-s3", "repository-gcs", "repository-azure"]
+        plugins = []
+        for p in plugins_moved_to_modules:
+            plugins.append(team.PluginDescriptor(p, core_plugin=False))
+
+        composite_supplier = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=plugins)
+
+        for p in plugins:
+            assert f"Plugin [{p.name}] is now an Elasticsearch module and no longer needs to be built from source." in caplog.messages
+            assert p not in composite_supplier.suppliers
+
+    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
     def test_create_suppliers_for_es_and_plugin_source_build(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "source.revision", "elasticsearch:abc,community-plugin:current")
