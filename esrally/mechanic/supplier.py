@@ -865,7 +865,7 @@ class DockerBuilder:
 
     def check_container_return_code(self, completion, container_name):
         if completion["StatusCode"] != 0:
-            msg = f"Executing '{container_name}' failed. The last 20 lines in the build log file are:\n"
+            msg = f"Executing '{container_name}' failed. The last 20 lines in the build.log file are:\n"
             msg += "=========================================================================================================\n"
             with open(self.log_file, "r", encoding="utf-8") as f:
                 msg += "\t"
