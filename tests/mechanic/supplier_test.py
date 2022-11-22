@@ -353,15 +353,18 @@ class TestDockerBuilder:
     def test_check_container_return_code(self, caplog):
         mock_docker_client = mock.MagicMock()
         builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
-
         completion = {"StatusCode": 0, "Error": None}
         builder.check_container_return_code(completion, "test-container-name")
         assert "Container [test-container-name] completed successfully." in caplog.text
 
         completion = {"StatusCode": 1, "Error": "Vague error message"}
-        with pytest.raises(exceptions.SystemSetupError) as e:
-            builder.check_container_return_code(completion, "test-container-name")
-        assert "Docker container [test-container-name] failed with status code [1]: Error [Vague error message]" in str(e.value)
+        with mock.patch("builtins.open", mock.mock_open()):
+            with pytest.raises(exceptions.BuildError) as e:
+                builder.check_container_return_code(completion, "test-container-name")
+            assert (
+                "Docker container [test-container-name] failed with status code [1]: Error [Vague error message]: "
+                "Build log output [Executing 'test-container-name' failed. The last 20 lines in the build.log file are" in str(e.value)
+            )
 
 
 class TestTemplateRenderer:
