@@ -363,7 +363,7 @@ class TestDockerBuilder:
                 builder.check_container_return_code(completion, "test-container-name")
             assert (
                 "Docker container [test-container-name] failed with status code [1]: Error [Vague error message]: "
-                "Build log output [Executing 'test-container-name' failed. The last 20 lines in the build log file are" in str(e.value)
+                "Build log output [Executing 'test-container-name' failed. The last 20 lines in the build.log file are" in str(e.value)
             )
 
 
