@@ -66,6 +66,12 @@ class EsClient:
     def delete_template(self, name):
         self.guarded(self._client.indices.delete_template, name=name)
 
+    def delete_by_query(self, index, body):
+        return self.guarded(self._client.delete_by_query, index=index, body=body)
+
+    def delete(self, index, id):
+        return self.guarded(self._client.delete, index=index, id=id, ignore=404)
+
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
@@ -1225,6 +1231,10 @@ def results_store(cfg):
         return NoopResultsStore()
 
 
+def delete_race(cfg):
+    race_store(cfg).delete_race()
+
+
 def list_races(cfg):
     def format_dict(d):
         if d:
@@ -1494,23 +1504,44 @@ class RaceStore:
     def list(self):
         raise NotImplementedError("abstract method")
 
+    def delete_race(self):
+        raise NotImplementedError("abstract method")
+
     def store_race(self, race):
         raise NotImplementedError("abstract method")
 
     def _max_results(self):
-        return int(self.cfg.opts("system", "list.races.max_results"))
+        return int(self.cfg.opts("system", "list.max_results"))
 
     def _track(self):
-        return self.cfg.opts("system", "list.races.track", mandatory=False)
+        return self.cfg.opts("system", "admin.track", mandatory=False)
 
     def _benchmark_name(self):
         return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
 
+    def _race_timestamp(self):
+        return self.cfg.opts("system", "add.race_timestamp")
+
+    def _message(self):
+        return self.cfg.opts("system", "add.message")
+
+    def _chart_type(self):
+        return self.cfg.opts("system", "add.chart_type", mandatory=False)
+
+    def _chart_name(self):
+        return self.cfg.opts("system", "add.chart_name", mandatory=False)
+
     def _from_date(self):
-        return self.cfg.opts("system", "list.races.from_date", mandatory=False)
+        return self.cfg.opts("system", "list.from_date", mandatory=False)
 
     def _to_date(self):
-        return self.cfg.opts("system", "list.races.to_date", mandatory=False)
+        return self.cfg.opts("system", "list.to_date", mandatory=False)
+
+    def _dry_run(self):
+        return self.cfg.opts("system", "admin.dry_run", mandatory=False)
+
+    def _id(self):
+        return self.cfg.opts("system", "delete.id")
 
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
@@ -1532,6 +1563,9 @@ class CompositeRaceStore:
         self.file_store.store_race(race)
         self.es_store.store_race(race)
 
+    def delete_race(self):
+        return self.es_store.delete_race()
+
     def list(self):
         return self.es_store.list()
 
@@ -1546,6 +1580,9 @@ class FileRaceStore(RaceStore):
 
     def _race_file(self, race_id=None):
         return os.path.join(paths.race_root(cfg=self.cfg, race_id=race_id), "race.json")
+
+    def delete_race(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
 
     def list(self):
         results = glob.glob(self._race_file(race_id="*"))
@@ -1613,6 +1650,25 @@ class EsRaceStore(RaceStore):
     def index_name(self, race):
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+
+    def delete_race(self):
+        races = self._id().split(",")
+        environment = self.environment_name
+        if self._dry_run():
+            if len(races) == 1:
+                console.println(f"Would delete race with id {races[0]} in environment {environment}.")
+            else:
+                console.println(f"Would delete {len(races)} races: {races} in environment {environment}.")
+        else:
+            for race_id in races:
+                selector = {"query": {"bool": {"filter": [{"term": {"environment": environment}}, {"term": {"race-id": race_id}}]}}}
+                self.client.delete_by_query(index="rally-races-*", body=selector)
+                self.client.delete_by_query(index="rally-metrics-*", body=selector)
+                result = self.client.delete_by_query(index="rally-results-*", body=selector)
+                if result["deleted"] > 0:
+                    console.println(f"Successfully deleted [{race_id}] in environment [{environment}].")
+                else:
+                    console.println(f"Did not find [{race_id}] in environment [{environment}].")
 
     def list(self):
         track = self._track()

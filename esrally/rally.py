@@ -178,6 +178,19 @@ def create_arg_parser():
     )
     add_track_source(list_parser)
 
+    delete_parser = subparsers.add_parser("delete", help="Delete records")
+    delete_parser.add_argument(
+        "configuration",
+        metavar="configuration",
+        help="The configuration for which Rally should delete the available records. " "Possible values are: race",
+        choices=["race"],
+    )
+    delete_parser.add_argument(
+        "--dry-run", help="Just show what would be done but do not apply the operation.", default=False, action="store_true"
+    )
+    delete_parser.add_argument("--id", help="Ids of the items to delete. Separate multiple ids with a comma.", required=True)
+    add_track_source(delete_parser)
+
     info_parser = subparsers.add_parser("info", help="Show info about a track")
     add_track_source(info_parser)
     info_parser.add_argument(
@@ -771,6 +784,7 @@ def create_arg_parser():
 
     for p in [
         list_parser,
+        delete_parser,
         race_parser,
         compare_parser,
         build_parser,
@@ -820,6 +834,14 @@ def dispatch_list(cfg):
         team.list_plugins(cfg)
     else:
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
+
+
+def dispatch_delete(cfg):
+    what = cfg.opts("system", "delete.config.option")
+    if what == "race":
+        metrics.delete_race(cfg)
+    else:
+        raise exceptions.SystemSetupError("Cannot delete unknown configuration option [%s]" % what)
 
 
 def print_help_on_errors():
@@ -1025,14 +1047,19 @@ def dispatch_sub_command(arg_parser, args, cfg):
             reporter.compare(cfg, args.baseline, args.contender)
         elif sub_command == "list":
             cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.track", args.track)
+            cfg.add(config.Scope.applicationOverride, "system", "list.max_results", args.limit)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.from_date", args.from_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.to_date", args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
+        elif sub_command == "delete":
+            cfg.add(config.Scope.applicationOverride, "system", "delete.config.option", args.configuration)
+            cfg.add(config.Scope.applicationOverride, "system", "delete.id", args.id)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.dry_run", args.dry_run)
+            dispatch_delete(cfg)
         elif sub_command == "build":
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))

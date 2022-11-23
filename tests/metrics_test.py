@@ -862,7 +862,7 @@ class TestEsRaceStore:
 
     def setup_method(self, method):
         self.cfg = config.Config()
-        self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
+        self.cfg.add(config.Scope.application, "system", "list.max_results", 100)
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
         self.cfg.add(config.Scope.application, "system", "time.start", self.RACE_TIMESTAMP)
         self.cfg.add(config.Scope.application, "system", "race.id", self.RACE_ID)
@@ -1001,12 +1001,21 @@ class TestEsRaceStore:
         }
         self.es_mock.index.assert_called_with(index="rally-races-2016-01", id=self.RACE_ID, item=expected_doc)
 
+    @mock.patch("esrally.utils.console.println")
+    def test_delete_race(self, console):
+        self.es_mock.delete_by_query.return_value = {"deleted": 0}
+        self.cfg.add(config.Scope.application, "system", "delete.id", "0101")
+        self.race_store.delete_race()
+        expected_query = {"query": {"bool": {"filter": [{"term": {"environment": "unittest-env"}}, {"term": {"race-id": "0101"}}]}}}
+        self.es_mock.delete_by_query.assert_called_with(index="rally-results-*", body=expected_query)
+        console.assert_called_with("Did not find [0101] in environment [unittest-env].")
+
     def test_filter_race(self):
         self.es_mock.search.return_value = {"hits": {"total": 0}}
-        self.cfg.add(config.Scope.application, "system", "list.races.track", "unittest")
+        self.cfg.add(config.Scope.application, "system", "admin.track", "unittest")
         self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
-        self.cfg.add(config.Scope.application, "system", "list.races.to_date", "20160131")
-        self.cfg.add(config.Scope.application, "system", "list.races.from_date", "20160230")
+        self.cfg.add(config.Scope.application, "system", "list.to_date", "20160131")
+        self.cfg.add(config.Scope.application, "system", "list.from_date", "20160230")
         self.race_store.list()
         expected_query = {
             "query": {
@@ -1598,7 +1607,7 @@ class TestFileRaceStore:
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
-        self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
+        self.cfg.add(config.Scope.application, "system", "list.max_results", 100)
         self.cfg.add(config.Scope.application, "system", "time.start", self.RACE_TIMESTAMP)
         self.cfg.add(config.Scope.application, "system", "race.id", self.RACE_ID)
         self.race_store = metrics.FileRaceStore(self.cfg)
@@ -1688,20 +1697,27 @@ class TestFileRaceStore:
 
         self.race_store.store_race(race)
         assert len(self.race_store.list()) == 1
-        self.cfg.add(config.Scope.application, "system", "list.races.track", "unittest-2")
+        self.cfg.add(config.Scope.application, "system", "admin.track", "unittest-2")
         assert len(self.race_store.list()) == 0
-        self.cfg.add(config.Scope.application, "system", "list.races.track", "unittest")
+        self.cfg.add(config.Scope.application, "system", "admin.track", "unittest")
         assert len(self.race_store.list()) == 1
         self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test-2")
         assert len(self.race_store.list()) == 0
         self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
         assert len(self.race_store.list()) == 1
-        self.cfg.add(config.Scope.application, "system", "list.races.to_date", "20160129")
+        self.cfg.add(config.Scope.application, "system", "list.to_date", "20160129")
         assert len(self.race_store.list()) == 0
-        self.cfg.add(config.Scope.application, "system", "list.races.to_date", "20160131")
+        self.cfg.add(config.Scope.application, "system", "list.to_date", "20160131")
         assert len(self.race_store.list()) == 1
-        self.cfg.add(config.Scope.application, "system", "list.races.from_date", "20160131")
+        self.cfg.add(config.Scope.application, "system", "list.from_date", "20160131")
         assert len(self.race_store.list()) == 1
+
+    def test_delete_race(self):
+        self.cfg.add(config.Scope.application, "system", "delete.id", "0101")
+
+        with pytest.raises(NotImplementedError) as ctx:
+            self.race_store.delete_race()
+        assert ctx.value.args[0] == "Not supported for in-memory datastore."
 
 
 class TestStatsCalculator:
@@ -2374,7 +2390,7 @@ class TestIndexTemplateProvider:
         self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
         self.cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest-env")
-        self.cfg.add(config.Scope.application, "system", "list.races.max_results", 100)
+        self.cfg.add(config.Scope.application, "system", "list.max_results", 100)
         self.cfg.add(config.Scope.application, "system", "time.start", TestFileRaceStore.RACE_TIMESTAMP)
         self.cfg.add(config.Scope.application, "system", "race.id", TestFileRaceStore.RACE_ID)
 
