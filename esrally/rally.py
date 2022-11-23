@@ -34,7 +34,6 @@ from esrally import (
     PROGRAM_NAME,
     SKULL,
     actor,
-    chart_generator,
     check_python_version,
     config,
     doc_link,
@@ -251,25 +250,6 @@ def create_arg_parser():
         "--output-path",
         default=os.path.join(os.getcwd(), "tracks"),
         help="Track output directory (default: tracks/)",
-    )
-
-    generate_parser = subparsers.add_parser("generate", help="Generate artifacts")
-    generate_parser.add_argument(
-        "artifact",
-        metavar="artifact",
-        help="The artifact to create. Possible values are: charts",
-        choices=["charts"],
-    )
-    generate_parser.add_argument(
-        "--chart-spec-path",
-        required=True,
-        help="Path to a JSON file(s) containing all combinations of charts to generate. Wildcard patterns can be used to specify "
-        "multiple files.",
-    )
-    generate_parser.add_argument(
-        "--output-path",
-        help="Output file name (default: stdout).",
-        default=None,
     )
 
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
@@ -793,7 +773,6 @@ def create_arg_parser():
         start_parser,
         stop_parser,
         info_parser,
-        generate_parser,
         create_track_parser,
     ]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -959,10 +938,6 @@ def with_actor_system(runnable, cfg):
                 console.warn(
                     "Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes."
                 )
-
-
-def generate(cfg):
-    chart_generator.generate(cfg)
 
 
 def configure_telemetry_params(args, cfg):
@@ -1132,10 +1107,6 @@ def dispatch_sub_command(arg_parser, args, cfg):
 
             configure_reporting_params(args, cfg)
             race(cfg, args.kill_running_processes)
-        elif sub_command == "generate":
-            cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
-            cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-            generate(cfg)
         elif sub_command == "create-track":
             if args.data_streams is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
