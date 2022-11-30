@@ -6,7 +6,12 @@ In some corporate environments servers do not have Internet access. You can stil
 Installation and Configuration
 ------------------------------
 
-We provide a special offline installation package. Follow the :ref:`offline installation guide <install_offline-install>` and :doc:`configure Rally as usual </configuration>` afterwards.
+We currently provide two ways to install Rally offline on Linux.
+
+ * If you want to control the Python version, follow the :ref:`offline installation guide <install_offline-install>`.
+ * Otherwise, and if your system has glibc 2.27 or later (that is Debian 10+, Fedora 28+, RHEL 8+ and Ubuntu 18.04+), install Rally as :ref:`standalone binary <install_standalone-binary>`. This is the recommended option.
+
+After installation, :doc:`configure Rally as usual </configuration>` afterwards.
 
 Command Line Usage
 ------------------

@@ -1,0 +1,73 @@
+---
+name: Build Linux binary using PyOxidizer
+
+on:
+  push:
+    tags: ["*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Linux binary
+    # For our binary to work on esbench (which defaults to Ubuntu 18.04), we
+    # need to link our executable with the glibc that ships with Ubuntu 18.04.
+    # The easiest way to do this is to actually build the binary from inside
+    # Ubuntu 18.04. Since GitHub Actions is removing Ubuntu 18.04, we build our
+    # executable in an Ubuntu 18.04 Docker container instead.
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:18.04
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: install dependencies
+        shell: bash
+        run: |
+          apt update
+          apt install -y git python3.8 python3-virtualenv virtualenv clang
+
+          # TODO switch to elastic/rally before merging
+          git clone https://github.com/pquentin/rally.git
+          cd rally
+
+          virtualenv -p python3.8 .venv
+          source .venv/bin/activate
+          pip install -U pip wheel
+          # https://github.com/indygreg/PyOxidizer/issues/663
+          pip install pyoxidizer==0.22.0
+
+      - name: build binary
+        shell: bash
+        run: |
+          cd rally
+          source .venv/bin/activate
+          pyoxidizer build --release
+
+      - name: check binary
+        shell: bash
+        run: |
+          ./rally/build/x86_64-unknown-linux-gnu/release/install/rally --version
+
+          cd rally
+          source .venv/bin/activate
+          pyoxidizer analyze build/x86_64-unknown-linux-gnu/release/install/rally
+
+      - name: tar files
+        shell: bash
+        run: |
+          cd rally
+          source .venv/bin/activate
+          VERSION=$(python -c 'import esrally; print(esrally.__version__)')
+
+          cd build/x86_64-unknown-linux-gnu/release
+
+          ARCHIVE=esrally-standalone-linux-$VERSION
+          mv install $ARCHIVE
+          tar cvzf $ARCHIVE.tar.gz $ARCHIVE
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: rally
+          path: rally/build/x86_64-unknown-linux-gnu/release/esrally-standalone-linux*.tar.gz
+          if-no-files-found: error

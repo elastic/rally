@@ -18,6 +18,12 @@ Rally does not support Windows and is only actively tested on macOS and Linux. I
 Python
 ~~~~~~
 
+    .. note::
+
+        You don't need Python if you
+        This documentation is for the version of Rally currently under development. We do not provide standalone binaries for development versions.
+        Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
+
 * Python 3.8 or better available as ``python3`` on the path. Verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
@@ -117,12 +123,15 @@ S3 support is optional and can be installed using the ``s3`` extra. If you need 
 Installing Rally
 ----------------
 
+User Install
+~~~~~~~~~~~~
+
 1. Ensure ``~/.local/bin`` is in your ``$PATH``.
 2. Ensure pip is the latest version: ``python3 -m pip install --user --upgrade pip``
 3. Install Rally: ``python3 -m pip install --user esrally``.
 
 Virtual environment Install
----------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can also use virtualenv to install Rally into an isolated Python environment without sudo.
 
@@ -136,16 +145,35 @@ You can also use virtualenv to install Rally into an isolated Python environment
 Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
 
 Docker
-------
+~~~~~~
 
 Docker images of Rally can be found in `Docker Hub <https://hub.docker.com/r/elastic/rally>`_.
 
 Please refer to :doc:`Running Rally with Docker <docker/>` for detailed instructions.
 
+.. _install_standalone-binary:
+
+Standalone binary
+~~~~~~~~~~~~~~~~~
+
+.. ifconfig:: release.endswith('.dev0')
+
+    .. warning::
+
+        This documentation is for the version of Rally currently under development. We do not provide standalone binaries for development versions.
+        Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
+
+If you don't want to install Python or pip and/or you are in a corporate environment using Linux servers that do not have any access to the Internet, you can use Rally's standalone binaries. Follow these steps to install Rally:
+
+1. Install all prerequisites as documented above, **except Python**.
+2. Download the standalone binary package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
+3. Decompress the installation package with ``tar -xvf esrally-standalone-linux-*.tar.gz``.
+4. Run Rally with ``./esrally-standalone-linux-*/rally``.
+
 .. _install_offline-install:
 
 Offline Install
----------------
+~~~~~~~~~~~~~~~
 
 .. ifconfig:: release.endswith('.dev0')
 

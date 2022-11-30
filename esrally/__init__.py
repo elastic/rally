@@ -19,7 +19,11 @@ import os
 import sys
 import urllib
 
+from ._package import setup_frozen_package
 from ._version import __version__
+
+if getattr(sys, "frozen", False):
+    setup_frozen_package()
 
 # Allow an alternative program name be set in case Rally is invoked a wrapper script
 PROGRAM_NAME = os.getenv("RALLY_ALTERNATIVE_BINARY_NAME", os.path.basename(sys.argv[0]))
