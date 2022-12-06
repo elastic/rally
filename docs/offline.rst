@@ -9,7 +9,7 @@ Installation and Configuration
 We currently provide two ways to install Rally offline on Linux.
 
  * If you want to control the Python version, follow the :ref:`offline installation guide <install_offline-install>`.
- * Otherwise, and if your system has glibc 2.27 or later (that is Debian 10+, Fedora 28+, RHEL 8+ and Ubuntu 18.04+), install Rally as :ref:`standalone binary <install_standalone-binary>`. This is the recommended option.
+ * Otherwise, and if your system has glibc 2.27 or later (that is Debian 10+, Fedora 28+, RHEL 8+ and Ubuntu 18.04+), install Rally as a :ref:`standalone binary <install_standalone-binary>`. This is the recommended option.
 
 After installation, :doc:`configure Rally as usual </configuration>` afterwards.
 
