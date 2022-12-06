@@ -355,7 +355,7 @@ class DriverActor(actor.RallyActor):
             self.start_sender,
             PreparationComplete(
                 # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
-                # we should default to trial/basic, but let's default to oss for now to avoid breaking the chart generator
+                # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
                 cluster_version.get("build_flavor", "oss"),
                 cluster_version.get("number"),
                 cluster_version.get("build_hash"),
