@@ -9,11 +9,11 @@ on:
 jobs:
   build:
     name: Build Linux binary
-    # For our binary to work on esbench (which defaults to Ubuntu 18.04), we
-    # need to link our executable with the glibc that ships with Ubuntu 18.04.
-    # The easiest way to do this is to actually build the binary from inside
-    # Ubuntu 18.04. Since GitHub Actions is removing Ubuntu 18.04, we build our
-    # executable in an Ubuntu 18.04 Docker container instead.
+    # For our binary to work on Ubuntu 18.04 and above, we need to link our
+    # executable with the glibc that ships with Ubuntu 18.04. The easiest way
+    # to do this is to actually build the binary from inside Ubuntu 18.04.
+    # Since GitHub Actions is removing Ubuntu 18.04, we build our executable in
+    # an Ubuntu 18.04 Docker container instead.
     runs-on: ubuntu-latest
     container:
       image: ubuntu:18.04

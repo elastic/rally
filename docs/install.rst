@@ -20,9 +20,7 @@ Python
 
     .. note::
 
-        You don't need Python if you
-        This documentation is for the version of Rally currently under development. We do not provide standalone binaries for development versions.
-        Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
+        You don't need Python to use the :ref:`standalone binary <install_standalone-binary>`.
 
 * Python 3.8 or better available as ``python3`` on the path. Verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
