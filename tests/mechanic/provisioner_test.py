@@ -257,7 +257,7 @@ class TestBareProvisioner:
         for p in plugins_moved_to_modules:
             plugin_installers.append(
                 provisioner.PluginInstaller(
-                    team.PluginDescriptor(p, core_plugin=False),
+                    team.PluginDescriptor(p, core_plugin=False, variables={"plugin-turned-to-module": "some value"}),
                     java_home="/usr/local/javas/java8",
                     hook_handler_class=self.NoopHookHandler,
                 )
@@ -274,6 +274,7 @@ class TestBareProvisioner:
         _, _, config_vars = apply_config_calls[0]
 
         assert not config_vars["cluster_settings"].get("plugin.mandatory")
+        assert "plugin-turned-to-module" in p._provisioner_variables()
 
 
 class NoopHookHandler:
