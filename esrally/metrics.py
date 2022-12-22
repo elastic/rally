@@ -158,7 +158,8 @@ class EsClient:
                     node = self._client.transport.hosts[0]
                     msg = (
                         "The operation [%s] against your Elasticsearch metrics store on "
-                        "host [%s] at port [%s] failed because index [%s] does not exist." % (target.__name__, node["host"], node["port"], kwargs.get("index"))
+                        "host [%s] at port [%s] failed because index [%s] does not exist."
+                        % (target.__name__, node["host"], node["port"], kwargs.get("index"))
                     )
                     self.logger.exception(msg)
                     raise exceptions.RallyError(msg)
