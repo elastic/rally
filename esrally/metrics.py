@@ -154,6 +154,14 @@ class EsClient:
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.TransportError as e:
+                if e.status_code == 404 and e.error == "index_not_found_exception":
+                    node = self._client.transport.hosts[0]
+                    msg = (
+                        "The operation [%s] against your Elasticsearch metrics store on "
+                        "host [%s] at port [%s] failed because index [%s] does not exist." % (target.__name__, node["host"], node["port"], kwargs.get("index"))
+                    )
+                    self.logger.exception(msg)
+                    raise exceptions.RallyError(msg)
                 if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
                     self.logger.debug(
                         "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
