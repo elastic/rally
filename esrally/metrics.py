@@ -1698,7 +1698,7 @@ class EsRaceStore(RaceStore):
 
     def add_annotation(self):
         def _at_midnight(race_timestamp):
-            TIMESTAMP_FMT = "%Y%m%dT%H%S%MZ"
+            TIMESTAMP_FMT = "%Y%m%dT%H%M%SZ"
             date = datetime.datetime.strptime(race_timestamp, TIMESTAMP_FMT)
             date = date.replace(hour=0, minute=0, second=0, tzinfo=datetime.timezone.utc)
             return date.strftime(TIMESTAMP_FMT)
