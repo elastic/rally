@@ -1067,7 +1067,7 @@ class TestEsRaceStore:
     def test_filter_race(self):
         self.es_mock.search.return_value = {"hits": {"total": 0}}
         self.cfg.add(config.Scope.application, "system", "admin.track", "unittest")
-        self.cfg.add(config.Scope.application, "system", "list.benchmark_name", "unittest-test")
+        self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
         self.cfg.add(config.Scope.application, "system", "list.to_date", "20160131")
         self.cfg.add(config.Scope.application, "system", "list.from_date", "20160230")
         self.race_store.list()
@@ -1755,9 +1755,9 @@ class TestFileRaceStore:
         assert len(self.race_store.list()) == 0
         self.cfg.add(config.Scope.application, "system", "admin.track", "unittest")
         assert len(self.race_store.list()) == 1
-        self.cfg.add(config.Scope.application, "system", "list.benchmark_name", "unittest-test-2")
+        self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test-2")
         assert len(self.race_store.list()) == 0
-        self.cfg.add(config.Scope.application, "system", "list.benchmark_name", "unittest-test")
+        self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
         assert len(self.race_store.list()) == 1
         self.cfg.add(config.Scope.application, "system", "list.to_date", "20160129")
         assert len(self.race_store.list()) == 0

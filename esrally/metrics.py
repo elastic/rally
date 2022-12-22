@@ -77,10 +77,7 @@ class EsClient:
         return self.guarded(self._client.indices.get, name=name)
 
     def create_index(self, index, body=None):
-        if body is not None:
-            return self.guarded(self._client.indices.create, index=index, body=body)
-        # ignore 400 cause by IndexAlreadyExistsException when creating an index
-        return self.guarded(self._client.indices.create, index=index, ignore=400)
+        return self.guarded(self._client.indices.create, index=index, body=body, ignore=400)
 
     def exists(self, index):
         return self.guarded(self._client.indices.exists, index=index)
@@ -1544,7 +1541,7 @@ class RaceStore:
         return self.cfg.opts("system", "admin.track", mandatory=False)
 
     def _benchmark_name(self):
-        return self.cfg.opts("system", "list.benchmark_name", mandatory=False)
+        return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
 
     def _race_timestamp(self):
         return self.cfg.opts("system", "add.race_timestamp")
