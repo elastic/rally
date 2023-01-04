@@ -1960,6 +1960,8 @@ class RawRequest(Runner):
         if not bool(headers):
             # counter-intuitive, but preserves prior behavior
             headers = None
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
 
         await es.perform_request(
             method=params.get("method", "GET"), path=path, headers=headers, body=params.get("body"), params=request_params
