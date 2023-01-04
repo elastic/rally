@@ -1026,7 +1026,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
             cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.to_date", args.to_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
