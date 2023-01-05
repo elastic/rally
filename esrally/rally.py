@@ -489,6 +489,12 @@ def create_arg_parser():
         choices=["docker", "default"],
         default="default",
     )
+    install_parser.add_argument(
+        "--installation-id",
+        required=False,
+        help="The id to use for the installation",
+        default=str(uuid.uuid4()),
+    )
     for p in [race_parser, install_parser]:
         p.add_argument(
             "--cluster-name",
@@ -1050,7 +1056,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             configure_mechanic_params(args, cfg)
             mechanic.download(cfg)
         elif sub_command == "install":
-            cfg.add(config.Scope.applicationOverride, "system", "install.id", str(uuid.uuid4()))
+            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
