@@ -349,7 +349,7 @@ A comma-separated list that specifies the node names of the master nodes in the 
 
     --master-nodes="rally-node-0,rally-node-1,rally-node-2"
 
-This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-node-2`` as `initial master nodes <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery-settings.html#modules-discovery-settings`_.
+This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-node-2`` as `initial master nodes <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery-settings.html#modules-discovery-settings>`_.
 
 ``seed-hosts``
 ~~~~~~~~~~~~~~
