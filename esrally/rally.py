@@ -145,8 +145,8 @@ def create_arg_parser():
         "configuration",
         metavar="configuration",
         help="The configuration for which Rally should show the available options. "
-        "Possible values are: telemetry, tracks, pipelines, races, cars, elasticsearch-plugins",
-        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins"],
+        "Possible values are: telemetry, tracks, pipelines, races, cars, elasticsearch-plugins, annotations",
+        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins", "annotations"],
     )
     list_parser.add_argument(
         "--limit",
@@ -181,8 +181,8 @@ def create_arg_parser():
     delete_parser.add_argument(
         "configuration",
         metavar="configuration",
-        help="The configuration for which Rally should delete the available records. " "Possible values are: race",
-        choices=["race"],
+        help="The configuration for which Rally should delete the available records. Possible values are: race, annotation",
+        choices=["race", "annotation"],
     )
     delete_parser.add_argument(
         "--dry-run", help="Just show what would be done but do not apply the operation.", default=False, action="store_true"
@@ -768,9 +768,44 @@ def create_arg_parser():
         default=False,
     )
 
+    add_parser = subparsers.add_parser("add", help="Add records")
+    add_parser.add_argument(
+        "configuration",
+        metavar="configuration",
+        help="The configuration for which Rally should add records. " "Possible values are: annotation",
+        choices=["annotation"],
+    )
+    add_parser.add_argument(
+        "--dry-run", help="Just show what would be done but do not apply the operation.", default=False, action="store_true"
+    )
+    add_parser.add_argument("--race-timestamp", help="Race timestamp", required=True)
+    add_parser.add_argument("--track", help="Track. If none given, applies to all tracks", default=None)
+    add_parser.add_argument(
+        "--chart-type",
+        help="Chart type to target. If none given, applies to all charts.",
+        choices=[
+            "query",
+            "script",
+            "stats",
+            "indexing",
+            "gc",
+            "index_times",
+            "merge_times",
+            "merge_count",
+            "refresh_times",
+            "segment_count",
+            "io",
+            "ml_processing_time",
+        ],
+        default=None,
+    )
+    add_parser.add_argument("--chart-name", help="A chart name to target. If none given, applies to all charts.", default=None)
+    add_parser.add_argument("--message", help="Annotation message", required=True)
+
     for p in [
         list_parser,
         delete_parser,
+        add_parser,
         race_parser,
         compare_parser,
         build_parser,
@@ -813,6 +848,8 @@ def dispatch_list(cfg):
         racecontrol.list_pipelines()
     elif what == "races":
         metrics.list_races(cfg)
+    elif what == "annotations":
+        metrics.list_annotations(cfg)
     elif what == "cars":
         team.list_cars(cfg)
     elif what == "elasticsearch-plugins":
@@ -821,10 +858,20 @@ def dispatch_list(cfg):
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
 
+def dispatch_add(cfg):
+    what = cfg.opts("system", "add.config.option")
+    if what == "annotation":
+        metrics.add_annotation(cfg)
+    else:
+        raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
+
+
 def dispatch_delete(cfg):
     what = cfg.opts("system", "delete.config.option")
     if what == "race":
         metrics.delete_race(cfg)
+    elif what == "annotation":
+        metrics.delete_annotation(cfg)
     else:
         raise exceptions.SystemSetupError("Cannot delete unknown configuration option [%s]" % what)
 
@@ -1041,6 +1088,15 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "system", "delete.id", args.id)
             cfg.add(config.Scope.applicationOverride, "system", "admin.dry_run", args.dry_run)
             dispatch_delete(cfg)
+        elif sub_command == "add":
+            cfg.add(config.Scope.applicationOverride, "system", "add.config.option", args.configuration)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
+            cfg.add(config.Scope.applicationOverride, "system", "add.message", args.message)
+            cfg.add(config.Scope.applicationOverride, "system", "add.race_timestamp", args.race_timestamp)
+            cfg.add(config.Scope.applicationOverride, "system", "add.chart_type", args.chart_type)
+            cfg.add(config.Scope.applicationOverride, "system", "add.chart_name", args.chart_name)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.dry_run", args.dry_run)
+            dispatch_add(cfg)
         elif sub_command == "build":
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))

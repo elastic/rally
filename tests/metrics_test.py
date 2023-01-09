@@ -1010,6 +1010,60 @@ class TestEsRaceStore:
         self.es_mock.delete_by_query.assert_called_with(index="rally-results-*", body=expected_query)
         console.assert_called_with("Did not find [0101] in environment [unittest-env].")
 
+    @mock.patch("esrally.utils.console.println")
+    def test_delete_annotation(self, console):
+        self.es_mock.delete.return_value = {"result": "deleted"}
+        self.cfg.add(config.Scope.application, "system", "delete.id", "0101")
+        self.race_store.delete_annotation()
+        self.es_mock.delete.assert_called_with(index="rally-annotations", id="0101")
+        console.assert_called_with("Successfully deleted [0101].")
+
+    @mock.patch("esrally.utils.console.println")
+    @mock.patch("uuid.uuid4")
+    def test_add_annotation(self, id_uuid, console):
+        self.es_mock.delete_by_query.return_value = {"deleted": 0}
+        id_uuid.return_value = 7
+        self.cfg.add(config.Scope.application, "system", "admin.track", "unittest-track")
+        self.cfg.add(config.Scope.application, "system", "add.chart_type", "unittest-chart_type")
+        self.cfg.add(config.Scope.application, "system", "add.chart_name", "unittest-chart_name")
+        self.cfg.add(config.Scope.application, "system", "add.message", "Test Annotation")
+        self.cfg.add(config.Scope.application, "system", "add.race_timestamp", "20221217T200000Z")
+
+        item = {
+            "environment": "unittest-env",
+            "race-timestamp": "20221217T000000Z",
+            "track": "unittest-track",
+            "chart": "unittest-chart_type",
+            "chart-name": "unittest-chart_name",
+            "message": "Test Annotation",
+        }
+        self.race_store.add_annotation()
+        self.es_mock.index(index="rally-annotations", id=7, item=item)
+        console.assert_called_with("Successfully added annotation [7].")
+
+    @mock.patch("esrally.utils.console.println")
+    def test_list_annotations(self, console):
+        self.es_mock.search.return_value = {"hits": {"total": 0}}
+        self.cfg.add(config.Scope.application, "system", "admin.track", "unittest-track")
+        self.cfg.add(config.Scope.application, "system", "list.to_date", "20160131")
+        self.cfg.add(config.Scope.application, "system", "list.from_date", "20160230")
+        self.race_store.list_annotations()
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"environment": "unittest-env"}},
+                        {"range": {"race-timestamp": {"gte": "20160230", "lte": "20160131", "format": "basic_date"}}},
+                        {"term": {"track": "unittest-track"}},
+                    ]
+                }
+            },
+            "sort": [{"race-timestamp": "desc"}, {"track": "asc"}, {"chart": "asc"}],
+            "size": 100,
+        }
+        self.es_mock.search.assert_called_with(index="rally-annotations", body=expected_query)
+        console.assert_called_with("No annotations found in environment [unittest-env].")
+
     def test_filter_race(self):
         self.es_mock.search.return_value = {"hits": {"total": 0}}
         self.cfg.add(config.Scope.application, "system", "admin.track", "unittest")
