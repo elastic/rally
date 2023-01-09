@@ -231,7 +231,6 @@ class DeterministicScheduler(SimpleScheduler):
 
     name = "deterministic"
 
-    # pylint: disable=unused-variable
     def __init__(self, task, target_throughput):
         super().__init__()
         self.wait_time = 1 / target_throughput
@@ -255,7 +254,6 @@ class PoissonScheduler(SimpleScheduler):
 
     name = "poisson"
 
-    # pylint: disable=unused-variable
     def __init__(self, task, target_throughput):
         super().__init__()
         self.rate = target_throughput

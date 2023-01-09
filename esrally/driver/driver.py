@@ -255,15 +255,15 @@ class DriverActor(actor.RallyActor):
         if msg.childAddress in self.coordinator.workers:
             worker_index = self.coordinator.workers.index(msg.childAddress)
             if self.status == "exiting":
-                self.logger.info("Worker [%d] has exited.", worker_index)
+                self.logger.debug("Worker [%d] has exited.", worker_index)
             else:
                 self.logger.error("Worker [%d] has exited prematurely. Aborting benchmark.", worker_index)
                 self.send(self.start_sender, actor.BenchmarkFailure("Worker [{}] has exited prematurely.".format(worker_index)))
         else:
-            self.logger.info("A track preparator has exited.")
+            self.logger.debug("A track preparator has exited.")
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("Main driver received unknown message [%s] (ignoring).", str(msg))
+        self.logger.debug("Main driver received unknown message [%s] (ignoring).", str(msg))
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareBenchmark(self, msg, sender):
@@ -355,7 +355,7 @@ class DriverActor(actor.RallyActor):
             self.start_sender,
             PreparationComplete(
                 # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
-                # we should default to trial/basic, but let's default to oss for now to avoid breaking the chart generator
+                # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
                 cluster_version.get("build_flavor", "oss"),
                 cluster_version.get("number"),
                 cluster_version.get("build_hash"),
@@ -479,7 +479,7 @@ class TrackPreparationActor(actor.RallyActor):
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.info("ActorExitRequest received. Forwarding to children")
+        self.logger.debug("ActorExitRequest received. Forwarding to children")
         for child in self.children:
             self.send(child, msg)
 
@@ -727,7 +727,7 @@ class Driver:
         self.logger.info("Benchmark consists of [%d] steps executed by [%d] clients.", self.number_of_steps, len(self.allocations))
         # avoid flooding the log if there are too many clients
         if allocator.clients < 128:
-            self.logger.info("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
+            self.logger.debug("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
         create_api_keys = self.config.opts("client", "options").all_client_options["default"].get("create_api_key_per_client", None)
         worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
@@ -737,7 +737,7 @@ class Driver:
             for clients in assignment["workers"]:
                 # don't assign workers without any clients
                 if len(clients) > 0:
-                    self.logger.info("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
+                    self.logger.debug("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
                     worker = self.target.create_client(host, self.config)
 
                     client_allocations = ClientAllocations()
@@ -764,7 +764,7 @@ class Driver:
     def joinpoint_reached(self, worker_id, worker_local_timestamp, task_allocations):
         self.currently_completed += 1
         self.workers_completed_current_step[worker_id] = (worker_local_timestamp, time.perf_counter())
-        self.logger.info(
+        self.logger.debug(
             "[%d/%d] workers reached join point [%d/%d].",
             self.currently_completed,
             len(self.workers),
@@ -834,7 +834,7 @@ class Driver:
         for worker_id, worker in enumerate(self.workers):
             worker_ended_task_at, master_received_msg_at = workers_curr_step[worker_id]
             worker_start_timestamp = worker_ended_task_at + (start_next_task - master_received_msg_at)
-            self.logger.info(
+            self.logger.debug(
                 "Scheduling next task for worker id [%d] at their timestamp [%f] (master timestamp [%f])",
                 worker_id,
                 worker_start_timestamp,
@@ -1029,7 +1029,7 @@ class SamplePostprocessor:
                         sample_type=timing.sample_type,
                         absolute_time=timing.absolute_time,
                         relative_time=timing.relative_time,
-                        meta_data=meta_data,
+                        meta_data=timing.request_meta_data,
                     )
 
         end = time.perf_counter()
@@ -1212,7 +1212,7 @@ class Worker(actor.RallyActor):
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Drive(self, msg, sender):
         sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
-        self.logger.info(
+        self.logger.debug(
             "Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
             self.worker_id,
             self.current_task_index,
@@ -1259,7 +1259,7 @@ class Worker(actor.RallyActor):
                     # deserialized on the receiver so we convert it here to a plain string.
                     self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.worker_id), str(e)))
                 else:
-                    self.logger.info("Worker[%s] is ready for the next task.", str(self.worker_id))
+                    self.logger.debug("Worker[%s] is ready for the next task.", str(self.worker_id))
                     self.executor_future = None
                     self.drive()
             else:
@@ -1282,18 +1282,18 @@ class Worker(actor.RallyActor):
                 self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.info("Worker[%s] has received ActorExitRequest.", str(self.worker_id))
+        self.logger.debug("Worker[%s] has received ActorExitRequest.", str(self.worker_id))
         if self.executor_future is not None and self.executor_future.running():
             self.cancel.set()
         self.pool.shutdown()
-        self.logger.info("Worker[%s] is exiting due to ActorExitRequest.", str(self.worker_id))
+        self.logger.debug("Worker[%s] is exiting due to ActorExitRequest.", str(self.worker_id))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our no_retry infrastructure; forward to master
         self.send(self.master, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
+        self.logger.debug("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
 
     def drive(self):
         task_allocations = self.current_tasks_and_advance()
@@ -1302,7 +1302,7 @@ class Worker(actor.RallyActor):
             task_allocations = self.current_tasks_and_advance()
 
         if self.at_joinpoint():
-            self.logger.info("Worker[%d] reached join point at index [%d].", self.worker_id, self.current_task_index)
+            self.logger.debug("Worker[%d] reached join point at index [%d].", self.worker_id, self.current_task_index)
             # clients that don't execute tasks don't need to care about waiting
             if self.executor_future is not None:
                 self.executor_future.result()
@@ -1322,10 +1322,18 @@ class Worker(actor.RallyActor):
                     self.current_task_index,
                 )
             else:
-                self.logger.info("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
+                self.logger.debug("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
                 self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=self.sample_queue_size)
                 executor = AsyncIoAdapter(
-                    self.config, self.track, task_allocations, self.sampler, self.cancel, self.complete, self.on_error, self.client_contexts
+                    self.config,
+                    self.track,
+                    task_allocations,
+                    self.sampler,
+                    self.cancel,
+                    self.complete,
+                    self.on_error,
+                    self.client_contexts,
+                    self.worker_id,
                 )
 
                 self.executor_future = self.pool.submit(executor)
@@ -1475,16 +1483,18 @@ class Sample:
     def dependent_timings(self):
         if self._dependent_timing:
             for t in self._dependent_timing:
+                timing = t.pop("dependent_timing")
+                meta_data = self._merge(self.request_meta_data, t)
                 yield Sample(
                     self.client_id,
-                    t["absolute_time"],
-                    t["request_start"],
+                    timing["absolute_time"],
+                    timing["request_start"],
                     self.task_start,
                     self.task,
                     self.sample_type,
-                    self.request_meta_data,
+                    meta_data,
                     0,
-                    t["service_time"],
+                    timing["service_time"],
                     0,
                     0,
                     self.total_ops,
@@ -1492,8 +1502,8 @@ class Sample:
                     self.time_period,
                     self.percent_completed,
                     None,
-                    t["operation"],
-                    t["operation-type"],
+                    timing["operation"],
+                    timing["operation-type"],
                 )
 
     def __repr__(self, *args, **kwargs):
@@ -1502,6 +1512,13 @@ class Sample:
             f"[{self.sample_type}]: [{self.latency}s] request latency, [{self.service_time}s] service time, "
             f"[{self.total_ops} {self.total_ops_unit}]"
         )
+
+    def _merge(self, *args):
+        result = {}
+        for arg in args:
+            if arg is not None:
+                result.update(arg)
+        return result
 
 
 def select_challenge(config, t):
@@ -1678,7 +1695,7 @@ class ThroughputCalculator:
 
 
 class AsyncIoAdapter:
-    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts):
+    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
         self.cfg = cfg
         self.track = track
         self.task_allocations = task_allocations
@@ -1687,6 +1704,7 @@ class AsyncIoAdapter:
         self.complete = complete
         self.abort_on_error = abort_on_error
         self.client_contexts = client_contexts
+        self.parent_worker_id = worker_id
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
         self.assertions_enabled = self.cfg.opts("driver", "assertions")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
@@ -1720,7 +1738,8 @@ class AsyncIoAdapter:
                 es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async(api_key=api_key)
             return es
 
-        self.logger.info("Task assertions enabled: %s", str(self.assertions_enabled))
+        if self.assertions_enabled:
+            self.logger.info("Task assertions enabled")
         runner.enable_assertions(self.assertions_enabled)
 
         clients = []
@@ -1740,20 +1759,24 @@ class AsyncIoAdapter:
             )
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
             aws.append(final_executor())
+        task_names = [t.task.task.name for t in self.task_allocations]
+        self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
         run_start = time.perf_counter()
         try:
             _ = await asyncio.gather(*aws)
         finally:
             run_end = time.perf_counter()
-            self.logger.info("Total run duration: %f seconds.", (run_end - run_start))
+            self.logger.info(
+                "Worker[%s] finished executing tasks %s in %f seconds", self.parent_worker_id, task_names, (run_end - run_start)
+            )
             await asyncio.get_event_loop().shutdown_asyncgens()
             shutdown_asyncgens_end = time.perf_counter()
-            self.logger.info("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
+            self.logger.debug("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
             for c in clients:
                 for es in c.values():
                     await es.close()
             transport_close_end = time.perf_counter()
-            self.logger.info("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
+            self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
 
 
 class AsyncProfiler:
@@ -2203,7 +2226,7 @@ def schedule_for(task_allocation, parameter_source):
     # guard all logging statements with the client index and only emit them for the first client. This information is
     # repetitive and may cause issues in thespian with many clients (an excessive number of actor messages is sent).
     if client_index == 0:
-        logger.info("Choosing [%s] for [%s].", sched, task)
+        logger.debug("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)
     params_for_op = parameter_source.partition(client_index, task.clients)
     if hasattr(sched, "parameter_source"):
@@ -2233,7 +2256,7 @@ def schedule_for(task_allocation, parameter_source):
         else:
             iterations = None
         if client_index == 0:
-            logger.info(
+            logger.debug(
                 "Creating iteration-count based schedule with [%s] distribution for [%s] with [%s] warmup "
                 "iterations and [%s] iterations.",
                 task.schedule,
@@ -2245,9 +2268,9 @@ def schedule_for(task_allocation, parameter_source):
 
     if client_index == 0:
         if loop_control.infinite:
-            logger.info("Parameter source will determine when the schedule for [%s] terminates.", task.name)
+            logger.debug("Parameter source will determine when the schedule for [%s] terminates.", task.name)
         else:
-            logger.info("%s schedule will determine when the schedule for [%s] terminates.", str(loop_control), task.name)
+            logger.debug("%s schedule will determine when the schedule for [%s] terminates.", str(loop_control), task.name)
 
     return ScheduleHandle(task_allocation, sched, loop_control, runner_for_op, params_for_op)
 

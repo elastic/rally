@@ -219,8 +219,14 @@ class BareProvisioner:
         plugin_variables = {}
         mandatory_plugins = []
         for installer in self.plugin_installers:
-            mandatory_plugins.append(installer.plugin_name)
             plugin_variables.update(installer.variables)
+            if installer.plugin.moved_to_module:
+                self.logger.info(
+                    "Skipping adding plugin [%s] to cluster setting 'plugin.mandatory' as it has been moved to a module",
+                    installer.plugin_name,
+                )
+            else:
+                mandatory_plugins.append(installer.plugin_name)
 
         cluster_settings = {}
         if mandatory_plugins:

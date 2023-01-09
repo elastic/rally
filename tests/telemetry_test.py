@@ -295,6 +295,19 @@ class TestJfr:
             "filename=/var/log/test-recording.jfr,settings=profile",
         ]
 
+    def test_sets_options_for_java_11_or_above_custom_delay_duration_recording_template(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"recording-template": "profile", "jfr-duration": "20m", "jfr-delay": "10s"},
+            log_root="/var/log",
+            java_major_version=random.randint(11, 999),
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,delay=10s,duration=20m,settings=profile",
+        ]
+
 
 class TestGc:
     def test_sets_options_for_pre_java_9(self):

@@ -16,6 +16,7 @@
 # under the License.
 
 import collections
+import datetime
 import glob
 import json
 import logging
@@ -64,6 +65,12 @@ class EsClient:
 
     def delete_template(self, name):
         self.guarded(self._client.indices.delete_template, name=name)
+
+    def delete_by_query(self, index, body):
+        return self.guarded(self._client.delete_by_query, index=index, body=body)
+
+    def delete(self, index, id):
+        return self.guarded(self._client.delete, index=index, id=id, ignore=404)
 
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
@@ -303,37 +310,6 @@ def metrics_store_class(cfg):
         return InMemoryMetricsStore
 
 
-def extract_user_tags_from_config(cfg):
-    """
-    Extracts user tags into a structured dict
-
-    :param cfg: The current configuration object.
-    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
-    """
-    user_tags = cfg.opts("race", "user.tag", mandatory=False)
-    return extract_user_tags_from_string(user_tags)
-
-
-def extract_user_tags_from_string(user_tags):
-    """
-    Extracts user tags into a structured dict
-
-    :param user_tags: A string containing user tags (tags separated by comma, key and value separated by colon).
-    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
-    """
-    user_tags_dict = {}
-    if user_tags and user_tags.strip() != "":
-        try:
-            for user_tag in user_tags.split(","):
-                user_tag_key, user_tag_value = user_tag.split(":")
-                user_tags_dict[user_tag_key] = user_tag_value
-        except ValueError:
-            msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
-            logging.getLogger(__name__).exception(msg)
-            raise exceptions.SystemSetupError(msg)
-    return user_tags_dict
-
-
 class SampleType(IntEnum):
     Warmup = 0
     Normal = 1
@@ -413,7 +389,7 @@ class MetricsStore:
             self._car,
         )
 
-        user_tags = extract_user_tags_from_config(self._config)
+        user_tags = self._config.opts("race", "user.tags", default_value={}, mandatory=False)
         for k, v in user_tags.items():
             # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
             self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % k, v)
@@ -1255,6 +1231,10 @@ def results_store(cfg):
         return NoopResultsStore()
 
 
+def delete_race(cfg):
+    race_store(cfg).delete_race()
+
+
 def list_races(cfg):
     def format_dict(d):
         if d:
@@ -1270,12 +1250,14 @@ def list_races(cfg):
                 race.race_id,
                 time.to_iso8601(race.race_timestamp),
                 race.track,
-                format_dict(race.track_params),
                 race.challenge_name,
                 race.car_name,
-                format_dict(race.user_tags),
+                race.distribution_version,
+                race.revision,
+                race.rally_version,
                 race.track_revision,
                 race.team_revision,
+                format_dict(race.user_tags),
             ]
         )
 
@@ -1288,12 +1270,14 @@ def list_races(cfg):
                     "Race ID",
                     "Race Timestamp",
                     "Track",
-                    "Track Parameters",
                     "Challenge",
                     "Car",
-                    "User Tags",
+                    "ES Version",
+                    "Revision",
+                    "Rally Version",
                     "Track Revision",
                     "Team Revision",
+                    "User Tags",
                 ],
             )
         )
@@ -1307,7 +1291,7 @@ def create_race(cfg, track, challenge, track_revision=None):
     environment = cfg.opts("system", "env.name")
     race_id = cfg.opts("system", "race.id")
     race_timestamp = cfg.opts("system", "time.start")
-    user_tags = extract_user_tags_from_config(cfg)
+    user_tags = cfg.opts("race", "user.tags", default_value={}, mandatory=False)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
     car_params = cfg.opts("mechanic", "car.params")
@@ -1520,11 +1504,44 @@ class RaceStore:
     def list(self):
         raise NotImplementedError("abstract method")
 
+    def delete_race(self):
+        raise NotImplementedError("abstract method")
+
     def store_race(self, race):
         raise NotImplementedError("abstract method")
 
     def _max_results(self):
-        return int(self.cfg.opts("system", "list.races.max_results"))
+        return int(self.cfg.opts("system", "list.max_results"))
+
+    def _track(self):
+        return self.cfg.opts("system", "admin.track", mandatory=False)
+
+    def _benchmark_name(self):
+        return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
+
+    def _race_timestamp(self):
+        return self.cfg.opts("system", "add.race_timestamp")
+
+    def _message(self):
+        return self.cfg.opts("system", "add.message")
+
+    def _chart_type(self):
+        return self.cfg.opts("system", "add.chart_type", mandatory=False)
+
+    def _chart_name(self):
+        return self.cfg.opts("system", "add.chart_name", mandatory=False)
+
+    def _from_date(self):
+        return self.cfg.opts("system", "list.from_date", mandatory=False)
+
+    def _to_date(self):
+        return self.cfg.opts("system", "list.to_date", mandatory=False)
+
+    def _dry_run(self):
+        return self.cfg.opts("system", "admin.dry_run", mandatory=False)
+
+    def _id(self):
+        return self.cfg.opts("system", "delete.id")
 
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
@@ -1546,6 +1563,9 @@ class CompositeRaceStore:
         self.file_store.store_race(race)
         self.es_store.store_race(race)
 
+    def delete_race(self):
+        return self.es_store.delete_race()
+
     def list(self):
         return self.es_store.list()
 
@@ -1560,6 +1580,9 @@ class FileRaceStore(RaceStore):
 
     def _race_file(self, race_id=None):
         return os.path.join(paths.race_root(cfg=self.cfg, race_id=race_id), "race.json")
+
+    def delete_race(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
 
     def list(self):
         results = glob.glob(self._race_file(race_id="*"))
@@ -1576,6 +1599,11 @@ class FileRaceStore(RaceStore):
 
     def _to_races(self, results):
         races = []
+        track = self._track()
+        name = self._benchmark_name()
+        pattern = "%Y%m%d"
+        from_date = self._from_date()
+        to_date = self._to_date()
         for result in results:
             # noinspection PyBroadException
             try:
@@ -1583,6 +1611,18 @@ class FileRaceStore(RaceStore):
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
                 logging.getLogger(__name__).exception("Could not load race file [%s] (incompatible format?) Skipping...", result)
+
+        if track:
+            races = filter(lambda r: r.track == track, races)
+        if name:
+            filtered_on_name = filter(lambda r: r.user_tags.get("name") == name, races)
+            filtered_on_benchmark_name = filter(lambda r: r.user_tags.get("benchmark-name") == name, races)
+            races = list(filtered_on_name) + list(filtered_on_benchmark_name)
+        if from_date:
+            races = filter(lambda r: r.race_timestamp.date() >= datetime.datetime.strptime(from_date, pattern).date(), races)
+        if to_date:
+            races = filter(lambda r: r.race_timestamp.date() <= datetime.datetime.strptime(to_date, pattern).date(), races)
+
         return sorted(races, key=lambda r: r.race_timestamp, reverse=True)
 
 
@@ -1611,13 +1651,38 @@ class EsRaceStore(RaceStore):
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
+    def delete_race(self):
+        races = self._id().split(",")
+        environment = self.environment_name
+        if self._dry_run():
+            if len(races) == 1:
+                console.println(f"Would delete race with id {races[0]} in environment {environment}.")
+            else:
+                console.println(f"Would delete {len(races)} races: {races} in environment {environment}.")
+        else:
+            for race_id in races:
+                selector = {"query": {"bool": {"filter": [{"term": {"environment": environment}}, {"term": {"race-id": race_id}}]}}}
+                self.client.delete_by_query(index="rally-races-*", body=selector)
+                self.client.delete_by_query(index="rally-metrics-*", body=selector)
+                result = self.client.delete_by_query(index="rally-results-*", body=selector)
+                if result["deleted"] > 0:
+                    console.println(f"Successfully deleted [{race_id}] in environment [{environment}].")
+                else:
+                    console.println(f"Did not find [{race_id}] in environment [{environment}].")
+
     def list(self):
+        track = self._track()
+        name = self._benchmark_name()
+        from_date = self._from_date()
+        to_date = self._to_date()
+
         filters = [
             {
                 "term": {
                     "environment": self.environment_name,
                 },
-            }
+            },
+            {"range": {"race-timestamp": {"gte": from_date, "lte": to_date, "format": "basic_date"}}},
         ]
 
         query = {
@@ -1635,6 +1700,13 @@ class EsRaceStore(RaceStore):
                 },
             ],
         }
+        if track:
+            query["query"]["bool"]["filter"].append({"term": {"track": track}})
+        if name:
+            query["query"]["bool"]["filter"].append(
+                {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}
+            )
+
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+

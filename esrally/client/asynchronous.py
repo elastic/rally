@@ -152,7 +152,6 @@ class ResponseMatcher:
 
     @staticmethod
     def always():
-        # pylint: disable=unused-variable
         def f(p):
             return True
 
@@ -249,7 +248,7 @@ class AIOHttpConnection(elasticsearch.AIOHttpConnection):
             connector = StaticConnector(limit=self._limit, enable_cleanup_closed=self._enable_cleanup_closed)
         else:
             connector = aiohttp.TCPConnector(
-                limit=self._limit, use_dns_cache=True, ssl_context=self._ssl_context, enable_cleanup_closed=self._enable_cleanup_closed
+                limit=self._limit, use_dns_cache=True, ssl=self._ssl_context, enable_cleanup_closed=self._enable_cleanup_closed
             )
 
         self.session = aiohttp.ClientSession(

@@ -158,7 +158,6 @@ def stop(cfg):
 
         metrics_store.close()
 
-    # TODO: Do we need to expose this as a separate command as well?
     provisioner.cleanup(
         preserve=cfg.opts("mechanic", "preserve.install"), install_dir=node_config.binary_path, data_paths=node_config.data_paths
     )
@@ -349,7 +348,7 @@ class MechanicActor(actor.RallyActor):
         self.externally_provisioned = False
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
+        self.logger.debug("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
 
     def receiveMsg_ChildActorExited(self, msg, sender):
         if self.is_current_status_expected(["cluster_stopping", "cluster_stopped"]):

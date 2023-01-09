@@ -120,6 +120,13 @@ def create(cfg, sources, distribution, car, plugins=None):
         suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))
 
     for plugin in plugins:
+        if plugin.moved_to_module:
+            # TODO: https://github.com/elastic/rally/issues/1622
+            # If it is listed as a core plugin (i.e. a user has overriden the team's path or revision), then we will build
+            # We still need to use the post-install hooks to configure the keystore, so don't remove from list of plugins
+            logger.info("Plugin [%s] is now an Elasticsearch module and no longer needs to be built from source.", plugin.name)
+            continue
+
         supplier_type, plugin_version, _ = supply_requirements[plugin.name]
 
         if supplier_type == "source":
@@ -188,7 +195,10 @@ def _supply_requirements(sources, distribution, plugins, revisions, distribution
         supply_requirements["elasticsearch"] = ("distribution", _required_version(distribution_version), False)
 
     for plugin in plugins:
-        if plugin.core_plugin:
+        if plugin.moved_to_module:
+            # TODO: https://github.com/elastic/rally/issues/1622
+            continue
+        elif plugin.core_plugin:
             # core plugins are entirely dependent upon Elasticsearch.
             supply_requirements[plugin.name] = supply_requirements["elasticsearch"]
         else:
@@ -759,7 +769,7 @@ class Builder:
         log_file = os.path.join(self.log_dir, "build.log")
 
         # we capture all output to a dedicated build log file
-        build_cmd = "export JAVA_HOME={}; cd {}; {} > {} 2>&1".format(self.java_home, src_dir, command, log_file)
+        build_cmd = "export JAVA_HOME={}; cd {}; {} >> {} 2>&1".format(self.java_home, src_dir, command, log_file)
         console.info("Creating installable binary from source files")
         self.logger.info("Running build command [%s]", build_cmd)
 
@@ -855,8 +865,16 @@ class DockerBuilder:
 
     def check_container_return_code(self, completion, container_name):
         if completion["StatusCode"] != 0:
-            raise SystemSetupError(
-                f"Docker container [{container_name}] failed with status code [{completion['StatusCode']}]: Error [{completion['Error']}]"
+            msg = f"Executing '{container_name}' failed. The last 20 lines in the build.log file are:\n"
+            msg += "=========================================================================================================\n"
+            with open(self.log_file, "r", encoding="utf-8") as f:
+                msg += "\t"
+                msg += "\t".join(f.readlines()[-20:])
+            msg += "=========================================================================================================\n"
+            msg += f"The full build log is available at [{self.log_file}]"
+            raise BuildError(
+                f"Docker container [{container_name}] failed with status code [{completion['StatusCode']}]: "
+                f"Error [{completion['Error']}]: Build log output [{msg}]"
             )
         self.logger.info("Container [%s] completed successfully.", container_name)
 

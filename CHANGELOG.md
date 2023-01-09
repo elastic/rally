@@ -1,3 +1,54 @@
+### 2.7.0
+
+#### Highlights
+
+* [#1574](https://github.com/elastic/rally/pull/1574): Include a new downsampling operation
+* [#1531](https://github.com/elastic/rally/pull/1531): Support data streams in create-track
+* [#1517](https://github.com/elastic/rally/pull/1517): Remove the check for internet connection
+
+#### Enhancements
+
+* [#1599](https://github.com/elastic/rally/pull/1599): add `--user-tags` as alias for `--user-tag`
+* [#1597](https://github.com/elastic/rally/pull/1597): Add additional filter options to rally list races
+* [#1591](https://github.com/elastic/rally/pull/1591): Support checking out remote branches
+* [#1588](https://github.com/elastic/rally/pull/1588): Fail benchmark if assertion could not run
+* [#1576](https://github.com/elastic/rally/pull/1576): Add build subcommand
+* [#1573](https://github.com/elastic/rally/pull/1573): Add knn vectors to disk-usage-stats
+* [#1551](https://github.com/elastic/rally/pull/1551): Switch from setuptools to hatchling
+* [#1542](https://github.com/elastic/rally/pull/1542): Add new wait-for-current-snapshots-create operation
+* [#1541](https://github.com/elastic/rally/pull/1541): Update opts.py to allow for 'None' timeout-value in client_options
+
+#### Bug Fixes
+
+* [#1586](https://github.com/elastic/rally/pull/1586): Fix supplier tests for aarch64
+* [#1580](https://github.com/elastic/rally/pull/1580): Remove buggy indices.exists() calls from code
+* [#1578](https://github.com/elastic/rally/pull/1578): Correctly retry HTTP downloads after incomplete reads
+* [#1563](https://github.com/elastic/rally/pull/1563): Fix multi-cluster attribute check for wrapped runners
+* [#1540](https://github.com/elastic/rally/pull/1540): Don't load libs path if not using it
+
+#### Doc Changes
+
+* [#1600](https://github.com/elastic/rally/pull/1600): Add docs for create-track from data streams 
+* [#1572](https://github.com/elastic/rally/pull/1572): Mention that create/restore-snapshot is an administrative operation
+* [#1568](https://github.com/elastic/rally/pull/1568): Encourage users to read tracks documentation
+* [#1557](https://github.com/elastic/rally/pull/1557): Remove duplicate property descriptions from corpora docs
+* [#1554](https://github.com/elastic/rally/pull/1554): Link to the 7.14.0 ES Python client docs.
+* [#1552](https://github.com/elastic/rally/pull/1552): Fix broken links on README.md
+
+#### Miscellaneous Changes
+
+* [#1579](https://github.com/elastic/rally/pull/1579): Use narrower exception to avoid pylint ignore
+* [#1571](https://github.com/elastic/rally/pull/1571): Stop trying to test Elasticsearch 6.8.0 on ARM
+* [#1565](https://github.com/elastic/rally/pull/1565): Fix `make lint` on Python 3.10
+* [#1564](https://github.com/elastic/rally/pull/1564): Introduce rally-tracks compatibility testing
+* [#1555](https://github.com/elastic/rally/pull/1555): Add an integration test for static responses.
+* [#1553](https://github.com/elastic/rally/pull/1553): Run unit and integration tests in separate tox environments
+* [#1548](https://github.com/elastic/rally/pull/1548): Move most packaging metadata to pyproject.toml
+* [#1546](https://github.com/elastic/rally/pull/1546): Run lint with pre-commit
+* [#1539](https://github.com/elastic/rally/pull/1539): Correctly log how long it took to close transports
+* [#1498](https://github.com/elastic/rally/pull/1498): Bump upper tested version to 8.4.0
+* [#1497](https://github.com/elastic/rally/pull/1497): Remove Elasticsearch 6.3 logic
+
 ### 2.6.0
 
 #### Highlights

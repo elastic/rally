@@ -229,6 +229,8 @@ class FlightRecorder(TelemetryDevice):
 
     def java_opts(self, log_file):
         recording_template = self.telemetry_params.get("recording-template")
+        delay = self.telemetry_params.get("jfr-delay")
+        duration = self.telemetry_params.get("jfr-duration")
         java_opts = ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints"]
         jfr_cmd = ""
         if self.java_major_version < 11:
@@ -238,18 +240,22 @@ class FlightRecorder(TelemetryDevice):
             java_opts.append("-XX:+FlightRecorder")
             java_opts.append("-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={}".format(log_file))
             jfr_cmd = "-XX:StartFlightRecording=defaultrecording=true"
-            if recording_template:
-                self.logger.info("jfr: Using recording template [%s].", recording_template)
-                jfr_cmd += ",settings={}".format(recording_template)
-            else:
-                self.logger.info("jfr: Using default recording template.")
         else:
             jfr_cmd += "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={}".format(log_file)
-            if recording_template:
-                self.logger.info("jfr: Using recording template [%s].", recording_template)
-                jfr_cmd += ",settings={}".format(recording_template)
-            else:
-                self.logger.info("jfr: Using default recording template.")
+
+        if delay:
+            self.logger.info("jfr: Using delay [%s].", delay)
+            jfr_cmd += f",delay={delay}"
+
+        if duration:
+            self.logger.info("jfr: Using duration [%s].", duration)
+            jfr_cmd += f",duration={duration}"
+
+        if recording_template:
+            self.logger.info("jfr: Using recording template [%s].", recording_template)
+            jfr_cmd += f",settings={recording_template}"
+        else:
+            self.logger.info("jfr: Using default recording template.")
         java_opts.append(jfr_cmd)
         return java_opts
 
@@ -1440,8 +1446,6 @@ class IngestPipelineStats(InternalTelemetryDevice):
         self.logger.info("Gathering Ingest Pipeline stats at benchmark end")
         end_stats = self.get_ingest_pipeline_stats()
 
-        # The nesting level is ok here given the structure of the Ingest Pipeline stats
-        # pylint: disable=too-many-nested-blocks
         for cluster_name, node in end_stats.items():
             if cluster_name not in self.start_stats:
                 self.logger.warning(
