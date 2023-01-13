@@ -358,7 +358,7 @@ This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-n
 
     This command line parameter is experimental. Expect the functionality and the command line interface to change significantly even in patch releases.
 
-A comma-separated list if IP:transport port pairs used to specify the seed hosts in the cluster when a node is setup via the ``install`` subcommand. See the `Elasticsearch documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery-settings.html#modules-discovery-settings>`_ for a detailed explanation of the seed hosts parameter. Example::
+A comma-separated list if IP:transport port pairs used to specify the seed hosts in the cluster when a node is setup via the ``install`` subcommand. See the `Elasticsearch documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/important-settings.html#unicast.hosts>`_ for a detailed explanation of the seed hosts parameter. Example::
 
     --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300"
 
