@@ -2146,7 +2146,8 @@ class TestNodeStatsRecorder:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         node_name = [self.node_stats_response["nodes"][node]["name"] for node in self.node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
+        roles = [self.node_stats_response["nodes"][node]["roles"] for node in self.node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
 
         telemetry_params = {}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
@@ -2396,7 +2397,8 @@ class TestNodeStatsRecorder:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
+        roles = [node_stats_response["nodes"][node]["roles"] for node in node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
         telemetry_params = {"node-stats-include-indices": True}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
@@ -2732,7 +2734,8 @@ class TestNodeStatsRecorder:
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
+        roles = [node_stats_response["nodes"][node]["roles"] for node in node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
         telemetry_params = {"node-stats-include-indices-metrics": "refresh,docs"}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
