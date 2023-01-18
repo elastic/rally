@@ -259,7 +259,6 @@ def bootstrap_actor_system(try_join=False, prefer_local_only=False, local_ip=Non
         if coordinator_ip:
             # Make the coordinator node the convention leader
             capabilities["Convention Address.IPv4"] = "%s:1900" % coordinator_ip
-        print(system_base, capabilities)
         logger.info("Starting actor system with system base [%s] and capabilities [%s].", system_base, capabilities)
         return thespian.actors.ActorSystem(system_base, logDefs=log.load_configuration(), capabilities=capabilities)
     except thespian.actors.ActorSystemException:
