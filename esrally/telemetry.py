@@ -829,7 +829,8 @@ class NodeStatsRecorder:
         current_sample = self.sample()
         for node_stats in current_sample:
             node_name = node_stats["name"]
-            metrics_store_meta_data = {"cluster": self.cluster_name, "node_name": node_name}
+            roles = node_stats["roles"]
+            metrics_store_meta_data = {"cluster": self.cluster_name, "node_name": node_name, "roles": roles}
             collected_node_stats = collections.OrderedDict()
             collected_node_stats["name"] = "node-stats"
 
