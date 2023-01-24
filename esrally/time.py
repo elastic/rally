@@ -37,7 +37,7 @@ def to_iso8601(dt):
     return "%04d%02d%02dT%02d%02d%02dZ" % (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
 
-def from_is8601(ts):
+def from_iso8601(ts):
     """
     Convert an ISO-8601 compliant string (as created by ``to_iso8601(dt)``) to a datetime instance.
 
