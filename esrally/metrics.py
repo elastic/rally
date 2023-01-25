@@ -27,6 +27,7 @@ import random
 import statistics
 import sys
 import time
+import uuid
 import zlib
 from enum import Enum, IntEnum
 from http.client import responses
@@ -66,12 +67,17 @@ class EsClient:
     def delete_template(self, name):
         self.guarded(self._client.indices.delete_template, name=name)
 
+    def delete_by_query(self, index, body):
+        return self.guarded(self._client.delete_by_query, index=index, body=body)
+
+    def delete(self, index, id):
+        return self.guarded(self._client.delete, index=index, id=id, ignore=404)
+
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
-    def create_index(self, index):
-        # ignore 400 cause by IndexAlreadyExistsException when creating an index
-        return self.guarded(self._client.indices.create, index=index, ignore=400)
+    def create_index(self, index, body=None):
+        return self.guarded(self._client.indices.create, index=index, body=body, ignore=400)
 
     def exists(self, index):
         return self.guarded(self._client.indices.exists, index=index)
@@ -148,6 +154,15 @@ class EsClient:
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.TransportError as e:
+                if e.status_code == 404 and e.error == "index_not_found_exception":
+                    node = self._client.transport.hosts[0]
+                    msg = (
+                        "The operation [%s] against your Elasticsearch metrics store on "
+                        "host [%s] at port [%s] failed because index [%s] does not exist."
+                        % (target.__name__, node["host"], node["port"], kwargs.get("index"))
+                    )
+                    self.logger.exception(msg)
+                    raise exceptions.RallyError(msg)
                 if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
                     self.logger.debug(
                         "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
@@ -235,6 +250,9 @@ class IndexTemplateProvider:
 
     def results_template(self):
         return self._read("results-template")
+
+    def annotations_template(self):
+        return self._read("annotation-template")
 
     def _read(self, template_name):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
@@ -849,7 +867,7 @@ class EsMetricsStore(MetricsStore):
         self._client.refresh(index=self._index)
 
     def index_name(self):
-        ts = time.from_is8601(self._race_timestamp)
+        ts = time.from_iso8601(self._race_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
 
     def _migrated_index_name(self, original_name):
@@ -1225,6 +1243,22 @@ def results_store(cfg):
         return NoopResultsStore()
 
 
+def delete_race(cfg):
+    race_store(cfg).delete_race()
+
+
+def delete_annotation(cfg):
+    race_store(cfg).delete_annotation()
+
+
+def list_annotations(cfg):
+    race_store(cfg).list_annotations()
+
+
+def add_annotation(cfg):
+    race_store(cfg).add_annotation()
+
+
 def list_races(cfg):
     def format_dict(d):
         if d:
@@ -1464,7 +1498,7 @@ class Race:
             d.get("rally-revision"),
             d["environment"],
             d["race-id"],
-            time.from_is8601(d["race-timestamp"]),
+            time.from_iso8601(d["race-timestamp"]),
             d["pipeline"],
             user_tags,
             d["track"],
@@ -1494,23 +1528,53 @@ class RaceStore:
     def list(self):
         raise NotImplementedError("abstract method")
 
+    def delete_race(self):
+        raise NotImplementedError("abstract method")
+
+    def delete_annotation(self):
+        raise NotImplementedError("abstract method")
+
+    def list_annotations(self):
+        raise NotImplementedError("abstract method")
+
+    def add_annotation(self):
+        raise NotImplementedError("abstract method")
+
     def store_race(self, race):
         raise NotImplementedError("abstract method")
 
     def _max_results(self):
-        return int(self.cfg.opts("system", "list.races.max_results"))
+        return int(self.cfg.opts("system", "list.max_results"))
 
     def _track(self):
-        return self.cfg.opts("system", "list.races.track", mandatory=False)
+        return self.cfg.opts("system", "admin.track", mandatory=False)
 
     def _benchmark_name(self):
         return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
 
+    def _race_timestamp(self):
+        return self.cfg.opts("system", "add.race_timestamp")
+
+    def _message(self):
+        return self.cfg.opts("system", "add.message")
+
+    def _chart_type(self):
+        return self.cfg.opts("system", "add.chart_type", mandatory=False)
+
+    def _chart_name(self):
+        return self.cfg.opts("system", "add.chart_name", mandatory=False)
+
     def _from_date(self):
-        return self.cfg.opts("system", "list.races.from_date", mandatory=False)
+        return self.cfg.opts("system", "list.from_date", mandatory=False)
 
     def _to_date(self):
-        return self.cfg.opts("system", "list.races.to_date", mandatory=False)
+        return self.cfg.opts("system", "list.to_date", mandatory=False)
+
+    def _dry_run(self):
+        return self.cfg.opts("system", "admin.dry_run", mandatory=False)
+
+    def _id(self):
+        return self.cfg.opts("system", "delete.id")
 
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
@@ -1532,6 +1596,18 @@ class CompositeRaceStore:
         self.file_store.store_race(race)
         self.es_store.store_race(race)
 
+    def delete_race(self):
+        return self.es_store.delete_race()
+
+    def delete_annotation(self):
+        return self.es_store.delete_annotation()
+
+    def list_annotations(self):
+        return self.es_store.list_annotations()
+
+    def add_annotation(self):
+        return self.es_store.add_annotation()
+
     def list(self):
         return self.es_store.list()
 
@@ -1546,6 +1622,18 @@ class FileRaceStore(RaceStore):
 
     def _race_file(self, race_id=None):
         return os.path.join(paths.race_root(cfg=self.cfg, race_id=race_id), "race.json")
+
+    def delete_race(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
+
+    def delete_annotation(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
+
+    def list_annotations(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
+
+    def add_annotation(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
 
     def list(self):
         results = glob.glob(self._race_file(race_id="*"))
@@ -1613,6 +1701,131 @@ class EsRaceStore(RaceStore):
     def index_name(self, race):
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+
+    def add_annotation(self):
+        def _at_midnight(race_timestamp):
+            TIMESTAMP_FMT = "%Y%m%dT%H%M%SZ"
+            date = datetime.datetime.strptime(race_timestamp, TIMESTAMP_FMT)
+            date = date.replace(hour=0, minute=0, second=0, tzinfo=datetime.timezone.utc)
+            return date.strftime(TIMESTAMP_FMT)
+
+        environment = self.environment_name
+        # To line up annotations with chart data points, use midnight of day N as this is
+        # what the chart use too.
+        race_timestamp = _at_midnight(self._race_timestamp())
+        track = self._track()
+        chart_type = self._chart_type()
+        chart_name = self._chart_name()
+        message = self._message()
+        annotation_id = str(uuid.uuid4())
+        dry_run = self._dry_run()
+
+        if dry_run:
+            console.println(
+                f"Would add annotation with message [{message}] for environment=[{environment}], race timestamp=[{race_timestamp}], "
+                f"track=[{track}], chart type=[{chart_type}], chart name=[{chart_name}]"
+            )
+        else:
+            if not self.client.exists(index="rally-annotations"):
+                body = self.index_template_provider.annotations_template()
+                self.client.create_index(index="rally-annotations", body=body)
+            self.client.index(
+                index="rally-annotations",
+                id=annotation_id,
+                item={
+                    "environment": environment,
+                    "race-timestamp": race_timestamp,
+                    "track": track,
+                    "chart": chart_type,
+                    "chart-name": chart_name,
+                    "message": message,
+                },
+            )
+            console.println(f"Successfully added annotation [{annotation_id}].")
+
+    def list_annotations(self):
+        environment = self.environment_name
+        track = self._track()
+        from_date = self._from_date()
+        to_date = self._to_date()
+        query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"environment": environment}},
+                        {"range": {"race-timestamp": {"gte": from_date, "lte": to_date, "format": "basic_date"}}},
+                    ]
+                }
+            }
+        }
+        if track:
+            query["query"]["bool"]["filter"].append({"term": {"track": track}})
+
+        query["sort"] = [{"race-timestamp": "desc"}, {"track": "asc"}, {"chart": "asc"}]
+        query["size"] = self._max_results()
+
+        result = self.client.search(index="rally-annotations", body=query)
+        annotations = []
+        hits = result["hits"]["total"]
+        if hits == 0:
+            console.println(f"No annotations found in environment [{environment}].")
+        else:
+            for hit in result["hits"]["hits"]:
+                src = hit["_source"]
+                annotations.append(
+                    [
+                        hit["_id"],
+                        src["race-timestamp"],
+                        src.get("track", ""),
+                        src.get("chart", ""),
+                        src.get("chart-name", ""),
+                        src["message"],
+                    ]
+                )
+
+            if annotations:
+                console.println("\nAnnotations:\n")
+                console.println(
+                    tabulate.tabulate(
+                        annotations,
+                        headers=["Annotation Id", "Timestamp", "Track", "Chart Type", "Chart Name", "Message"],
+                    )
+                )
+
+    def delete_annotation(self):
+        annotations = self._id().split(",")
+        environment = self.environment_name
+        if self._dry_run():
+            if len(annotations) == 1:
+                console.println(f"Would delete annotation with id [{annotations[0]}] in environment [{environment}].")
+            else:
+                console.println(f"Would delete {len(annotations)} annotations: {annotations} in environment [{environment}].")
+        else:
+            for annotation_id in annotations:
+                result = self.client.delete(index="rally-annotations", id=annotation_id)
+                if result["result"] == "deleted":
+                    console.println(f"Successfully deleted [{annotation_id}].")
+                else:
+                    console.println(f"Did not find [{annotation_id}] in environment [{environment}].")
+
+    def delete_race(self):
+        races = self._id().split(",")
+        environment = self.environment_name
+        if self._dry_run():
+            if len(races) == 1:
+                console.println(f"Would delete race with id {races[0]} in environment {environment}.")
+            else:
+                console.println(f"Would delete {len(races)} races: {races} in environment {environment}.")
+        else:
+            for race_id in races:
+                selector = {"query": {"bool": {"filter": [{"term": {"environment": environment}}, {"term": {"race-id": race_id}}]}}}
+                self.client.delete_by_query(index="rally-races-*", body=selector)
+                self.client.delete_by_query(index="rally-metrics-*", body=selector)
+                result = self.client.delete_by_query(index="rally-results-*", body=selector)
+                if result["deleted"] > 0:
+                    console.println(f"Successfully deleted [{race_id}] in environment [{environment}].")
+                else:
+                    console.println(f"Did not find [{race_id}] in environment [{environment}].")
 
     def list(self):
         track = self._track()

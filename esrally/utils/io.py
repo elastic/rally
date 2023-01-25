@@ -26,7 +26,6 @@ import shutil
 import subprocess
 import tarfile
 import zipfile
-from contextlib import suppress
 
 from esrally.utils import console
 
@@ -97,9 +96,7 @@ class MmapSource:
     def open(self):
         self.f = open(self.file_name, mode="r+b")
         self.mm = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
-        # madvise is available in Python 3.8+
-        with suppress(AttributeError):
-            self.mm.madvise(mmap.MADV_SEQUENTIAL)
+        self.mm.madvise(mmap.MADV_SEQUENTIAL)
 
         # allow for chaining
         return self

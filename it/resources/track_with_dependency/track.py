@@ -1,5 +1,8 @@
 async def noop(es, params):
     # pylint: disable=import-outside-toplevel,import-error
+    # We want to use a library that will never be a Rally dependency, otherwise the test
+    # could succeed regardless of whether the dependencies function actually succeeds.
+    # For this reason we're using pytoml, which was deprecated long ago
     import pytoml as toml
 
     ret_val = {}

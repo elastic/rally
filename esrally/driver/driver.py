@@ -355,7 +355,7 @@ class DriverActor(actor.RallyActor):
             self.start_sender,
             PreparationComplete(
                 # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
-                # we should default to trial/basic, but let's default to oss for now to avoid breaking the chart generator
+                # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
                 cluster_version.get("build_flavor", "oss"),
                 cluster_version.get("number"),
                 cluster_version.get("build_hash"),
@@ -1029,7 +1029,7 @@ class SamplePostprocessor:
                         sample_type=timing.sample_type,
                         absolute_time=timing.absolute_time,
                         relative_time=timing.relative_time,
-                        meta_data=meta_data,
+                        meta_data=timing.request_meta_data,
                     )
 
         end = time.perf_counter()
@@ -1483,16 +1483,18 @@ class Sample:
     def dependent_timings(self):
         if self._dependent_timing:
             for t in self._dependent_timing:
+                timing = t.pop("dependent_timing")
+                meta_data = self._merge(self.request_meta_data, t)
                 yield Sample(
                     self.client_id,
-                    t["absolute_time"],
-                    t["request_start"],
+                    timing["absolute_time"],
+                    timing["request_start"],
                     self.task_start,
                     self.task,
                     self.sample_type,
-                    self.request_meta_data,
+                    meta_data,
                     0,
-                    t["service_time"],
+                    timing["service_time"],
                     0,
                     0,
                     self.total_ops,
@@ -1500,8 +1502,8 @@ class Sample:
                     self.time_period,
                     self.percent_completed,
                     None,
-                    t["operation"],
-                    t["operation-type"],
+                    timing["operation"],
+                    timing["operation-type"],
                 )
 
     def __repr__(self, *args, **kwargs):
@@ -1510,6 +1512,13 @@ class Sample:
             f"[{self.sample_type}]: [{self.latency}s] request latency, [{self.service_time}s] service time, "
             f"[{self.total_ops} {self.total_ops_unit}]"
         )
+
+    def _merge(self, *args):
+        result = {}
+        for arg in args:
+            if arg is not None:
+                result.update(arg)
+        return result
 
 
 def select_challenge(config, t):

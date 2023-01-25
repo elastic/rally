@@ -120,7 +120,7 @@ def checkout_revision(src_dir, *, revision):
 
 @probed
 def head_revision(src_dir):
-    return process.run_subprocess_with_output("git -C {0} rev-parse --short HEAD".format(io.escape_path(src_dir)))[0].strip()
+    return process.run_subprocess_with_output("git -C {0} rev-parse HEAD".format(io.escape_path(src_dir)))[0].strip()
 
 
 @probed

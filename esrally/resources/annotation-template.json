@@ -1,0 +1,47 @@
+{
+  "settings": {
+    "number_of_shards": 1
+  },
+  "mappings": {
+    "dynamic_templates": [
+      {
+        "strings": {
+          "match": "*",
+          "match_mapping_type": "string",
+          "mapping": {
+            "type": "keyword"
+          }
+        }
+      }
+    ],
+    "properties": {
+      "environment": {
+        "type": "keyword"
+      },
+      "race-timestamp": {
+        "type": "date",
+        "fields": {
+          "raw": {
+            "type": "keyword"
+          }
+        },
+        "format": "basic_date_time_no_millis"
+      },
+      "user-tag": {
+        "type": "keyword"
+      },
+      "track": {
+        "type": "keyword"
+      },
+      "chart": {
+        "type": "keyword"
+      },
+      "chart-name": {
+        "type": "keyword"
+      },
+      "message": {
+        "type": "keyword"
+      }
+    }
+  }
+}

@@ -629,13 +629,13 @@ class BulkIndex(Runner):
             error_details.add((data["status"], None))
 
     def error_description(self, error_details):
-        error_description = ""
+        error_descriptions = []
         for status, reason in error_details:
             if reason:
-                error_description += "HTTP status: %s, message: %s" % (str(status), reason)
+                error_descriptions.append(f"HTTP status: {status}, message: {reason}")
             else:
-                error_description += "HTTP status: %s" % str(status)
-        return error_description
+                error_descriptions.append(f"HTTP status: {status}")
+        return " | ".join(sorted(error_descriptions))
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"
@@ -1015,11 +1015,29 @@ class Query(Runner):
             r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
 
             if detailed_results:
-                props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+                props = parse(
+                    r,
+                    [
+                        "hits.total",
+                        "hits.total.value",
+                        "hits.total.relation",
+                        "timed_out",
+                        "took",
+                        "_shards.total",
+                        "_shards.successful",
+                        "_shards.skipped",
+                        "_shards.failed",
+                    ],
+                )
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
                 timed_out = props.get("timed_out", False)
                 took = props.get("took", 0)
+
+                shards_total = props.get("_shards.total", 0)
+                shards_successful = props.get("_shards.successful", 0)
+                shards_skipped = props.get("_shards.skipped", 0)
+                shards_failed = props.get("_shards.failed", 0)
 
                 return {
                     "weight": 1,
@@ -1029,6 +1047,12 @@ class Query(Runner):
                     "hits_relation": hits_relation,
                     "timed_out": timed_out,
                     "took": took,
+                    "shards": {
+                        "total": shards_total,
+                        "successful": shards_successful,
+                        "skipped": shards_skipped,
+                        "failed": shards_failed,
+                    },
                 }
             else:
                 return {
@@ -1936,6 +1960,8 @@ class RawRequest(Runner):
         if not bool(headers):
             # counter-intuitive, but preserves prior behavior
             headers = None
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
 
         await es.perform_request(
             method=params.get("method", "GET"), path=path, headers=headers, body=params.get("body"), params=request_params
@@ -2592,9 +2618,16 @@ class Composite(Runner):
                     async with connection_limit:
                         async with runner:
                             response = await runner({"default": es}, item)
-                            timing = response.get("dependent_timing") if response else None
-                            if timing:
-                                timings.append(timing)
+                            if response:
+                                # TODO: support calculating dependent's throughput
+                                # drop weight and unit metadata but keep the rest
+                                response.pop("weight")
+                                response.pop("unit")
+                                timing = response.get("dependent_timing")
+                                if timing:
+                                    timings.append(response)
+                            else:
+                                timings.append(None)
 
                 else:
                     raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")

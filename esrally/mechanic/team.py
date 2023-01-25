@@ -435,6 +435,14 @@ class PluginDescriptor:
             r.append("%s = [%s]" % (prop, repr(value)))
         return ", ".join(r)
 
+    @property
+    def moved_to_module(self):
+        # For a BWC escape hatch we first check if the plugin is listed in rally-teams' "core-plugin.txt",
+        # thus allowing users to override the teams path or revision to include the repository-s3/azure/gcs plugins in
+        # "core-plugin.txt"
+        # TODO: https://github.com/elastic/rally/issues/1622
+        return self.name in ["repository-s3", "repository-gcs", "repository-azure"] and not self.core_plugin
+
     def __hash__(self):
         return hash(self.name) ^ hash(self.config) ^ hash(self.core_plugin)
 
