@@ -503,8 +503,8 @@ Consider the DefaultTrackPreparator below, which is invoked by default unless ov
                 params = {"cfg": self.cfg, "track": track, "corpus": corpus, "preparator": prep}
                 yield DefaultTrackPreparator.prepare_docs, params
 
-In this case, you can see by default we do nothing here for ``on_after_load_track`` to mutate the track, but yield a tuple of the `prepare_docs`
-function and its parameters for each corpus in the track `corpora`. After this is called, these tuples are given to each TrackProcessor worker actor
+In this case, you can see by default we do nothing here for ``on_after_load_track`` to mutate the track, but yield a tuple of the ``prepare_docs``
+function and its parameters for each corpus in the track ``corpora``. After this is called, these tuples are given to each TrackProcessor worker actor
 to be executed in parallel.
 
 .. note::
