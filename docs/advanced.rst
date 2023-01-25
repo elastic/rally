@@ -446,13 +446,13 @@ In order to perform pre-flight activity such as data generation, you can make us
             :param track: The current track.
             """
 
-        def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[Callable, dict]:
+        def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[Tuple[Callable, dict], None, None]:
             """
 
             :param track: The current track. This parameter should be treated as effectively immutable. Any modifications
                           will not be reflected in subsequent phases of the benchmark.
             :param data_root_dir: The data root directory on the current machine as configured by the user.
-            :return: an Generator[Callable, dict] of function/parameter pairs to be executed by the prepare track's executor
+            :return: an Generator[Tuple[Callable, dict], None, None] of function/parameter pairs to be executed by the prepare track's executor
             actors.
             """
 
@@ -466,7 +466,7 @@ To "duck type" this class, you must implement the following methods:
     This method is called by Rally after the ``on_after_load_track`` phase. Here, any data that is necessary for
     benchmark execution should be prepared, e.g. by downloading data or generating it. Implementations should
     be aware that this method might be called on a different machine than ``on_after_load_track`` and they cannot
-    share any state in between phases. The method should `yield` a tuple of a function and its parameters for each
+    share any state in between phases. The method should `yield` a tuple of a Callable and its parameters for each
     Track Processor thread to be able to work in parallel.
 
 Consider the DefaultTrackPreparator below, which is invoked by default unless overridden by custom registered track processors::
