@@ -3,8 +3,8 @@ Advanced Topics
 
 .. _template_language:
 
-Template Language
-^^^^^^^^^^^^^^^^^
+Templating Track Files with Jinja2
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as a template language so you can use Jinja2 expressions in track files.
 
@@ -87,8 +87,8 @@ The parameter ``default_value`` controls the value to use for the setting if it 
 
 .. _adding_tracks_custom_param_sources:
 
-Custom parameter sources
-^^^^^^^^^^^^^^^^^^^^^^^^
+Controlling Operation Parameters Using Custom Parameter Sources
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. warning::
 
@@ -254,8 +254,8 @@ You can also implement your parameter sources and runners in multiple Python fil
 
 .. _adding_tracks_custom_runners:
 
-Custom runners
-^^^^^^^^^^^^^^
+Creating Your Own Operations With Custom Runners
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. warning::
 
@@ -375,8 +375,8 @@ For cases, where you want to provide a progress indication, you can implement th
 
 .. _adding_tracks_custom_schedulers:
 
-Custom schedulers
-^^^^^^^^^^^^^^^^^
+Controlling Task Execution Behavior With Custom Schedulers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. warning::
 
@@ -434,3 +434,90 @@ You can then use your custom scheduler as follows::
     "target-throughput": 100,
     "variation-millis": 1
   }
+
+Manipulating Track Objects And Data With Track Processors
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In order to perform pre-flight activity such as data generation, you can make use of the ``TrackProcessor`` interface::
+
+    class TrackProcessor:
+        def on_after_load_track(self, track: track.Track) -> None:
+            """
+            :param track: The current track.
+            """
+
+        def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[Callable, dict]:
+            """
+
+            :param track: The current track. This parameter should be treated as effectively immutable. Any modifications
+                          will not be reflected in subsequent phases of the benchmark.
+            :param data_root_dir: The data root directory on the current machine as configured by the user.
+            :return: an Generator[Callable, dict] of function/parameter pairs to be executed by the prepare track's executor
+            actors.
+            """
+
+
+To "duck type" this class, you must implement the following methods:
+
+* ``on_after_load_track``
+    This method is called by Rally after a track has been loaded by Rally but before work is distributed to worker actors. Implementations are expected to modify the
+    provided track object in place.
+* ``on_prepare_track``
+    This method is called by Rally after the ``on_after_load_track`` phase. Here, any data that is necessary for
+    benchmark execution should be prepared, e.g. by downloading data or generating it. Implementations should
+    be aware that this method might be called on a different machine than ``on_after_load_track`` and they cannot
+    share any state in between phases. The method should `yield` a tuple of a function and its parameters for each
+    Track Processor thread to be able to work in parallel.
+
+Consider the DefaultTrackPreparator below, which is invoked by default unless overridden by custom registered track processors::
+
+    class DefaultTrackPreparator(TrackProcessor):
+        def __init__(self):
+            super().__init__()
+            # just declare here, will be injected later
+            self.cfg = None
+            self.downloader = None
+            self.decompressor = None
+            self.track = None
+
+        def on_after_load_track(self, track):
+            ...
+
+        @staticmethod
+        def prepare_docs(cfg, track, corpus, preparator):
+            for document_set in corpus.documents:
+                if document_set.is_bulk:
+                    data_root = data_dir(cfg, track.name, corpus.name)
+                    logging.getLogger(__name__).info(
+                        "Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root
+                    )
+                    if len(data_root) == 1:
+                        preparator.prepare_document_set(document_set, data_root[0])
+                    # attempt to prepare everything in the current directory and fallback to the corpus directory
+                    elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
+                        preparator.prepare_document_set(document_set, data_root[1])
+
+        def on_prepare_track(self, track, data_root_dir):
+            prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
+            for corpus in used_corpora(track):
+                params = {"cfg": self.cfg, "track": track, "corpus": corpus, "preparator": prep}
+                yield DefaultTrackPreparator.prepare_docs, params
+
+In this case, you can see by default we do nothing here for ``on_after_load_track`` to mutate the track, but yield a tuple of the `prepare_docs`
+function and its parameters for each corpus in the track `corpora`. After this is called, these tuples are given to each TrackProcessor worker actor
+to be executed in parallel.
+
+.. note::
+    By default, Rally creates 1 TrackProcessor worker process for each CPU on the machine where Rally is invoked. To override this behavior, you can use the
+    :ref:`system` ``available.cores`` property.
+
+Once your TrackProcessor is created, it needs to be registered in ``track.py``::
+
+    def register(registry):
+        registry.register_track_processor(MyTrackProcessor())
+
+Multiple TrackProcessors can be registered this way, and will be invoked sequentially (all ``on_after_load_track`` calls, and then all ``on_prepare_track`` calls).
+
+.. warning::
+    Registering custom TrackProcessors prevents the DefaultTrackProcessor from executing. This is expert functionality, as all steps for resolving
+    data for your track should be performed in your TrackProcessors.

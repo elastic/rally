@@ -20,6 +20,8 @@ import logging
 import os
 import re
 import subprocess
+from typing import Iterable, Callable, Generator
+
 import sys
 import tempfile
 import urllib.error
@@ -42,7 +44,7 @@ class TrackSyntaxError(exceptions.InvalidSyntax):
 
 
 class TrackProcessor:
-    def on_after_load_track(self, track):
+    def on_after_load_track(self, track: track.Track) -> None:
         """
         This method is called by Rally after a track has been loaded. Implementations are expected to modify the
         provided track object in place.
@@ -50,7 +52,7 @@ class TrackProcessor:
         :param track: The current track.
         """
 
-    def on_prepare_track(self, track, data_root_dir):
+    def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[Callable, dict]:
         """
         This method is called by Rally after the "after_load_track" phase. Here, any data that is necessary for
         benchmark execution should be prepared, e.g. by downloading data or generating it. Implementations should
@@ -60,10 +62,10 @@ class TrackProcessor:
         :param track: The current track. This parameter should be treated as effectively immutable. Any modifications
                       will not be reflected in subsequent phases of the benchmark.
         :param data_root_dir: The data root directory on the current machine as configured by the user.
-        :return: an Iterable[Callable, dict] of function/parameter pairs to be executed by the prepare track's executor
+        :return: a Generator[Callable, dict] of function/parameter pairs to be executed by the prepare track's executor
         actors.
         """
-        return []
+        yield lambda _: None, {}
 
 
 class TrackProcessorRegistry:
@@ -448,7 +450,7 @@ class DefaultTrackPreparator(TrackProcessor):
                 elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
                     preparator.prepare_document_set(document_set, data_root[1])
 
-    def on_prepare_track(self, track, data_root_dir):
+    def on_prepare_track(self, track, data_root_dir)-> Generator[Callable, dict]:
         prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
             params = {"cfg": self.cfg, "track": track, "corpus": corpus, "preparator": prep}
