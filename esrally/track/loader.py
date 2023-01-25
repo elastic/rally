@@ -14,17 +14,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import abc
 import glob
 import json
 import logging
 import os
 import re
 import subprocess
-from typing import Iterable, Callable, Generator, Tuple
-
 import sys
 import tempfile
 import urllib.error
+from typing import Callable, Generator, Tuple
 
 import jinja2
 import jinja2.exceptions
@@ -43,7 +43,7 @@ class TrackSyntaxError(exceptions.InvalidSyntax):
     """
 
 
-class TrackProcessor:
+class TrackProcessor(abc.ABC):
     def on_after_load_track(self, track: track.Track) -> None:
         """
         This method is called by Rally after a track has been loaded. Implementations are expected to modify the
@@ -65,7 +65,7 @@ class TrackProcessor:
         :return: a Generator[Tuple[Callable, dict], None, None] of function/parameter pairs to be executed by the prepare track's executor
         actors.
         """
-        yield lambda _: None, {}
+        return
 
 
 class TrackProcessorRegistry:
