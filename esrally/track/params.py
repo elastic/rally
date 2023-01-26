@@ -954,7 +954,7 @@ def create_readers(
 ):
     logger = logging.getLogger(__name__)
     # pre-initialize in order to assign parallel tasks for different corpora through assignment
-    readers = [None for corpus in corpora for _ in corpus.documents] * num_clients
+    readers = [None for corpus in corpora for _ in corpus.documents]
     # stagger which corpus each client starts with for better parallelism
     for group, corpus in enumerate(corpora[(start_client_index + mod) % len(corpora)] for mod in range(len(corpora))):
         for entry, docs in enumerate(corpus.documents):
