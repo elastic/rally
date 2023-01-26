@@ -1384,6 +1384,17 @@ class TestBulkDataGenerator:
     def test_generate_bulks_from_multiple_corpora(self):
         corpora = [
             track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2017-01",
+                        target_type="docs",
+                    )
+                ],
+            ),
+            track.DocumentCorpus(
                 name="default",
                 documents=[
                     track.Documents(
@@ -1398,17 +1409,6 @@ class TestBulkDataGenerator:
                         target_index="logs-2018-02",
                         target_type="docs",
                     ),
-                ],
-            ),
-            track.DocumentCorpus(
-                name="special",
-                documents=[
-                    track.Documents(
-                        source_format=track.Documents.SOURCE_FORMAT_BULK,
-                        number_of_documents=5,
-                        target_index="logs-2017-01",
-                        target_type="docs",
-                    )
                 ],
             ),
         ]
@@ -1434,7 +1434,7 @@ class TestBulkDataGenerator:
                 "body": ["1", "2", "3", "4", "5"],
                 "bulk-size": 5,
                 "unit": "docs",
-                "index": "logs-2018-01",
+                "index": "logs-2017-01",
                 "type": "docs",
                 "my-custom-parameter": "foo",
                 "my-custom-parameter-2": True,
@@ -1444,7 +1444,7 @@ class TestBulkDataGenerator:
                 "body": ["1", "2", "3", "4", "5"],
                 "bulk-size": 5,
                 "unit": "docs",
-                "index": "logs-2017-01",
+                "index": "logs-2018-01",
                 "type": "docs",
                 "my-custom-parameter": "foo",
                 "my-custom-parameter-2": True,
