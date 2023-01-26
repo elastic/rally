@@ -52,6 +52,15 @@ class TrackProcessor(abc.ABC):
         :param track: The current track.
         """
 
+    @staticmethod
+    def _noop():
+        """
+        To minimize complexity here, we use a no-op function to return a no-op result in the base class.
+        Alternatively we could use an ABC with some refactoring. We def the function since lambdas cannot be
+        pickled for Thespian's sake.
+        """
+        return
+
     def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[Tuple[Callable, dict], None, None]:
         """
         This method is called by Rally after the "after_load_track" phase. Here, any data that is necessary for
@@ -65,7 +74,7 @@ class TrackProcessor(abc.ABC):
         :return: a Generator[Tuple[Callable, dict], None, None] of function/parameter pairs to be executed by the prepare track's executor
         actors.
         """
-        return
+        yield TrackProcessor._noop, {}
 
 
 class TrackProcessorRegistry:

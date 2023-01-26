@@ -471,7 +471,7 @@ To "duck type" this class, you must implement the following methods:
 
 Consider the DefaultTrackPreparator below, which is invoked by default unless overridden by custom registered track processors::
 
-    class DefaultTrackPreparator(TrackProcessor):
+    class DefaultTrackPreparator:
         def __init__(self):
             super().__init__()
             # just declare here, will be injected later
@@ -481,7 +481,7 @@ Consider the DefaultTrackPreparator below, which is invoked by default unless ov
             self.track = None
 
         def on_after_load_track(self, track):
-            ...
+            pass
 
         @staticmethod
         def prepare_docs(cfg, track, corpus, preparator):
@@ -504,8 +504,10 @@ Consider the DefaultTrackPreparator below, which is invoked by default unless ov
                 yield DefaultTrackPreparator.prepare_docs, params
 
 In this case, you can see by default we do nothing here for ``on_after_load_track`` to mutate the track, but yield a tuple of the ``prepare_docs``
-function and its parameters for each corpus in the track ``corpora``. After this is called, these tuples are given to each TrackProcessor worker actor
-to be executed in parallel.
+function and a dict of its args for each corpus in the track ``corpora``. The ``DocumentSetPreparator`` class referenced has code which checks to see if data
+is already available locally, otherwise it resolves, downloads, and decompresses specified corpora files. After this is called, these tuples are given to each
+TrackProcessor worker actor to be executed in parallel. In a custom track processor, the callable and its parameters are arbitrary, and should be defined to
+your specific needs.
 
 .. note::
     By default, Rally creates 1 TrackProcessor worker process for each CPU on the machine where Rally is invoked. To override this behavior, you can use the
@@ -520,4 +522,4 @@ Multiple TrackProcessors can be registered this way, and will be invoked sequent
 
 .. warning::
     Registering custom TrackProcessors prevents the DefaultTrackProcessor from executing. This is expert functionality, as all steps for resolving
-    data for your track should be performed in your TrackProcessors.
+    data for your track should be performed in your TrackProcessors, including what is typically performed by default.
