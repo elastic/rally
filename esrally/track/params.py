@@ -963,32 +963,32 @@ def create_readers(
             offset, num_docs, num_lines = bounds(
                 docs.number_of_documents, start_client_index, end_client_index, num_clients, docs.includes_action_and_meta_data
             )
-            if num_docs > 0:
-                target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
-                if docs.target_data_stream:
-                    target = docs.target_data_stream
-                logger.debug(
-                    "Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
-                    "from corpus [%s].",
-                    start_client_index,
-                    end_client_index,
-                    num_docs,
-                    offset,
-                    target,
-                    corpus.name,
-                )
-                reader = create_reader(
-                    docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
-                )
-                readers[-1].append(reader)
-                total_readers += 1
-            else:
+            if num_docs == 0:
                 logger.debug(
                     "Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
                     start_client_index,
                     end_client_index,
                     corpus.name,
                 )
+
+            target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
+            if docs.target_data_stream:
+                target = docs.target_data_stream
+            logger.debug(
+                "Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
+                "from corpus [%s].",
+                start_client_index,
+                end_client_index,
+                num_docs,
+                offset,
+                target,
+                corpus.name,
+            )
+            reader = create_reader(
+                docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
+            )
+            readers[-1].append(reader)
+            total_readers += 1
 
     # Instead of reading all files from the first corpus, and then all files from the
     # second corpus, etc. we want to read the first file of all corpora, then the second
