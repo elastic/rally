@@ -953,11 +953,13 @@ def create_readers(
     create_reader,
 ):
     logger = logging.getLogger(__name__)
-    # pre-initialize in order to assign parallel tasks for different corpora through assignment
-    readers = [None for corpus in corpora for _ in corpus.documents] * num_clients
+    readers = []
+    total_readers = 0
     # stagger which corpus each client starts with for better parallelism
-    for group, corpus in enumerate(corpora[(start_client_index + mod) % len(corpora)] for mod in range(len(corpora))):
-        for entry, docs in enumerate(corpus.documents):
+    reordered_corpora = corpora[start_client_index:] + corpora[:start_client_index]
+    for corpus in reordered_corpora:
+        readers.append(collections.deque())
+        for docs in corpus.documents:
             offset, num_docs, num_lines = bounds(
                 docs.number_of_documents, start_client_index, end_client_index, num_clients, docs.includes_action_and_meta_data
             )
@@ -975,9 +977,11 @@ def create_readers(
                     target,
                     corpus.name,
                 )
-                readers[len(corpora) * entry + group] = create_reader(
+                reader = create_reader(
                     docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
                 )
+                readers[-1].append(reader)
+                total_readers += 1
             else:
                 logger.debug(
                     "Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
@@ -985,7 +989,17 @@ def create_readers(
                     end_client_index,
                     corpus.name,
                 )
-    return readers
+
+    # Instead of reading all files from the first corpus, and then all files from the
+    # second corpus, etc. we want to read the first file of all corpora, then the second
+    # file, etc.
+    staggered_readers = []
+    while total_readers > 0:
+        for reader_queue in readers:
+            if reader_queue:
+                staggered_readers.append(reader_queue.popleft())
+                total_readers -= 1
+    return staggered_readers
 
 
 def bounds(total_docs, start_client_index, end_client_index, num_clients, includes_action_and_meta_data):
