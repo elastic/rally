@@ -2806,7 +2806,6 @@ class TestForceMergeParamSource:
         )
 
         p = source.params()
-
         assert p["index"] == "data-stream-2"
         assert p["mode"] == "blocking"
 
@@ -2817,7 +2816,6 @@ class TestForceMergeParamSource:
         )
 
         p = source.params()
-
         assert p["index"] == "_all"
         assert p["mode"] == "blocking"
 
@@ -2834,7 +2832,6 @@ class TestForceMergeParamSource:
         )
 
         p = source.params()
-
         assert p["index"] == "index2"
         assert p["request-timeout"] == 30
         assert p["max-num-segments"] == 1
@@ -2853,7 +2850,6 @@ class TestDownsampleParamSource:
         )
 
         p = source.params()
-
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "test-source-index"
         assert p["target-index"] == "test-target-index"
@@ -2871,7 +2867,6 @@ class TestDownsampleParamSource:
         )
 
         p = source.params()
-
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "test-source-index"
         assert p["target-index"] == "test-target-index"
@@ -2890,7 +2885,6 @@ class TestDownsampleParamSource:
         )
 
         p = source.params()
-
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "another-index"
         assert p["target-index"] == "test-target-index"
@@ -2902,6 +2896,5 @@ class TestDownsampleParamSource:
         )
 
         p = source.params()
-
         assert p["fixed-interval"] == "1h"
         assert p["target-index"] == f"{p['source-index']}-{p['fixed-interval']}"

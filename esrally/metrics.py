@@ -867,7 +867,7 @@ class EsMetricsStore(MetricsStore):
         self._client.refresh(index=self._index)
 
     def index_name(self):
-        ts = time.from_is8601(self._race_timestamp)
+        ts = time.from_iso8601(self._race_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
 
     def _migrated_index_name(self, original_name):
@@ -1498,7 +1498,7 @@ class Race:
             d.get("rally-revision"),
             d["environment"],
             d["race-id"],
-            time.from_is8601(d["race-timestamp"]),
+            time.from_iso8601(d["race-timestamp"]),
             d["pipeline"],
             user_tags,
             d["track"],
