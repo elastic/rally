@@ -9,6 +9,7 @@ Install the following software packages:
 * pyenv installed, Follow the instructions in the output of ``pyenv init`` to setup your shell and then restart it before proceeding. For more details please refer to the pyenv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
 * JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/main/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
 * `Docker <https://docs.docker.com/install/>`_ and on Linux additionally `docker-compose <https://docs.docker.com/compose/install/>`_.
+* `jq <https://stedolan.github.io/jq/download/>`_
 * git
 
 Check the :doc:`installation guide </install>` for detailed installation instructions for these packages.

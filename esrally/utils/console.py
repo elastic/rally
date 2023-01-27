@@ -163,7 +163,7 @@ def error(msg, end="\n", flush=False, force=False, logger=None, overline=None, u
         console_prefix="[ERROR]",
         end=end,
         flush=flush,
-        force=force,
+        force=True,
         overline=overline,
         underline=underline,
         logger=logger.error if logger else None,

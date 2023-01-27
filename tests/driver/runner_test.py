@@ -671,7 +671,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 5,
             "index": "test",
@@ -681,6 +680,7 @@ class TestBulkIndexRunner:
             "success-count": 1,
             "error-count": 2,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
         }
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
@@ -698,7 +698,7 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "1",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@1]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #1",
                     }
                 },
                 {
@@ -707,7 +707,7 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "2",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@2]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #2",
                     }
                 },
                 {
@@ -716,7 +716,7 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "3",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@3]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #3",
                     }
                 },
             ],
@@ -744,7 +744,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 20,
             "index": "test",
@@ -754,6 +753,7 @@ class TestBulkIndexRunner:
             "success-count": 0,
             "error-count": 3,
             "error-type": "bulk",
+            "error-description": " | ".join([f"HTTP status: 429, message: EsRejectedExecutionException #{i}" for i in (1, 2, 3)]),
         }
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
@@ -841,7 +841,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 30,
             "index": "test",
@@ -851,6 +850,7 @@ class TestBulkIndexRunner:
             "success-count": 2,
             "error-count": 2,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
         }
         assert "ingest_took" not in result, "ingest_took is not extracted with simple stats"
 
@@ -970,7 +970,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 30,
             "ingest_took": 20,
@@ -981,6 +980,7 @@ class TestBulkIndexRunner:
             "success-count": 3,
             "error-count": 3,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
             "ops": {
                 "index": collections.Counter({"item-count": 4, "created": 2, "noop": 2}),
                 "update": collections.Counter({"item-count": 2, "updated": 1, "noop": 1}),
@@ -1550,6 +1550,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 1,
@@ -1588,6 +1589,7 @@ class TestQueryRunner:
             "hits_relation": "gte",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1601,6 +1603,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {"value": 1, "relation": "gte"},
                 "hits": [
@@ -1635,6 +1638,7 @@ class TestQueryRunner:
             "hits_relation": "gte",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1652,6 +1656,7 @@ class TestQueryRunner:
         response = {
             "timed_out": False,
             "took": 62,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 2,
@@ -1688,6 +1693,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 62,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1761,6 +1767,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": 2,
                 "hits": [
@@ -1796,6 +1803,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1815,6 +1823,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 2,
@@ -1853,6 +1862,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1872,6 +1882,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {"value": 2, "relation": "eq"},
                 "hits": [
@@ -1909,6 +1920,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -6521,23 +6533,22 @@ class TestComposite:
         assert response["unit"] == "ops"
         timings = response["dependent_timing"]
         assert len(timings) == 3
+        assert timings[0]["dependent_timing"]["operation"] == "initial-call"
+        assert timings[0]["dependent_timing"]["service_time"] == pytest.approx(0.1, abs=0.1)
 
-        assert timings[0]["operation"] == "initial-call"
-        assert timings[0]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[1]["dependent_timing"]["operation"] == "stream-a"
+        assert timings[1]["dependent_timing"]["service_time"] == pytest.approx(0.2, abs=0.1)
 
-        assert timings[1]["operation"] == "stream-a"
-        assert timings[1]["service_time"] == pytest.approx(0.2, abs=0.1)
-
-        assert timings[2]["operation"] == "stream-b"
-        assert timings[2]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[2]["dependent_timing"]["operation"] == "stream-b"
+        assert timings[2]["dependent_timing"]["service_time"] == pytest.approx(0.1, abs=0.1)
 
         # common properties
         for timing in timings:
-            assert timing["operation-type"] == "sleep"
-            assert "absolute_time" in timing
-            assert "request_start" in timing
-            assert "request_end" in timing
-            assert timing["request_end"] > timing["request_start"]
+            assert timing["dependent_timing"]["operation-type"] == "sleep"
+            assert "absolute_time" in timing["dependent_timing"]
+            assert "request_start" in timing["dependent_timing"]
+            assert "request_end" in timing["dependent_timing"]
+            assert timing["dependent_timing"]["request_end"] > timing["dependent_timing"]["request_start"]
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio

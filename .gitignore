@@ -103,6 +103,9 @@ target/
 # pyenv
 .python-version
 
+# direnv
+.envrc
+
 # Rally specific
 .rally_it/
 # Virtualenv for development

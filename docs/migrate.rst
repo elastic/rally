@@ -1,6 +1,16 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.7.1
+------------------------
+
+Snapshot repository plugins are no longer built from source
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``repository-s3``, ``repository-gcs``, and ``repository-azure`` snapshot plugins were converted into Elasticsearch modules from version 8.0 onwards, meaning that they are always included in the Elasticsearch distribution. Installing or removing these plugins is now a no-op, but attempting to build them from source will fail.
+
+Rally will no longer attempt to build these plugins because they have been removed from the corresponding `rally-team's <https://github.com/elastic/rally-teams/pull/76>`_ ``core-plugins.txt``.
+
 Migrating to Rally 2.5.1
 ------------------------
 

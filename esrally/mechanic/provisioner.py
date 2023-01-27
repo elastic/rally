@@ -219,8 +219,14 @@ class BareProvisioner:
         plugin_variables = {}
         mandatory_plugins = []
         for installer in self.plugin_installers:
-            mandatory_plugins.append(installer.plugin_name)
             plugin_variables.update(installer.variables)
+            if installer.plugin.moved_to_module:
+                self.logger.info(
+                    "Skipping adding plugin [%s] to cluster setting 'plugin.mandatory' as it has been moved to a module",
+                    installer.plugin_name,
+                )
+            else:
+                mandatory_plugins.append(installer.plugin_name)
 
         cluster_settings = {}
         if mandatory_plugins:
@@ -313,6 +319,7 @@ class ElasticsearchInstaller:
             "transport_port": str(self.http_port + 100),
             "all_node_ips": '["%s"]' % '","'.join(self.all_node_ips),
             "all_node_names": '["%s"]' % '","'.join(self.all_node_names),
+            "all_node_ips_count": len(self.all_node_ips),
             # at the moment we are strict and enforce that all nodes are master eligible nodes
             "minimum_master_nodes": len(self.all_node_ips),
             "install_root_path": self.es_home_path,

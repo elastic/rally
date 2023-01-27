@@ -88,6 +88,7 @@ class TestBareProvisioner:
             "transport_port": "9300",
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
+            "all_node_ips_count": 2,
             "minimum_master_nodes": 2,
             "install_root_path": "/opt/elasticsearch-5.0.0",
         }
@@ -111,6 +112,7 @@ class TestBareProvisioner:
         def __init__(self):
             self.name = "x-pack"
             self.core_plugin = False
+            self.moved_to_module = False
             self.config = {"base": "internal_base,security"}
             self.root_path = None
             self.config_paths = []
@@ -208,11 +210,73 @@ class TestBareProvisioner:
             "transport_port": "9300",
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
+            "all_node_ips_count": 2,
             "minimum_master_nodes": 2,
             "install_root_path": "/opt/elasticsearch-6.8.0",
             "plugin_name": "x-pack-security",
             "xpack_security_enabled": True,
         }
+
+    @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-6.8.0"])
+    @mock.patch("esrally.utils.io.decompress")
+    @mock.patch("esrally.utils.io.ensure_dir")
+    @mock.patch("esrally.mechanic.provisioner.PluginInstaller.install")
+    @mock.patch("shutil.rmtree")
+    def test_prepare_distribution_skips_plugins_moved_to_modules(self, mock_rm, mock_ensure_dir, mock_install, mock_decompress):
+        """
+        Test that plugin.mandatory is not set for plugins moved to modules
+
+        See: https://github.com/elastic/rally/issues/1622
+        """
+        apply_config_calls = []
+
+        def null_apply_config(source_root_path, target_root_path, config_vars):
+            apply_config_calls.append((source_root_path, target_root_path, config_vars))
+
+        installer = provisioner.ElasticsearchInstaller(
+            car=team.Car(
+                names="unit-test-car",
+                root_path=None,
+                config_paths=[HOME_DIR + "/.rally/benchmarks/teams/default/my-car"],
+                variables={
+                    "heap": "4g",
+                    "runtime.jdk": "8",
+                    "runtime.jdk.bundled": "true",
+                },
+            ),
+            java_home="/usr/local/javas/java8",
+            node_name="rally-node-0",
+            cluster_name="rally-benchmark",
+            node_root_dir=HOME_DIR + "/.rally/benchmarks/races/unittest",
+            all_node_ips=["10.17.22.22", "10.17.22.23"],
+            all_node_names=["rally-node-0", "rally-node-1"],
+            ip="10.17.22.23",
+            http_port=9200,
+        )
+
+        plugins_moved_to_modules = ["repository-s3", "repository-gcs", "repository-azure"]
+        plugin_installers = []
+        for p in plugins_moved_to_modules:
+            plugin_installers.append(
+                provisioner.PluginInstaller(
+                    team.PluginDescriptor(p, core_plugin=False, variables={"plugin-turned-to-module": "some value"}),
+                    java_home="/usr/local/javas/java8",
+                    hook_handler_class=self.NoopHookHandler,
+                )
+            )
+
+        p = provisioner.BareProvisioner(
+            es_installer=installer,
+            plugin_installers=plugin_installers,
+            distribution_version="6.8.0",
+            apply_config=null_apply_config,
+        )
+        p.prepare({"elasticsearch": "/opt/elasticsearch-6.8.0.tar.gz"})
+
+        _, _, config_vars = apply_config_calls[0]
+
+        assert not config_vars["cluster_settings"].get("plugin.mandatory")
+        assert "plugin-turned-to-module" in p._provisioner_variables()
 
 
 class NoopHookHandler:
@@ -262,6 +326,7 @@ class TestElasticsearchInstaller:
             "transport_port": "9300",
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
+            "all_node_ips_count": 2,
             "minimum_master_nodes": 2,
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT",
         }
@@ -307,6 +372,7 @@ class TestElasticsearchInstaller:
             "transport_port": "9300",
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
+            "all_node_ips_count": 2,
             "minimum_master_nodes": 2,
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT",
         }

@@ -14,22 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
-import os
-
 import it
+from esrally.utils import process
 
 
 @it.rally_in_mem
-def test_track_info_with_challenge(cfg, tmp_path):
-    cwd = os.path.dirname(__file__)
-    chart_spec_path = os.path.join(cwd, "resources", "sample-race-config.json")
-    output_path = os.path.join(tmp_path, "nightly-charts.ndjson")
-    assert it.esrally(cfg, f"generate charts --chart-spec-path={chart_spec_path} --output-path={output_path}") == 0
-
-
-@it.rally_in_mem
-def test_fails_when_spec_not_found(cfg, tmp_path):
-    chart_spec_path = "/non/existent/path"
-    output_path = os.path.join(tmp_path, "nightly-charts.ndjson")
-    assert it.esrally(cfg, f"generate charts --chart-spec-path={chart_spec_path} --output-path={output_path}") != 0
+def test_error_prints_when_quiet(cfg):
+    cmd = it.esrally_command_line_for(cfg, "build --revision=nonsense --quiet")
+    output = process.run_subprocess_with_output(cmd)
+    expected = "[ERROR] Cannot build."
+    assert expected in "\n".join(output)

@@ -288,7 +288,9 @@ def op(name, operation_type):
 
 
 class TestSamplePostprocessor:
-    def throughput(self, absolute_time, relative_time, value):
+    def throughput(self, absolute_time, relative_time, value, meta_data=None):
+        if not meta_data:
+            meta_data = {}
         return mock.call(
             name="throughput",
             value=value,
@@ -299,19 +301,21 @@ class TestSamplePostprocessor:
             sample_type=metrics.SampleType.Normal,
             absolute_time=absolute_time,
             relative_time=relative_time,
-            meta_data={},
+            meta_data=meta_data,
         )
 
-    def service_time(self, absolute_time, relative_time, value):
-        return self.request_metric(absolute_time, relative_time, "service_time", value)
+    def service_time(self, absolute_time, relative_time, value, meta_data=None):
+        return self.request_metric(absolute_time, relative_time, "service_time", value, meta_data)
 
-    def processing_time(self, absolute_time, relative_time, value):
-        return self.request_metric(absolute_time, relative_time, "processing_time", value)
+    def processing_time(self, absolute_time, relative_time, value, meta_data=None):
+        return self.request_metric(absolute_time, relative_time, "processing_time", value, meta_data)
 
-    def latency(self, absolute_time, relative_time, value):
-        return self.request_metric(absolute_time, relative_time, "latency", value)
+    def latency(self, absolute_time, relative_time, value, meta_data=None):
+        return self.request_metric(absolute_time, relative_time, "latency", value, meta_data)
 
-    def request_metric(self, absolute_time, relative_time, name, value):
+    def request_metric(self, absolute_time, relative_time, name, value, meta_data=None):
+        if not meta_data:
+            meta_data = {}
         return mock.call(
             name=name,
             value=value,
@@ -322,7 +326,7 @@ class TestSamplePostprocessor:
             sample_type=metrics.SampleType.Normal,
             absolute_time=absolute_time,
             relative_time=relative_time,
-            meta_data={},
+            meta_data=meta_data,
         )
 
     @mock.patch("esrally.metrics.MetricsStore")
@@ -395,21 +399,40 @@ class TestSamplePostprocessor:
                 1,
                 1 / 2,
                 dependent_timing=[
-                    {"absolute_time": 38601, "request_start": 25, "service_time": 0.05, "operation": "index-op", "operation-type": "bulk"},
-                    {"absolute_time": 38602, "request_start": 26, "service_time": 0.08, "operation": "index-op", "operation-type": "bulk"},
+                    {
+                        "meta_key": "meta_value",
+                        "dependent_timing": {
+                            "absolute_time": 38601,
+                            "request_start": 25,
+                            "service_time": 0.05,
+                            "operation": "index-op",
+                            "operation-type": "bulk",
+                        },
+                    },
+                    {
+                        "meta_key": "meta_value",
+                        "dependent_timing": {
+                            "absolute_time": 38602,
+                            "request_start": 26,
+                            "service_time": 0.08,
+                            "operation": "index-op",
+                            "operation-type": "bulk",
+                        },
+                    },
                 ],
             ),
         ]
 
         post_process(samples)
-
+        meta_data = {"meta_key": "meta_value"}
         calls = [
             self.latency(38598, 24, 10.0),
             self.service_time(38598, 24, 7.0),
             self.processing_time(38598, 24, 9.0),
             # dependent timings
-            self.service_time(38601, 25, 50.0),
-            self.service_time(38602, 26, 80.0),
+            self.service_time(38601, 25, 50.0, meta_data),
+            self.service_time(38602, 26, 80.0, meta_data),
+            # we don't currently calculate dependent throughput
             self.throughput(38598, 24, 5000),
         ]
         metrics_store.put_value_cluster_level.assert_has_calls(calls)

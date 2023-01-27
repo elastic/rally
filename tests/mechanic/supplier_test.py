@@ -162,9 +162,9 @@ class TestBuilder:
 
         calls = [
             # Actual call
-            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew clean > logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew clean >> logs/build.log 2>&1"),
             # Return value check
-            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew assemble > logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk8; cd /src; ./gradlew assemble >> logs/build.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
@@ -180,9 +180,9 @@ class TestBuilder:
 
         calls = [
             # Actual call
-            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew clean > logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew clean >> logs/build.log 2>&1"),
             # Return value check
-            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew assemble > logs/build.log 2>&1"),
+            mock.call("export JAVA_HOME=/opt/jdk10; cd /src; ./gradlew assemble >> logs/build.log 2>&1"),
         ]
 
         mock_run_subprocess.assert_has_calls(calls)
@@ -353,15 +353,18 @@ class TestDockerBuilder:
     def test_check_container_return_code(self, caplog):
         mock_docker_client = mock.MagicMock()
         builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock_docker_client)
-
         completion = {"StatusCode": 0, "Error": None}
         builder.check_container_return_code(completion, "test-container-name")
         assert "Container [test-container-name] completed successfully." in caplog.text
 
         completion = {"StatusCode": 1, "Error": "Vague error message"}
-        with pytest.raises(exceptions.SystemSetupError) as e:
-            builder.check_container_return_code(completion, "test-container-name")
-        assert "Docker container [test-container-name] failed with status code [1]: Error [Vague error message]" in str(e.value)
+        with mock.patch("builtins.open", mock.mock_open()):
+            with pytest.raises(exceptions.BuildError) as e:
+                builder.check_container_return_code(completion, "test-container-name")
+            assert (
+                "Docker container [test-container-name] failed with status code [1]: Error [Vague error message]: "
+                "Build log output [Executing 'test-container-name' failed. The last 20 lines in the build.log file are" in str(e.value)
+            )
 
 
 class TestTemplateRenderer:
@@ -1017,6 +1020,32 @@ class TestCreateSupplier:
         assert isinstance(composite_supplier.suppliers[2].source_supplier, supplier.ExternalPluginSourceSupplier)
         assert composite_supplier.suppliers[2].source_supplier.plugin == external_plugin
         assert composite_supplier.suppliers[2].source_supplier.builder is not None
+
+    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
+    def test_create_suppliers_skips_plugins_converted_to_modules(self, caplog):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "mechanic", "source.revision", "current")
+        cfg.add(config.Scope.application, "node", "root.dir", "/opt/rally")
+        cfg.add(config.Scope.application, "node", "src.root.dir", "/opt/rally/src")
+        cfg.add(config.Scope.application, "source", "elasticsearch.src.subdir", "elasticsearch")
+        cfg.add(config.Scope.application, "source", "remote.repo.url", "https://github.com/elastic/elasticsearch.git")
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "build_command": "./gradlew assemble", "build.jdk": "11"},
+        )
+
+        plugins_moved_to_modules = ["repository-s3", "repository-gcs", "repository-azure"]
+        plugins = []
+        for p in plugins_moved_to_modules:
+            plugins.append(team.PluginDescriptor(p, core_plugin=False))
+
+        composite_supplier = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=plugins)
+
+        for p in plugins:
+            assert f"Plugin [{p.name}] is now an Elasticsearch module and no longer needs to be built from source." in caplog.messages
+            assert p not in composite_supplier.suppliers
 
     @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
     def test_create_suppliers_for_es_and_plugin_source_build(self):

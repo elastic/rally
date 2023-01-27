@@ -34,7 +34,6 @@ from esrally import (
     PROGRAM_NAME,
     SKULL,
     actor,
-    chart_generator,
     check_python_version,
     config,
     doc_link,
@@ -146,8 +145,8 @@ def create_arg_parser():
         "configuration",
         metavar="configuration",
         help="The configuration for which Rally should show the available options. "
-        "Possible values are: telemetry, tracks, pipelines, races, cars, elasticsearch-plugins",
-        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins"],
+        "Possible values are: telemetry, tracks, pipelines, races, cars, elasticsearch-plugins, annotations",
+        choices=["telemetry", "tracks", "pipelines", "races", "cars", "elasticsearch-plugins", "annotations"],
     )
     list_parser.add_argument(
         "--limit",
@@ -177,6 +176,19 @@ def create_arg_parser():
         default=None,
     )
     add_track_source(list_parser)
+
+    delete_parser = subparsers.add_parser("delete", help="Delete records")
+    delete_parser.add_argument(
+        "configuration",
+        metavar="configuration",
+        help="The configuration for which Rally should delete the available records. Possible values are: race, annotation",
+        choices=["race", "annotation"],
+    )
+    delete_parser.add_argument(
+        "--dry-run", help="Just show what would be done but do not apply the operation.", default=False, action="store_true"
+    )
+    delete_parser.add_argument("--id", help="Ids of the items to delete. Separate multiple ids with a comma.", required=True)
+    add_track_source(delete_parser)
 
     info_parser = subparsers.add_parser("info", help="Show info about a track")
     add_track_source(info_parser)
@@ -238,25 +250,6 @@ def create_arg_parser():
         "--output-path",
         default=os.path.join(os.getcwd(), "tracks"),
         help="Track output directory (default: tracks/)",
-    )
-
-    generate_parser = subparsers.add_parser("generate", help="Generate artifacts")
-    generate_parser.add_argument(
-        "artifact",
-        metavar="artifact",
-        help="The artifact to create. Possible values are: charts",
-        choices=["charts"],
-    )
-    generate_parser.add_argument(
-        "--chart-spec-path",
-        required=True,
-        help="Path to a JSON file(s) containing all combinations of charts to generate. Wildcard patterns can be used to specify "
-        "multiple files.",
-    )
-    generate_parser.add_argument(
-        "--output-path",
-        help="Output file name (default: stdout).",
-        default=None,
     )
 
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
@@ -495,6 +488,12 @@ def create_arg_parser():
         help="Method with which to build Elasticsearch and plugins from source",
         choices=["docker", "default"],
         default="default",
+    )
+    install_parser.add_argument(
+        "--installation-id",
+        required=False,
+        help="The id to use for the installation",
+        default=str(uuid.uuid4()),
     )
     for p in [race_parser, install_parser]:
         p.add_argument(
@@ -769,8 +768,44 @@ def create_arg_parser():
         default=False,
     )
 
+    add_parser = subparsers.add_parser("add", help="Add records")
+    add_parser.add_argument(
+        "configuration",
+        metavar="configuration",
+        help="The configuration for which Rally should add records. " "Possible values are: annotation",
+        choices=["annotation"],
+    )
+    add_parser.add_argument(
+        "--dry-run", help="Just show what would be done but do not apply the operation.", default=False, action="store_true"
+    )
+    add_parser.add_argument("--race-timestamp", help="Race timestamp", required=True)
+    add_parser.add_argument("--track", help="Track. If none given, applies to all tracks", default=None)
+    add_parser.add_argument(
+        "--chart-type",
+        help="Chart type to target. If none given, applies to all charts.",
+        choices=[
+            "query",
+            "script",
+            "stats",
+            "indexing",
+            "gc",
+            "index_times",
+            "merge_times",
+            "merge_count",
+            "refresh_times",
+            "segment_count",
+            "io",
+            "ml_processing_time",
+        ],
+        default=None,
+    )
+    add_parser.add_argument("--chart-name", help="A chart name to target. If none given, applies to all charts.", default=None)
+    add_parser.add_argument("--message", help="Annotation message", required=True)
+
     for p in [
         list_parser,
+        delete_parser,
+        add_parser,
         race_parser,
         compare_parser,
         build_parser,
@@ -779,7 +814,6 @@ def create_arg_parser():
         start_parser,
         stop_parser,
         info_parser,
-        generate_parser,
         create_track_parser,
     ]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -814,12 +848,32 @@ def dispatch_list(cfg):
         racecontrol.list_pipelines()
     elif what == "races":
         metrics.list_races(cfg)
+    elif what == "annotations":
+        metrics.list_annotations(cfg)
     elif what == "cars":
         team.list_cars(cfg)
     elif what == "elasticsearch-plugins":
         team.list_plugins(cfg)
     else:
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
+
+
+def dispatch_add(cfg):
+    what = cfg.opts("system", "add.config.option")
+    if what == "annotation":
+        metrics.add_annotation(cfg)
+    else:
+        raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
+
+
+def dispatch_delete(cfg):
+    what = cfg.opts("system", "delete.config.option")
+    if what == "race":
+        metrics.delete_race(cfg)
+    elif what == "annotation":
+        metrics.delete_annotation(cfg)
+    else:
+        raise exceptions.SystemSetupError("Cannot delete unknown configuration option [%s]" % what)
 
 
 def print_help_on_errors():
@@ -939,10 +993,6 @@ def with_actor_system(runnable, cfg):
                 )
 
 
-def generate(cfg):
-    chart_generator.generate(cfg)
-
-
 def configure_telemetry_params(args, cfg):
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", opts.csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "telemetry", "params", opts.to_dict(args.telemetry_params))
@@ -1025,14 +1075,28 @@ def dispatch_sub_command(arg_parser, args, cfg):
             reporter.compare(cfg, args.baseline, args.contender)
         elif sub_command == "list":
             cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.max_results", args.limit)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.track", args.track)
+            cfg.add(config.Scope.applicationOverride, "system", "list.max_results", args.limit)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.from_date", args.from_date)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.to_date", args.to_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
+        elif sub_command == "delete":
+            cfg.add(config.Scope.applicationOverride, "system", "delete.config.option", args.configuration)
+            cfg.add(config.Scope.applicationOverride, "system", "delete.id", args.id)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.dry_run", args.dry_run)
+            dispatch_delete(cfg)
+        elif sub_command == "add":
+            cfg.add(config.Scope.applicationOverride, "system", "add.config.option", args.configuration)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
+            cfg.add(config.Scope.applicationOverride, "system", "add.message", args.message)
+            cfg.add(config.Scope.applicationOverride, "system", "add.race_timestamp", args.race_timestamp)
+            cfg.add(config.Scope.applicationOverride, "system", "add.chart_type", args.chart_type)
+            cfg.add(config.Scope.applicationOverride, "system", "add.chart_name", args.chart_name)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.dry_run", args.dry_run)
+            dispatch_add(cfg)
         elif sub_command == "build":
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
@@ -1048,7 +1112,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             configure_mechanic_params(args, cfg)
             mechanic.download(cfg)
         elif sub_command == "install":
-            cfg.add(config.Scope.applicationOverride, "system", "install.id", str(uuid.uuid4()))
+            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
@@ -1105,10 +1169,6 @@ def dispatch_sub_command(arg_parser, args, cfg):
 
             configure_reporting_params(args, cfg)
             race(cfg, args.kill_running_processes)
-        elif sub_command == "generate":
-            cfg.add(config.Scope.applicationOverride, "generator", "chart.spec.path", args.chart_spec_path)
-            cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-            generate(cfg)
         elif sub_command == "create-track":
             if args.data_streams is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
@@ -1191,7 +1251,7 @@ def main():
         raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
 
     # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
-    logging.info("Cleaning track dependency directory [%s]...", paths.libs())
+    logger.info("Cleaning track dependency directory [%s]...", paths.libs())
     shutil.rmtree(paths.libs(), onerror=_trap)
 
     result = dispatch_sub_command(arg_parser, args, cfg)
