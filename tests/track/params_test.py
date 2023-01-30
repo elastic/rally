@@ -1391,7 +1391,13 @@ class TestBulkDataGenerator:
                         number_of_documents=5,
                         target_index="logs-2017-01",
                         target_type="docs",
-                    )
+                    ),
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=0,
+                        target_index="logs-2017-02",
+                        target_type="docs",
+                    ),
                 ],
             ),
             track.DocumentCorpus(

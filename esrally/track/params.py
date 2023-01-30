@@ -970,6 +970,7 @@ def create_readers(
                     end_client_index,
                     corpus.name,
                 )
+                continue
 
             target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
             if docs.target_data_stream:
