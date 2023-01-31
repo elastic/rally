@@ -952,7 +952,6 @@ def create_readers(
     recency,
     create_reader,
 ):
-    logger = logging.getLogger(__name__)
     readers = []
     total_readers = 0
     # stagger which corpus each client starts with for better parallelism
@@ -964,27 +963,8 @@ def create_readers(
                 docs.number_of_documents, start_client_index, end_client_index, num_clients, docs.includes_action_and_meta_data
             )
             if num_docs == 0:
-                logger.debug(
-                    "Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
-                    start_client_index,
-                    end_client_index,
-                    corpus.name,
-                )
                 continue
 
-            target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
-            if docs.target_data_stream:
-                target = docs.target_data_stream
-            logger.debug(
-                "Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
-                "from corpus [%s].",
-                start_client_index,
-                end_client_index,
-                num_docs,
-                offset,
-                target,
-                corpus.name,
-            )
             reader = create_reader(
                 docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
             )
