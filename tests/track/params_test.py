@@ -1467,6 +1467,67 @@ class TestBulkDataGenerator:
             },
         ]
 
+    def test_generate_bulks_with_more_clients_than_corpora(self):
+        corpora = [
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2017-01",
+                        target_type="docs",
+                    ),
+                ],
+            ),
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2018-01",
+                        target_type="docs",
+                    ),
+                ],
+            ),
+            track.DocumentCorpus(
+                name="defaults",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2019-01",
+                        target_type="docs",
+                    ),
+                ],
+            ),
+        ]
+
+        for client_index, indices in [
+            (0, ["logs-2017-01", "logs-2018-01", "logs-2019-01"]),
+            (1, ["logs-2018-01", "logs-2019-01", "logs-2017-01"]),
+            (2, ["logs-2019-01", "logs-2017-01", "logs-2018-01"]),
+            (3, ["logs-2017-01", "logs-2018-01", "logs-2019-01"]),
+            (4, ["logs-2018-01", "logs-2019-01", "logs-2017-01"]),
+        ]:
+            bulks = params.bulk_data_based(
+                num_clients=5,
+                start_client_index=client_index,
+                end_client_index=client_index,
+                corpora=corpora,
+                batch_size=5,
+                bulk_size=5,
+                id_conflicts=params.IndexIdConflict.NoConflicts,
+                conflict_probability=None,
+                on_conflict=None,
+                recency=None,
+                pipeline=None,
+                original_params={},
+                create_reader=self.create_test_reader([["1", "2", "3", "4", "5"]]),
+            )
+            assert [bulk["index"] for bulk in bulks] == indices
+
     def test_internal_params_take_precedence(self):
         corpus = track.DocumentCorpus(
             name="default",

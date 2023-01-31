@@ -974,7 +974,8 @@ def create_readers(
     corpora_readers: List[Deque[IndexDataReader]] = []
     total_readers = 0
     # stagger which corpus each client starts with for better parallelism (see 1. above)
-    reordered_corpora = corpora[start_client_index:] + corpora[:start_client_index]
+    start_corpora_id = start_client_index % len(corpora)
+    reordered_corpora = corpora[start_corpora_id:] + corpora[:start_corpora_id]
 
     for corpus in reordered_corpora:
         reader_queue: Deque[IndexDataReader] = collections.deque()
