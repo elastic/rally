@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 import collections
 import inspect
 import logging
@@ -25,13 +27,16 @@ import random
 import time
 from abc import ABC
 from enum import Enum
+from typing import Callable, Deque, Dict, List
 
 from esrally import exceptions
 from esrally.track import track
 from esrally.utils import io
 
-__PARAM_SOURCES_BY_OP = {}
-__PARAM_SOURCES_BY_NAME = {}
+# pylint: disable=used-before-assignment
+
+__PARAM_SOURCES_BY_OP: Dict[track.OperationType, ParamSource] = {}
+__PARAM_SOURCES_BY_NAME: Dict[str, ParamSource] = {}
 
 
 def param_source_for_operation(op_type, track, params, task_name):
@@ -940,30 +945,30 @@ def create_default_reader(
 
 
 def create_readers(
-    num_clients,
-    start_client_index,
-    end_client_index,
-    corpora,
-    batch_size,
-    bulk_size,
-    id_conflicts,
-    conflict_probability,
-    on_conflict,
-    recency,
-    create_reader,
-):
+    num_clients: int,
+    start_client_index: int,
+    end_client_index: int,
+    corpora: List[track.DocumentCorpus],
+    batch_size: int,
+    bulk_size: int,
+    id_conflicts: IndexIdConflict,
+    conflict_probability: float,
+    on_conflict: str,
+    recency: str,
+    create_reader: Callable[..., IndexDataReader],
+) -> List[IndexDataReader]:
     readers = []
     total_readers = 0
     # stagger which corpus each client starts with for better parallelism
     reordered_corpora = corpora[start_client_index:] + corpora[:start_client_index]
     for corpus in reordered_corpora:
-        reader_queue = collections.dequeue()
+        reader_queue: Deque[IndexDataReader] = collections.deque()
         for docs in corpus.documents:
             offset, num_docs, num_lines = bounds(
                 docs.number_of_documents, start_client_index, end_client_index, num_clients, docs.includes_action_and_meta_data
             )
             if num_docs > 0:
-                reader = create_reader(
+                reader: IndexDataReader = create_reader(
                     docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
                 )
                 reader_queue.append(reader)
@@ -973,7 +978,7 @@ def create_readers(
     # Instead of reading all files from the first corpus, and then all files from the
     # second corpus, etc. we want to read the first file of all corpora, then the second
     # file, etc.
-    staggered_readers = []
+    staggered_readers: List[IndexDataReader] = []
     while total_readers > 0:
         for reader_queue in readers:
             if reader_queue:
