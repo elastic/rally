@@ -962,14 +962,12 @@ def create_readers(
             offset, num_docs, num_lines = bounds(
                 docs.number_of_documents, start_client_index, end_client_index, num_clients, docs.includes_action_and_meta_data
             )
-            if num_docs == 0:
-                continue
-
-            reader = create_reader(
-                docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
-            )
-            reader_queue.append(reader)
-            total_readers += 1
+            if num_docs > 0:
+                reader = create_reader(
+                    docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
+                )
+                reader_queue.append(reader)
+                total_readers += 1
         readers.append(reader_queue)
 
     # Instead of reading all files from the first corpus, and then all files from the
