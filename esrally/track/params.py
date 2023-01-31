@@ -957,10 +957,25 @@ def create_readers(
     recency: str,
     create_reader: Callable[..., IndexDataReader],
 ) -> List[IndexDataReader]:
-    readers = []
+    """
+    Return a list of IndexDataReader instances to allow a range of clients to read their share of corpora.
+
+    We're looking for better parallelism between corpora in indexing tasks in two ways:
+
+    1. By giving each client its own starting point in the list of corpora (using a
+       modulus of the number of corpora listed and the number of the client). In a track
+       with 2 corpora and 5 clients, clients 1, 3, and 5 would start with the first corpus
+       and clients 2 and 4 would start with the second corpus.
+    2. By generating the IndexDataReader list round-robin among all files, instead of in
+       order. If I'm the first client, I start with the first partition of the first file
+       of the first corpus. Then I move on to the first partition of the first file of the
+       second corpus, and so on.
+    """
+    corpora_readers: List[Deque[IndexDataReader]] = []
     total_readers = 0
-    # stagger which corpus each client starts with for better parallelism
+    # stagger which corpus each client starts with for better parallelism (see 1. above)
     reordered_corpora = corpora[start_client_index:] + corpora[:start_client_index]
+
     for corpus in reordered_corpora:
         reader_queue: Deque[IndexDataReader] = collections.deque()
         for docs in corpus.documents:
@@ -973,14 +988,14 @@ def create_readers(
                 )
                 reader_queue.append(reader)
                 total_readers += 1
-        readers.append(reader_queue)
+        corpora_readers.append(reader_queue)
 
-    # Instead of reading all files from the first corpus, and then all files from the
-    # second corpus, etc. we want to read the first file of all corpora, then the second
-    # file, etc.
+    # Stagger which files will be read (see 2. above)
     staggered_readers: List[IndexDataReader] = []
     while total_readers > 0:
-        for reader_queue in readers:
+        for reader_queue in corpora_readers:
+            # Since corpora don't necessarily contain the same number of documents, we
+            # ignore already consumed queues
             if reader_queue:
                 staggered_readers.append(reader_queue.popleft())
                 total_readers -= 1
