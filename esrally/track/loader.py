@@ -1244,9 +1244,7 @@ class TrackSpecificationReader:
             idx_body_tmpl_src = TemplateSource(mapping_dir, body_file, self.source)
             with self.source(os.path.join(mapping_dir, body_file), "rt") as f:
                 idx_body_tmpl_src.load_template_from_string(f.read())
-                body = self._load_template(
-                    idx_body_tmpl_src.assembled_source, f"definition for index {index_name} in {body_file}"
-                )
+                body = self._load_template(idx_body_tmpl_src.assembled_source, f"definition for index {index_name} in {body_file}")
         else:
             body = None
 

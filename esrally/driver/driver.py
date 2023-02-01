@@ -802,8 +802,8 @@ class Driver:
                         delete_api_keys(self.default_sync_es_client, self.generated_api_key_ids)
                     except exceptions.RallyError:
                         console.warn(
-                                "Unable to delete auto-generated API keys. You may need to manually delete them. "
-                                "Please check the logs for details."
+                            "Unable to delete auto-generated API keys. You may need to manually delete them. "
+                            "Please check the logs for details."
                         )
                 self.logger.debug("Sending benchmark results...")
                 self.target.on_benchmark_complete(m)

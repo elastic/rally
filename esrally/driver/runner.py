@@ -2725,9 +2725,7 @@ class Sql(Runner):
             cursor = parse(r, ["cursor"]).get("cursor")
 
             if not cursor:
-                raise exceptions.DataError(
-                    f"Result set has been exhausted before all pages have been fetched, {pages} page(s) remaining."
-                )
+                raise exceptions.DataError(f"Result set has been exhausted before all pages have been fetched, {pages} page(s) remaining.")
 
             r = await es.perform_request(method="POST", path="/_sql", body={"cursor": cursor})
             pages -= 1

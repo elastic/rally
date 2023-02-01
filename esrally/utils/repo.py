@@ -55,9 +55,7 @@ class RallyRepository:
                     raise exceptions.SystemSetupError(
                         "[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init".format(src=self.repo_dir)
                     )
-                raise exceptions.SystemSetupError(
-                    f"Expected a git repository at [{self.repo_dir}] but the directory does not exist."
-                )
+                raise exceptions.SystemSetupError(f"Expected a git repository at [{self.repo_dir}] but the directory does not exist.")
 
     def update(self, distribution_version):
         try:

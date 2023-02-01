@@ -251,9 +251,7 @@ class SummaryReporter:
     def _report_total_time_per_shard(self, name, total_time_per_shard):
         unit = "min"
         return self._join(
-            self._line(
-                f"Min cumulative {name} across primary shards", "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes
-            ),
+            self._line(f"Min cumulative {name} across primary shards", "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes),
             self._line(
                 f"Median cumulative {name} across primary shards",
                 "",
@@ -261,9 +259,7 @@ class SummaryReporter:
                 unit,
                 convert.ms_to_minutes,
             ),
-            self._line(
-                f"Max cumulative {name} across primary shards", "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes
-            ),
+            self._line(f"Max cumulative {name} across primary shards", "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes),
         )
 
     def _report_total_count(self, name, total_count):
@@ -847,9 +843,7 @@ class ComparisonReporter:
 
     def _report_total_count(self, name, baseline_total, contender_total):
         return self._join(
-            self._line(
-                f"Cumulative {name} of primary shards", baseline_total, contender_total, "", "", treat_increase_as_improvement=False
-            )
+            self._line(f"Cumulative {name} of primary shards", baseline_total, contender_total, "", "", treat_increase_as_improvement=False)
         )
 
     def _report_gc_metrics(self, baseline_stats, contender_stats):

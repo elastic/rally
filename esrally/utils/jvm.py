@@ -158,9 +158,7 @@ def _resolve_single_path(major, mandatory=True, sysprop_reader=system_property):
         if java_home:
             return java_home
         elif mandatory:
-            raise exceptions.SystemSetupError(
-                f"Neither {specific_env_var} nor {generic_env_var} point to a JDK {major} installation."
-            )
+            raise exceptions.SystemSetupError(f"Neither {specific_env_var} nor {generic_env_var} point to a JDK {major} installation.")
         else:
             return None
 

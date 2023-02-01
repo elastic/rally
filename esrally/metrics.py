@@ -1896,9 +1896,7 @@ class EsRaceStore(RaceStore):
         if hits == 1:
             return Race.from_dict(result["hits"]["hits"][0]["_source"])
         elif hits > 1:
-            raise exceptions.RallyAssertionError(
-                f"Expected exactly one race to match race id [{race_id}] but there were [{hits}] matches."
-            )
+            raise exceptions.RallyAssertionError(f"Expected exactly one race to match race id [{race_id}] but there were [{hits}] matches.")
         else:
             raise exceptions.NotFound(f"No race with race id [{race_id}]")
 

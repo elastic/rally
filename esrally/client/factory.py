@@ -114,13 +114,13 @@ class EsClientFactory:
             missing_auth = [k for k, v in provided_auth.items() if not v]
             if missing_auth:
                 console.println(
-                        "Basic auth credentials are required in order to create API keys.\n"
-                        f"Missing basic auth client options are: {missing_auth}\n"
-                        f"Read the documentation at {console.format.link(doc_link('command_line_reference.html#client-options'))}"
+                    "Basic auth credentials are required in order to create API keys.\n"
+                    f"Missing basic auth client options are: {missing_auth}\n"
+                    f"Read the documentation at {console.format.link(doc_link('command_line_reference.html#client-options'))}"
                 )
                 raise exceptions.SystemSetupError(
-                        "You must provide the 'basic_auth_user' and 'basic_auth_password' client options in addition "
-                        "to 'create_api_key_per_client' in order to create client API keys."
+                    "You must provide the 'basic_auth_user' and 'basic_auth_password' client options in addition "
+                    "to 'create_api_key_per_client' in order to create client API keys."
                 )
             self.logger.debug("Automatic creation of client API keys: on")
         else:
