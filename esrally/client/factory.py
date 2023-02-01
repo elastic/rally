@@ -118,6 +118,7 @@ class EsClientFactory:
             self.logger.debug("SSL support: off")
 
         if self._is_set(self.client_options, "create_api_key_per_client"):
+            self.client_options.pop("create_api_key_per_client")
             basic_auth_user = self.client_options.get("basic_auth_user", False)
             basic_auth_password = self.client_options.get("basic_auth_password", False)
             provided_auth = {"basic_auth_user": basic_auth_user, "basic_auth_password": basic_auth_password}
@@ -155,8 +156,9 @@ class EsClientFactory:
         else:
             self.logger.debug("HTTP compression: off")
 
-        if self._is_set(self.client_options, "enable_cleanup_closed"):
-            self.client_options["enable_cleanup_closed"] = convert.to_bool(self.client_options.pop("enable_cleanup_closed"))
+        self.enable_cleanup_closed = convert.to_bool(self.client_options.pop("enable_cleanup_closed", True))
+        self.max_connections = max(256, self.client_options.pop("max_connections", 0))
+        self.static_responses = self.client_options.pop("static_responses", None)
 
     @staticmethod
     def _only_hostnames(hosts):
@@ -222,22 +224,28 @@ class EsClientFactory:
 
         # override the builtin JSON serializer
         self.client_options["serializer"] = LazyJSONSerializer()
-        # TODO see esrally.client/asynchronous
-        # self.client_options["trace_config"] = trace_config
 
         if api_key is not None:
             self.client_options.pop("http_auth")
             self.client_options["api_key"] = api_key
 
-        return RallyAsyncElasticsearch(
+        async_client = RallyAsyncElasticsearch(
             distro=self.distribution_version,
             hosts=self.hosts,
             transport_class=RallyAsyncTransport,
             ssl_context=self.ssl_context,
-            maxsize=max,
+            maxsize=self.max_connections,
             **self.client_options,
         )
 
+        # the AsyncElasticsearch constructor automatically creates the corresponding NodeConfig objects, so we set
+        # their instance attributes after they've been instantiated
+        for node_connection in async_client.transport.node_pool.all():
+            node_connection.trace_configs = trace_config
+            node_connection.enable_cleanup_closed = self.enable_cleanup_closed
+            node_connection.static_responses = self.static_responses
+
+        return async_client
 
 def wait_for_rest_layer(es, max_attempts=40):
     """

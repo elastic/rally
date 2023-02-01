@@ -202,22 +202,38 @@ class ResponseMatcher:
 class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
     def __init__(self, config):
         super().__init__(config)
+        self._loop = None
+        self._trace_configs = None
+        self._enable_cleanup_closed = None
+        self._static_responses = None
 
-        self._loop = asyncio.get_running_loop()
-        self._limit = None
+    @property
+    def trace_configs(self):
+        return self._trace_configs
 
-        client_options = config._extras.get("_rally_client_options")
-        if client_options:
-            self._trace_configs = client_options.get("trace_config")
-            self._enable_cleanup_closed = client_options.get("enable_cleanup_closed")
+    @trace_configs.setter
+    def trace_configs(self, trace_configs):
+        self._trace_configs = [trace_configs]
 
-        static_responses = client_options.get("static_responses")
-        self.use_static_responses = static_responses is not None
+    @property
+    def enable_cleanup_closed(self):
+        return self._enable_cleanup_closed
 
-        if self.use_static_responses:
+    @enable_cleanup_closed.setter
+    def enable_cleanup_closed(self, enable_cleanup_closed):
+        self._enable_cleanup_closed = enable_cleanup_closed
+
+    @property
+    def static_responses(self):
+        return self._static_responses
+
+    @static_responses.setter
+    def static_responses(self, static_responses):
+        self._static_responses = static_responses
+        if self._static_responses:
             # read static responses once and reuse them
             if not StaticRequest.RESPONSES:
-                with open(io.normalize_path(static_responses)) as f:
+                with open(io.normalize_path(self._static_responses)) as f:
                     StaticRequest.RESPONSES = ResponseMatcher(json.load(f))
 
             self._request_class = StaticRequest
@@ -227,11 +243,14 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
             self._response_class = RawClientResponse
 
     def _create_aiohttp_session(self):
-        if self.use_static_responses:
-            connector = StaticConnector(limit=self._limit, enable_cleanup_closed=self._enable_cleanup_closed)
+        if self._loop is None:
+            self._loop = asyncio.get_running_loop()
+
+        if self._static_responses:
+            connector = StaticConnector(limit_per_host=self._connections_per_node, enable_cleanup_closed=self._enable_cleanup_closed)
         else:
             connector = aiohttp.TCPConnector(
-                limit=self._limit, use_dns_cache=True, ssl=self._ssl_context, enable_cleanup_closed=self._enable_cleanup_closed
+                limit_per_host=self._connections_per_node, use_dns_cache=True, ssl=self._ssl_context, enable_cleanup_closed=self._enable_cleanup_closed
             )
 
         self.session = aiohttp.ClientSession(
@@ -248,31 +267,7 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
 
 class RallyAsyncTransport(elastic_transport.AsyncTransport):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # TODO The previous way of handling trace_config relied on a closure, which is
-        # not possible anymore now that RallyAsyncTransport is in its own file
-
-        # We need to pass a trace config to the session that's created in
-        # async_connection.RallyAiohttphttpnode, which is a subclass of
-        # elastic_transport.AiohttpHttpNode.
-        #
-        # Its constructor only accepts an elastic_transport.NodeConfig object.
-        # Because we do not fully control creation of these objects , we need to
-        # pass the trace_config by adding it to the NodeConfig's `extras`, which
-        # can contain arbitrary metadata.
-
-        # client_options.update({"trace_config": [trace_config]})
-        # node_configs = args[0]
-        # for conf in node_configs:
-        #     extras = conf._extras
-        #     extras.update({"_rally_client_options": client_options})
-        #     conf._extras = extras
-        # original_args = args
-        # new_args = (node_configs, *original_args[1:])
-
-        # super().__init__(*new_args, node_class=RallyAiohttpHttpNode, **kwargs)
-
+        super().__init__(*args, node_class=RallyAiohttpHttpNode, **kwargs)
 
 class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
     def __init__(self, distro, *args, **kwargs):
