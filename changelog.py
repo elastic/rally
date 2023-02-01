@@ -88,7 +88,7 @@ def main():
     milestone_name = sys.argv[1]
 
     # requires a personal Github access token with permission `public_repo` (see https://github.com/settings/tokens)
-    gh = github3.login(token=open("%s/.github/rally_release_changelog.token" % os.getenv("HOME"), "r").readline().strip())
+    gh = github3.login(token=open("%s/.github/rally_release_changelog.token" % os.getenv("HOME")).readline().strip())
 
     rally_repo = gh.repository(ORG, REPO)
 

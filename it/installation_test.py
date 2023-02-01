@@ -27,11 +27,11 @@ import it
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _CI_VARS = ".ci/variables.json"
 
-with open(os.path.join(ROOT_DIR, _CI_VARS), "rt") as fp:
+with open(os.path.join(ROOT_DIR, _CI_VARS)) as fp:
     try:
         MIN_PY_VER = json.load(fp)["python_versions"]["MIN_PY_VER"]
     except KeyError:
-        raise EnvironmentError(f"Installation tests require [python_versions.MIN_PY_VER] key in [{_CI_VARS}]")
+        raise OSError(f"Installation tests require [python_versions.MIN_PY_VER] key in [{_CI_VARS}]")
 
 
 def test_installs_inside_venv():

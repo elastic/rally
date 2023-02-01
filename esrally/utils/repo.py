@@ -56,7 +56,7 @@ class RallyRepository:
                         "[{src}] must be a git repository.\n\nPlease run:\ngit -C {src} init".format(src=self.repo_dir)
                     )
                 raise exceptions.SystemSetupError(
-                    "Expected a git repository at [{src}] but the directory does not exist.".format(src=self.repo_dir)
+                    f"Expected a git repository at [{self.repo_dir}] but the directory does not exist."
                 )
 
     def update(self, distribution_version):
@@ -118,7 +118,7 @@ class RallyRepository:
         tags = git.tags(self.repo_dir)
         for version in versions.variants_of(distribution_version):
             # tags have a "v" prefix by convention.
-            tag_candidate = "v{}".format(version)
+            tag_candidate = f"v{version}"
             if tag_candidate in tags:
                 return tag_candidate
         return None

@@ -122,5 +122,5 @@ class TestDecompression:
         assert result is False
 
     def read(self, f):
-        with open(f, "r") as content_file:
+        with open(f) as content_file:
             return content_file.read()

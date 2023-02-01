@@ -245,30 +245,30 @@ class SummaryReporter:
     def _report_total_time(self, name, total_time):
         unit = "min"
         return self._join(
-            self._line("Cumulative {} of primary shards".format(name), "", total_time, unit, convert.ms_to_minutes),
+            self._line(f"Cumulative {name} of primary shards", "", total_time, unit, convert.ms_to_minutes),
         )
 
     def _report_total_time_per_shard(self, name, total_time_per_shard):
         unit = "min"
         return self._join(
             self._line(
-                "Min cumulative {} across primary shards".format(name), "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes
+                f"Min cumulative {name} across primary shards", "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes
             ),
             self._line(
-                "Median cumulative {} across primary shards".format(name),
+                f"Median cumulative {name} across primary shards",
                 "",
                 total_time_per_shard.get("median"),
                 unit,
                 convert.ms_to_minutes,
             ),
             self._line(
-                "Max cumulative {} across primary shards".format(name), "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes
+                f"Max cumulative {name} across primary shards", "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes
             ),
         )
 
     def _report_total_count(self, name, total_count):
         return self._join(
-            self._line("Cumulative {} of primary shards".format(name), "", total_count, ""),
+            self._line(f"Cumulative {name} of primary shards", "", total_count, ""),
         )
 
     def _report_ml_processing_times(self, stats):
@@ -803,7 +803,7 @@ class ComparisonReporter:
         unit = "min"
         return self._join(
             self._line(
-                "Cumulative {} of primary shards".format(name),
+                f"Cumulative {name} of primary shards",
                 baseline_total,
                 contender_total,
                 "",
@@ -817,7 +817,7 @@ class ComparisonReporter:
         unit = "min"
         return self._join(
             self._line(
-                "Min cumulative {} across primary shard".format(name),
+                f"Min cumulative {name} across primary shard",
                 baseline_per_shard.get("min"),
                 contender_per_shard.get("min"),
                 "",
@@ -826,7 +826,7 @@ class ComparisonReporter:
                 formatter=convert.ms_to_minutes,
             ),
             self._line(
-                "Median cumulative {} across primary shard".format(name),
+                f"Median cumulative {name} across primary shard",
                 baseline_per_shard.get("median"),
                 contender_per_shard.get("median"),
                 "",
@@ -835,7 +835,7 @@ class ComparisonReporter:
                 formatter=convert.ms_to_minutes,
             ),
             self._line(
-                "Max cumulative {} across primary shard".format(name),
+                f"Max cumulative {name} across primary shard",
                 baseline_per_shard.get("max"),
                 contender_per_shard.get("max"),
                 "",
@@ -848,7 +848,7 @@ class ComparisonReporter:
     def _report_total_count(self, name, baseline_total, contender_total):
         return self._join(
             self._line(
-                "Cumulative {} of primary shards".format(name), baseline_total, contender_total, "", "", treat_increase_as_improvement=False
+                f"Cumulative {name} of primary shards", baseline_total, contender_total, "", "", treat_increase_as_improvement=False
             )
         )
 

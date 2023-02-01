@@ -150,38 +150,38 @@ def list_tracks(cfg):
 
 def track_info(cfg):
     def format_task(t, indent="", num="", suffix=""):
-        msg = "{}{}{}".format(indent, num, str(t))
+        msg = f"{indent}{num}{str(t)}"
         if t.clients > 1:
-            msg += " ({} clients)".format(t.clients)
+            msg += f" ({t.clients} clients)"
         msg += suffix
         return msg
 
     def challenge_info(c):
         if not c.auto_generated:
-            msg = "Challenge [{}]".format(c.name)
+            msg = f"Challenge [{c.name}]"
             if c.default:
                 msg += " (run by default)"
             console.println(msg, underline="=", overline="=")
             if c.description:
-                console.println("\n{}".format(c.description))
+                console.println(f"\n{c.description}")
 
         console.println("\nSchedule:", underline="-")
         console.println("")
         for num, task in enumerate(c.schedule, start=1):
             if task.nested:
-                console.println(format_task(task, suffix=":", num="{}. ".format(num)))
+                console.println(format_task(task, suffix=":", num=f"{num}. "))
                 for leaf_num, leaf_task in enumerate(task, start=1):
-                    console.println(format_task(leaf_task, indent="\t", num="{}.{} ".format(num, leaf_num)))
+                    console.println(format_task(leaf_task, indent="\t", num=f"{num}.{leaf_num} "))
             else:
-                console.println(format_task(task, num="{}. ".format(num)))
+                console.println(format_task(task, num=f"{num}. "))
 
     t = load_track(cfg)
-    console.println("Showing details for track [{}]:\n".format(t.name))
-    console.println("* Description: {}".format(t.description))
+    console.println(f"Showing details for track [{t.name}]:\n")
+    console.println(f"* Description: {t.description}")
     if t.number_of_documents:
-        console.println("* Documents: {}".format(convert.number_to_human_string(t.number_of_documents)))
-        console.println("* Compressed Size: {}".format(convert.bytes_to_human_string(t.compressed_size_in_bytes)))
-        console.println("* Uncompressed Size: {}".format(convert.bytes_to_human_string(t.uncompressed_size_in_bytes)))
+        console.println(f"* Documents: {convert.number_to_human_string(t.number_of_documents)}")
+        console.println(f"* Compressed Size: {convert.bytes_to_human_string(t.compressed_size_in_bytes)}")
+        console.println(f"* Uncompressed Size: {convert.bytes_to_human_string(t.uncompressed_size_in_bytes)}")
     console.println("")
 
     if t.selected_challenge:
@@ -700,7 +700,7 @@ class TemplateSource:
             base_track = loader.get_source(jinja2.Environment(), self.template_file_name)
         except jinja2.TemplateNotFound:
             self.logger.exception("Could not load track from [%s].", self.template_file_name)
-            raise TrackSyntaxError("Could not load track from '{}'".format(self.template_file_name))
+            raise TrackSyntaxError(f"Could not load track from '{self.template_file_name}'")
         self.assembled_source = self.replace_includes(self.base_path, base_track[0])
 
     def load_template_from_string(self, template_source):
@@ -994,7 +994,7 @@ class TrackFileReader:
 
     def __init__(self, cfg):
         track_schema_file = os.path.join(cfg.opts("node", "rally.root"), "resources", "track-schema.json")
-        with open(track_schema_file, mode="rt", encoding="utf-8") as f:
+        with open(track_schema_file, encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
         self.track_params = cfg.opts("track", "params", mandatory=False)
         self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
@@ -1021,16 +1021,16 @@ class TrackFileReader:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
             try:
                 rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
-                with open(tmp.name, "wt", encoding="utf-8") as f:
+                with open(tmp.name, "w", encoding="utf-8") as f:
                     f.write(rendered)
                 self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
                 track_spec = json.loads(rendered)
             except jinja2.exceptions.TemplateNotFound:
                 self.logger.exception("Could not load [%s]", track_spec_file)
-                raise exceptions.SystemSetupError("Track {} does not exist".format(track_name))
+                raise exceptions.SystemSetupError(f"Track {track_name} does not exist")
             except json.JSONDecodeError as e:
                 self.logger.exception("Could not load [%s].", track_spec_file)
-                msg = "Could not load '{}': {}.".format(track_spec_file, str(e))
+                msg = f"Could not load '{track_spec_file}': {str(e)}."
                 if e.doc and e.lineno > 0 and e.colno > 0:
                     line_idx = e.lineno - 1
                     lines = e.doc.split("\n")
@@ -1040,11 +1040,11 @@ class TrackFileReader:
                     erroneous_lines = lines[ctx_start:ctx_end]
                     erroneous_lines.insert(line_idx - ctx_start + 1, "-" * (e.colno - 1) + "^ Error is here")
                     msg += " Lines containing the error:\n\n{}\n\n".format("\n".join(erroneous_lines))
-                msg += "The complete track has been written to '{}' for diagnosis.".format(tmp.name)
+                msg += f"The complete track has been written to '{tmp.name}' for diagnosis."
                 raise TrackSyntaxError(msg)
             except Exception as e:
                 self.logger.exception("Could not load [%s].", track_spec_file)
-                msg = "Could not load '{}'. The complete track has been written to '{}' for diagnosis.".format(track_spec_file, tmp.name)
+                msg = f"Could not load '{track_spec_file}'. The complete track has been written to '{tmp.name}' for diagnosis."
                 raise TrackSyntaxError(msg, e)
 
         # check the track version before even attempting to validate the JSON format to avoid bogus errors.
@@ -1102,7 +1102,7 @@ class TrackFileReader:
             self.logger.critical(err_msg)
             # also dump the message on the console
             console.println(err_msg)
-            raise exceptions.TrackConfigError("Unused track parameters {}.".format(sorted(unused_user_defined_track_params)))
+            raise exceptions.TrackConfigError(f"Unused track parameters {sorted(unused_user_defined_track_params)}.")
         return current_track
 
 
@@ -1245,7 +1245,7 @@ class TrackSpecificationReader:
             with self.source(os.path.join(mapping_dir, body_file), "rt") as f:
                 idx_body_tmpl_src.load_template_from_string(f.read())
                 body = self._load_template(
-                    idx_body_tmpl_src.assembled_source, "definition for index {} in {}".format(index_name, body_file)
+                    idx_body_tmpl_src.assembled_source, f"definition for index {index_name} in {body_file}"
                 )
         else:
             body = None
@@ -1282,7 +1282,7 @@ class TrackSpecificationReader:
         with self.source(template_file, "rt") as f:
             idx_tmpl_src.load_template_from_string(f.read())
             template_content = self._load_template(
-                idx_tmpl_src.assembled_source, "definition for index template {} in {}".format(name, template_file)
+                idx_tmpl_src.assembled_source, f"definition for index template {name} in {template_file}"
             )
         if template_path:
             for field in template_path.split("."):
@@ -1508,7 +1508,7 @@ class TrackSpecificationReader:
         elif schedule is not None:
             return [{"name": "default", "schedule": schedule}], True
         else:
-            raise AssertionError("Unexpected: schedule=[{}], challenge=[{}], challenges=[{}]".format(schedule, challenge, challenges))
+            raise AssertionError(f"Unexpected: schedule=[{schedule}], challenge=[{challenge}], challenges=[{challenges}]")
 
     def parse_parallel(self, ops_spec, ops, challenge_name):
         # use same default values as #parseTask() in case the 'parallel' element did not specify anything
