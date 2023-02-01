@@ -911,6 +911,10 @@ class NodeStatsRecorder:
         return self.flatten_stats_fields(prefix="os_mem", stats=node_stats["os"]["mem"])
     
     def os_cgroup_stats(self, node_name, node_stats):
+        # Convert strings returned by the Node Stats API for os.cgroup.memory limits
+        # https://github.com/elastic/elasticsearch/issues/93429
+        for k in ("limit_in_bytes", "usage_in_bytes"):
+            node_stats["os"]["cgroup"]["memory"].update({k: int(node_stats["os"]["cgroup"]["memory"].get(k))})
         return self.flatten_stats_fields(prefix="os_cgroup", stats=node_stats["os"]["cgroup"])
 
     def jvm_gc_stats(self, node_name, node_stats):
