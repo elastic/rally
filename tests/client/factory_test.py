@@ -322,11 +322,7 @@ class TestEsClientFactory:
     @mock.patch("esrally.client.asynchronous.RallyAsyncElasticsearch")
     def test_create_async_client_with_api_key_auth_override(self, es):
         hosts = [{"host": "localhost", "port": 9200}]
-        client_options = {
-            "use_ssl": True,
-            "verify_certs": True,
-            "http_auth": ("user", "password"),
-        }
+        client_options = {"use_ssl": True, "verify_certs": True, "http_auth": ("user", "password"), "max_connections": 600}
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
         api_key = ("id", "secret")
@@ -336,6 +332,7 @@ class TestEsClientFactory:
         assert f.create_async(api_key=api_key)
         assert "http_auth" not in f.client_options
         assert f.client_options["api_key"] == api_key
+        assert client_options["max_connections"] == f.max_connections
         assert client_options == original_client_options
 
         es.assert_called_once_with(
@@ -343,7 +340,7 @@ class TestEsClientFactory:
             hosts=["https://localhost:9200"],
             transport_class=RallyAsyncTransport,
             ssl_context=f.ssl_context,
-            maxsize=max,
+            maxsize=f.max_connections,
             verify_certs=True,
             serializer=f.client_options["serializer"],
             api_key=api_key,
@@ -489,7 +486,7 @@ class TestApiKeys:
         client_id = 0
         assert client.create_api_key(es, client_id, max_attempts=3)
         # even though max_attempts is 3, this should only be called once
-        es.security.create_api_key.assert_called_once_with({"name": f"rally-client-{client_id}"})
+        es.security.create_api_key.assert_called_once_with(name=f"rally-client-{client_id}")
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_api_key_creation_fails_on_405_and_raises_system_setup_error(self, es):
@@ -501,7 +498,7 @@ class TestApiKeys:
         ):
             client.create_api_key(es, client_id, max_attempts=5)
 
-        es.security.create_api_key.assert_called_once_with({"name": f"rally-client-{client_id}"})
+        es.security.create_api_key.assert_called_once_with(name=f"rally-client-{client_id}")
 
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
@@ -514,7 +511,7 @@ class TestApiKeys:
             _api_error(500, "Internal Server Error"),
             {"id": "abc", "name": f"rally-client-{client_id}", "api_key": "123"},
         ]
-        calls = [mock.call({"name": "rally-client-0"}) for _ in range(5)]
+        calls = [mock.call(name="rally-client-0") for _ in range(5)]
 
         assert client.create_api_key(es, client_id, max_attempts=5)
         assert es.security.create_api_key.call_args_list == calls
@@ -537,7 +534,7 @@ class TestApiKeys:
             ]
         else:
             es.security.invalidate_api_key.return_value = {"invalidated_api_keys": ["foo", "bar", "baz"], "error_count": 0}
-            calls = [mock.call({"ids": ids})]
+            calls = [mock.call(ids=ids)]
 
         assert client.delete_api_keys(es, ids, max_attempts=3)
         assert es.security.invalidate_api_key.has_calls(calls, any_order=True)
@@ -559,12 +556,12 @@ class TestApiKeys:
             ]
             calls = [
                 # foo and bar are deleted successfully, leaving only baz
-                mock.call({"id": "foo"}),
-                mock.call({"id": "bar"}),
+                mock.call(id="foo"),
+                mock.call(id="bar"),
                 # two exceptions are thrown, so it should take 3 attempts to delete baz
-                mock.call({"id": "baz"}),
-                mock.call({"id": "baz"}),
-                mock.call({"id": "baz"}),
+                mock.call(id="baz"),
+                mock.call(id="baz"),
+                mock.call(id="baz"),
             ]
         else:
             es.security.invalidate_api_key.side_effect = [
@@ -574,7 +571,7 @@ class TestApiKeys:
                 _api_error(500, "Internal Server Error"),
                 {"invalidated_api_keys": ["foo", "bar", "baz"], "error_count": 0},
             ]
-            calls = [mock.call({"ids": ids}) for _ in range(max_attempts)]
+            calls = [mock.call(ids=ids) for _ in range(max_attempts)]
 
         assert client.delete_api_keys(es, ids, max_attempts=max_attempts)
         assert es.security.invalidate_api_key.call_args_list == calls
@@ -593,9 +590,9 @@ class TestApiKeys:
             ]
 
             calls = [
-                mock.call({"id": "foo"}),
-                mock.call({"id": "bar"}),
-                mock.call({"id": "baz"}),
+                mock.call(id="foo"),
+                mock.call(id="bar"),
+                mock.call(id="baz"),
             ]
         else:
             # Since there are two ways this version can fail, we interleave them
@@ -613,9 +610,9 @@ class TestApiKeys:
             ]
 
             calls = [
-                mock.call({"ids": ["foo", "bar", "baz", "qux"]}),
-                mock.call({"ids": ["bar", "baz", "qux"]}),
-                mock.call({"ids": ["bar", "baz", "qux"]}),
+                mock.call(ids=["foo", "bar", "baz", "qux"]),
+                mock.call(ids=["bar", "baz", "qux"]),
+                mock.call(ids=["bar", "baz", "qux"]),
             ]
 
         with pytest.raises(exceptions.RallyError, match=re.escape(f"Could not delete API keys with the following IDs: {failed_to_delete}")):

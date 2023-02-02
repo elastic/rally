@@ -226,7 +226,8 @@ class EsClientFactory:
         self.client_options["serializer"] = LazyJSONSerializer()
 
         if api_key is not None:
-            self.client_options.pop("http_auth")
+            self.client_options.pop("http_auth", None)
+            self.client_options.pop("basic_auth", None)
             self.client_options["api_key"] = api_key
 
         async_client = RallyAsyncElasticsearch(
@@ -246,6 +247,7 @@ class EsClientFactory:
             node_connection.static_responses = self.static_responses
 
         return async_client
+
 
 def wait_for_rest_layer(es, max_attempts=40):
     """
@@ -303,7 +305,7 @@ def create_api_key(es, client_id, max_attempts=5):
 
         try:
             logger.debug("Creating ES API key for client ID [%s]", client_id)
-            return es.security.create_api_key({"name": f"rally-client-{client_id}"})
+            return es.security.create_api_key(name=f"rally-client-{client_id}")
         except elasticsearch.TransportError as e:
             logger.debug("Got transport error [%s] on attempt [%s]. Sleeping...", str(e), attempt)
             time.sleep(1)
@@ -348,7 +350,7 @@ def delete_api_keys(es, ids, max_attempts=5):
 
         try:
             if current_version >= minimum_version:
-                resp = es.security.invalidate_api_key({"ids": remaining})
+                resp = es.security.invalidate_api_key(ids=remaining)
                 deleted += resp["invalidated_api_keys"]
                 remaining = [i for i in ids if i not in deleted]
                 # Like bulk indexing requests, we can get an HTTP 200, but the
@@ -374,7 +376,7 @@ def delete_api_keys(es, ids, max_attempts=5):
                 remaining = [i for i in ids if i not in deleted]
                 if attempt < max_attempts:
                     for i in remaining:
-                        es.security.invalidate_api_key({"id": i})
+                        es.security.invalidate_api_key(id=i)
                         deleted.append(i)
                 else:
                     if remaining:
