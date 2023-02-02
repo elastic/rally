@@ -56,6 +56,9 @@ class StaticTransport:
     def close(self):
         self.closed = True
 
+    def abort(self):
+        self.close()
+
 
 class StaticConnector(BaseConnector):
     async def _create_connection(self, req: "ClientRequest", traces: List["Trace"], timeout: "ClientTimeout") -> ResponseHandler:
@@ -121,6 +124,9 @@ class StaticResponse(aiohttp.ClientResponse):
         return self
 
     async def text(self, encoding=None, errors="strict"):
+        return self.static_body
+
+    async def read(self):
         return self.static_body
 
 
@@ -250,7 +256,10 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
             connector = StaticConnector(limit_per_host=self._connections_per_node, enable_cleanup_closed=self._enable_cleanup_closed)
         else:
             connector = aiohttp.TCPConnector(
-                limit_per_host=self._connections_per_node, use_dns_cache=True, ssl=self._ssl_context, enable_cleanup_closed=self._enable_cleanup_closed
+                limit_per_host=self._connections_per_node,
+                use_dns_cache=True,
+                ssl=self._ssl_context,
+                enable_cleanup_closed=self._enable_cleanup_closed,
             )
 
         self.session = aiohttp.ClientSession(
@@ -268,6 +277,7 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
 class RallyAsyncTransport(elastic_transport.AsyncTransport):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, node_class=RallyAiohttpHttpNode, **kwargs)
+
 
 class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
     def __init__(self, distro=None, *args, **kwargs):
@@ -290,7 +300,6 @@ class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHo
         headers: Optional[Mapping[str, str]] = None,
         body: Optional[Any] = None,
     ) -> ApiResponse[Any]:
-
         # We need to ensure that we provide content-type and accept headers
         if body is not None:
             if headers is None:
