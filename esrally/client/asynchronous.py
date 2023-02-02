@@ -270,7 +270,7 @@ class RallyAsyncTransport(elastic_transport.AsyncTransport):
         super().__init__(*args, node_class=RallyAiohttpHttpNode, **kwargs)
 
 class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
-    def __init__(self, distro, *args, **kwargs):
+    def __init__(self, distro=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # skip verification at this point; we've already verified this earlier with the synchronous client.
         # The async client is used in the hot code path and we use customized overrides (such as that we don't
@@ -307,6 +307,9 @@ class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHo
         else:
             request_headers = self._headers
 
+        # Converts all parts of a Accept/Content-Type headers
+        # from application/X -> application/vnd.elasticsearch+X
+        # see https://github.com/elastic/elasticsearch/issues/51816
         if self.distribution_version is not None and self.distribution_version >= versions.Version.from_string("8.0.0"):
             _mimetype_header_to_compat("Accept", request_headers)
             _mimetype_header_to_compat("Content-Type", request_headers)

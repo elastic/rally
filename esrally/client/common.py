@@ -1,13 +1,16 @@
 import re
 from datetime import date, datetime
 from typing import Any, Mapping
-
+from elasticsearch import VERSION
 from elastic_transport.client_utils import percent_encode
 
-_WARNING_RE = re.compile(r"\"([^\"]*)\"")
 
-# TODO: get versionstr dynamically
-_COMPAT_MIMETYPE_TEMPLATE = "application/vnd.elasticsearch+%s; compatible-with=" + str("8.2.0".partition(".")[0])
+def _client_major_version_to_str(version: tuple) -> str:
+    return ".".join(map(str, version)).partition(".")[0]
+
+
+_WARNING_RE = re.compile(r"\"([^\"]*)\"")
+_COMPAT_MIMETYPE_TEMPLATE = "application/vnd.elasticsearch+%s; compatible-with=" + _client_major_version_to_str(VERSION)
 _COMPAT_MIMETYPE_RE = re.compile(r"application/(json|x-ndjson|vnd\.mapbox-vector-tile)")
 _COMPAT_MIMETYPE_SUB = _COMPAT_MIMETYPE_TEMPLATE % (r"\g<1>",)
 

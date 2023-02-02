@@ -121,7 +121,7 @@ class _ProductChecker:
 
 
 class RallySyncElasticsearch(elasticsearch.Elasticsearch):
-    def __init__(self, distro, *args, **kwargs):
+    def __init__(self, distro=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._verified_elasticsearch = None
 
@@ -166,8 +166,9 @@ class RallySyncElasticsearch(elasticsearch.Elasticsearch):
             if self._verified_elasticsearch is not True:
                 _ProductChecker.raise_error(self._verified_elasticsearch, info_meta, info_body)
 
-        # Custom behavior for backwards compatibility with versions of ES that do not
-        # recognize the compatible-with header.
+        # Converts all parts of a Accept/Content-Type headers
+        # from application/X -> application/vnd.elasticsearch+X
+        # see https://github.com/elastic/elasticsearch/issues/51816
         if self.distribution_version is not None and self.distribution_version >= versions.Version.from_string("8.0.0"):
             _mimetype_header_to_compat("Accept", request_headers)
             _mimetype_header_to_compat("Content-Type", request_headers)
