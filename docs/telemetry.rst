@@ -133,7 +133,7 @@ Supported telemetry parameters:
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
 * ``node-stats-include-gc`` (default: ``true``): A boolean indicating whether JVM gc stats should be included.
 * ``node-stats-include-mem`` (default: ``true``): A boolean indicating whether both JVM heap, and OS mem stats should be included.
-* ``node-stats-include-cgroup`` (default: ``true``): A boolean to include or exclude operating system cgroup stats.
+* ``node-stats-include-cgroup`` (default: ``false``): A boolean to include or exclude operating system cgroup stats.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
 * ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
 * ``node-stats-include-indexing-pressure`` (default: ``true``): A boolean indicating whether indexing pressuer stats should be included.

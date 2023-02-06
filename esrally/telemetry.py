@@ -777,6 +777,9 @@ class NodeStats(TelemetryDevice):
 
 class NodeStatsRecorder:
     def __init__(self, telemetry_params, cluster_name, client, metrics_store):
+        self.logger = logging.getLogger(__name__)
+
+        self.logger.info("node stats recorder")
         self.sample_interval = telemetry_params.get("node-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
@@ -816,7 +819,7 @@ class NodeStatsRecorder:
         self.include_network = telemetry_params.get("node-stats-include-network", True)
         self.include_process = telemetry_params.get("node-stats-include-process", True)
         self.include_mem_stats = telemetry_params.get("node-stats-include-mem", True)
-        self.include_cgroup_stats = telemetry_params.get("node-stats-include-cgroup", True)
+        self.include_cgroup_stats = telemetry_params.get("node-stats-include-cgroup", False)
         self.include_gc_stats = telemetry_params.get("node-stats-include-gc", True)
         self.include_indexing_pressure = telemetry_params.get("node-stats-include-indexing-pressure", True)
         self.client = client
@@ -911,11 +914,17 @@ class NodeStatsRecorder:
         return self.flatten_stats_fields(prefix="os_mem", stats=node_stats["os"]["mem"])
 
     def os_cgroup_stats(self, node_name, node_stats):
-        # Convert strings returned by the Node Stats API for os.cgroup.memory limits
-        # https://github.com/elastic/elasticsearch/issues/93429
-        for k in ("limit_in_bytes", "usage_in_bytes"):
-            node_stats["os"]["cgroup"]["memory"].update({k: int(node_stats["os"]["cgroup"]["memory"].get(k))})
-        return self.flatten_stats_fields(prefix="os_cgroup", stats=node_stats["os"]["cgroup"])
+        cgroup_stats = {}
+        try:
+            # Convert strings returned by the Node Stats API for os.cgroup.memory limits
+            # https://github.com/elastic/elasticsearch/issues/93429
+            for k in ("limit_in_bytes", "usage_in_bytes"):
+                node_stats["os"]["cgroup"]["memory"].update({k: int(node_stats["os"]["cgroup"]["memory"].get(k))})
+            cgroup_stats = self.flatten_stats_fields(prefix="os_cgroup", stats=node_stats["os"]["cgroup"])
+        except KeyError:
+            self.logger.warning("Node cgroup stats requested with none present.")
+        finally:
+            return cgroup_stats
 
     def jvm_gc_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
