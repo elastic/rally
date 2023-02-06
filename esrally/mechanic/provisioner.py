@@ -95,12 +95,12 @@ class NodeConfiguration:
 
 
 def save_node_configuration(path, n):
-    with open(os.path.join(path, "node-config.json"), "wt") as f:
+    with open(os.path.join(path, "node-config.json"), "w") as f:
         json.dump(n.as_dict(), f, indent=2)
 
 
 def load_node_configuration(path):
-    with open(os.path.join(path, "node-config.json"), "rt") as f:
+    with open(os.path.join(path, "node-config.json")) as f:
         return NodeConfiguration.from_dict(json.load(f))
 
 
@@ -139,7 +139,7 @@ def cleanup(preserve, install_dir, data_paths):
 
     logger = logging.getLogger(__name__)
     if preserve:
-        console.info("Preserving benchmark candidate installation at [{}].".format(install_dir), logger=logger)
+        console.info(f"Preserving benchmark candidate installation at [{install_dir}].", logger=logger)
     else:
         logger.info("Wiping benchmark candidate installation at [%s].", install_dir)
         for path in data_paths:
@@ -482,7 +482,7 @@ class DockerProvisioner:
         docker_cfg = self._render_template_from_file(self.docker_vars(mounts))
         self.logger.info("Starting Docker container with configuration:\n%s", docker_cfg)
 
-        with open(os.path.join(self.binary_path, "docker-compose.yml"), mode="wt", encoding="utf-8") as f:
+        with open(os.path.join(self.binary_path, "docker-compose.yml"), mode="w", encoding="utf-8") as f:
             f.write(docker_cfg)
 
         return NodeConfiguration(

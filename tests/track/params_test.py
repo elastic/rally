@@ -161,7 +161,7 @@ class TestActionMetaData:
             return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % id
 
         def conflict(action, id):
-            return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % (action, id)
+            return action, f'{{"{action}": {{"_index": "test_index", "_type": "test_type", "_id": "{id}"}}}}\n'
 
         pseudo_random_conflicts = iter(
             [
@@ -212,15 +212,15 @@ class TestActionMetaData:
     def test_generate_action_meta_data_with_id_conflicts_and_recency_bias(self):
         def idx(type_name, id):
             if type_name:
-                return "index", '{"index": {"_index": "test_index", "_type": "%s", "_id": "%s"}}\n' % (type_name, id)
+                return "index", f'{{"index": {{"_index": "test_index", "_type": "{type_name}", "_id": "{id}"}}}}\n'
             else:
                 return "index", '{"index": {"_index": "test_index", "_id": "%s"}}\n' % id
 
         def conflict(action, type_name, id):
             if type_name:
-                return action, '{"%s": {"_index": "test_index", "_type": "%s", "_id": "%s"}}\n' % (action, type_name, id)
+                return action, f'{{"{action}": {{"_index": "test_index", "_type": "{type_name}", "_id": "{id}"}}}}\n'
             else:
-                return action, '{"%s": {"_index": "test_index", "_id": "%s"}}\n' % (action, id)
+                return action, f'{{"{action}": {{"_index": "test_index", "_id": "{id}"}}}}\n'
 
         pseudo_random_conflicts = iter(
             [

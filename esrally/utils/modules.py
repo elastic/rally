@@ -106,6 +106,6 @@ class ComponentLoader:
             root_module = self._load_component(component_name, module_dirs)
             return root_module
         except BaseException:
-            msg = "Could not load component [{}]".format(component_name)
+            msg = f"Could not load component [{component_name}]"
             self.logger.exception(msg)
             raise exceptions.SystemSetupError(msg)

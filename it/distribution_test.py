@@ -123,7 +123,7 @@ def test_cluster():
 
 @it.random_rally_config
 def test_multi_target_hosts(cfg, test_cluster):
-    hosts = ["127.0.0.1:{}".format(test_cluster.http_port)]
+    hosts = [f"127.0.0.1:{test_cluster.http_port}"]
     target_hosts = {
         "remote": hosts,
         "default": hosts,

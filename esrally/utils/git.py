@@ -26,7 +26,7 @@ def probed(f):
     def probe(src, *args, **kwargs):
         # Probe for -C
         if not process.exit_status_as_bool(
-            lambda: process.run_subprocess_with_logging("git -C {} --version".format(io.escape_path(src)), level=logging.DEBUG), quiet=True
+            lambda: process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} --version", level=logging.DEBUG), quiet=True
         ):
             version = process.run_subprocess_with_output("git --version")
             if version:
@@ -73,26 +73,26 @@ def clone(src, *, remote):
 
 @probed
 def fetch(src, *, remote):
-    if process.run_subprocess_with_logging("git -C {0} fetch --prune --tags {1}".format(io.escape_path(src), remote)):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} fetch --prune --tags {remote}"):
         raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
 
 
 @probed
 def checkout(src_dir, *, branch):
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), branch)):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {branch}"):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
 @probed
 def checkout_branch(src_dir, remote, branch):
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {remote}/{branch}"):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
 @probed
 def rebase(src_dir, *, remote, branch):
     checkout(src_dir, branch=branch)
-    if process.run_subprocess_with_logging("git -C {0} rebase {1}/{2}".format(io.escape_path(src_dir), remote, branch)):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} rebase {remote}/{branch}"):
         raise exceptions.SupplyError("Could not rebase on branch [%s]" % branch)
 
 
@@ -108,24 +108,24 @@ def pull_ts(src_dir, ts, *, remote, branch):
     clean_src = io.escape_path(src_dir)
     rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
     revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(clean_src, revision)):
+    if process.run_subprocess_with_logging(f"git -C {clean_src} checkout {revision}"):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
 
 
 @probed
 def checkout_revision(src_dir, *, revision):
-    if process.run_subprocess_with_logging("git -C {0} checkout {1}".format(io.escape_path(src_dir), revision)):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {revision}"):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 
 
 @probed
 def head_revision(src_dir):
-    return process.run_subprocess_with_output("git -C {0} rev-parse HEAD".format(io.escape_path(src_dir)))[0].strip()
+    return process.run_subprocess_with_output(f"git -C {io.escape_path(src_dir)} rev-parse HEAD")[0].strip()
 
 
 @probed
 def current_branch(src_dir):
-    return process.run_subprocess_with_output("git -C {0} rev-parse --abbrev-ref HEAD".format(io.escape_path(src_dir)))[0].strip()
+    return process.run_subprocess_with_output(f"git -C {io.escape_path(src_dir)} rev-parse --abbrev-ref HEAD")[0].strip()
 
 
 @probed
@@ -134,17 +134,17 @@ def branches(src_dir, remote=True):
     if remote:
         # alternatively: git for-each-ref refs/remotes/ --format='%(refname:short)'
         return _cleanup_remote_branch_names(
-            process.run_subprocess_with_output("git -C {src} for-each-ref refs/remotes/ --format='%(refname:short)'".format(src=clean_src))
+            process.run_subprocess_with_output(f"git -C {clean_src} for-each-ref refs/remotes/ --format='%(refname:short)'")
         )
     else:
         return _cleanup_local_branch_names(
-            process.run_subprocess_with_output("git -C {src} for-each-ref refs/heads/ --format='%(refname:short)'".format(src=clean_src))
+            process.run_subprocess_with_output(f"git -C {clean_src} for-each-ref refs/heads/ --format='%(refname:short)'")
         )
 
 
 @probed
 def tags(src_dir):
-    return _cleanup_tag_names(process.run_subprocess_with_output("git -C {0} tag".format(io.escape_path(src_dir))))
+    return _cleanup_tag_names(process.run_subprocess_with_output(f"git -C {io.escape_path(src_dir)} tag"))
 
 
 def _cleanup_remote_branch_names(branch_names):

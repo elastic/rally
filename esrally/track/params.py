@@ -173,7 +173,7 @@ class SleepParamSource(ParamSource):
         if not isinstance(duration, numbers.Number):
             raise exceptions.InvalidSyntax("parameter 'duration' for sleep operation must be a number")
         if duration < 0:
-            raise exceptions.InvalidSyntax("parameter 'duration' must be non-negative but was {}".format(duration))
+            raise exceptions.InvalidSyntax(f"parameter 'duration' must be non-negative but was {duration}")
 
     def params(self):
         return dict(self._params)
@@ -588,7 +588,7 @@ class BulkIndexParamSource(ParamSource):
             )
             self.on_conflict = params.get("on-conflict", "index")
             if self.on_conflict not in ["index", "update"]:
-                raise exceptions.InvalidSyntax("Unknown 'on-conflict' setting [{}]".format(self.on_conflict))
+                raise exceptions.InvalidSyntax(f"Unknown 'on-conflict' setting [{self.on_conflict}]")
             self.recency = self.float_param(params, name="recency", default_value=0, min_value=0, max_value=1, min_operator=operator.lt)
 
         else:
@@ -655,11 +655,11 @@ class BulkIndexParamSource(ParamSource):
             if min_operator(value, min_value) or value > max_value:
                 interval_min = "(" if min_operator is operator.le else "["
                 raise exceptions.InvalidSyntax(
-                    "'{}' must be in the range {}{:.1f}, {:.1f}] but was {:.1f}".format(name, interval_min, min_value, max_value, value)
+                    f"'{name}' must be in the range {interval_min}{min_value:.1f}, {max_value:.1f}] but was {value:.1f}"
                 )
             return value
         except ValueError:
-            raise exceptions.InvalidSyntax("'{}' must be numeric".format(name))
+            raise exceptions.InvalidSyntax(f"'{name}' must be numeric")
 
     def used_corpora(self, t, params):
         corpora = []
@@ -910,8 +910,7 @@ def chain(*iterables):
     for it in filter(lambda x: x is not None, iterables):
         # execute within a context
         with it:
-            for element in it:
-                yield element
+            yield from it
 
 
 def create_default_reader(
@@ -1186,7 +1185,7 @@ class GenerateActionMetaData:
             elif action == "update":
                 return "update", self.meta_data_update_with_id % doc_id
             else:
-                raise exceptions.RallyAssertionError("Unknown action [{}]".format(action))
+                raise exceptions.RallyAssertionError(f"Unknown action [{action}]")
         else:
             if self.use_create:
                 return "create", self.meta_data_create_no_id
@@ -1283,7 +1282,7 @@ class IndexDataReader:
             if docs_in_batch == 0:
                 raise StopIteration()
             return self.index_name, self.type_name, batch
-        except IOError:
+        except OSError:
             logging.getLogger(__name__).exception("Could not read [%s]", self.data_file)
 
     def __exit__(self, exc_type, exc_val, exc_tb):

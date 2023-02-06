@@ -222,9 +222,9 @@ class CmdLineProgressReporter:
 
         formatted_progress = progress.rjust(w - len(final_message))
         if self._plain_output:
-            self._printer("\n{0}{1}".format(final_message, formatted_progress), end="")
+            self._printer(f"\n{final_message}{formatted_progress}", end="")
         else:
-            self._printer("\033[{0}D{1}{2}".format(w, final_message, formatted_progress), end="")
+            self._printer(f"\033[{w}D{final_message}{formatted_progress}", end="")
         sys.stdout.flush()
 
     def _truncate(self, text, max_length, omission="..."):

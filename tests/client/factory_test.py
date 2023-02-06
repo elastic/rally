@@ -186,7 +186,7 @@ class TestEsClientFactory:
         client_ssl_options = {"client_cert": "../utils/resources/certs/client.crt", "client_key": "../utils/resources/certs/client.key"}
 
         random_client_ssl_option = random.choice(list(client_ssl_options.keys()))
-        missing_client_ssl_option = list(set(client_ssl_options) - set([random_client_ssl_option]))[0]
+        missing_client_ssl_option = list(set(client_ssl_options) - {random_client_ssl_option})[0]
         client_options.update({random_client_ssl_option: client_ssl_options[random_client_ssl_option]})
 
         with pytest.raises(exceptions.SystemSetupError) as ctx:
