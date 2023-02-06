@@ -27,16 +27,14 @@ import random
 import time
 from abc import ABC
 from enum import Enum
-from typing import Callable, Deque, Dict, List
+from typing import Callable, Deque
 
 from esrally import exceptions
 from esrally.track import track
 from esrally.utils import io
 
-# pylint: disable=used-before-assignment
-
-__PARAM_SOURCES_BY_OP: Dict[track.OperationType, ParamSource] = {}
-__PARAM_SOURCES_BY_NAME: Dict[str, ParamSource] = {}
+__PARAM_SOURCES_BY_OP: dict[track.OperationType, ParamSource] = {}
+__PARAM_SOURCES_BY_NAME: dict[str, ParamSource] = {}
 
 
 def param_source_for_operation(op_type, track, params, task_name):
@@ -947,7 +945,7 @@ def create_readers(
     num_clients: int,
     start_client_index: int,
     end_client_index: int,
-    corpora: List[track.DocumentCorpus],
+    corpora: list[track.DocumentCorpus],
     batch_size: int,
     bulk_size: int,
     id_conflicts: IndexIdConflict,
@@ -955,7 +953,7 @@ def create_readers(
     on_conflict: str,
     recency: str,
     create_reader: Callable[..., IndexDataReader],
-) -> List[IndexDataReader]:
+) -> list[IndexDataReader]:
     """
     Return a list of IndexDataReader instances to allow a range of clients to read their share of corpora.
 
@@ -970,7 +968,7 @@ def create_readers(
        of the first corpus. Then I move on to the first partition of the first file of the
        second corpus, and so on.
     """
-    corpora_readers: List[Deque[IndexDataReader]] = []
+    corpora_readers: list[Deque[IndexDataReader]] = []
     total_readers = 0
     # stagger which corpus each client starts with for better parallelism (see 1. above)
     start_corpora_id = start_client_index % len(corpora)
@@ -991,7 +989,7 @@ def create_readers(
         corpora_readers.append(reader_queue)
 
     # Stagger which files will be read (see 2. above)
-    staggered_readers: List[IndexDataReader] = []
+    staggered_readers: list[IndexDataReader] = []
     while total_readers > 0:
         for reader_queue in corpora_readers:
             # Since corpora don't necessarily contain the same number of documents, we
