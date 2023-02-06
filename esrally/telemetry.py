@@ -923,8 +923,7 @@ class NodeStatsRecorder:
             cgroup_stats = self.flatten_stats_fields(prefix="os_cgroup", stats=node_stats["os"]["cgroup"])
         except KeyError:
             self.logger.warning("Node cgroup stats requested with none present.")
-        finally:
-            return cgroup_stats
+        return cgroup_stats
 
     def jvm_gc_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
