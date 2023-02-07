@@ -758,6 +758,12 @@ Properties
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results. See the section below for the meta-data that are returned. This property must be set to ``true`` for individual bulk request failures to be logged by Rally.
 * ``timeout`` (optional, defaults to ``1m``): Defines the `time period that Elasticsearch will wait per action <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-query-params>`_ until it has finished processing the following operations: automatic index creation, dynamic mapping updates, waiting for active shards.
 
+With multiple ``clients``, Rally will split each document from ``corpora`` using as many splits as there are ``clients``. This ensures that the bulk index operations are efficiently parallelized but has the drawback that the ingestion is not done in the order of each document. For example, if ``clients`` is set to 2, one client will index the document starting from the beginning, while the other will index starting from the middle.
+
+Additionally, if there are multiple documents or corpora, Rally will try to index all documents in parallel in two ways:
+
+1. Each client will have a different starting point. For example, in a track with 2 corpora and 5 clients, clients 1, 3, and 5 will start with the first corpus and clients 2 and 4 will start with the second corpus.
+2. Each client is assigned to multiple documents. Client 1 will start with the first split of the first document of the first corpus. Then it will move on to the first split of the first document of the second corpus, and so on.
 
 The image below shows how Rally behaves with a ``recency`` set to 0.5. Internally, Rally uses the blue function for its calculations but to understand the behavior we will focus on red function (which is just the inverse). Suppose we have already generated ids from 1 to 100 and we are about to simulate an id conflict. Rally will randomly choose a value on the y-axis, e.g. 0.8 which is mapped to 0.1 on the x-axis. This means that in 80% of all cases, Rally will choose an id within the most recent 10%, i.e. between 90 and 100. With 20% probability the id will be between 1 and 89. The closer ``recency`` gets to zero, the "flatter" the red curve gets and the more likely Rally will choose less recent ids.
 
