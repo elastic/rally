@@ -48,18 +48,18 @@ def setup(request, tmp_path_factory):
     cls.tmp_clone_dir = str(tmp_path_factory.mktemp("rally-unit-test-clone-dir"))
 
     # create tmp git repos
-    cls.local_repo = Repo.init(cls.local_tmp_src_dir, initial_branch="main")
+    cls.local_repo = Repo.init(cls.local_tmp_src_dir)
     commit(cls.local_repo)
-    cls.local_revision = cls.local_repo.heads["main"].commit.hexsha
+    cls.local_revision = cls.local_repo.heads["master"].commit.hexsha
     cls.local_repo.create_tag("local-tag-1", "HEAD")
     cls.local_repo.create_tag("local-tag-2", "HEAD")
     cls.local_repo.create_head(cls.local_branch, "HEAD")
 
-    cls.remote_repo = Repo.init(cls.remote_tmp_src_dir, initial_branch="main")
+    cls.remote_repo = Repo.init(cls.remote_tmp_src_dir)
     commit(cls.remote_repo, date="2016-01-01 00:00:00+0000")
-    cls.old_revision = cls.remote_repo.heads["main"].commit.hexsha
+    cls.old_revision = cls.remote_repo.heads["master"].commit.hexsha
     commit(cls.remote_repo)
-    cls.remote_branch_hash = cls.remote_repo.heads["main"].commit.hexsha
+    cls.remote_branch_hash = cls.remote_repo.heads["master"].commit.hexsha
 
     cls.remote_repo.create_head(cls.remote_branch, "HEAD")
     cls.local_repo.create_remote(cls.local_remote, cls.remote_tmp_src_dir)
@@ -81,8 +81,8 @@ class TestGit:
         # undo rebase
         self.local_repo.head.reset("ORIG_HEAD", hard=True)
         # checkout starting branches
-        self.local_repo.head.reference = "main"
-        self.remote_repo.head.reference = "main"
+        self.local_repo.head.reference = "master"
+        self.remote_repo.head.reference = "master"
 
         # delete branches
         self.local_repo.delete_head(self.rebase_branch, force=True)
@@ -101,7 +101,7 @@ class TestGit:
         assert git.is_branch(self.local_tmp_src_dir, identifier=self.local_branch)
 
         # both remote, and local
-        assert git.is_branch(self.local_tmp_src_dir, identifier="main")
+        assert git.is_branch(self.local_tmp_src_dir, identifier="master")
 
     def test_is_not_branch_tags(self):
         assert not git.is_branch(self.local_tmp_src_dir, identifier="2.6.0")
@@ -170,7 +170,7 @@ class TestGit:
 
     def test_head_revision(self):
         # minimum 'core.abbrev' is to return 7 char prefixes
-        git.checkout(self.local_tmp_src_dir, branch="main")
+        git.checkout(self.local_tmp_src_dir, branch="master")
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.local_revision[:7])
 
     def test_pull_ts(self):
