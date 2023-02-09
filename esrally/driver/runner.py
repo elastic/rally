@@ -129,7 +129,7 @@ def register_runner(operation_type, runner, **kwargs):
 
     if not async_runner:
         raise exceptions.RallyAssertionError(
-            "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner))
+            f"Runner [{str(runner)}] must be implemented as async runner and registered with async_runner=True."
         )
 
     if hasattr(unwrap(runner), "multi_cluster"):
@@ -1625,7 +1625,7 @@ class ShrinkIndex(Runner):
             es, params={"index": idx, "retries": sys.maxsize, "request-params": {"wait_for_no_relocating_shards": "true"}}
         )
         if not result["success"]:
-            raise exceptions.RallyAssertionError("Failed to wait for [{}].".format(description))
+            raise exceptions.RallyAssertionError(f"Failed to wait for [{description}].")
 
     async def __call__(self, es, params):
         source_index = mandatory(params, "source-index", self)
@@ -2681,9 +2681,7 @@ class Sql(Runner):
             cursor = parse(r, ["cursor"]).get("cursor")
 
             if not cursor:
-                raise exceptions.DataError(
-                    "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
-                )
+                raise exceptions.DataError(f"Result set has been exhausted before all pages have been fetched, {pages} page(s) remaining.")
 
             r = await es.perform_request(method="POST", path="/_sql", body={"cursor": cursor})
             pages -= 1

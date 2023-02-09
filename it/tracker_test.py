@@ -75,7 +75,7 @@ def test_create_track(cfg, tmp_path, test_cluster):
         full_path = track_path / f
         assert full_path.exists(), f"Expected file to exist at path [{full_path}]"
 
-    with open(track_path / f"{base_generated_corpora}-1k.json", "rt") as f:
+    with open(track_path / f"{base_generated_corpora}-1k.json") as f:
         num_lines = sum(1 for line in f)
     assert (
         num_lines == 1000

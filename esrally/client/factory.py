@@ -125,17 +125,13 @@ class EsClientFactory:
             missing_auth = [k for k, v in provided_auth.items() if not v]
             if missing_auth:
                 console.println(
-                    (
-                        "Basic auth credentials are required in order to create API keys.\n"
-                        f"Missing basic auth client options are: {missing_auth}\n"
-                        f"Read the documentation at {console.format.link(doc_link('command_line_reference.html#client-options'))}"
-                    )
+                    "Basic auth credentials are required in order to create API keys.\n"
+                    f"Missing basic auth client options are: {missing_auth}\n"
+                    f"Read the documentation at {console.format.link(doc_link('command_line_reference.html#client-options'))}"
                 )
                 raise exceptions.SystemSetupError(
-                    (
-                        "You must provide the 'basic_auth_user' and 'basic_auth_password' client options in addition "
-                        "to 'create_api_key_per_client' in order to create client API keys."
-                    )
+                    "You must provide the 'basic_auth_user' and 'basic_auth_password' client options in addition "
+                    "to 'create_api_key_per_client' in order to create client API keys."
                 )
             self.logger.debug("Automatic creation of client API keys: on")
         else:
@@ -269,7 +265,7 @@ def wait_for_rest_layer(es, max_attempts=40):
         try:
             # see also WaitForHttpResource in Elasticsearch tests. Contrary to the ES tests we consider the API also
             # available when the cluster status is RED (as long as all required nodes are present)
-            es.cluster.health(wait_for_nodes=">={}".format(expected_node_count))
+            es.cluster.health(wait_for_nodes=f">={expected_node_count}")
             logger.debug("REST API is available for >= [%s] nodes after [%s] attempts.", expected_node_count, attempt)
             return True
         except elasticsearch.TransportError as e:

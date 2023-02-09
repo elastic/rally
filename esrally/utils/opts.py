@@ -29,7 +29,7 @@ def csv_to_list(csv):
     if csv is None:
         return None
     if io.has_extension(csv, ".json"):
-        with open(io.normalize_path(csv), mode="rt", encoding="utf-8") as f:
+        with open(io.normalize_path(csv), encoding="utf-8") as f:
             content = f.read()
             if not RE_JSON_ARRAY_START.match(content):
                 raise ValueError(f"csv args only support arrays in json but you supplied [{csv}]")
@@ -104,7 +104,7 @@ def kv_to_map(kvs):
 
 def to_dict(arg, default_parser=kv_to_map):
     if io.has_extension(arg, ".json"):
-        with open(io.normalize_path(arg), mode="rt", encoding="utf-8") as f:
+        with open(io.normalize_path(arg), encoding="utf-8") as f:
             return json.load(f)
     try:
         return json.loads(arg)
@@ -113,11 +113,11 @@ def to_dict(arg, default_parser=kv_to_map):
 
 
 def bulleted_list_of(src_list):
-    return ["- {}".format(param) for param in src_list]
+    return [f"- {param}" for param in src_list]
 
 
 def double_quoted_list_of(src_list):
-    return ['"{}"'.format(param) for param in src_list]
+    return [f'"{param}"' for param in src_list]
 
 
 def make_list_of_close_matches(word_list, all_possibilities):

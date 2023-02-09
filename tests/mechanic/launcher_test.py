@@ -120,7 +120,7 @@ class MockProcess:
         self.pid = pid
 
     def name(self):
-        return "p{pid}".format(pid=self.pid)
+        return f"p{self.pid}"
 
     def wait(self, timeout=None):
         raise psutil.TimeoutExpired(timeout)
@@ -173,7 +173,7 @@ class TestProcessLauncher:
                     car_runtime_jdks="12,11",
                     car_provides_bundled_jdk=True,
                     ip="127.0.0.1",
-                    node_name="testnode-{}".format(node),
+                    node_name=f"testnode-{node}",
                     node_root_path="/tmp",
                     binary_path="/tmp",
                     data_paths="/tmp",

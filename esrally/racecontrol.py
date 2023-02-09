@@ -284,7 +284,7 @@ def set_default_hosts(cfg, host="127.0.0.1", port=9200):
         logger.info("Using configured hosts %s", configured_hosts.default)
     else:
         logger.info("Setting default host to [%s:%d]", host, port)
-        default_host_object = opts.TargetHosts("{}:{}".format(host, port))
+        default_host_object = opts.TargetHosts(f"{host}:{port}")
         cfg.add(config.Scope.benchmark, "client", "hosts", default_host_object)
 
 

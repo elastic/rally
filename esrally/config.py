@@ -61,20 +61,20 @@ class ConfigFile:
             source_path = template_path
         else:
             source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "rally.ini"))
-        with open(self.location, "wt", encoding="utf-8") as target:
-            with open(source_path, "rt", encoding="utf-8") as src:
+        with open(self.location, "w", encoding="utf-8") as target:
+            with open(source_path, encoding="utf-8") as src:
                 contents = src.read()
                 target.write(Template(contents).substitute(CONFIG_DIR=self.config_dir))
 
     def store(self, config):
         io.ensure_dir(self.config_dir)
-        with open(self.location, "wt", encoding="utf-8") as configfile:
+        with open(self.location, "w", encoding="utf-8") as configfile:
             config.write(configfile)
 
     def backup(self):
         config_file = self.location
         logging.getLogger(__name__).info("Creating a backup of the current config file at [%s].", config_file)
-        shutil.copyfile(config_file, "{}.bak".format(config_file))
+        shutil.copyfile(config_file, f"{config_file}.bak")
 
     @property
     def config_dir(self):
@@ -83,10 +83,10 @@ class ConfigFile:
     @property
     def location(self):
         if self.config_name:
-            config_name_suffix = "-{}".format(self.config_name)
+            config_name_suffix = f"-{self.config_name}"
         else:
             config_name_suffix = ""
-        return os.path.join(self.config_dir, "rally{}.ini".format(config_name_suffix))
+        return os.path.join(self.config_dir, f"rally{config_name_suffix}.ini")
 
 
 def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs):

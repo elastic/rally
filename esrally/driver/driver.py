@@ -259,7 +259,7 @@ class DriverActor(actor.RallyActor):
                 self.logger.debug("Worker [%d] has exited.", worker_index)
             else:
                 self.logger.error("Worker [%d] has exited prematurely. Aborting benchmark.", worker_index)
-                self.send(self.start_sender, actor.BenchmarkFailure("Worker [{}] has exited prematurely.".format(worker_index)))
+                self.send(self.start_sender, actor.BenchmarkFailure(f"Worker [{worker_index}] has exited prematurely."))
         else:
             self.logger.debug("A track preparator has exited.")
 
@@ -806,10 +806,8 @@ class Driver:
                         delete_api_keys(self.default_sync_es_client, self.generated_api_key_ids)
                     except exceptions.RallyError:
                         console.warn(
-                            (
-                                "Unable to delete auto-generated API keys. You may need to manually delete them. "
-                                "Please check the logs for details."
-                            )
+                            "Unable to delete auto-generated API keys. You may need to manually delete them. "
+                            "Please check the logs for details."
                         )
                 self.logger.debug("Sending benchmark results...")
                 self.target.on_benchmark_complete(m)
@@ -1261,7 +1259,7 @@ class Worker(actor.RallyActor):
                     )
                     # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
                     # deserialized on the receiver so we convert it here to a plain string.
-                    self.send(self.master, actor.BenchmarkFailure("Error in load generator [{}]".format(self.worker_id), str(e)))
+                    self.send(self.master, actor.BenchmarkFailure(f"Error in load generator [{self.worker_id}]", str(e)))
                 else:
                     self.logger.debug("Worker[%s] is ready for the next task.", str(self.worker_id))
                     self.executor_future = None
