@@ -182,8 +182,6 @@ class TestTargetHosts:
 
         assert opts.TargetHosts(target_hosts).default == [{"host": "127.0.0.1", "port": 9200}, {"host": "10.17.0.5", "port": 19200}]
 
-        assert opts.TargetHosts(target_hosts).default == [{"host": "127.0.0.1", "port": 9200}, {"host": "10.17.0.5", "port": 19200}]
-
     def test_jsonstring_parses_as_dict_of_clusters(self):
         target_hosts = (
             '{"default": ["127.0.0.1:9200","10.17.0.5:19200"],'
@@ -192,14 +190,14 @@ class TestTargetHosts:
         )
 
         assert opts.TargetHosts(target_hosts).all_hosts == {
-            "default": ["127.0.0.1:9200", "10.17.0.5:19200"],
-            "remote_1": ["88.33.22.15:19200"],
-            "remote_2": ["10.18.0.6:19200", "10.18.0.7:19201"],
+            "default": [{"host": "127.0.0.1", "port": 9200}, {"host": "10.17.0.5", "port": 19200}],
+            "remote_1": [{"host": "88.33.22.15", "port": 19200}],
+            "remote_2": [{"host": "10.18.0.6", "port": 19200}, {"host": "10.18.0.7", "port": 19201}],
         }
 
     def test_json_file_parameter_parses(self):
         assert opts.TargetHosts(os.path.join(os.path.dirname(__file__), "resources", "target_hosts_1.json")).all_hosts == {
-            "default": ["127.0.0.1:9200", "10.127.0.3:19200"]
+            "default": [{"host": "127.0.0.1", "port": 9200, "use_ssl": True}, {"host": "10.127.0.3", "port": 19200}]
         }
 
         assert opts.TargetHosts(os.path.join(os.path.dirname(__file__), "resources", "target_hosts_2.json")).all_hosts == {
@@ -277,8 +275,7 @@ class TestClientOptions:
 
     def test_no_client_option_parses_to_default_with_multicluster(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
-        target_hosts = opts.TargetHosts('{"default": ["127.0.0.1:9200,10.17.0.5:19200"], "remote": ["88.33.22.15:19200"]}')
-
+        target_hosts = opts.TargetHosts('{"default": ["127.0.0.1:9200", "10.17.0.5:19200"], "remote": ["88.33.22.15:19200"]}')
         assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default == {"timeout": 60}
 
         assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).all_client_options == {

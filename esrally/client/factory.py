@@ -35,7 +35,8 @@ class EsClientFactory:
     def __init__(self, hosts, client_options, distribution_version=None):
         # We need to pass a list of connection strings to the client as of elasticsearch-py 8.0
         def host_string(host):
-            protocol = "https" if client_options.get("use_ssl") else "http"
+            # protocol can be set at either host or client opts level
+            protocol = "https" if client_options.get("use_ssl") or host.get("use_ssl") else "http"
             return f"{protocol}://{host['host']}:{host['port']}"
 
         self.hosts = [host_string(h) for h in hosts]
@@ -155,6 +156,9 @@ class EsClientFactory:
         self.enable_cleanup_closed = convert.to_bool(self.client_options.pop("enable_cleanup_closed", True))
         self.max_connections = max(256, self.client_options.pop("max_connections", 0))
         self.static_responses = self.client_options.pop("static_responses", None)
+
+        if self._is_set(self.client_options, "timeout"):
+            self.client_options["request_timeout"] = self.client_options.pop("timeout")
 
     @staticmethod
     def _only_hostnames(hosts):
