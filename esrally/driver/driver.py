@@ -1983,7 +1983,6 @@ async def execute_single(runner, es, params, on_error):
             total_ops = 1
             total_ops_unit = "ops"
             request_meta_data = {"success": True}
-    # TODO: This all needs to be refactored
     except elasticsearch.TransportError as e:
         # we *specifically* want to distinguish connection refused (a node died?) from connection timeouts
         # pylint: disable=unidiomatic-typecheck
@@ -1993,43 +1992,47 @@ async def execute_single(runner, es, params, on_error):
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {"success": False, "error-type": "transport"}
-        # The ES client will sometimes return string like "N/A" or "TIMEOUT" for connection errors.
-        if isinstance(e.message, int):
-            request_meta_data["http-status"] = e.message
+        # For the 'errors' attribute, errors are ordered from
+        # most recently raised (index=0) to least recently raised (index=N)
+        #
+        # If an HTTP status code is available with the error it
+        # will be stored under 'status'. If HTTP headers are available
+        # they are stored under 'headers'.
+        if e.errors:
+            if hasattr(e.errors[0], "status"):
+                request_meta_data["http-status"] = e.errors[0].status
         # connection timeout errors don't provide a helpful description
         if isinstance(e, elasticsearch.ConnectionTimeout):
             request_meta_data["error-description"] = "network connection timed out"
-        # elif e.info:
-        #     request_meta_data["error-description"] = f"{e.error} ({e.info})"
         else:
-            error_description = str(e)
+            error_description = e.message
             request_meta_data["error-description"] = error_description
     except elasticsearch.ApiError as e:
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {"success": False, "error-type": "api"}
 
-        if isinstance(e.message, bytes):
-            error_message = e.message.decode("utf-8")
-        elif isinstance(e.message, BytesIO):
-            error_message = e.message.read().decode("utf-8")
+        if isinstance(e.error, bytes):
+            error_message = e.error.decode("utf-8")
+        elif isinstance(e.error, BytesIO):
+            error_message = e.error.read().decode("utf-8")
         else:
-            error_message = e.message
+            error_message = e.error
 
-        if isinstance(e.body, bytes):
-            error_body = e.body.decode("utf-8")
-        elif isinstance(e.body, BytesIO):
-            error_body = e.body.read().decode("utf-8")
+        if isinstance(e.info, bytes):
+            error_body = e.info.decode("utf-8")
+        elif isinstance(e.info, BytesIO):
+            error_body = e.info.read().decode("utf-8")
         else:
-            error_body = e.body
+            error_body = e.info
 
         if error_body:
             error_message += f" ({error_body})"
         error_description = error_message
 
         request_meta_data["error-description"] = error_description
-        if e.meta.status:
-            request_meta_data["http-status"] = e.meta.status
+        if e.status_code:
+            request_meta_data["http-status"] = e.status_code
     except KeyError as e:
         logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters.", str(runner))
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))

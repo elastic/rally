@@ -30,7 +30,6 @@ import time
 import uuid
 import zlib
 from enum import Enum, IntEnum
-from http.client import responses
 
 import tabulate
 from elasticsearch import ApiError, TransportError
@@ -106,71 +105,19 @@ class EsClient:
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
-        max_execution_count = 11
+        max_execution_count = 10
         execution_count = 0
 
-        while execution_count < max_execution_count:
+        while execution_count <= max_execution_count:
             time_to_sleep = 2**execution_count + random.random()
             execution_count += 1
 
             try:
                 return target(*args, **kwargs)
-            except elasticsearch.exceptions.AuthenticationException:
-                # we know that it is just one host (see EsClientFactory)
-                node = self._client.transport.hosts[0]
-                msg = (
-                    "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at "
-                    "port [%s] (wrong password?). Please fix the configuration in [%s]."
-                    % (node["host"], node["port"], config.ConfigFile().location)
-                )
-                self.logger.exception(msg)
-                raise exceptions.SystemSetupError(msg)
-            except elasticsearch.exceptions.AuthorizationException:
-                node = self._client.transport.hosts[0]
-                msg = (
-                    "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics "
-                    "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough "
-                    "privileges in the configuration in [%s]." % (target.__name__, node["host"], node["port"], config.ConfigFile().location)
-                )
-                self.logger.exception(msg)
-                raise exceptions.SystemSetupError(msg)
-            except elasticsearch.exceptions.ConnectionTimeout:
-                if execution_count < max_execution_count:
-                    self.logger.debug("Connection timeout in attempt [%d/%d].", execution_count, max_execution_count)
-                    time.sleep(time_to_sleep)
-                else:
-                    operation = target.__name__
-                    self.logger.exception("Connection timeout while running [%s] (retried %d times).", operation, max_execution_count)
-                    node = self._client.transport.hosts[0]
-                    msg = (
-                        "A connection timeout occurred while running the operation [%s] against your Elasticsearch metrics store on "
-                        "host [%s] at port [%s]." % (operation, node["host"], node["port"])
-                    )
-                    raise exceptions.RallyError(msg)
-            except elasticsearch.exceptions.ConnectionError:
-                node = self._client.transport.hosts[0]
-                msg = (
-                    "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]"
-                    " or fix the configuration in [%s]." % (node["host"], node["port"], config.ConfigFile().location)
-                )
-                self.logger.exception(msg)
-                raise exceptions.SystemSetupError(msg)
-            # TODO: Refactor error handling to better account for TransportError/ApiError subtleties
-            except TransportError as e:
-                if e.status == 404 and e.error == "index_not_found_exception":
-                    node = self._client.transport.hosts[0]
-                    msg = (
-                        "The operation [%s] against your Elasticsearch metrics store on "
-                        "host [%s] at port [%s] failed because index [%s] does not exist."
-                        % (target.__name__, node["host"], node["port"], kwargs.get("index"))
-                    )
-                    self.logger.exception(msg)
-                    raise exceptions.RallyError(msg)
-
-                if e.message in (502, 503, 504, 429) and execution_count < max_execution_count:
+            except elasticsearch.exceptions.ConnectionTimeout as e:
+                if execution_count <= max_execution_count:
                     self.logger.debug(
-                        "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
-                        responses[e.message],
+                        "Connection timeout [%s] in attempt [%d/%d]. Sleeping for [%f] seconds.",
                         e.message,
                         execution_count,
                         max_execution_count,
@@ -178,19 +125,82 @@ class EsClient:
                     )
                     time.sleep(time_to_sleep)
                 else:
-                    node = self._client.transport.hosts[0]
+                    operation = target.__name__
+                    self.logger.exception("Connection timeout while running [%s] (retried %d times).", operation, max_execution_count)
+                    node = self._client.transport.node_pool.get()
                     msg = (
-                        "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on "
-                        "host [%s] at port [%s]." % (target.__name__, node["host"], node["port"])
+                        "A connection timeout occurred while running the operation [%s] against your Elasticsearch metrics store on "
+                        "host [%s] at port [%s]." % (operation, node.host, node.port)
+                    )
+                    raise exceptions.RallyError(msg)
+            except elasticsearch.exceptions.ConnectionError as e:
+                if execution_count <= max_execution_count:
+                    self.logger.debug(
+                        "Connection error [%s] in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                        e.message,
+                        execution_count,
+                        max_execution_count,
+                        time_to_sleep,
+                    )
+                    time.sleep(time_to_sleep)
+                else:
+                    node = self._client.transport.node_pool.get()
+                    msg = (
+                        "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]"
+                        " or fix the configuration in [%s]." % (node.host, node.port, config.ConfigFile().location)
                     )
                     self.logger.exception(msg)
+                    # connection errors doesn't neccessarily mean it's during setup
                     raise exceptions.RallyError(msg)
-
-            except ApiError:
-                node = self._client.transport.hosts[0]
+            except elasticsearch.exceptions.AuthenticationException:
+                # we know that it is just one host (see EsClientFactory)
+                node = self._client.transport.node_pool.get()
                 msg = (
-                    "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
-                    "at port [%s]." % (target.__name__, node["host"], node["port"])
+                    "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at "
+                    "port [%s] (wrong password?). Please fix the configuration in [%s]."
+                    % (node.host, node.port, config.ConfigFile().location)
+                )
+                self.logger.exception(msg)
+                raise exceptions.SystemSetupError(msg)
+            except elasticsearch.exceptions.AuthorizationException:
+                node = self._client.transport.node_pool.get()
+                msg = (
+                    "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics "
+                    "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough "
+                    "privileges in the configuration in [%s]." % (target.__name__, node.host, node.port, config.ConfigFile().location)
+                )
+                self.logger.exception(msg)
+                raise exceptions.SystemSetupError(msg)
+            except ApiError as e:
+                if e.status_code in (502, 503, 504, 429) and execution_count <= max_execution_count:
+                    self.logger.debug(
+                        "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                        e.error,
+                        e.status_code,
+                        execution_count,
+                        max_execution_count,
+                        time_to_sleep,
+                    )
+                    time.sleep(time_to_sleep)
+                else:
+                    node = self._client.transport.node_pool.get()
+                    msg = (
+                        "An error [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
+                        "at port [%s]." % (e.error, target.__name__, node.host, node.port)
+                    )
+                    self.logger.exception(msg)
+                    # this does not necessarily mean it's a system setup problem...
+                    raise exceptions.RallyError(msg)
+            except TransportError as e:
+                node = self._client.transport.node_pool.get()
+
+                if e.errors:
+                    err = e.errors
+                else:
+                    err = e
+                msg = (
+                    "Transport error(s) [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on "
+                    "host [%s] at port [%s]." % (err, target.__name__, node.host, node.port)
                 )
                 self.logger.exception(msg)
                 # this does not necessarily mean it's a system setup problem...

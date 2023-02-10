@@ -268,14 +268,30 @@ def wait_for_rest_layer(es, max_attempts=40):
             es.cluster.health(wait_for_nodes=f">={expected_node_count}")
             logger.debug("REST API is available for >= [%s] nodes after [%s] attempts.", expected_node_count, attempt)
             return True
+        except elasticsearch.SerializationError as e:
+            if "Client sent an HTTP request to an HTTPS server" in str(e):
+                raise exceptions.SystemSetupError(
+                    "Rally sent an HTTP request to an HTTPS server. Are you sure this is an HTTP endpoint?", e
+                )
+
+            logger.debug("Got serialization error [%s] on attempt [%s]. Sleeping...", e, attempt)
+            time.sleep(3)
+        except elasticsearch.SSLError as e:
+            raise exceptions.SystemSetupError("Could not connect to cluster via HTTPS. Are you sure this is an HTTPS endpoint?", e)
+        except elasticsearch.exceptions.ConnectionError as e:
+            if "ProtocolError" in str(e):
+                raise exceptions.SystemSetupError(
+                    "Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?", e
+                )
+
+            logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
+            time.sleep(3)
         except elasticsearch.TransportError as e:
-            if "SSL: UNKNOWN_PROTOCOL" in str(e):
-                raise exceptions.SystemSetupError("Could not connect to cluster via https. Is this an https endpoint?", e)
             logger.debug("Got transport error on attempt [%s]. Sleeping...", attempt)
             time.sleep(3)
         except elasticsearch.ApiError as e:
             # cluster block, x-pack not initialized yet, our wait condition is not reached
-            if e.meta.status in (503, 401, 408):
+            if e.status_code in (503, 401, 408):
                 logger.debug("Got status code [%s] on attempt [%s]. Sleeping...", e.message, attempt)
                 time.sleep(3)
             else:

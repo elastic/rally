@@ -2867,7 +2867,7 @@ class Retry(Runner, Delegator):
                 if last_attempt or not retry_on_timeout:
                     raise
                 await asyncio.sleep(sleep_time)
-            except elasticsearch.exceptions.TransportError as e:
+            except elasticsearch.ApiError as e:
                 if last_attempt or not retry_on_timeout:
                     raise e
 
@@ -2875,6 +2875,16 @@ class Retry(Runner, Delegator):
                     self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
                     await asyncio.sleep(sleep_time)
                 else:
+                    raise e
+
+            except elasticsearch.exceptions.ConnectionTimeout as e:
+                if last_attempt or not retry_on_timeout:
+                    raise e
+
+                self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
+                await asyncio.sleep(sleep_time)
+            except elasticsearch.exceptions.TransportError as e:
+                if last_attempt or not retry_on_timeout:
                     raise e
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

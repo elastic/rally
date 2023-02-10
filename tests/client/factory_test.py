@@ -471,12 +471,35 @@ class TestRestLayer:
         assert not client.wait_for_rest_layer(es, max_attempts=3)
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_ssl_error(self, es):
+    def test_ssl_serialization_error(self, es):
+        es.cluster.health.side_effect = elasticsearch.SerializationError(message="Client sent an HTTP request to an HTTPS server")
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match="Rally sent an HTTP request to an HTTPS server. Are you sure this is an HTTP endpoint?",
+        ):
+            client.wait_for_rest_layer(es, max_attempts=3)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_connection_ssl_error(self, es):
+        es.cluster.health.side_effect = elasticsearch.SSLError(
+            message="SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1131)",
+        )
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match="Could not connect to cluster via HTTPS. Are you sure this is an HTTPS endpoint?",
+        ):
+            client.wait_for_rest_layer(es, max_attempts=3)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_connection_protocol_error(self, es):
         es.cluster.health.side_effect = elasticsearch.ConnectionError(
             message="N/A",
-            errors=[urllib3.exceptions.SSLError("[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)")],
+            errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],
         )
-        with pytest.raises(exceptions.SystemSetupError, match="Could not connect to cluster via https. Is this an https endpoint?"):
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match="Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?",
+        ):
             client.wait_for_rest_layer(es, max_attempts=3)
 
 
