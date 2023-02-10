@@ -18,6 +18,7 @@
 from esrally.client import common
 
 
+# pylint: disable=protected-access
 def test_client_major_version_to_str():
     version = (8, 2, 0)
     assert common._client_major_version_to_str(version) == "8"
