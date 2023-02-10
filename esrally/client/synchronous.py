@@ -121,11 +121,12 @@ class _ProductChecker:
 
 
 class RallySyncElasticsearch(elasticsearch.Elasticsearch):
-    def __init__(self, distro=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        distro = kwargs.pop("distro", None)
         super().__init__(*args, **kwargs)
         self._verified_elasticsearch = None
 
-        if distro is not None:
+        if distro:
             self.distribution_version = versions.Version.from_string(distro)
         else:
             self.distribution_version = None
@@ -155,16 +156,6 @@ class RallySyncElasticsearch(elasticsearch.Elasticsearch):
             request_headers.update(headers)
         else:
             request_headers = self._headers
-
-        if self._verified_elasticsearch is None:
-            info = self.transport.perform_request(method="GET", target="/", headers=request_headers)
-            info_meta = info.meta
-            info_body = info.body
-
-            self._verified_elasticsearch = _ProductChecker.check_product(info_meta.headers, info_body)
-
-            if self._verified_elasticsearch is not True:
-                _ProductChecker.raise_error(self._verified_elasticsearch, info_meta, info_body)
 
         # Converts all parts of a Accept/Content-Type headers
         # from application/X -> application/vnd.elasticsearch+X
@@ -210,6 +201,15 @@ class RallySyncElasticsearch(elasticsearch.Elasticsearch):
                     pass
 
             raise HTTP_EXCEPTIONS.get(meta.status, ApiError)(message=message, meta=meta, body=resp_body)
+
+        if self._verified_elasticsearch is None:
+            info = self.transport.perform_request(method="GET", target="/", headers=request_headers)
+            info_meta = info.meta
+            info_body = info.body
+            self._verified_elasticsearch = _ProductChecker.check_product(info_meta.headers, info_body)
+
+            if self._verified_elasticsearch is not True:
+                _ProductChecker.raise_error(self._verified_elasticsearch, info_meta, info_body)
 
         # 'Warning' headers should be reraised as 'ElasticsearchWarning'
         if "warning" in meta.headers:

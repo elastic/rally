@@ -280,13 +280,14 @@ class RallyAsyncTransport(elastic_transport.AsyncTransport):
 
 
 class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
-    def __init__(self, distro=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        distro = kwargs.pop("distro", None)
         super().__init__(*args, **kwargs)
         # skip verification at this point; we've already verified this earlier with the synchronous client.
         # The async client is used in the hot code path and we use customized overrides (such as that we don't
         # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
         self._verified_elasticsearch = True
-        if distro is not None:
+        if distro:
             self.distribution_version = versions.Version.from_string(distro)
         else:
             self.distribution_version = None
