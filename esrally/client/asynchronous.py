@@ -123,11 +123,8 @@ class StaticResponse(aiohttp.ClientResponse):
         self.status = 200
         return self
 
-    async def text(self, encoding=None, errors="strict"):
-        return self.static_body
-
     async def read(self):
-        return self.static_body
+        return self.static_body.encode("utf-8")
 
 
 class ResponseMatcher:
@@ -146,14 +143,7 @@ class ResponseMatcher:
             else:
                 matcher = ResponseMatcher.equals(path)
 
-            body = response["body"]
-            body_encoding = response.get("body-encoding", "json")
-            if body_encoding == "raw":
-                body = json.dumps(body).encode("utf-8")
-            elif body_encoding == "json":
-                body = json.dumps(body)
-            else:
-                raise ValueError(f"Unknown body encoding [{body_encoding}] for path [{path}]")
+            body = json.dumps(response["body"])
 
             self.responses.append((path, matcher, body))
 
