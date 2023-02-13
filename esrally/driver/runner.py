@@ -1963,7 +1963,7 @@ class CreateSnapshotRepository(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
         await es.snapshot.create_repository(
-            repository=mandatory(params, "repository", repr(self)), body=mandatory(params, "body", repr(self)), params=request_params
+            name=mandatory(params, "repository", repr(self)), body=mandatory(params, "body", repr(self)), params=request_params
         )
 
     def __repr__(self, *args, **kwargs):
@@ -2699,7 +2699,6 @@ class Downsample(Runner):
     """
 
     async def __call__(self, es, params):
-
         request_params, request_headers = self._transport_request_params(params)
 
         fixed_interval = mandatory(params, "fixed-interval", self)

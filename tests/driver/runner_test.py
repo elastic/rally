@@ -3765,7 +3765,7 @@ class TestCreateSnapshotRepository:
         await r(es, params)
 
         es.snapshot.create_repository.assert_called_once_with(
-            repository="backups", body={"type": "fs", "settings": {"location": "/var/backups"}}, params={}
+            name="backups", body={"type": "fs", "settings": {"location": "/var/backups"}}, params={}
         )
 
 
@@ -5101,7 +5101,6 @@ class TestTransformStatsRunner:
 
 
 class TestCreateIlmPolicyRunner:
-
     params = {
         "policy-name": "my-ilm-policy",
         "request-params": {"master_timeout": "30s", "timeout": "30s"},
@@ -5147,7 +5146,6 @@ class TestCreateIlmPolicyRunner:
 
 
 class TestDeleteIlmPolicyRunner:
-
     params = {"policy-name": "my-ilm-policy", "request-params": {"master_timeout": "30s", "timeout": "30s"}}
 
     @mock.patch("elasticsearch.Elasticsearch")
