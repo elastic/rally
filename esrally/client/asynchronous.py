@@ -130,19 +130,6 @@ class StaticResponse(aiohttp.ClientResponse):
         return self.static_body
 
 
-class RawClientResponse(aiohttp.ClientResponse):
-    """
-    Returns the body as bytes object (instead of a str) to avoid decoding overhead.
-    """
-
-    async def text(self, encoding=None, errors="strict"):
-        """Read response payload and decode."""
-        if self._body is None:
-            await self.read()
-
-        return self._body
-
-
 class ResponseMatcher:
     def __init__(self, responses):
         self.logger = logging.getLogger(__name__)
@@ -212,6 +199,8 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
         self._trace_configs = None
         self._enable_cleanup_closed = None
         self._static_responses = None
+        self._request_class = aiohttp.ClientRequest
+        self._response_class = aiohttp.ClientResponse
 
     @property
     def trace_configs(self):
@@ -244,9 +233,6 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
 
             self._request_class = StaticRequest
             self._response_class = StaticResponse
-        else:
-            self._request_class = aiohttp.ClientRequest
-            self._response_class = RawClientResponse
 
     def _create_aiohttp_session(self):
         if self._loop is None:
