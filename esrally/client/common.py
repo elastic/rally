@@ -1,8 +1,9 @@
 import re
 from datetime import date, datetime
 from typing import Any, Mapping
-from elasticsearch import VERSION
+
 from elastic_transport.client_utils import percent_encode
+from elasticsearch import VERSION
 
 
 def _client_major_version_to_str(version: tuple) -> str:
