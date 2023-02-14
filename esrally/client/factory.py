@@ -242,7 +242,7 @@ class EsClientFactory:
         # the AsyncElasticsearch constructor automatically creates the corresponding NodeConfig objects, so we set
         # their instance attributes after they've been instantiated
         for node_connection in async_client.transport.node_pool.all():
-            node_connection.trace_configs = trace_config
+            node_connection.trace_configs = [trace_config]
             node_connection.enable_cleanup_closed = self.enable_cleanup_closed
             node_connection.static_responses = self.static_responses
 

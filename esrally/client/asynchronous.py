@@ -187,19 +187,11 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
     def __init__(self, config):
         super().__init__(config)
         self._loop = None
-        self._trace_configs = None
+        self.trace_configs = None
         self._enable_cleanup_closed = None
         self._static_responses = None
         self._request_class = aiohttp.ClientRequest
         self._response_class = aiohttp.ClientResponse
-
-    @property
-    def trace_configs(self):
-        return self._trace_configs
-
-    @trace_configs.setter
-    def trace_configs(self, trace_configs):
-        self._trace_configs = [trace_configs]
 
     @property
     def enable_cleanup_closed(self):
@@ -247,7 +239,7 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
             request_class=self._request_class,
             response_class=self._response_class,
             connector=connector,
-            trace_configs=self._trace_configs,
+            trace_configs=self.trace_configs,
         )
 
 
