@@ -7,7 +7,7 @@ from elasticsearch import VERSION
 
 
 def _client_major_version_to_str(version: tuple) -> str:
-    return ".".join(map(str, version)).partition(".")[0]
+    return str(version[0])
 
 
 _WARNING_RE = re.compile(r"\"([^\"]*)\"")
