@@ -188,18 +188,10 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
         super().__init__(config)
         self._loop = None
         self.trace_configs = None
-        self._enable_cleanup_closed = None
+        self.enable_cleanup_closed = None
         self._static_responses = None
         self._request_class = aiohttp.ClientRequest
         self._response_class = aiohttp.ClientResponse
-
-    @property
-    def enable_cleanup_closed(self):
-        return self._enable_cleanup_closed
-
-    @enable_cleanup_closed.setter
-    def enable_cleanup_closed(self, enable_cleanup_closed):
-        self._enable_cleanup_closed = enable_cleanup_closed
 
     @property
     def static_responses(self):
@@ -222,13 +214,13 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
             self._loop = asyncio.get_running_loop()
 
         if self._static_responses:
-            connector = StaticConnector(limit_per_host=self._connections_per_node, enable_cleanup_closed=self._enable_cleanup_closed)
+            connector = StaticConnector(limit_per_host=self._connections_per_node, enable_cleanup_closed=self.enable_cleanup_closed)
         else:
             connector = aiohttp.TCPConnector(
                 limit_per_host=self._connections_per_node,
                 use_dns_cache=True,
                 ssl=self._ssl_context,
-                enable_cleanup_closed=self._enable_cleanup_closed,
+                enable_cleanup_closed=self.enable_cleanup_closed,
             )
 
         self.session = aiohttp.ClientSession(
