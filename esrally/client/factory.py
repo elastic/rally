@@ -33,7 +33,6 @@ class EsClientFactory:
     """
 
     def __init__(self, hosts, client_options, distribution_version=None):
-        # We need to pass a list of connection strings to the client as of elasticsearch-py 8.0
         def host_string(host):
             # protocol can be set at either host or client opts level
             protocol = "https" if client_options.get("use_ssl") or host.get("use_ssl") else "http"
