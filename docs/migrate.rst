@@ -4,6 +4,10 @@ Migration Guide
 Migrating to Rally 2.7.1
 ------------------------
 
+Elasticsearch client logs are now captured by the ``elastic_transport`` logger
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The 8.x version of ``elasticsearch-py`` client version Rally uses has moved the underlying network requests into a new module (and subsequently a new logger) named ``elastic_transport``. New installations of Rally will automatically be configured, and if you are upgrading in-place (i.e. there is a pre-existing ``logging.json``), Rally will automatically add this new logger to the configuration file.
+
 Snapshot repository plugins are no longer built from source
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

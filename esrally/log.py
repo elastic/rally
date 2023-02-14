@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import copy
 import json
 import logging
 import logging.config
@@ -43,6 +44,44 @@ def log_config_path():
     return os.path.join(paths.rally_confdir(), "logging.json")
 
 
+def add_missing_loggers_to_config():
+    """
+    Ensures that any missing top level loggers in resources/logging.json are
+    appended to an existing log configuration
+    """
+    logger = logging.getLogger(__name__)
+
+    def missing_keys(source, target):
+        """
+        Returns any top-level dicts present in 'source', but not in 'target'
+        :return: A dict of all keys present in 'source', but not in 'target'
+        """
+        missing_keys = {}
+        for k in source:
+            if k in source and k in target:
+                continue
+            else:
+                missing_keys[k] = source[k]
+        return missing_keys
+
+    source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
+    with open(log_config_path(), "r+", encoding="UTF-8") as target:
+        with open(source_path, "r+", encoding="UTF-8") as src:
+            template = json.load(src)
+            existing_logging_config = json.load(target)
+            existing_logging_config_copy = copy.deepcopy(existing_logging_config)
+            if missing_loggers := missing_keys(source=template["loggers"], target=existing_logging_config_copy["loggers"]):
+                logger.info(
+                    "Found loggers [%s] in source template that weren't present in the existing configuration, adding them.",
+                    str(missing_loggers),
+                )
+                existing_logging_config["loggers"].update(missing_loggers)
+                updated_config = json.dumps(existing_logging_config, indent=2)
+                target.seek(0)
+                target.write(updated_config)
+                target.truncate()
+
+
 def install_default_log_config():
     """
     Ensures a log configuration file is present on this machine. The default
@@ -63,6 +102,7 @@ def install_default_log_config():
                 log_path = io.escape_path(log_path)
                 contents = src.read().replace("${LOG_PATH}", log_path)
                 target.write(contents)
+    add_missing_loggers_to_config()
     io.ensure_dir(paths.logs())
 
 
