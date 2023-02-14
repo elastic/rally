@@ -36,6 +36,7 @@ from elastic_transport import (
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
+from elasticsearch._async.client import IlmClient
 from elasticsearch.compat import warn_stacklevel
 from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWarning
 from multidict import CIMultiDict, CIMultiDictProxy
@@ -255,6 +256,17 @@ class RallyAsyncTransport(elastic_transport.AsyncTransport):
         super().__init__(*args, node_class=RallyAiohttpHttpNode, **kwargs)
 
 
+class RallyIlmClient(IlmClient):
+    async def put_lifecycle(self, *args, **kwargs):
+        if args:
+            kwargs["name"] = args[0]
+
+        if body := kwargs.pop("body", None):
+            kwargs["policy"] = body.get("policy", {})
+        # pylint: disable=missing-kwoa
+        return await IlmClient.put_lifecycle(self, **kwargs)
+
+
 class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
     def __init__(self, *args, **kwargs):
         distro = kwargs.pop("distro", None)
@@ -267,6 +279,11 @@ class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHo
             self.distribution_version = versions.Version.from_string(distro)
         else:
             self.distribution_version = None
+
+        # some ILM method signatures changed in 'elasticsearch-py' 8.x,
+        # so we override method(s) here to provide BWC for any custom
+        # runners that aren't using the new kwargs
+        self.ilm = RallyIlmClient(self)
 
     async def perform_request(
         self,

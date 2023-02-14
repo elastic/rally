@@ -2625,8 +2625,21 @@ class CreateIlmPolicy(Runner):
     async def __call__(self, es, params):
         policy_name = mandatory(params, "policy-name", self)
         body = mandatory(params, "body", self)
+        policy = mandatory(body, "policy", self)
         request_params = params.get("request-params", {})
-        await es.ilm.put_lifecycle(policy=policy_name, body=body, params=request_params)
+        error_trace = request_params.get("error_trace", None)
+        filter_path = request_params.get("filter_path", None)
+        master_timeout = request_params.get("master_timeout", None)
+        timeout = request_params.get("timeout", None)
+
+        await es.ilm.put_lifecycle(
+            name=policy_name,
+            policy=policy,
+            error_trace=error_trace,
+            filter_path=filter_path,
+            master_timeout=master_timeout,
+            timeout=timeout,
+        )
         return {
             "weight": 1,
             "unit": "ops",
@@ -2646,7 +2659,14 @@ class DeleteIlmPolicy(Runner):
     async def __call__(self, es, params):
         policy_name = mandatory(params, "policy-name", self)
         request_params = params.get("request-params", {})
-        await es.ilm.delete_lifecycle(policy=policy_name, params=request_params)
+        error_trace = request_params.get("error_trace", None)
+        filter_path = request_params.get("filter_path", None)
+        master_timeout = request_params.get("master_timeout", None)
+        timeout = request_params.get("timeout", None)
+
+        await es.ilm.delete_lifecycle(
+            name=policy_name, error_trace=error_trace, filter_path=filter_path, master_timeout=master_timeout, timeout=timeout
+        )
         return {
             "weight": 1,
             "unit": "ops",

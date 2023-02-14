@@ -29,6 +29,7 @@ import elasticsearch
 import pytest
 
 from esrally import client, exceptions
+from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.driver import runner
 
 
@@ -5125,7 +5126,12 @@ class TestCreateIlmPolicyRunner:
         }
 
         es.ilm.put_lifecycle.assert_awaited_once_with(
-            policy=self.params["policy-name"], body=self.params["body"], params=self.params["request-params"]
+            name=self.params["policy-name"],
+            policy=self.params["body"]["policy"],
+            master_timeout=self.params["request-params"].get("master_timeout"),
+            timeout=self.params["request-params"].get("timeout"),
+            error_trace=None,
+            filter_path=None,
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -5142,7 +5148,30 @@ class TestCreateIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.put_lifecycle.assert_awaited_once_with(policy=params["policy-name"], body=params["body"], params={})
+        es.ilm.put_lifecycle.assert_awaited_once_with(
+            name=params["policy-name"],
+            policy=self.params["body"]["policy"],
+            master_timeout=None,
+            timeout=None,
+            error_trace=None,
+            filter_path=None,
+        )
+
+    @mock.patch("esrally.client.asynchronous.IlmClient")
+    @pytest.mark.asyncio
+    async def test_asyncRallyIlmClient_rewrites_kwargs(self, es_ilm):
+        es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
+        es_ilm.put_lifecycle = mock.AsyncMock(return_value={})
+
+        # simulating a custom runner that hasn't been refactored
+        # to suit the new 'elasticsearch-py' 8.x kwarg only method signature
+        await es.ilm.put_lifecycle("test-name", body=self.params["body"])
+
+        es_ilm.put_lifecycle.assert_awaited_once_with(
+            es.ilm,
+            policy=self.params["body"]["policy"],
+            name="test-name",
+        )
 
 
 class TestDeleteIlmPolicyRunner:
@@ -5160,7 +5189,13 @@ class TestDeleteIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.delete_lifecycle.assert_awaited_once_with(policy=self.params["policy-name"], params=self.params["request-params"])
+        es.ilm.delete_lifecycle.assert_awaited_once_with(
+            name=self.params["policy-name"],
+            master_timeout=self.params["request-params"].get("master_timeout"),
+            timeout=self.params["request-params"].get("timeout"),
+            error_trace=None,
+            filter_path=None,
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -5176,7 +5211,13 @@ class TestDeleteIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.delete_lifecycle.assert_awaited_once_with(policy=params["policy-name"], params={})
+        es.ilm.delete_lifecycle.assert_awaited_once_with(
+            name=self.params["policy-name"],
+            master_timeout=None,
+            timeout=None,
+            error_trace=None,
+            filter_path=None,
+        )
 
 
 class TestSqlRunner:
