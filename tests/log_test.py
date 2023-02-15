@@ -15,15 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import copy
+import json
+import os
 from unittest import mock
+from unittest.mock import mock_open, patch
 
 import pytest
-import os
-import copy
 
 from esrally import log
-import json
-from unittest.mock import patch, mock_open
 
 
 class TestLog:

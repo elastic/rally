@@ -5159,7 +5159,7 @@ class TestCreateIlmPolicyRunner:
 
     @mock.patch("esrally.client.asynchronous.IlmClient")
     @pytest.mark.asyncio
-    async def test_asyncRallyIlmClient_rewrites_kwargs(self, es_ilm):
+    async def test_RallyIlmClient_rewrites_kwargs(self, es_ilm):
         es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
         es_ilm.put_lifecycle = mock.AsyncMock(return_value={})
 
@@ -7038,7 +7038,8 @@ class TestEqlRunnerOverride:
         "index": "my-index",
         "request-timeout": 3600,
         "body": {
-            "query": "sequence by source.ip, destination.ip with maxspan=5m [process where true] [process where true] [process where true] [network where true] |head 100 | tail 50",
+            "query": "sequence by source.ip, destination.ip with maxspan=5m [process where true] [process where true] "
+            "[process where true] [network where true] |head 100 | tail 50",
             "fetch_size": 1000,
             "size": 100,
         },

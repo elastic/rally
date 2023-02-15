@@ -280,7 +280,7 @@ class RallyEqlClient(EqlClient):
             for p in params:
                 if param := body.get(p):
                     kwargs[p] = param
-
+        # pylint: disable=missing-kwoa
         return await EqlClient.search(self, **kwargs)
 
 
