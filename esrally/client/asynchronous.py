@@ -36,7 +36,7 @@ from elastic_transport import (
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
-from elasticsearch._async.client import IlmClient
+from elasticsearch._async.client import EqlClient, IlmClient
 from elasticsearch.compat import warn_stacklevel
 from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWarning
 from multidict import CIMultiDict, CIMultiDictProxy
@@ -251,6 +251,39 @@ class RallyIlmClient(IlmClient):
         return await IlmClient.put_lifecycle(self, **kwargs)
 
 
+class RallyEqlClient(EqlClient):
+    async def search(self, *args, **kwargs):
+        if args:
+            kwargs["index"] = args[0]
+
+        if body := kwargs.pop("body", None):
+            params = [
+                "query",
+                "allow_no_indices",
+                "case_sensitive",
+                "event_category_field",
+                "expand_wildcards",
+                "fetch_size",
+                "fields",
+                "filter",
+                "ignore_unavailable",
+                "keep_alive",
+                "keep_on_completion",
+                "result_position",
+                "runtime_mappings",
+                "size",
+                "tiebreaker_field",
+                "timestamp_field",
+                "wait_for_completion_timeout",
+            ]
+
+            for p in params:
+                if param := body.get(p):
+                    kwargs[p] = param
+
+        return await EqlClient.search(self, **kwargs)
+
+
 class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
     def __init__(self, *args, **kwargs):
         distro = kwargs.pop("distro", None)
@@ -268,6 +301,7 @@ class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHo
         # so we override method(s) here to provide BWC for any custom
         # runners that aren't using the new kwargs
         self.ilm = RallyIlmClient(self)
+        self.eql = RallyEqlClient(self)
 
     async def perform_request(
         self,
