@@ -49,14 +49,23 @@ def setup(request, tmp_path_factory):
     cls.tmp_clone_dir = str(tmp_path_factory.mktemp("rally-unit-test-clone-dir"))
 
     # create tmp git repos
-    cls.local_repo = Repo.init(cls.local_tmp_src_dir)
+    # Some recent git versions default to `main` but old versions don't accept
+    # --initial-branch. Until we migrate off Jenkins, let's default recent versions to
+    # master too.
+    try:
+        cls.local_repo = Repo.init(cls.local_tmp_src_dir, initial_branch="master")
+    except:
+        cls.local_repo = Repo.init(cls.local_tmp_src_dir)
     commit(cls.local_repo)
     cls.local_revision = cls.local_repo.heads["master"].commit.hexsha
     cls.local_repo.create_tag("local-tag-1", "HEAD")
     cls.local_repo.create_tag("local-tag-2", "HEAD")
     cls.local_repo.create_head(cls.local_branch, "HEAD")
 
-    cls.remote_repo = Repo.init(cls.remote_tmp_src_dir)
+    try:
+        cls.remote_repo = Repo.init(cls.remote_tmp_src_dir, initial_branch="master")
+    except Exception:
+        cls.remote_repo = Repo.init(cls.remote_tmp_src_dir)
     commit(cls.remote_repo, date="2016-01-01 00:00:00+0000")
     cls.old_revision = cls.remote_repo.heads["master"].commit.hexsha
     commit(cls.remote_repo)
