@@ -17,88 +17,86 @@
 
 import logging
 import os
-import shutil
 from unittest import mock
 
 import pytest
+from git import Repo
 
 from esrally import exceptions
-from esrally.utils import git, process
+from esrally.utils import git
+
+
+def commit(repo, *, date=None):
+    file_name = os.path.join(repo.working_dir, "test")
+    # creates an empty file
+    with open(file_name, "wb"):
+        pass
+    repo.index.add([file_name])
+    repo.index.commit("initial commit", commit_date=date)
 
 
 @pytest.fixture(scope="class", autouse=True)
 def setup(request, tmp_path_factory):
-    request.cls.remote_repo = "esrally"
-    request.cls.local_branch = "rally-unit-test-local-only-branch"
-    request.cls.remote_branch = "rally-unit-test-remote-only-branch"
-    request.cls.rebase_branch = "rally-unit-test-rebase-branch"
+    cls = request.cls
 
-    # this is assuming that nobody stripped the git repo info in their Rally working copy
-    request.cls.original_src_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    request.cls.local_tmp_src_dir = str(tmp_path_factory.mktemp("rally-unit-test-local-dir"))
-    request.cls.remote_tmp_src_dir = str(tmp_path_factory.mktemp("rally-unit-test-remote-dir"))
-    request.cls.tmp_clone_dir = str(tmp_path_factory.mktemp("rally-unit-test-clone-dir"))
+    cls.local_remote_name = "remote_repo"
+    cls.local_branch = "rally-unit-test-local-only-branch"
+    cls.remote_branch = "rally-unit-test-remote-only-branch"
+    cls.rebase_branch = "rally-unit-test-rebase-branch"
+
+    cls.local_tmp_src_dir = str(tmp_path_factory.mktemp("rally-unit-test-local-dir"))
+    cls.remote_tmp_src_dir = str(tmp_path_factory.mktemp("rally-unit-test-remote-dir"))
+    cls.tmp_clone_dir = str(tmp_path_factory.mktemp("rally-unit-test-clone-dir"))
 
     # create tmp git repos
-    shutil.copytree(request.cls.original_src_dir, request.cls.local_tmp_src_dir, dirs_exist_ok=True)
-    # stash any current changes in copied dir
-    process.run_subprocess_with_logging(f"git -C {request.cls.local_tmp_src_dir} stash")
-    shutil.copytree(request.cls.original_src_dir, request.cls.remote_tmp_src_dir, dirs_exist_ok=True)
-    # so we can restore the working tree after some tests
-    request.cls.starting_branch = git.current_branch(request.cls.local_tmp_src_dir)
+    # Some recent git versions default to `main` but old versions don't accept
+    # --initial-branch. Until we migrate off Jenkins, let's default recent versions to
+    # master too.
+    try:
+        cls.local_repo = Repo.init(cls.local_tmp_src_dir, initial_branch="master")
+    except Exception:
+        cls.local_repo = Repo.init(cls.local_tmp_src_dir)
+    commit(cls.local_repo)
+    cls.local_revision = cls.local_repo.heads["master"].commit.hexsha
+    cls.local_repo.create_tag("local-tag-1", "HEAD")
+    cls.local_repo.create_tag("local-tag-2", "HEAD")
+    cls.local_repo.create_head(cls.local_branch, "HEAD")
 
-    # setup test branches
-    process.run_subprocess_with_logging(f"git -C {request.cls.local_tmp_src_dir} branch {request.cls.local_branch}")
-    process.run_subprocess_with_logging(f"git -C {request.cls.remote_tmp_src_dir} branch {request.cls.remote_branch}")
-    request.cls.remote_branch_hash = process.run_subprocess_with_output(
-        f"git -C {request.cls.remote_tmp_src_dir} rev-parse {request.cls.remote_branch}"
-    )[0]
-    # setup remote
-    process.run_subprocess_with_logging(
-        f"git -C {request.cls.local_tmp_src_dir} remote add {request.cls.remote_repo} "
-        f"{os.path.join(request.cls.remote_tmp_src_dir, '.git')}"
-    )
+    try:
+        cls.remote_repo = Repo.init(cls.remote_tmp_src_dir, initial_branch="master")
+    except Exception:
+        cls.remote_repo = Repo.init(cls.remote_tmp_src_dir)
+    commit(cls.remote_repo, date="2016-01-01 00:00:00+0000")
+    cls.old_revision = cls.remote_repo.heads["master"].commit.hexsha
+    commit(cls.remote_repo)
+    cls.remote_branch_hash = cls.remote_repo.heads["master"].commit.hexsha
 
-    # fetch branches from remote
-    git.fetch(request.cls.local_tmp_src_dir, remote=request.cls.remote_repo)
+    cls.remote_repo.create_head(cls.remote_branch, "HEAD")
+    cls.local_repo.create_remote(cls.local_remote_name, cls.remote_tmp_src_dir)
+    cls.local_repo.remotes[cls.local_remote_name].fetch()
 
 
 # pylint: disable=too-many-public-methods
 class TestGit:
-    @pytest.fixture(autouse=True)
-    def checkout_previous_branch(self):
-        yield
-        # checkout the 'original' branch after each test
-        git.checkout(self.local_tmp_src_dir, branch=self.starting_branch)
-
-    @pytest.fixture
-    def delete_local_tags(self):
-        # delete tags, locally
-        process.run_subprocess(f"git -C {self.local_tmp_src_dir} tag | xargs git -C {self.local_tmp_src_dir} tag -d")
-        yield
-        # reinstate local tags from remote
-        git.fetch(self.local_tmp_src_dir, remote=self.remote_repo)
-
     @pytest.fixture
     def setup_teardown_rebase(self):
         # create branches on local and remote
-        process.run_subprocess_with_logging(f"git -C {self.local_tmp_src_dir} branch {self.rebase_branch}")
-        process.run_subprocess_with_logging(f"git -C {self.remote_tmp_src_dir} checkout -b {self.rebase_branch}")
+        self.local_repo.create_head(self.rebase_branch, "HEAD")
+        self.remote_repo.head.reference = self.remote_repo.create_head(self.rebase_branch, "HEAD")
         # create remote commit from which to rebase on in local
-        process.run_subprocess_with_logging(f"git -C {self.remote_tmp_src_dir} commit --allow-empty -m 'Rally rebase/pull test'")
-        self.remote_commit_hash = git.head_revision(self.remote_tmp_src_dir)
+        commit(self.remote_repo)
+        self.remote_commit_hash = self.remote_repo.heads[self.rebase_branch].commit.hexsha
         # run rebase
         yield
         # undo rebase
-        process.run_subprocess_with_logging(f"git -C {self.local_tmp_src_dir} reset --hard ORIG_HEAD")
-
+        self.local_repo.head.reset("ORIG_HEAD", hard=True)
         # checkout starting branches
-        git.checkout(self.local_tmp_src_dir, branch=self.starting_branch)
-        git.checkout(self.remote_tmp_src_dir, branch=self.starting_branch)
+        self.local_repo.head.reference = "master"
+        self.remote_repo.head.reference = "master"
 
         # delete branches
-        process.run_subprocess_with_logging(f"git -C {self.local_tmp_src_dir} branch -D {self.rebase_branch}")
-        process.run_subprocess_with_logging(f"git -C {self.remote_tmp_src_dir} branch -D {self.rebase_branch}")
+        self.local_repo.delete_head(self.rebase_branch, force=True)
+        self.remote_repo.delete_head(self.rebase_branch, force=True)
 
     def test_is_git_working_copy(self):
         # this test is assuming that nobody stripped the git repo info in their Rally working copy
@@ -128,14 +126,8 @@ class TestGit:
     def test_list_local_branches(self):
         assert self.local_branch in git.branches(self.local_tmp_src_dir, remote=False)
 
-    def test_list_tags_with_tags_present(self):
-        expected_tags = ["2.6.0", "2.5.0", "2.4.0", "2.3.1", "2.3.0"]
-        tags = git.tags(self.local_tmp_src_dir)
-        for tag in expected_tags:
-            assert tag in tags
-
-    def test_list_tags_no_tags_available(self, delete_local_tags):
-        assert git.tags(self.local_tmp_src_dir) == []
+    def test_list_tags(self):
+        assert git.tags(self.local_tmp_src_dir) == ["local-tag-1", "local-tag-2"]
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -154,13 +146,13 @@ class TestGit:
         assert git.is_working_copy(self.tmp_clone_dir)
 
     def test_clone_with_error(self):
-        remote = "/this/remote/doesnt/exist.git"
+        remote = "/this/remote/doesnt/exist"
         with pytest.raises(exceptions.SupplyError) as exc:
             git.clone(self.tmp_clone_dir, remote=remote)
         assert exc.value.args[0] == f"Could not clone from [{remote}] to [{self.tmp_clone_dir}]"
 
     def test_fetch_successful(self):
-        git.fetch(self.local_tmp_src_dir, remote=self.remote_repo)
+        git.fetch(self.local_tmp_src_dir, remote=self.local_remote_name)
 
     def test_fetch_with_error(self):
         with pytest.raises(exceptions.SupplyError) as exc:
@@ -179,32 +171,31 @@ class TestGit:
 
     def test_checkout_revision(self):
         # minimum 'core.abbrev' is to return 7 char prefixes
-        git.checkout_revision(self.local_tmp_src_dir, revision="bd368741951c643f9eb1958072c316e493c15b96")
-        assert git.head_revision(self.local_tmp_src_dir).startswith("bd36874")
+        git.checkout_revision(self.local_tmp_src_dir, revision=self.local_revision)
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.local_revision[:7])
 
     def test_checkout_branch(self):
-        git.checkout_branch(self.local_tmp_src_dir, remote=self.remote_repo, branch=self.remote_branch)
+        git.checkout_branch(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.remote_branch)
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_branch_hash[0:7])
 
     def test_head_revision(self):
         # minimum 'core.abbrev' is to return 7 char prefixes
-        git.checkout(self.local_tmp_src_dir, branch="2.6.0")
-        assert git.head_revision(self.local_tmp_src_dir).startswith("09980cd")
+        git.checkout(self.local_tmp_src_dir, branch="master")
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.local_revision[:7])
 
     def test_pull_ts(self):
-        # results in commit 28474f4f097106ff3507be35958db0c3c8be0fc6
         # minimum 'core.abbrev' is to return 7 char prefixes
-        git.pull_ts(self.local_tmp_src_dir, "2016-01-01T110000Z", remote=self.remote_repo, branch=self.remote_branch)
-        assert git.head_revision(self.local_tmp_src_dir).startswith("28474f4")
+        git.pull_ts(self.local_tmp_src_dir, "2016-01-01T110000Z", remote=self.local_remote_name, branch=self.remote_branch)
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.old_revision)
 
     def test_rebase(self, setup_teardown_rebase):
         # fetch required first to get remote branch
-        git.fetch(self.local_tmp_src_dir, remote=self.remote_repo)
-        git.rebase(self.local_tmp_src_dir, remote=self.remote_repo, branch=self.rebase_branch)
+        git.fetch(self.local_tmp_src_dir, remote=self.local_remote_name)
+        git.rebase(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.rebase_branch)
         # minimum 'core.abbrev' is to return 7 char prefixes
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_commit_hash[0:7])
 
     def test_pull_rebase(self, setup_teardown_rebase):
-        git.pull(self.local_tmp_src_dir, remote=self.remote_repo, branch=self.rebase_branch)
+        git.pull(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.rebase_branch)
         # minimum 'core.abbrev' is to return 7 char prefixes
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_commit_hash[0:7])
