@@ -39,7 +39,7 @@ def commit(repo, *, date=None):
 def setup(request, tmp_path_factory):
     cls = request.cls
 
-    cls.local_remote = "remote_repo"
+    cls.local_remote_name = "remote_repo"
     cls.local_branch = "rally-unit-test-local-only-branch"
     cls.remote_branch = "rally-unit-test-remote-only-branch"
     cls.rebase_branch = "rally-unit-test-rebase-branch"
@@ -63,8 +63,8 @@ def setup(request, tmp_path_factory):
     cls.remote_branch_hash = cls.remote_repo.heads["master"].commit.hexsha
 
     cls.remote_repo.create_head(cls.remote_branch, "HEAD")
-    cls.local_repo.create_remote(cls.local_remote, cls.remote_tmp_src_dir)
-    cls.local_repo.remotes[cls.local_remote].fetch()
+    cls.local_repo.create_remote(cls.local_remote_name, cls.remote_tmp_src_dir)
+    cls.local_repo.remotes[cls.local_remote_name].fetch()
 
 
 # pylint: disable=too-many-public-methods
@@ -143,7 +143,7 @@ class TestGit:
         assert exc.value.args[0] == f"Could not clone from [{remote}] to [{self.tmp_clone_dir}]"
 
     def test_fetch_successful(self):
-        git.fetch(self.local_tmp_src_dir, remote=self.local_remote)
+        git.fetch(self.local_tmp_src_dir, remote=self.local_remote_name)
 
     def test_fetch_with_error(self):
         with pytest.raises(exceptions.SupplyError) as exc:
@@ -166,7 +166,7 @@ class TestGit:
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.local_revision[:7])
 
     def test_checkout_branch(self):
-        git.checkout_branch(self.local_tmp_src_dir, remote=self.local_remote, branch=self.remote_branch)
+        git.checkout_branch(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.remote_branch)
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_branch_hash[0:7])
 
     def test_head_revision(self):
@@ -176,17 +176,17 @@ class TestGit:
 
     def test_pull_ts(self):
         # minimum 'core.abbrev' is to return 7 char prefixes
-        git.pull_ts(self.local_tmp_src_dir, "2016-01-01T110000Z", remote=self.local_remote, branch=self.remote_branch)
+        git.pull_ts(self.local_tmp_src_dir, "2016-01-01T110000Z", remote=self.local_remote_name, branch=self.remote_branch)
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.old_revision)
 
     def test_rebase(self, setup_teardown_rebase):
         # fetch required first to get remote branch
-        git.fetch(self.local_tmp_src_dir, remote=self.local_remote)
-        git.rebase(self.local_tmp_src_dir, remote=self.local_remote, branch=self.rebase_branch)
+        git.fetch(self.local_tmp_src_dir, remote=self.local_remote_name)
+        git.rebase(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.rebase_branch)
         # minimum 'core.abbrev' is to return 7 char prefixes
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_commit_hash[0:7])
 
     def test_pull_rebase(self, setup_teardown_rebase):
-        git.pull(self.local_tmp_src_dir, remote=self.local_remote, branch=self.rebase_branch)
+        git.pull(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.rebase_branch)
         # minimum 'core.abbrev' is to return 7 char prefixes
         assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_commit_hash[0:7])
