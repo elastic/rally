@@ -54,7 +54,7 @@ def setup(request, tmp_path_factory):
     # master too.
     try:
         cls.local_repo = Repo.init(cls.local_tmp_src_dir, initial_branch="master")
-    except:
+    except Exception:
         cls.local_repo = Repo.init(cls.local_tmp_src_dir)
     commit(cls.local_repo)
     cls.local_revision = cls.local_repo.heads["master"].commit.hexsha
