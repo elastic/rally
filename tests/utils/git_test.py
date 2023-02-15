@@ -28,6 +28,7 @@ from esrally.utils import git
 
 def commit(repo, *, date=None):
     file_name = os.path.join(repo.working_dir, "test")
+    # creates an empty file
     with open(file_name, "wb"):
         pass
     repo.index.add([file_name])
