@@ -43,8 +43,8 @@ dependencies = [
     #   urllib3: MIT
     #   aiohttp: Apache 2.0
 
-    "elasticsearch[async]==8.2.0",
-    "elastic-transport==8.1.2",
+    "elasticsearch[async]==8.6.1",
+    "elastic-transport==8.4.0",
     "urllib3==1.26.9",
     "docker==6.0.0",
     # License: BSD
