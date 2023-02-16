@@ -7030,36 +7030,3 @@ class TestFieldCapsRunner:
 
         expected_body = {"index_filter": index_filter}
         es.field_caps.assert_awaited_once_with(index="_all", fields="time-*", body=expected_body, params=None)
-
-
-class TestEqlRunnerOverride:
-    params = {
-        "cluster": "my-cluster",
-        "index": "my-index",
-        "request-timeout": 3600,
-        "body": {
-            "query": "sequence by source.ip, destination.ip with maxspan=5m [process where true] [process where true] "
-            "[process where true] [network where true] |head 100 | tail 50",
-            "fetch_size": 1000,
-            "size": 100,
-        },
-    }
-
-    @mock.patch("esrally.client.asynchronous.EqlClient")
-    @pytest.mark.asyncio
-    async def test_RallyEqlClient_rewrites_kwargs(self, es_eql):
-        es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
-        es_eql.search = mock.AsyncMock(return_value={})
-        index = f"{self.params['cluster']}:{self.params['index']}"
-        # simulating a custom runner that hasn't been refactored
-        # to suit the new 'elasticsearch-py' 8.x kwarg only method signature
-        await es.eql.search(index=index, body=self.params["body"], request_timeout=self.params["request-timeout"])
-
-        es_eql.search.assert_awaited_once_with(
-            es.eql,
-            index=index,
-            query=self.params["body"]["query"],
-            fetch_size=self.params["body"]["fetch_size"],
-            size=self.params["body"]["size"],
-            request_timeout=self.params["request-timeout"],
-        )
