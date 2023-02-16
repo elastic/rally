@@ -127,7 +127,7 @@ class TestBareProvisioner:
         def __repr__(self):
             r = []
             for prop, value in vars(self).items():
-                r.append("%s = [%s]" % (prop, repr(value)))
+                r.append(f"{prop} = [{repr(value)}]")
             return ", ".join(r)
 
     @mock.patch("glob.glob", lambda p: ["/opt/elasticsearch-6.8.0"])

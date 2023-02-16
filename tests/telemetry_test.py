@@ -367,7 +367,7 @@ class TestSegmentStats:
         # pylint: disable=unnecessary-dunder-call
         file_mock.assert_has_calls(
             [
-                call("/var/log/segment_stats.log", "wt"),
+                call("/var/log/segment_stats.log", "w"),
                 call().__enter__(),
                 call().write(stats_response),
                 call().__exit__(None, None, None),
@@ -2145,12 +2145,14 @@ class TestNodeStatsRecorder:
         client = Client(nodes=SubClient(stats=self.node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        node_name = [self.node_stats_response["nodes"][node]["name"] for node in self.node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
 
         telemetry_params = {}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
+
+        node_name = [self.node_stats_response["nodes"][node]["name"] for node in self.node_stats_response["nodes"]][0]
+        roles = [self.node_stats_response["nodes"][node]["roles"] for node in self.node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
 
         expected_doc = collections.OrderedDict()
         expected_doc["name"] = "node-stats"
@@ -2395,11 +2397,13 @@ class TestNodeStatsRecorder:
         client = Client(nodes=SubClient(stats=node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
         telemetry_params = {"node-stats-include-indices": True}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
+
+        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
+        roles = [node_stats_response["nodes"][node]["roles"] for node in node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
 
         metrics_store_put_doc.assert_called_once_with(
             {
@@ -2731,11 +2735,13 @@ class TestNodeStatsRecorder:
         client = Client(nodes=SubClient(stats=node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
         telemetry_params = {"node-stats-include-indices-metrics": "refresh,docs"}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
+
+        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
+        roles = [node_stats_response["nodes"][node]["roles"] for node in node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
 
         metrics_store_put_doc.assert_called_once_with(
             {

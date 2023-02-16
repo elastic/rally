@@ -13,6 +13,8 @@ This section contains meta information about the configuration file.
 
 * ``config.version``: The version of the configuration file format. This property is managed by Rally and should not be changed.
 
+.. _system:
+
 system
 ~~~~~~
 

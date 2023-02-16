@@ -100,7 +100,7 @@ class TestMechanic:
 
         def start(self, node_configs):
             self.started = True
-            return [TestMechanic.Node("rally-node-{}".format(n)) for n in range(len(node_configs))]
+            return [TestMechanic.Node(f"rally-node-{n}") for n in range(len(node_configs))]
 
         def stop(self, nodes, metrics_store):
             self.started = False

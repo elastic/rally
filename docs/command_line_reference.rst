@@ -349,7 +349,7 @@ A comma-separated list that specifies the node names of the master nodes in the 
 
     --master-nodes="rally-node-0,rally-node-1,rally-node-2"
 
-This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-node-2`` as `initial master nodes <https://www.elastic.co/guide/en/elasticsearch/reference/current/discovery-settings.html#initial_master_nodes>`_.
+This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-node-2`` as `initial master nodes <https://www.elastic.co/guide/en/elasticsearch/reference/current/important-settings.html#initial_master_nodes>`_.
 
 ``seed-hosts``
 ~~~~~~~~~~~~~~
@@ -358,7 +358,7 @@ This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-n
 
     This command line parameter is experimental. Expect the functionality and the command line interface to change significantly even in patch releases.
 
-A comma-separated list if IP:transport port pairs used to specify the seed hosts in the cluster when a node is setup via the ``install`` subcommand. See the `Elasticsearch documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/discovery-settings.html#unicast.hosts>`_ for a detailed explanation of the seed hosts parameter. Example::
+A comma-separated list if IP:transport port pairs used to specify the seed hosts in the cluster when a node is setup via the ``install`` subcommand. See the `Elasticsearch documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/important-settings.html#unicast.hosts>`_ for a detailed explanation of the seed hosts parameter. Example::
 
     --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300"
 
@@ -588,7 +588,7 @@ Example::
    # Force to run with JDK 11
    esrally race --track=geonames --distribution-version=7.0.0 --runtime-jdk=11
 
-It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/current/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
+It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/7.0/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
 
 .. _clr_revision:
 

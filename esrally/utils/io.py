@@ -471,7 +471,7 @@ class FileOffsetTable:
         prior_remaining_lines = target_line_number
 
         for line in self.offset_file:
-            line_number, offset_in_bytes = [int(i) for i in line.strip().split(";")]
+            line_number, offset_in_bytes = (int(i) for i in line.strip().split(";"))
             if line_number <= target_line_number:
                 prior_offset = offset_in_bytes
                 prior_remaining_lines = target_line_number - line_number
@@ -527,7 +527,7 @@ def prepare_file_offset_table(data_file_path):
         console.info("Preparing file offset table for [%s] ... " % data_file_path, end="", flush=True)
         line_number = 0
         with file_offset_table:
-            with open(data_file_path, mode="rt", encoding="utf-8") as data_file:
+            with open(data_file_path, encoding="utf-8") as data_file:
                 while True:
                     line = data_file.readline()
                     if len(line) == 0:

@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 import collections
 import inspect
 import logging
@@ -25,13 +27,14 @@ import random
 import time
 from abc import ABC
 from enum import Enum
+from typing import Callable, Deque
 
 from esrally import exceptions
 from esrally.track import track
 from esrally.utils import io
 
-__PARAM_SOURCES_BY_OP = {}
-__PARAM_SOURCES_BY_NAME = {}
+__PARAM_SOURCES_BY_OP: dict[track.OperationType, ParamSource] = {}
+__PARAM_SOURCES_BY_NAME: dict[str, ParamSource] = {}
 
 
 def param_source_for_operation(op_type, track, params, task_name):
@@ -168,7 +171,7 @@ class SleepParamSource(ParamSource):
         if not isinstance(duration, numbers.Number):
             raise exceptions.InvalidSyntax("parameter 'duration' for sleep operation must be a number")
         if duration < 0:
-            raise exceptions.InvalidSyntax("parameter 'duration' must be non-negative but was {}".format(duration))
+            raise exceptions.InvalidSyntax(f"parameter 'duration' must be non-negative but was {duration}")
 
     def params(self):
         return dict(self._params)
@@ -583,7 +586,7 @@ class BulkIndexParamSource(ParamSource):
             )
             self.on_conflict = params.get("on-conflict", "index")
             if self.on_conflict not in ["index", "update"]:
-                raise exceptions.InvalidSyntax("Unknown 'on-conflict' setting [{}]".format(self.on_conflict))
+                raise exceptions.InvalidSyntax(f"Unknown 'on-conflict' setting [{self.on_conflict}]")
             self.recency = self.float_param(params, name="recency", default_value=0, min_value=0, max_value=1, min_operator=operator.lt)
 
         else:
@@ -650,11 +653,11 @@ class BulkIndexParamSource(ParamSource):
             if min_operator(value, min_value) or value > max_value:
                 interval_min = "(" if min_operator is operator.le else "["
                 raise exceptions.InvalidSyntax(
-                    "'{}' must be in the range {}{:.1f}, {:.1f}] but was {:.1f}".format(name, interval_min, min_value, max_value, value)
+                    f"'{name}' must be in the range {interval_min}{min_value:.1f}, {max_value:.1f}] but was {value:.1f}"
                 )
             return value
         except ValueError:
-            raise exceptions.InvalidSyntax("'{}' must be numeric".format(name))
+            raise exceptions.InvalidSyntax(f"'{name}' must be numeric")
 
     def used_corpora(self, t, params):
         corpora = []
@@ -905,8 +908,7 @@ def chain(*iterables):
     for it in filter(lambda x: x is not None, iterables):
         # execute within a context
         with it:
-            for element in it:
-                yield element
+            yield from it
 
 
 def create_default_reader(
@@ -940,52 +942,62 @@ def create_default_reader(
 
 
 def create_readers(
-    num_clients,
-    start_client_index,
-    end_client_index,
-    corpora,
-    batch_size,
-    bulk_size,
-    id_conflicts,
-    conflict_probability,
-    on_conflict,
-    recency,
-    create_reader,
-):
-    logger = logging.getLogger(__name__)
-    # pre-initialize in order to assign parallel tasks for different corpora through assignment
-    readers = [None for corpus in corpora for _ in corpus.documents] * num_clients
-    # stagger which corpus each client starts with for better parallelism
-    for group, corpus in enumerate(corpora[(start_client_index + mod) % len(corpora)] for mod in range(len(corpora))):
-        for entry, docs in enumerate(corpus.documents):
+    num_clients: int,
+    start_client_index: int,
+    end_client_index: int,
+    corpora: list[track.DocumentCorpus],
+    batch_size: int,
+    bulk_size: int,
+    id_conflicts: IndexIdConflict,
+    conflict_probability: float,
+    on_conflict: str,
+    recency: str,
+    create_reader: Callable[..., IndexDataReader],
+) -> list[IndexDataReader]:
+    """
+    Return a list of IndexDataReader instances to allow a range of clients to read their share of corpora.
+
+    We're looking for better parallelism between corpora in indexing tasks in two ways:
+
+    1. By giving each client its own starting point in the list of corpora (using a
+       modulus of the number of corpora listed and the number of the client). In a track
+       with 2 corpora and 5 clients, clients 1, 3, and 5 would start with the first corpus
+       and clients 2 and 4 would start with the second corpus.
+    2. By generating the IndexDataReader list round-robin among all files, instead of in
+       order. If I'm the first client, I start with the first partition of the first file
+       of the first corpus. Then I move on to the first partition of the first file of the
+       second corpus, and so on.
+    """
+    corpora_readers: list[Deque[IndexDataReader]] = []
+    total_readers = 0
+    # stagger which corpus each client starts with for better parallelism (see 1. above)
+    start_corpora_id = start_client_index % len(corpora)
+    reordered_corpora = corpora[start_corpora_id:] + corpora[:start_corpora_id]
+
+    for corpus in reordered_corpora:
+        reader_queue: Deque[IndexDataReader] = collections.deque()
+        for docs in corpus.documents:
             offset, num_docs, num_lines = bounds(
                 docs.number_of_documents, start_client_index, end_client_index, num_clients, docs.includes_action_and_meta_data
             )
             if num_docs > 0:
-                target = f"{docs.target_index}/{docs.target_type}" if docs.target_index else "/"
-                if docs.target_data_stream:
-                    target = docs.target_data_stream
-                logger.debug(
-                    "Task-relative clients at index [%d-%d] will bulk index [%d] docs starting from line offset [%d] for [%s] "
-                    "from corpus [%s].",
-                    start_client_index,
-                    end_client_index,
-                    num_docs,
-                    offset,
-                    target,
-                    corpus.name,
-                )
-                readers[len(corpora) * entry + group] = create_reader(
+                reader: IndexDataReader = create_reader(
                     docs, offset, num_lines, num_docs, batch_size, bulk_size, id_conflicts, conflict_probability, on_conflict, recency
                 )
-            else:
-                logger.debug(
-                    "Task-relative clients at index [%d-%d] skip [%s] (no documents to read).",
-                    start_client_index,
-                    end_client_index,
-                    corpus.name,
-                )
-    return readers
+                reader_queue.append(reader)
+                total_readers += 1
+        corpora_readers.append(reader_queue)
+
+    # Stagger which files will be read (see 2. above)
+    staggered_readers: list[IndexDataReader] = []
+    while total_readers > 0:
+        for reader_queue in corpora_readers:
+            # Since corpora don't necessarily contain the same number of documents, we
+            # ignore already consumed queues
+            if reader_queue:
+                staggered_readers.append(reader_queue.popleft())
+                total_readers -= 1
+    return staggered_readers
 
 
 def bounds(total_docs, start_client_index, end_client_index, num_clients, includes_action_and_meta_data):
@@ -1171,7 +1183,7 @@ class GenerateActionMetaData:
             elif action == "update":
                 return "update", self.meta_data_update_with_id % doc_id
             else:
-                raise exceptions.RallyAssertionError("Unknown action [{}]".format(action))
+                raise exceptions.RallyAssertionError(f"Unknown action [{action}]")
         else:
             if self.use_create:
                 return "create", self.meta_data_create_no_id
@@ -1268,7 +1280,7 @@ class IndexDataReader:
             if docs_in_batch == 0:
                 raise StopIteration()
             return self.index_name, self.type_name, batch
-        except IOError:
+        except OSError:
             logging.getLogger(__name__).exception("Could not read [%s]", self.data_file)
 
     def __exit__(self, exc_type, exc_val, exc_tb):

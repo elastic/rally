@@ -161,7 +161,7 @@ class TestActionMetaData:
             return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % id
 
         def conflict(action, id):
-            return action, '{"%s": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % (action, id)
+            return action, f'{{"{action}": {{"_index": "test_index", "_type": "test_type", "_id": "{id}"}}}}\n'
 
         pseudo_random_conflicts = iter(
             [
@@ -212,15 +212,15 @@ class TestActionMetaData:
     def test_generate_action_meta_data_with_id_conflicts_and_recency_bias(self):
         def idx(type_name, id):
             if type_name:
-                return "index", '{"index": {"_index": "test_index", "_type": "%s", "_id": "%s"}}\n' % (type_name, id)
+                return "index", f'{{"index": {{"_index": "test_index", "_type": "{type_name}", "_id": "{id}"}}}}\n'
             else:
                 return "index", '{"index": {"_index": "test_index", "_id": "%s"}}\n' % id
 
         def conflict(action, type_name, id):
             if type_name:
-                return action, '{"%s": {"_index": "test_index", "_type": "%s", "_id": "%s"}}\n' % (action, type_name, id)
+                return action, f'{{"{action}": {{"_index": "test_index", "_type": "{type_name}", "_id": "{id}"}}}}\n'
             else:
-                return action, '{"%s": {"_index": "test_index", "_id": "%s"}}\n' % (action, id)
+                return action, f'{{"{action}": {{"_index": "test_index", "_id": "{id}"}}}}\n'
 
         pseudo_random_conflicts = iter(
             [
@@ -1358,32 +1358,48 @@ class TestBulkDataGenerator:
             original_params={"my-custom-parameter": "foo", "my-custom-parameter-2": True},
             create_reader=self.create_test_reader([["1", "2", "3", "4", "5"], ["6", "7", "8"]]),
         )
-        all_bulks = list(bulks)
-        assert len(all_bulks) == 2
-        assert all_bulks[0] == {
-            "action-metadata-present": True,
-            "body": ["1", "2", "3", "4", "5"],
-            "bulk-size": 5,
-            "unit": "docs",
-            "index": "test-idx",
-            "type": "test-type",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True,
-        }
-
-        assert all_bulks[1] == {
-            "action-metadata-present": True,
-            "body": ["6", "7", "8"],
-            "bulk-size": 3,
-            "unit": "docs",
-            "index": "test-idx",
-            "type": "test-type",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True,
-        }
+        assert list(bulks) == [
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3", "4", "5"],
+                "bulk-size": 5,
+                "unit": "docs",
+                "index": "test-idx",
+                "type": "test-type",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+            {
+                "action-metadata-present": True,
+                "body": ["6", "7", "8"],
+                "bulk-size": 3,
+                "unit": "docs",
+                "index": "test-idx",
+                "type": "test-type",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+        ]
 
     def test_generate_bulks_from_multiple_corpora(self):
         corpora = [
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2017-01",
+                        target_type="docs",
+                    ),
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=0,
+                        target_index="logs-2017-02",
+                        target_type="docs",
+                    ),
+                ],
+            ),
             track.DocumentCorpus(
                 name="default",
                 documents=[
@@ -1399,17 +1415,6 @@ class TestBulkDataGenerator:
                         target_index="logs-2018-02",
                         target_type="docs",
                     ),
-                ],
-            ),
-            track.DocumentCorpus(
-                name="special",
-                documents=[
-                    track.Documents(
-                        source_format=track.Documents.SOURCE_FORMAT_BULK,
-                        number_of_documents=5,
-                        target_index="logs-2017-01",
-                        target_type="docs",
-                    )
                 ],
             ),
         ]
@@ -1429,40 +1434,99 @@ class TestBulkDataGenerator:
             original_params={"my-custom-parameter": "foo", "my-custom-parameter-2": True},
             create_reader=self.create_test_reader([["1", "2", "3", "4", "5"]]),
         )
-        all_bulks = list(bulks)
-        assert len(all_bulks) == 3
-        assert all_bulks[0] == {
-            "action-metadata-present": True,
-            "body": ["1", "2", "3", "4", "5"],
-            "bulk-size": 5,
-            "unit": "docs",
-            "index": "logs-2018-01",
-            "type": "docs",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True,
-        }
+        assert list(bulks) == [
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3", "4", "5"],
+                "bulk-size": 5,
+                "unit": "docs",
+                "index": "logs-2017-01",
+                "type": "docs",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3", "4", "5"],
+                "bulk-size": 5,
+                "unit": "docs",
+                "index": "logs-2018-01",
+                "type": "docs",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3", "4", "5"],
+                "bulk-size": 5,
+                "unit": "docs",
+                "index": "logs-2018-02",
+                "type": "docs",
+                "my-custom-parameter": "foo",
+                "my-custom-parameter-2": True,
+            },
+        ]
 
-        assert all_bulks[1] == {
-            "action-metadata-present": True,
-            "body": ["1", "2", "3", "4", "5"],
-            "bulk-size": 5,
-            "unit": "docs",
-            "index": "logs-2017-01",
-            "type": "docs",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True,
-        }
+    def test_generate_bulks_with_more_clients_than_corpora(self):
+        corpora = [
+            track.DocumentCorpus(
+                name="special",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2017-01",
+                        target_type="docs",
+                    ),
+                ],
+            ),
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2018-01",
+                        target_type="docs",
+                    ),
+                ],
+            ),
+            track.DocumentCorpus(
+                name="defaults",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=5,
+                        target_index="logs-2019-01",
+                        target_type="docs",
+                    ),
+                ],
+            ),
+        ]
 
-        assert all_bulks[2] == {
-            "action-metadata-present": True,
-            "body": ["1", "2", "3", "4", "5"],
-            "bulk-size": 5,
-            "unit": "docs",
-            "index": "logs-2018-02",
-            "type": "docs",
-            "my-custom-parameter": "foo",
-            "my-custom-parameter-2": True,
-        }
+        for client_index, indices in [
+            (0, ["logs-2017-01", "logs-2018-01", "logs-2019-01"]),
+            (1, ["logs-2018-01", "logs-2019-01", "logs-2017-01"]),
+            (2, ["logs-2019-01", "logs-2017-01", "logs-2018-01"]),
+            (3, ["logs-2017-01", "logs-2018-01", "logs-2019-01"]),
+            (4, ["logs-2018-01", "logs-2019-01", "logs-2017-01"]),
+        ]:
+            bulks = params.bulk_data_based(
+                num_clients=5,
+                start_client_index=client_index,
+                end_client_index=client_index,
+                corpora=corpora,
+                batch_size=5,
+                bulk_size=5,
+                id_conflicts=params.IndexIdConflict.NoConflicts,
+                conflict_probability=None,
+                on_conflict=None,
+                recency=None,
+                pipeline=None,
+                original_params={},
+                create_reader=self.create_test_reader([["1", "2", "3", "4", "5"]]),
+            )
+            assert [bulk["index"] for bulk in bulks] == indices
 
     def test_internal_params_take_precedence(self):
         corpus = track.DocumentCorpus(
@@ -1492,18 +1556,18 @@ class TestBulkDataGenerator:
             original_params={"body": "foo", "custom-param": "bar"},
             create_reader=self.create_test_reader([["1", "2", "3"]]),
         )
-        all_bulks = list(bulks)
-        assert len(all_bulks) == 1
         # body must not contain 'foo'!
-        assert all_bulks[0] == {
-            "action-metadata-present": True,
-            "body": ["1", "2", "3"],
-            "bulk-size": 3,
-            "unit": "docs",
-            "index": "test-idx",
-            "type": "test-type",
-            "custom-param": "bar",
-        }
+        assert list(bulks) == [
+            {
+                "action-metadata-present": True,
+                "body": ["1", "2", "3"],
+                "bulk-size": 3,
+                "unit": "docs",
+                "index": "test-idx",
+                "type": "test-type",
+                "custom-param": "bar",
+            }
+        ]
 
 
 class TestParamsRegistration:
@@ -1789,11 +1853,12 @@ class TestCreateDataStreamParamSource:
             track.Track(name="unit-test"),
             params={"data-stream": "test-data-stream"},
         )
-        p = source.params()
-        assert len(p["data-streams"]) == 1
-        ds = p["data-streams"][0]
-        assert ds == "test-data-stream"
-        assert p["request-params"] == {}
+
+        assert source.params() == {
+            "data-stream": "test-data-stream",
+            "data-streams": ["test-data-stream"],
+            "request-params": {},
+        }
 
     def test_create_data_stream_inline_without_body(self):
         source = params.CreateDataStreamParamSource(
@@ -1804,11 +1869,11 @@ class TestCreateDataStreamParamSource:
             },
         )
 
-        p = source.params()
-        assert len(p["data-streams"]) == 1
-        ds = p["data-streams"][0]
-        assert ds == "test-data-stream"
-        assert p["request-params"] == {"wait_for_active_shards": True}
+        assert source.params() == {
+            "data-stream": "test-data-stream",
+            "data-streams": ["test-data-stream"],
+            "request-params": {"wait_for_active_shards": True},
+        }
 
     def test_filter_data_stream(self):
         source = params.CreateDataStreamParamSource(
@@ -1823,11 +1888,11 @@ class TestCreateDataStreamParamSource:
             params={"data-stream": "data-stream-2"},
         )
 
-        p = source.params()
-        assert len(p["data-streams"]) == 1
-
-        ds = p["data-streams"][0]
-        assert ds == "data-stream-2"
+        assert source.params() == {
+            "data-stream": "data-stream-2",
+            "data-streams": ["data-stream-2"],
+            "request-params": {},
+        }
 
 
 class TestDeleteIndexParamSource:
@@ -1844,11 +1909,11 @@ class TestDeleteIndexParamSource:
             params={},
         )
 
-        p = source.params()
-
-        assert p["indices"] == ["index1", "index2", "index3"]
-        assert p["request-params"] == {}
-        assert p["only-if-exists"]
+        assert source.params() == {
+            "indices": ["index1", "index2", "index3"],
+            "request-params": {},
+            "only-if-exists": True,
+        }
 
     def test_filter_index_from_track(self):
         source = params.DeleteIndexParamSource(
@@ -1867,18 +1932,27 @@ class TestDeleteIndexParamSource:
             },
         )
 
-        p = source.params()
-
-        assert ["index2"] == p["indices"]
-        assert p["request-params"] == {"allow_no_indices": True}
-        assert not p["only-if-exists"]
+        assert source.params() == {
+            "indices": ["index2"],
+            "index": "index2",
+            "request-params": {"allow_no_indices": True},
+            "only-if-exists": False,
+        }
 
     def test_delete_index_by_name(self):
-        source = params.DeleteIndexParamSource(track.Track(name="unit-test"), params={"index": "index2"})
+        source = params.DeleteIndexParamSource(
+            track.Track(
+                name="unit-test",
+            ),
+            params={"index": "index2"},
+        )
 
-        p = source.params()
-
-        assert p["indices"] == ["index2"]
+        assert source.params() == {
+            "indices": ["index2"],
+            "index": "index2",
+            "request-params": {},
+            "only-if-exists": True,
+        }
 
     def test_delete_no_index(self):
         with pytest.raises(exceptions.InvalidSyntax) as exc:
@@ -1900,11 +1974,11 @@ class TestDeleteDataStreamParamSource:
             params={},
         )
 
-        p = source.params()
-
-        assert p["data-streams"] == ["data-stream-1", "data-stream-2", "data-stream-3"]
-        assert p["request-params"] == {}
-        assert p["only-if-exists"]
+        assert source.params() == {
+            "data-streams": ["data-stream-1", "data-stream-2", "data-stream-3"],
+            "request-params": {},
+            "only-if-exists": True,
+        }
 
     def test_filter_data_stream_from_track(self):
         source = params.DeleteDataStreamParamSource(
@@ -1923,22 +1997,32 @@ class TestDeleteDataStreamParamSource:
             },
         )
 
-        p = source.params()
-
-        assert p["data-streams"] == ["data-stream-2"]
-        assert p["request-params"] == {"allow_no_indices": True}
-        assert not p["only-if-exists"]
+        assert source.params() == {
+            "data-stream": "data-stream-2",
+            "data-streams": ["data-stream-2"],
+            "only-if-exists": False,
+            "request-params": {"allow_no_indices": True},
+        }
 
     def test_delete_data_stream_by_name(self):
-        source = params.DeleteDataStreamParamSource(track.Track(name="unit-test"), params={"data-stream": "data-stream-2"})
+        source = params.DeleteDataStreamParamSource(
+            track.Track(name="unit-test"),
+            params={"data-stream": "data-stream-2"},
+        )
 
-        p = source.params()
-
-        assert p["data-streams"] == ["data-stream-2"]
+        assert source.params() == {
+            "data-stream": "data-stream-2",
+            "data-streams": ["data-stream-2"],
+            "request-params": {},
+            "only-if-exists": True,
+        }
 
     def test_delete_no_data_stream(self):
         with pytest.raises(exceptions.InvalidSyntax) as exc:
-            params.DeleteDataStreamParamSource(track.Track(name="unit-test"), params={})
+            params.DeleteDataStreamParamSource(
+                track.Track(name="unit-test"),
+                params={},
+            )
         assert exc.value.args[0] == "delete-data-stream operation targets no data stream"
 
 
@@ -2011,14 +2095,17 @@ class TestCreateIndexTemplateParamSource:
 
 class TestDeleteIndexTemplateParamSource:
     def test_delete_index_template_by_name(self):
-        source = params.DeleteIndexTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
+        source = params.DeleteIndexTemplateParamSource(
+            track.Track(name="unit-test"),
+            params={"template": "default"},
+        )
 
-        p = source.params()
-
-        assert len(p["templates"]) == 1
-        assert p["templates"][0] == ("default", False, None)
-        assert p["only-if-exists"]
-        assert p["request-params"] == {}
+        assert source.params() == {
+            "template": "default",
+            "templates": [("default", False, None)],
+            "only-if-exists": True,
+            "request-params": {},
+        }
 
     def test_delete_index_template_by_name_and_matching_indices(self):
         source = params.DeleteIndexTemplateParamSource(
@@ -2030,17 +2117,23 @@ class TestDeleteIndexTemplateParamSource:
             },
         )
 
-        p = source.params()
-
-        assert len(p["templates"]) == 1
-        assert p["templates"][0] == ("default", True, "logs-*")
-        assert p["only-if-exists"]
-        assert p["request-params"] == {}
+        assert source.params() == {
+            "template": "default",
+            "delete-matching-indices": True,
+            "index-pattern": "logs-*",
+            "templates": [("default", True, "logs-*")],
+            "only-if-exists": True,
+            "request-params": {},
+        }
 
     def test_delete_index_template_by_name_and_matching_indices_missing_index_pattern(self):
         with pytest.raises(exceptions.InvalidSyntax) as exc:
             params.DeleteIndexTemplateParamSource(
-                track.Track(name="unit-test"), params={"template": "default", "delete-matching-indices": True}
+                track.Track(name="unit-test"),
+                params={
+                    "template": "default",
+                    "delete-matching-indices": True,
+                },
             )
         assert (
             exc.value.args[0] == "The property 'index-pattern' is required for delete-index-template if 'delete-matching-indices' is true."
@@ -2070,16 +2163,20 @@ class TestDeleteIndexTemplateParamSource:
 
         source = params.DeleteIndexTemplateParamSource(
             track.Track(name="unit-test", templates=[tpl1, tpl2]),
-            params={"request-params": {"master_timeout": 20}, "only-if-exists": False},
+            params={
+                "request-params": {"master_timeout": 20},
+                "only-if-exists": False,
+            },
         )
 
-        p = source.params()
-
-        assert len(p["templates"]) == 2
-        assert p["templates"][0] == ("metrics", True, "metrics-*")
-        assert p["templates"][1] == ("logs", False, "logs-*")
-        assert not p["only-if-exists"]
-        assert p["request-params"] == {"master_timeout": 20}
+        assert source.params() == {
+            "request-params": {"master_timeout": 20},
+            "only-if-exists": False,
+            "templates": [
+                ("metrics", True, "metrics-*"),
+                ("logs", False, "logs-*"),
+            ],
+        }
 
 
 class TestCreateComposableTemplateParamSource:
@@ -2096,16 +2193,18 @@ class TestCreateComposableTemplateParamSource:
             },
         )
 
-        p = source.params()
-
-        assert len(p["templates"]) == 1
-        assert p["request-params"] == {}
-        template, body = p["templates"][0]
-        assert template == "test"
-        assert body == {
-            "index_patterns": ["my*"],
-            "template": {"settings": {"index.number_of_shards": 3}},
-            "composed_of": ["ct1", "ct2"],
+        assert source.params() == {
+            "request-params": {},
+            "templates": [
+                (
+                    "test",
+                    {
+                        "index_patterns": ["my*"],
+                        "template": {"settings": {"index.number_of_shards": 3}},
+                        "composed_of": ["ct1", "ct2"],
+                    },
+                )
+            ],
         }
 
     def test_create_composable_index_template_from_track(self):
@@ -2126,16 +2225,23 @@ class TestCreateComposableTemplateParamSource:
             },
         )
 
-        p = source.params()
-
-        assert len(p["templates"]) == 1
-        assert p["request-params"] == {}
-        template, body = p["templates"][0]
-        assert template == "default"
-        assert body == {
-            "index_patterns": ["my*"],
-            "template": {"settings": {"index.number_of_shards": 3, "index.number_of_replicas": 1}},
-            "composed_of": ["ct1", "ct2"],
+        assert source.params() == {
+            "request-params": {},
+            "templates": [
+                (
+                    "default",
+                    {
+                        "index_patterns": ["my*"],
+                        "template": {
+                            "settings": {
+                                "index.number_of_shards": 3,
+                                "index.number_of_replicas": 1,
+                            }
+                        },
+                        "composed_of": ["ct1", "ct2"],
+                    },
+                )
+            ],
         }
 
     def test_create_composable_index_template_from_track_wrong_filter(self):
@@ -2176,41 +2282,41 @@ class TestCreateComposableTemplateParamSource:
             },
         )
 
-        p = source.params()
-
-        assert len(p["templates"]) == 1
-        assert p["request-params"] == {}
-        template, body = p["templates"][0]
-        assert template == "default"
-        assert body == {
-            "index_patterns": ["my*"],
-            "template": {"settings": {"index.number_of_replicas": 1}},
-            "composed_of": ["ct1", "ct2"],
+        assert source.params() == {
+            "request-params": {},
+            "templates": [
+                (
+                    "default",
+                    {
+                        "index_patterns": ["my*"],
+                        "template": {
+                            "settings": {
+                                "index.number_of_replicas": 1,
+                            }
+                        },
+                        "composed_of": ["ct1", "ct2"],
+                    },
+                )
+            ],
         }
 
     def test_create_or_merge(self):
         content = params.CreateComposableTemplateParamSource._create_or_merge(
             {"parent": {}},
             ["parent", "child", "grandchild"],
-            {
-                "name": "Mike",
-            },
+            {"name": "Mike"},
         )
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
         content = params.CreateComposableTemplateParamSource._create_or_merge(
             {"parent": {"child": {}}},
             ["parent", "child", "grandchild"],
-            {
-                "name": "Mike",
-            },
+            {"name": "Mike"},
         )
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
         content = params.CreateComposableTemplateParamSource._create_or_merge(
             {"parent": {"child": {"grandchild": {}}}},
             ["parent", "child", "grandchild"],
-            {
-                "name": "Mike",
-            },
+            {"name": "Mike"},
         )
         assert content["parent"]["child"]["grandchild"]["name"] == "Mike"
         content = params.CreateComposableTemplateParamSource._create_or_merge(
@@ -2300,24 +2406,26 @@ class TestCreateComponentTemplateParamSource:
             },
         )
 
-        p = source.params()
-
-        assert len(p["templates"]) == 1
-        assert p["request-params"] == {}
-        template, body = p["templates"][0]
-        assert template == "default"
-        assert body == {
-            "template": {
-                "settings": {
-                    "index.number_of_shards": 1,
-                    "index.number_of_replicas": 1,
-                },
-                "mappings": {
-                    "properties": {
-                        "@timestamp": {"type": "date"},
+        assert source.params() == {
+            "request-params": {},
+            "templates": [
+                (
+                    "default",
+                    {
+                        "template": {
+                            "settings": {
+                                "index.number_of_shards": 1,
+                                "index.number_of_replicas": 1,
+                            },
+                            "mappings": {
+                                "properties": {
+                                    "@timestamp": {"type": "date"},
+                                },
+                            },
+                        }
                     },
-                },
-            }
+                )
+            ],
         }
 
     def test_create_component_index_template_from_track_wrong_filter(self):
@@ -2342,16 +2450,23 @@ class TestCreateComponentTemplateParamSource:
 
 class TestDeleteComponentTemplateParamSource:
     def test_delete_component_template_by_name(self):
-        source = params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
-        p = source.params()
-        assert len(p["templates"]) == 1
-        assert p["templates"][0] == "default"
-        assert p["only-if-exists"]
-        assert p["request-params"] == {}
+        source = params.DeleteComponentTemplateParamSource(
+            track.Track(name="unit-test"),
+            params={"template": "default"},
+        )
+
+        assert source.params() == {
+            "templates": ["default"],
+            "only-if-exists": True,
+            "request-params": {},
+        }
 
     def test_no_component_templates(self):
         with pytest.raises(exceptions.InvalidSyntax) as exc:
-            params.DeleteComponentTemplateParamSource(track.Track(name="unit-test"), params={"operation-type": "delete-component-template"})
+            params.DeleteComponentTemplateParamSource(
+                track.Track(name="unit-test"),
+                params={"operation-type": "delete-component-template"},
+            )
         assert exc.value.args[0] == "Please set the property 'template' for the delete-component-template operation."
 
     def test_delete_component_template_from_track(self):
@@ -2405,17 +2520,22 @@ class TestDeleteComponentTemplateParamSource:
 
 class TestDeleteComposableTemplateParamSource:
     def test_delete_composable_template_by_name(self):
-        source = params.DeleteComposableTemplateParamSource(track.Track(name="unit-test"), params={"template": "default"})
-        p = source.params()
-        assert len(p["templates"]) == 1
-        assert p["templates"][0][0] == "default"
-        assert p["only-if-exists"]
-        assert p["request-params"] == {}
+        source = params.DeleteComposableTemplateParamSource(
+            track.Track(name="unit-test"),
+            params={"template": "default"},
+        )
+        assert source.params() == {
+            "template": "default",
+            "templates": [("default", False, None)],
+            "only-if-exists": True,
+            "request-params": {},
+        }
 
     def test_no_composable_templates(self):
         with pytest.raises(exceptions.InvalidSyntax) as exc:
             params.DeleteComponentTemplateParamSource(
-                track.Track(name="unit-test"), params={"operation-type": "delete-composable-template"}
+                track.Track(name="unit-test"),
+                params={"operation-type": "delete-composable-template"},
             )
         assert exc.value.args[0] == "Please set the property 'template' for the delete-composable-template operation."
 
@@ -2486,22 +2606,21 @@ class TestSearchParamSource:
                 "cache": True,
             },
         )
-        p = source.params()
 
-        assert len(p) == 10
-        assert p["index"] == "index1"
-        assert p["type"] is None
-        assert p["request-timeout"] is None
-        assert p["opaque-id"] is None
-        assert p["headers"] == {"header1": "value1"}
-        assert p["request-params"] == {}
-        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
-        assert p["cache"] is True
-        assert p["response-compression-enabled"] is True
-        assert p["detailed-results"] is False
-        assert p["body"] == {
-            "query": {
-                "match_all": {},
+        assert source.params() == {
+            "index": "index1",
+            "type": None,
+            "request-timeout": None,
+            "opaque-id": None,
+            "headers": {"header1": "value1"},
+            "request-params": {},
+            "cache": True,
+            "response-compression-enabled": True,
+            "detailed-results": False,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
             },
         }
 
@@ -2522,22 +2641,21 @@ class TestSearchParamSource:
                 "cache": True,
             },
         )
-        p = source.params()
 
-        assert len(p) == 10
-        assert p["index"] == "data-stream-1"
-        assert p["type"] is None
-        assert p["request-timeout"] == 1.0
-        assert p["headers"] == {"header1": "value1", "header2": "value2"}
-        assert p["opaque-id"] == "12345abcde"
-        assert p["request-params"] == {}
-        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
-        assert p["cache"] is True
-        assert p["response-compression-enabled"] is True
-        assert p["detailed-results"] is False
-        assert p["body"] == {
-            "query": {
-                "match_all": {},
+        assert source.params() == {
+            "index": "data-stream-1",
+            "type": None,
+            "request-timeout": 1.0,
+            "headers": {"header1": "value1", "header2": "value2"},
+            "opaque-id": "12345abcde",
+            "request-params": {},
+            "cache": True,
+            "response-compression-enabled": True,
+            "detailed-results": False,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
             },
         }
 
@@ -2572,22 +2690,21 @@ class TestSearchParamSource:
                 },
             },
         )
-        p = source.params()
 
-        assert len(p) == 10
-        assert p["index"] == "index1"
-        assert p["type"] is None
-        assert p["request-timeout"] is None
-        assert p["headers"] is None
-        assert p["opaque-id"] is None
-        assert p["request-params"] == {"_source_include": "some_field"}
-        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
-        assert p["cache"] is None
-        assert p["response-compression-enabled"] is True
-        assert p["detailed-results"] is False
-        assert p["body"] == {
-            "query": {
-                "match_all": {},
+        assert source.params() == {
+            "index": "index1",
+            "type": None,
+            "request-timeout": None,
+            "opaque-id": None,
+            "headers": None,
+            "request-params": {"_source_include": "some_field"},
+            "cache": None,
+            "response-compression-enabled": True,
+            "detailed-results": False,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
             },
         }
 
@@ -2610,22 +2727,21 @@ class TestSearchParamSource:
                 },
             },
         )
-        p = source.params()
 
-        assert len(p) == 10
-        assert p["index"] == "_all"
-        assert p["type"] == "type1"
-        assert p["request-params"] == {}
-        assert p["request-timeout"] is None
-        assert p["headers"] is None
-        assert p["opaque-id"] == "12345abcde"
-        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
-        assert p["cache"] is False
-        assert p["response-compression-enabled"] is False
-        assert p["detailed-results"] is True
-        assert p["body"] == {
-            "query": {
-                "match_all": {},
+        assert source.params() == {
+            "index": "_all",
+            "type": "type1",
+            "request-timeout": None,
+            "opaque-id": "12345abcde",
+            "headers": None,
+            "request-params": {},
+            "cache": False,
+            "response-compression-enabled": False,
+            "detailed-results": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
             },
         }
 
@@ -2646,22 +2762,21 @@ class TestSearchParamSource:
                 },
             },
         )
-        p = source.params()
 
-        assert len(p) == 10
-        assert p["index"] == "data-stream-2"
-        assert p["type"] is None
-        assert p["request-timeout"] == 1.0
-        assert p["headers"] is None
-        assert p["opaque-id"] is None
-        assert p["request-params"] == {}
-        # Explicitly check in these tests for equality, `assert not x` succeeds if `x` is None
-        assert p["cache"] is False
-        assert p["response-compression-enabled"] is False
-        assert p["detailed-results"] is False
-        assert p["body"] == {
-            "query": {
-                "match_all": {},
+        assert source.params() == {
+            "index": "data-stream-2",
+            "type": None,
+            "request-timeout": 1.0,
+            "opaque-id": None,
+            "headers": None,
+            "request-params": {},
+            "cache": False,
+            "response-compression-enabled": False,
+            "detailed-results": False,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
             },
         }
 
@@ -2709,12 +2824,18 @@ class TestSearchParamSource:
 class TestForceMergeParamSource:
     def test_force_merge_index_from_track(self):
         source = params.ForceMergeParamSource(
-            track.Track(name="unit-test", indices=[track.Index(name="index1"), track.Index(name="index2"), track.Index(name="index3")]),
+            track.Track(
+                name="unit-test",
+                indices=[
+                    track.Index(name="index1"),
+                    track.Index(name="index2"),
+                    track.Index(name="index3"),
+                ],
+            ),
             params={},
         )
 
         p = source.params()
-
         assert p["index"] == "index1,index2,index3"
         assert p["mode"] == "blocking"
 
@@ -2732,42 +2853,52 @@ class TestForceMergeParamSource:
         )
 
         p = source.params()
-
         assert p["index"] == "data-stream-1,data-stream-2,data-stream-3"
         assert p["mode"] == "blocking"
 
     def test_force_merge_index_by_name(self):
-        source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"index": "index2"})
+        source = params.ForceMergeParamSource(
+            track.Track(name="unit-test"),
+            params={"index": "index2"},
+        )
 
         p = source.params()
-
         assert p["index"] == "index2"
         assert p["mode"] == "blocking"
 
     def test_force_merge_by_data_stream_name(self):
-        source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={"data-stream": "data-stream-2"})
+        source = params.ForceMergeParamSource(
+            track.Track(name="unit-test"),
+            params={"data-stream": "data-stream-2"},
+        )
 
         p = source.params()
-
         assert p["index"] == "data-stream-2"
         assert p["mode"] == "blocking"
 
     def test_default_force_merge_index(self):
-        source = params.ForceMergeParamSource(track.Track(name="unit-test"), params={})
+        source = params.ForceMergeParamSource(
+            track.Track(name="unit-test"),
+            params={},
+        )
 
         p = source.params()
-
         assert p["index"] == "_all"
         assert p["mode"] == "blocking"
 
     def test_force_merge_all_params(self):
         source = params.ForceMergeParamSource(
             track.Track(name="unit-test"),
-            params={"index": "index2", "request-timeout": 30, "max-num-segments": 1, "polling-period": 20, "mode": "polling"},
+            params={
+                "index": "index2",
+                "request-timeout": 30,
+                "max-num-segments": 1,
+                "polling-period": 20,
+                "mode": "polling",
+            },
         )
 
         p = source.params()
-
         assert p["index"] == "index2"
         assert p["request-timeout"] == 30
         assert p["max-num-segments"] == 1
@@ -2778,35 +2909,49 @@ class TestDownsampleParamSource:
     def test_downsample_all_params(self):
         source = params.DownsampleParamSource(
             track.Track(name="unit-test"),
-            params={"source-index": "test-source-index", "target-index": "test-target-index", "fixed-interval": "1m"},
+            params={
+                "source-index": "test-source-index",
+                "target-index": "test-target-index",
+                "fixed-interval": "1m",
+            },
         )
 
         p = source.params()
-
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "test-source-index"
         assert p["target-index"] == "test-target-index"
 
     def test_downsample_default_index_param(self):
         source = params.DownsampleParamSource(
-            track.Track(name="unit-test", indices=[track.Index(name="test-source-index", body="index.json")]),
-            params={"fixed-interval": "1m", "target-index": "test-target-index"},
+            track.Track(
+                name="unit-test",
+                indices=[track.Index(name="test-source-index", body="index.json")],
+            ),
+            params={
+                "fixed-interval": "1m",
+                "target-index": "test-target-index",
+            },
         )
 
         p = source.params()
-
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "test-source-index"
         assert p["target-index"] == "test-target-index"
 
     def test_downsample_source_index_override_default_index_param(self):
         source = params.DownsampleParamSource(
-            track.Track(name="unit-test", indices=[track.Index(name="test-source-index", body="index.json")]),
-            params={"source-index": "another-index", "fixed-interval": "1m", "target-index": "test-target-index"},
+            track.Track(
+                name="unit-test",
+                indices=[track.Index(name="test-source-index", body="index.json")],
+            ),
+            params={
+                "source-index": "another-index",
+                "fixed-interval": "1m",
+                "target-index": "test-target-index",
+            },
         )
 
         p = source.params()
-
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "another-index"
         assert p["target-index"] == "test-target-index"
@@ -2818,6 +2963,5 @@ class TestDownsampleParamSource:
         )
 
         p = source.params()
-
         assert p["fixed-interval"] == "1h"
         assert p["target-index"] == f"{p['source-index']}-{p['fixed-interval']}"

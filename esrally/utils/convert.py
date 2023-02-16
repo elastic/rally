@@ -76,7 +76,7 @@ def _bytes_to_human(b):
 
 
 def number_to_human_string(number):
-    return "{:,}".format(number)
+    return f"{number:,}"
 
 
 def mb_to_bytes(mb):

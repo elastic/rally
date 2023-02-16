@@ -57,7 +57,7 @@ class DockerLauncher:
 
         ret = process.run_subprocess_with_logging(compose_cmd)
         if ret != 0:
-            msg = "Docker daemon startup failed with exit code [{}]".format(ret)
+            msg = f"Docker daemon startup failed with exit code [{ret}]"
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 
@@ -72,7 +72,7 @@ class DockerLauncher:
         return process.run_subprocess_with_output(compose_ps_cmd)[0]
 
     def _wait_for_healthy_running_container(self, container_id, timeout):
-        cmd = 'docker ps -a --filter "id={}" --filter "status=running" --filter "health=healthy" -q'.format(container_id)
+        cmd = f'docker ps -a --filter "id={container_id}" --filter "status=running" --filter "health=healthy" -q'
         stop_watch = self.clock.stop_watch()
         stop_watch.start()
         while stop_watch.split_time() < timeout:
@@ -80,7 +80,7 @@ class DockerLauncher:
             if len(containers) > 0:
                 return
             time.sleep(0.5)
-        msg = "No healthy running container after {} seconds!".format(timeout)
+        msg = f"No healthy running container after {timeout} seconds!"
         logging.error(msg)
         raise exceptions.LaunchError(msg)
 
@@ -110,7 +110,7 @@ def wait_for_pidfile(pidfilename, timeout=60, clock=time.Clock):
         except (FileNotFoundError, EOFError):
             time.sleep(0.5)
 
-    msg = "pid file not available after {} seconds!".format(timeout)
+    msg = f"pid file not available after {timeout} seconds!"
     logging.error(msg)
     raise exceptions.LaunchError(msg)
 
@@ -217,7 +217,7 @@ class ProcessLauncher:
         cmd.extend(["-d", "-p", pid_path])
         ret = ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
         if ret != 0:
-            msg = "Daemon startup failed with exit code [{}]".format(ret)
+            msg = f"Daemon startup failed with exit code [{ret}]"
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 

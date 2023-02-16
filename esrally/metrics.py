@@ -636,7 +636,7 @@ class MetricsStore:
         elif level is None:
             meta = None
         else:
-            raise exceptions.SystemSetupError("Unknown meta info level [{}]".format(level))
+            raise exceptions.SystemSetupError(f"Unknown meta info level [{level}]")
 
         if meta and meta_data:
             meta.update(meta_data)
@@ -867,11 +867,11 @@ class EsMetricsStore(MetricsStore):
         self._client.refresh(index=self._index)
 
     def index_name(self):
-        ts = time.from_is8601(self._race_timestamp)
+        ts = time.from_iso8601(self._race_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
 
     def _migrated_index_name(self, original_name):
-        return "{}.new".format(original_name)
+        return f"{original_name}.new"
 
     def _get_template(self):
         return self._index_template_provider.metrics_template()
@@ -1498,7 +1498,7 @@ class Race:
             d.get("rally-revision"),
             d["environment"],
             d["race-id"],
-            time.from_is8601(d["race-timestamp"]),
+            time.from_iso8601(d["race-timestamp"]),
             d["pipeline"],
             user_tags,
             d["track"],
@@ -1617,7 +1617,7 @@ class FileRaceStore(RaceStore):
         doc = race.as_dict()
         race_path = paths.race_root(self.cfg, race_id=race.race_id)
         io.ensure_dir(race_path)
-        with open(self._race_file(), mode="wt", encoding="utf-8") as f:
+        with open(self._race_file(), mode="w", encoding="utf-8") as f:
             f.write(json.dumps(doc, indent=True, ensure_ascii=False))
 
     def _race_file(self, race_id=None):
@@ -1646,7 +1646,7 @@ class FileRaceStore(RaceStore):
             races = self._to_races([race_file])
             if races:
                 return races[0]
-        raise exceptions.NotFound("No race with race id [{}]".format(race_id))
+        raise exceptions.NotFound(f"No race with race id [{race_id}]")
 
     def _to_races(self, results):
         races = []
@@ -1658,7 +1658,7 @@ class FileRaceStore(RaceStore):
         for result in results:
             # noinspection PyBroadException
             try:
-                with open(result, mode="rt", encoding="utf-8") as f:
+                with open(result, encoding="utf-8") as f:
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
                 logging.getLogger(__name__).exception("Could not load race file [%s] (incompatible format?) Skipping...", result)
@@ -1896,11 +1896,9 @@ class EsRaceStore(RaceStore):
         if hits == 1:
             return Race.from_dict(result["hits"]["hits"][0]["_source"])
         elif hits > 1:
-            raise exceptions.RallyAssertionError(
-                "Expected exactly one race to match race id [{}] but there were [{}] matches.".format(race_id, hits)
-            )
+            raise exceptions.RallyAssertionError(f"Expected exactly one race to match race id [{race_id}] but there were [{hits}] matches.")
         else:
-            raise exceptions.NotFound("No race with race id [{}]".format(race_id))
+            raise exceptions.NotFound(f"No race with race id [{race_id}]")
 
 
 class EsResultsStore:

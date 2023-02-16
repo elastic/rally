@@ -55,7 +55,7 @@ def fresh_log_file():
         shutil.move(log_file, bak)
         yield log_file
         # append log lines to the original file and move it back to its original
-        with open(log_file, "r") as src:
+        with open(log_file) as src:
             with open(bak, "a") as dst:
                 dst.write(src.read())
         shutil.move(bak, log_file)
@@ -64,7 +64,7 @@ def fresh_log_file():
 
 
 def assert_log_line_present(log_file, text):
-    with open(log_file, "r") as f:
+    with open(log_file) as f:
         assert any(text in line for line in f), f"Could not find [{text}] in [{log_file}]."
 
 
