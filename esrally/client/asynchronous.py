@@ -36,7 +36,7 @@ from elastic_transport import (
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
-from elasticsearch._async.client import EqlClient, IlmClient, SearchableSnapshotsClient
+from elasticsearch._async.client import EqlClient, IlmClient
 from elasticsearch.compat import warn_stacklevel
 from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWarning
 from multidict import CIMultiDict, CIMultiDictProxy
@@ -284,39 +284,6 @@ class RallyEqlClient(EqlClient):
         return await EqlClient.search(self, **kwargs)
 
 
-class RallySearchableSnapshotsClient(SearchableSnapshotsClient):
-    async def mount(self, *args, **kwargs):
-        old_params = ["repository", "snapshot", "body", "master_timeout", "storage", "wait_for_completion"]
-
-        if args:
-            for i, arg in enumerate(args):
-                kwargs[old_params[i]] = arg
-
-        if body := kwargs.pop("body", None):
-            params = [
-                "repository",
-                "snapshot",
-                "index",
-                "error_trace",
-                "filter_path",
-                "human",
-                "ignore_index_settings",
-                "index_settings",
-                "master_timeout",
-                "pretty",
-                "renamed_index",
-                "storage",
-                "wait_for_completion",
-            ]
-
-            for p in params:
-                if param := body.get(p):
-                    kwargs[p] = param
-
-        # pylint: disable=missing-kwoa
-        return await SearchableSnapshotsClient.mount(self, **kwargs)
-
-
 class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
     def __init__(self, *args, **kwargs):
         distro = kwargs.pop("distro", None)
@@ -330,12 +297,11 @@ class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHo
         else:
             self.distribution_version = None
 
-        # method signatures changed in 'elasticsearch-py' 8.x,
+        # some ILM method signatures changed in 'elasticsearch-py' 8.x,
         # so we override method(s) here to provide BWC for any custom
-        # runners (i.e. in rally-tracks) that aren't using the new kwargs
+        # runners that aren't using the new kwargs
         self.ilm = RallyIlmClient(self)
         self.eql = RallyEqlClient(self)
-        self.searchable_snapshots = RallySearchableSnapshotsClient(self)
 
     async def perform_request(
         self,
