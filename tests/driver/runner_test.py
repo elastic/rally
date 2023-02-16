@@ -261,27 +261,29 @@ class TestAssertingRunner:
                 )
 
     @pytest.mark.asyncio
-    async def test_skips_asserts_for_non_dicts(self):
+    async def test_raise_asserts_for_non_dicts(self):
         es = None
         response = (1, "ops")
         delegate = mock.AsyncMock(return_value=response)
         r = runner.AssertingRunner(delegate)
-        async with r:
-            final_response = await r(
-                es,
-                {
-                    "name": "test-task",
-                    "assertions": [
-                        {
-                            "property": "hits.hits.value",
-                            "condition": "==",
-                            "value": 5,
-                        },
-                    ],
-                },
-            )
-        # still passes response as is
-        assert final_response == response
+        with pytest.raises(
+            exceptions.DataError,
+            match=r"Cannot check assertion in \[test-task\] as \[<AsyncMock id='\d+'>\] did not return a dict.",
+        ):
+            async with r:
+                await r(
+                    es,
+                    {
+                        "name": "test-task",
+                        "assertions": [
+                            {
+                                "property": "hits.hits.value",
+                                "condition": "==",
+                                "value": 5,
+                            },
+                        ],
+                    },
+                )
 
     def test_predicates(self):
         r = runner.AssertingRunner(delegate=None)
@@ -316,7 +318,7 @@ class TestAssertingRunner:
 
 class TestSelectiveJsonParser:
     def doc_as_text(self, doc):
-        return io.StringIO(json.dumps(doc))
+        return io.BytesIO(json.dumps(doc).encode())
 
     def test_parse_all_expected(self):
         doc = self.doc_as_text(
@@ -411,7 +413,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -440,7 +442,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -480,7 +482,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -519,7 +521,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -568,7 +570,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -605,7 +607,7 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -647,7 +649,7 @@ class TestBulkIndexRunner:
             ],
         }
 
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -668,7 +670,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 5,
             "index": "test",
@@ -678,6 +679,7 @@ class TestBulkIndexRunner:
             "success-count": 1,
             "error-count": 2,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
         }
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
@@ -695,7 +697,7 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "1",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@1]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #1",
                     }
                 },
                 {
@@ -704,7 +706,7 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "2",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@2]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #2",
                     }
                 },
                 {
@@ -713,13 +715,13 @@ class TestBulkIndexRunner:
                         "_type": "doc",
                         "_id": "3",
                         "status": 429,
-                        "error": "EsRejectedExecutionException[rejected execution (queue capacity 50) on org.elasticsearch.action.support.replication.TransportShardReplicationOperationAction$PrimaryPhase$1@3]",  # pylint: disable=line-too-long
+                        "error": "EsRejectedExecutionException #3",
                     }
                 },
             ],
         }
 
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
 
         bulk = runner.BulkIndex()
 
@@ -741,7 +743,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 20,
             "index": "test",
@@ -751,6 +752,7 @@ class TestBulkIndexRunner:
             "success-count": 0,
             "error-count": 3,
             "error-type": "bulk",
+            "error-description": " | ".join([f"HTTP status: 429, message: EsRejectedExecutionException #{i}" for i in (1, 2, 3)]),
         }
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
@@ -815,7 +817,7 @@ class TestBulkIndexRunner:
                 },
             ],
         }
-        es.bulk = mock.AsyncMock(return_value=io.StringIO(json.dumps(bulk_response)))
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -838,7 +840,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 30,
             "index": "test",
@@ -848,6 +849,7 @@ class TestBulkIndexRunner:
             "success-count": 2,
             "error-count": 2,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
         }
         assert "ingest_took" not in result, "ingest_took is not extracted with simple stats"
 
@@ -967,7 +969,6 @@ class TestBulkIndexRunner:
 
         result = await bulk(es, bulk_params)
 
-        result.pop("error-description")  # TODO not deterministic
         assert result == {
             "took": 30,
             "ingest_took": 20,
@@ -978,6 +979,7 @@ class TestBulkIndexRunner:
             "success-count": 3,
             "error-count": 3,
             "error-type": "bulk",
+            "error-description": "HTTP status: 404 | HTTP status: 500",
             "ops": {
                 "index": collections.Counter({"item-count": 4, "created": 2, "noop": 2}),
                 "update": collections.Counter({"item-count": 2, "updated": 1, "noop": 1}),
@@ -1547,6 +1549,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 1,
@@ -1558,7 +1561,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1585,6 +1588,7 @@ class TestQueryRunner:
             "hits_relation": "gte",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1598,6 +1602,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {"value": 1, "relation": "gte"},
                 "hits": [
@@ -1606,7 +1611,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1632,6 +1637,7 @@ class TestQueryRunner:
             "hits_relation": "gte",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1649,6 +1655,7 @@ class TestQueryRunner:
         response = {
             "timed_out": False,
             "took": 62,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 2,
@@ -1660,7 +1667,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
 
         query_runner = runner.Query()
         params = {
@@ -1685,6 +1692,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 62,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1716,7 +1724,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
 
         query_runner = runner.Query()
         params = {
@@ -1758,6 +1766,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": 2,
                 "hits": [
@@ -1766,7 +1775,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1793,6 +1802,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1812,6 +1822,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {
                     "value": 2,
@@ -1823,7 +1834,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1850,6 +1861,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1869,6 +1881,7 @@ class TestQueryRunner:
         search_response = {
             "timed_out": False,
             "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
             "hits": {
                 "total": {"value": 2, "relation": "eq"},
                 "hits": [
@@ -1878,7 +1891,7 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
 
@@ -1906,6 +1919,7 @@ class TestQueryRunner:
             "hits_relation": "eq",
             "timed_out": False,
             "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
         es.perform_request.assert_awaited_once_with(
@@ -1934,8 +1948,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -1997,8 +2011,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2055,8 +2069,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2135,12 +2149,12 @@ class TestQueryRunner:
 
         es.perform_request = mock.AsyncMock(
             side_effect=[
-                io.StringIO(json.dumps(search_response)),
-                io.StringIO(json.dumps(scroll_response)),
+                io.BytesIO(json.dumps(search_response).encode()),
+                io.BytesIO(json.dumps(scroll_response).encode()),
             ]
         )
 
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2189,7 +2203,7 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
         es.clear_scroll = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout())
 
         query_runner = runner.Query()
@@ -2254,11 +2268,11 @@ class TestQueryRunner:
 
         es.perform_request = mock.AsyncMock(
             side_effect=[
-                io.StringIO(json.dumps(search_response)),
-                io.StringIO(json.dumps(scroll_response)),
+                io.BytesIO(json.dumps(search_response).encode()),
+                io.BytesIO(json.dumps(scroll_response).encode()),
             ]
         )
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2308,8 +2322,8 @@ class TestQueryRunner:
             },
         }
 
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(search_response)))
-        es.clear_scroll = mock.AsyncMock(return_value=io.StringIO('{"acknowledged": true}'))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+        es.clear_scroll = mock.AsyncMock(return_value=io.BytesIO(b'{"acknowledged": true}'))
 
         query_runner = runner.Query()
 
@@ -2712,7 +2726,7 @@ class TestDeleteIndexRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_existing_indices(self, es):
-        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete = mock.AsyncMock()
         es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
         es.cluster.put_settings = mock.AsyncMock()
@@ -2777,7 +2791,7 @@ class TestDeleteDataStreamRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_existing_data_streams(self, es):
-        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete_data_stream = mock.AsyncMock()
 
         r = runner.DeleteDataStream()
@@ -2907,7 +2921,7 @@ class TestDeleteIndexTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.exists_template = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get_template = mock.AsyncMock(side_effect=[False, True])
         es.indices.delete_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
 
@@ -3038,10 +3052,7 @@ class TestDeleteComponentTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        async def _side_effect(name):
-            return name == "templateB"
-
-        es.cluster.exists_component_template = mock.AsyncMock(side_effect=_side_effect)
+        es.cluster.get_component_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.cluster.delete_component_template = mock.AsyncMock()
 
         r = runner.DeleteComponentTemplate()
@@ -3201,7 +3212,7 @@ class TestDeleteComposableTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.exists_index_template = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get_index_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete_index_template = mock.AsyncMock()
 
         r = runner.DeleteComposableTemplate()
@@ -5174,7 +5185,7 @@ class TestSqlRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_fetch_one_page(self, es):
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Sql()
         params = {
@@ -5197,7 +5208,7 @@ class TestSqlRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_fetch_all_pages(self, es):
-        es.perform_request = mock.AsyncMock(return_value=io.StringIO(json.dumps(self.default_response)))
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Sql()
         params = {"operation-type": "sql", "body": {"query": "SELECT first_name FROM emp"}, "pages": 3}
@@ -5219,7 +5230,10 @@ class TestSqlRunner:
     @pytest.mark.asyncio
     async def test_failure_on_too_few_pages(self, es):
         es.perform_request = mock.AsyncMock(
-            side_effect=[io.StringIO(json.dumps(self.default_response)), io.StringIO(json.dumps({"rows": [["John"]]}))]
+            side_effect=[
+                io.BytesIO(json.dumps(self.default_response).encode()),
+                io.BytesIO(json.dumps({"rows": [["John"]]}).encode()),
+            ]
         )
 
         sql_runner = runner.Sql()
@@ -5274,6 +5288,75 @@ class TestSqlRunner:
             await sql_runner(es, params)
         assert exc.value.args[0] == (
             "Parameter source for operation 'sql' did not provide the mandatory parameter 'body.query'. "
+            "Add it to your parameter source and try again."
+        )
+
+
+class TestDownsampleRunner:
+    default_response = {}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_index_downsample(self, es):
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
+
+        sql_runner = runner.Downsample()
+        params = {
+            "operation-type": "downsample",
+            "fixed-interval": "1d",
+            "source-index": "source-index",
+            "target-index": "target-index",
+        }
+
+        async with sql_runner:
+            result = await sql_runner(es, params)
+
+        assert result == {"success": True, "weight": 1, "unit": "ops"}
+
+        es.perform_request.assert_awaited_once_with(
+            method="POST",
+            path="/source-index/_downsample/target-index",
+            body={"fixed_interval": params.get("fixed-interval")},
+            params={},
+            headers={},
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_fixed_interval_in_body_param(self, es):
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "source-index": "source-index", "target-index": "target-index"}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'fixed-interval'. "
+            "Add it to your parameter source and try again."
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_source_index_in_body_param(self, es):
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "target-index": "target-index"}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'source-index'. "
+            "Add it to your parameter source and try again."
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_mandatory_target_index_in_body_param(self, es):
+        sql_runner = runner.Downsample()
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "source-index": "source-index"}
+
+        with pytest.raises(exceptions.DataError) as exc:
+            await sql_runner(es, params)
+        assert exc.value.args[0] == (
+            "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
             "Add it to your parameter source and try again."
         )
 
@@ -6197,7 +6280,7 @@ class TestComposite:
                 # raw-request
                 None,
                 # search
-                io.StringIO(
+                io.BytesIO(
                     json.dumps(
                         {
                             "hits": {
@@ -6207,7 +6290,7 @@ class TestComposite:
                                 },
                             },
                         },
-                    ),
+                    ).encode()
                 ),
             ]
         )
@@ -6268,7 +6351,7 @@ class TestComposite:
         es.perform_request = mock.AsyncMock(
             side_effect=[
                 # search
-                io.StringIO(
+                io.BytesIO(
                     json.dumps(
                         {
                             "hits": {
@@ -6278,7 +6361,7 @@ class TestComposite:
                                 },
                             }
                         }
-                    )
+                    ).encode()
                 )
             ]
         )
@@ -6441,23 +6524,22 @@ class TestComposite:
         assert response["unit"] == "ops"
         timings = response["dependent_timing"]
         assert len(timings) == 3
+        assert timings[0]["dependent_timing"]["operation"] == "initial-call"
+        assert timings[0]["dependent_timing"]["service_time"] == pytest.approx(0.1, abs=0.1)
 
-        assert timings[0]["operation"] == "initial-call"
-        assert timings[0]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[1]["dependent_timing"]["operation"] == "stream-a"
+        assert timings[1]["dependent_timing"]["service_time"] == pytest.approx(0.2, abs=0.1)
 
-        assert timings[1]["operation"] == "stream-a"
-        assert timings[1]["service_time"] == pytest.approx(0.2, abs=0.1)
-
-        assert timings[2]["operation"] == "stream-b"
-        assert timings[2]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[2]["dependent_timing"]["operation"] == "stream-b"
+        assert timings[2]["dependent_timing"]["service_time"] == pytest.approx(0.1, abs=0.1)
 
         # common properties
         for timing in timings:
-            assert timing["operation-type"] == "sleep"
-            assert "absolute_time" in timing
-            assert "request_start" in timing
-            assert "request_end" in timing
-            assert timing["request_end"] > timing["request_start"]
+            assert timing["dependent_timing"]["operation-type"] == "sleep"
+            assert "absolute_time" in timing["dependent_timing"]
+            assert "request_start" in timing["dependent_timing"]
+            assert "request_end" in timing["dependent_timing"]
+            assert timing["dependent_timing"]["request_end"] > timing["dependent_timing"]["request_start"]
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio

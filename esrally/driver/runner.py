@@ -66,6 +66,7 @@ def register_default_runners():
     # these requests should not be retried as they are not idempotent
     register_runner(track.OperationType.CreateSnapshot, CreateSnapshot(), async_runner=True)
     register_runner(track.OperationType.RestoreSnapshot, RestoreSnapshot(), async_runner=True)
+    register_runner(track.OperationType.Downsample, Downsample(), async_runner=True)
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
     register_runner(track.OperationType.ClusterHealth, Retry(ClusterHealth()), async_runner=True)
     register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
@@ -128,7 +129,7 @@ def register_runner(operation_type, runner, **kwargs):
 
     if not async_runner:
         raise exceptions.RallyAssertionError(
-            "Runner [{}] must be implemented as async runner and registered with async_runner=True.".format(str(runner))
+            f"Runner [{str(runner)}] must be implemented as async runner and registered with async_runner=True."
         )
 
     if hasattr(unwrap(runner), "multi_cluster"):
@@ -396,7 +397,7 @@ class AssertingRunner(Runner, Delegator):
                 for assertion in params["assertions"]:
                     self.check_assertion(op_name, assertion, return_value)
             else:
-                self.logger.debug("Skipping assertion check in [%s] as [%s] does not return a dict.", op_name, repr(self.delegate))
+                raise exceptions.DataError(f"Cannot check assertion in [{op_name}] as [{repr(self.delegate)}] did not return a dict.")
         return return_value
 
     def __repr__(self, *args, **kwargs):
@@ -628,13 +629,13 @@ class BulkIndex(Runner):
             error_details.add((data["status"], None))
 
     def error_description(self, error_details):
-        error_description = ""
+        error_descriptions = []
         for status, reason in error_details:
             if reason:
-                error_description += "HTTP status: %s, message: %s" % (str(status), reason)
+                error_descriptions.append(f"HTTP status: {status}, message: {reason}")
             else:
-                error_description += "HTTP status: %s" % str(status)
-        return error_description
+                error_descriptions.append(f"HTTP status: {status}")
+        return " | ".join(sorted(error_descriptions))
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"
@@ -1014,11 +1015,29 @@ class Query(Runner):
             r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
 
             if detailed_results:
-                props = parse(r, ["hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"])
+                props = parse(
+                    r,
+                    [
+                        "hits.total",
+                        "hits.total.value",
+                        "hits.total.relation",
+                        "timed_out",
+                        "took",
+                        "_shards.total",
+                        "_shards.successful",
+                        "_shards.skipped",
+                        "_shards.failed",
+                    ],
+                )
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
                 timed_out = props.get("timed_out", False)
                 took = props.get("took", 0)
+
+                shards_total = props.get("_shards.total", 0)
+                shards_successful = props.get("_shards.successful", 0)
+                shards_skipped = props.get("_shards.skipped", 0)
+                shards_failed = props.get("_shards.failed", 0)
 
                 return {
                     "weight": 1,
@@ -1028,6 +1047,12 @@ class Query(Runner):
                     "hits_relation": hits_relation,
                     "timed_out": timed_out,
                     "took": took,
+                    "shards": {
+                        "total": shards_total,
+                        "successful": shards_successful,
+                        "skipped": shards_skipped,
+                        "failed": shards_failed,
+                    },
                 }
             else:
                 return {
@@ -1219,7 +1244,6 @@ class ClusterHealth(Runner):
 
             def __lt__(self, other):
                 if self.__class__ is other.__class__:
-                    # pylint: disable=comparison-with-callable
                     return self.value < other.value
                 return NotImplemented
 
@@ -1371,10 +1395,15 @@ class DeleteIndex(Runner):
                 if not only_if_exists:
                     await es.indices.delete(index=index_name, params=request_params)
                     ops += 1
-                elif only_if_exists and await es.indices.exists(index=index_name):
-                    self.logger.info("Index [%s] already exists. Deleting it.", index_name)
-                    await es.indices.delete(index=index_name, params=request_params)
-                    ops += 1
+                elif only_if_exists:
+                    # here we use .get() and check for 404 instead of exists due to a bug in some versions
+                    # of elasticsearch-py/elastic-transport with HEAD calls.
+                    # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                    get_response = await es.indices.get(index=index_name, ignore=[404])
+                    if not get_response.get("status") == 404:
+                        self.logger.info("Index [%s] already exists. Deleting it.", index_name)
+                        await es.indices.delete(index=index_name, params=request_params)
+                        ops += 1
         finally:
             await set_destructive_requires_name(es, prior_destructive_setting)
         return {
@@ -1403,10 +1432,15 @@ class DeleteDataStream(Runner):
             if not only_if_exists:
                 await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
                 ops += 1
-            elif only_if_exists and await es.indices.exists(index=data_stream):
-                self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
-                await es.indices.delete_data_stream(name=data_stream, params=request_params)
-                ops += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                get_response = await es.indices.get(index=data_stream, ignore=[404])
+                if not get_response.get("status") == 404:
+                    self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
+                    await es.indices.delete_data_stream(name=data_stream, params=request_params)
+                    ops += 1
 
         return {
             "weight": ops,
@@ -1455,10 +1489,15 @@ class DeleteComponentTemplate(Runner):
             if not only_if_exists:
                 await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.cluster.exists_component_template(name=template_name):
-                self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
-                await es.cluster.delete_component_template(name=template_name, params=request_params)
-                ops_count += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists_component_template due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                component_template_exists = await es.cluster.get_component_template(name=template_name, ignore=[404])
+                if not component_template_exists.get("status") == 404:
+                    self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
+                    await es.cluster.delete_component_template(name=template_name, params=request_params)
+                    ops_count += 1
         return {
             "weight": ops_count,
             "unit": "ops",
@@ -1505,10 +1544,15 @@ class DeleteComposableTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_index_template(name=template_name):
-                self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
-                await es.indices.delete_index_template(name=template_name, params=request_params)
-                ops_count += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists_index_template due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                index_template_exists = await es.indices.get_index_template(name=template_name, ignore=[404])
+                if not index_template_exists.get("status") == 404:
+                    self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
+                    await es.indices.delete_index_template(name=template_name, params=request_params)
+                    ops_count += 1
             # ensure that we do not provide an empty index pattern by accident
             if delete_matching_indices and index_pattern:
                 await es.indices.delete(index=index_pattern)
@@ -1560,7 +1604,10 @@ class DeleteIndexTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_template(name=template_name):
+            # here we use .get_template() and check for empty instead of exists_template due to a bug in some versions
+            # of elasticsearch-py/elastic-transport with HEAD calls.
+            # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+            elif only_if_exists and await es.indices.get_template(name=template_name, ignore=[404]):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1597,7 +1644,7 @@ class ShrinkIndex(Runner):
             es, params={"index": idx, "retries": sys.maxsize, "request-params": {"wait_for_no_relocating_shards": "true"}}
         )
         if not result["success"]:
-            raise exceptions.RallyAssertionError("Failed to wait for [{}].".format(description))
+            raise exceptions.RallyAssertionError(f"Failed to wait for [{description}].")
 
     async def __call__(self, es, params):
         source_index = mandatory(params, "source-index", self)
@@ -1913,6 +1960,8 @@ class RawRequest(Runner):
         if not bool(headers):
             # counter-intuitive, but preserves prior behavior
             headers = None
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
 
         await es.perform_request(
             method=params.get("method", "GET"), path=path, headers=headers, body=params.get("body"), params=request_params
@@ -2569,9 +2618,16 @@ class Composite(Runner):
                     async with connection_limit:
                         async with runner:
                             response = await runner({"default": es}, item)
-                            timing = response.get("dependent_timing") if response else None
-                            if timing:
-                                timings.append(timing)
+                            if response:
+                                # TODO: support calculating dependent's throughput
+                                # drop weight and unit metadata but keep the rest
+                                response.pop("weight")
+                                response.pop("unit")
+                                timing = response.get("dependent_timing")
+                                if timing:
+                                    timings.append(response)
+                            else:
+                                timings.append(None)
 
                 else:
                     raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
@@ -2669,9 +2725,7 @@ class Sql(Runner):
             cursor = parse(r, ["cursor"]).get("cursor")
 
             if not cursor:
-                raise exceptions.DataError(
-                    "Result set has been exhausted before all pages have been fetched, {} page(s) remaining.".format(pages)
-                )
+                raise exceptions.DataError(f"Result set has been exhausted before all pages have been fetched, {pages} page(s) remaining.")
 
             r = await es.perform_request(method="POST", path="/_sql", body={"cursor": cursor})
             pages -= 1
@@ -2681,6 +2735,48 @@ class Sql(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "sql"
+
+
+class Downsample(Runner):
+    """
+    Executes a downsampling operation creating the target index and aggregating data in the source index on the @timestamp field.
+    """
+
+    async def __call__(self, es, params):
+
+        request_params, request_headers = self._transport_request_params(params)
+
+        fixed_interval = mandatory(params, "fixed-interval", self)
+        if fixed_interval is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'fixed-interval'. "
+                "Add it to your parameter source and try again."
+            )
+
+        source_index = mandatory(params, "source-index", self)
+        if source_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'source-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        target_index = mandatory(params, "target-index", self)
+        if target_index is None:
+            raise exceptions.DataError(
+                "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
+                "Add it to your parameter source and try again."
+            )
+
+        path = f"/{source_index}/_downsample/{target_index}"
+
+        await es.perform_request(
+            method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
+        )
+
+        return {"weight": 1, "unit": "ops", "success": True}
+
+    def __repr__(self, *args, **kwargs):
+        return "downsample"
 
 
 class FieldCaps(Runner):

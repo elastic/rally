@@ -20,17 +20,114 @@ import os
 from unittest import mock
 
 import pytest
+from git import Repo
 
 from esrally import exceptions
 from esrally.utils import git
 
 
+def commit(repo, *, date=None):
+    file_name = os.path.join(repo.working_dir, "test")
+    # creates an empty file
+    with open(file_name, "wb"):
+        pass
+    repo.index.add([file_name])
+    repo.index.commit("initial commit", commit_date=date)
+
+
+@pytest.fixture(scope="class", autouse=True)
+def setup(request, tmp_path_factory):
+    cls = request.cls
+
+    cls.local_remote_name = "remote_repo"
+    cls.local_branch = "rally-unit-test-local-only-branch"
+    cls.remote_branch = "rally-unit-test-remote-only-branch"
+    cls.rebase_branch = "rally-unit-test-rebase-branch"
+
+    cls.local_tmp_src_dir = str(tmp_path_factory.mktemp("rally-unit-test-local-dir"))
+    cls.remote_tmp_src_dir = str(tmp_path_factory.mktemp("rally-unit-test-remote-dir"))
+    cls.tmp_clone_dir = str(tmp_path_factory.mktemp("rally-unit-test-clone-dir"))
+
+    # create tmp git repos
+    # Some recent git versions default to `main` but old versions don't accept
+    # --initial-branch. Until we migrate off Jenkins, let's default recent versions to
+    # master too.
+    try:
+        cls.local_repo = Repo.init(cls.local_tmp_src_dir, initial_branch="master")
+    except Exception:
+        cls.local_repo = Repo.init(cls.local_tmp_src_dir)
+    commit(cls.local_repo)
+    cls.local_revision = cls.local_repo.heads["master"].commit.hexsha
+    cls.local_repo.create_tag("local-tag-1", "HEAD")
+    cls.local_repo.create_tag("local-tag-2", "HEAD")
+    cls.local_repo.create_head(cls.local_branch, "HEAD")
+
+    try:
+        cls.remote_repo = Repo.init(cls.remote_tmp_src_dir, initial_branch="master")
+    except Exception:
+        cls.remote_repo = Repo.init(cls.remote_tmp_src_dir)
+    commit(cls.remote_repo, date="2016-01-01 00:00:00+0000")
+    cls.old_revision = cls.remote_repo.heads["master"].commit.hexsha
+    commit(cls.remote_repo)
+    cls.remote_branch_hash = cls.remote_repo.heads["master"].commit.hexsha
+
+    cls.remote_repo.create_head(cls.remote_branch, "HEAD")
+    cls.local_repo.create_remote(cls.local_remote_name, cls.remote_tmp_src_dir)
+    cls.local_repo.remotes[cls.local_remote_name].fetch()
+
+
+# pylint: disable=too-many-public-methods
 class TestGit:
+    @pytest.fixture
+    def setup_teardown_rebase(self):
+        # create branches on local and remote
+        self.local_repo.create_head(self.rebase_branch, "HEAD")
+        self.remote_repo.head.reference = self.remote_repo.create_head(self.rebase_branch, "HEAD")
+        # create remote commit from which to rebase on in local
+        commit(self.remote_repo)
+        self.remote_commit_hash = self.remote_repo.heads[self.rebase_branch].commit.hexsha
+        # run rebase
+        yield
+        # undo rebase
+        self.local_repo.head.reset("ORIG_HEAD", hard=True)
+        # checkout starting branches
+        self.local_repo.head.reference = "master"
+        self.remote_repo.head.reference = "master"
+
+        # delete branches
+        self.local_repo.delete_head(self.rebase_branch, force=True)
+        self.remote_repo.delete_head(self.rebase_branch, force=True)
+
     def test_is_git_working_copy(self):
-        test_dir = os.path.dirname(os.path.dirname(__file__))
         # this test is assuming that nobody stripped the git repo info in their Rally working copy
-        assert not git.is_working_copy(test_dir)
-        assert git.is_working_copy(os.path.dirname(test_dir))
+        assert not git.is_working_copy(os.path.dirname(self.local_tmp_src_dir))
+        assert git.is_working_copy(self.local_tmp_src_dir)
+
+    def test_is_branch(self):
+        # only remote
+        assert git.is_branch(self.local_tmp_src_dir, identifier=self.remote_branch)
+
+        # only local
+        assert git.is_branch(self.local_tmp_src_dir, identifier=self.local_branch)
+
+        # both remote, and local
+        assert git.is_branch(self.local_tmp_src_dir, identifier="master")
+
+    def test_is_not_branch_tags(self):
+        assert not git.is_branch(self.local_tmp_src_dir, identifier="2.6.0")
+
+    def test_is_not_branch_commit_hash(self):
+        # rally's initial commit :-)
+        assert not git.is_branch(self.local_tmp_src_dir, identifier="bd368741951c643f9eb1958072c316e493c15b96")
+
+    def test_list_remote_branches(self):
+        assert self.remote_branch in git.branches(self.local_tmp_src_dir, remote=True)
+
+    def test_list_local_branches(self):
+        assert self.local_branch in git.branches(self.local_tmp_src_dir, remote=False)
+
+    def test_list_tags(self):
+        assert git.tags(self.local_tmp_src_dir) == ["local-tag-1", "local-tag-2"]
 
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -44,170 +141,61 @@ class TestGit:
         assert exc.value.args[0] == "Your git version is [1.0.0] but Rally requires at least git 1.9. Please update git."
         run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG)
 
-    @mock.patch("esrally.utils.io.ensure_dir")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_clone_successful(self, run_subprocess_with_logging, ensure_dir):
-        run_subprocess_with_logging.return_value = 0
-        src = "/src"
-        remote = "http://github.com/some/project"
+    def test_clone_successful(self):
+        git.clone(self.tmp_clone_dir, remote=self.remote_tmp_src_dir)
+        assert git.is_working_copy(self.tmp_clone_dir)
 
-        git.clone(src, remote=remote)
-
-        ensure_dir.assert_called_with(src)
-        run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
-
-    @mock.patch("esrally.utils.io.ensure_dir")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_clone_with_error(self, run_subprocess_with_logging, ensure_dir):
-        run_subprocess_with_logging.return_value = 128
-        src = "/src"
-        remote = "http://github.com/some/project"
-
+    def test_clone_with_error(self):
+        remote = "/this/remote/doesnt/exist"
         with pytest.raises(exceptions.SupplyError) as exc:
-            git.clone(src, remote=remote)
-        assert exc.value.args[0] == "Could not clone from [http://github.com/some/project] to [/src]"
+            git.clone(self.tmp_clone_dir, remote=remote)
+        assert exc.value.args[0] == f"Could not clone from [{remote}] to [{self.tmp_clone_dir}]"
 
-        ensure_dir.assert_called_with(src)
-        run_subprocess_with_logging.assert_called_with("git clone http://github.com/some/project /src")
+    def test_fetch_successful(self):
+        git.fetch(self.local_tmp_src_dir, remote=self.local_remote_name)
 
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_fetch_successful(self, run_subprocess_with_logging):
-        run_subprocess_with_logging.return_value = 0
-        git.fetch("/src", remote="my-origin")
-        run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin")
-
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_fetch_with_error(self, run_subprocess_with_logging):
-        # first call is to check the git version (0 -> succeeds), the second call is the failing checkout (1 -> fails)
-        run_subprocess_with_logging.side_effect = [0, 1]
+    def test_fetch_with_error(self):
         with pytest.raises(exceptions.SupplyError) as exc:
-            git.fetch("/src", remote="my-origin")
-        assert exc.value.args[0] == "Could not fetch source tree from [my-origin]"
-        run_subprocess_with_logging.assert_called_with("git -C /src fetch --prune --tags my-origin")
+            git.fetch(self.local_tmp_src_dir, remote="this-remote-doesnt-actually-exist")
+        assert exc.value.args[0] == "Could not fetch source tree from [this-remote-doesnt-actually-exist]"
 
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_checkout_successful(self, run_subprocess_with_logging):
-        run_subprocess_with_logging.return_value = 0
-        git.checkout("/src", branch="feature-branch")
-        run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
+    def test_checkout_successful(self):
+        git.checkout(self.local_tmp_src_dir, branch=self.local_branch)
+        assert git.current_branch(self.local_tmp_src_dir) == self.local_branch
 
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_checkout_with_error(self, run_subprocess_with_logging):
-        # first call is to check the git version (0 -> succeeds), the second call is the failing checkout (1 -> fails)
-        run_subprocess_with_logging.side_effect = [0, 1]
+    def test_checkout_with_error(self):
+        branch = "this-branch-doesnt-actually-exist"
         with pytest.raises(exceptions.SupplyError) as exc:
-            git.checkout("/src", branch="feature-branch")
-        assert exc.value.args[0] == "Could not checkout [feature-branch]. Do you have uncommitted changes?"
-        run_subprocess_with_logging.assert_called_with("git -C /src checkout feature-branch")
+            git.checkout(self.local_tmp_src_dir, branch=branch)
+        assert exc.value.args[0] == f"Could not checkout [{branch}]. Do you have uncommitted changes?"
 
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_rebase(self, run_subprocess_with_logging):
-        run_subprocess_with_logging.return_value = 0
-        git.rebase("/src", remote="my-origin", branch="feature-branch")
-        calls = [
-            mock.call("git -C /src checkout feature-branch"),
-            mock.call("git -C /src rebase my-origin/feature-branch"),
-        ]
-        run_subprocess_with_logging.assert_has_calls(calls)
+    def test_checkout_revision(self):
+        # minimum 'core.abbrev' is to return 7 char prefixes
+        git.checkout_revision(self.local_tmp_src_dir, revision=self.local_revision)
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.local_revision[:7])
 
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_pull(self, run_subprocess_with_logging):
-        run_subprocess_with_logging.return_value = 0
-        git.pull("/src", remote="my-origin", branch="feature-branch")
-        calls = [
-            # pull
-            mock.call("git -C /src --version", level=logging.DEBUG),
-            # fetch
-            mock.call("git -C /src --version", level=logging.DEBUG),
-            mock.call("git -C /src fetch --prune --tags my-origin"),
-            # rebase
-            mock.call("git -C /src --version", level=logging.DEBUG),
-            # checkout
-            mock.call("git -C /src --version", level=logging.DEBUG),
-            mock.call("git -C /src checkout feature-branch"),
-            mock.call("git -C /src rebase my-origin/feature-branch"),
-        ]
-        run_subprocess_with_logging.assert_has_calls(calls)
+    def test_checkout_branch(self):
+        git.checkout_branch(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.remote_branch)
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_branch_hash[0:7])
 
-    @mock.patch("esrally.utils.process.run_subprocess")
-    @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_pull_ts(self, run_subprocess_with_logging, run_subprocess_with_output, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess_with_output.return_value = ["3694a07"]
-        run_subprocess.side_effect = [False, False]
-        git.pull_ts("/src", "20160101T110000Z", remote="origin", branch="master")
+    def test_head_revision(self):
+        # minimum 'core.abbrev' is to return 7 char prefixes
+        git.checkout(self.local_tmp_src_dir, branch="master")
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.local_revision[:7])
 
-        run_subprocess_with_output.assert_called_with('git -C /src rev-list -n 1 --before="20160101T110000Z" --date=iso8601 origin/master')
-        run_subprocess.has_calls(
-            [
-                mock.call("git -C /src fetch --prune --tags --quiet origin"),
-                mock.call("git -C /src checkout 3694a07"),
-            ]
-        )
+    def test_pull_ts(self):
+        # minimum 'core.abbrev' is to return 7 char prefixes
+        git.pull_ts(self.local_tmp_src_dir, "2016-01-01T110000Z", remote=self.local_remote_name, branch=self.remote_branch)
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.old_revision)
 
-    @mock.patch("esrally.utils.process.run_subprocess")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_pull_revision(self, run_subprocess_with_logging, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.side_effect = [False, False]
-        git.pull_revision("/src", remote="origin", revision="3694a07")
-        run_subprocess.has_calls(
-            [
-                mock.call("git -C /src fetch --prune --tags --quiet origin"),
-                mock.call("git -C /src checkout --quiet 3694a07"),
-            ]
-        )
+    def test_rebase(self, setup_teardown_rebase):
+        # fetch required first to get remote branch
+        git.fetch(self.local_tmp_src_dir, remote=self.local_remote_name)
+        git.rebase(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.rebase_branch)
+        # minimum 'core.abbrev' is to return 7 char prefixes
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_commit_hash[0:7])
 
-    @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_head_revision(self, run_subprocess_with_logging, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = ["3694a07"]
-        assert git.head_revision("/src") == "3694a07"
-        run_subprocess.assert_called_with("git -C /src rev-parse --short HEAD")
-
-    @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_list_remote_branches(self, run_subprocess_with_logging, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = [
-            "  origin/HEAD",
-            "  origin/master",
-            "  origin/5.0.0-alpha1",
-            "  origin/5",
-        ]
-        assert git.branches("/src", remote=True) == ["master", "5.0.0-alpha1", "5"]
-        run_subprocess.assert_called_with("git -C /src for-each-ref refs/remotes/ --format='%(refname:short)'")
-
-    @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_list_local_branches(self, run_subprocess_with_logging, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = [
-            "  HEAD",
-            "  master",
-            "  5.0.0-alpha1",
-            "  5",
-        ]
-        assert git.branches("/src", remote=False) == ["master", "5.0.0-alpha1", "5"]
-        run_subprocess.assert_called_with("git -C /src for-each-ref refs/heads/ --format='%(refname:short)'")
-
-    @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_list_tags_with_tags_present(self, run_subprocess_with_logging, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = [
-            "  v1",
-            "  v2",
-        ]
-        assert git.tags("/src") == ["v1", "v2"]
-        run_subprocess.assert_called_with("git -C /src tag")
-
-    @mock.patch("esrally.utils.process.run_subprocess_with_output")
-    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
-    def test_list_tags_no_tags_available(self, run_subprocess_with_logging, run_subprocess):
-        run_subprocess_with_logging.return_value = 0
-        run_subprocess.return_value = ""
-        assert git.tags("/src") == []
-        run_subprocess.assert_called_with("git -C /src tag")
+    def test_pull_rebase(self, setup_teardown_rebase):
+        git.pull(self.local_tmp_src_dir, remote=self.local_remote_name, branch=self.rebase_branch)
+        # minimum 'core.abbrev' is to return 7 char prefixes
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_commit_hash[0:7])

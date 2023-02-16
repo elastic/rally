@@ -26,7 +26,6 @@ import shutil
 import subprocess
 import tarfile
 import zipfile
-from contextlib import suppress
 
 from esrally.utils import console
 
@@ -97,9 +96,7 @@ class MmapSource:
     def open(self):
         self.f = open(self.file_name, mode="r+b")
         self.mm = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
-        # madvise is available in Python 3.8+
-        with suppress(AttributeError):
-            self.mm.madvise(mmap.MADV_SEQUENTIAL)
+        self.mm.madvise(mmap.MADV_SEQUENTIAL)
 
         # allow for chaining
         return self
@@ -474,7 +471,7 @@ class FileOffsetTable:
         prior_remaining_lines = target_line_number
 
         for line in self.offset_file:
-            line_number, offset_in_bytes = [int(i) for i in line.strip().split(";")]
+            line_number, offset_in_bytes = (int(i) for i in line.strip().split(";"))
             if line_number <= target_line_number:
                 prior_offset = offset_in_bytes
                 prior_remaining_lines = target_line_number - line_number
@@ -530,7 +527,7 @@ def prepare_file_offset_table(data_file_path):
         console.info("Preparing file offset table for [%s] ... " % data_file_path, end="", flush=True)
         line_number = 0
         with file_offset_table:
-            with open(data_file_path, mode="rt", encoding="utf-8") as data_file:
+            with open(data_file_path, encoding="utf-8") as data_file:
                 while True:
                     line = data_file.readline()
                     if len(line) == 0:

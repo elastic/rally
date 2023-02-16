@@ -758,6 +758,12 @@ Properties
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results. See the section below for the meta-data that are returned. This property must be set to ``true`` for individual bulk request failures to be logged by Rally.
 * ``timeout`` (optional, defaults to ``1m``): Defines the `time period that Elasticsearch will wait per action <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-query-params>`_ until it has finished processing the following operations: automatic index creation, dynamic mapping updates, waiting for active shards.
 
+With multiple ``clients``, Rally will split each document using as many splits as there are ``clients``. This ensures that the bulk index operations are efficiently parallelized but has the drawback that the ingestion is not done in the order of each document. For example, if ``clients`` is set to 2, one client will index the document starting from the beginning, while the other will index starting from the middle.
+
+Additionally, if there are multiple documents or corpora, Rally will try to index all documents in parallel in two ways:
+
+1. Each client will have a different starting point. For example, in a track with 2 corpora and 5 clients, clients 1, 3, and 5 will start with the first corpus and clients 2 and 4 will start with the second corpus.
+2. Each client is assigned to multiple documents. Client 1 will start with the first split of the first document of the first corpus. Then it will move on to the first split of the first document of the second corpus, and so on.
 
 The image below shows how Rally behaves with a ``recency`` set to 0.5. Internally, Rally uses the blue function for its calculations but to understand the behavior we will focus on red function (which is just the inverse). Suppose we have already generated ids from 1 to 100 and we are about to simulate an id conflict. Rally will randomly choose a value on the y-axis, e.g. 0.8 which is mapped to 0.1 on the x-axis. This means that in 80% of all cases, Rally will choose an id within the most recent 10%, i.e. between 90 and 100. With 20% probability the id will be between 1 and 89. The closer ``recency`` gets to zero, the "flatter" the red curve gets and the more likely Rally will choose less recent ids.
 
@@ -2377,6 +2383,8 @@ Properties
     It's not recommended to rely on ``wait-for-completion=true``. Instead you should keep the default value (``False``) and use an additional ``wait-for-snapshot-create`` operation in the next step.
     This is mandatory on `Elastic Cloud <https://www.elastic.co/cloud>`_ or environments where Elasticsearch is connected via intermediate network components, such as proxies, that may terminate the blocking connection after a timeout.
 
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
 Meta-data
 """""""""
 
@@ -2453,6 +2461,8 @@ Properties
         }
 
     However, this might not work if a proxy is in between the client and Elasticsearch and the proxy has a shorter request timeout configured than the client. In this case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step.
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
 Meta-data
 """""""""
@@ -3051,6 +3061,39 @@ The following meta data is always returned:
 
 * ``weight``: The number of fetched pages. Should always equal to the ``pages`` parameter.
 * ``unit``: The unit in which to interpret ``weight``. Always "ops".
+
+downsample
+~~~~~~~~~~
+
+Executes a downsampling operation on an index producing a new index whose data is aggregated on the @timestamp field.
+
+
+Properties
+""""""""""
+
+* ``fixed_interval`` (optional, defaults to ``1h``): The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
+* ``source-index`` (optional): The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation. If there is only one index defined in the ``indices`` of the track definition, that will be used as the default.
+* ``target-index`` (optional, defaults to ``{source-index}-{fixed-interval}``): Tne new target index created by the downsampling operation and including aggregated data.
+
+**Example**
+
+Executes a downsampling operation aggregating data in the source index (test-source-index) and creating a new target index (test-target-index) applying an aggregation
+interval of 1 minute on the @timestamp field::
+
+    {
+      "name": "downsample",
+      "operation": {
+        "operation-type": "downsample",
+        "fixed-interval": "1m",
+        "source-index": "test-source-index",
+        "target-index": "tsdb-target-index"
+      }
+    }
+
+Meta-data
+"""""""""
+
+The operation returns no meta-data.
 
 field-caps
 ~~~~~~~~~~~~~~~~~~~

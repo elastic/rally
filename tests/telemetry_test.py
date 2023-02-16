@@ -295,6 +295,19 @@ class TestJfr:
             "filename=/var/log/test-recording.jfr,settings=profile",
         ]
 
+    def test_sets_options_for_java_11_or_above_custom_delay_duration_recording_template(self):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"recording-template": "profile", "jfr-duration": "20m", "jfr-delay": "10s"},
+            log_root="/var/log",
+            java_major_version=random.randint(11, 999),
+        )
+        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,delay=10s,duration=20m,settings=profile",
+        ]
+
 
 class TestGc:
     def test_sets_options_for_pre_java_9(self):
@@ -354,7 +367,7 @@ class TestSegmentStats:
         # pylint: disable=unnecessary-dunder-call
         file_mock.assert_has_calls(
             [
-                call("/var/log/segment_stats.log", "wt"),
+                call("/var/log/segment_stats.log", "w"),
                 call().__enter__(),
                 call().write(stats_response),
                 call().__exit__(None, None, None),
@@ -2132,12 +2145,14 @@ class TestNodeStatsRecorder:
         client = Client(nodes=SubClient(stats=self.node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        node_name = [self.node_stats_response["nodes"][node]["name"] for node in self.node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
 
         telemetry_params = {}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
+
+        node_name = [self.node_stats_response["nodes"][node]["name"] for node in self.node_stats_response["nodes"]][0]
+        roles = [self.node_stats_response["nodes"][node]["roles"] for node in self.node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
 
         expected_doc = collections.OrderedDict()
         expected_doc["name"] = "node-stats"
@@ -2382,11 +2397,13 @@ class TestNodeStatsRecorder:
         client = Client(nodes=SubClient(stats=node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
         telemetry_params = {"node-stats-include-indices": True}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
+
+        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
+        roles = [node_stats_response["nodes"][node]["roles"] for node in node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
 
         metrics_store_put_doc.assert_called_once_with(
             {
@@ -2718,11 +2735,13 @@ class TestNodeStatsRecorder:
         client = Client(nodes=SubClient(stats=node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
-        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name}
         telemetry_params = {"node-stats-include-indices-metrics": "refresh,docs"}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
+
+        node_name = [node_stats_response["nodes"][node]["name"] for node in node_stats_response["nodes"]][0]
+        roles = [node_stats_response["nodes"][node]["roles"] for node in node_stats_response["nodes"]][0]
+        metrics_store_meta_data = {"cluster": "remote", "node_name": node_name, "roles": roles}
 
         metrics_store_put_doc.assert_called_once_with(
             {
@@ -4678,6 +4697,29 @@ class TestDiskUsageStats:
             self._mock_store("disk_usage_total", 346, "station.country_code"),
             self._mock_store("disk_usage_doc_values", 328, "station.country_code"),
             self._mock_store("disk_usage_points", 18, "station.country_code"),
+        ]
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    def test_indexed_vector(self, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es = Client(
+            transport_client=TransportClient(
+                response={
+                    "_shards": {"failed": 0},
+                    "foo": {
+                        "fields": {"title_vector": {"total_in_bytes": 64179820, "doc_values_in_bytes": 0, "knn_vectors_in_bytes": 64179820}}
+                    },
+                }
+            )
+        )
+        device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        assert metrics_store_cluster_level.mock_calls == [
+            self._mock_store("disk_usage_total", 64179820, "title_vector"),
+            self._mock_store("disk_usage_knn_vectors", 64179820, "title_vector"),
         ]
 
     def _mock_store(self, name, size, field):

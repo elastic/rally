@@ -229,6 +229,8 @@ class FlightRecorder(TelemetryDevice):
 
     def java_opts(self, log_file):
         recording_template = self.telemetry_params.get("recording-template")
+        delay = self.telemetry_params.get("jfr-delay")
+        duration = self.telemetry_params.get("jfr-duration")
         java_opts = ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints"]
         jfr_cmd = ""
         if self.java_major_version < 11:
@@ -236,20 +238,24 @@ class FlightRecorder(TelemetryDevice):
 
         if self.java_major_version < 9:
             java_opts.append("-XX:+FlightRecorder")
-            java_opts.append("-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={}".format(log_file))
+            java_opts.append(f"-XX:FlightRecorderOptions=disk=true,maxage=0s,maxsize=0,dumponexit=true,dumponexitpath={log_file}")
             jfr_cmd = "-XX:StartFlightRecording=defaultrecording=true"
-            if recording_template:
-                self.logger.info("jfr: Using recording template [%s].", recording_template)
-                jfr_cmd += ",settings={}".format(recording_template)
-            else:
-                self.logger.info("jfr: Using default recording template.")
         else:
-            jfr_cmd += "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={}".format(log_file)
-            if recording_template:
-                self.logger.info("jfr: Using recording template [%s].", recording_template)
-                jfr_cmd += ",settings={}".format(recording_template)
-            else:
-                self.logger.info("jfr: Using default recording template.")
+            jfr_cmd += f"-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,filename={log_file}"
+
+        if delay:
+            self.logger.info("jfr: Using delay [%s].", delay)
+            jfr_cmd += f",delay={delay}"
+
+        if duration:
+            self.logger.info("jfr: Using duration [%s].", duration)
+            jfr_cmd += f",duration={duration}"
+
+        if recording_template:
+            self.logger.info("jfr: Using recording template [%s].", recording_template)
+            jfr_cmd += f",settings={recording_template}"
+        else:
+            self.logger.info("jfr: Using default recording template.")
         java_opts.append(jfr_cmd)
         return java_opts
 
@@ -272,7 +278,7 @@ class JitCompiler(TelemetryDevice):
             "-XX:+UnlockDiagnosticVMOptions",
             "-XX:+TraceClassLoading",
             "-XX:+LogCompilation",
-            "-XX:LogFile={}".format(log_file),
+            f"-XX:LogFile={log_file}",
             "-XX:+PrintAssembly",
         ]
 
@@ -298,7 +304,7 @@ class Gc(TelemetryDevice):
     def java_opts(self, log_file):
         if self.java_major_version < 9:
             return [
-                "-Xloggc:{}".format(log_file),
+                f"-Xloggc:{log_file}",
                 "-XX:+PrintGCDetails",
                 "-XX:+PrintGCDateStamps",
                 "-XX:+PrintGCTimeStamps",
@@ -325,9 +331,9 @@ class Heapdump(TelemetryDevice):
     def detach_from_node(self, node, running):
         if running:
             io.ensure_dir(self.log_root)
-            heap_dump_file = os.path.join(self.log_root, "heap_at_exit_{}.hprof".format(node.pid))
-            console.info("{}: Writing heap dump to [{}]".format(self.human_name, heap_dump_file), logger=self.logger)
-            cmd = "jmap -dump:format=b,file={} {}".format(heap_dump_file, node.pid)
+            heap_dump_file = os.path.join(self.log_root, f"heap_at_exit_{node.pid}.hprof")
+            console.info(f"{self.human_name}: Writing heap dump to [{heap_dump_file}]", logger=self.logger)
+            cmd = f"jmap -dump:format=b,file={heap_dump_file} {node.pid}"
             if process.run_subprocess_with_logging(cmd):
                 self.logger.warning("Could not write heap dump to [%s]", heap_dump_file)
 
@@ -349,7 +355,7 @@ class SegmentStats(TelemetryDevice):
             segment_stats = self.client.cat.segments(index="_all", v=True)
             stats_file = os.path.join(self.log_root, "segment_stats.log")
             console.info(f"{self.human_name}: Writing segment stats to [{stats_file}]", logger=self.logger)
-            with open(stats_file, "wt") as f:
+            with open(stats_file, "w") as f:
                 f.write(segment_stats)
         except BaseException:
             self.logger.exception("Could not retrieve segment stats.")
@@ -384,7 +390,7 @@ class CcrStats(TelemetryDevice):
         self.sample_interval = telemetry_params.get("ccr-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                "The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval)
+                f"The telemetry parameter 'ccr-stats-sample-interval' must be greater than zero but was {self.sample_interval}."
             )
         self.specified_cluster_names = self.clients.keys()
         self.indices_per_cluster = self.telemetry_params.get("ccr-stats-indices", False)
@@ -610,7 +616,7 @@ class RecoveryStatsRecorder:
         try:
             stats = self.client.indices.recovery(index=self.indices, active_only=True, detailed=False)
         except elasticsearch.TransportError:
-            msg = "A transport error occurred while collecting recovery stats on cluster [{}]".format(self.cluster_name)
+            msg = f"A transport error occurred while collecting recovery stats on cluster [{self.cluster_name}]"
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
@@ -774,7 +780,7 @@ class NodeStatsRecorder:
         self.sample_interval = telemetry_params.get("node-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                "The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was {}.".format(self.sample_interval)
+                f"The telemetry parameter 'node-stats-sample-interval' must be greater than zero but was {self.sample_interval}."
             )
 
         self.include_indices = telemetry_params.get("node-stats-include-indices", False)
@@ -823,7 +829,8 @@ class NodeStatsRecorder:
         current_sample = self.sample()
         for node_stats in current_sample:
             node_name = node_stats["name"]
-            metrics_store_meta_data = {"cluster": self.cluster_name, "node_name": node_name}
+            roles = node_stats["roles"]
+            metrics_store_meta_data = {"cluster": self.cluster_name, "node_name": node_name, "roles": roles}
             collected_node_stats = collections.OrderedDict()
             collected_node_stats["name"] = "node-stats"
 
@@ -863,7 +870,7 @@ class NodeStatsRecorder:
         def iterate():
             for section_name, section_value in stats.items():
                 if isinstance(section_value, dict):
-                    new_prefix = "{}_{}".format(prefix, section_name)
+                    new_prefix = f"{prefix}_{section_name}"
                     # https://www.python.org/dev/peps/pep-0380/
                     yield from self.flatten_stats_fields(prefix=new_prefix, stats=section_value).items()
                 # Avoid duplication for metric fields that have unit embedded in value as they are also recorded elsewhere
@@ -1440,8 +1447,6 @@ class IngestPipelineStats(InternalTelemetryDevice):
         self.logger.info("Gathering Ingest Pipeline stats at benchmark end")
         end_stats = self.get_ingest_pipeline_stats()
 
-        # The nesting level is ok here given the structure of the Ingest Pipeline stats
-        # pylint: disable=too-many-nested-blocks
         for cluster_name, node in end_stats.items():
             if cluster_name not in self.start_stats:
                 self.logger.warning(
@@ -2331,3 +2336,7 @@ class DiskUsageStats(TelemetryDevice):
                 term_vectors = field_info.get("term_vectors_in_bytes", 0)
                 if term_vectors > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_term_vectors", term_vectors, meta_data=meta, unit="byte")
+
+                knn_vectors = field_info.get("knn_vectors_in_bytes", 0)
+                if knn_vectors > 0:
+                    self.metrics_store.put_value_cluster_level("disk_usage_knn_vectors", knn_vectors, meta_data=meta, unit="byte")

@@ -29,9 +29,9 @@ TEAM_FORMAT_VERSION = 1
 
 
 def _path_for(team_root_path, team_member_type):
-    root_path = os.path.join(team_root_path, team_member_type, "v{}".format(TEAM_FORMAT_VERSION))
+    root_path = os.path.join(team_root_path, team_member_type, f"v{TEAM_FORMAT_VERSION}")
     if not os.path.exists(root_path):
-        raise exceptions.SystemSetupError("Path {} for {} does not exist.".format(root_path, team_member_type))
+        raise exceptions.SystemSetupError(f"Path {root_path} for {team_member_type} does not exist.")
     return root_path
 
 
@@ -71,12 +71,12 @@ def load_car(repo, name, car_params=None):
                     root_path = p
                 # multiple cars are based on the same hook
                 elif root_path != p:
-                    raise exceptions.SystemSetupError("Invalid car: {}. Multiple bootstrap hooks are forbidden.".format(name))
+                    raise exceptions.SystemSetupError(f"Invalid car: {name}. Multiple bootstrap hooks are forbidden.")
         all_config_base_vars.update(descriptor.config_base_variables)
         all_car_vars.update(descriptor.variables)
 
     if len(all_config_paths) == 0:
-        raise exceptions.SystemSetupError("At least one config base is required for car {}".format(name))
+        raise exceptions.SystemSetupError(f"At least one config base is required for car {name}")
     variables = {}
     # car variables *always* take precedence over config base variables
     variables.update(all_config_base_vars)
@@ -156,12 +156,12 @@ class CarLoader:
         return map(__car_name, filter(__is_car, os.listdir(self.cars_dir)))
 
     def _car_file(self, name):
-        return os.path.join(self.cars_dir, "{}.ini".format(name))
+        return os.path.join(self.cars_dir, f"{name}.ini")
 
     def load_car(self, name, car_params=None):
         car_config_file = self._car_file(name)
         if not io.exists(car_config_file):
-            raise exceptions.SystemSetupError("Unknown car [{}]. List the available cars with {} list cars.".format(name, PROGRAM_NAME))
+            raise exceptions.SystemSetupError(f"Unknown car [{name}]. List the available cars with {PROGRAM_NAME} list cars.")
         config = self._config_loader(car_config_file)
         root_paths = []
         config_paths = []
@@ -257,7 +257,7 @@ class Car:
         try:
             return self.variables[name]
         except KeyError:
-            raise exceptions.SystemSetupError('Car "{}" requires config key "{}"'.format(self.name, name))
+            raise exceptions.SystemSetupError(f'Car "{self.name}" requires config key "{name}"')
 
     @property
     def name(self):
@@ -290,7 +290,7 @@ class PluginLoader:
         core_plugins = []
         core_plugins_path = os.path.join(self.plugins_root_path, "core-plugins.txt")
         if os.path.exists(core_plugins_path):
-            with open(core_plugins_path, mode="rt", encoding="utf-8") as f:
+            with open(core_plugins_path, encoding="utf-8") as f:
                 for line in f:
                     if not line.startswith("#"):
                         # be forward compatible and allow additional values (comma-separated). At the moment, we only use the plugin name.
@@ -435,6 +435,14 @@ class PluginDescriptor:
             r.append("%s = [%s]" % (prop, repr(value)))
         return ", ".join(r)
 
+    @property
+    def moved_to_module(self):
+        # For a BWC escape hatch we first check if the plugin is listed in rally-teams' "core-plugin.txt",
+        # thus allowing users to override the teams path or revision to include the repository-s3/azure/gcs plugins in
+        # "core-plugin.txt"
+        # TODO: https://github.com/elastic/rally/issues/1622
+        return self.name in ["repository-s3", "repository-gcs", "repository-azure"] and not self.core_plugin
+
     def __hash__(self):
         return hash(self.name) ^ hash(self.config) ^ hash(self.core_plugin)
 
@@ -488,14 +496,14 @@ class BootstrapHookHandler:
             # just pass our own exceptions transparently.
             raise
         except BaseException:
-            msg = "Could not load bootstrap hooks in [{}]".format(self.loader.root_path)
+            msg = f"Could not load bootstrap hooks in [{self.loader.root_path}]"
             self.logger.exception(msg)
             raise exceptions.SystemSetupError(msg)
 
     def register(self, phase, hook):
         self.logger.info("Registering bootstrap hook [%s] for phase [%s] in component [%s]", hook.__name__, phase, self.component.name)
         if not BootstrapPhase.valid(phase):
-            raise exceptions.SystemSetupError("Unknown bootstrap phase [{}]. Valid phases are: {}.".format(phase, BootstrapPhase.names()))
+            raise exceptions.SystemSetupError(f"Unknown bootstrap phase [{phase}]. Valid phases are: {BootstrapPhase.names()}.")
         if phase not in self.hooks:
             self.hooks[phase] = []
         self.hooks[phase].append(hook)

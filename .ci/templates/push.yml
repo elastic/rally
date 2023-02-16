@@ -18,6 +18,5 @@
       - multijob:
           name: all CI tests
           projects:
-            - name: elastic+rally+push+{branch}-precommit
             - name: elastic+rally+push+{branch}-it-python38
             - name: elastic+rally+push+{branch}-it-python310

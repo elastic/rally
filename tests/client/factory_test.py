@@ -66,9 +66,9 @@ class TestEsClientFactory:
         original_client_options = deepcopy(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: on"),
@@ -107,9 +107,9 @@ class TestEsClientFactory:
         original_client_options = deepcopy(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: on"),
@@ -149,9 +149,9 @@ class TestEsClientFactory:
         original_client_options = deepcopy(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: on"),
@@ -186,7 +186,7 @@ class TestEsClientFactory:
         client_ssl_options = {"client_cert": "../utils/resources/certs/client.crt", "client_key": "../utils/resources/certs/client.key"}
 
         random_client_ssl_option = random.choice(list(client_ssl_options.keys()))
-        missing_client_ssl_option = list(set(client_ssl_options) - set([random_client_ssl_option]))[0]
+        missing_client_ssl_option = list(set(client_ssl_options) - {random_client_ssl_option})[0]
         client_options.update({random_client_ssl_option: client_ssl_options[random_client_ssl_option]})
 
         with pytest.raises(exceptions.SystemSetupError) as ctx:
@@ -220,9 +220,9 @@ class TestEsClientFactory:
         original_client_options = dict(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: off"),
@@ -261,9 +261,9 @@ class TestEsClientFactory:
         original_client_options = deepcopy(client_options)
 
         logger = logging.getLogger("esrally.client.factory")
-        with mock.patch.object(logger, "info") as mocked_info_logger:
+        with mock.patch.object(logger, "debug") as mocked_debug_logger:
             f = client.EsClientFactory(hosts, client_options)
-        mocked_info_logger.assert_has_calls(
+        mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL certificate verification: off"),
                 mock.call("SSL client authentication: on"),

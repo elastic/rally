@@ -85,7 +85,7 @@ def main():
     parser = argparse.ArgumentParser(
         prog=PROGRAM_NAME,
         description=BANNER + "\n\n Rally daemon to support remote benchmarks",
-        epilog="Find out more about Rally at {}".format(console.format.link(doc_link())),
+        epilog=f"Find out more about Rally at {console.format.link(doc_link())}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version="%(prog)s " + version.version())

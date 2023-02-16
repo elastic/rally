@@ -16,6 +16,7 @@
 # under the License.
 
 import collections
+import datetime
 import glob
 import json
 import logging
@@ -26,6 +27,7 @@ import random
 import statistics
 import sys
 import time
+import uuid
 import zlib
 from enum import Enum, IntEnum
 from http.client import responses
@@ -65,12 +67,17 @@ class EsClient:
     def delete_template(self, name):
         self.guarded(self._client.indices.delete_template, name=name)
 
+    def delete_by_query(self, index, body):
+        return self.guarded(self._client.delete_by_query, index=index, body=body)
+
+    def delete(self, index, id):
+        return self.guarded(self._client.delete, index=index, id=id, ignore=404)
+
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
-    def create_index(self, index):
-        # ignore 400 cause by IndexAlreadyExistsException when creating an index
-        return self.guarded(self._client.indices.create, index=index, ignore=400)
+    def create_index(self, index, body=None):
+        return self.guarded(self._client.indices.create, index=index, body=body, ignore=400)
 
     def exists(self, index):
         return self.guarded(self._client.indices.exists, index=index)
@@ -147,6 +154,15 @@ class EsClient:
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.TransportError as e:
+                if e.status_code == 404 and e.error == "index_not_found_exception":
+                    node = self._client.transport.hosts[0]
+                    msg = (
+                        "The operation [%s] against your Elasticsearch metrics store on "
+                        "host [%s] at port [%s] failed because index [%s] does not exist."
+                        % (target.__name__, node["host"], node["port"], kwargs.get("index"))
+                    )
+                    self.logger.exception(msg)
+                    raise exceptions.RallyError(msg)
                 if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
                     self.logger.debug(
                         "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
@@ -235,6 +251,9 @@ class IndexTemplateProvider:
     def results_template(self):
         return self._read("results-template")
 
+    def annotations_template(self):
+        return self._read("annotation-template")
+
     def _read(self, template_name):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
             template = json.load(f)
@@ -301,37 +320,6 @@ def metrics_store_class(cfg):
         return EsMetricsStore
     else:
         return InMemoryMetricsStore
-
-
-def extract_user_tags_from_config(cfg):
-    """
-    Extracts user tags into a structured dict
-
-    :param cfg: The current configuration object.
-    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
-    """
-    user_tags = cfg.opts("race", "user.tag", mandatory=False)
-    return extract_user_tags_from_string(user_tags)
-
-
-def extract_user_tags_from_string(user_tags):
-    """
-    Extracts user tags into a structured dict
-
-    :param user_tags: A string containing user tags (tags separated by comma, key and value separated by colon).
-    :return: A dict containing user tags. If no user tags are given, an empty dict is returned.
-    """
-    user_tags_dict = {}
-    if user_tags and user_tags.strip() != "":
-        try:
-            for user_tag in user_tags.split(","):
-                user_tag_key, user_tag_value = user_tag.split(":")
-                user_tags_dict[user_tag_key] = user_tag_value
-        except ValueError:
-            msg = "User tag keys and values have to separated by a ':'. Invalid value [%s]" % user_tags
-            logging.getLogger(__name__).exception(msg)
-            raise exceptions.SystemSetupError(msg)
-    return user_tags_dict
 
 
 class SampleType(IntEnum):
@@ -413,7 +401,7 @@ class MetricsStore:
             self._car,
         )
 
-        user_tags = extract_user_tags_from_config(self._config)
+        user_tags = self._config.opts("race", "user.tags", default_value={}, mandatory=False)
         for k, v in user_tags.items():
             # prefix user tag with "tag_" in order to avoid clashes with our internal meta data
             self.add_meta_info(MetaInfoScope.cluster, None, "tag_%s" % k, v)
@@ -648,7 +636,7 @@ class MetricsStore:
         elif level is None:
             meta = None
         else:
-            raise exceptions.SystemSetupError("Unknown meta info level [{}]".format(level))
+            raise exceptions.SystemSetupError(f"Unknown meta info level [{level}]")
 
         if meta and meta_data:
             meta.update(meta_data)
@@ -879,11 +867,11 @@ class EsMetricsStore(MetricsStore):
         self._client.refresh(index=self._index)
 
     def index_name(self):
-        ts = time.from_is8601(self._race_timestamp)
+        ts = time.from_iso8601(self._race_timestamp)
         return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
 
     def _migrated_index_name(self, original_name):
-        return "{}.new".format(original_name)
+        return f"{original_name}.new"
 
     def _get_template(self):
         return self._index_template_provider.metrics_template()
@@ -1255,6 +1243,22 @@ def results_store(cfg):
         return NoopResultsStore()
 
 
+def delete_race(cfg):
+    race_store(cfg).delete_race()
+
+
+def delete_annotation(cfg):
+    race_store(cfg).delete_annotation()
+
+
+def list_annotations(cfg):
+    race_store(cfg).list_annotations()
+
+
+def add_annotation(cfg):
+    race_store(cfg).add_annotation()
+
+
 def list_races(cfg):
     def format_dict(d):
         if d:
@@ -1270,12 +1274,14 @@ def list_races(cfg):
                 race.race_id,
                 time.to_iso8601(race.race_timestamp),
                 race.track,
-                format_dict(race.track_params),
                 race.challenge_name,
                 race.car_name,
-                format_dict(race.user_tags),
+                race.distribution_version,
+                race.revision,
+                race.rally_version,
                 race.track_revision,
                 race.team_revision,
+                format_dict(race.user_tags),
             ]
         )
 
@@ -1288,12 +1294,14 @@ def list_races(cfg):
                     "Race ID",
                     "Race Timestamp",
                     "Track",
-                    "Track Parameters",
                     "Challenge",
                     "Car",
-                    "User Tags",
+                    "ES Version",
+                    "Revision",
+                    "Rally Version",
                     "Track Revision",
                     "Team Revision",
+                    "User Tags",
                 ],
             )
         )
@@ -1307,7 +1315,7 @@ def create_race(cfg, track, challenge, track_revision=None):
     environment = cfg.opts("system", "env.name")
     race_id = cfg.opts("system", "race.id")
     race_timestamp = cfg.opts("system", "time.start")
-    user_tags = extract_user_tags_from_config(cfg)
+    user_tags = cfg.opts("race", "user.tags", default_value={}, mandatory=False)
     pipeline = cfg.opts("race", "pipeline")
     track_params = cfg.opts("track", "params")
     car_params = cfg.opts("mechanic", "car.params")
@@ -1490,7 +1498,7 @@ class Race:
             d.get("rally-revision"),
             d["environment"],
             d["race-id"],
-            time.from_is8601(d["race-timestamp"]),
+            time.from_iso8601(d["race-timestamp"]),
             d["pipeline"],
             user_tags,
             d["track"],
@@ -1520,11 +1528,53 @@ class RaceStore:
     def list(self):
         raise NotImplementedError("abstract method")
 
+    def delete_race(self):
+        raise NotImplementedError("abstract method")
+
+    def delete_annotation(self):
+        raise NotImplementedError("abstract method")
+
+    def list_annotations(self):
+        raise NotImplementedError("abstract method")
+
+    def add_annotation(self):
+        raise NotImplementedError("abstract method")
+
     def store_race(self, race):
         raise NotImplementedError("abstract method")
 
     def _max_results(self):
-        return int(self.cfg.opts("system", "list.races.max_results"))
+        return int(self.cfg.opts("system", "list.max_results"))
+
+    def _track(self):
+        return self.cfg.opts("system", "admin.track", mandatory=False)
+
+    def _benchmark_name(self):
+        return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
+
+    def _race_timestamp(self):
+        return self.cfg.opts("system", "add.race_timestamp")
+
+    def _message(self):
+        return self.cfg.opts("system", "add.message")
+
+    def _chart_type(self):
+        return self.cfg.opts("system", "add.chart_type", mandatory=False)
+
+    def _chart_name(self):
+        return self.cfg.opts("system", "add.chart_name", mandatory=False)
+
+    def _from_date(self):
+        return self.cfg.opts("system", "list.from_date", mandatory=False)
+
+    def _to_date(self):
+        return self.cfg.opts("system", "list.to_date", mandatory=False)
+
+    def _dry_run(self):
+        return self.cfg.opts("system", "admin.dry_run", mandatory=False)
+
+    def _id(self):
+        return self.cfg.opts("system", "delete.id")
 
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
@@ -1546,6 +1596,18 @@ class CompositeRaceStore:
         self.file_store.store_race(race)
         self.es_store.store_race(race)
 
+    def delete_race(self):
+        return self.es_store.delete_race()
+
+    def delete_annotation(self):
+        return self.es_store.delete_annotation()
+
+    def list_annotations(self):
+        return self.es_store.list_annotations()
+
+    def add_annotation(self):
+        return self.es_store.add_annotation()
+
     def list(self):
         return self.es_store.list()
 
@@ -1555,11 +1617,23 @@ class FileRaceStore(RaceStore):
         doc = race.as_dict()
         race_path = paths.race_root(self.cfg, race_id=race.race_id)
         io.ensure_dir(race_path)
-        with open(self._race_file(), mode="wt", encoding="utf-8") as f:
+        with open(self._race_file(), mode="w", encoding="utf-8") as f:
             f.write(json.dumps(doc, indent=True, ensure_ascii=False))
 
     def _race_file(self, race_id=None):
         return os.path.join(paths.race_root(cfg=self.cfg, race_id=race_id), "race.json")
+
+    def delete_race(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
+
+    def delete_annotation(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
+
+    def list_annotations(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
+
+    def add_annotation(self):
+        raise NotImplementedError("Not supported for in-memory datastore.")
 
     def list(self):
         results = glob.glob(self._race_file(race_id="*"))
@@ -1572,17 +1646,34 @@ class FileRaceStore(RaceStore):
             races = self._to_races([race_file])
             if races:
                 return races[0]
-        raise exceptions.NotFound("No race with race id [{}]".format(race_id))
+        raise exceptions.NotFound(f"No race with race id [{race_id}]")
 
     def _to_races(self, results):
         races = []
+        track = self._track()
+        name = self._benchmark_name()
+        pattern = "%Y%m%d"
+        from_date = self._from_date()
+        to_date = self._to_date()
         for result in results:
             # noinspection PyBroadException
             try:
-                with open(result, mode="rt", encoding="utf-8") as f:
+                with open(result, encoding="utf-8") as f:
                     races.append(Race.from_dict(json.loads(f.read())))
             except BaseException:
                 logging.getLogger(__name__).exception("Could not load race file [%s] (incompatible format?) Skipping...", result)
+
+        if track:
+            races = filter(lambda r: r.track == track, races)
+        if name:
+            filtered_on_name = filter(lambda r: r.user_tags.get("name") == name, races)
+            filtered_on_benchmark_name = filter(lambda r: r.user_tags.get("benchmark-name") == name, races)
+            races = list(filtered_on_name) + list(filtered_on_benchmark_name)
+        if from_date:
+            races = filter(lambda r: r.race_timestamp.date() >= datetime.datetime.strptime(from_date, pattern).date(), races)
+        if to_date:
+            races = filter(lambda r: r.race_timestamp.date() <= datetime.datetime.strptime(to_date, pattern).date(), races)
+
         return sorted(races, key=lambda r: r.race_timestamp, reverse=True)
 
 
@@ -1611,13 +1702,144 @@ class EsRaceStore(RaceStore):
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
+    def add_annotation(self):
+        def _at_midnight(race_timestamp):
+            TIMESTAMP_FMT = "%Y%m%dT%H%M%SZ"
+            date = datetime.datetime.strptime(race_timestamp, TIMESTAMP_FMT)
+            date = date.replace(hour=0, minute=0, second=0, tzinfo=datetime.timezone.utc)
+            return date.strftime(TIMESTAMP_FMT)
+
+        environment = self.environment_name
+        # To line up annotations with chart data points, use midnight of day N as this is
+        # what the chart use too.
+        race_timestamp = _at_midnight(self._race_timestamp())
+        track = self._track()
+        chart_type = self._chart_type()
+        chart_name = self._chart_name()
+        message = self._message()
+        annotation_id = str(uuid.uuid4())
+        dry_run = self._dry_run()
+
+        if dry_run:
+            console.println(
+                f"Would add annotation with message [{message}] for environment=[{environment}], race timestamp=[{race_timestamp}], "
+                f"track=[{track}], chart type=[{chart_type}], chart name=[{chart_name}]"
+            )
+        else:
+            if not self.client.exists(index="rally-annotations"):
+                body = self.index_template_provider.annotations_template()
+                self.client.create_index(index="rally-annotations", body=body)
+            self.client.index(
+                index="rally-annotations",
+                id=annotation_id,
+                item={
+                    "environment": environment,
+                    "race-timestamp": race_timestamp,
+                    "track": track,
+                    "chart": chart_type,
+                    "chart-name": chart_name,
+                    "message": message,
+                },
+            )
+            console.println(f"Successfully added annotation [{annotation_id}].")
+
+    def list_annotations(self):
+        environment = self.environment_name
+        track = self._track()
+        from_date = self._from_date()
+        to_date = self._to_date()
+        query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"environment": environment}},
+                        {"range": {"race-timestamp": {"gte": from_date, "lte": to_date, "format": "basic_date"}}},
+                    ]
+                }
+            }
+        }
+        if track:
+            query["query"]["bool"]["filter"].append({"term": {"track": track}})
+
+        query["sort"] = [{"race-timestamp": "desc"}, {"track": "asc"}, {"chart": "asc"}]
+        query["size"] = self._max_results()
+
+        result = self.client.search(index="rally-annotations", body=query)
+        annotations = []
+        hits = result["hits"]["total"]
+        if hits == 0:
+            console.println(f"No annotations found in environment [{environment}].")
+        else:
+            for hit in result["hits"]["hits"]:
+                src = hit["_source"]
+                annotations.append(
+                    [
+                        hit["_id"],
+                        src["race-timestamp"],
+                        src.get("track", ""),
+                        src.get("chart", ""),
+                        src.get("chart-name", ""),
+                        src["message"],
+                    ]
+                )
+
+            if annotations:
+                console.println("\nAnnotations:\n")
+                console.println(
+                    tabulate.tabulate(
+                        annotations,
+                        headers=["Annotation Id", "Timestamp", "Track", "Chart Type", "Chart Name", "Message"],
+                    )
+                )
+
+    def delete_annotation(self):
+        annotations = self._id().split(",")
+        environment = self.environment_name
+        if self._dry_run():
+            if len(annotations) == 1:
+                console.println(f"Would delete annotation with id [{annotations[0]}] in environment [{environment}].")
+            else:
+                console.println(f"Would delete {len(annotations)} annotations: {annotations} in environment [{environment}].")
+        else:
+            for annotation_id in annotations:
+                result = self.client.delete(index="rally-annotations", id=annotation_id)
+                if result["result"] == "deleted":
+                    console.println(f"Successfully deleted [{annotation_id}].")
+                else:
+                    console.println(f"Did not find [{annotation_id}] in environment [{environment}].")
+
+    def delete_race(self):
+        races = self._id().split(",")
+        environment = self.environment_name
+        if self._dry_run():
+            if len(races) == 1:
+                console.println(f"Would delete race with id {races[0]} in environment {environment}.")
+            else:
+                console.println(f"Would delete {len(races)} races: {races} in environment {environment}.")
+        else:
+            for race_id in races:
+                selector = {"query": {"bool": {"filter": [{"term": {"environment": environment}}, {"term": {"race-id": race_id}}]}}}
+                self.client.delete_by_query(index="rally-races-*", body=selector)
+                self.client.delete_by_query(index="rally-metrics-*", body=selector)
+                result = self.client.delete_by_query(index="rally-results-*", body=selector)
+                if result["deleted"] > 0:
+                    console.println(f"Successfully deleted [{race_id}] in environment [{environment}].")
+                else:
+                    console.println(f"Did not find [{race_id}] in environment [{environment}].")
+
     def list(self):
+        track = self._track()
+        name = self._benchmark_name()
+        from_date = self._from_date()
+        to_date = self._to_date()
+
         filters = [
             {
                 "term": {
                     "environment": self.environment_name,
                 },
-            }
+            },
+            {"range": {"race-timestamp": {"gte": from_date, "lte": to_date, "format": "basic_date"}}},
         ]
 
         query = {
@@ -1635,6 +1857,13 @@ class EsRaceStore(RaceStore):
                 },
             ],
         }
+        if track:
+            query["query"]["bool"]["filter"].append({"term": {"track": track}})
+        if name:
+            query["query"]["bool"]["filter"].append(
+                {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}
+            )
+
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
@@ -1667,11 +1896,9 @@ class EsRaceStore(RaceStore):
         if hits == 1:
             return Race.from_dict(result["hits"]["hits"][0]["_source"])
         elif hits > 1:
-            raise exceptions.RallyAssertionError(
-                "Expected exactly one race to match race id [{}] but there were [{}] matches.".format(race_id, hits)
-            )
+            raise exceptions.RallyAssertionError(f"Expected exactly one race to match race id [{race_id}] but there were [{hits}] matches.")
         else:
-            raise exceptions.NotFound("No race with race id [{}]".format(race_id))
+            raise exceptions.NotFound(f"No race with race id [{race_id}]")
 
 
 class EsResultsStore:

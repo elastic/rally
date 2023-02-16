@@ -83,6 +83,27 @@ This subcommand is needed for :doc:`tournament mode </tournament>` and its usage
 
 This subcommand creates a basic track from data in an existing cluster. See the :ref:`track tutorial <add_track_create_track>` for a complete walkthrough.
 
+``build``
+~~~~~~~~~~~~~
+
+.. warning::
+
+    This subcommand is unsupported and intended only for Elasticsearch developer use. Expect the functionality and the command line interface to change significantly even in patch releases.
+
+This subcommand can be used to build Elasticsearch (and plugins) from specific revisions. Example::
+
+    esrally build --revision="@2022-07-21" --elasticsearch-plugins=analysis-icu --target-arch aarch64 --target-os linux  --quiet
+
+This will build Elasticsearch and the plugin ``analysis-icu`` for an ARM equipped Linux system, from the last commit on 2022-07-21. See :ref:`revision for more information<clr_revision>`.
+
+Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has built it::
+
+    {
+      "elasticsearch": "/.rally/benchmarks/distributions/src/elasticsearch-ec774626230-linux-aarch64.tar.gz",
+      "analysis-icu": "file:///.rally/benchmarks/distributions/src/analysis-icu-ec774626230.zip"
+    }
+
+
 ``download``
 ~~~~~~~~~~~~~
 
@@ -105,6 +126,13 @@ This will show the path to the default distribution::
     {
       "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-6.8.0.tar.gz"
     }
+
+``delete``
+~~~~~~~~~~~
+
+The ``delete`` subcommand is used to delete records for different configuration options:
+
+* race: Will delete a race and all corresponding metrics records from Elasticsearch metric store. ``--id`` is a required command line flag. Use ``list races`` to get the id of the race to be deleted.
 
 ``install``
 ~~~~~~~~~~~
@@ -237,7 +265,7 @@ Example JSON file::
 
 All track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races``, it will show all track parameters::
 
-    Race Timestamp    Track    Track Parameters          Challenge            Car       User Tag
+    Race Timestamp    Track    Track Parameters          Challenge            Car       User Tags
     ----------------  -------  ------------------------- -------------------  --------  ---------
     20160518T122341Z  pmc      bulk_size=8000            append-no-conflicts  defaults
     20160518T112341Z  pmc      bulk_size=2000,clients=16 append-no-conflicts  defaults
@@ -321,7 +349,7 @@ A comma-separated list that specifies the node names of the master nodes in the 
 
     --master-nodes="rally-node-0,rally-node-1,rally-node-2"
 
-This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-node-2`` as `initial master nodes <https://www.elastic.co/guide/en/elasticsearch/reference/current/discovery-settings.html#initial_master_nodes>`_.
+This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-node-2`` as `initial master nodes <https://www.elastic.co/guide/en/elasticsearch/reference/current/important-settings.html#initial_master_nodes>`_.
 
 ``seed-hosts``
 ~~~~~~~~~~~~~~
@@ -330,7 +358,7 @@ This will treat the nodes named ``rally-node-0``, ``rally-node-1`` and ``rally-n
 
     This command line parameter is experimental. Expect the functionality and the command line interface to change significantly even in patch releases.
 
-A comma-separated list if IP:transport port pairs used to specify the seed hosts in the cluster when a node is setup via the ``install`` subcommand. See the `Elasticsearch documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/discovery-settings.html#unicast.hosts>`_ for a detailed explanation of the seed hosts parameter. Example::
+A comma-separated list if IP:transport port pairs used to specify the seed hosts in the cluster when a node is setup via the ``install`` subcommand. See the `Elasticsearch documentation <https://www.elastic.co/guide/en/elasticsearch/reference/current/important-settings.html#unicast.hosts>`_ for a detailed explanation of the seed hosts parameter. Example::
 
     --seed-hosts="192.168.14.77:39300,192.168.14.78:39300,192.168.14.79:39300"
 
@@ -560,7 +588,7 @@ Example::
    # Force to run with JDK 11
    esrally race --track=geonames --distribution-version=7.0.0 --runtime-jdk=11
 
-It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/current/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
+It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/7.0/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
 
 .. _clr_revision:
 
@@ -574,7 +602,9 @@ You can specify the revision in different formats:
 * ``--revision=latest``: Use the HEAD revision from origin/main.
 * ``--revision=current``: Use the current revision (i.e. don't alter the local source tree).
 * ``--revision=abc123``: Where ``abc123`` is some git revision hash.
+* ``--revision=v8.4.0``: Where ``v8.4.0`` is some git tag.
 * ``--revision=@2013-07-27T10:37:00Z``: Determines the revision that is closest to the provided date. Rally logs to which git revision hash the date has been resolved and if you use Elasticsearch as metrics store (instead of the default in-memory one), :doc:`each metric record will contain the git revision hash also in the meta-data section </metrics>`.
+* ``--revision=my-branch-name``: Where ``my-branch-name`` is the name of an existing branch name. If you are using a :ref:`remote source repository <configuration_source>`, Rally will fetch and checkout the remote branch.
 
 Supported date format: If you specify a date, it has to be ISO-8601 conformant and must start with an ``@`` sign to make it easier for Rally to determine that you actually mean a date.
 
@@ -879,37 +909,53 @@ Rally usually installs and launches an Elasticsearch cluster internally and wipe
 .. note::
    This option does only affect clusters that are provisioned by Rally. More specifically, if you use the pipeline ``benchmark-only``, this option is ineffective as Rally does not provision a cluster in this case.
 
-``user-tag``
-~~~~~~~~~~~~
+``user-tags``
+~~~~~~~~~~~~~
 
-This is only relevant when you want to run :doc:`tournaments </tournament>`. You can use this flag to attach an arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
+You can use this flag to attach arbitrary text to the meta-data of each metric record and also the corresponding race. This will help you to recognize a race when you run ``esrally list races`` as you don't need to remember the concrete timestamp on which a race has been run but can instead use your own descriptive names.
 
-The required format is ``key`` ":" ``value``. You can choose ``key`` and  ``value`` freely.
-
-**Example**
-
- ::
-
-   esrally race --track=pmc --user-tag="intention:github-issue-1234-baseline,gc:cms"
-
-You can also specify multiple tags. They need to be separated by a comma.
+The required format is in ``key`` ":" ``value`` pairs which can be defined as string (separated by comma), inline json or referenced from a json file.
 
 **Example**
 
  ::
 
-   esrally race --track=pmc --user-tag="disk:SSD,data_node_count:4"
+   esrally race --track=pmc --user-tags="intention:github-issue-1234-baseline,gc:cms"
+
+**Example**
+
+ ::
+
+   esrally race --track=pmc --user-tags='{"disk":"SSD","data_node_count":4}'
+
+
+
+**Example**
+
+ ::
+
+   cat user_tags.json
+   {
+     "issue": "rally-issue-1000",
+     "iteration": 9
+   }
+
+   esrally race --track=pmc --user-tags=./user_tags.json
 
 
 
 When you run ``esrally list races``, this will show up again::
 
-    Race Timestamp    Track    Track Parameters   Challenge            Car       User Tag
-    ----------------  -------  ------------------ -------------------  --------  ------------------------------------
-    20160518T122341Z  pmc                         append-no-conflicts  defaults  intention:github-issue-1234-baseline
-    20160518T112341Z  pmc                         append-no-conflicts  defaults  disk:SSD,data_node_count:4
+    Race ID                               Race Timestamp    Track     Challenge            Car       ES Version      Revision                                  Rally Version                       Track Revision    Team Revision    User Tags
+    ------------------------------------  ----------------  --------  -------------------  --------  --------------  ----------------------------------------  ----------------------------------  ----------------  ---------------  -----------------------------
+    5479b7ca-85bf-4e22-bce9-d32ab6093190  20221103T140347Z  pmc       append-no-conflicts  defaults  8.6.0-SNAPSHOT  14b2d2d37e25071f820af7e9af8edca7c5ad0ac3  2.7.1.dev0 (git revision: 16e534b)  fee27e9           c9ca37f          gc=cms, intention=github-issue-1234-baseline
+    2689abb1-2274-4919-8b21-1cbe66243040  20221103T140206Z  pmc       append-no-conflicts  defaults  8.6.0-SNAPSHOT  14b2d2d37e25071f820af7e9af8edca7c5ad0ac3  2.7.1.dev0 (git revision: 16e534b)  fee27e9           c9ca37f          disk=SSD, data_node_count=4
+    41c5be35-55e8-45a8-8bf4-1ed91cb778e8  20221103T135132Z  pmc       append-no-conflicts  defaults  8.6.0-SNAPSHOT  14b2d2d37e25071f820af7e9af8edca7c5ad0ac3  2.6.1.dev0 (git revision: c47c204)  fee27e9           c9ca37f          issue=rally-issue-1000, iteration=9
 
 This will help you recognize a specific race when running ``esrally compare``.
+
+.. note::
+   This option used to be named `--user-tag` without an s, which was confusing as multiple tags are supported. While users are now encouraged to use `--user-tags` for clarity, Rally will continue to honor `--user-tag` in the future to avoid breaking backwards-compatibility.
 
 ``indices``
 ~~~~~~~~~~~
@@ -929,6 +975,29 @@ Target multiple indices::
 Use index patterns::
 
     esrally create-track --track=my-logs --indices="logs-*" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+
+.. note::
+   If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
+
+``data-streams``
+~~~~~~~~~~~~~~~~
+
+A comma-separated list of data stream patterns to target when generating a track with the ``create-track`` subcommand.
+
+**Examples**
+
+Target a single data stream::
+
+    esrally create-track --track=acme --data-streams="metrics-system.cpu-default" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+Target multiple data streams::
+
+    esrally create-track --track=acme --data-streams="logs-aws.vpcflow-default,metrics-system.cpu-default" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+Use index patterns::
+
+    esrally create-track --track=my-logs --data-streams="logs-*,metrics-*" --target-hosts=127.0.0.1:9200 --output-path=~/tracks
 
 
 .. note::

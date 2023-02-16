@@ -33,6 +33,14 @@ from esrally.utils import console, net
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
 
+def build(cfg):
+    car, plugins = load_team(cfg, external=False)
+
+    s = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=plugins)
+    binaries = s()
+    console.println(json.dumps(binaries, indent=2), force=True)
+
+
 def download(cfg):
     car, plugins = load_team(cfg, external=False)
 
@@ -78,7 +86,7 @@ def install(cfg):
         # there is no binary for Docker that can be downloaded / built upfront
         node_config = p.prepare(binary=None)
     else:
-        raise exceptions.SystemSetupError("Unknown build type [{}]".format(build_type))
+        raise exceptions.SystemSetupError(f"Unknown build type [{build_type}]")
 
     provisioner.save_node_configuration(root_path, node_config)
     console.println(json.dumps({"installation-id": cfg.opts("system", "install.id")}, indent=2), force=True)
@@ -103,7 +111,7 @@ def start(cfg):
     elif node_config.build_type == "docker":
         node_launcher = launcher.DockerLauncher(cfg)
     else:
-        raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
+        raise exceptions.SystemSetupError(f"Unknown build type [{node_config.build_type}]")
     nodes = node_launcher.start([node_config])
     _store_node_file(root_path, (nodes, race_id))
 
@@ -116,7 +124,7 @@ def stop(cfg):
     elif node_config.build_type == "docker":
         node_launcher = launcher.DockerLauncher(cfg)
     else:
-        raise exceptions.SystemSetupError("Unknown build type [{}]".format(node_config.build_type))
+        raise exceptions.SystemSetupError(f"Unknown build type [{node_config.build_type}]")
 
     nodes, race_id = _load_node_file(root_path)
 
@@ -150,7 +158,6 @@ def stop(cfg):
 
         metrics_store.close()
 
-    # TODO: Do we need to expose this as a separate command as well?
     provisioner.cleanup(
         preserve=cfg.opts("mechanic", "preserve.install"), install_dir=node_config.binary_path, data_paths=node_config.data_paths
     )
@@ -341,7 +348,7 @@ class MechanicActor(actor.RallyActor):
         self.externally_provisioned = False
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
+        self.logger.debug("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
 
     def receiveMsg_ChildActorExited(self, msg, sender):
         if self.is_current_status_expected(["cluster_stopping", "cluster_stopped"]):
@@ -416,7 +423,7 @@ class MechanicActor(actor.RallyActor):
         if msg.payload == MechanicActor.WAKEUP_RESET_RELATIVE_TIME:
             self.reset_relative_time()
         else:
-            raise exceptions.RallyAssertionError("Unknown wakeup reason [{}]".format(msg.payload))
+            raise exceptions.RallyAssertionError(f"Unknown wakeup reason [{msg.payload}]")
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.send(self.race_control, msg)

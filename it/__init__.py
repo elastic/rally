@@ -19,6 +19,7 @@ import errno
 import functools
 import json
 import os
+import platform
 import random
 import socket
 import subprocess
@@ -30,7 +31,10 @@ from esrally import client, config, version
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
-DISTRIBUTIONS = ["6.8.0", "7.6.0"]
+DISTRIBUTIONS = ["8.4.0"]
+# There are no ARM distribution artefacts for 6.8.0, which can't be tested on Apple Silicon
+if platform.machine() != "arm64":
+    DISTRIBUTIONS.insert(0, "6.8.0")
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -83,12 +87,15 @@ def esrally(cfg, command_line):
     return subprocess.call(esrally_command_line_for(cfg, command_line), shell=True)
 
 
-def race(cfg, command_line):
+def race(cfg, command_line, enable_assertions=True):
     """
     This method should be used for rally invocations of the race command.
     It sets up some defaults for how the integration tests expect to run races.
     """
-    return esrally(cfg, f"race {command_line} --kill-running-processes --on-error='abort' --enable-assertions")
+    race_command = f"race {command_line} --kill-running-processes --on-error='abort'"
+    if enable_assertions:
+        race_command += " --enable-assertions"
+    return esrally(cfg, race_command)
 
 
 def shell_cmd(command_line):
@@ -171,10 +178,10 @@ class TestCluster:
             )
             self.installation_id = json.loads("".join(output))["installation-id"]
         except BaseException as e:
-            raise AssertionError("Failed to install Elasticsearch {}.".format(distribution_version), e)
+            raise AssertionError(f"Failed to install Elasticsearch {distribution_version}.", e)
 
     def start(self, race_id):
-        cmd = 'start --runtime-jdk="bundled" --installation-id={} --race-id={}'.format(self.installation_id, race_id)
+        cmd = f'start --runtime-jdk="bundled" --installation-id={self.installation_id} --race-id={race_id}'
         if esrally(self.cfg, cmd) != 0:
             raise AssertionError("Failed to start Elasticsearch test cluster.")
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
@@ -183,7 +190,7 @@ class TestCluster:
 
     def stop(self):
         if self.installation_id:
-            if esrally(self.cfg, "stop --installation-id={}".format(self.installation_id)) != 0:
+            if esrally(self.cfg, f"stop --installation-id={self.installation_id}") != 0:
                 raise AssertionError("Failed to stop Elasticsearch test cluster.")
 
     def __str__(self):
@@ -191,7 +198,7 @@ class TestCluster:
 
 
 class EsMetricsStore:
-    VERSION = "7.6.0"
+    VERSION = "8.5.1"
 
     def __init__(self):
         self.cluster = TestCluster("in-memory-it")

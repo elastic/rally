@@ -687,6 +687,7 @@ class OperationType(Enum):
     FieldCaps = 17
     CompositeAgg = 18
     WaitForCurrentSnapshotsCreate = 19
+    Downsample = 20
 
     # administrative actions
     ForceMerge = 1001
@@ -728,15 +729,12 @@ class OperationType(Enum):
 
     @property
     def admin_op(self):
-        # pylint: disable=comparison-with-callable
         return self.value > 1000
 
     def to_hyphenated_string(self):
         """
         Turns enum constants into hyphenated names, e.g. ``WaitForTransform`` becomes ``wait-for-transform``.
         """
-        # Pylint complains that self.name is not iterable
-        # pylint: disable=not-an-iterable
         return "".join(["-" + c.lower() if c.isupper() else c for c in self.name]).lstrip("-")
 
     # pylint: disable=too-many-return-statements
@@ -852,6 +850,8 @@ class OperationType(Enum):
             return OperationType.Sql
         elif v == "field-caps":
             return OperationType.FieldCaps
+        elif v == "downsample":
+            return OperationType.Downsample
         else:
             raise KeyError(f"No enum value for [{v}]")
 
@@ -912,7 +912,7 @@ class Singleton(type):
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+            cls._instances[cls] = super().__call__(*args, **kwargs)
         return cls._instances[cls]
 
 

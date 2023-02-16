@@ -94,13 +94,13 @@ class BenchmarkActor(actor.RallyActor):
         self.coordinator = None
 
     def receiveMsg_PoisonMessage(self, msg, sender):
-        self.logger.info("BenchmarkActor got notified of poison message [%s] (forwarding).", (str(msg)))
+        self.logger.debug("BenchmarkActor got notified of poison message [%s] (forwarding).", (str(msg)))
         if self.coordinator:
             self.coordinator.error = True
         self.send(self.start_sender, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("BenchmarkActor received unknown message [%s] (ignoring).", (str(msg)))
+        self.logger.debug("BenchmarkActor received unknown message [%s] (ignoring).", (str(msg)))
 
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Setup(self, msg, sender):
@@ -230,7 +230,6 @@ class BenchmarkCoordinator:
             )
 
     def on_task_finished(self, new_metrics):
-        self.logger.info("Task has finished.")
         self.logger.info("Bulk adding request metrics to metrics store.")
         self.metrics_store.bulk_add(new_metrics)
 
@@ -285,7 +284,7 @@ def set_default_hosts(cfg, host="127.0.0.1", port=9200):
         logger.info("Using configured hosts %s", configured_hosts.default)
     else:
         logger.info("Setting default host to [%s:%d]", host, port)
-        default_host_object = opts.TargetHosts("{}:{}".format(host, port))
+        default_host_object = opts.TargetHosts(f"{host}:{port}")
         cfg.add(config.Scope.benchmark, "client", "hosts", default_host_object)
 
 

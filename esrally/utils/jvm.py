@@ -34,11 +34,11 @@ def supports_option(java_home, option):
     :param option: The JVM option or combination of JVM options (separated by spaces) to check.
     :return: True iff the provided ``option`` is supported on this JVM.
     """
-    return process.exit_status_as_bool(lambda: process.run_subprocess_with_logging("{} {} -version".format(_java(java_home), option)))
+    return process.exit_status_as_bool(lambda: process.run_subprocess_with_logging(f"{_java(java_home)} {option} -version"))
 
 
 def system_property(java_home, system_property_name):
-    lines = process.run_subprocess_with_output("{} -XshowSettings:properties -version".format(_java(java_home)))
+    lines = process.run_subprocess_with_output(f"{_java(java_home)} -XshowSettings:properties -version")
     # matches e.g. "    java.runtime.version = 1.8.0_121-b13" and captures "1.8.0_121-b13"
     sys_prop_pattern = re.compile(r".*%s.*=\s?(.*)" % system_property_name)
     for line in lines:
@@ -119,7 +119,7 @@ def resolve_path(majors, sysprop_reader=system_property):
             if java_home:
                 return major, java_home
         raise exceptions.SystemSetupError(
-            "Install a JDK with one of the versions {} and point to it with one of {}.".format(majors, _checked_env_vars(majors))
+            f"Install a JDK with one of the versions {majors} and point to it with one of {_checked_env_vars(majors)}."
         )
 
 
@@ -141,14 +141,14 @@ def _resolve_single_path(major, mandatory=True, sysprop_reader=system_property):
             if actual_major == major:
                 return java_v_home
             elif mandatory:
-                raise exceptions.SystemSetupError("{} points to JDK {} but it should point to JDK {}.".format(env_var, actual_major, major))
+                raise exceptions.SystemSetupError(f"{env_var} points to JDK {actual_major} but it should point to JDK {major}.")
             else:
                 return None
         else:
             return None
 
     # this has to be consistent with _checked_env_vars()
-    specific_env_var = "JAVA{}_HOME".format(major)
+    specific_env_var = f"JAVA{major}_HOME"
     generic_env_var = "JAVA_HOME"
     java_home = do_resolve(specific_env_var, major)
     if java_home:
@@ -158,9 +158,7 @@ def _resolve_single_path(major, mandatory=True, sysprop_reader=system_property):
         if java_home:
             return java_home
         elif mandatory:
-            raise exceptions.SystemSetupError(
-                "Neither {} nor {} point to a JDK {} installation.".format(specific_env_var, generic_env_var, major)
-            )
+            raise exceptions.SystemSetupError(f"Neither {specific_env_var} nor {generic_env_var} point to a JDK {major} installation.")
         else:
             return None
 
@@ -172,6 +170,6 @@ def _checked_env_vars(majors):
     :param majors: A list of major versions.
     :return: A list of checked environment variables.
     """
-    checked = ["JAVA{}_HOME".format(major) for major in majors]
+    checked = [f"JAVA{major}_HOME" for major in majors]
     checked.append("JAVA_HOME")
     return checked
