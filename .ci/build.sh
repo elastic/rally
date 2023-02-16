@@ -111,12 +111,6 @@ function install {
   make install
 }
 
-function precommit {
-  install
-  make precommit
-  make unit
-}
-
 function it38 {
   install
   make it38
