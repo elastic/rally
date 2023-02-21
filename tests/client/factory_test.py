@@ -322,7 +322,7 @@ class TestEsClientFactory:
     @mock.patch("esrally.client.asynchronous.RallyAsyncElasticsearch")
     def test_create_async_client_with_api_key_auth_override(self, es):
         hosts = [{"host": "localhost", "port": 9200}]
-        client_options = {"use_ssl": True, "verify_certs": True, "http_auth": ("user", "password"), "max_connections": 600}
+        client_options = {"use_ssl": True, "verify_certs": True, "http_auth": ("user", "password"), "max_connections": 600,}
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
         api_key = ("id", "secret")
