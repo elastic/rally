@@ -204,7 +204,16 @@ class EsClientFactory:
         port = self._config.opts("reporting", "datastore.port")
         secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
         user = self._config.opts("reporting", "datastore.user")
-        password = self._config.opts("reporting", "datastore.password")
+        try:
+            password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
+        except KeyError:
+            try:
+                password = self._config.opts("reporting", "datastore.password")
+            except exceptions.ConfigError:
+                raise exceptions.ConfigError(
+                    "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                ) from None
+
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
         self.probe_version = self._config.opts("reporting", "datastore.probe.cluster_version", default_value=True, mandatory=False)

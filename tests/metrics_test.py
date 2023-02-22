@@ -119,8 +119,9 @@ class TestEsClient:
         def __init__(self, hosts):
             self.transport = TestEsClient.TransportMock(hosts)
 
+    @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
     @mock.patch("esrally.client.EsClientFactory")
-    def test_config_opts_parsing(self, client_esclientfactory):
+    def test_config_opts_parsing(self, client_esclientfactory, password_configuration, monkeypatch):
         cfg = config.Config()
 
         _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
@@ -134,11 +135,27 @@ class TestEsClient:
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", _datastore_user)
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+
+        if password_configuration == "config":
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+        elif password_configuration == "environment":
+            monkeypatch.setenv("RALLY_REPORTING_DATASTORE_PASSWORD", _datastore_password)
+
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
-        metrics.EsClientFactory(cfg)
+        try:
+            metrics.EsClientFactory(cfg)
+        except exceptions.ConfigError as e:
+            if password_configuration is not None:
+                raise
+
+            assert (
+                e.message
+                == "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+            )
+            return
+
         expected_client_options = {
             "use_ssl": True,
             "timeout": 120,
