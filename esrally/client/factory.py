@@ -72,6 +72,7 @@ class EsClientFactory:
                 # order matters to avoid ValueError: check_hostname needs a SSL context with either CERT_OPTIONAL or CERT_REQUIRED
                 self.ssl_context.check_hostname = False
                 self.ssl_context.verify_mode = ssl.CERT_NONE
+                self.client_options["ssl_show_warn"] = False
 
                 self.logger.warning(
                     "User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a "
