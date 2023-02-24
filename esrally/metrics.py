@@ -32,7 +32,6 @@ import zlib
 from enum import Enum, IntEnum
 
 import tabulate
-from elasticsearch import ApiError, TransportError
 
 from esrally import client, config, exceptions, paths, time, version
 from esrally.utils import console, convert, io, versions
@@ -104,6 +103,7 @@ class EsClient:
     def guarded(self, target, *args, **kwargs):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+        from elastic_transport import ApiError, TransportError
 
         max_execution_count = 10
         execution_count = 0
