@@ -19,7 +19,6 @@ import logging
 import time
 
 import certifi
-import urllib3
 from urllib3.connection import is_ipaddress
 
 from esrally import doc_link, exceptions
@@ -75,13 +74,8 @@ class EsClientFactory:
                 self.client_options["ssl_show_warn"] = False
 
                 self.logger.warning(
-                    "User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a "
-                    "benchmark. Disabling urllib warnings now to avoid a logging storm. "
-                    "See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings for details."
+                    "User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark."
                 )
-                # disable:  "InsecureRequestWarning: Unverified HTTPS request is being made. Adding certificate verification is strongly \
-                # advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings"
-                urllib3.disable_warnings()
             else:
                 # check_hostname should not be set when host is an IP address
                 self.ssl_context.check_hostname = self._only_hostnames(hosts)
