@@ -14,10 +14,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import it
-from it import fresh_log_file
-
 import pytest
+
+import it
+
+# pylint: disable=unused-import
+from it import fresh_log_file
 
 
 @pytest.fixture(autouse=True)
