@@ -18,7 +18,7 @@
 import logging
 import os
 
-from elasticsearch import ApiError, TransportError
+from elastic_transport import ApiError, TransportError
 from jinja2 import Environment, FileSystemLoader
 
 from esrally import PROGRAM_NAME

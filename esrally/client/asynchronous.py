@@ -22,13 +22,13 @@ import warnings
 from typing import Any, Iterable, List, Mapping, Optional
 
 import aiohttp
-import elastic_transport
-import elasticsearch
 from aiohttp import BaseConnector, RequestInfo
 from aiohttp.client_proto import ResponseHandler
 from aiohttp.helpers import BaseTimerContext
 from elastic_transport import (
+    AiohttpHttpNode,
     ApiResponse,
+    AsyncTransport,
     BinaryApiResponse,
     HeadApiResponse,
     ListApiResponse,
@@ -36,6 +36,7 @@ from elastic_transport import (
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
+from elasticsearch import AsyncElasticsearch
 from elasticsearch._async.client import IlmClient
 from elasticsearch.compat import warn_stacklevel
 from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWarning
@@ -183,7 +184,7 @@ class ResponseMatcher:
                 return body
 
 
-class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
+class RallyAiohttpHttpNode(AiohttpHttpNode):
     def __init__(self, config):
         super().__init__(config)
         self._loop = None
@@ -235,7 +236,7 @@ class RallyAiohttpHttpNode(elastic_transport.AiohttpHttpNode):
         )
 
 
-class RallyAsyncTransport(elastic_transport.AsyncTransport):
+class RallyAsyncTransport(AsyncTransport):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, node_class=RallyAiohttpHttpNode, **kwargs)
 
@@ -251,7 +252,7 @@ class RallyIlmClient(IlmClient):
         return await IlmClient.put_lifecycle(self, **kwargs)
 
 
-class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
+class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
     def __init__(self, *args, **kwargs):
         distro = kwargs.pop("distro", None)
         super().__init__(*args, **kwargs)

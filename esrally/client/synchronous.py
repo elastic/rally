@@ -19,7 +19,6 @@ import re
 import warnings
 from typing import Any, Iterable, Mapping, Optional
 
-import elasticsearch
 from elastic_transport import (
     ApiResponse,
     BinaryApiResponse,
@@ -29,6 +28,7 @@ from elastic_transport import (
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
+from elasticsearch import Elasticsearch
 from elasticsearch.compat import warn_stacklevel
 from elasticsearch.exceptions import (
     HTTP_EXCEPTIONS,
@@ -120,7 +120,7 @@ class _ProductChecker:
         return True
 
 
-class RallySyncElasticsearch(elasticsearch.Elasticsearch):
+class RallySyncElasticsearch(Elasticsearch):
     def __init__(self, *args, **kwargs):
         distro = kwargs.pop("distro", None)
         super().__init__(*args, **kwargs)
@@ -140,7 +140,6 @@ class RallySyncElasticsearch(elasticsearch.Elasticsearch):
         headers: Optional[Mapping[str, str]] = None,
         body: Optional[Any] = None,
     ) -> ApiResponse[Any]:
-
         # We need to ensure that we provide content-type and accept headers
         if body is not None:
             if headers is None:
