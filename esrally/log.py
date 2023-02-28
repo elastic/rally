@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import copy
 import json
 import logging
 import logging.config
@@ -49,7 +48,6 @@ def add_missing_loggers_to_config():
     Ensures that any missing top level loggers in resources/logging.json are
     appended to an existing log configuration
     """
-    logger = logging.getLogger(__name__)
 
     def _missing_loggers(source, target):
         """
@@ -65,21 +63,18 @@ def add_missing_loggers_to_config():
         return missing_loggers
 
     source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
-    with open(log_config_path(), "r+", encoding="UTF-8") as target:
-        with open(source_path, "r", encoding="UTF-8") as src:
+
+    with open(log_config_path(), encoding="UTF-8") as target:
+        with open(source_path, encoding="UTF-8") as src:
             template = json.load(src)
             existing_logging_config = json.load(target)
-            existing_logging_config_copy = copy.deepcopy(existing_logging_config)
-            if missing_loggers := _missing_loggers(source=template["loggers"], target=existing_logging_config_copy["loggers"]):
-                logger.info(
-                    "Found loggers [%s] in source template that weren't present in the existing configuration, adding them.",
-                    str(missing_loggers),
-                )
+            if missing_loggers := _missing_loggers(source=template["loggers"], target=existing_logging_config["loggers"]):
                 existing_logging_config["loggers"].update(missing_loggers)
                 updated_config = json.dumps(existing_logging_config, indent=2)
-                target.seek(0)
-                target.write(updated_config)
-                target.truncate()
+
+    if missing_loggers:
+        with open(log_config_path(), "w", encoding="UTF-8") as target:
+            target.write(updated_config)
 
 
 def install_default_log_config():

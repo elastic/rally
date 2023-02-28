@@ -53,8 +53,3 @@ class TestLog:
             log.add_missing_loggers_to_config()
             handle = mock_file()
             handle.write.assert_called_once_with(expected_configuration)
-
-        assert (
-            "Found loggers [{'elastic_transport': {'handlers': ['rally_log_handler'], 'level': 'WARNING', 'propagate': "
-            "False}}] in source template that weren't present in the existing configuration, adding them." in caplog.text
-        )
