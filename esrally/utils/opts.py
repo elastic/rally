@@ -171,7 +171,8 @@ class TargetHosts(ConnectOptions):
 
         self.parse_options()
 
-    def _normalize_hosts(self, hosts):
+    @classmethod
+    def _normalize_hosts(cls, hosts):
         # pylint: disable=import-outside-toplevel
         from urllib.parse import unquote, urlparse
 
@@ -264,7 +265,6 @@ class ClientOptions(ConnectOptions):
 
     @staticmethod
     def normalize_to_dict(arg):
-
         """
         When --client-options is a non-json csv string (single cluster mode),
         return parsed client options as dict with "default" key
