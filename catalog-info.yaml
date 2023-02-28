@@ -24,7 +24,7 @@ spec:
   owner: group:es-perf
   lifecycle: production
   dependsOn:
-    - resource:marbi-buildkite-pipeline
+    - resource:rally-it-pipeline
 
 
 # Declare Rally's Buildkite pipeline.
