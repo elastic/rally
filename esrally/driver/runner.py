@@ -204,7 +204,6 @@ class Runner:
         # filter Nones
         return dict(filter(lambda kv: kv[1] is not None, full_result.items()))
 
-    # TODO: have this function call options() on the es instance?
     def _transport_request_params(self, params):
         request_params = params.get("request-params", {})
         request_timeout = params.get("request-timeout")
@@ -1703,8 +1702,7 @@ class CreateMlDatafeed(Runner):
         try:
             await es.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
         except elasticsearch.BadRequestError:
-            # TODO: when we drop support for Elasticsearch 6.8, all Datafeed classes
-            # will be able to stop using this _xpack path
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="PUT",
                 path=f"/_xpack/ml/datafeeds/{datafeed_id}",
@@ -1730,6 +1728,7 @@ class DeleteMlDatafeed(Runner):
             # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
             await es.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
         except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="DELETE",
                 path=f"/_xpack/ml/datafeeds/{datafeed_id}",
@@ -1757,6 +1756,7 @@ class StartMlDatafeed(Runner):
         try:
             await es.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
         except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="POST",
                 path=f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
@@ -1782,7 +1782,7 @@ class StopMlDatafeed(Runner):
         try:
             await es.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
         except elasticsearch.BadRequestError:
-            # fallback to old path (ES < 7)
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             request_params = {
                 "force": escape(force),
             }
@@ -1812,7 +1812,7 @@ class CreateMlJob(Runner):
         try:
             await es.ml.put_job(job_id=job_id, body=body)
         except elasticsearch.BadRequestError:
-            # fallback to old path (ES < 7)
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="PUT",
                 path=f"/_xpack/ml/anomaly_detectors/{job_id}",
@@ -1838,7 +1838,7 @@ class DeleteMlJob(Runner):
         try:
             await es.ml.delete_job(job_id=job_id, force=force, ignore=[404])
         except elasticsearch.BadRequestError:
-            # fallback to old path (ES < 7)
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="DELETE",
                 path=f"/_xpack/ml/anomaly_detectors/{job_id}",
@@ -1862,7 +1862,7 @@ class OpenMlJob(Runner):
         try:
             await es.ml.open_job(job_id=job_id)
         except elasticsearch.BadRequestError:
-            # fallback to old path (ES < 7)
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="POST",
                 path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
@@ -1887,7 +1887,7 @@ class CloseMlJob(Runner):
         try:
             await es.ml.close_job(job_id=job_id, force=force, timeout=timeout)
         except elasticsearch.BadRequestError:
-            # fallback to old path (ES < 7)
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             request_params = {
                 "force": escape(force),
             }
