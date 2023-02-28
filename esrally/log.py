@@ -57,7 +57,7 @@ def add_missing_loggers_to_config():
 
     source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
     with open(log_config_path(), "r+", encoding="UTF-8") as target:
-        with open(source_path, "r+", encoding="UTF-8") as src:
+        with open(source_path, "r", encoding="UTF-8") as src:
             template = json.load(src)
             existing_logging_config = json.load(target)
             existing_logging_config_copy = copy.deepcopy(existing_logging_config)
