@@ -51,18 +51,18 @@ def add_missing_loggers_to_config():
     """
     logger = logging.getLogger(__name__)
 
-    def missing_keys(source, target):
+    def _missing_loggers(source, target):
         """
-        Returns any top-level dicts present in 'source', but not in 'target'
-        :return: A dict of all keys present in 'source', but not in 'target'
+        Returns any top-level loggers present in 'source', but not in 'target'
+        :return: A dict of all loggers present in 'source', but not in 'target'
         """
-        missing_keys = {}
-        for k in source:
-            if k in source and k in target:
+        missing_loggers = {}
+        for logger in source:
+            if logger in source and logger in target:
                 continue
             else:
-                missing_keys[k] = source[k]
-        return missing_keys
+                missing_loggers[logger] = source[logger]
+        return missing_loggers
 
     source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
     with open(log_config_path(), "r+", encoding="UTF-8") as target:
@@ -70,7 +70,7 @@ def add_missing_loggers_to_config():
             template = json.load(src)
             existing_logging_config = json.load(target)
             existing_logging_config_copy = copy.deepcopy(existing_logging_config)
-            if missing_loggers := missing_keys(source=template["loggers"], target=existing_logging_config_copy["loggers"]):
+            if missing_loggers := _missing_loggers(source=template["loggers"], target=existing_logging_config_copy["loggers"]):
                 logger.info(
                     "Found loggers [%s] in source template that weren't present in the existing configuration, adding them.",
                     str(missing_loggers),
