@@ -243,6 +243,10 @@ class RallyAsyncTransport(AsyncTransport):
 
 class RallyIlmClient(IlmClient):
     async def put_lifecycle(self, *args, **kwargs):
+        """
+        The 'elasticsearch-py' 8.x method signature renames the 'policy' param to 'name', and the previously so-called
+        'body' param becomes 'policy'
+        """
         if args:
             kwargs["name"] = args[0]
 
