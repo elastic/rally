@@ -156,6 +156,19 @@ class RallySyncElasticsearch(Elasticsearch):
         else:
             request_headers = self._headers
 
+        if self._verified_elasticsearch is None:
+            info = self.transport.perform_request(method="GET", target="/", headers=request_headers)
+            info_meta = info.meta
+            info_body = info.body
+
+            if not 200 <= info_meta.status < 299:
+                raise HTTP_EXCEPTIONS.get(info_meta.status, ApiError)(message=str(info_body), meta=info_meta, body=info_body)
+
+            self._verified_elasticsearch = _ProductChecker.check_product(info_meta.headers, info_body)
+
+            if self._verified_elasticsearch is not True:
+                _ProductChecker.raise_error(self._verified_elasticsearch, info_meta, info_body)
+
         # Converts all parts of a Accept/Content-Type headers
         # from application/X -> application/vnd.elasticsearch+X
         # see https://github.com/elastic/elasticsearch/issues/51816
@@ -200,15 +213,6 @@ class RallySyncElasticsearch(Elasticsearch):
                     pass
 
             raise HTTP_EXCEPTIONS.get(meta.status, ApiError)(message=message, meta=meta, body=resp_body)
-
-        if self._verified_elasticsearch is None:
-            info = self.transport.perform_request(method="GET", target="/", headers=request_headers)
-            info_meta = info.meta
-            info_body = info.body
-            self._verified_elasticsearch = _ProductChecker.check_product(info_meta.headers, info_body)
-
-            if self._verified_elasticsearch is not True:
-                _ProductChecker.raise_error(self._verified_elasticsearch, info_meta, info_body)
 
         # 'Warning' headers should be reraised as 'ElasticsearchWarning'
         if "warning" in meta.headers:
