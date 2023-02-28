@@ -52,8 +52,17 @@ def add_missing_loggers_to_config():
     logger = logging.getLogger(__name__)
 
     def missing_keys(source, target):
-        """Returns any top-level dicts present in 'source', but not in 'target'"""
-        return set(source.keys()).difference(target.keys())
+        """
+        Returns any top-level dicts present in 'source', but not in 'target'
+        :return: A dict of all keys present in 'source', but not in 'target'
+        """
+        missing_keys = {}
+        for k in source:
+            if k in source and k in target:
+                continue
+            else:
+                missing_keys[k] = source[k]
+        return missing_keys
 
     source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
     with open(log_config_path(), "r+", encoding="UTF-8") as target:
