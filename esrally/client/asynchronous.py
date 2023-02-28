@@ -254,14 +254,14 @@ class RallyIlmClient(IlmClient):
 
 class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
     def __init__(self, *args, **kwargs):
-        distro = kwargs.pop("distro", None)
+        distribution_version = kwargs.pop("distribution_version", None)
         super().__init__(*args, **kwargs)
         # skip verification at this point; we've already verified this earlier with the synchronous client.
         # The async client is used in the hot code path and we use customized overrides (such as that we don't
         # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
         self._verified_elasticsearch = True
-        if distro:
-            self.distribution_version = versions.Version.from_string(distro)
+        if distribution_version:
+            self.distribution_version = versions.Version.from_string(distribution_version)
         else:
             self.distribution_version = None
 

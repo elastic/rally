@@ -341,7 +341,7 @@ class TestEsClientFactory:
         assert client_options == original_client_options
 
         es.assert_called_once_with(
-            distro=None,
+            distribution_version=None,
             hosts=["https://localhost:9200"],
             transport_class=RallyAsyncTransport,
             ssl_context=f.ssl_context,

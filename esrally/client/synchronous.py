@@ -122,12 +122,12 @@ class _ProductChecker:
 
 class RallySyncElasticsearch(Elasticsearch):
     def __init__(self, *args, **kwargs):
-        distro = kwargs.pop("distro", None)
+        distribution_version = kwargs.pop("distribution_version", None)
         super().__init__(*args, **kwargs)
         self._verified_elasticsearch = None
 
-        if distro:
-            self.distribution_version = versions.Version.from_string(distro)
+        if distribution_version:
+            self.distribution_version = versions.Version.from_string(distribution_version)
         else:
             self.distribution_version = None
 

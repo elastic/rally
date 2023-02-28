@@ -181,7 +181,7 @@ class EsClientFactory:
         from esrally.client.synchronous import RallySyncElasticsearch
 
         return RallySyncElasticsearch(
-            distro=self.distribution_version, hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options
+            distribution_version=self.distribution_version, hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options
         )
 
     def create_async(self, api_key=None):
@@ -225,7 +225,7 @@ class EsClientFactory:
             self.client_options["api_key"] = api_key
 
         async_client = RallyAsyncElasticsearch(
-            distro=self.distribution_version,
+            distribution_version=self.distribution_version,
             hosts=self.hosts,
             transport_class=RallyAsyncTransport,
             ssl_context=self.ssl_context,
