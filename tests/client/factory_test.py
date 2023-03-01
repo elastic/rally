@@ -471,9 +471,14 @@ class TestRestLayer:
     # don't sleep in realtime
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_dont_retry_eternally_on_transport_errors(self, es, sleep):
+    def test_dont_retry_eternally_on_api_errors(self, es, sleep):
         es.cluster.health.side_effect = _api_error(401, "Unauthorized")
-        assert not client.wait_for_rest_layer(es, max_attempts=3)
+        es.transport.node_pool = ["node_1"]
+        with pytest.raises(elasticsearch.ApiError, match=r"Unauthorized"):
+            client.wait_for_rest_layer(es, max_attempts=3)
+        es.cluster.health.assert_has_calls(
+            [mock.call(wait_for_nodes=">=1"), mock.call(wait_for_nodes=">=1"), mock.call(wait_for_nodes=">=1")]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_ssl_serialization_error(self, es):

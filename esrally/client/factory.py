@@ -256,7 +256,9 @@ def wait_for_rest_layer(es, max_attempts=40):
     # but this is still better than just checking for any random node's REST API being reachable.
     expected_node_count = len(es.transport.node_pool)
     logger = logging.getLogger(__name__)
-    for attempt in range(max_attempts):
+    attempt = 0
+    while attempt <= max_attempts:
+        attempt += 1
         # pylint: disable=import-outside-toplevel
         from elastic_transport import (
             ApiError,
@@ -278,8 +280,11 @@ def wait_for_rest_layer(es, max_attempts=40):
                     "Rally sent an HTTP request to an HTTPS server. Are you sure this is an HTTP endpoint?", e
                 )
 
-            logger.debug("Got serialization error [%s] on attempt [%s]. Sleeping...", e, attempt)
-            time.sleep(3)
+            if attempt <= max_attempts:
+                logger.debug("Got serialization error [%s] on attempt [%s]. Sleeping...", e, attempt)
+                time.sleep(3)
+            else:
+                raise
         except TlsError as e:
             raise exceptions.SystemSetupError("Could not connect to cluster via HTTPS. Are you sure this is an HTTPS endpoint?", e)
         except ConnectionError as e:
@@ -288,19 +293,25 @@ def wait_for_rest_layer(es, max_attempts=40):
                     "Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?", e
                 )
 
-            logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
-            time.sleep(3)
+            if attempt <= max_attempts:
+                logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
+                time.sleep(3)
+            else:
+                raise
         except TransportError as e:
-            logger.debug("Got transport error on attempt [%s]. Sleeping...", attempt)
-            time.sleep(3)
+            if attempt <= max_attempts:
+                logger.debug("Got transport error on attempt [%s]. Sleeping...", attempt)
+                time.sleep(3)
+            else:
+                raise
         except ApiError as e:
             # cluster block, x-pack not initialized yet, our wait condition is not reached
-            if e.status_code in (503, 401, 408):
+            if e.status_code in (503, 401, 408) and attempt <= max_attempts:
                 logger.debug("Got status code [%s] on attempt [%s]. Sleeping...", e.message, attempt)
                 time.sleep(3)
             else:
                 logger.warning("Got unexpected status code [%s] on attempt [%s].", e.message, attempt)
-                raise e
+                raise
     return False
 
 
