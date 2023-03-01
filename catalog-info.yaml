@@ -51,6 +51,7 @@ spec:
       name: Rally
       description:  Macrobenchmarking framework for Elasticsearch
     spec:
+      pipeline_file: .buildkite/it/pipeline.yml
       repository: elastic/rally
       teams:
         elasticsearch-team: {}
