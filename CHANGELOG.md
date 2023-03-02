@@ -1,3 +1,43 @@
+### 2.7.1
+
+#### Highlights
+
+* [#1674](https://github.com/elastic/rally/pull/1674): Allow reading metrics password from environment
+* [#1624](https://github.com/elastic/rally/pull/1624): Skip building plugins moved to modules
+
+#### Enhancements
+
+* [#1654](https://github.com/elastic/rally/pull/1654): Add role metadata to node-stats telemetry device
+* [#1649](https://github.com/elastic/rally/pull/1649): Allow specifying --installation-id in esrally install
+* [#1643](https://github.com/elastic/rally/pull/1643): Skip response parsing for raw requests
+* [#1637](https://github.com/elastic/rally/pull/1637): Build Rally binary using PyOxidizer
+* [#1630](https://github.com/elastic/rally/pull/1630): Add delay and duration parameters to jfr telmetry device
+* [#1623](https://github.com/elastic/rally/pull/1623): Support Python 3.11
+* [#1619](https://github.com/elastic/rally/pull/1619): Add shard data to search operation's detailed-results meta-data
+* [#1618](https://github.com/elastic/rally/pull/1618): Support meta-data for composite tasks
+* [#1610](https://github.com/elastic/rally/pull/1610): Support specifying user tags as json
+
+#### Bug Fixes
+
+* [#1645](https://github.com/elastic/rally/pull/1645): Fix --to-date option for list subcommand
+* [#1640](https://github.com/elastic/rally/pull/1640): Pass plugin-params also for modules
+* [#1638](https://github.com/elastic/rally/pull/1638): Don't use --short when retrieving revisions from git
+
+#### Doc Changes
+
+* [#1666](https://github.com/elastic/rally/pull/1666): Document bulk behavior with multiple clients/documents
+* [#1648](https://github.com/elastic/rally/pull/1648): Fix broken links on the command line reference docs
+* [#1641](https://github.com/elastic/rally/pull/1641): Mention jq is required for development
+* [#1613](https://github.com/elastic/rally/pull/1613): Document Track Processor Interface
+* [#1605](https://github.com/elastic/rally/pull/1605): Update list of available tracks
+
+#### Miscellaneous Changes
+
+* [#1659](https://github.com/elastic/rally/pull/1659): Simplify create_readers
+* [#1615](https://github.com/elastic/rally/pull/1615): Print errors when --quiet is used
+* [#1611](https://github.com/elastic/rally/pull/1611): Use newer ssl parameter in aiohttp client API
+* [#1607](https://github.com/elastic/rally/pull/1607): Cut down on the amount of INFO-level logging
+
 ### 2.7.0
 
 #### Highlights
