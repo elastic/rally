@@ -2053,32 +2053,15 @@ class WaitForCurrentSnapshotsCreate(Runner):
         wait_period = params.get("completion-recheck-wait-period", 1)
         es_info = await es.info()
         es_version = Version.from_string(es_info["version"]["number"])
-        api = es.snapshot.get
         request_args = {"repository": repository, "snapshot": "_current", "verbose": False}
 
         # significantly reduce response size when lots of snapshots have been taken
         # only available since ES 8.3.0 (https://github.com/elastic/elasticsearch/pull/86269)
         if (es_version.major, es_version.minor) >= (8, 3):
-            request_params, headers = self._transport_request_params(params)
-            headers["Content-Type"] = "application/json"
-
-            request_params["index_names"] = "false"
-            request_params["verbose"] = "false"
-
-            request_args = {
-                "method": "GET",
-                "path": f"_snapshot/{repository}/_current",
-                "headers": headers,
-                "params": request_params,
-            }
-
-            # TODO: Switch to native es.snapshot.get once `index_names` becomes supported in
-            #       `es.snapshot.get` of the elasticsearch-py client and we've upgraded the client in Rally, see:
-            #       https://elasticsearch-py.readthedocs.io/en/latest/api.html#elasticsearch.client.SnapshotClient.get
-            api = es.perform_request
+            request_args["index_names"] = False
 
         while True:
-            response = await api(**request_args)
+            response = await es.snapshot.get(**request_args)
 
             if int(response.get("total")) == 0:
                 break

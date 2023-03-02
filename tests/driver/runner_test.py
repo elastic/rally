@@ -4159,7 +4159,7 @@ class TestWaitForCurrentSnapshotsCreate:
             "completion-recheck-wait-period": 0,
         }
 
-        es.perform_request = mock.AsyncMock(
+        es.snapshot.get = mock.AsyncMock(
             side_effect=[
                 {
                     "snapshots": [
@@ -4202,14 +4202,9 @@ class TestWaitForCurrentSnapshotsCreate:
         r = runner.WaitForCurrentSnapshotsCreate()
         result = await r(es, task_params)
 
-        es.perform_request.assert_awaited_with(
-            method="GET",
-            path=f"_snapshot/{repository}/_current",
-            headers={"Content-Type": "application/json"},
-            params={"index_names": "false", "verbose": "false"},
-        )
+        es.snapshot.get.assert_awaited_with(repository=repository, snapshot="_current", verbose=False, index_names=False)
 
-        assert es.perform_request.await_count == 2
+        assert es.snapshot.get.await_count == 2
 
         assert result is None
 
