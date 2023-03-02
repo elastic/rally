@@ -319,7 +319,6 @@ class ElasticsearchInstaller:
             "transport_port": str(self.http_port + 100),
             "all_node_ips": '["%s"]' % '","'.join(self.all_node_ips),
             "all_node_names": '["%s"]' % '","'.join(self.all_node_names),
-            "all_node_ips_count": len(self.all_node_ips),
             # at the moment we are strict and enforce that all nodes are master eligible nodes
             "minimum_master_nodes": len(self.all_node_ips),
             "install_root_path": self.es_home_path,
