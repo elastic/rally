@@ -16,6 +16,7 @@
 # under the License.
 
 import time
+from unittest import mock
 
 import esrally.time
 
@@ -36,30 +37,20 @@ class TestTime:
         total_time = stop_watch.total_time()
         assert prev_split_time <= total_time
 
-    def test_total_time_roughly_in_expected_range(self):
-        wait_period_seconds = 0.05
-        acceptable_delta_seconds = 0.03
-
+    @mock.patch("esrally.time.StopWatch._now", side_effect=[1, 2])
+    def test_total_time_roughly_in_expected_range(self, mock_now):
         stop_watch = esrally.time.Clock.stop_watch()
         stop_watch.start()
-        time.sleep(wait_period_seconds)
         stop_watch.stop()
 
         interval = stop_watch.total_time()
-        # depending on scheduling accuracy we should end up somewhere in that range
-        assert interval >= wait_period_seconds - acceptable_delta_seconds
-        assert interval <= wait_period_seconds + acceptable_delta_seconds
+        assert mock_now.call_count == 2
+        assert interval == 2 - 1
 
-    def test_millis_conversion_roughly_in_expected_range(self):
-        wait_period_millis = 50
-        acceptable_delta_millis = 30
-
+    @mock.patch("esrally.time.Clock.now", side_effect=[1, 2])
+    def test_millis_conversion_roughly_in_expected_range(self, mock_now):
         start = esrally.time.to_epoch_millis(esrally.time.Clock.now())
-        time.sleep(wait_period_millis / 1000.0)
         end = esrally.time.to_epoch_millis(esrally.time.Clock.now())
 
-        interval_millis = end - start
-
-        # depending on scheduling accuracy we should end up somewhere in that range
-        assert interval_millis >= wait_period_millis - acceptable_delta_millis
-        assert interval_millis <= wait_period_millis + acceptable_delta_millis
+        assert end - start == 2000 - 1000
+        assert mock_now.call_count == 2

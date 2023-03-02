@@ -367,7 +367,7 @@ class TestSegmentStats:
         # pylint: disable=unnecessary-dunder-call
         file_mock.assert_has_calls(
             [
-                call("/var/log/segment_stats.log", "wt"),
+                call("/var/log/segment_stats.log", "w"),
                 call().__enter__(),
                 call().write(stats_response),
                 call().__exit__(None, None, None),

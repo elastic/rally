@@ -78,7 +78,7 @@ def create(cfg, sources, distribution, car, plugins=None):
     dist_cfg.update(car.variables)
     for plugin in plugins:
         for k, v in plugin.variables.items():
-            dist_cfg["plugin_{}_{}".format(plugin.name, k)] = v
+            dist_cfg[f"plugin_{plugin.name}_{k}"] = v
     # ... but the user can override it in rally.ini
     dist_cfg.update(cfg.all_opts("distributions"))
 
@@ -437,7 +437,7 @@ class ElasticsearchSourceSupplier:
         path = os.path.join(src_dir, ".ci", "java-versions.properties")
         major_version = None
         try:
-            with open(path, "rt", encoding="UTF-8") as f:
+            with open(path, encoding="UTF-8") as f:
                 for line in f.readlines():
                     if "ES_BUILD_JAVA" in line:
                         java_version = line.split("=")[1].lstrip().rstrip("\n")
@@ -528,7 +528,7 @@ class ExternalPluginSourceSupplier:
 
     def prepare(self):
         if self.builder:
-            command = _config_value(self.src_config, "plugin.{}.build.command".format(self.plugin.name))
+            command = _config_value(self.src_config, f"plugin.{self.plugin.name}.build.command")
             build_cmd = f"export JAVA_HOME={self.builder.java_home}; cd {self.override_build_dir}; {command}"
             self.builder.build([build_cmd])
 
@@ -564,7 +564,7 @@ class CorePluginSourceSupplier:
     def prepare(self):
         if self.builder:
             self.builder.build_jdk = ElasticsearchSourceSupplier.resolve_build_jdk_major(self.es_src_dir)
-            self.builder.build(["./gradlew :plugins:{}:assemble".format(self.plugin.name)])
+            self.builder.build([f"./gradlew :plugins:{self.plugin.name}:assemble"])
 
     def add(self, binaries):
         binaries[self.plugin.name] = self.resolve_binary()
@@ -769,18 +769,18 @@ class Builder:
         log_file = os.path.join(self.log_dir, "build.log")
 
         # we capture all output to a dedicated build log file
-        build_cmd = "export JAVA_HOME={}; cd {}; {} >> {} 2>&1".format(self.java_home, src_dir, command, log_file)
+        build_cmd = f"export JAVA_HOME={self.java_home}; cd {src_dir}; {command} >> {log_file} 2>&1"
         console.info("Creating installable binary from source files")
         self.logger.info("Running build command [%s]", build_cmd)
 
         if process.run_subprocess(build_cmd):
-            msg = "Executing '{}' failed. The last 20 lines in the build log file are:\n".format(command)
+            msg = f"Executing '{command}' failed. The last 20 lines in the build log file are:\n"
             msg += "=========================================================================================================\n"
-            with open(log_file, "r", encoding="utf-8") as f:
+            with open(log_file, encoding="utf-8") as f:
                 msg += "\t"
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"
-            msg += "The full build log is available at [{}].".format(log_file)
+            msg += f"The full build log is available at [{log_file}]."
 
             raise BuildError(msg)
 
@@ -867,7 +867,7 @@ class DockerBuilder:
         if completion["StatusCode"] != 0:
             msg = f"Executing '{container_name}' failed. The last 20 lines in the build.log file are:\n"
             msg += "=========================================================================================================\n"
-            with open(self.log_file, "r", encoding="utf-8") as f:
+            with open(self.log_file, encoding="utf-8") as f:
                 msg += "\t"
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"
@@ -953,11 +953,11 @@ class DistributionRepository:
     def download_url(self):
         # team repo
         if self.runtime_jdk_bundled:
-            default_key = "jdk.bundled.{}_url".format(self.name)
+            default_key = f"jdk.bundled.{self.name}_url"
         else:
-            default_key = "jdk.unbundled.{}_url".format(self.name)
+            default_key = f"jdk.unbundled.{self.name}_url"
         # rally.ini
-        override_key = "{}.url".format(self.name)
+        override_key = f"{self.name}.url"
         return self._url_for(override_key, default_key)
 
     @property
@@ -967,9 +967,9 @@ class DistributionRepository:
 
     def plugin_download_url(self, plugin_name):
         # team repo
-        default_key = "plugin_{}_{}_url".format(plugin_name, self.name)
+        default_key = f"plugin_{plugin_name}_{self.name}_url"
         # rally.ini
-        override_key = "plugin.{}.{}.url".format(plugin_name, self.name)
+        override_key = f"plugin.{plugin_name}.{self.name}.url"
         return self._url_for(override_key, default_key, mandatory=False)
 
     def _url_for(self, user_defined_key, default_key, mandatory=True):
@@ -980,13 +980,13 @@ class DistributionRepository:
                 url_template = self.cfg[default_key]
         except KeyError:
             if mandatory:
-                raise exceptions.SystemSetupError("Neither config key [{}] nor [{}] is defined.".format(user_defined_key, default_key))
+                raise exceptions.SystemSetupError(f"Neither config key [{user_defined_key}] nor [{default_key}] is defined.")
             return None
         return self.template_renderer.render(url_template)
 
     @property
     def cache(self):
-        k = "{}.cache".format(self.name)
+        k = f"{self.name}.cache"
         try:
             raw_value = self.cfg[k]
         except KeyError:

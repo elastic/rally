@@ -107,8 +107,6 @@ serve-docs: check-venv
 test: check-venv
 	. $(VENV_ACTIVATE_FILE); pytest tests/
 
-precommit: lint
-
 unit: check-venv python-caches-clean tox-env-clean
 	. $(VENV_ACTIVATE_FILE); tox -e py38-unit
 	. $(VENV_ACTIVATE_FILE); tox -e py310-unit

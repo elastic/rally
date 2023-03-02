@@ -987,7 +987,7 @@ class TestCreateSupplier:
         assert len(composite_supplier.suppliers) == 1
         assert isinstance(composite_supplier.suppliers[0], supplier.ElasticsearchDistributionSupplier)
 
-    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
+    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, f"/opt/java/java{v}"))
     def test_create_suppliers_for_es_distribution_plugin_source_build(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "distribution.version", "6.0.0")
@@ -1021,7 +1021,7 @@ class TestCreateSupplier:
         assert composite_supplier.suppliers[2].source_supplier.plugin == external_plugin
         assert composite_supplier.suppliers[2].source_supplier.builder is not None
 
-    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
+    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, f"/opt/java/java{v}"))
     def test_create_suppliers_skips_plugins_converted_to_modules(self, caplog):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "source.revision", "current")
@@ -1047,7 +1047,7 @@ class TestCreateSupplier:
             assert f"Plugin [{p.name}] is now an Elasticsearch module and no longer needs to be built from source." in caplog.messages
             assert p not in composite_supplier.suppliers
 
-    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, "/opt/java/java{}".format(v)))
+    @mock.patch("esrally.utils.jvm.resolve_path", lambda v: (v, f"/opt/java/java{v}"))
     def test_create_suppliers_for_es_and_plugin_source_build(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "mechanic", "source.revision", "elasticsearch:abc,community-plugin:current")

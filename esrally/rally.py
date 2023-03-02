@@ -66,7 +66,7 @@ def create_arg_parser():
             # don't convert, just check that the format is correct, we'll use the string value later on anyway
             return v
         except ValueError:
-            msg = "[{}] does not conform to the pattern [yyyyMMdd]".format(v)
+            msg = f"[{v}] does not conform to the pattern [yyyyMMdd]"
             raise argparse.ArgumentTypeError(msg)
 
     def positive_number(v):
@@ -127,7 +127,7 @@ def create_arg_parser():
     parser = argparse.ArgumentParser(
         prog=PROGRAM_NAME,
         description=BANNER + "\n\n You Know, for Benchmarking Elasticsearch.",
-        epilog="Find out more about Rally at {}".format(console.format.link(doc_link())),
+        epilog=f"Find out more about Rally at {console.format.link(doc_link())}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
