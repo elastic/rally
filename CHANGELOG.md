@@ -10,9 +10,7 @@
 * [#1654](https://github.com/elastic/rally/pull/1654): Add role metadata to node-stats telemetry device
 * [#1649](https://github.com/elastic/rally/pull/1649): Allow specifying --installation-id in esrally install
 * [#1643](https://github.com/elastic/rally/pull/1643): Skip response parsing for raw requests
-* [#1637](https://github.com/elastic/rally/pull/1637): Build Rally binary using PyOxidizer
 * [#1630](https://github.com/elastic/rally/pull/1630): Add delay and duration parameters to jfr telmetry device
-* [#1623](https://github.com/elastic/rally/pull/1623): Support Python 3.11
 * [#1619](https://github.com/elastic/rally/pull/1619): Add shard data to search operation's detailed-results meta-data
 * [#1618](https://github.com/elastic/rally/pull/1618): Support meta-data for composite tasks
 * [#1610](https://github.com/elastic/rally/pull/1610): Support specifying user tags as json
