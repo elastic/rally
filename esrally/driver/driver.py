@@ -28,6 +28,7 @@ import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
+from io import BytesIO
 from typing import Callable
 
 import thespian.actors
@@ -597,13 +598,16 @@ class Driver:
 
     def create_es_clients(self):
         all_hosts = self.config.opts("client", "hosts").all_hosts
+        distribution_version = self.config.opts("mechanic", "distribution.version", mandatory=False)
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
             all_client_options = self.config.opts("client", "options").all_client_options
             cluster_client_options = dict(all_client_options[cluster_name])
             # Use retries to avoid aborts on long living connections for telemetry devices
-            cluster_client_options["retry-on-timeout"] = True
-            es[cluster_name] = self.es_client_factory(cluster_hosts, cluster_client_options).create()
+            cluster_client_options["retry_on_timeout"] = True
+            es[cluster_name] = self.es_client_factory(
+                cluster_hosts, cluster_client_options, distribution_version=distribution_version
+            ).create()
         return es
 
     def prepare_telemetry(self, es, enable, index_names, data_stream_names):
@@ -1728,12 +1732,14 @@ class AsyncIoAdapter:
         self.logger.error("Uncaught exception in event loop: %s", context)
 
     async def run(self):
-        def es_clients(client_id, all_hosts, all_client_options):
+        def es_clients(client_id, all_hosts, all_client_options, distribution_version):
             es = {}
             context = self.client_contexts.get(client_id)
             api_key = context.api_key
             for cluster_name, cluster_hosts in all_hosts.items():
-                es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async(api_key=api_key)
+                es[cluster_name] = client.EsClientFactory(
+                    cluster_hosts, all_client_options[cluster_name], distribution_version=distribution_version
+                ).create_async(api_key=api_key)
             return es
 
         if self.assertions_enabled:
@@ -1750,7 +1756,12 @@ class AsyncIoAdapter:
                 param_source = track.operation_parameters(self.track, task)
                 params_per_task[task] = param_source
             schedule = schedule_for(task_allocation, params_per_task[task])
-            es = es_clients(client_id, self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options"))
+            es = es_clients(
+                client_id,
+                self.cfg.opts("client", "hosts").all_hosts,
+                self.cfg.opts("client", "options"),
+                self.cfg.opts("mechanic", "distribution.version", mandatory=False),
+            )
             clients.append(es)
             async_executor = AsyncExecutor(
                 client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.abort_on_error)
@@ -1981,20 +1992,47 @@ async def execute_single(runner, es, params, on_error):
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {"success": False, "error-type": "transport"}
-        # The ES client will sometimes return string like "N/A" or "TIMEOUT" for connection errors.
-        if isinstance(e.status_code, int):
-            request_meta_data["http-status"] = e.status_code
+        # For the 'errors' attribute, errors are ordered from
+        # most recently raised (index=0) to least recently raised (index=N)
+        #
+        # If an HTTP status code is available with the error it
+        # will be stored under 'status'. If HTTP headers are available
+        # they are stored under 'headers'.
+        if e.errors:
+            if hasattr(e.errors[0], "status"):
+                request_meta_data["http-status"] = e.errors[0].status
         # connection timeout errors don't provide a helpful description
         if isinstance(e, elasticsearch.ConnectionTimeout):
             request_meta_data["error-description"] = "network connection timed out"
-        elif e.info:
-            request_meta_data["error-description"] = f"{e.error} ({e.info})"
         else:
-            if isinstance(e.error, bytes):
-                error_description = e.error.decode("utf-8")
-            else:
-                error_description = str(e.error)
+            error_description = e.message
             request_meta_data["error-description"] = error_description
+    except elasticsearch.ApiError as e:
+        total_ops = 0
+        total_ops_unit = "ops"
+        request_meta_data = {"success": False, "error-type": "api"}
+
+        if isinstance(e.error, bytes):
+            error_message = e.error.decode("utf-8")
+        elif isinstance(e.error, BytesIO):
+            error_message = e.error.read().decode("utf-8")
+        else:
+            error_message = e.error
+
+        if isinstance(e.info, bytes):
+            error_body = e.info.decode("utf-8")
+        elif isinstance(e.info, BytesIO):
+            error_body = e.info.read().decode("utf-8")
+        else:
+            error_body = e.info
+
+        if error_body:
+            error_message += f" ({error_body})"
+        error_description = error_message
+
+        request_meta_data["error-description"] = error_description
+        if e.status_code:
+            request_meta_data["http-status"] = e.status_code
     except KeyError as e:
         logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters.", str(runner))
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
