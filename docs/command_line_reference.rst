@@ -765,31 +765,34 @@ Define a JSON file containing a list of objects with the following properties:
 
 * ``path``: A path or path pattern that should be matched. Only leading and trailing wildcards (``*``) are supported. A path containing only a wildcard acts matches any path.
 * ``body``: The respective response body.
+* ``body-encoding``: Either ``raw`` or ``json``. Use ``json`` by default and ``raw`` for the operation-type ``bulk`` and ``search``.
 
 Here we define the necessary responses for a track that bulk-indexes data::
 
     [
       {
-        "path": "/_cluster/settings",
-        "body": {
-          "transient": {
-              "action.destructive_requires_name": "true"
-          }
-        }
-      },
-      {
         "path": "*/_bulk",
         "body": {
           "errors": false,
           "took": 1
-        }
+        },
+        "body-encoding": "raw"
       },
       {
         "path": "/_cluster/health*",
         "body": {
           "status": "green",
           "relocating_shards": 0
-        }
+        },
+        "body-encoding": "json"
+      },
+      {
+        "path": "/_cluster/settings",
+        "body": {
+          "persistent": {},
+          "transient": {}
+        },
+        "body-encoding": "json"
       },
       {
         "path": "/_all/_stats/_all",
@@ -801,11 +804,13 @@ Here we define the necessary responses for a track that bulk-indexes data::
               }
             }
           }
-        }
+        },
+        "body-encoding": "json"
       },
       {
         "path": "*",
-        "body": {}
+        "body": {},
+        "body-encoding": "json"
       }
     ]
 

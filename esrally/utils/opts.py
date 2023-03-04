@@ -171,51 +171,6 @@ class TargetHosts(ConnectOptions):
 
         self.parse_options()
 
-    @classmethod
-    def _normalize_hosts(cls, hosts):
-        # pylint: disable=import-outside-toplevel
-        from urllib.parse import unquote, urlparse
-
-        string_types = str, bytes
-        # if hosts are empty, just defer to defaults down the line
-        if hosts is None:
-            return [{}]
-
-        # passed in just one string
-        if isinstance(hosts, string_types):
-            hosts = [hosts]
-
-        out = []
-        # normalize hosts to dicts
-        for host in hosts:
-            if isinstance(host, string_types):
-                if "://" not in host:
-                    host = "//%s" % host
-
-                parsed_url = urlparse(host)
-                h = {"host": parsed_url.hostname}
-
-                if parsed_url.port:
-                    h["port"] = parsed_url.port
-
-                if parsed_url.scheme == "https":
-                    h["port"] = parsed_url.port or 443
-                    h["use_ssl"] = True
-
-                if parsed_url.username or parsed_url.password:
-                    h["http_auth"] = "%s:%s" % (
-                        unquote(parsed_url.username),
-                        unquote(parsed_url.password),
-                    )
-
-                if parsed_url.path and parsed_url.path != "/":
-                    h["url_prefix"] = parsed_url.path
-
-                out.append(h)
-            else:
-                out.append(host)
-        return out
-
     def parse_options(self):
         def normalize_to_dict(arg):
             """
@@ -223,14 +178,12 @@ class TargetHosts(ConnectOptions):
             This is needed to support backwards compatible --target-hosts for single clusters that are not
             defined as a json string or file.
             """
-            return {TargetHosts.DEFAULT: self._normalize_hosts(arg)}
+            # pylint: disable=import-outside-toplevel
+            from elasticsearch.client import _normalize_hosts
 
-        parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
-        p_opts_copy = parsed_options.copy()
-        for cluster_name, nodes in p_opts_copy.items():
-            parsed_options[cluster_name] = self._normalize_hosts(nodes)
+            return {TargetHosts.DEFAULT: _normalize_hosts(arg)}
 
-        self.parsed_options = parsed_options
+        self.parsed_options = to_dict(self.argvalue, default_parser=normalize_to_dict)
 
     @property
     def all_hosts(self):
@@ -265,6 +218,7 @@ class ClientOptions(ConnectOptions):
 
     @staticmethod
     def normalize_to_dict(arg):
+
         """
         When --client-options is a non-json csv string (single cluster mode),
         return parsed client options as dict with "default" key

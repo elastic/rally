@@ -43,40 +43,6 @@ def log_config_path():
     return os.path.join(paths.rally_confdir(), "logging.json")
 
 
-def add_missing_loggers_to_config():
-    """
-    Ensures that any missing top level loggers in resources/logging.json are
-    appended to an existing log configuration
-    """
-
-    def _missing_loggers(source, target):
-        """
-        Returns any top-level loggers present in 'source', but not in 'target'
-        :return: A dict of all loggers present in 'source', but not in 'target'
-        """
-        missing_loggers = {}
-        for logger in source:
-            if logger in source and logger in target:
-                continue
-            else:
-                missing_loggers[logger] = source[logger]
-        return missing_loggers
-
-    source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
-
-    with open(log_config_path(), encoding="UTF-8") as target:
-        with open(source_path, encoding="UTF-8") as src:
-            template = json.load(src)
-            existing_logging_config = json.load(target)
-            if missing_loggers := _missing_loggers(source=template["loggers"], target=existing_logging_config["loggers"]):
-                existing_logging_config["loggers"].update(missing_loggers)
-                updated_config = json.dumps(existing_logging_config, indent=2)
-
-    if missing_loggers:
-        with open(log_config_path(), "w", encoding="UTF-8") as target:
-            target.write(updated_config)
-
-
 def install_default_log_config():
     """
     Ensures a log configuration file is present on this machine. The default
@@ -97,7 +63,6 @@ def install_default_log_config():
                 log_path = io.escape_path(log_path)
                 contents = src.read().replace("${LOG_PATH}", log_path)
                 target.write(contents)
-    add_missing_loggers_to_config()
     io.ensure_dir(paths.logs())
 
 

@@ -24,12 +24,10 @@ import math
 import random
 from unittest import mock
 
-import elastic_transport
 import elasticsearch
 import pytest
 
 from esrally import client, exceptions
-from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.driver import runner
 
 
@@ -1297,7 +1295,7 @@ class TestForceMergeRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_force_merge_with_polling(self, es):
-        es.indices.forcemerge = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
+        es.indices.forcemerge = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout())
         es.tasks.list = mock.AsyncMock(
             side_effect=[
                 {
@@ -1344,7 +1342,7 @@ class TestForceMergeRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_force_merge_with_polling_and_params(self, es):
-        es.indices.forcemerge = mock.AsyncMock(return_value=elasticsearch.ConnectionTimeout("connection timeout"))
+        es.indices.forcemerge = mock.AsyncMock(return_value=elasticsearch.ConnectionTimeout())
         es.tasks.list = mock.AsyncMock(
             side_effect=[
                 {
@@ -1645,7 +1643,7 @@ class TestQueryRunner:
         es.perform_request.assert_awaited_once_with(
             method="GET",
             path="/_all/_search",
-            params={"request_cache": "true"},
+            params={"request_timeout": 3.0, "request_cache": "true"},
             body=params["body"],
             headers={"header1": "value1", "x-opaque-id": "test-id1"},
         )
@@ -2206,7 +2204,7 @@ class TestQueryRunner:
         }
 
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
-        es.clear_scroll = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
+        es.clear_scroll = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout())
 
         query_runner = runner.Query()
 
@@ -2728,7 +2726,7 @@ class TestDeleteIndexRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_existing_indices(self, es):
-        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete = mock.AsyncMock()
         es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
         es.cluster.put_settings = mock.AsyncMock()
@@ -2793,7 +2791,7 @@ class TestDeleteDataStreamRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_existing_data_streams(self, es):
-        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete_data_stream = mock.AsyncMock()
 
         r = runner.DeleteDataStream()
@@ -2923,7 +2921,7 @@ class TestDeleteIndexTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.exists_template = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get_template = mock.AsyncMock(side_effect=[False, True])
         es.indices.delete_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
 
@@ -3053,8 +3051,8 @@ class TestDeleteComponentTemplateRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_deletes_only_existing_component_templates(self, es):
-        es.cluster.exists_component_template = mock.AsyncMock(side_effect=[False, True])
+    async def test_deletes_only_existing_index_templates(self, es):
+        es.cluster.get_component_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.cluster.delete_component_template = mock.AsyncMock()
 
         r = runner.DeleteComponentTemplate()
@@ -3214,7 +3212,7 @@ class TestDeleteComposableTemplateRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.exists_index_template = mock.AsyncMock(side_effect=[False, True])
+        es.indices.get_index_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
         es.indices.delete_index_template = mock.AsyncMock()
 
         r = runner.DeleteComposableTemplate()
@@ -3273,8 +3271,7 @@ class TestCreateMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
         body = {"job_id": "total-requests", "indices": ["server-metrics"]}
@@ -3303,8 +3300,7 @@ class TestDeleteMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        es.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
 
         es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
@@ -3337,8 +3333,7 @@ class TestStartMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_body_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.perform_request = mock.AsyncMock()
         body = {"end": "now"}
         params = {"datafeed-id": "some-data-feed", "body": body}
@@ -3386,8 +3381,7 @@ class TestStopMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_stop_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         params = {
@@ -3438,8 +3432,7 @@ class TestCreateMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         body = {
@@ -3481,8 +3474,7 @@ class TestDeleteMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -3513,8 +3505,7 @@ class TestOpenMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_open_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -3545,8 +3536,7 @@ class TestCloseMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_close_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         params = {
@@ -3766,7 +3756,7 @@ class TestCreateSnapshotRepository:
         await r(es, params)
 
         es.snapshot.create_repository.assert_called_once_with(
-            name="backups", body={"type": "fs", "settings": {"location": "/var/backups"}}, params={}
+            repository="backups", body={"type": "fs", "settings": {"location": "/var/backups"}}, params={}
         )
 
 
@@ -4159,7 +4149,7 @@ class TestWaitForCurrentSnapshotsCreate:
             "completion-recheck-wait-period": 0,
         }
 
-        es.snapshot.get = mock.AsyncMock(
+        es.perform_request = mock.AsyncMock(
             side_effect=[
                 {
                     "snapshots": [
@@ -4202,9 +4192,14 @@ class TestWaitForCurrentSnapshotsCreate:
         r = runner.WaitForCurrentSnapshotsCreate()
         result = await r(es, task_params)
 
-        es.snapshot.get.assert_awaited_with(repository=repository, snapshot="_current", verbose=False, index_names=False)
+        es.perform_request.assert_awaited_with(
+            method="GET",
+            path=f"_snapshot/{repository}/_current",
+            headers={"Content-Type": "application/json"},
+            params={"index_names": "false", "verbose": "false"},
+        )
 
-        assert es.snapshot.get.await_count == 2
+        assert es.perform_request.await_count == 2
 
         assert result is None
 
@@ -5097,6 +5092,7 @@ class TestTransformStatsRunner:
 
 
 class TestCreateIlmPolicyRunner:
+
     params = {
         "policy-name": "my-ilm-policy",
         "request-params": {"master_timeout": "30s", "timeout": "30s"},
@@ -5121,12 +5117,7 @@ class TestCreateIlmPolicyRunner:
         }
 
         es.ilm.put_lifecycle.assert_awaited_once_with(
-            name=self.params["policy-name"],
-            policy=self.params["body"]["policy"],
-            master_timeout=self.params["request-params"].get("master_timeout"),
-            timeout=self.params["request-params"].get("timeout"),
-            error_trace=None,
-            filter_path=None,
+            policy=self.params["policy-name"], body=self.params["body"], params=self.params["request-params"]
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -5143,33 +5134,11 @@ class TestCreateIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.put_lifecycle.assert_awaited_once_with(
-            name=params["policy-name"],
-            policy=self.params["body"]["policy"],
-            master_timeout=None,
-            timeout=None,
-            error_trace=None,
-            filter_path=None,
-        )
-
-    @mock.patch("esrally.client.asynchronous.IlmClient")
-    @pytest.mark.asyncio
-    async def test_RallyIlmClient_rewrites_kwargs(self, es_ilm):
-        es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
-        es_ilm.put_lifecycle = mock.AsyncMock(return_value={})
-
-        # simulating a custom runner that hasn't been refactored
-        # to suit the new 'elasticsearch-py' 8.x kwarg only method signature
-        await es.ilm.put_lifecycle("test-name", body=self.params["body"])
-
-        es_ilm.put_lifecycle.assert_awaited_once_with(
-            es.ilm,
-            policy=self.params["body"]["policy"],
-            name="test-name",
-        )
+        es.ilm.put_lifecycle.assert_awaited_once_with(policy=params["policy-name"], body=params["body"], params={})
 
 
 class TestDeleteIlmPolicyRunner:
+
     params = {"policy-name": "my-ilm-policy", "request-params": {"master_timeout": "30s", "timeout": "30s"}}
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -5184,13 +5153,7 @@ class TestDeleteIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.delete_lifecycle.assert_awaited_once_with(
-            name=self.params["policy-name"],
-            master_timeout=self.params["request-params"].get("master_timeout"),
-            timeout=self.params["request-params"].get("timeout"),
-            error_trace=None,
-            filter_path=None,
-        )
+        es.ilm.delete_lifecycle.assert_awaited_once_with(policy=self.params["policy-name"], params=self.params["request-params"])
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -5206,13 +5169,7 @@ class TestDeleteIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.delete_lifecycle.assert_awaited_once_with(
-            name=self.params["policy-name"],
-            master_timeout=None,
-            timeout=None,
-            error_trace=None,
-            filter_path=None,
-        )
+        es.ilm.delete_lifecycle.assert_awaited_once_with(policy=params["policy-name"], params={})
 
 
 class TestSqlRunner:
@@ -6792,10 +6749,10 @@ class TestRetry:
     async def test_retries_on_timeout_if_wanted_and_raises_if_no_recovery(self):
         delegate = mock.AsyncMock(
             side_effect=[
-                elasticsearch.ConnectionError(message="no route to host"),
-                elasticsearch.ConnectionError(message="no route to host"),
-                elasticsearch.ConnectionError(message="no route to host"),
-                elasticsearch.ConnectionError(message="no route to host"),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
             ]
         )
         es = None
@@ -6819,7 +6776,7 @@ class TestRetry:
 
         delegate = mock.AsyncMock(
             side_effect=[
-                elasticsearch.ConnectionError(message="no route to host"),
+                elasticsearch.ConnectionError("N/A", "no route to host"),
                 failed_return_value,
             ]
         )
@@ -6841,7 +6798,7 @@ class TestRetry:
 
     @pytest.mark.asyncio
     async def test_retries_mixed_timeout_and_application_errors(self):
-        connection_error = elasticsearch.ConnectionError(message="no route to host")
+        connection_error = elasticsearch.ConnectionError("N/A", "no route to host")
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": False}
 
