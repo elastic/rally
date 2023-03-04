@@ -18,34 +18,18 @@
 import asyncio
 import json
 import logging
-import warnings
-from typing import Any, Iterable, List, Mapping, Optional
+from typing import List, Optional
 
 import aiohttp
+import elasticsearch
 from aiohttp import BaseConnector, RequestInfo
 from aiohttp.client_proto import ResponseHandler
 from aiohttp.helpers import BaseTimerContext
-from elastic_transport import (
-    AiohttpHttpNode,
-    ApiResponse,
-    AsyncTransport,
-    BinaryApiResponse,
-    HeadApiResponse,
-    ListApiResponse,
-    ObjectApiResponse,
-    TextApiResponse,
-)
-from elastic_transport.client_utils import DEFAULT
-from elasticsearch import AsyncElasticsearch
-from elasticsearch._async.client import IlmClient
-from elasticsearch.compat import warn_stacklevel
-from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWarning
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from esrally.client.common import _WARNING_RE, _mimetype_header_to_compat, _quote_query
 from esrally.client.context import RequestContextHolder
-from esrally.utils import io, versions
+from esrally.utils import io
 
 
 class StaticTransport:
@@ -57,9 +41,6 @@ class StaticTransport:
 
     def close(self):
         self.closed = True
-
-    def abort(self):
-        self.close()
 
 
 class StaticConnector(BaseConnector):
@@ -125,8 +106,21 @@ class StaticResponse(aiohttp.ClientResponse):
         self.status = 200
         return self
 
-    async def read(self):
-        return self.static_body.encode("utf-8")
+    async def text(self, encoding=None, errors="strict"):
+        return self.static_body
+
+
+class RawClientResponse(aiohttp.ClientResponse):
+    """
+    Returns the body as bytes object (instead of a str) to avoid decoding overhead.
+    """
+
+    async def text(self, encoding=None, errors="strict"):
+        """Read response payload and decode."""
+        if self._body is None:
+            await self.read()
+
+        return self._body
 
 
 class ResponseMatcher:
@@ -145,7 +139,14 @@ class ResponseMatcher:
             else:
                 matcher = ResponseMatcher.equals(path)
 
-            body = json.dumps(response["body"])
+            body = response["body"]
+            body_encoding = response.get("body-encoding", "json")
+            if body_encoding == "raw":
+                body = json.dumps(body).encode("utf-8")
+            elif body_encoding == "json":
+                body = json.dumps(body)
+            else:
+                raise ValueError(f"Unknown body encoding [{body_encoding}] for path [{path}]")
 
             self.responses.append((path, matcher, body))
 
@@ -184,192 +185,94 @@ class ResponseMatcher:
                 return body
 
 
-class RallyAiohttpHttpNode(AiohttpHttpNode):
-    def __init__(self, config):
-        super().__init__(config)
-        self._loop = None
-        self.trace_configs = None
-        self.enable_cleanup_closed = None
-        self._static_responses = None
-        self._request_class = aiohttp.ClientRequest
-        self._response_class = aiohttp.ClientResponse
+class AIOHttpConnection(elasticsearch.AIOHttpConnection):
+    def __init__(
+        self,
+        host="localhost",
+        port=None,
+        http_auth=None,
+        use_ssl=False,
+        ssl_assert_fingerprint=None,
+        headers=None,
+        ssl_context=None,
+        http_compress=None,
+        cloud_id=None,
+        api_key=None,
+        opaque_id=None,
+        loop=None,
+        trace_config=None,
+        **kwargs,
+    ):
+        super().__init__(
+            host=host,
+            port=port,
+            http_auth=http_auth,
+            use_ssl=use_ssl,
+            ssl_assert_fingerprint=ssl_assert_fingerprint,
+            # provided to the base class via `maxsize` to keep base class state consistent despite Rally
+            # calling the attribute differently.
+            maxsize=kwargs.get("max_connections", 0),
+            headers=headers,
+            ssl_context=ssl_context,
+            http_compress=http_compress,
+            cloud_id=cloud_id,
+            api_key=api_key,
+            opaque_id=opaque_id,
+            loop=loop,
+            **kwargs,
+        )
 
-    @property
-    def static_responses(self):
-        return self._static_responses
+        self._trace_configs = [trace_config] if trace_config else None
+        self._enable_cleanup_closed = kwargs.get("enable_cleanup_closed", True)
 
-    @static_responses.setter
-    def static_responses(self, static_responses):
-        self._static_responses = static_responses
-        if self._static_responses:
+        static_responses = kwargs.get("static_responses")
+        self.use_static_responses = static_responses is not None
+
+        if self.use_static_responses:
             # read static responses once and reuse them
             if not StaticRequest.RESPONSES:
-                with open(io.normalize_path(self._static_responses)) as f:
+                with open(io.normalize_path(static_responses)) as f:
                     StaticRequest.RESPONSES = ResponseMatcher(json.load(f))
 
             self._request_class = StaticRequest
             self._response_class = StaticResponse
+        else:
+            self._request_class = aiohttp.ClientRequest
+            self._response_class = RawClientResponse
 
-    def _create_aiohttp_session(self):
-        if self._loop is None:
-            self._loop = asyncio.get_running_loop()
+    async def _create_aiohttp_session(self):
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
 
-        if self._static_responses:
-            connector = StaticConnector(limit_per_host=self._connections_per_node, enable_cleanup_closed=self.enable_cleanup_closed)
+        if self.use_static_responses:
+            connector = StaticConnector(limit=self._limit, enable_cleanup_closed=self._enable_cleanup_closed)
         else:
             connector = aiohttp.TCPConnector(
-                limit_per_host=self._connections_per_node,
-                use_dns_cache=True,
-                ssl=self._ssl_context,
-                enable_cleanup_closed=self.enable_cleanup_closed,
+                limit=self._limit, use_dns_cache=True, ssl=self._ssl_context, enable_cleanup_closed=self._enable_cleanup_closed
             )
 
         self.session = aiohttp.ClientSession(
             headers=self.headers,
             auto_decompress=True,
-            loop=self._loop,
+            loop=self.loop,
             cookie_jar=aiohttp.DummyCookieJar(),
             request_class=self._request_class,
             response_class=self._response_class,
             connector=connector,
-            trace_configs=self.trace_configs,
+            trace_configs=self._trace_configs,
         )
 
 
-class RallyAsyncTransport(AsyncTransport):
+class VerifiedAsyncTransport(elasticsearch.AsyncTransport):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, node_class=RallyAiohttpHttpNode, **kwargs)
-
-
-class RallyIlmClient(IlmClient):
-    async def put_lifecycle(self, *args, **kwargs):
-        """
-        The 'elasticsearch-py' 8.x method signature renames the 'policy' param to 'name', and the previously so-called
-        'body' param becomes 'policy'
-        """
-        if args:
-            kwargs["name"] = args[0]
-
-        if body := kwargs.pop("body", None):
-            kwargs["policy"] = body.get("policy", {})
-        # pylint: disable=missing-kwoa
-        return await IlmClient.put_lifecycle(self, **kwargs)
-
-
-class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
-    def __init__(self, *args, **kwargs):
-        distribution_version = kwargs.pop("distribution_version", None)
         super().__init__(*args, **kwargs)
         # skip verification at this point; we've already verified this earlier with the synchronous client.
         # The async client is used in the hot code path and we use customized overrides (such as that we don't
         # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
         self._verified_elasticsearch = True
-        if distribution_version:
-            self.distribution_version = versions.Version.from_string(distribution_version)
-        else:
-            self.distribution_version = None
 
-        # some ILM method signatures changed in 'elasticsearch-py' 8.x,
-        # so we override method(s) here to provide BWC for any custom
-        # runners that aren't using the new kwargs
-        self.ilm = RallyIlmClient(self)
 
-    async def perform_request(
-        self,
-        method: str,
-        path: str,
-        *,
-        params: Optional[Mapping[str, Any]] = None,
-        headers: Optional[Mapping[str, str]] = None,
-        body: Optional[Any] = None,
-    ) -> ApiResponse[Any]:
-        # We need to ensure that we provide content-type and accept headers
-        if body is not None:
-            if headers is None:
-                headers = {"content-type": "application/json", "accept": "application/json"}
-            else:
-                if headers.get("content-type") is None:
-                    headers["content-type"] = "application/json"
-                if headers.get("accept") is None:
-                    headers["accept"] = "application/json"
-
-        if headers:
-            request_headers = self._headers.copy()
-            request_headers.update(headers)
-        else:
-            request_headers = self._headers
-
-        # Converts all parts of a Accept/Content-Type headers
-        # from application/X -> application/vnd.elasticsearch+X
-        # see https://github.com/elastic/elasticsearch/issues/51816
-        if self.distribution_version is not None and self.distribution_version >= versions.Version.from_string("8.0.0"):
-            _mimetype_header_to_compat("Accept", request_headers)
-            _mimetype_header_to_compat("Content-Type", request_headers)
-
-        if params:
-            target = f"{path}?{_quote_query(params)}"
-        else:
-            target = path
-
-        meta, resp_body = await self.transport.perform_request(
-            method,
-            target,
-            headers=request_headers,
-            body=body,
-            request_timeout=self._request_timeout,
-            max_retries=self._max_retries,
-            retry_on_status=self._retry_on_status,
-            retry_on_timeout=self._retry_on_timeout,
-            client_meta=self._client_meta,
-        )
-
-        # HEAD with a 404 is returned as a normal response
-        # since this is used as an 'exists' functionality.
-        if not (method == "HEAD" and meta.status == 404) and (
-            not 200 <= meta.status < 299
-            and (self._ignore_status is DEFAULT or self._ignore_status is None or meta.status not in self._ignore_status)
-        ):
-            message = str(resp_body)
-
-            # If the response is an error response try parsing
-            # the raw Elasticsearch error before raising.
-            if isinstance(resp_body, dict):
-                try:
-                    error = resp_body.get("error", message)
-                    if isinstance(error, dict) and "type" in error:
-                        error = error["type"]
-                    message = error
-                except (ValueError, KeyError, TypeError):
-                    pass
-
-            raise HTTP_EXCEPTIONS.get(meta.status, ApiError)(message=message, meta=meta, body=resp_body)
-
-        # 'Warning' headers should be reraised as 'ElasticsearchWarning'
-        if "warning" in meta.headers:
-            warning_header = (meta.headers.get("warning") or "").strip()
-            warning_messages: Iterable[str] = _WARNING_RE.findall(warning_header) or (warning_header,)
-            stacklevel = warn_stacklevel()
-            for warning_message in warning_messages:
-                warnings.warn(
-                    warning_message,
-                    category=ElasticsearchWarning,
-                    stacklevel=stacklevel,
-                )
-
-        if method == "HEAD":
-            response = HeadApiResponse(meta=meta)
-        elif isinstance(resp_body, dict):
-            response = ObjectApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        elif isinstance(resp_body, list):
-            response = ListApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        elif isinstance(resp_body, str):
-            response = TextApiResponse(  # type: ignore[assignment]
-                body=resp_body,
-                meta=meta,
-            )
-        elif isinstance(resp_body, bytes):
-            response = BinaryApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        else:
-            response = ApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-
-        return response
+class RallyAsyncElasticsearch(elasticsearch.AsyncElasticsearch, RequestContextHolder):
+    def perform_request(self, *args, **kwargs):
+        kwargs["url"] = kwargs.pop("path")
+        return self.transport.perform_request(*args, **kwargs)

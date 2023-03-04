@@ -47,11 +47,6 @@
       "handlers": ["rally_profile_handler"],
       "level": "INFO",
       "propagate": false
-    },
-    "elastic_transport": {
-      "handlers": ["rally_log_handler"],
-      "level": "WARNING",
-      "propagate": false
     }
   }
 }

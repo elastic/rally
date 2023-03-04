@@ -24,7 +24,6 @@ import random
 import string
 import tempfile
 import uuid
-from dataclasses import dataclass
 from unittest import mock
 
 import elasticsearch.exceptions
@@ -84,28 +83,37 @@ class StaticStopWatch:
         return 0
 
 
+class TransportErrors:
+    err_return_codes = {
+        502: "Bad Gateway",
+        503: "Service Unavailable",
+        504: "Gateway Timeout",
+        429: "Too Many Requests",
+    }
+
+    def __init__(self, max_err_responses=10):
+        self.max_err_responses = max_err_responses
+        # allow duplicates in list of error codes
+        self.rnd_err_codes = [random.choice(list(TransportErrors.err_return_codes)) for _ in range(self.max_err_responses)]
+
+    @property
+    def code_list(self):
+        return self.rnd_err_codes
+
+    @property
+    def side_effects(self):
+        side_effect_list = [
+            elasticsearch.exceptions.TransportError(rnd_code, TransportErrors.err_return_codes[rnd_code]) for rnd_code in self.rnd_err_codes
+        ]
+        side_effect_list.append("success")
+
+        return side_effect_list
+
+
 class TestEsClient:
-    class NodeMock:
-        def __init__(self, host, port):
-            self.host = host
-            self.port = port
-
-    class NodePoolMock:
-        def __init__(self, hosts):
-            self.nodes = []
-            for h in hosts:
-                self.nodes.append(TestEsClient.NodeMock(host=h["host"], port=h["port"]))
-
-        def get(self):
-            return self.nodes[0]
-
     class TransportMock:
         def __init__(self, hosts):
-            self.node_pool = TestEsClient.NodePoolMock(hosts)
-
-    @dataclass
-    class ApiResponseMeta:
-        status: int
+            self.hosts = hosts
 
     class ClientMock:
         def __init__(self, hosts):
@@ -160,110 +168,22 @@ class TestEsClient:
             hosts=[{"host": _datastore_host, "port": _datastore_port}], client_options=expected_client_options
         )
 
-    @mock.patch("random.random")
-    @mock.patch("esrally.time.sleep")
-    def test_retries_on_various_errors(self, mocked_sleep, mocked_random, caplog):
-        class ConnectionError:
-            def logging_statements(self, retries):
-                logging_statements = []
-                for i, v in enumerate(range(retries)):
-                    logging_statements.append(
-                        "Connection error [%s] in attempt [%d/%d]. Sleeping for [%f] seconds."
-                        % (
-                            "unit-test",
-                            i + 1,
-                            max_retry,
-                            sleep_slots[v],
-                        )
-                    )
-                logging_statements.append(
-                    "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [127.0.0.1] at "
-                    f"port [9200] or fix the configuration in [{paths.rally_confdir()}/rally.ini]."
-                )
-                return logging_statements
-
-            def raise_error(self):
-                raise elasticsearch.exceptions.ConnectionError("unit-test")
-
-        class ConnectionTimeout:
-            def logging_statements(self, retries):
-                logging_statements = []
-                for i, v in enumerate(range(retries)):
-                    logging_statements.append(
-                        "Connection timeout [%s] in attempt [%d/%d]. Sleeping for [%f] seconds."
-                        % (
-                            "unit-test",
-                            i + 1,
-                            max_retry,
-                            sleep_slots[v],
-                        )
-                    )
-                logging_statements.append(f"Connection timeout while running [raise_error] (retried {retries} times).")
-                return logging_statements
-
-            def raise_error(self):
-                raise elasticsearch.exceptions.ConnectionTimeout("unit-test")
-
-        class ApiError:
-            def __init__(self, status_code):
-                self.status_code = status_code
-
-            def logging_statements(self, retries):
-                logging_statements = []
-                for i, v in enumerate(range(retries)):
-                    logging_statements.append(
-                        "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds."
-                        % (
-                            "unit-test",
-                            self.status_code,
-                            i + 1,
-                            max_retry,
-                            sleep_slots[v],
-                        )
-                    )
-                logging_statements.append(
-                    "An error [unit-test] occurred while running the operation [raise_error] against your Elasticsearch "
-                    "metrics store on host [127.0.0.1] at port [9200]."
-                )
-                return logging_statements
-
-            def raise_error(self):
-                err = elasticsearch.exceptions.ApiError("unit-test", meta=TestEsClient.ApiResponseMeta(status=self.status_code), body={})
-                raise err
-
-        retriable_errors = [ApiError(429), ApiError(502), ApiError(503), ApiError(504), ConnectionError(), ConnectionTimeout()]
-
-        max_retry = 10
-
-        # The sec to sleep for 10 transport errors is
-        # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
-        sleep_slots = [float(2**i) for i in range(0, max_retry)]
-
-        # we want deterministic timings to assess logging statements
-        mocked_random.return_value = 0
+    def test_raises_sytem_setup_error_on_connection_problems(self):
+        def raise_connection_error():
+            raise elasticsearch.exceptions.ConnectionError("unit-test")
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9200"}]))
 
-        exepcted_logger_calls = []
-        expected_sleep_calls = []
-
-        for e in retriable_errors:
-            exepcted_logger_calls += e.logging_statements(max_retry)
-            expected_sleep_calls += [mock.call(int(sleep_slots[i])) for i in range(0, max_retry)]
-
-            with pytest.raises(exceptions.RallyError):
-                with caplog.at_level(logging.DEBUG):
-                    client.guarded(e.raise_error)
-
-        actual_logger_calls = [r.message for r in caplog.records]
-        actual_sleep_calls = mocked_sleep.call_args_list
-
-        assert actual_sleep_calls == expected_sleep_calls
-        assert actual_logger_calls == exepcted_logger_calls
+        with pytest.raises(exceptions.SystemSetupError) as ctx:
+            client.guarded(raise_connection_error)
+        assert ctx.value.args[0] == (
+            "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [127.0.0.1] at "
+            f"port [9200] or fix the configuration in [{paths.rally_confdir()}/rally.ini]."
+        )
 
     def test_raises_sytem_setup_error_on_authentication_problems(self):
         def raise_authentication_error():
-            raise elasticsearch.exceptions.AuthenticationException(meta=None, body=None, message="unit-test")
+            raise elasticsearch.exceptions.AuthenticationException("unit-test")
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -276,7 +196,7 @@ class TestEsClient:
 
     def test_raises_sytem_setup_error_on_authorization_problems(self):
         def raise_authorization_error():
-            raise elasticsearch.exceptions.AuthorizationException(meta=None, body=None, message="unit-test")
+            raise elasticsearch.exceptions.AuthorizationException("unit-test")
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -290,15 +210,77 @@ class TestEsClient:
 
     def test_raises_rally_error_on_unknown_problems(self):
         def raise_unknown_error():
-            exc = elasticsearch.exceptions.TransportError(message="unit-test")
-            raise exc
+            raise elasticsearch.exceptions.SerializationError("unit-test")
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
         with pytest.raises(exceptions.RallyError) as ctx:
             client.guarded(raise_unknown_error)
         assert ctx.value.args[0] == (
-            "Transport error(s) [unit-test] occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
+            "An unknown error occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
+            "store on host [127.0.0.1] at port [9243]."
+        )
+
+    def test_retries_on_various_transport_errors(self):
+        @mock.patch("random.random")
+        @mock.patch("esrally.time.sleep")
+        def test_transport_error_retries(side_effect, expected_logging_calls, expected_sleep_calls, mocked_sleep, mocked_random):
+            # should return on first success
+            operation = mock.Mock(side_effect=side_effect)
+
+            # Disable additional randomization time in exponential backoff calls
+            mocked_random.return_value = 0
+
+            client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+            logger = logging.getLogger("esrally.metrics")
+            with mock.patch.object(logger, "debug") as mocked_debug_logger:
+                test_result = client.guarded(operation)
+                mocked_sleep.assert_has_calls(expected_sleep_calls)
+                mocked_debug_logger.assert_has_calls(expected_logging_calls, any_order=True)
+                assert test_result == "success"
+
+        max_retry = 10
+        all_err_codes = TransportErrors.err_return_codes
+        transport_errors = TransportErrors(max_err_responses=max_retry)
+        rnd_err_codes = transport_errors.code_list
+        rnd_side_effects = transport_errors.side_effects
+        rnd_mocked_logger_calls = []
+
+        # The sec to sleep for 10 transport errors is
+        # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
+        sleep_slots = [float(2**i) for i in range(0, max_retry)]
+        mocked_sleep_calls = [mock.call(sleep_slots[i]) for i in range(0, max_retry)]
+
+        for rnd_err_idx, rnd_err_code in enumerate(rnd_err_codes):
+            # List of logger.debug calls to expect
+            rnd_mocked_logger_calls.append(
+                mock.call(
+                    "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                    all_err_codes[rnd_err_code],
+                    rnd_err_code,
+                    rnd_err_idx + 1,
+                    max_retry + 1,
+                    sleep_slots[rnd_err_idx],
+                )
+            )
+        # pylint: disable=no-value-for-parameter
+        test_transport_error_retries(rnd_side_effects, rnd_mocked_logger_calls, mocked_sleep_calls)
+
+    @mock.patch("esrally.time.sleep")
+    def test_fails_after_too_many_errors(self, mocked_sleep):
+        def random_transport_error(rnd_resp_code):
+            raise elasticsearch.exceptions.TransportError(rnd_resp_code, TransportErrors.err_return_codes[rnd_resp_code])
+
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        rnd_code = random.choice(list(TransportErrors.err_return_codes))
+
+        with pytest.raises(exceptions.RallyError) as ctx:
+            client.guarded(random_transport_error, rnd_code)
+
+        assert ctx.value.args[0] == (
+            "A transport error occurred while running the operation "
+            "[random_transport_error] against your Elasticsearch metrics "
             "store on host [127.0.0.1] at port [9243]."
         )
 

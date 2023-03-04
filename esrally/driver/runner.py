@@ -730,7 +730,7 @@ class NodeStats(Runner):
 
     async def __call__(self, es, params):
         request_timeout = params.get("request-timeout")
-        await es.options(request_timeout=request_timeout).nodes.stats(metric="_all")
+        await es.nodes.stats(metric="_all", request_timeout=request_timeout)
 
     def __repr__(self, *args, **kwargs):
         return "node-stats"
@@ -848,9 +848,6 @@ class Query(Runner):
 
     async def __call__(self, es, params):
         request_params, headers = self._transport_request_params(params)
-        request_timeout = request_params.pop("request_timeout", None)
-        if request_timeout is not None:
-            es.options(request_timeout=request_timeout)
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
@@ -1398,10 +1395,15 @@ class DeleteIndex(Runner):
                 if not only_if_exists:
                     await es.indices.delete(index=index_name, params=request_params)
                     ops += 1
-                elif only_if_exists and await es.indices.exists(index=index_name):
-                    self.logger.info("Index [%s] already exists. Deleting it.", index_name)
-                    await es.indices.delete(index=index_name, params=request_params)
-                    ops += 1
+                elif only_if_exists:
+                    # here we use .get() and check for 404 instead of exists due to a bug in some versions
+                    # of elasticsearch-py/elastic-transport with HEAD calls.
+                    # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                    get_response = await es.indices.get(index=index_name, ignore=[404])
+                    if not get_response.get("status") == 404:
+                        self.logger.info("Index [%s] already exists. Deleting it.", index_name)
+                        await es.indices.delete(index=index_name, params=request_params)
+                        ops += 1
         finally:
             await set_destructive_requires_name(es, prior_destructive_setting)
         return {
@@ -1430,10 +1432,15 @@ class DeleteDataStream(Runner):
             if not only_if_exists:
                 await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
                 ops += 1
-            elif only_if_exists and await es.indices.exists(index=data_stream):
-                self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
-                await es.indices.delete_data_stream(name=data_stream, params=request_params)
-                ops += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                get_response = await es.indices.get(index=data_stream, ignore=[404])
+                if not get_response.get("status") == 404:
+                    self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
+                    await es.indices.delete_data_stream(name=data_stream, params=request_params)
+                    ops += 1
 
         return {
             "weight": ops,
@@ -1482,10 +1489,15 @@ class DeleteComponentTemplate(Runner):
             if not only_if_exists:
                 await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.cluster.exists_component_template(name=template_name):
-                self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
-                await es.cluster.delete_component_template(name=template_name, params=request_params)
-                ops_count += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists_component_template due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                component_template_exists = await es.cluster.get_component_template(name=template_name, ignore=[404])
+                if not component_template_exists.get("status") == 404:
+                    self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
+                    await es.cluster.delete_component_template(name=template_name, params=request_params)
+                    ops_count += 1
         return {
             "weight": ops_count,
             "unit": "ops",
@@ -1532,10 +1544,15 @@ class DeleteComposableTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_index_template(name=template_name):
-                self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
-                await es.indices.delete_index_template(name=template_name, params=request_params)
-                ops_count += 1
+            elif only_if_exists:
+                # here we use .get() and check for 404 instead of exists_index_template due to a bug in some versions
+                # of elasticsearch-py/elastic-transport with HEAD calls.
+                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+                index_template_exists = await es.indices.get_index_template(name=template_name, ignore=[404])
+                if not index_template_exists.get("status") == 404:
+                    self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
+                    await es.indices.delete_index_template(name=template_name, params=request_params)
+                    ops_count += 1
             # ensure that we do not provide an empty index pattern by accident
             if delete_matching_indices and index_pattern:
                 await es.indices.delete(index=index_pattern)
@@ -1587,7 +1604,10 @@ class DeleteIndexTemplate(Runner):
             if not only_if_exists:
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
-            elif only_if_exists and await es.indices.exists_template(name=template_name):
+            # here we use .get_template() and check for empty instead of exists_template due to a bug in some versions
+            # of elasticsearch-py/elastic-transport with HEAD calls.
+            # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
+            elif only_if_exists and await es.indices.get_template(name=template_name, ignore=[404]):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
                 await es.indices.delete_template(name=template_name, params=request_params)
                 ops_count += 1
@@ -1701,13 +1721,16 @@ class CreateMlDatafeed(Runner):
         body = mandatory(params, "body", self)
         try:
             await es.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
-        except elasticsearch.BadRequestError:
-            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
-            await es.perform_request(
-                method="PUT",
-                path=f"/_xpack/ml/datafeeds/{datafeed_id}",
-                body=body,
-            )
+        except elasticsearch.TransportError as e:
+            # fallback to old path
+            if e.status_code == 400:
+                await es.perform_request(
+                    method="PUT",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
+                    body=body,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "create-ml-datafeed"
@@ -1727,13 +1750,16 @@ class DeleteMlDatafeed(Runner):
         try:
             # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
             await es.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
-        except elasticsearch.BadRequestError:
-            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
-            await es.perform_request(
-                method="DELETE",
-                path=f"/_xpack/ml/datafeeds/{datafeed_id}",
-                params={"force": escape(force), "ignore": 404},
-            )
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                await es.perform_request(
+                    method="DELETE",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
+                    params={"force": escape(force), "ignore": 404},
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "delete-ml-datafeed"
@@ -1755,13 +1781,16 @@ class StartMlDatafeed(Runner):
         timeout = params.get("timeout")
         try:
             await es.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
-        except elasticsearch.BadRequestError:
-            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
-            await es.perform_request(
-                method="POST",
-                path=f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
-                body=body,
-            )
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
+                    body=body,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "start-ml-datafeed"
@@ -1781,18 +1810,21 @@ class StopMlDatafeed(Runner):
         timeout = params.get("timeout")
         try:
             await es.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
-        except elasticsearch.BadRequestError:
-            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
-            request_params = {
-                "force": escape(force),
-            }
-            if timeout:
-                request_params["timeout"] = escape(timeout)
-            await es.perform_request(
-                method="POST",
-                path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
-                params=request_params,
-            )
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                request_params = {
+                    "force": escape(force),
+                }
+                if timeout:
+                    request_params["timeout"] = escape(timeout)
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
+                    params=request_params,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "stop-ml-datafeed"
@@ -1811,13 +1843,16 @@ class CreateMlJob(Runner):
         body = mandatory(params, "body", self)
         try:
             await es.ml.put_job(job_id=job_id, body=body)
-        except elasticsearch.BadRequestError:
-            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
-            await es.perform_request(
-                method="PUT",
-                path=f"/_xpack/ml/anomaly_detectors/{job_id}",
-                body=body,
-            )
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                await es.perform_request(
+                    method="PUT",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
+                    body=body,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "create-ml-job"
@@ -1837,13 +1872,16 @@ class DeleteMlJob(Runner):
         # we don't want to fail if a job does not exist, thus we ignore 404s.
         try:
             await es.ml.delete_job(job_id=job_id, force=force, ignore=[404])
-        except elasticsearch.BadRequestError:
-            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
-            await es.perform_request(
-                method="DELETE",
-                path=f"/_xpack/ml/anomaly_detectors/{job_id}",
-                params={"force": escape(force), "ignore": 404},
-            )
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                await es.perform_request(
+                    method="DELETE",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
+                    params={"force": escape(force), "ignore": 404},
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "delete-ml-job"
@@ -1861,12 +1899,15 @@ class OpenMlJob(Runner):
         job_id = mandatory(params, "job-id", self)
         try:
             await es.ml.open_job(job_id=job_id)
-        except elasticsearch.BadRequestError:
-            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
-            await es.perform_request(
-                method="POST",
-                path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
-            )
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "open-ml-job"
@@ -1886,19 +1927,22 @@ class CloseMlJob(Runner):
         timeout = params.get("timeout")
         try:
             await es.ml.close_job(job_id=job_id, force=force, timeout=timeout)
-        except elasticsearch.BadRequestError:
-            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
-            request_params = {
-                "force": escape(force),
-            }
-            if timeout:
-                request_params["timeout"] = escape(timeout)
+        except elasticsearch.TransportError as e:
+            # fallback to old path (ES < 7)
+            if e.status_code == 400:
+                request_params = {
+                    "force": escape(force),
+                }
+                if timeout:
+                    request_params["timeout"] = escape(timeout)
 
-            await es.perform_request(
-                method="POST",
-                path=f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
-                params=request_params,
-            )
+                await es.perform_request(
+                    method="POST",
+                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
+                    params=request_params,
+                )
+            else:
+                raise e
 
     def __repr__(self, *args, **kwargs):
         return "close-ml-job"
@@ -1963,7 +2007,7 @@ class CreateSnapshotRepository(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
         await es.snapshot.create_repository(
-            name=mandatory(params, "repository", repr(self)), body=mandatory(params, "body", repr(self)), params=request_params
+            repository=mandatory(params, "repository", repr(self)), body=mandatory(params, "body", repr(self)), params=request_params
         )
 
     def __repr__(self, *args, **kwargs):
@@ -2053,15 +2097,32 @@ class WaitForCurrentSnapshotsCreate(Runner):
         wait_period = params.get("completion-recheck-wait-period", 1)
         es_info = await es.info()
         es_version = Version.from_string(es_info["version"]["number"])
+        api = es.snapshot.get
         request_args = {"repository": repository, "snapshot": "_current", "verbose": False}
 
         # significantly reduce response size when lots of snapshots have been taken
         # only available since ES 8.3.0 (https://github.com/elastic/elasticsearch/pull/86269)
         if (es_version.major, es_version.minor) >= (8, 3):
-            request_args["index_names"] = False
+            request_params, headers = self._transport_request_params(params)
+            headers["Content-Type"] = "application/json"
+
+            request_params["index_names"] = "false"
+            request_params["verbose"] = "false"
+
+            request_args = {
+                "method": "GET",
+                "path": f"_snapshot/{repository}/_current",
+                "headers": headers,
+                "params": request_params,
+            }
+
+            # TODO: Switch to native es.snapshot.get once `index_names` becomes supported in
+            #       `es.snapshot.get` of the elasticsearch-py client and we've upgraded the client in Rally, see:
+            #       https://elasticsearch-py.readthedocs.io/en/latest/api.html#elasticsearch.client.SnapshotClient.get
+            api = es.perform_request
 
         while True:
-            response = await es.snapshot.get(**request_args)
+            response = await api(**request_args)
 
             if int(response.get("total")) == 0:
                 break
@@ -2608,21 +2669,8 @@ class CreateIlmPolicy(Runner):
     async def __call__(self, es, params):
         policy_name = mandatory(params, "policy-name", self)
         body = mandatory(params, "body", self)
-        policy = mandatory(body, "policy", self)
         request_params = params.get("request-params", {})
-        error_trace = request_params.get("error_trace", None)
-        filter_path = request_params.get("filter_path", None)
-        master_timeout = request_params.get("master_timeout", None)
-        timeout = request_params.get("timeout", None)
-
-        await es.ilm.put_lifecycle(
-            name=policy_name,
-            policy=policy,
-            error_trace=error_trace,
-            filter_path=filter_path,
-            master_timeout=master_timeout,
-            timeout=timeout,
-        )
+        await es.ilm.put_lifecycle(policy=policy_name, body=body, params=request_params)
         return {
             "weight": 1,
             "unit": "ops",
@@ -2642,14 +2690,7 @@ class DeleteIlmPolicy(Runner):
     async def __call__(self, es, params):
         policy_name = mandatory(params, "policy-name", self)
         request_params = params.get("request-params", {})
-        error_trace = request_params.get("error_trace", None)
-        filter_path = request_params.get("filter_path", None)
-        master_timeout = request_params.get("master_timeout", None)
-        timeout = request_params.get("timeout", None)
-
-        await es.ilm.delete_lifecycle(
-            name=policy_name, error_trace=error_trace, filter_path=filter_path, master_timeout=master_timeout, timeout=timeout
-        )
+        await es.ilm.delete_lifecycle(policy=policy_name, params=request_params)
         return {
             "weight": 1,
             "unit": "ops",
@@ -2702,6 +2743,7 @@ class Downsample(Runner):
     """
 
     async def __call__(self, es, params):
+
         request_params, request_headers = self._transport_request_params(params)
 
         fixed_interval = mandatory(params, "fixed-interval", self)
@@ -2869,7 +2911,7 @@ class Retry(Runner, Delegator):
                 if last_attempt or not retry_on_timeout:
                     raise
                 await asyncio.sleep(sleep_time)
-            except elasticsearch.ApiError as e:
+            except elasticsearch.exceptions.TransportError as e:
                 if last_attempt or not retry_on_timeout:
                     raise e
 
@@ -2877,16 +2919,6 @@ class Retry(Runner, Delegator):
                     self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
                     await asyncio.sleep(sleep_time)
                 else:
-                    raise e
-
-            except elasticsearch.exceptions.ConnectionTimeout as e:
-                if last_attempt or not retry_on_timeout:
-                    raise e
-
-                self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
-                await asyncio.sleep(sleep_time)
-            except elasticsearch.exceptions.TransportError as e:
-                if last_attempt or not retry_on_timeout:
                     raise e
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
