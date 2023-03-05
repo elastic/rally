@@ -1041,7 +1041,7 @@ class TransformStatsRecorder:
         import elasticsearch
 
         try:
-            stats = self.client.transform.get_transform_stats("_all")
+            stats = self.client.transform.get_transform_stats(transform_id="_all")
 
         except elasticsearch.TransportError:
             msg = f"A transport error occurred while collecting transform stats on cluster [{self.cluster_name}]"
@@ -1543,7 +1543,6 @@ class IngestPipelineStats(InternalTelemetryDevice):
             # We have a top level pipeline stats obj, which contains the total time spent preprocessing documents in
             # the ingest pipeline.
             elif processor_name == "total":
-
                 metadata = {"pipeline_name": pipeline_name, "cluster_name": cluster_name}
 
                 start_count = start_stats_processors[processor_name].get("count", 0)
