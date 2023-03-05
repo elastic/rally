@@ -29,11 +29,16 @@ import elasticsearch
 import pytest
 import trustme
 import urllib3.exceptions
+from elastic_transport import ApiResponseMeta
 from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
-from esrally.client.asynchronous import AIOHttpConnection, VerifiedAsyncTransport
+from esrally.client.asynchronous import RallyAsyncTransport
 from esrally.utils import console
+
+
+def _api_error(status, message):
+    return elasticsearch.ApiError(message, ApiResponseMeta(status=status, http_version="1.1", headers={}, duration=0.0, node=None), None)
 
 
 class TestEsClientFactory:
@@ -47,10 +52,9 @@ class TestEsClientFactory:
 
         f = client.EsClientFactory(hosts, client_options)
 
-        assert f.hosts == hosts
+        assert f.hosts == ["http://localhost:9200"]
         assert f.ssl_context is None
-        assert f.client_options["scheme"] == "http"
-        assert "http_auth" not in f.client_options
+        assert "basic_auth" not in f.client_options
 
         assert client_options == original_client_options
 
@@ -60,7 +64,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
@@ -80,14 +84,13 @@ class TestEsClientFactory:
             not mocked_load_cert_chain.called
         ), "ssl_context.load_cert_chain should not have been called as we have not supplied client certs"
 
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
+        assert f.client_options["verify_certs"]
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
         assert "ca_certs" not in f.client_options
 
         assert client_options == original_client_options
@@ -98,7 +101,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
             "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
             "client_cert": os.path.join(self.cwd, "../utils/resources/certs/client.crt"),
             "client_key": os.path.join(self.cwd, "../utils/resources/certs/client.key"),
@@ -122,14 +125,14 @@ class TestEsClientFactory:
             keyfile=client_options["client_key"],
         )
 
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
+        assert f.client_options["verify_certs"]
+
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
         assert "ca_certs" not in f.client_options
         assert "client_cert" not in f.client_options
         assert "client_key" not in f.client_options
@@ -142,7 +145,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
             "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
         }
         # make a copy so we can verify later that the factory did not modify it
@@ -162,14 +165,13 @@ class TestEsClientFactory:
         assert (
             not mocked_load_cert_chain.called
         ), "ssl_context.load_cert_chain should not have been called as we have not supplied client certs"
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
+        assert f.client_options["verify_certs"]
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
         assert "ca_certs" not in f.client_options
 
         assert client_options == original_client_options
@@ -179,7 +181,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": True,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
             "ca_certs": os.path.join(self.cwd, "../utils/resources/certs/ca.crt"),
         }
 
@@ -234,14 +236,14 @@ class TestEsClientFactory:
             not mocked_load_cert_chain.called
         ), "ssl_context.load_cert_chain should not have been called as we have not supplied client certs"
 
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert not f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_NONE
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
+        assert not f.client_options["verify_certs"]
+
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
         assert "basic_auth_user" not in f.client_options
         assert "basic_auth_password" not in f.client_options
 
@@ -253,7 +255,7 @@ class TestEsClientFactory:
         client_options = {
             "use_ssl": True,
             "verify_certs": False,
-            "http_auth": ("user", "password"),
+            "basic_auth": ("user", "password"),
             "client_cert": os.path.join(self.cwd, "../utils/resources/certs/client.crt"),
             "client_key": os.path.join(self.cwd, "../utils/resources/certs/client.key"),
         }
@@ -275,14 +277,13 @@ class TestEsClientFactory:
             keyfile=client_options["client_key"],
         )
 
-        assert f.hosts == hosts
+        assert f.hosts == ["https://localhost:9200"]
         assert not f.ssl_context.check_hostname
         assert f.ssl_context.verify_mode == ssl.CERT_NONE
 
-        assert f.client_options["scheme"] == "https"
-        assert f.client_options["http_auth"] == ("user", "password")
+        assert f.client_options["basic_auth"] == ("user", "password")
         assert "use_ssl" not in f.client_options
-        assert "verify_certs" not in f.client_options
+        assert not f.client_options["verify_certs"]
         assert "basic_auth_user" not in f.client_options
         assert "basic_auth_password" not in f.client_options
         assert "ca_certs" not in f.client_options
@@ -314,7 +315,7 @@ class TestEsClientFactory:
         }
 
         f = client.EsClientFactory(hosts, client_options)
-        assert f.hosts == hosts
+        assert f.hosts == ["https://127.0.0.1:9200"]
         assert f.ssl_context.check_hostname is False
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
@@ -325,6 +326,7 @@ class TestEsClientFactory:
             "use_ssl": True,
             "verify_certs": True,
             "http_auth": ("user", "password"),
+            "max_connections": 600,
         }
         # make a copy so we can verify later that the factory did not modify it
         original_client_options = deepcopy(client_options)
@@ -335,16 +337,17 @@ class TestEsClientFactory:
         assert f.create_async(api_key=api_key)
         assert "http_auth" not in f.client_options
         assert f.client_options["api_key"] == api_key
+        assert client_options["max_connections"] == f.max_connections
         assert client_options == original_client_options
 
         es.assert_called_once_with(
-            hosts=hosts,
-            transport_class=VerifiedAsyncTransport,
-            connection_class=AIOHttpConnection,
+            distribution_version=None,
+            hosts=["https://localhost:9200"],
+            transport_class=RallyAsyncTransport,
             ssl_context=f.ssl_context,
-            scheme="https",
+            maxsize=f.max_connections,
+            verify_certs=True,
             serializer=f.client_options["serializer"],
-            trace_config=f.client_options["trace_config"],
             api_key=api_key,
         )
 
@@ -444,10 +447,7 @@ class TestRequestContextManager:
 class TestRestLayer:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_successfully_waits_for_rest_layer(self, es):
-        es.transport.hosts = [
-            {"host": "node-a.example.org", "port": 9200},
-            {"host": "node-b.example.org", "port": 9200},
-        ]
+        es.transport.node_pool.__len__ = mock.Mock(return_value=2)
         assert client.wait_for_rest_layer(es, max_attempts=3)
         es.cluster.health.assert_has_calls(
             [
@@ -460,10 +460,10 @@ class TestRestLayer:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_retries_on_transport_errors(self, es, sleep):
         es.cluster.health.side_effect = [
-            elasticsearch.TransportError(503, "Service Unavailable"),
-            elasticsearch.TransportError(401, "Unauthorized"),
-            elasticsearch.TransportError(408, "Timed Out"),
-            elasticsearch.TransportError(408, "Timed Out"),
+            _api_error(503, "Service Unavailable"),
+            _api_error(401, "Unauthorized"),
+            elasticsearch.TransportError("Connection timed out"),
+            elasticsearch.TransportError("Connection timed out"),
             {"version": {"number": "5.0.0", "build_hash": "abc123"}},
         ]
         assert client.wait_for_rest_layer(es, max_attempts=5)
@@ -471,18 +471,45 @@ class TestRestLayer:
     # don't sleep in realtime
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_dont_retry_eternally_on_transport_errors(self, es, sleep):
-        es.cluster.health.side_effect = elasticsearch.TransportError(401, "Unauthorized")
-        assert not client.wait_for_rest_layer(es, max_attempts=3)
+    def test_dont_retry_eternally_on_api_errors(self, es, sleep):
+        es.cluster.health.side_effect = _api_error(401, "Unauthorized")
+        es.transport.node_pool = ["node_1"]
+        with pytest.raises(elasticsearch.ApiError, match=r"Unauthorized"):
+            client.wait_for_rest_layer(es, max_attempts=3)
+        es.cluster.health.assert_has_calls(
+            [mock.call(wait_for_nodes=">=1"), mock.call(wait_for_nodes=">=1"), mock.call(wait_for_nodes=">=1")]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_ssl_error(self, es):
-        es.cluster.health.side_effect = elasticsearch.ConnectionError(
-            "N/A",
-            "[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)",
-            urllib3.exceptions.SSLError("[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:719)"),
+    def test_ssl_serialization_error(self, es):
+        es.cluster.health.side_effect = elasticsearch.SerializationError(message="Client sent an HTTP request to an HTTPS server")
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match="Rally sent an HTTP request to an HTTPS server. Are you sure this is an HTTP endpoint?",
+        ):
+            client.wait_for_rest_layer(es, max_attempts=3)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_connection_ssl_error(self, es):
+        es.cluster.health.side_effect = elasticsearch.SSLError(
+            message="SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1131)",
         )
-        with pytest.raises(exceptions.SystemSetupError, match="Could not connect to cluster via https. Is this an https endpoint?"):
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match="Could not connect to cluster via HTTPS. Are you sure this is an HTTPS endpoint?",
+        ):
+            client.wait_for_rest_layer(es, max_attempts=3)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_connection_protocol_error(self, es):
+        es.cluster.health.side_effect = elasticsearch.ConnectionError(
+            message="N/A",
+            errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],
+        )
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match="Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?",
+        ):
             client.wait_for_rest_layer(es, max_attempts=3)
 
 
@@ -492,32 +519,32 @@ class TestApiKeys:
         client_id = 0
         assert client.create_api_key(es, client_id, max_attempts=3)
         # even though max_attempts is 3, this should only be called once
-        es.security.create_api_key.assert_called_once_with({"name": f"rally-client-{client_id}"})
+        es.security.create_api_key.assert_called_once_with(name=f"rally-client-{client_id}")
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_api_key_creation_fails_on_405_and_raises_system_setup_error(self, es):
         client_id = 0
-        es.security.create_api_key.side_effect = elasticsearch.TransportError(405, "Incorrect HTTP method")
+        es.security.create_api_key.side_effect = _api_error(405, "Incorrect HTTP method")
         with pytest.raises(
             exceptions.SystemSetupError,
             match=re.escape("Got status code 405 when attempting to create API keys. Is Elasticsearch Security enabled?"),
         ):
             client.create_api_key(es, client_id, max_attempts=5)
 
-        es.security.create_api_key.assert_called_once_with({"name": f"rally-client-{client_id}"})
+        es.security.create_api_key.assert_called_once_with(name=f"rally-client-{client_id}")
 
     @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
     def test_retries_api_key_creation_on_transport_errors(self, es, sleep):
         client_id = 0
         es.security.create_api_key.side_effect = [
-            elasticsearch.TransportError(503, "Service Unavailable"),
-            elasticsearch.TransportError(401, "Unauthorized"),
-            elasticsearch.TransportError(408, "Timed Out"),
-            elasticsearch.TransportError(500, "Internal Server Error"),
+            _api_error(503, "Service Unavailable"),
+            _api_error(401, "Unauthorized"),
+            elasticsearch.TransportError("Connection timed out"),
+            _api_error(500, "Internal Server Error"),
             {"id": "abc", "name": f"rally-client-{client_id}", "api_key": "123"},
         ]
-        calls = [mock.call({"name": "rally-client-0"}) for _ in range(5)]
+        calls = [mock.call(name="rally-client-0") for _ in range(5)]
 
         assert client.create_api_key(es, client_id, max_attempts=5)
         assert es.security.create_api_key.call_args_list == calls
@@ -540,7 +567,7 @@ class TestApiKeys:
             ]
         else:
             es.security.invalidate_api_key.return_value = {"invalidated_api_keys": ["foo", "bar", "baz"], "error_count": 0}
-            calls = [mock.call({"ids": ids})]
+            calls = [mock.call(ids=ids)]
 
         assert client.delete_api_keys(es, ids, max_attempts=3)
         assert es.security.invalidate_api_key.has_calls(calls, any_order=True)
@@ -556,28 +583,28 @@ class TestApiKeys:
             es.security.invalidate_api_key.side_effect = [
                 {"invalidated_api_keys": ["foo"]},
                 {"invalidated_api_keys": ["bar"]},
-                elasticsearch.TransportError(401, "Unauthorized"),
-                elasticsearch.TransportError(503, "Service Unavailable"),
+                _api_error(401, "Unauthorized"),
+                _api_error(503, "Service Unavailable"),
                 {"invalidated_api_keys": ["baz"]},
             ]
             calls = [
                 # foo and bar are deleted successfully, leaving only baz
-                mock.call({"id": "foo"}),
-                mock.call({"id": "bar"}),
+                mock.call(id="foo"),
+                mock.call(id="bar"),
                 # two exceptions are thrown, so it should take 3 attempts to delete baz
-                mock.call({"id": "baz"}),
-                mock.call({"id": "baz"}),
-                mock.call({"id": "baz"}),
+                mock.call(id="baz"),
+                mock.call(id="baz"),
+                mock.call(id="baz"),
             ]
         else:
             es.security.invalidate_api_key.side_effect = [
-                elasticsearch.TransportError(503, "Service Unavailable"),
-                elasticsearch.TransportError(401, "Unauthorized"),
-                elasticsearch.TransportError(408, "Timed Out"),
-                elasticsearch.TransportError(500, "Internal Server Error"),
+                _api_error(503, "Service Unavailable"),
+                _api_error(401, "Unauthorized"),
+                elasticsearch.TransportError("Connection timed Out"),
+                _api_error(500, "Internal Server Error"),
                 {"invalidated_api_keys": ["foo", "bar", "baz"], "error_count": 0},
             ]
-            calls = [mock.call({"ids": ids}) for _ in range(max_attempts)]
+            calls = [mock.call(ids=ids) for _ in range(max_attempts)]
 
         assert client.delete_api_keys(es, ids, max_attempts=max_attempts)
         assert es.security.invalidate_api_key.call_args_list == calls
@@ -592,13 +619,13 @@ class TestApiKeys:
             es.security.invalidate_api_key.side_effect = [
                 {"invalidated_api_keys": ["foo"]},
                 {"invalidated_api_keys": ["bar"]},
-                elasticsearch.TransportError(500, "Internal Server Error"),
+                _api_error(500, "Internal Server Error"),
             ]
 
             calls = [
-                mock.call({"id": "foo"}),
-                mock.call({"id": "bar"}),
-                mock.call({"id": "baz"}),
+                mock.call(id="foo"),
+                mock.call(id="bar"),
+                mock.call(id="baz"),
             ]
         else:
             # Since there are two ways this version can fail, we interleave them
@@ -607,33 +634,21 @@ class TestApiKeys:
                     "invalidated_api_keys": ["foo"],
                     "error_count": 3,
                 },
-                elasticsearch.TransportError(500, "Internal Server Error"),
+                _api_error(500, "Internal Server Error"),
                 {
                     "invalidated_api_keys": ["bar"],
                     "error_count": 2,
                 },
-                elasticsearch.TransportError(500, "Internal Server Error"),
+                _api_error(500, "Internal Server Error"),
             ]
 
             calls = [
-                mock.call({"ids": ["foo", "bar", "baz", "qux"]}),
-                mock.call({"ids": ["bar", "baz", "qux"]}),
-                mock.call({"ids": ["bar", "baz", "qux"]}),
+                mock.call(ids=["foo", "bar", "baz", "qux"]),
+                mock.call(ids=["bar", "baz", "qux"]),
+                mock.call(ids=["bar", "baz", "qux"]),
             ]
 
         with pytest.raises(exceptions.RallyError, match=re.escape(f"Could not delete API keys with the following IDs: {failed_to_delete}")):
             client.delete_api_keys(es, ids, max_attempts=3)
 
         es.security.invalidate_api_key.assert_has_calls(calls)
-
-
-class TestAsyncConnection:
-    @pytest.mark.asyncio
-    async def test_enable_cleanup_close(self):
-        connection = AIOHttpConnection()
-        # pylint: disable=protected-access
-        assert connection._enable_cleanup_closed is True
-
-        connection = AIOHttpConnection(enable_cleanup_closed=False)
-        # pylint: disable=protected-access
-        assert connection._enable_cleanup_closed is False
