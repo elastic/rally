@@ -3066,9 +3066,8 @@ class TestNodeStatsRecorder:
 
         with mock.patch.object(logger, "warning") as mocked_warning:
             recorder.record()
-            mocked_warning.assert_called_once_with(
-              "Node cgroup stats requested with none present."  
-            )
+            mocked_warning.assert_called_once_with("Node cgroup stats requested with none present.")
+
 
 class TestTransformStats:
     def test_negative_sample_interval_forbidden(self):
