@@ -1,0 +1,9 @@
+agents:
+  provider: "gcp"
+  image: family/core-ubuntu-2204
+
+steps:
+  - label: "Run 3.8 integration tests :test_tube:"
+    command: bash .buildkite/it/run.sh 3.8
+  - label: "Run 3.10 integration tests :test_tube:"
+    command: bash .buildkite/it/run.sh 3.10

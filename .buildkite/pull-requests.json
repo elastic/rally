@@ -1,0 +1,9 @@
+{
+  "jobs": [
+    {
+      "enabled": true,
+      "pipeline_slug": "rally",
+      "allow_org_users": true
+    }
+  ]
+}

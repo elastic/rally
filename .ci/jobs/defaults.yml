@@ -47,21 +47,3 @@
     publishers:
       - email:
           recipients: infra-root+build@elastic.co
-      - junit:
-          allow-empty-results: true
-          results: 'junit-py*.xml'
-          keep-long-stdio: true
-      - google-cloud-storage:
-          credentials-id: 'elasticsearch-ci-gcs-plugin'
-          uploads:
-            - classic:
-                file-pattern: '.rally/$BUILD_NUMBER.tar.bz2'
-                storage-location: 'gs://elasticsearch-ci-artifacts/jobs/$JOB_NAME'
-                share-publicly: false
-                upload-for-failed-jobs: true
-                show-inline: true
-    builders:
-      - inject:
-          properties-content: |
-            HOME=$JENKINS_HOME
-            RALLY_HOME=$WORKSPACE

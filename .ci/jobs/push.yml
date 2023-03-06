@@ -1,5 +1,0 @@
----
-
-jjbb-template: push.yml
-vars:
-  - branch: master

@@ -73,7 +73,7 @@ install: install-user
 clean: nondocs-clean docs-clean
 
 nondocs-clean:
-	rm -rf .benchmarks .eggs .tox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
+	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
 
 docs-clean:
 	cd docs && $(MAKE) clean
@@ -81,16 +81,6 @@ docs-clean:
 # Avoid conflicts between .pyc/pycache related files created by local Python interpreters and other interpreters in Docker
 python-caches-clean:
 	-@find . -name "__pycache__" -prune -exec rm -rf -- \{\} \;
-
-# Force recreation of the virtual environment used by tox.
-#
-# See https://tox.readthedocs.io/en/latest/#system-overview:
-#
-# > Note pip will not update project dependencies (specified either in the install_requires or the extras
-# > section of the setup.py) if any version already exists in the virtual environment; therefore we recommend
-# > to recreate your environments whenever your project dependencies change.
-tox-env-clean:
-	rm -rf .tox
 
 lint: check-venv
 	@. $(VENV_ACTIVATE_FILE); pre-commit run --all-files
@@ -107,26 +97,10 @@ serve-docs: check-venv
 test: check-venv
 	. $(VENV_ACTIVATE_FILE); pytest tests/
 
-unit: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38-unit
-	. $(VENV_ACTIVATE_FILE); tox -e py310-unit
-
 # checks min and max python versions
-it: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38-it
-	. $(VENV_ACTIVATE_FILE); tox -e py310-it
-
-it38: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py38-it
-
-it39: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py39-it
-
-it310: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e py310-it
-
-rally-tracks-compat: check-venv python-caches-clean tox-env-clean
-	. $(VENV_ACTIVATE_FILE); tox -e rally-tracks-compat
+it: check-venv python-caches-clean
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.8
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.10
 
 check-all: lint test it
 
@@ -140,4 +114,4 @@ release-checks: check-venv
 release: check-venv release-checks clean docs it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean tox-env-clean docs serve-docs test it it38 it39 it310 benchmark release release-checks prereq venv-create check-env
+.PHONY: install clean nondocs-clean docs-clean python-caches-clean lint format docs serve-docs test it check-all benchmark release release-checks prereq venv-create check-env
