@@ -37,7 +37,8 @@ echo "--- System dependencies"
 
 PYTHON_VERSION="$1"
 retry 5 sudo add-apt-repository --yes ppa:deadsnakes/ppa
-retry 5 sudo apt-get update && sudo apt-get install -y \
+retry 5 sudo apt-get update
+retry 5 sudo apt-get install -y \
     "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-dev" "python${PYTHON_VERSION}-venv" \
     git make jq docker \
     openjdk-17-jdk-headless openjdk-11-jdk-headless \
