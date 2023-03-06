@@ -4212,8 +4212,8 @@ class TestWaitForCurrentSnapshotsCreate:
 class TestRestoreSnapshot:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_restore_snapshot(self, es):
-        es.snapshot.restore = mock.AsyncMock()
+    async def test_restore_snapshot_with_wait(self, es):
+        es.perform_request = mock.AsyncMock()
 
         params = {
             "repository": "backups",
@@ -4225,14 +4225,14 @@ class TestRestoreSnapshot:
         r = runner.RestoreSnapshot()
         await r(es, params)
 
-        es.snapshot.restore.assert_awaited_once_with(
-            repository="backups", snapshot="snapshot-001", wait_for_completion=True, params={"request_timeout": 7200}
+        es.perform_request.assert_awaited_once_with(
+            method="POST", path="/_snapshot/backups/snapshot-001/_restore", params={"request_timeout": 7200, "wait_for_completion": True}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_restore_snapshot_with_body(self, es):
-        es.snapshot.restore = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
         params = {
             "repository": "backups",
             "snapshot": "snapshot-001",
@@ -4250,9 +4250,9 @@ class TestRestoreSnapshot:
         r = runner.RestoreSnapshot()
         await r(es, params)
 
-        es.snapshot.restore.assert_awaited_once_with(
-            repository="backups",
-            snapshot="snapshot-001",
+        es.perform_request.assert_awaited_once_with(
+            method="POST",
+            path="/_snapshot/backups/snapshot-001/_restore",
             body={
                 "indices": "index1,index2",
                 "include_global_state": False,
@@ -4260,8 +4260,7 @@ class TestRestoreSnapshot:
                     "index.number_of_replicas": 0,
                 },
             },
-            wait_for_completion=True,
-            params={"request_timeout": 7200},
+            params={"request_timeout": 7200, "wait_for_completion": True},
         )
 
 

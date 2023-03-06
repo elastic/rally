@@ -2081,13 +2081,13 @@ class RestoreSnapshot(Runner):
     """
 
     async def __call__(self, es, params):
+        wait_for_completion = params.get("wait-for-completion", False)
+        params.get("request-params", {}).update({"wait_for_completion": wait_for_completion})
         api_kwargs = self._default_kw_params(params)
-        await es.snapshot.restore(
-            repository=mandatory(params, "repository", repr(self)),
-            snapshot=mandatory(params, "snapshot", repr(self)),
-            wait_for_completion=params.get("wait-for-completion", False),
-            **api_kwargs,
-        )
+        repo = mandatory(params, "repository", repr(self))
+        snapshot = mandatory(params, "snapshot", repr(self))
+
+        await es.perform_request(method="POST", path=f"/_snapshot/{repo}/{snapshot}/_restore", **api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "restore-snapshot"
