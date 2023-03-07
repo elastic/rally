@@ -2087,6 +2087,8 @@ class RestoreSnapshot(Runner):
         repo = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
 
+        # TODO: Replace 'perform_request' with 'SnapshotClient.restore()' when https://github.com/elastic/elasticsearch-py/issues/2168
+        # is fixed
         await es.perform_request(method="POST", path=f"/_snapshot/{repo}/{snapshot}/_restore", **api_kwargs)
 
     def __repr__(self, *args, **kwargs):
