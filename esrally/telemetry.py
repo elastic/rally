@@ -778,7 +778,6 @@ class NodeStats(TelemetryDevice):
 class NodeStatsRecorder:
     def __init__(self, telemetry_params, cluster_name, client, metrics_store):
         self.logger = logging.getLogger(__name__)
-
         self.logger.info("node stats recorder")
         self.sample_interval = telemetry_params.get("node-stats-sample-interval", 1)
         if self.sample_interval <= 0:
