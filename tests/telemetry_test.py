@@ -2084,6 +2084,12 @@ class TestNodeStatsRecorder:
             "jvm_gc_collectors_young_collection_time_in_millis": 309,
             "jvm_gc_collectors_old_collection_count": 2,
             "jvm_gc_collectors_old_collection_time_in_millis": 229,
+            "os_cgroup_cpuacct_usage_nanos": 1394207523870751,
+            "os_cgroup_cpu_cfs_period_micros": 100000,
+            "os_cgroup_cpu_cfs_quota_micros": 793162,
+            "os_cgroup_cpu_stat_number_of_elapsed_periods": 41092415,
+            "os_cgroup_cpu_stat_number_of_times_throttled": 41890,
+            "os_cgroup_cpu_stat_time_throttled_nanos": 29380593023188,
             "os_mem_total_in_bytes": 62277025792,
             "os_mem_free_in_bytes": 4934840320,
             "os_mem_used_in_bytes": 57342185472,
@@ -2795,6 +2801,12 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_cgroup_cpuacct_usage_nanos": 1394207523870751,
+                "os_cgroup_cpu_cfs_period_micros": 100000,
+                "os_cgroup_cpu_cfs_quota_micros": 793162,
+                "os_cgroup_cpu_stat_number_of_elapsed_periods": 41092415,
+                "os_cgroup_cpu_stat_number_of_times_throttled": 41890,
+                "os_cgroup_cpu_stat_time_throttled_nanos": 29380593023188,
                 "os_mem_total_in_bytes": 62277025792,
                 "os_mem_free_in_bytes": 4934840320,
                 "os_mem_used_in_bytes": 57342185472,
@@ -2840,7 +2852,7 @@ class TestNodeStatsRecorder:
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    def test_logs_warning_on_missing_cgroup_stats(self, metrics_store_put_doc):
+    def test_logs_debug_on_missing_cgroup_stats(self, metrics_store_put_doc):
         node_stats_response = {
             "cluster_name": "elasticsearch",
             "nodes": {
@@ -3064,9 +3076,9 @@ class TestNodeStatsRecorder:
         telemetry_params = {"node-stats-include-cgroup": True}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
 
-        with mock.patch.object(logger, "warning") as mocked_warning:
+        with mock.patch.object(logger, "debug") as mocked_debug:
             recorder.record()
-            mocked_warning.assert_called_once_with("Node cgroup stats requested with none present.")
+            mocked_debug.assert_called_once_with("Node cgroup stats requested with none present.")
 
 
 class TestTransformStats:

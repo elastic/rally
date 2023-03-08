@@ -819,7 +819,7 @@ class NodeStatsRecorder:
         self.include_network = telemetry_params.get("node-stats-include-network", True)
         self.include_process = telemetry_params.get("node-stats-include-process", True)
         self.include_mem_stats = telemetry_params.get("node-stats-include-mem", True)
-        self.include_cgroup_stats = telemetry_params.get("node-stats-include-cgroup", False)
+        self.include_cgroup_stats = telemetry_params.get("node-stats-include-cgroup", True)
         self.include_gc_stats = telemetry_params.get("node-stats-include-gc", True)
         self.include_indexing_pressure = telemetry_params.get("node-stats-include-indexing-pressure", True)
         self.client = client
@@ -918,7 +918,7 @@ class NodeStatsRecorder:
         try:
             cgroup_stats = self.flatten_stats_fields(prefix="os_cgroup", stats=node_stats["os"]["cgroup"])
         except KeyError:
-            self.logger.warning("Node cgroup stats requested with none present.")
+            self.logger.debug("Node cgroup stats requested with none present.")
         return cgroup_stats
 
     def jvm_gc_stats(self, node_name, node_stats):
