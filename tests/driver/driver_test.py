@@ -235,8 +235,6 @@ class TestDriver:
         assert d.current_step == 0
         assert len(d.workers_completed_current_step) == 0
 
-        # this requires at least Python 3.6
-        # target.on_task_finished.assert_called_once()
         assert target.on_task_finished.call_count == 1
         assert target.drive_at.call_count == 4
 
