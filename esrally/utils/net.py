@@ -262,16 +262,16 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
         if os.path.isfile(tmp_data_set_path):
             os.remove(tmp_data_set_path)
         raise
-    else:
-        download_size = os.path.getsize(tmp_data_set_path)
-        if expected_size_in_bytes is not None and download_size != expected_size_in_bytes:
-            if os.path.isfile(tmp_data_set_path):
-                os.remove(tmp_data_set_path)
-            raise exceptions.DataError(
-                "Download of [%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected. Please retry."
-                % (local_path, download_size, expected_size_in_bytes)
-            )
-        os.rename(tmp_data_set_path, local_path)
+
+    download_size = os.path.getsize(tmp_data_set_path)
+    if expected_size_in_bytes is not None and download_size != expected_size_in_bytes:
+        if os.path.isfile(tmp_data_set_path):
+            os.remove(tmp_data_set_path)
+        raise exceptions.DataError(
+            "Download of [%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected. Please retry."
+            % (local_path, download_size, expected_size_in_bytes)
+        )
+    os.rename(tmp_data_set_path, local_path)
 
 
 def retrieve_content_as_string(url):

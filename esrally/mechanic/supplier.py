@@ -701,7 +701,7 @@ class SourceRepository:
             elif os.path.isdir(self.src_dir) and may_skip_init:
                 self.logger.info("Skipping repository initialization for %s.", self.name)
             else:
-                exceptions.SystemSetupError("A remote repository URL is mandatory for %s" % self.name)
+                raise exceptions.SystemSetupError("A remote repository URL is mandatory for %s" % self.name)
 
     def _update(self, revision):
         if self.has_remote() and revision == "latest":
