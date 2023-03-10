@@ -1,7 +1,11 @@
 version: 2
 
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.11"
+
 python:
-  version: "3.11"
   install:
     - method: pip
       path: .
@@ -10,3 +14,4 @@ python:
 
 sphinx:
   fail_on_warning: true
+  configuration: docs/conf.py
