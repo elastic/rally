@@ -1054,7 +1054,7 @@ class TransformStatsRecorder:
         import elasticsearch
 
         try:
-            stats = self.client.transform.get_transform_stats("_all")
+            stats = self.client.transform.get_transform_stats(transform_id="_all")
 
         except elasticsearch.TransportError:
             msg = f"A transport error occurred while collecting transform stats on cluster [{self.cluster_name}]"
@@ -1556,7 +1556,6 @@ class IngestPipelineStats(InternalTelemetryDevice):
             # We have a top level pipeline stats obj, which contains the total time spent preprocessing documents in
             # the ingest pipeline.
             elif processor_name == "total":
-
                 metadata = {"pipeline_name": pipeline_name, "cluster_name": cluster_name}
 
                 start_count = start_stats_processors[processor_name].get("count", 0)
@@ -2297,7 +2296,7 @@ class DiskUsageStats(TelemetryDevice):
         for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
-                response = self.client.perform_request(method="POST", path=f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
+                response = self.client.indices.disk_usage(index=index, run_expensive_tasks=True)
             except elasticsearch.RequestError:
                 msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)
@@ -2320,8 +2319,10 @@ class DiskUsageStats(TelemetryDevice):
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        del response["_shards"]
         for index, idx_fields in response.items():
+            if index == "_shards":
+                continue
+
             for field, field_info in idx_fields["fields"].items():
                 meta = {"index": index, "field": field}
                 self.metrics_store.put_value_cluster_level("disk_usage_total", field_info["total_in_bytes"], meta_data=meta, unit="byte")
