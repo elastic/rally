@@ -2782,8 +2782,8 @@ class TestDeleteIndexRunner:
         )
         es.indices.delete.assert_has_awaits(
             [
-                mock.call(index="indexA", params=params["request-params"]),
-                mock.call(index="indexB", params=params["request-params"]),
+                mock.call(index="indexA", params=params["request-params"], ignore=[404]),
+                mock.call(index="indexB", params=params["request-params"], ignore=[404]),
             ]
         )
         assert es.indices.exists.call_count == 0
@@ -2916,7 +2916,10 @@ class TestDeleteIndexTemplateRunner:
         }
 
         es.indices.delete_template.assert_has_awaits(
-            [mock.call(name="templateA", params=params["request-params"]), mock.call(name="templateB", params=params["request-params"])]
+            [
+                mock.call(name="templateA", ignore=[404], params=params["request-params"]),
+                mock.call(name="templateB", ignore=[404], params=params["request-params"]),
+            ]
         )
         es.indices.delete.assert_awaited_once_with(index="logs-*")
 
@@ -3744,7 +3747,7 @@ class TestDeleteSnapshotRepository:
         r = runner.DeleteSnapshotRepository()
         await r(es, params)
 
-        es.snapshot.delete_repository.assert_called_once_with(repository="backups")
+        es.snapshot.delete_repository.assert_called_once_with(repository="backups", ignore=[404])
 
 
 class TestCreateSnapshotRepository:
@@ -5189,6 +5192,7 @@ class TestDeleteIlmPolicyRunner:
             timeout=self.params["request-params"].get("timeout"),
             error_trace=None,
             filter_path=None,
+            ignore=[404],
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -5211,6 +5215,7 @@ class TestDeleteIlmPolicyRunner:
             timeout=None,
             error_trace=None,
             filter_path=None,
+            ignore=[404],
         )
 
 

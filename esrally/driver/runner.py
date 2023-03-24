@@ -1396,7 +1396,7 @@ class DeleteIndex(Runner):
         try:
             for index_name in indices:
                 if not only_if_exists:
-                    await es.indices.delete(index=index_name, params=request_params)
+                    await es.indices.delete(index=index_name, ignore=[404], params=request_params)
                     ops += 1
                 elif only_if_exists and await es.indices.exists(index=index_name):
                     self.logger.info("Index [%s] already exists. Deleting it.", index_name)
@@ -1585,7 +1585,7 @@ class DeleteIndexTemplate(Runner):
 
         for template_name, delete_matching_indices, index_pattern in template_names:
             if not only_if_exists:
-                await es.indices.delete_template(name=template_name, params=request_params)
+                await es.indices.delete_template(name=template_name, ignore=[404], params=request_params)
                 ops_count += 1
             elif only_if_exists and await es.indices.exists_template(name=template_name):
                 self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
@@ -1949,7 +1949,7 @@ class DeleteSnapshotRepository(Runner):
     """
 
     async def __call__(self, es, params):
-        await es.snapshot.delete_repository(repository=mandatory(params, "repository", repr(self)))
+        await es.snapshot.delete_repository(repository=mandatory(params, "repository", repr(self)), ignore=[404])
 
     def __repr__(self, *args, **kwargs):
         return "delete-snapshot-repository"
@@ -2650,7 +2650,7 @@ class DeleteIlmPolicy(Runner):
         timeout = request_params.get("timeout", None)
 
         await es.ilm.delete_lifecycle(
-            name=policy_name, error_trace=error_trace, filter_path=filter_path, master_timeout=master_timeout, timeout=timeout
+            name=policy_name, error_trace=error_trace, filter_path=filter_path, master_timeout=master_timeout, timeout=timeout, ignore=[404]
         )
         return {
             "weight": 1,
