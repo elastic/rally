@@ -1454,8 +1454,8 @@ class CreateComponentTemplate(Runner):
     async def __call__(self, es, params):
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
-        for template, body in templates:
-            await es.cluster.put_component_template(name=template, body=body, params=request_params)
+        for name, body in templates:
+            await es.cluster.put_component_template(name=name, template=body["template"], params=request_params)
         return {
             "weight": len(templates),
             "unit": "ops",
