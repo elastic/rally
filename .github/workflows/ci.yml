@@ -67,6 +67,7 @@ jobs:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
           # being rate limited
           ASSETS_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Artifact will show up under "Artifacts" in the "Summary" page of runs
       - uses: actions/upload-artifact@v3
         if: always()
         with:
