@@ -2,6 +2,11 @@
 
 set -eo pipefail
 
+export TERM=dumb
+export LC_ALL=en_US.UTF-8
+export DEBIAN_FRONTEND=noninteractive
+export TZ=Etc/UTC
+
 # based on https://gist.github.com/sj26/88e1c6584397bb7c13bd11108a579746?permalink_comment_id=4155247#gistcomment-4155247
 function retry {
   local retries=$1
