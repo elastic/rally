@@ -67,6 +67,12 @@ jobs:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
           # being rate limited
           ASSETS_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: rally-tracks-compat-logs
+          path: /home/runner/.rally/logs/
+          if-no-files-found: error
 
   install-with-pyenv:
     runs-on: ubuntu-22.04
