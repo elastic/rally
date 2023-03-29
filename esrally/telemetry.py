@@ -777,6 +777,8 @@ class NodeStats(TelemetryDevice):
 
 class NodeStatsRecorder:
     def __init__(self, telemetry_params, cluster_name, client, metrics_store):
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("node stats recorder")
         self.sample_interval = telemetry_params.get("node-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
@@ -816,6 +818,7 @@ class NodeStatsRecorder:
         self.include_network = telemetry_params.get("node-stats-include-network", True)
         self.include_process = telemetry_params.get("node-stats-include-process", True)
         self.include_mem_stats = telemetry_params.get("node-stats-include-mem", True)
+        self.include_cgroup_stats = telemetry_params.get("node-stats-include-cgroup", True)
         self.include_gc_stats = telemetry_params.get("node-stats-include-gc", True)
         self.include_indexing_pressure = telemetry_params.get("node-stats-include-indexing-pressure", True)
         self.client = client
@@ -845,6 +848,8 @@ class NodeStatsRecorder:
             if self.include_mem_stats:
                 collected_node_stats.update(self.jvm_mem_stats(node_name, node_stats))
                 collected_node_stats.update(self.os_mem_stats(node_name, node_stats))
+            if self.include_cgroup_stats:
+                collected_node_stats.update(self.os_cgroup_stats(node_name, node_stats))
             if self.include_gc_stats:
                 collected_node_stats.update(self.jvm_gc_stats(node_name, node_stats))
             if self.include_network:
@@ -906,6 +911,14 @@ class NodeStatsRecorder:
 
     def os_mem_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="os_mem", stats=node_stats["os"]["mem"])
+
+    def os_cgroup_stats(self, node_name, node_stats):
+        cgroup_stats = {}
+        try:
+            cgroup_stats = self.flatten_stats_fields(prefix="os_cgroup", stats=node_stats["os"]["cgroup"])
+        except KeyError:
+            self.logger.debug("Node cgroup stats requested with none present.")
+        return cgroup_stats
 
     def jvm_gc_stats(self, node_name, node_stats):
         return self.flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
@@ -1041,7 +1054,7 @@ class TransformStatsRecorder:
         import elasticsearch
 
         try:
-            stats = self.client.transform.get_transform_stats("_all")
+            stats = self.client.transform.get_transform_stats(transform_id="_all")
 
         except elasticsearch.TransportError:
             msg = f"A transport error occurred while collecting transform stats on cluster [{self.cluster_name}]"
@@ -1543,7 +1556,6 @@ class IngestPipelineStats(InternalTelemetryDevice):
             # We have a top level pipeline stats obj, which contains the total time spent preprocessing documents in
             # the ingest pipeline.
             elif processor_name == "total":
-
                 metadata = {"pipeline_name": pipeline_name, "cluster_name": cluster_name}
 
                 start_count = start_stats_processors[processor_name].get("count", 0)
@@ -2284,7 +2296,7 @@ class DiskUsageStats(TelemetryDevice):
         for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
-                response = self.client.perform_request(method="POST", path=f"/{index}/_disk_usage", params={"run_expensive_tasks": "true"})
+                response = self.client.indices.disk_usage(index=index, run_expensive_tasks=True)
             except elasticsearch.RequestError:
                 msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)
@@ -2307,8 +2319,10 @@ class DiskUsageStats(TelemetryDevice):
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
 
-        del response["_shards"]
         for index, idx_fields in response.items():
+            if index == "_shards":
+                continue
+
             for field, field_info in idx_fields["fields"].items():
                 meta = {"index": index, "field": field}
                 self.metrics_store.put_value_cluster_level("disk_usage_total", field_info["total_in_bytes"], meta_data=meta, unit="byte")

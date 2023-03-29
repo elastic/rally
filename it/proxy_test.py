@@ -17,13 +17,14 @@
 
 import collections
 import os
-import shutil
-import tempfile
 
 import pytest
 
 import it
 from esrally.utils import process
+
+# pylint: disable=unused-import
+from it import fresh_log_file
 
 HttpProxy = collections.namedtuple("HttpProxy", ["authenticated_url", "anonymous_url"])
 
@@ -44,34 +45,10 @@ def http_proxy():
     process.run_subprocess(f"docker stop {proxy_container_id}")
 
 
-# ensures that a fresh log file is available
-@pytest.fixture(scope="function")
-def fresh_log_file():
-    cfg = it.ConfigFile(config_name=None)
-    log_file = os.path.join(cfg.rally_home, "logs", "rally.log")
-
-    if os.path.exists(log_file):
-        bak = os.path.join(tempfile.mkdtemp(), "rally.log")
-        shutil.move(log_file, bak)
-        yield log_file
-        # append log lines to the original file and move it back to its original
-        with open(log_file) as src:
-            with open(bak, "a") as dst:
-                dst.write(src.read())
-        shutil.move(bak, log_file)
-    else:
-        yield log_file
-
-
-def assert_log_line_present(log_file, text):
-    with open(log_file) as f:
-        assert any(text in line for line in f), f"Could not find [{text}] in [{log_file}]."
-
-
 @it.rally_in_mem
 def test_run_with_direct_internet_connection(cfg, http_proxy, fresh_log_file):
     assert it.esrally(cfg, "list tracks") == 0
-    assert_log_line_present(fresh_log_file, "Connecting directly to the Internet")
+    assert it.check_log_line_present(fresh_log_file, "Connecting directly to the Internet")
 
 
 @it.rally_in_mem

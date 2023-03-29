@@ -18,7 +18,7 @@
 import logging
 import os
 
-from elasticsearch import ElasticsearchException
+from elastic_transport import ApiError, TransportError
 from jinja2 import Environment, FileSystemLoader
 
 from esrally import PROGRAM_NAME
@@ -42,7 +42,7 @@ def extract_indices_from_data_streams(client, data_streams_to_extract):
     for data_stream_name in data_streams_to_extract:
         try:
             indices += index.extract_indices_from_data_stream(client, data_stream_name)
-        except ElasticsearchException:
+        except (ApiError, TransportError):
             logging.getLogger(__name__).exception("Failed to extract indices from data stream [%s]", data_stream_name)
 
     return indices
@@ -56,7 +56,7 @@ def extract_mappings_and_corpora(client, output_path, indices_to_extract):
     for index_name in indices_to_extract:
         try:
             indices += index.extract(client, output_path, index_name)
-        except ElasticsearchException:
+        except (ApiError, TransportError):
             logging.getLogger(__name__).exception("Failed to extract index [%s]", index_name)
 
     # That list only contains valid indices (with index patterns already resolved)
