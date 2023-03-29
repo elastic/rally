@@ -2896,6 +2896,8 @@ class TestDeleteIndexTemplateRunner:
     async def test_deletes_all_index_templates(self, es):
         es.indices.delete_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
 
         r = runner.DeleteIndexTemplate()
 
@@ -2903,22 +2905,38 @@ class TestDeleteIndexTemplateRunner:
             "templates": [
                 ("templateA", False, None),
                 ("templateB", True, "logs-*"),
+                ("templateC", True, "metrics-*"),
             ],
             "request-params": {"timeout": 60},
         }
         result = await r(es, params)
 
-        # 2 times delete index template, one time delete matching indices
+        # 3 times delete index template, 2 times to set/reset transient cluster settings, 2 times delete matching indices
         assert result == {
-            "weight": 3,
+            "weight": 7,
             "unit": "ops",
             "success": True,
         }
 
         es.indices.delete_template.assert_has_awaits(
-            [mock.call(name="templateA", params=params["request-params"]), mock.call(name="templateB", params=params["request-params"])]
+            [
+                mock.call(name="templateA", params=params["request-params"]),
+                mock.call(name="templateB", params=params["request-params"]),
+                mock.call(name="templateC", params=params["request-params"]),
+            ]
         )
-        es.indices.delete.assert_awaited_once_with(index="logs-*")
+        es.indices.delete.assert_has_awaits(
+            [
+                mock.call(index="logs-*"),
+                mock.call(index="metrics-*"),
+            ]
+        )
+        es.cluster.put_settings.assert_has_awaits(
+            [
+                mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+                mock.call(body={"transient": {"action.destructive_requires_name": True}}),
+            ]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -3183,6 +3201,8 @@ class TestDeleteComposableTemplateRunner:
     async def test_deletes_all_index_templates(self, es):
         es.indices.delete_index_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
 
         r = runner.DeleteComposableTemplate()
 
@@ -3190,15 +3210,16 @@ class TestDeleteComposableTemplateRunner:
             "templates": [
                 ("templateA", False, None),
                 ("templateB", True, "logs-*"),
+                ("templateC", True, "metrics-*"),
             ],
             "request-params": {"timeout": 60},
             "only-if-exists": False,
         }
         result = await r(es, params)
 
-        # 2 times delete index template, one time delete matching indices
+        # 3 times delete index template, 2 times to set/reset transient cluster settings, 2 times delete matching indices
         assert result == {
-            "weight": 3,
+            "weight": 7,
             "unit": "ops",
             "success": True,
         }
@@ -3207,9 +3228,21 @@ class TestDeleteComposableTemplateRunner:
             [
                 mock.call(name="templateA", params=params["request-params"], ignore=[404]),
                 mock.call(name="templateB", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateC", params=params["request-params"], ignore=[404]),
             ]
         )
-        es.indices.delete.assert_awaited_once_with(index="logs-*")
+        es.cluster.put_settings.assert_has_awaits(
+            [
+                mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+                mock.call(body={"transient": {"action.destructive_requires_name": True}}),
+            ]
+        )
+        es.indices.delete.assert_has_awaits(
+            [
+                mock.call(index="logs-*"),
+                mock.call(index="metrics-*"),
+            ]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
