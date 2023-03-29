@@ -4,8 +4,10 @@ set -eo pipefail
 
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
-export DEBIAN_FRONTEND=noninteractive
 export TZ=Etc/UTC
+# https://askubuntu.com/questions/1367139/apt-get-upgrade-auto-restart-services
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
 
 # based on https://gist.github.com/sj26/88e1c6584397bb7c13bd11108a579746?permalink_comment_id=4155247#gistcomment-4155247
 function retry {
