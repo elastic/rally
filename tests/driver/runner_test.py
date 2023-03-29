@@ -2992,12 +2992,12 @@ class TestCreateComponentTemplateRunner:
             [
                 mock.call(
                     name="templateA",
-                    body={"template": {"mappings": {"properties": {"@timestamp": {"type": "date"}}}}},
+                    template={"mappings": {"properties": {"@timestamp": {"type": "date"}}}},
                     params=params["request-params"],
                 ),
                 mock.call(
                     name="templateB",
-                    body={"template": {"settings": {"index.number_of_shards": 1, "index.number_of_replicas": 1}}},
+                    template={"settings": {"index.number_of_shards": 1, "index.number_of_replicas": 1}},
                     params=params["request-params"],
                 ),
             ]
