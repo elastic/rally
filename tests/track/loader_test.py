@@ -896,9 +896,8 @@ class TestTemplateSource:
         base_path = "~/.rally/benchmarks/tracks/default/geonames"
         template_file_name = "track.json"
         tmpl_src = loader.TemplateSource(base_path, template_file_name)
-        # pylint: disable=trailing-whitespace
         expected_response = textwrap.dedent(
-            """                                
+            """
             {% import "rally.helpers" as rally with context %}
             {
               "version": 2,

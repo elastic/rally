@@ -1713,16 +1713,13 @@ class AsyncIoAdapter:
         self.logger = logging.getLogger(__name__)
 
     def __call__(self, *args, **kwargs):
-        # only possible in Python 3.7+ (has introduced get_running_loop)
-        # try:
-        #     loop = asyncio.get_running_loop()
-        # except RuntimeError:
-        #     loop = asyncio.new_event_loop()
-        #     asyncio.set_event_loop(loop)
-        loop = asyncio.new_event_loop()
-        loop.set_debug(self.debug_event_loop)
-        loop.set_exception_handler(self._logging_exception_handler)
-        asyncio.set_event_loop(loop)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            loop.set_debug(self.debug_event_loop)
+            loop.set_exception_handler(self._logging_exception_handler)
+            asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(self.run())
         finally:
