@@ -1454,8 +1454,8 @@ class CreateComponentTemplate(Runner):
     async def __call__(self, es, params):
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
-        for template, body in templates:
-            await es.cluster.put_component_template(name=template, body=body, params=request_params)
+        for name, body in templates:
+            await es.cluster.put_component_template(name=name, template=body["template"], params=request_params)
         return {
             "weight": len(templates),
             "unit": "ops",
@@ -1528,17 +1528,30 @@ class DeleteComposableTemplate(Runner):
         request_params = mandatory(params, "request-params", self)
         ops_count = 0
 
-        for template_name, delete_matching_indices, index_pattern in templates:
-            if not only_if_exists:
-                await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
-                ops_count += 1
-            elif only_if_exists and await es.indices.exists_index_template(name=template_name):
-                self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
-                await es.indices.delete_index_template(name=template_name, params=request_params)
-                ops_count += 1
-            # ensure that we do not provide an empty index pattern by accident
-            if delete_matching_indices and index_pattern:
-                await es.indices.delete(index=index_pattern)
+        prior_destructive_setting = None
+        current_destructive_setting = None
+        try:
+            for template_name, delete_matching_indices, index_pattern in templates:
+                if not only_if_exists:
+                    await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
+                    ops_count += 1
+                elif only_if_exists and await es.indices.exists_index_template(name=template_name):
+                    self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
+                    await es.indices.delete_index_template(name=template_name, params=request_params)
+                    ops_count += 1
+                # ensure that we do not provide an empty index pattern by accident
+                if delete_matching_indices and index_pattern:
+                    # only set if really required
+                    if current_destructive_setting is None:
+                        current_destructive_setting = False
+                        prior_destructive_setting = await set_destructive_requires_name(es, current_destructive_setting)
+                        ops_count += 1
+
+                    await es.indices.delete(index=index_pattern)
+                    ops_count += 1
+        finally:
+            if current_destructive_setting is not None:
+                await set_destructive_requires_name(es, prior_destructive_setting)
                 ops_count += 1
 
         return {
@@ -1583,17 +1596,31 @@ class DeleteIndexTemplate(Runner):
         request_params = params.get("request-params", {})
         ops_count = 0
 
-        for template_name, delete_matching_indices, index_pattern in template_names:
-            if not only_if_exists:
-                await es.indices.delete_template(name=template_name, ignore=[404], params=request_params)
-                ops_count += 1
-            elif only_if_exists and await es.indices.exists_template(name=template_name):
-                self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
-                await es.indices.delete_template(name=template_name, params=request_params)
-                ops_count += 1
-            # ensure that we do not provide an empty index pattern by accident
-            if delete_matching_indices and index_pattern:
-                await es.indices.delete(index=index_pattern)
+        prior_destructive_setting = None
+        current_destructive_setting = None
+
+        try:
+            for template_name, delete_matching_indices, index_pattern in template_names:
+                if not only_if_exists:
+                    await es.indices.delete_template(name=template_name, ignore=[404], params=request_params)
+                    ops_count += 1
+                elif only_if_exists and await es.indices.exists_template(name=template_name):
+                    self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
+                    await es.indices.delete_template(name=template_name, params=request_params)
+                    ops_count += 1
+                # ensure that we do not provide an empty index pattern by accident
+                if delete_matching_indices and index_pattern:
+                    # only set if really required
+                    if current_destructive_setting is None:
+                        current_destructive_setting = False
+                        prior_destructive_setting = await set_destructive_requires_name(es, current_destructive_setting)
+                        ops_count += 1
+
+                    await es.indices.delete(index=index_pattern)
+                    ops_count += 1
+        finally:
+            if current_destructive_setting is not None:
+                await set_destructive_requires_name(es, prior_destructive_setting)
                 ops_count += 1
 
         return {
