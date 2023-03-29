@@ -147,12 +147,18 @@ def tags(src_dir):
     return _cleanup_tag_names(process.run_subprocess_with_output(f"git -C {io.escape_path(src_dir)} tag"))
 
 
-def _cleanup_remote_branch_names(branch_names):
-    return [(b[b.index("/") + 1 :]).strip() for b in branch_names if not b.endswith("/HEAD")]
+def _cleanup_remote_branch_names(refs):
+    branches = []
+    for ref in refs:
+        # git >= 2.40.0 reports an `origin` ref without a slash while previous versions
+        # reported a `origin/HEAD` ref.
+        if "/" in ref and not ref.endswith("/HEAD"):
+            branches.append(ref[ref.index("/") + 1 :].strip())
+    return branches
 
 
-def _cleanup_local_branch_names(branch_names):
-    return [b.strip() for b in branch_names if not b.endswith("HEAD")]
+def _cleanup_local_branch_names(refs):
+    return [ref.strip() for ref in refs if not ref.endswith("HEAD")]
 
 
 def _cleanup_tag_names(tag_names):
