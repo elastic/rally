@@ -59,7 +59,7 @@ def is_pr(issue):
     :param issue: an issue. May also be a PR.
     :return: True iff the issue is actually a PR.
     """
-    return issue.html_url and "pull" in issue.html_url
+    return issue.html_url and "pull" in issue.html_url and issue.pull_request().merged
 
 
 def pr_list(i):
