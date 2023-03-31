@@ -165,6 +165,9 @@ def _download_from_gcs_bucket(bucket_name, bucket_path, local_path, expected_siz
             if progress_indicator and download.bytes_downloaded and download.total_bytes:
                 progress_indicator(download.bytes_downloaded, expected_size_in_bytes)
             download.consume_next_chunk(transport)
+        # show final progress (for large files) or any progress (for files < chunk_size)
+        if progress_indicator and download.bytes_downloaded and expected_size_in_bytes:
+            progress_indicator(download.bytes_downloaded, expected_size_in_bytes)
 
 
 def download_from_bucket(blobstore, url, local_path, expected_size_in_bytes=None, progress_indicator=None):
