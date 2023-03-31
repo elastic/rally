@@ -20,6 +20,9 @@ import logging
 import logging.config
 import os
 import time
+from datetime import datetime
+
+import pytz
 
 from esrally import paths
 from esrally.utils import io
@@ -28,11 +31,24 @@ from esrally.utils import io
 # pylint: disable=unused-argument
 def configure_utc_formatter(*args, **kwargs):
     """
-    Logging formatter that renders timestamps in UTC to ensure consistent
-    timestamps across all deployments regardless of machine settings.
+    Logging formatter that renders timestamps in user provided timezone(only if it valid),
+    else configures UTC by default/invalid timezone value obtained
     """
     formatter = logging.Formatter(fmt=kwargs["format"], datefmt=kwargs["datefmt"])
-    formatter.converter = time.gmtime
+    user_tz = kwargs.get("timezone", None)
+    if user_tz:
+        if user_tz == "localtime":
+            local_tz = datetime.utcnow().astimezone().tzinfo
+            formatter.converter = getattr(time, local_tz)
+        else:
+            try:
+                tz = pytz.timezone(user_tz)
+                formatter.converter = getattr(time, tz)
+            except pytz.UnknownTimeZoneError:
+                formatter.converter = time.gmtime
+    else:
+        formatter.converter = time.gmtime
+
     return formatter
 
 
