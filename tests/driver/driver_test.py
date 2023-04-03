@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import asyncio
 import collections
 import io
 import threading
