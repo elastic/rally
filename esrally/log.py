@@ -32,18 +32,18 @@ from esrally.utils import io
 def configure_utc_formatter(*args, **kwargs):
     """
     Logging formatter that renders timestamps in user provided timezone(only if it valid),
-    else configures UTC by default if invalid timezone value is obtained
+    else configures UTC by default/invalid timezone value obtained
     """
     formatter = logging.Formatter(fmt=kwargs["format"], datefmt=kwargs["datefmt"])
     user_tz = kwargs.get("timezone", None)
     if user_tz:
         if user_tz == "localtime":
             local_tz = datetime.utcnow().astimezone().tzinfo
-            formatter.converter = local_tz
+            formatter.converter = getattr(time, local_tz)
         else:
             try:
                 tz = pytz.timezone(user_tz)
-                formatter.converter = tz
+                formatter.converter = getattr(time, tz)
             except pytz.UnknownTimeZoneError:
                 formatter.converter = time.gmtime
     else:
