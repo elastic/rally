@@ -3,14 +3,14 @@
   "formatters": {
     "normal": {
       "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
-      "datefmt": "%Y-%m-%d %H:%M:%S %Z",
+      "datefmt": "%Y-%m-%d %H:%M:%S",
       "timezone": "localtime",
-      "()": "esrally.log.configure_utc_formatter"
+      "()": "esrally.log.configure_time_formatter"
     },
     "profile": {
       "format": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
       "datefmt": "%Y-%m-%d %H:%M:%S",
-      "()": "esrally.log.configure_utc_formatter"
+      "()": "esrally.log.configure_time_formatter"
     }
   },
   "filters": {
