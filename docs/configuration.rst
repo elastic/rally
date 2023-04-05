@@ -212,7 +212,7 @@ With the following configuration Rally will log all output to standard error::
           "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
           "datefmt": "%Y-%m-%d %H:%M:%S",
           "timezone": "localtime",
-          "()": "esrally.log.configure_utc_formatter"
+          "()": "esrally.log.configure_time_formatter"
         }
       },
       "filters": {

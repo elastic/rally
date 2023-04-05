@@ -18,6 +18,7 @@
 import copy
 import json
 import os
+import time
 from unittest import mock
 from unittest.mock import mock_open, patch
 
@@ -53,3 +54,13 @@ class TestLog:
             log.add_missing_loggers_to_config()
             handle = mock_file()
             handle.write.assert_called_once_with(expected_configuration)
+
+    log_format = "%(asctime)s %(message)s"
+
+    def test_configure_time_formatter_utc(self):
+        formatter = log.configure_time_formatter(format=self.log_format, datefmt="%Y-%m-%d %H:%M:%S")
+        assert formatter.converter is time.gmtime
+
+    def test_configure_time_formatter_localtime(self):
+        formatter = log.configure_time_formatter(format=self.log_format, datefmt="%Y-%m-%d %H:%M:%S", timezone="localtime")
+        assert formatter.converter is time.localtime
