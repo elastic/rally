@@ -805,6 +805,8 @@ class NodeStatsRecorder:
                 "indexing",
                 "search",
                 "merges",
+                "refresh",
+                "flush",
                 "query_cache",
                 "fielddata",
                 "segments",

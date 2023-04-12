@@ -2209,7 +2209,14 @@ class TestNodeStatsRecorder:
                         "refresh": {
                             "total": 747,
                             "total_time_in_millis": 277382,
+                            "external_total": 979,
+                            "external_total_time_in_millis": 14199,
                             "listeners": 0,
+                        },
+                        "flush": {
+                            "total": 71,
+                            "periodic": 71,
+                            "total_time_in_millis": 34545
                         },
                         "query_cache": {
                             "memory_size_in_bytes": 0,
@@ -2418,6 +2425,9 @@ class TestNodeStatsRecorder:
                 "indices_docs_deleted": 324530,
                 "indices_fielddata_evictions": 17,
                 "indices_fielddata_memory_size_in_bytes": 6936,
+                "indices_flush_periodic": 71,
+                "indices_flush_total": 71,
+                "indices_flush_total_time_in_millis": 34545,
                 "indices_indexing_throttle_time_in_millis": 0,
                 "indices_merges_current": 0,
                 "indices_merges_current_docs": 0,
@@ -2429,6 +2439,11 @@ class TestNodeStatsRecorder:
                 "indices_query_cache_memory_size_in_bytes": 0,
                 "indices_query_cache_miss_count": 0,
                 "indices_query_cache_total_count": 0,
+                "indices_refresh_external_total": 979,
+                "indices_refresh_external_total_time_in_millis": 14199,
+                "indices_refresh_listeners": 0,
+                "indices_refresh_total": 747,
+                "indices_refresh_total_time_in_millis": 277382,
                 "indices_request_cache_evictions": 0,
                 "indices_request_cache_hit_count": 0,
                 "indices_request_cache_memory_size_in_bytes": 0,
