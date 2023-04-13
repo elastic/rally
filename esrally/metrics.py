@@ -114,6 +114,27 @@ class EsClient:
 
             try:
                 return target(*args, **kwargs)
+            except elasticsearch.helpers.BulkIndexError as e:
+                for err in e.errors:
+                    err_type = err.get("index", {}).get("error", {}).get("type", None)
+                    if err.get("index", {}).get("status", None) not in (502, 503, 504, 429):
+                        msg = f"Unretryable error encountered when sending metrics to remote metrics store: [{err_type}]"
+                        self.logger.exception(msg)
+                        raise exceptions.RallyError(msg)
+
+                if execution_count <= max_execution_count:
+                    self.logger.debug(
+                        "Error in sending metrics to remote metrics store [%s] in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                        e,
+                        execution_count,
+                        max_execution_count,
+                        time_to_sleep,
+                    )
+                    time.sleep(time_to_sleep)
+                else:
+                    msg = f"Failed to send metrics to remote metrics store: [{e.errors}]"
+                    self.logger.exception(msg)
+                    raise exceptions.RallyError(msg)
             except elasticsearch.exceptions.ConnectionTimeout as e:
                 if execution_count <= max_execution_count:
                     self.logger.debug(
@@ -451,9 +472,9 @@ class MetricsStore:
         metrics on close (in order to avoid additional latency during the benchmark).
         """
         self.logger.info("Closing metrics store.")
+        self.opened = False
         self.flush()
         self._clear_meta_info()
-        self.opened = False
 
     def add_meta_info(self, scope, scope_key, key, value):
         """
