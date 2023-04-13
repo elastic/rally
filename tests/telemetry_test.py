@@ -2213,11 +2213,7 @@ class TestNodeStatsRecorder:
                             "external_total_time_in_millis": 14199,
                             "listeners": 0,
                         },
-                        "flush": {
-                            "total": 71,
-                            "periodic": 71,
-                            "total_time_in_millis": 34545
-                        },
+                        "flush": {"total": 71, "periodic": 71, "total_time_in_millis": 34545},
                         "query_cache": {
                             "memory_size_in_bytes": 0,
                             "total_count": 0,
