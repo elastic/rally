@@ -37,21 +37,19 @@ class RequestContextManager:
 
     @property
     def request_start(self):
-        return self.ctx["request_start"]
+        return self.ctx.get("request_start")
 
     @property
     def request_end(self):
-        return self.ctx["request_end"]
+        return self.ctx.get("request_end")
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        # propagate earliest request start and most recent request end to parent
-        request_start = self.request_start
-        request_end = self.request_end
         self.ctx_holder.restore_context(self.token)
         # don't attempt to restore these values on the top-level context as they don't exist
         if self.token.old_value != contextvars.Token.MISSING:
-            self.ctx_holder.update_request_start(request_start)
-            self.ctx_holder.update_request_end(request_end)
+            # propagate earliest request start and most recent request end to parent
+            self.ctx_holder.update_request_start(self.request_start)
+            self.ctx_holder.update_request_end(self.request_end)
         self.token = None
         return False
 
