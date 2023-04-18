@@ -204,16 +204,29 @@ class Runner:
         # filter Nones
         return dict(filter(lambda kv: kv[1] is not None, full_result.items()))
 
-    def _transport_request_params(self, params):
+    @staticmethod
+    def _transport_request_params(params):
+        """
+        Takes all of a runner's params and splits out request parameters, transport
+        level parameters, and headers into their own respective dicts.
+
+        :param params: A hash with all the respective runner's parameters.
+        :return: A tuple of the specific runner's params, request level parameters, transport level parameters, and headers, respectively.
+        """
+        transport_params = {}
         request_params = params.get("request-params", {})
-        request_timeout = params.get("request-timeout")
-        if request_timeout is not None:
-            request_params["request_timeout"] = request_timeout
-        headers = params.get("headers") or {}
-        opaque_id = params.get("opaque-id")
-        if opaque_id is not None:
+
+        if request_timeout := params.pop("request-timeout", None):
+            transport_params["request_timeout"] = request_timeout
+
+        if (ignore_status := request_params.pop("ignore", None)) or (ignore_status := params.pop("ignore", None)):
+            transport_params["ignore_status"] = ignore_status
+
+        headers = params.pop("headers", None) or {}
+        if opaque_id := params.pop("opaque-id", None):
             headers.update({"x-opaque-id": opaque_id})
-        return request_params, headers
+
+        return params, request_params, transport_params, headers
 
 
 class Delegator:
@@ -847,10 +860,9 @@ class Query(Runner):
         self._composite_agg_extractor = CompositeAggExtractor()
 
     async def __call__(self, es, params):
-        request_params, headers = self._transport_request_params(params)
-        request_timeout = request_params.pop("request_timeout", None)
-        if request_timeout is not None:
-            es.options(request_timeout=request_timeout)
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        # we don't set headers at the options level because the Query runner sets them via the client's '_perform_request' method
+        es.options(**transport_params)
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
@@ -1933,16 +1945,19 @@ class CloseMlJob(Runner):
 
 class RawRequest(Runner):
     async def __call__(self, es, params):
-        request_params, headers = self._transport_request_params(params)
-        if "ignore" in params:
-            request_params["ignore"] = params["ignore"]
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es.options(**transport_params)
+
         path = mandatory(params, "path", self)
+
         if not path.startswith("/"):
             self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
             raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
+
         if not bool(headers):
             # counter-intuitive, but preserves prior behavior
             headers = None
+
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
@@ -2731,7 +2746,8 @@ class Downsample(Runner):
     """
 
     async def __call__(self, es, params):
-        request_params, request_headers = self._transport_request_params(params)
+        params, request_params, transport_params, request_headers = self._transport_request_params(params)
+        es.options(**transport_params)
 
         fixed_interval = mandatory(params, "fixed-interval", self)
         if fixed_interval is None:

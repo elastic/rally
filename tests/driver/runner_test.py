@@ -1642,6 +1642,7 @@ class TestQueryRunner:
             "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
+        es.options.assert_called_once_with(request_timeout=3.0)
         es.perform_request.assert_awaited_once_with(
             method="GET",
             path="/_all/_search",
@@ -3641,10 +3642,8 @@ class TestRawRequestRunner:
             },
         }
         await r(es, params)
-
-        es.perform_request.assert_called_once_with(
-            method="DELETE", path="/twitter", headers=None, body=None, params={"ignore": [400, 404], "pretty": "true"}
-        )
+        es.options.assert_called_once_with(ignore_status=[400, 404])
+        es.perform_request.assert_called_once_with(method="DELETE", path="/twitter", headers=None, body=None, params={"pretty": "true"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -3720,6 +3719,8 @@ class TestRawRequestRunner:
         }
         await r(es, params)
 
+        es.options.assert_called_once_with(request_timeout=3.0)
+
         es.perform_request.assert_called_once_with(
             method="GET",
             path="/_msearch",
@@ -3730,7 +3731,7 @@ class TestRawRequestRunner:
                 {"index": "test", "search_type": "dfs_query_then_fetch"},
                 {"query": {"match_all": {}}},
             ],
-            params={"request_timeout": 3.0},
+            params={},
         )
 
 
