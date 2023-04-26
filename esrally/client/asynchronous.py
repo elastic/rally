@@ -184,10 +184,35 @@ class ResponseMatcher:
                 return body
 
 
+class RallyTCPConnector(aiohttp.TCPConnector):
+    def __init__(self, *args, **kwargs):
+        self.client_id = kwargs.pop("client_id", None)
+        self.logger = logging.getLogger(__name__)
+        super().__init__(*args, **kwargs)
+
+    async def _resolve_host(self, *args, **kwargs):
+        hosts = await super()._resolve_host(*args, **kwargs)
+        self.logger.debug("client id [%s] resolved hosts [{%s}]", self.client_id, hosts)
+        # super()._resolve_host() does actually return all the IPs a given name resolves to, but the underlying
+        # super()._create_direct_connection() logic only ever selects the first succesful host from this list from which
+        # to establish a connection
+        #
+        # here we use the factory assigned client_id to deterministically return a IP from this list, which we then swap
+        # to the beginning of the list to evenly distribute connections across _all_ clients
+        # see https://github.com/elastic/rally/issues/1598
+        idx = self.client_id % len(hosts)
+        host = hosts[idx]
+        self.logger.debug("client id [%s] selected host [{%s}]", self.client_id, host)
+        # swap order of hosts
+        hosts[0], hosts[idx] = hosts[idx], hosts[0]
+        return hosts
+
+
 class RallyAiohttpHttpNode(AiohttpHttpNode):
     def __init__(self, config):
         super().__init__(config)
         self._loop = None
+        self.client_id = None
         self.trace_configs = None
         self.enable_cleanup_closed = None
         self._static_responses = None
@@ -217,11 +242,12 @@ class RallyAiohttpHttpNode(AiohttpHttpNode):
         if self._static_responses:
             connector = StaticConnector(limit_per_host=self._connections_per_node, enable_cleanup_closed=self.enable_cleanup_closed)
         else:
-            connector = aiohttp.TCPConnector(
+            connector = RallyTCPConnector(
                 limit_per_host=self._connections_per_node,
                 use_dns_cache=True,
                 ssl=self._ssl_context,
                 enable_cleanup_closed=self.enable_cleanup_closed,
+                client_id=self.client_id,
             )
 
         self.session = aiohttp.ClientSession(
