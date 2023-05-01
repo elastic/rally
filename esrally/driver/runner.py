@@ -862,7 +862,7 @@ class Query(Runner):
     async def __call__(self, es, params):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         # we don't set headers at the options level because the Query runner sets them via the client's '_perform_request' method
-        es.options(**transport_params)
+        es = es.options(**transport_params)
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
@@ -1946,7 +1946,7 @@ class CloseMlJob(Runner):
 class RawRequest(Runner):
     async def __call__(self, es, params):
         params, request_params, transport_params, headers = self._transport_request_params(params)
-        es.options(**transport_params)
+        es = es.options(**transport_params)
 
         path = mandatory(params, "path", self)
 
@@ -2747,7 +2747,7 @@ class Downsample(Runner):
 
     async def __call__(self, es, params):
         params, request_params, transport_params, request_headers = self._transport_request_params(params)
-        es.options(**transport_params)
+        es = es.options(**transport_params)
 
         fixed_interval = mandatory(params, "fixed-interval", self)
         if fixed_interval is None:
