@@ -1595,6 +1595,7 @@ class TestAsyncExecutor:
         async def perform_request(*args, **kwargs):
             return None
 
+        es.options.return_value = es
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
         # one has been "consumed".
