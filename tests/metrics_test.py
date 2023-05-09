@@ -249,7 +249,7 @@ class TestEsClient:
                             sleep_slots[v],
                         )
                     )
-                logging_statements.append(f"Failed to send metrics to remote metrics store: [{self.errors}]")
+                logging_statements.append(f"Failed to send metrics to remote metrics store: [{self.errors}] - Full error(s) [{self.errors}]")
                 return logging_statements
 
             def raise_error(self):

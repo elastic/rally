@@ -119,7 +119,7 @@ class EsClient:
                     err_type = err.get("index", {}).get("error", {}).get("type", None)
                     if err.get("index", {}).get("status", None) not in (502, 503, 504, 429):
                         msg = f"Unretryable error encountered when sending metrics to remote metrics store: [{err_type}]"
-                        self.logger.exception(msg)
+                        self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
                         raise exceptions.RallyError(msg)
 
                 if execution_count <= max_execution_count:
@@ -133,7 +133,7 @@ class EsClient:
                     time.sleep(time_to_sleep)
                 else:
                     msg = f"Failed to send metrics to remote metrics store: [{e.errors}]"
-                    self.logger.exception(msg)
+                    self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
                     raise exceptions.RallyError(msg)
             except elasticsearch.exceptions.ConnectionTimeout as e:
                 if execution_count <= max_execution_count:
