@@ -1,0 +1,3 @@
+steps:
+  - label: "Release Docker Artifacts for Rally :docker:"
+    command: echo "TODO"
