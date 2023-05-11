@@ -54,6 +54,6 @@ spec:
       pipeline_file: .buildkite/it/pipeline.yml
       repository: elastic/rally
       teams:
-        elasticsearch-team: {}
+        es-perf: {}
         everyone:
           access_level: READ_ONLY
