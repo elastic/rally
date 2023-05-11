@@ -276,7 +276,7 @@ class TestEsClient:
             },
         ]
 
-        retriable_errors = [
+        retryable_errors = [
             ApiError(429),
             ApiError(502),
             ApiError(503),
@@ -300,7 +300,7 @@ class TestEsClient:
         exepcted_logger_calls = []
         expected_sleep_calls = []
 
-        for e in retriable_errors:
+        for e in retryable_errors:
             exepcted_logger_calls += e.logging_statements(max_retry)
             expected_sleep_calls += [mock.call(int(sleep_slots[i])) for i in range(0, max_retry)]
 

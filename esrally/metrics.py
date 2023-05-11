@@ -46,6 +46,7 @@ class EsClient:
         self._client = client
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
+        self.retryable_status_codes = [502, 503, 504, 429]
 
     # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
     def probe_version(self):
@@ -114,27 +115,6 @@ class EsClient:
 
             try:
                 return target(*args, **kwargs)
-            except elasticsearch.helpers.BulkIndexError as e:
-                for err in e.errors:
-                    err_type = err.get("index", {}).get("error", {}).get("type", None)
-                    if err.get("index", {}).get("status", None) not in (502, 503, 504, 429):
-                        msg = f"Unretryable error encountered when sending metrics to remote metrics store: [{err_type}]"
-                        self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
-                        raise exceptions.RallyError(msg)
-
-                if execution_count <= max_execution_count:
-                    self.logger.debug(
-                        "Error in sending metrics to remote metrics store [%s] in attempt [%d/%d]. Sleeping for [%f] seconds.",
-                        e,
-                        execution_count,
-                        max_execution_count,
-                        time_to_sleep,
-                    )
-                    time.sleep(time_to_sleep)
-                else:
-                    msg = f"Failed to send metrics to remote metrics store: [{e.errors}]"
-                    self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
-                    raise exceptions.RallyError(msg)
             except elasticsearch.exceptions.ConnectionTimeout as e:
                 if execution_count <= max_execution_count:
                     self.logger.debug(
@@ -192,8 +172,29 @@ class EsClient:
                 )
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
+            except elasticsearch.helpers.BulkIndexError as e:
+                for err in e.errors:
+                    err_type = err.get("index", {}).get("error", {}).get("type", None)
+                    if err.get("index", {}).get("status", None) not in self.retryable_status_codes:
+                        msg = f"Unretryable error encountered when sending metrics to remote metrics store: [{err_type}]"
+                        self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
+                        raise exceptions.RallyError(msg)
+
+                if execution_count <= max_execution_count:
+                    self.logger.debug(
+                        "Error in sending metrics to remote metrics store [%s] in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                        e,
+                        execution_count,
+                        max_execution_count,
+                        time_to_sleep,
+                    )
+                    time.sleep(time_to_sleep)
+                else:
+                    msg = f"Failed to send metrics to remote metrics store: [{e.errors}]"
+                    self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
+                    raise exceptions.RallyError(msg)
             except ApiError as e:
-                if e.status_code in (502, 503, 504, 429) and execution_count <= max_execution_count:
+                if e.status_code in self.retryable_status_codes and execution_count <= max_execution_count:
                     self.logger.debug(
                         "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
                         e.error,
