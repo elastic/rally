@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from unittest import mock
 
 import elasticsearch.exceptions
+import elasticsearch.helpers
 import pytest
 
 from esrally import config, exceptions, metrics, paths, track
@@ -231,7 +232,59 @@ class TestEsClient:
                 err = elasticsearch.exceptions.ApiError("unit-test", meta=TestEsClient.ApiResponseMeta(status=self.status_code), body={})
                 raise err
 
-        retriable_errors = [ApiError(429), ApiError(502), ApiError(503), ApiError(504), ConnectionError(), ConnectionTimeout()]
+        class BulkIndexError:
+            def __init__(self, errors):
+                self.errors = errors
+                self.error_message = f"{len(self.errors)} document(s) failed to index"
+
+            def logging_statements(self, retries):
+                logging_statements = []
+                for i, v in enumerate(range(retries)):
+                    logging_statements.append(
+                        "Error in sending metrics to remote metrics store [%s] in attempt [%d/%d]. Sleeping for [%f] seconds."
+                        % (
+                            self.error_message,
+                            i + 1,
+                            max_retry,
+                            sleep_slots[v],
+                        )
+                    )
+                logging_statements.append(
+                    f"Failed to send metrics to remote metrics store: [{self.errors}] - Full error(s) [{self.errors}]"
+                )
+                return logging_statements
+
+            def raise_error(self):
+                raise elasticsearch.helpers.BulkIndexError(self.error_message, self.errors)
+
+        bulk_index_errors = [
+            {
+                "index": {
+                    "_index": "rally-metrics-2023-04",
+                    "_id": "dffAc4cBOnIJ2Omtflwg",
+                    "status": 429,
+                    "error": {
+                        "type": "circuit_breaking_exception",
+                        "reason": "[parent] Data too large, data for [<http_request>] would be [123848638/118.1mb], "
+                        "which is larger than the limit of [123273216/117.5mb], real usage: [120182112/114.6mb], "
+                        "new bytes reserved: [3666526/3.4mb]",
+                        "bytes_wanted": 123848638,
+                        "bytes_limit": 123273216,
+                        "durability": "TRANSIENT",
+                    },
+                }
+            },
+        ]
+
+        retryable_errors = [
+            ApiError(429),
+            ApiError(502),
+            ApiError(503),
+            ApiError(504),
+            ConnectionError(),
+            ConnectionTimeout(),
+            BulkIndexError(bulk_index_errors),
+        ]
 
         max_retry = 10
 
@@ -247,7 +300,7 @@ class TestEsClient:
         exepcted_logger_calls = []
         expected_sleep_calls = []
 
-        for e in retriable_errors:
+        for e in retryable_errors:
             exepcted_logger_calls += e.logging_statements(max_retry)
             expected_sleep_calls += [mock.call(int(sleep_slots[i])) for i in range(0, max_retry)]
 
@@ -301,6 +354,60 @@ class TestEsClient:
             "Transport error(s) [unit-test] occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
             "store on host [127.0.0.1] at port [9243]."
         )
+
+    def test_raises_rally_error_on_unretryable_bulk_indexing_errors(self):
+        bulk_index_errors = [
+            {
+                "index": {
+                    "_index": "rally-metrics-2023-04",
+                    "_id": "dffAc4cBOnIJ2Omtflwg",
+                    "status": 429,
+                    "error": {
+                        "type": "circuit_breaking_exception",
+                        "reason": "[parent] Data too large, data for [<http_request>] would be [123848638/118.1mb], "
+                        "which is larger than the limit of [123273216/117.5mb], real usage: [120182112/114.6mb], "
+                        "new bytes reserved: [3666526/3.4mb]",
+                        "bytes_wanted": 123848638,
+                        "bytes_limit": 123273216,
+                        "durability": "TRANSIENT",
+                    },
+                }
+            },
+            {
+                "index": {
+                    "_id": "1",
+                    "_index": "rally-metrics-2023-04",
+                    "error": {"type": "version_conflict_engine_exception"},
+                    "status": 409,
+                }
+            },
+            {
+                "index": {
+                    "_index": "rally-metrics-2023-04",
+                    "_id": "dffAc4cBOnIJ2Omtflwg",
+                    "status": 400,
+                    "error": {
+                        "type": "mapper_parsing_exception",
+                        "reason": "failed to parse field [meta.error-description] of type [keyword] in document with id "
+                        "'dffAc4cBOnIJ2Omtflwg'. Preview of field's value: 'HTTP status: 400, message: failed to parse "
+                        "field [@timestamp] of type [date] in document with id '-PXAc4cBOnIJ2OmtX33J'. Preview of "
+                        "field's value: '1998-04-30T15:02:56-05:00'",
+                    },
+                }
+            },
+        ]
+
+        def raise_bulk_index_error():
+            err = elasticsearch.helpers.BulkIndexError(f"{len(bulk_index_errors)} document(s) failed to index", bulk_index_errors)
+            raise err
+
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+
+        with pytest.raises(
+            exceptions.RallyError,
+            match=(r"Unretryable error encountered when sending metrics to remote metrics store: \[version_conflict_engine_exception\]"),
+        ):
+            client.guarded(raise_bulk_index_error)
 
 
 class TestEsMetrics:
