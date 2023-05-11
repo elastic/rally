@@ -25,6 +25,7 @@ spec:
   lifecycle: production
   dependsOn:
     - resource:rally-it-pipeline
+    - resource:rally-releaser-docker-pipeline
 
 
 # Declare Rally's Buildkite pipeline.
