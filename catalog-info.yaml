@@ -83,7 +83,7 @@ spec:
       name: Rally - Release Docker
       description: Release Docker Artifacts for Rally
     spec:
-      pipeline_file: .buildkite/relase-docker/pipeline.yml
+      pipeline_file: .buildkite/release-docker/pipeline.yml
       provider_settings:
         trigger_mode: none
       repository: elastic/rally
