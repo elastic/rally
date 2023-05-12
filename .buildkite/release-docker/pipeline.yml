@@ -1,3 +1,14 @@
 steps:
-  - label: "Release Docker Artifacts for Rally :docker:"
-    command: echo "TODO"
+  - input: "Build parameters"
+    fields:
+      - text: "RELEASE_VERSION"
+        key: "RELEASE_VERSION"
+        default: ""
+        hint: "The version to release e.g. '2.8.0'."
+
+  - wait
+  - label: "Release Docker Artifacts for Rally"
+    command: bash .buildkite/release-docker/run.sh
+    # Run on GCP to use `docker`
+    agents:
+      provider: gcp
