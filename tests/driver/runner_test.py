@@ -1548,6 +1548,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_match_only_request_body_defined(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1601,6 +1602,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_with_timeout_and_headers(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1642,6 +1644,7 @@ class TestQueryRunner:
             "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
+        es.options.assert_called_once_with(request_timeout=3.0)
         es.perform_request.assert_awaited_once_with(
             method="GET",
             path="/_all/_search",
@@ -1654,6 +1657,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_match_using_request_params(self, es):
+        es.options.return_value = es
         response = {
             "timed_out": False,
             "took": 62,
@@ -1712,6 +1716,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_no_detailed_results(self, es):
+        es.options.return_value = es
         response = {
             "timed_out": False,
             "took": 62,
@@ -1765,6 +1770,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_hits_total_as_number(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1821,6 +1827,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_match_all(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1880,6 +1887,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_match_all_doc_type_fallback(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1936,6 +1944,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_only_one_page(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -1999,6 +2008,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_no_request_cache(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2057,6 +2067,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_only_one_page_only_request_body_defined(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2119,6 +2130,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_with_explicit_number_of_pages(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2192,6 +2204,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_cannot_clear_scroll(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2242,6 +2255,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_request_all_pages(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2310,6 +2324,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_runner_search_with_pages_logs_warning_and_executes(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2367,6 +2382,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_runner_fails_with_unknown_operation_type(self, es):
+        es.options.return_value = es
         query_runner = runner.Query()
 
         params = {
@@ -3602,6 +3618,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_raises_missing_slash(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3618,6 +3635,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_request_with_defaults(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3629,6 +3647,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_delete_index(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3641,14 +3660,13 @@ class TestRawRequestRunner:
             },
         }
         await r(es, params)
-
-        es.perform_request.assert_called_once_with(
-            method="DELETE", path="/twitter", headers=None, body=None, params={"ignore": [400, 404], "pretty": "true"}
-        )
+        es.options.assert_called_once_with(ignore_status=[400, 404])
+        es.perform_request.assert_called_once_with(method="DELETE", path="/twitter", headers=None, body=None, params={"pretty": "true"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_create_index(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3672,6 +3690,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_msearch(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3703,6 +3722,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_raw_with_timeout_and_opaqueid(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3720,6 +3740,8 @@ class TestRawRequestRunner:
         }
         await r(es, params)
 
+        es.options.assert_called_once_with(request_timeout=3.0)
+
         es.perform_request.assert_called_once_with(
             method="GET",
             path="/_msearch",
@@ -3730,7 +3752,7 @@ class TestRawRequestRunner:
                 {"index": "test", "search_type": "dfs_query_then_fetch"},
                 {"query": {"match_all": {}}},
             ],
-            params={"request_timeout": 3.0},
+            params={},
         )
 
 
@@ -5375,6 +5397,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_index_downsample(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Downsample()
@@ -5401,6 +5424,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_fixed_interval_in_body_param(self, es):
+        es.options.return_value = es
         sql_runner = runner.Downsample()
         params = {"operation-type": "downsample", "source-index": "source-index", "target-index": "target-index"}
 
@@ -5414,6 +5438,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_source_index_in_body_param(self, es):
+        es.options.return_value = es
         sql_runner = runner.Downsample()
         params = {"operation-type": "downsample", "fixed-interval": "1d", "target-index": "target-index"}
 
@@ -5427,6 +5452,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_target_index_in_body_param(self, es):
+        es.options.return_value = es
         sql_runner = runner.Downsample()
         params = {"operation-type": "downsample", "fixed-interval": "1d", "source-index": "source-index"}
 
@@ -5577,6 +5603,7 @@ class TestQueryWithSearchAfterScroll:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_search_after_with_pit(self, es):
+        es.options.return_value = es
         pit_op = "open-point-in-time1"
         pit_id = "0123456789abcdef"
         params = {
@@ -5689,6 +5716,7 @@ class TestQueryWithSearchAfterScroll:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_search_after_without_pit(self, es):
+        es.options.return_value = es
         params = {
             "name": "search-with-pit",
             "operation-type": "paginated-search",
@@ -5851,6 +5879,7 @@ class TestCompositeAgg:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_composite_agg_without_pit(self, es):
+        es.options.return_value = es
         params = {
             "name": "composite-agg-without-pit",
             "operation-type": "composite-agg",
@@ -5977,6 +6006,7 @@ class TestCompositeAgg:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_composite_agg_with_pit(self, es):
+        es.options.return_value = es
         pit_op = "open-point-in-time1"
         pit_id = "0123456789abcdef"
         params = {
@@ -6352,6 +6382,7 @@ class TestComposite:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_execute_multiple_streams(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock(
             side_effect=[
                 # raw-request
@@ -6425,6 +6456,7 @@ class TestComposite:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_propagates_violated_assertions(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock(
             side_effect=[
                 # search

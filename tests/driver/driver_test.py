@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import asyncio
 import collections
 import io
 import threading
@@ -1595,6 +1594,7 @@ class TestAsyncExecutor:
         async def perform_request(*args, **kwargs):
             return None
 
+        es.options.return_value = es
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
         # one has been "consumed".
@@ -1898,15 +1898,13 @@ class TestAsyncExecutor:
 class TestAsyncProfiler:
     @pytest.mark.asyncio
     async def test_profiler_is_a_transparent_wrapper(self):
+        f_called = False
+
         async def f(x):
-            await asyncio.sleep(x)
+            nonlocal f_called
+            f_called = True
             return x * 2
 
         profiler = driver.AsyncProfiler(f)
-        start = time.perf_counter()
-        # this should take roughly 1 second and should return something
-        return_value = await profiler(1)
-        end = time.perf_counter()
-        assert return_value == 2
-        duration = end - start
-        assert 0.9 <= duration <= 1.2, "Should sleep for roughly 1 second but took [%.2f] seconds." % duration
+        assert await profiler(1) == 2
+        assert f_called

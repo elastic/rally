@@ -21,7 +21,6 @@ import glob
 import grp
 import logging
 import os
-import re
 import shutil
 import urllib.error
 
@@ -30,8 +29,8 @@ from esrally import PROGRAM_NAME, exceptions, paths
 from esrally.exceptions import BuildError, SystemSetupError
 from esrally.utils import console, convert, git, io, jvm, net, process, sysstats
 
-# e.g. my-plugin:current - we cannot simply use String#split(":") as this would not work for timestamp-based revisions
-REVISION_PATTERN = r"(\w.*?):(.*)"
+DEFAULT_ELASTICSEARCH_BRANCH = "main"
+DEFAULT_PLUGIN_BRANCH = "main"
 
 
 def create(cfg, sources, distribution, car, plugins=None):
@@ -400,7 +399,7 @@ class ElasticsearchSourceSupplier:
         self.template_renderer = template_renderer
 
     def fetch(self):
-        return SourceRepository("Elasticsearch", self.remote_url, self.src_dir, branch="main").fetch(self.revision)
+        return SourceRepository("Elasticsearch", self.remote_url, self.src_dir, branch=DEFAULT_ELASTICSEARCH_BRANCH).fetch(self.revision)
 
     def prepare(self):
         if self.builder:
@@ -559,7 +558,7 @@ class CorePluginSourceSupplier:
 
     def fetch(self):
         # Just retrieve the current revision *number* and assume that Elasticsearch has prepared the source tree.
-        return SourceRepository("Elasticsearch", None, self.es_src_dir, branch="main").fetch(revision="current")
+        return SourceRepository("Elasticsearch", None, self.es_src_dir, branch=DEFAULT_PLUGIN_BRANCH).fetch(revision="current")
 
     def prepare(self):
         if self.builder:
@@ -649,13 +648,12 @@ def _config_value(src_config, key):
 def _extract_revisions(revision):
     revisions = revision.split(",") if revision else []
     if len(revisions) == 1:
-        r = revisions[0]
-        if r.startswith("elasticsearch:"):
+        c, r = _component_from_revision(revisions[0])
+        if c.startswith("elasticsearch:"):
             r = r[len("elasticsearch:") :]
-        # may as well be just a single plugin
-        m = re.match(REVISION_PATTERN, r)
-        if m:
-            return {m.group(1): m.group(2)}
+        # elasticsearch or single plugin
+        if c:
+            return {c: r}
         else:
             return {
                 "elasticsearch": r,
@@ -664,13 +662,45 @@ def _extract_revisions(revision):
             }
     else:
         results = {}
-        for r in revisions:
-            m = re.match(REVISION_PATTERN, r)
-            if m:
-                results[m.group(1)] = m.group(2)
+        for rev in revisions:
+            c, r = _component_from_revision(rev)
+            if c:
+                results[c] = r
             else:
                 raise exceptions.SystemSetupError("Revision [%s] does not match expected format [name:revision]." % r)
         return results
+
+
+def _branch_from_revision_with_ts(revision, default_branch):
+    """
+    Extracts the branch and revision from a `revision` that uses @timestamp.
+    If a branch can't be found in `revision`, default_branch is used.
+    """
+
+    # ":" separator maybe used in both the timestamp and the component
+    # e.g. elasticsearch:<branch>@TS
+    _, r = _component_from_revision(revision)
+    branch, git_ts_revision = r.split("@")
+    if not branch:
+        branch = default_branch
+    return branch, git_ts_revision
+
+
+def _component_from_revision(revision):
+    """Extracts the (optional) component and remaining data from `revision`"""
+
+    component = ""
+    r = revision
+    if "@" not in revision and ":" in revision:
+        # e.g. @2023-04-20T01:00:00Z
+        component, r = revision.split(":")
+    elif "@" in revision and ":" in revision:
+        # e.g. "elasticsearch:<optional_branch>@2023-04-20T01:00:00Z"
+        revision_without_ts = revision[: revision.find("@")]
+        if ":" in revision_without_ts:
+            component = revision_without_ts.split(":")[0]
+            r = revision[revision.find(":", 1) + 1 :]
+    return component, r
 
 
 class SourceRepository:
@@ -709,11 +739,16 @@ class SourceRepository:
             git.pull(self.src_dir, remote="origin", branch=self.branch)
         elif revision == "current":
             self.logger.info("Skip fetching sources for %s.", self.name)
-        elif self.has_remote() and revision.startswith("@"):
-            # convert timestamp annotated for Rally to something git understands -> we strip leading and trailing " and the @.
-            git_ts_revision = revision[1:]
-            self.logger.info("Fetching from remote and checking out revision with timestamp [%s] for %s.", git_ts_revision, self.name)
-            git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=self.branch)
+        # revision contains a timestamp
+        elif self.has_remote() and "@" in revision:
+            branch, git_ts_revision = _branch_from_revision_with_ts(revision, self.branch)
+            self.logger.info(
+                "Fetching from remote and checking out revision with timestamp [%s] from branch %s for %s.",
+                git_ts_revision,
+                branch,
+                self.name,
+            )
+            git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=branch)
         elif self.has_remote():  # we can have either a commit hash, branch name, or tag
             git.fetch(self.src_dir, remote="origin")
             if git.is_branch(self.src_dir, identifier=revision):

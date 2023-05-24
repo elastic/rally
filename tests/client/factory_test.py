@@ -428,6 +428,19 @@ class TestEsClientAgainstHTTPSServer:
 
 class TestRequestContextManager:
     @pytest.mark.asyncio
+    async def test_does_not_propagates_empty_toplevel_context(self):
+        test_client = client.RequestContextHolder()
+        async with test_client.new_request_context() as top_level_ctx:
+            # Simulate that we started a request context but did not issue a request.
+            # This can happen when a runner throws an exception before it issued an
+            # API request. The most typical case is that a mandatory parameter is
+            # missing.
+            pass
+
+        assert top_level_ctx.request_start is None
+        assert top_level_ctx.request_end is None
+
+    @pytest.mark.asyncio
     async def test_propagates_nested_context(self):
         test_client = client.RequestContextHolder()
         async with test_client.new_request_context() as top_level_ctx:

@@ -184,7 +184,7 @@ class EsClientFactory:
             distribution_version=self.distribution_version, hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options
         )
 
-    def create_async(self, api_key=None):
+    def create_async(self, api_key=None, client_id=None):
         # pylint: disable=import-outside-toplevel
         import io
 
@@ -239,6 +239,7 @@ class EsClientFactory:
             node_connection.trace_configs = [trace_config]
             node_connection.enable_cleanup_closed = self.enable_cleanup_closed
             node_connection.static_responses = self.static_responses
+            node_connection.client_id = client_id
 
         return async_client
 

@@ -1736,7 +1736,7 @@ class AsyncIoAdapter:
             for cluster_name, cluster_hosts in all_hosts.items():
                 es[cluster_name] = client.EsClientFactory(
                     cluster_hosts, all_client_options[cluster_name], distribution_version=distribution_version
-                ).create_async(api_key=api_key)
+                ).create_async(api_key=api_key, client_id=client_id)
             return es
 
         if self.assertions_enabled:
