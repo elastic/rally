@@ -48,10 +48,12 @@ def log_config_path():
     return os.path.join(paths.rally_confdir(), "logging.json")
 
 
-def add_missing_loggers_to_config():
-    """
-    Ensures that any missing top level loggers in resources/logging.json are
-    appended to an existing log configuration
+def migrate_logging_configuration():
+    """Upgrade logging configuration to newer versions of Rally
+
+    2.8.0:
+     * Ensures that any missing top level loggers in resources/logging.json are
+       appended to an existing log configuration
     """
 
     def _missing_loggers(source, target):
@@ -73,13 +75,13 @@ def add_missing_loggers_to_config():
         with open(source_path, encoding="UTF-8") as src:
             template = json.load(src)
             existing_logging_config = json.load(target)
+
             if missing_loggers := _missing_loggers(source=template["loggers"], target=existing_logging_config["loggers"]):
                 existing_logging_config["loggers"].update(missing_loggers)
-                updated_config = json.dumps(existing_logging_config, indent=2)
 
     if missing_loggers:
         with open(log_config_path(), "w", encoding="UTF-8") as target:
-            target.write(updated_config)
+            json.dump(existing_logging_config, target, indent=2)
 
 
 def install_default_log_config():
@@ -102,7 +104,7 @@ def install_default_log_config():
                 log_path = io.escape_path(log_path)
                 contents = src.read().replace("${LOG_PATH}", log_path)
                 target.write(contents)
-    add_missing_loggers_to_config()
+    migrate_logging_configuration()
     io.ensure_dir(paths.logs())
 
 

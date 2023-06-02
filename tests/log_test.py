@@ -37,23 +37,24 @@ class TestLog:
         p = os.path.join(os.path.join(os.path.dirname(__file__), "..", "esrally", "resources", "logging.json"))
         self.configuration = self._load_logging_template(p)
 
+    @mock.patch("json.dump")
     @mock.patch("json.load")
-    def test_add_missing_loggers_to_config_missing(self, mock_json_load, caplog):
+    def test_migrate_logging_configuration(self, mock_json_load, mock_json_dump, caplog):
         source_template = copy.deepcopy(self.configuration)
         existing_configuration = copy.deepcopy(self.configuration)
         # change existing to differ from source template, showing that we don't overwrite any existing loggers config
         existing_configuration["loggers"]["rally.profile"]["level"] = "DEBUG"
-        expected_configuration = json.dumps(copy.deepcopy(existing_configuration), indent=2)
+        expected_configuration = copy.deepcopy(existing_configuration)
+
         # simulate user missing 'elastic_transport' in logging.json
         del existing_configuration["loggers"]["elastic_transport"]
 
         # first loads template, then existing configuration
-        mock_json_load.side_effect = [source_template, existing_configuration]
+        mock_json_load.side_effect = [source_template, copy.deepcopy(existing_configuration)]
 
         with patch("builtins.open", mock_open()) as mock_file:
-            log.add_missing_loggers_to_config()
-            handle = mock_file()
-            handle.write.assert_called_once_with(expected_configuration)
+            log.migrate_logging_configuration()
+            mock_json_dump.assert_called_once_with(expected_configuration, mock_file(), indent=2)
 
     log_format = "%(asctime)s %(message)s"
 
