@@ -48,6 +48,8 @@ class TestLog:
 
         # simulate user missing 'elastic_transport' in logging.json
         del existing_configuration["loggers"]["elastic_transport"]
+        # simulate old formatter name
+        existing_configuration["formatters"]["normal"]["()"] = "esrally.log.configure_utc_formatter"
 
         # first loads template, then existing configuration
         mock_json_load.side_effect = [source_template, copy.deepcopy(existing_configuration)]
