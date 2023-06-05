@@ -1871,7 +1871,7 @@ class AsyncExecutor:
                 absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
                 self.schedule_handle.before_request(processing_start)
-                async with self.es["default"].new_request_context() as request_context:
+                with self.es["default"].new_request_context() as request_context:
                     total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                     request_start = request_context.request_start
                     request_end = request_context.request_end

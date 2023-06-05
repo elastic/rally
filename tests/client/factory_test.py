@@ -430,7 +430,7 @@ class TestRequestContextManager:
     @pytest.mark.asyncio
     async def test_does_not_propagates_empty_toplevel_context(self):
         test_client = client.RequestContextHolder()
-        async with test_client.new_request_context() as top_level_ctx:
+        with test_client.new_request_context() as top_level_ctx:
             # Simulate that we started a request context but did not issue a request.
             # This can happen when a runner throws an exception before it issued an
             # API request. The most typical case is that a mandatory parameter is
@@ -443,10 +443,10 @@ class TestRequestContextManager:
     @pytest.mark.asyncio
     async def test_propagates_nested_context(self):
         test_client = client.RequestContextHolder()
-        async with test_client.new_request_context() as top_level_ctx:
+        with test_client.new_request_context() as top_level_ctx:
             test_client.on_request_start()
             await asyncio.sleep(0.01)
-            async with test_client.new_request_context() as nested_ctx:
+            with test_client.new_request_context() as nested_ctx:
                 test_client.on_request_start()
                 await asyncio.sleep(0.01)
                 test_client.on_request_end()

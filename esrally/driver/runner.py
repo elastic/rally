@@ -2814,7 +2814,7 @@ class RequestTiming(Runner, Delegator):
 
     async def __call__(self, es, params):
         absolute_time = time.time()
-        async with es["default"].new_request_context() as request_context:
+        with es["default"].new_request_context() as request_context:
             return_value = await self.delegate(es, params)
             if isinstance(return_value, tuple) and len(return_value) == 2:
                 total_ops, total_ops_unit = return_value
