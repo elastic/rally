@@ -179,7 +179,7 @@ Logging in Rally is configured in ``~/.rally/logging.json``. For more informatio
 * The Python reference documentation on the `logging configuration schema <https://docs.python.org/3/library/logging.config.html#logging-config-dictschema>`_ explains the file format.
 * The `logging handler documentation <https://docs.python.org/3/library/logging.handlers.html>`_ describes how to customize where log output is written to.
 
-The default timestamp for logs in Rally is set to UTC, but users can override this setting by ``"timezone": "localtime"`` in configuration file. Also, Rally will log all output to ``~/.rally/logs/rally.log``.
+By default, Rally will log all output to ``~/.rally/logs/rally.log``. The default timestamp is UTC, but users can opt for the local time by setting ``"timezone": "localtime"`` in the logging configuration file. 
 
 The log file will not be rotated automatically as this is problematic due to Rally's multi-process architecture. Setup an external tool like `logrotate <https://linux.die.net/man/8/logrotate>`_ to achieve that. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
 
