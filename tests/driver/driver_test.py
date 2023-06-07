@@ -1341,7 +1341,7 @@ class TestAsyncExecutor:
             self.task_start = task_start
             self.current_request_start = self.task_start
 
-        async def __aenter__(self):
+        def __enter__(self):
             # pretend time advances on each request
             self.current_request_start += 5
             return self
@@ -1354,7 +1354,7 @@ class TestAsyncExecutor:
         def request_end(self):
             return self.current_request_start + 0.05
 
-        async def __aexit__(self, exc_type, exc_val, exc_tb):
+        def __exit__(self, exc_type, exc_val, exc_tb):
             return False
 
     class RunnerWithProgress:

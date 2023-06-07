@@ -31,7 +31,7 @@ class RequestContextManager:
         self.ctx = None
         self.token = None
 
-    async def __aenter__(self):
+    def __enter__(self):
         self.ctx, self.token = self.ctx_holder.init_request_context()
         return self
 
@@ -43,7 +43,7 @@ class RequestContextManager:
     def request_end(self):
         return self.ctx.get("request_end")
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.ctx_holder.restore_context(self.token)
         # don't attempt to restore these values on the top-level context as they don't exist
         if self.token.old_value != contextvars.Token.MISSING:
