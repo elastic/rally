@@ -48,7 +48,6 @@ from esrally import (
     version,
 )
 from esrally.mechanic import mechanic, team
-from esrally.tracker import tracker
 from esrally.utils import console, convert, io, net, opts, process, versions
 
 
@@ -1170,20 +1169,6 @@ def dispatch_sub_command(arg_parser, args, cfg):
 
             configure_reporting_params(args, cfg)
             race(cfg, args.kill_running_processes)
-        elif sub_command == "create-track":
-            if args.data_streams is not None:
-                cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
-                cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
-                cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
-            elif args.indices is not None:
-                cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
-                cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
-                cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
-                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
-            configure_connection_params(arg_parser, args, cfg)
-
-            tracker.create_track(cfg)
         elif sub_command == "info":
             configure_track_params(arg_parser, args, cfg)
             track.track_info(cfg)
