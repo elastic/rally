@@ -829,6 +829,7 @@ class ForceMergeParamSource(ParamSource):
         self._max_num_segments = params.get("max-num-segments")
         self._poll_period = params.get("poll-period", 10)
         self._mode = params.get("mode", "blocking")
+        self._wait_for_completion = params.get("wait-for-completion")
 
     def params(self):
         parsed_params = {
@@ -836,6 +837,7 @@ class ForceMergeParamSource(ParamSource):
             "max-num-segments": self._max_num_segments,
             "mode": self._mode,
             "poll-period": self._poll_period,
+            "wait-for-completion": self._wait_for_completion,
         }
         parsed_params.update(self._client_params())
         return parsed_params

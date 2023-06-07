@@ -664,10 +664,13 @@ class ForceMerge(Runner):
         import elasticsearch
 
         max_num_segments = params.get("max-num-segments")
+        wait_for_completion = params.get("wait-for-completion")
         mode = params.get("mode")
         merge_params = self._default_kw_params(params)
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
+        if isinstance(wait_for_completion, bool):
+            merge_params["wait_for_completion"] = wait_for_completion
         if mode == "polling":
             complete = False
             try:
