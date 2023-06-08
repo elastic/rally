@@ -28,11 +28,15 @@ from esrally.utils import io
 # pylint: disable=unused-argument
 def configure_utc_formatter(*args, **kwargs):
     """
-    Logging formatter that renders timestamps in UTC to ensure consistent
-    timestamps across all deployments regardless of machine settings.
+    Logging formatter that renders timestamps UTC, or in the local system time zone when the user requests it.
     """
     formatter = logging.Formatter(fmt=kwargs["format"], datefmt=kwargs["datefmt"])
-    formatter.converter = time.gmtime
+    user_tz = kwargs.get("timezone", None)
+    if user_tz == "localtime":
+        formatter.converter = time.localtime
+    else:
+        formatter.converter = time.gmtime
+
     return formatter
 
 
