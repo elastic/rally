@@ -41,7 +41,10 @@ jobs:
       - name: "Install dependencies"
         run: python -m pip install --upgrade nox
       - name: "Run tests"
-        run: nox -s test-${{matrix.python-version}}
+        shell: bash
+        env:
+          PYTHON_VERSION: ${{matrix.python-version}}
+        run: nox -s test-${PYTHON_VERSION%-dev} --error-on-missing-interpreters
 
   rally-tracks-compat:
     runs-on: ubuntu-22.04
