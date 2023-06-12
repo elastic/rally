@@ -97,7 +97,8 @@ serve-docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
 
 test: check-venv
-	. $(VENV_ACTIVATE_FILE); pytest tests/
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.8
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.11
 
 # checks min and max python versions
 it: check-venv python-caches-clean
