@@ -1,3 +1,35 @@
+### 2.8.0
+
+#### Highlights
+
+* [#1683](https://github.com/elastic/rally/pull/1683): Upgrade Elasticsearch client to 8.6.1
+* [#1669](https://github.com/elastic/rally/pull/1669): Upgrade ES Client to 8.x
+
+#### Enhancements
+
+* [#1727](https://github.com/elastic/rally/pull/1727): Allow configuring logging to use local time
+* [#1707](https://github.com/elastic/rally/pull/1707): Evenly distribute client connections across hosts
+* [#1706](https://github.com/elastic/rally/pull/1706): Allow specifying branch together with timestamp in revision
+* [#1702](https://github.com/elastic/rally/pull/1702): Include 'refresh' and 'flush' stats by default when using 'node-stats-include-indices'
+* [#1663](https://github.com/elastic/rally/pull/1663): Add operating system cgroup stats to node-stats telemetry
+
+#### Bug Fixes
+
+* [#1722](https://github.com/elastic/rally/pull/1722): Increase 'mapping.total_fields.limit' to '2000'
+* [#1719](https://github.com/elastic/rally/pull/1719): Bump up minimum Python version
+* [#1710](https://github.com/elastic/rally/pull/1710): Actually use client returned from '.options()'
+* [#1705](https://github.com/elastic/rally/pull/1705): Refactor some runners to set transport level options
+* [#1703](https://github.com/elastic/rally/pull/1703): Improve exception handling for metrics store errors
+* [#1698](https://github.com/elastic/rally/pull/1698): Update progress after GCS download finished
+* [#1692](https://github.com/elastic/rally/pull/1692): Allow to delete indices related to index templates
+* [#1691](https://github.com/elastic/rally/pull/1691): Ignore HTTP 404 consistently in runners
+* [#1690](https://github.com/elastic/rally/pull/1690): Use correct params for create component template
+* [#1687](https://github.com/elastic/rally/pull/1687): Propagate request start/end lazily
+
+#### Miscellaneous Changes
+
+* [#1725](https://github.com/elastic/rally/pull/1725): Make async context manager synchronous
+
 ### 2.7.1
 
 #### Highlights
