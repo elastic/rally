@@ -1,0 +1,3 @@
+steps:
+  - label: "Run Precommit tests :test_tube:"
+    command: echo "TODO"
