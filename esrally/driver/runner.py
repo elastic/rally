@@ -501,6 +501,8 @@ class BulkIndex(Runner):
             bulk_params["timeout"] = params["timeout"]
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
+        if "refresh" in params:
+            bulk_params["refresh"] = params["refresh"]
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)

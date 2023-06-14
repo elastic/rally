@@ -634,6 +634,7 @@ class BulkIndexParamSource(ParamSource):
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
 
         self.ingest_percentage = self.float_param(params, name="ingest-percentage", default_value=100, min_value=0, max_value=100)
+        self.refresh = params.get("refresh")
         self.param_source = PartitionBulkIndexParamSource(
             self.corpora,
             self.batch_size,
@@ -644,6 +645,7 @@ class BulkIndexParamSource(ParamSource):
             self.on_conflict,
             self.recency,
             self.pipeline,
+            self.refresh,
             self._params,
         )
 
@@ -705,6 +707,7 @@ class PartitionBulkIndexParamSource:
         on_conflict,
         recency,
         pipeline=None,
+        refresh=None,
         original_params=None,
     ):
         """
@@ -732,6 +735,7 @@ class PartitionBulkIndexParamSource:
         self.on_conflict = on_conflict
         self.recency = recency
         self.pipeline = pipeline
+        self.refresh = refresh
         self.original_params = original_params
         # this is only intended for unit-testing
         self.create_reader = original_params.pop("__create_reader", create_default_reader)
