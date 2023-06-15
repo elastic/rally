@@ -5,6 +5,8 @@ on:
   pull_request:
   schedule:
     - cron: '0 14 * * *'
+  # Allows triggering the job manually
+  workflow_dispatch:
 
 permissions:
   contents: read
