@@ -672,12 +672,15 @@ class ForceMerge(Runner):
         if isinstance(wait_for_completion, bool):
             merge_params["wait_for_completion"] = wait_for_completion
         if mode == "polling":
+            # Explicitely set wait_for_completion to false for polling mode.
+            merge_params["wait_for_completion"] = False
             complete = False
-            try:
-                await es.indices.forcemerge(**merge_params)
-                complete = True
-            except elasticsearch.ConnectionTimeout:
-                pass
+            # try:
+            #     await es.indices.forcemerge(**merge_params)
+            #     complete = True
+            # except elasticsearch.ConnectionTimeout:
+            #     pass
+            await es.indices.forcemerge(**merge_params)
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
                 tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
