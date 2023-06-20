@@ -2,7 +2,7 @@
   "jobs": [
     {
       "enabled": true,
-      "pipeline_slug": "rally",
+      "pipeline_slug": "rally-it",
       "allow_org_users": true
     }
   ]
