@@ -114,7 +114,7 @@ release-checks: check-venv
 	. $(VENV_ACTIVATE_FILE); ./release-checks.sh $(release_version) $(next_version)
 
 # usage: e.g. make release release_version=0.9.2 next_version=0.9.3
-release: check-venv release-checks clean docs test it
+release: check-venv release-checks clean docs lint test it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
 .PHONY: install clean nondocs-clean docs-clean python-caches-clean lint format docs serve-docs test it check-all benchmark release release-checks prereq venv-create check-env
