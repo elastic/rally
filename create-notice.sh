@@ -47,7 +47,7 @@ function main {
     add_license "jsonschema" "https://raw.githubusercontent.com/Julian/jsonschema/main/COPYING"
     add_license "psutil" "https://raw.githubusercontent.com/giampaolo/psutil/master/LICENSE"
     add_license "py-cpuinfo" "https://raw.githubusercontent.com/workhorsy/py-cpuinfo/master/LICENSE"
-    add_license "tabulate" "https://bitbucket.org/astanin/python-tabulate/raw/03182bf9b8a2becbc54d17aa7e3e7dfed072c5f5/LICENSE"
+    add_license "tabulate" "https://raw.githubusercontent.com/astanin/python-tabulate/master/LICENSE"
     add_license "thespian" "https://raw.githubusercontent.com/kquick/Thespian/master/LICENSE.txt"
     add_license "boto3" "https://raw.githubusercontent.com/boto/boto3/develop/LICENSE"
     add_license "yappi" "https://raw.githubusercontent.com/sumerc/yappi/master/LICENSE"
@@ -73,7 +73,7 @@ function main {
     # yarl dependency "multidict" is already coverered above
     # boto3 dependencies
     add_license "s3transfer" "https://raw.githubusercontent.com/boto/s3transfer/develop/LICENSE.txt"
-    add_license "jmespath" "https://raw.githubusercontent.com/jmespath/jmespath.py/develop/LICENSE.txt"
+    add_license "jmespath" "https://raw.githubusercontent.com/jmespath/jmespath.py/develop/LICENSE"
     add_license "botocore" "https://raw.githubusercontent.com/boto/botocore/develop/LICENSE.txt"
     # google-resumable-media dependencies
     add_license "google-crc32c": "https://raw.githubusercontent.com/googleapis/python-crc32c/main/LICENSE"
