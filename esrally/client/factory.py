@@ -412,7 +412,8 @@ def delete_api_keys(es, ids, max_attempts=5):
 
     # Before ES 7.10, deleting API keys by ID had to be done individually.
     # After ES 7.10, a list of API key IDs can be deleted in one request.
-    current_version = versions.Version.from_string(es.info()["version"]["number"])
+    version = es.info()["version"]
+    current_version = versions.Version.from_string(version.get("number", "7.10.0"))
     minimum_version = versions.Version.from_string("7.10.0")
 
     deleted = []
@@ -423,7 +424,7 @@ def delete_api_keys(es, ids, max_attempts=5):
         import elasticsearch
 
         try:
-            if current_version >= minimum_version:
+            if current_version >= minimum_version or es.is_serverless:
                 resp = es.security.invalidate_api_key(ids=remaining)
                 deleted += resp["invalidated_api_keys"]
                 remaining = [i for i in ids if i not in deleted]
