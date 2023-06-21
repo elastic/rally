@@ -757,8 +757,9 @@ class NodeStats(TelemetryDevice):
 
     def on_benchmark_start(self):
         default_client = self.clients["default"]
-        distribution_version = default_client.info()["version"]["number"]
-        if Version.from_string(distribution_version) < Version(major=7, minor=2, patch=0):
+        es_info = default_client.info()
+        es_version = es_info["version"].get("number", "7.2.0")
+        if Version.from_string(es_version) < Version(major=7, minor=2, patch=0):
             console.warn(NodeStats.warning, logger=self.logger)
 
         for cluster_name in self.specified_cluster_names:
