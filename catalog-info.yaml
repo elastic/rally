@@ -38,7 +38,7 @@ metadata:
   description: Run Rally integration tests
   links:
     - title: Pipeline
-      url: https://buildkite.com/elastic/rally
+      url: https://buildkite.com/elastic/rally-it
 
 spec:
   type: buildkite-pipeline
