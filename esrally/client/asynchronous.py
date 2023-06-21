@@ -290,8 +290,13 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         # The async client is used in the hot code path and we use customized overrides (such as that we don't
         # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
         self._verified_elasticsearch = True
+        self._serverless = False
+
+        # this isn't always available because any call to self.options() doesn't pass any custom args
+        # to the constructor
+        # https://github.com/elastic/rally/issues/1673
         if distribution_version:
-            self.distribution_version = versions.Version.from_string(distribution_version)
+            self.distribution_version = distribution_version
         else:
             self.distribution_version = None
 
@@ -299,6 +304,10 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         # so we override method(s) here to provide BWC for any custom
         # runners that aren't using the new kwargs
         self.ilm = RallyIlmClient(self)
+
+    @property
+    def is_serverless(self):
+        return self._serverless
 
     async def perform_request(
         self,
@@ -328,9 +337,13 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         # Converts all parts of a Accept/Content-Type headers
         # from application/X -> application/vnd.elasticsearch+X
         # see https://github.com/elastic/elasticsearch/issues/51816
-        if self.distribution_version is not None and self.distribution_version >= versions.Version.from_string("8.0.0"):
-            _mimetype_header_to_compat("Accept", request_headers)
-            _mimetype_header_to_compat("Content-Type", request_headers)
+        # Not applicable to serverless
+        if not self.is_serverless:
+            if self.distribution_version is not None and (
+                versions.Version.from_string(self.distribution_version) >= versions.Version.from_string("8.0.0") and not self.is_serverless
+            ):
+                _mimetype_header_to_compat("Accept", request_headers)
+                _mimetype_header_to_compat("Content-Type", request_headers)
 
         if params:
             target = f"{path}?{_quote_query(params)}"
@@ -399,3 +412,17 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
             response = ApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
 
         return response
+
+
+class RallyAsyncElasticsearchServerless(RallyAsyncElasticsearch):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # we set this as an instance attribute because we can't afford to make any calls to external APIs to verify
+        # whether we're talking to a serverless cluster or not once we're executing the benchmark.
+        #
+        # the reason for this is because the client can reinstantiate itself (e.g. with a call to .options()) during
+        # the execution of the benchmark, which means external API calls add unnecessary latency, and it reinstantiates
+        # itself without the ability to pass any custom arguments (i.e. distribution_version) to the constructor
+        #
+        # see https://github.com/elastic/rally/issues/1673
+        self._serverless = True
