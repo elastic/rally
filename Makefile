@@ -97,12 +97,13 @@ serve-docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
 
 test: check-venv
-	. $(VENV_ACTIVATE_FILE); pytest tests/
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.8
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.11
 
 # checks min and max python versions
 it: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.8
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.11
+	. $(VENV_ACTIVATE_FILE); nox -s it-3.8
+	. $(VENV_ACTIVATE_FILE); nox -s it-3.11
 
 check-all: lint test it
 
@@ -113,7 +114,7 @@ release-checks: check-venv
 	. $(VENV_ACTIVATE_FILE); ./release-checks.sh $(release_version) $(next_version)
 
 # usage: e.g. make release release_version=0.9.2 next_version=0.9.3
-release: check-venv release-checks clean docs it
+release: check-venv release-checks clean docs lint test it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
 .PHONY: install clean nondocs-clean docs-clean python-caches-clean lint format docs serve-docs test it check-all benchmark release release-checks prereq venv-create check-env
