@@ -123,11 +123,13 @@ class TestEsClient:
         _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
         _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
         _datastore_verify_certs = random.choice([True, False])
+        _datastore_probe_version = False
 
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", _datastore_user)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.probe.cluster_version", _datastore_probe_version)
 
         if password_configuration == "config":
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
@@ -158,7 +160,10 @@ class TestEsClient:
         }
 
         client_esclientfactory.assert_called_with(
-            hosts=[{"host": _datastore_host, "port": _datastore_port}], client_options=expected_client_options
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options,
+            distribution_version=None,
+            distribution_flavor=None,
         )
 
     @mock.patch("random.random")
