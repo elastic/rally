@@ -349,17 +349,21 @@ class DriverActor(actor.RallyActor):
 
     def _after_track_prepared(self):
         cluster_version = self.cluster_details["version"] if self.cluster_details else {}
+        # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
+        # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
+        build_flavor = cluster_version.get("build_flavor", "oss")
+        build_version = cluster_version.get("number", build_flavor)
+        build_hash = cluster_version.get("build_hash", build_flavor)
+
         for child in self.children:
             self.send(child, thespian.actors.ActorExitRequest())
         self.children = []
         self.send(
             self.start_sender,
             PreparationComplete(
-                # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
-                # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
-                cluster_version.get("build_flavor", "oss"),
-                cluster_version.get("number"),
-                cluster_version.get("build_hash"),
+                build_flavor,
+                build_version,
+                build_hash,
             ),
         )
 
@@ -599,6 +603,7 @@ class Driver:
     def create_es_clients(self):
         all_hosts = self.config.opts("client", "hosts").all_hosts
         distribution_version = self.config.opts("mechanic", "distribution.version", mandatory=False)
+        distribution_flavor = self.config.opts("mechanic", "distribution.flavor", mandatory=False)
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
             all_client_options = self.config.opts("client", "options").all_client_options
@@ -606,7 +611,7 @@ class Driver:
             # Use retries to avoid aborts on long living connections for telemetry devices
             cluster_client_options["retry_on_timeout"] = True
             es[cluster_name] = self.es_client_factory(
-                cluster_hosts, cluster_client_options, distribution_version=distribution_version
+                cluster_hosts, cluster_client_options, distribution_version=distribution_version, distribution_flavor=distribution_flavor
             ).create()
         return es
 
@@ -1729,13 +1734,16 @@ class AsyncIoAdapter:
         self.logger.error("Uncaught exception in event loop: %s", context)
 
     async def run(self):
-        def es_clients(client_id, all_hosts, all_client_options, distribution_version):
+        def es_clients(client_id, all_hosts, all_client_options, distribution_version, distribution_flavor):
             es = {}
             context = self.client_contexts.get(client_id)
             api_key = context.api_key
             for cluster_name, cluster_hosts in all_hosts.items():
                 es[cluster_name] = client.EsClientFactory(
-                    cluster_hosts, all_client_options[cluster_name], distribution_version=distribution_version
+                    cluster_hosts,
+                    all_client_options[cluster_name],
+                    distribution_version=distribution_version,
+                    distribution_flavor=distribution_flavor,
                 ).create_async(api_key=api_key, client_id=client_id)
             return es
 
@@ -1758,6 +1766,7 @@ class AsyncIoAdapter:
                 self.cfg.opts("client", "hosts").all_hosts,
                 self.cfg.opts("client", "options"),
                 self.cfg.opts("mechanic", "distribution.version", mandatory=False),
+                self.cfg.opts("mechanic", "distribution.flavor", mandatory=False),
             )
             clients.append(es)
             async_executor = AsyncExecutor(

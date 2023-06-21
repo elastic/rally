@@ -26,6 +26,7 @@ import thespian.actors
 from esrally import (
     PROGRAM_NAME,
     actor,
+    client,
     config,
     doc_link,
     driver,
@@ -183,13 +184,27 @@ class BenchmarkCoordinator:
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
         # to derive it ourselves. For source builds we always assume "main"
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
-            distribution_version = mechanic.cluster_distribution_version(self.cfg)
-            self.logger.info("Automatically derived distribution version [%s]", distribution_version)
+            hosts = self.cfg.opts("client", "hosts").default
+            client_options = self.cfg.opts("client", "options").default
+            distribution_flavor, distribution_version, distribution_build_hash = client.factory.cluster_distribution_version(
+                hosts, client_options
+            )
+
+            self.logger.info(
+                "Automatically derived distribution flavor [%s], version [%s], and build hash [%s]",
+                distribution_flavor,
+                distribution_version,
+                distribution_build_hash,
+            )
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
-            min_es_version = versions.Version.from_string(version.minimum_es_version())
-            specified_version = versions.Version.from_string(distribution_version)
-            if specified_version < min_es_version:
-                raise exceptions.SystemSetupError(f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]")
+            self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.flavor", distribution_flavor)
+            if not versions.is_serverless(distribution_flavor):
+                min_es_version = versions.Version.from_string(version.minimum_es_version())
+                specified_version = versions.Version.from_string(distribution_version)
+                if specified_version < min_es_version:
+                    raise exceptions.SystemSetupError(
+                        f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]"
+                    )
 
         self.current_track = track.load_track(self.cfg, install_dependencies=True)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)

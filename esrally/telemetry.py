@@ -1772,9 +1772,11 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         except BaseException:
             self.logger.exception("Could not retrieve cluster version info")
             return
-        revision = client_info["version"]["build_hash"]
-        distribution_version = client_info["version"]["number"]
         distribution_flavor = client_info["version"].get("build_flavor", "oss")
+        # build hash will only be available on serverless if the client has operator privs
+        revision = client_info["version"].get("build_hash", distribution_flavor)
+        # build version does not exist for serverless
+        distribution_version = client_info["version"].get("number", distribution_flavor)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)
