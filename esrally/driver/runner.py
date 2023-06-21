@@ -663,24 +663,31 @@ class ForceMerge(Runner):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
+        es_info = await es.info()
+        es_version = Version.from_string(es_info["version"]["number"])
         max_num_segments = params.get("max-num-segments")
         wait_for_completion = params.get("wait-for-completion")
         mode = params.get("mode")
         merge_params = self._default_kw_params(params)
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
-        if isinstance(wait_for_completion, bool):
-            merge_params["wait_for_completion"] = wait_for_completion
+        # _forcemerge supports wait_for_completion as of 8.1.0
+        # https://github.com/elastic/elasticsearch/pull/80463
+        if (es_version.major, es_version.minor) >= (8, 1):
+            if isinstance(wait_for_completion, bool):
+                merge_params["wait_for_completion"] = wait_for_completion
         if mode == "polling":
-            # Explicitely set wait_for_completion to false for polling mode.
-            merge_params["wait_for_completion"] = False
             complete = False
-            # try:
-            #     await es.indices.forcemerge(**merge_params)
-            #     complete = True
-            # except elasticsearch.ConnectionTimeout:
-            #     pass
-            await es.indices.forcemerge(**merge_params)
+            if (es_version.major, es_version.minor) >= (8, 1):
+                # Explicitely set wait_for_completion to false for polling mode.
+                merge_params["wait_for_completion"] = False
+                await es.indices.forcemerge(**merge_params)
+            else:
+                try:
+                    await es.indices.forcemerge(**merge_params)
+                    complete = True
+                except elasticsearch.ConnectionTimeout:
+                    pass
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
                 tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
