@@ -342,6 +342,7 @@ class TestEsClientFactory:
 
         es.assert_called_once_with(
             distribution_version=None,
+            distribution_flavor=None,
             hosts=["https://localhost:9200"],
             transport_class=RallyAsyncTransport,
             ssl_context=f.ssl_context,

@@ -123,21 +123,21 @@ class _ProductChecker:
 class RallySyncElasticsearch(Elasticsearch):
     def __init__(self, *args, **kwargs):
         distribution_version = kwargs.pop("distribution_version", None)
+        distribution_flavor = kwargs.pop("distribution_flavor", None)
         super().__init__(*args, **kwargs)
         self._verified_elasticsearch = None
-        self._serverless = False
-
-        # this isn't always available because any call to self.options() doesn't pass any custom args
-        # to the constructor
-        # https://github.com/elastic/rally/issues/1673
-        if distribution_version:
-            self.distribution_version = distribution_version
-        else:
-            self.distribution_version = None
+        self.distribution_version = distribution_version
+        self.distribution_flavor = distribution_flavor
 
     @property
     def is_serverless(self):
-        return self._serverless
+        return versions.is_serverless(self.distribution_flavor)
+
+    def options(self, *args, **kwargs):
+        new_self = super().options(*args, **kwargs)
+        new_self.distribution_version = self.distribution_version
+        new_self.distribution_flavor = self.distribution_flavor
+        return new_self
 
     def perform_request(
         self,
@@ -254,17 +254,3 @@ class RallySyncElasticsearch(Elasticsearch):
             response = ApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
 
         return response
-
-
-class RallySyncElasticsearchServerless(RallySyncElasticsearch):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # we set this as an instance attribute because we can't afford to make any calls to external APIs to verify
-        # whether we're talking to a serverless cluster or not once we're executing the benchmark.
-        #
-        # the reason for this is because the client can reinstantiate itself (e.g. with a call to .options()) during
-        # the execution of the benchmark, which means external API calls add unnecessary latency, and it reinstantiates
-        # itself without the ability to pass any custom arguments (i.e. distribution_version) to the constructor
-        #
-        # see https://github.com/elastic/rally/issues/1673
-        self._serverless = True

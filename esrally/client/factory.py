@@ -41,7 +41,8 @@ class EsClientFactory:
         self.client_options = dict(client_options)
         self.ssl_context = None
         # This attribute is necessary for the backwards-compatibility logic contained in
-        # RallySyncElasticsearch.perform_request() and RallyAsyncElasticsearch.perform_request().
+        # RallySyncElasticsearch.perform_request() and RallyAsyncElasticsearch.perform_request(), and also for
+        # identification of whether or not a client is 'serverless'.
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
         self.logger = logging.getLogger(__name__)
@@ -179,19 +180,15 @@ class EsClientFactory:
 
     def create(self):
         # pylint: disable=import-outside-toplevel
-        from esrally.client.synchronous import (
-            RallySyncElasticsearch,
-            RallySyncElasticsearchServerless,
-        )
+        from esrally.client.synchronous import RallySyncElasticsearch
 
-        if versions.is_serverless(self.distribution_flavor):
-            return RallySyncElasticsearchServerless(
-                distribution_version=self.distribution_version, hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options
-            )
-        else:
-            return RallySyncElasticsearch(
-                distribution_version=self.distribution_version, hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options
-            )
+        return RallySyncElasticsearch(
+            distribution_version=self.distribution_version,
+            distribution_flavor=self.distribution_flavor,
+            hosts=self.hosts,
+            ssl_context=self.ssl_context,
+            **self.client_options,
+        )
 
     def create_async(self, api_key=None, client_id=None):
         # pylint: disable=import-outside-toplevel
@@ -202,7 +199,6 @@ class EsClientFactory:
 
         from esrally.client.asynchronous import (
             RallyAsyncElasticsearch,
-            RallyAsyncElasticsearchServerless,
             RallyAsyncTransport,
         )
 
@@ -222,24 +218,15 @@ class EsClientFactory:
             self.client_options.pop("basic_auth", None)
             self.client_options["api_key"] = api_key
 
-        if versions.is_serverless(self.distribution_flavor):
-            async_client = RallyAsyncElasticsearchServerless(
-                distribution_version=self.distribution_version,
-                hosts=self.hosts,
-                transport_class=RallyAsyncTransport,
-                ssl_context=self.ssl_context,
-                maxsize=self.max_connections,
-                **self.client_options,
-            )
-        else:
-            async_client = RallyAsyncElasticsearch(
-                distribution_version=self.distribution_version,
-                hosts=self.hosts,
-                transport_class=RallyAsyncTransport,
-                ssl_context=self.ssl_context,
-                maxsize=self.max_connections,
-                **self.client_options,
-            )
+        async_client = RallyAsyncElasticsearch(
+            distribution_version=self.distribution_version,
+            distribution_flavor=self.distribution_flavor,
+            hosts=self.hosts,
+            transport_class=RallyAsyncTransport,
+            ssl_context=self.ssl_context,
+            maxsize=self.max_connections,
+            **self.client_options,
+        )
 
         async def on_request_start(session, trace_config_ctx, params):
             async_client.on_request_start()
