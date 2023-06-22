@@ -210,6 +210,18 @@ class EsClientFactory:
                 else:
                     return super().loads(data)
 
+        async def on_request_start(session, trace_config_ctx, params):
+            RallyAsyncElasticsearch.on_request_start()
+
+        async def on_request_end(session, trace_config_ctx, params):
+            RallyAsyncElasticsearch.on_request_end()
+
+        trace_config = aiohttp.TraceConfig()
+        trace_config.on_request_start.append(on_request_start)
+        trace_config.on_request_end.append(on_request_end)
+        # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
+        trace_config.on_request_exception.append(on_request_end)
+
         # override the builtin JSON serializer
         self.client_options["serializer"] = LazyJSONSerializer()
 
@@ -227,18 +239,6 @@ class EsClientFactory:
             maxsize=self.max_connections,
             **self.client_options,
         )
-
-        async def on_request_start(session, trace_config_ctx, params):
-            async_client.on_request_start()
-
-        async def on_request_end(session, trace_config_ctx, params):
-            async_client.on_request_end()
-
-        trace_config = aiohttp.TraceConfig()
-        trace_config.on_request_start.append(on_request_start)
-        trace_config.on_request_end.append(on_request_end)
-        # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
-        trace_config.on_request_exception.append(on_request_end)
 
         # the AsyncElasticsearch constructor automatically creates the corresponding NodeConfig objects, so we set
         # their instance attributes after they've been instantiated
