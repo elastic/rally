@@ -181,7 +181,7 @@ class RallySyncElasticsearch(Elasticsearch):
         # from application/X -> application/vnd.elasticsearch+X
         # see https://github.com/elastic/elasticsearch/issues/51816
         if not self.is_serverless:
-            if self.distribution_version is not None and (
+            if versions.is_version_identifier(self.distribution_version) and (
                 versions.Version.from_string(self.distribution_version) >= versions.Version.from_string("8.0.0")
             ):
                 _mimetype_header_to_compat("Accept", headers)
