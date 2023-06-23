@@ -86,7 +86,7 @@ def create_track(cfg):
         distribution_flavor=distribution_flavor,
     ).create()
 
-    console.info(f"Connected to Elasticsearch cluster version [{distribution_version}]\n", logger=logger)
+    console.info(f"Connected to Elasticsearch cluster version [{distribution_version}] flavor [{distribution_flavor}] \n", logger=logger)
 
     output_path = os.path.abspath(os.path.join(io.normalize_path(root_path), track_name))
     io.ensure_dir(output_path)
