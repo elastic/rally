@@ -770,7 +770,6 @@ class TestElasticsearchSourceSupplier:
 
     def test_resolve_build_jdk_major(self, caplog):
         def text(build_java, runtime_java):
-
             # based off of https://github.com/elastic/elasticsearch/blob/main/.ci/java-versions.properties
             text = (
                 "# This file is used with all of the non-matrix tests in Jenkins.\n"

@@ -353,7 +353,6 @@ class TestSegmentStats:
     @mock.patch("elasticsearch.Elasticsearch")
     @mock.patch("builtins.open", new_callable=mock.mock_open)
     def test_generates_log_file(self, file_mock, es):
-
         stats_response = """
         index    shard prirep ip        segment generation docs.count docs.deleted   size size.memory committed searchable version compound
         geonames 0     p      127.0.0.1 _0               0        212            0 72.3kb        9621 true      true       8.4.0   true
@@ -4204,7 +4203,6 @@ class TestMasterNodeStatsRecorder:
 
 
 class TestIngestPipelineStats:
-
     ingest_pipeline_stats_start_response = {
         "_nodes": {"total": 1, "successful": 1, "failed": 0},
         "cluster_name": "docker-cluster",
@@ -4577,7 +4575,6 @@ class TestIngestPipelineStats:
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_logs_warning_on_missing_stats(self, metrics_put_value_cluster_level, metrics_put_value_node_level):
-
         cfg = create_config()
         logger = logging.getLogger("esrally.telemetry")
         metrics_store = metrics.EsMetricsStore(cfg)

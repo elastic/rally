@@ -1577,7 +1577,6 @@ class TrackSpecificationReader:
         default_ramp_up_time_period=None,
         completed_by_name=None,
     ):
-
         op_spec = task_spec["operation"]
         if isinstance(op_spec, str) and op_spec in ops:
             op = ops[op_spec]
