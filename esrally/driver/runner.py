@@ -2094,12 +2094,13 @@ class WaitForCurrentSnapshotsCreate(Runner):
         repository = mandatory(params, "repository", repr(self))
         wait_period = params.get("completion-recheck-wait-period", 1)
         es_info = await es.info()
-        es_version = Version.from_string(es_info["version"]["number"])
+        es_version = es_info["version"].get("number", "8.3.0")
+
         request_args = {"repository": repository, "snapshot": "_current", "verbose": False}
 
         # significantly reduce response size when lots of snapshots have been taken
         # only available since ES 8.3.0 (https://github.com/elastic/elasticsearch/pull/86269)
-        if (es_version.major, es_version.minor) >= (8, 3):
+        if (Version.from_string(es_version) >= Version.from_string("8.3.0")) or es.is_serverless:
             request_args["index_names"] = False
 
         while True:

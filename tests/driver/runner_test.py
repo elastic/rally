@@ -4107,6 +4107,7 @@ class TestWaitForCurrentSnapshotsCreate:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_wait_for_current_snapshots_create_before_8_3_0(self, es):
+        es.is_serverless = False
         es.info = mock.AsyncMock(
             return_value={
                 "name": "es01",

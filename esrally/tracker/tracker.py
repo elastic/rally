@@ -22,9 +22,9 @@ from elastic_transport import ApiError, TransportError
 from jinja2 import Environment, FileSystemLoader
 
 from esrally import PROGRAM_NAME
-from esrally.client import EsClientFactory
+from esrally.client import factory
 from esrally.tracker import corpus, index
-from esrally.utils import console, io, opts
+from esrally.utils import console, io
 
 
 def process_template(templates_path, template_filename, template_vars, output_path):
@@ -74,16 +74,19 @@ def create_track(cfg):
     track_name = cfg.opts("track", "track.name")
     indices = cfg.opts("generator", "indices")
     root_path = cfg.opts("generator", "output.path")
-    target_hosts = cfg.opts("client", "hosts")
-    client_options = cfg.opts("client", "options")
+    target_hosts = cfg.opts("client", "hosts").default
+    client_options = cfg.opts("client", "options").default
     data_streams = cfg.opts("generator", "data_streams")
 
-    client = EsClientFactory(
-        hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT], client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]
+    distribution_flavor, distribution_version, _ = factory.cluster_distribution_version(target_hosts, client_options)
+    client = factory.EsClientFactory(
+        hosts=target_hosts,
+        client_options=client_options,
+        distribution_version=distribution_version,
+        distribution_flavor=distribution_flavor,
     ).create()
 
-    info = client.info()
-    console.info(f"Connected to Elasticsearch cluster [{info['name']}] version [{info['version']['number']}].\n", logger=logger)
+    console.info(f"Connected to Elasticsearch cluster version [{distribution_version}] flavor [{distribution_flavor}] \n", logger=logger)
 
     output_path = os.path.abspath(os.path.join(io.normalize_path(root_path), track_name))
     io.ensure_dir(output_path)

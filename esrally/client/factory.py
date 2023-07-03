@@ -31,7 +31,7 @@ class EsClientFactory:
     compatibility guarantees that are broader than the library's defaults.
     """
 
-    def __init__(self, hosts, client_options, distribution_version=None):
+    def __init__(self, hosts, client_options, distribution_version=None, distribution_flavor=None):
         def host_string(host):
             # protocol can be set at either host or client opts level
             protocol = "https" if client_options.get("use_ssl") or host.get("use_ssl") else "http"
@@ -41,8 +41,10 @@ class EsClientFactory:
         self.client_options = dict(client_options)
         self.ssl_context = None
         # This attribute is necessary for the backwards-compatibility logic contained in
-        # RallySyncElasticsearch.perform_request() and RallyAsyncElasticsearch.perform_request().
+        # RallySyncElasticsearch.perform_request() and RallyAsyncElasticsearch.perform_request(), and also for
+        # identification of whether or not a client is 'serverless'.
         self.distribution_version = distribution_version
+        self.distribution_flavor = distribution_flavor
         self.logger = logging.getLogger(__name__)
 
         masked_client_options = dict(client_options)
@@ -181,7 +183,11 @@ class EsClientFactory:
         from esrally.client.synchronous import RallySyncElasticsearch
 
         return RallySyncElasticsearch(
-            distribution_version=self.distribution_version, hosts=self.hosts, ssl_context=self.ssl_context, **self.client_options
+            distribution_version=self.distribution_version,
+            distribution_flavor=self.distribution_flavor,
+            hosts=self.hosts,
+            ssl_context=self.ssl_context,
+            **self.client_options,
         )
 
     def create_async(self, api_key=None, client_id=None):
@@ -226,6 +232,7 @@ class EsClientFactory:
 
         async_client = RallyAsyncElasticsearch(
             distribution_version=self.distribution_version,
+            distribution_flavor=self.distribution_flavor,
             hosts=self.hosts,
             transport_class=RallyAsyncTransport,
             ssl_context=self.ssl_context,
@@ -316,6 +323,32 @@ def wait_for_rest_layer(es, max_attempts=40):
     return False
 
 
+def cluster_distribution_version(hosts, client_options, client_factory=EsClientFactory):
+    """
+    Attempt to get the target cluster's distribution version, build flavor, and build hash by creating and using
+    a 'sync' Elasticsearch client.
+
+    :param hosts: The host(s) to connect to.
+    :param client_options: The client options to customize the Elasticsearch client.
+    :param client_factory: Factory class that creates the Elasticsearch client.
+    :return: The cluster's build flavor, version number, and build hash. For Serverless Elasticsearch these may all be
+      the build flavor value.
+    """
+    # no way for us to know whether we're talking to a serverless elasticsearch or not, so we default to the sync client
+    es = client_factory(hosts, client_options).create()
+    # unconditionally wait for the REST layer - if it's not up by then, we'll intentionally raise the original error
+    wait_for_rest_layer(es)
+    version = es.info()["version"]
+
+    version_build_flavor = version.get("build_flavor", "oss")
+    # build hash will only be available for serverless if the client has operator privs
+    version_build_hash = version.get("build_hash", version_build_flavor)
+    # version number does not exist for serverless
+    version_number = version.get("number", version_build_flavor)
+
+    return version_build_flavor, version_number, version_build_hash
+
+
 def create_api_key(es, client_id, max_attempts=5):
     """
     Creates an API key for the provided ``client_id``.
@@ -366,7 +399,8 @@ def delete_api_keys(es, ids, max_attempts=5):
 
     # Before ES 7.10, deleting API keys by ID had to be done individually.
     # After ES 7.10, a list of API key IDs can be deleted in one request.
-    current_version = versions.Version.from_string(es.info()["version"]["number"])
+    version = es.info()["version"]
+    current_version = versions.Version.from_string(version.get("number", "7.10.0"))
     minimum_version = versions.Version.from_string("7.10.0")
 
     deleted = []
@@ -377,7 +411,7 @@ def delete_api_keys(es, ids, max_attempts=5):
         import elasticsearch
 
         try:
-            if current_version >= minimum_version:
+            if current_version >= minimum_version or es.is_serverless:
                 resp = es.security.invalidate_api_key(ids=remaining)
                 deleted += resp["invalidated_api_keys"]
                 remaining = [i for i in ids if i not in deleted]

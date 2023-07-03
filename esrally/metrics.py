@@ -48,16 +48,6 @@ class EsClient:
         self._cluster_version = cluster_version
         self.retryable_status_codes = [502, 503, 504, 429]
 
-    # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
-    def probe_version(self):
-        info = self.guarded(self._client.info)
-        try:
-            self._cluster_version = versions.components(info["version"]["number"])
-        except BaseException:
-            msg = "Could not determine version of metrics cluster"
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
-
     def put_template(self, name, template):
         tmpl = json.loads(template)
         return self.guarded(self._client.indices.put_template, name=name, **tmpl)
@@ -238,8 +228,11 @@ class EsClientFactory:
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
+        hosts = [{"host": host, "port": port}]
         secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
         user = self._config.opts("reporting", "datastore.user")
+        distribution_version = None
+        distribution_flavor = None
         try:
             password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
         except KeyError:
@@ -266,13 +259,21 @@ class EsClientFactory:
             client_options["basic_auth_user"] = user
             client_options["basic_auth_password"] = password
 
-        factory = client.EsClientFactory(hosts=[{"host": host, "port": port}], client_options=client_options)
+        # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
+        if self.probe_version:
+            distribution_flavor, distribution_version, _ = client.cluster_distribution_version(hosts=hosts, client_options=client_options)
+            self._cluster_version = distribution_version
+
+        factory = client.EsClientFactory(
+            hosts=hosts,
+            client_options=client_options,
+            distribution_version=distribution_version,
+            distribution_flavor=distribution_flavor,
+        )
         self._client = factory.create()
 
     def create(self):
         c = EsClient(self._client)
-        if self.probe_version:
-            c.probe_version()
         return c
 
 
@@ -1509,7 +1510,7 @@ class Race:
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result
             "active": True,
         }
-        if self.distribution_version:
+        if versions.is_version_identifier(self.distribution_version):
             result_template["distribution-major-version"] = versions.major_version(self.distribution_version)
         if self.team_revision:
             result_template["team-revision"] = self.team_revision

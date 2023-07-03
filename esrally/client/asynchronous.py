@@ -285,20 +285,29 @@ class RallyIlmClient(IlmClient):
 class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
     def __init__(self, *args, **kwargs):
         distribution_version = kwargs.pop("distribution_version", None)
+        distribution_flavor = kwargs.pop("distribution_flavor", None)
         super().__init__(*args, **kwargs)
         # skip verification at this point; we've already verified this earlier with the synchronous client.
         # The async client is used in the hot code path and we use customized overrides (such as that we don't
         # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
         self._verified_elasticsearch = True
-        if distribution_version:
-            self.distribution_version = versions.Version.from_string(distribution_version)
-        else:
-            self.distribution_version = None
+        self.distribution_version = distribution_version
+        self.distribution_flavor = distribution_flavor
 
         # some ILM method signatures changed in 'elasticsearch-py' 8.x,
         # so we override method(s) here to provide BWC for any custom
         # runners that aren't using the new kwargs
         self.ilm = RallyIlmClient(self)
+
+    @property
+    def is_serverless(self):
+        return versions.is_serverless(self.distribution_flavor)
+
+    def options(self, *args, **kwargs):
+        new_self = super().options(*args, **kwargs)
+        new_self.distribution_version = self.distribution_version
+        new_self.distribution_flavor = self.distribution_flavor
+        return new_self
 
     async def perform_request(
         self,
@@ -328,9 +337,13 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         # Converts all parts of a Accept/Content-Type headers
         # from application/X -> application/vnd.elasticsearch+X
         # see https://github.com/elastic/elasticsearch/issues/51816
-        if self.distribution_version is not None and self.distribution_version >= versions.Version.from_string("8.0.0"):
-            _mimetype_header_to_compat("Accept", request_headers)
-            _mimetype_header_to_compat("Content-Type", request_headers)
+        # Not applicable to serverless
+        if not self.is_serverless:
+            if versions.is_version_identifier(self.distribution_version) and (
+                versions.Version.from_string(self.distribution_version) >= versions.Version.from_string("8.0.0")
+            ):
+                _mimetype_header_to_compat("Accept", request_headers)
+                _mimetype_header_to_compat("Content-Type", request_headers)
 
         if params:
             target = f"{path}?{_quote_query(params)}"

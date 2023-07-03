@@ -18,6 +18,7 @@
 from .context import RequestContextHolder, RequestContextManager
 from .factory import (
     EsClientFactory,
+    cluster_distribution_version,
     create_api_key,
     delete_api_keys,
     wait_for_rest_layer,

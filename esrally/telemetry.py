@@ -757,8 +757,9 @@ class NodeStats(TelemetryDevice):
 
     def on_benchmark_start(self):
         default_client = self.clients["default"]
-        distribution_version = default_client.info()["version"]["number"]
-        if Version.from_string(distribution_version) < Version(major=7, minor=2, patch=0):
+        es_info = default_client.info()
+        es_version = es_info["version"].get("number", "7.2.0")
+        if Version.from_string(es_version) < Version(major=7, minor=2, patch=0):
             console.warn(NodeStats.warning, logger=self.logger)
 
         for cluster_name in self.specified_cluster_names:
@@ -1350,9 +1351,9 @@ class DataStreamStats(TelemetryDevice):
     def on_benchmark_start(self):
         for cluster_name in self.specified_cluster_names:
             recorder = DataStreamStatsRecorder(cluster_name, self.clients[cluster_name], self.metrics_store, self.sample_interval)
-            client_info = self.clients[cluster_name].info()
-            distribution_version = client_info["version"]["number"]
-            distribution_flavor = client_info["version"].get("build_flavor", "oss")
+            es_info = self.clients[cluster_name].info()
+            distribution_version = es_info["version"].get("number", "7.9.0")
+            distribution_flavor = es_info["version"].get("build_flavor", "oss")
             if Version.from_string(distribution_version) < Version(major=7, minor=9, patch=0):
                 raise exceptions.SystemSetupError(
                     "The data-stream-stats telemetry device can only be used with clusters from version 7.9 onwards"
@@ -1772,9 +1773,11 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         except BaseException:
             self.logger.exception("Could not retrieve cluster version info")
             return
-        revision = client_info["version"]["build_hash"]
-        distribution_version = client_info["version"]["number"]
         distribution_flavor = client_info["version"].get("build_flavor", "oss")
+        # build hash will only be available on serverless if the client has operator privs
+        revision = client_info["version"].get("build_hash", distribution_flavor)
+        # build version does not exist for serverless
+        distribution_version = client_info["version"].get("number", distribution_flavor)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)

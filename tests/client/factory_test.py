@@ -342,6 +342,7 @@ class TestEsClientFactory:
 
         es.assert_called_once_with(
             distribution_version=None,
+            distribution_flavor=None,
             hosts=["https://localhost:9200"],
             transport_class=RallyAsyncTransport,
             ssl_context=f.ssl_context,
@@ -566,6 +567,7 @@ class TestApiKeys:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_successfully_deletes_api_keys(self, es, version):
         ids = ["foo", "bar", "baz"]
+        es.is_serverless = False
         es.info.return_value = {"version": {"number": version}}
         if version == "7.9.0":
             es.security.invalidate_api_key.return_value = [
@@ -590,6 +592,7 @@ class TestApiKeys:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_retries_api_keys_deletion_on_transport_errors(self, es, sleep, version):
         max_attempts = 5
+        es.is_serverless = False
         es.info.return_value = {"version": {"number": version}}
         ids = ["foo", "bar", "baz"]
         if version == "7.9.0":
@@ -625,6 +628,7 @@ class TestApiKeys:
     @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
     @mock.patch("elasticsearch.Elasticsearch")
     def test_raises_exception_when_api_key_deletion_fails(self, es, version):
+        es.is_serverless = False
         es.info.return_value = {"version": {"number": version}}
         ids = ["foo", "bar", "baz", "qux"]
         failed_to_delete = ["baz", "qux"]
