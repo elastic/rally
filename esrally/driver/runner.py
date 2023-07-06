@@ -510,7 +510,8 @@ class BulkIndex(Runner):
 
             if bulk_params["refresh"] is None:
                 self.logger.warning(
-                    "[Bulk] Using default refresh parameter value '%s' in place of unrecognized specfified parameter value '%s'. Use one of %s.",
+                    "Using default bulk refresh parameter value '%s' in place of unrecognized specfified parameter value '%s'. "
+                    "Use one of %s.",
                     refresh_params["default"],
                     params["refresh"],
                     ", ".join(refresh_params.keys()),
