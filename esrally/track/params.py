@@ -722,6 +722,8 @@ class PartitionBulkIndexParamSource:
         :param recency: A number between [0.0, 1.0] indicating whether to bias generation of conflicting ids towards more recent ones.
                         May be None.
         :param pipeline: The name of the ingest pipeline to run.
+        :param refresh: Valid values are "async", "sync", and "default". If "async", Elasticsearch refreshes the affected shards in the background.
+                        If "sync", the client is blocked until Elasticsearch finishes the refresh operation.
         :param original_params: The original dict passed to the parent parameter source.
         """
         self.corpora = corpora
