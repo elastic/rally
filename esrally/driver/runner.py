@@ -492,9 +492,9 @@ class BulkIndex(Runner):
         * ``timeout``: a time unit value indicating the server-side timeout for the operation
         * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present, defaults to
          ``None`` and potentially falls back to the global timeout setting.
-        * ``refresh``: If ``async``, Elasticsearch will issue an async refresh to the index like ?refresh=true.
-        If ``sync``, Elasticsearch issues a synchronous refresh to the index like ?refresh=wait_for.
-        If ``default``, Elasticsearch will use refresh defaults like ?refresh=false.
+        * ``refresh``: If ``"true"``, Elasticsearch will issue an async refresh to the index; i.e., ``?refresh=true``.
+        If ``"wait_for"``, Elasticsearch issues a synchronous refresh to the index; i.e., ``?refresh=wait_for``.
+        If ``"false""``, Elasticsearch will use refresh defaults; i.e., ``?refresh=false``.
         """
         detailed_results = params.get("detailed-results", False)
         api_kwargs = self._default_kw_params(params)
@@ -505,16 +505,14 @@ class BulkIndex(Runner):
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
         if "refresh" in params:
-            refresh_params = {"sync": "wait_for", "async": "true", "default": "false"}
-            bulk_params["refresh"] = refresh_params.get(params["refresh"])
-
-            if bulk_params["refresh"] is None:
-                self.logger.warning(
-                    "Using default bulk refresh parameter value '%s' in place of unrecognized specfified parameter value '%s'. "
-                    "Use one of %s.",
-                    refresh_params["default"],
+            valid_refresh_values = ("wait_for", "true", "false")
+            if params["refresh"] in valid_refresh_values:
+                bulk_params["refresh"] = params["refresh"]
+            else:
+                self.logger.info(
+                    "Using default bulk refresh parameter value \"false\" in place of unrecognized parameter value '%s'. Use one of %s.",
                     params["refresh"],
-                    ", ".join(refresh_params.keys()),
+                    ", ".join(valid_refresh_values),
                 )
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
