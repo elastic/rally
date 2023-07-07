@@ -1263,7 +1263,7 @@ class TestBulkIndexRunner:
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
-            "refresh": "default",
+            "refresh": "false",
         }
 
         result = await bulk(es, dict(bulk_params))
@@ -1286,7 +1286,7 @@ class TestBulkIndexRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_bulk_index_success_with_refresh_async(self, es):
+    async def test_bulk_index_success_with_refresh_true(self, es):
         bulk_response = {
             "errors": False,
             "took": 8,
@@ -1304,7 +1304,7 @@ class TestBulkIndexRunner:
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
-            "refresh": "async",
+            "refresh": "true",
         }
 
         result = await bulk(es, dict(bulk_params))
@@ -1327,7 +1327,7 @@ class TestBulkIndexRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_bulk_index_success_with_refresh_sync(self, es):
+    async def test_bulk_index_success_with_refresh_wait_for(self, es):
         bulk_response = {
             "errors": False,
             "took": 8,
@@ -1343,7 +1343,7 @@ class TestBulkIndexRunner:
             "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
-            "refresh": "sync",
+            "refresh": "wait_for",
         }
 
         result = await bulk(es, bulk_params)
@@ -1399,7 +1399,7 @@ class TestBulkIndexRunner:
             "total-document-size-bytes": 10,
         }
 
-        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": None})
+        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={})
 
 
 class TestForceMergeRunner:
