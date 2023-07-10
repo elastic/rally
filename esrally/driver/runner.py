@@ -492,6 +492,9 @@ class BulkIndex(Runner):
         * ``timeout``: a time unit value indicating the server-side timeout for the operation
         * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present, defaults to
          ``None`` and potentially falls back to the global timeout setting.
+        * ``refresh``: If ``"true"``, Elasticsearch will issue an async refresh to the index; i.e., ``?refresh=true``.
+        If ``"wait_for"``, Elasticsearch issues a synchronous refresh to the index; i.e., ``?refresh=wait_for``.
+        If ``"false""``, Elasticsearch will use refresh defaults; i.e., ``?refresh=false``.
         """
         detailed_results = params.get("detailed-results", False)
         api_kwargs = self._default_kw_params(params)
@@ -501,6 +504,13 @@ class BulkIndex(Runner):
             bulk_params["timeout"] = params["timeout"]
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
+        if "refresh" in params:
+            valid_refresh_values = ("wait_for", "true", "false")
+            if params["refresh"] not in valid_refresh_values:
+                raise exceptions.RallyAssertionError(
+                    f"Unsupported bulk refresh value: {params['refresh']}. Use one of [{', '.join(valid_refresh_values)}]."
+                )
+            bulk_params["refresh"] = params["refresh"]
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)

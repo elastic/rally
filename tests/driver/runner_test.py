@@ -1243,6 +1243,142 @@ class TestBulkIndexRunner:
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_success_with_refresh_default(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8,
+            "items": [{"create": {"_index": "test", "result": "created", "status": 201}}],
+        }
+        es.bulk = mock.AsyncMock(return_value=bulk_response)
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body("index_line"),
+            "index": "test",
+            "action-metadata-present": False,
+            "type": "_doc",
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "refresh": "false",
+        }
+
+        result = await bulk(es, dict(bulk_params))
+
+        assert result == {
+            "took": 8,
+            "index": "test",
+            "weight": 1,
+            "unit": "docs",
+            "success": True,
+            "success-count": 1,
+            "error-count": 0,
+            "bulk-request-size-bytes": 10,
+            "ops": {"create": collections.Counter({"item-count": 1, "created": 1})},
+            "shards_histogram": [],
+            "total-document-size-bytes": 10,
+        }
+
+        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "false"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_success_with_refresh_true(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8,
+            "items": [{"create": {"_index": "test", "result": "created", "status": 201, "forced_refresh": True}}],
+        }
+        es.bulk = mock.AsyncMock(return_value=bulk_response)
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body("index_line"),
+            "index": "test",
+            "action-metadata-present": False,
+            "type": "_doc",
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "refresh": "true",
+        }
+
+        result = await bulk(es, dict(bulk_params))
+
+        assert result == {
+            "took": 8,
+            "index": "test",
+            "weight": 1,
+            "unit": "docs",
+            "success": True,
+            "success-count": 1,
+            "error-count": 0,
+            "bulk-request-size-bytes": 10,
+            "ops": {"create": collections.Counter({"item-count": 1, "created": 1})},
+            "shards_histogram": [],
+            "total-document-size-bytes": 10,
+        }
+
+        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "true"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_success_with_refresh_wait_for(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8,
+        }
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body("index_line"),
+            "index": "test",
+            "action-metadata-present": False,
+            "type": "_doc",
+            "bulk-size": 1,
+            "unit": "docs",
+            "refresh": "wait_for",
+        }
+
+        result = await bulk(es, bulk_params)
+
+        assert result == {
+            "took": 8,
+            "index": "test",
+            "weight": 1,
+            "unit": "docs",
+            "success": True,
+            "success-count": 1,
+            "error-count": 0,
+        }
+
+        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "wait_for"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_success_with_refresh_invalid(self, es):
+        bulk_params = {
+            "body": _build_bulk_body("index_line"),
+            "index": "test",
+            "action-metadata-present": False,
+            "type": "_doc",
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "refresh": "invalidvalue",
+        }
+        bulk = runner.BulkIndex()
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await bulk(es, dict(bulk_params))
+
+        assert exc.value.args[0] == ("Unsupported bulk refresh value: invalidvalue. Use one of [wait_for, true, false].")
+
 
 class TestForceMergeRunner:
     @mock.patch("elasticsearch.Elasticsearch")
