@@ -506,14 +506,11 @@ class BulkIndex(Runner):
             bulk_params["pipeline"] = params["pipeline"]
         if "refresh" in params:
             valid_refresh_values = ("wait_for", "true", "false")
-            if params["refresh"] in valid_refresh_values:
-                bulk_params["refresh"] = params["refresh"]
-            else:
-                self.logger.info(
-                    "Using default bulk refresh parameter value \"false\" in place of unrecognized parameter value '%s'. Use one of %s.",
-                    params["refresh"],
-                    ", ".join(valid_refresh_values),
+            if params["refresh"] not in valid_refresh_values:
+                raise exceptions.RallyAssertionError(
+                    f"Unsupported bulk refresh value: {params['refresh']}. Use one of [{', '.join(valid_refresh_values)}]."
                 )
+            bulk_params["refresh"] = params["refresh"]
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)

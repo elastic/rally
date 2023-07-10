@@ -1363,15 +1363,6 @@ class TestBulkIndexRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_bulk_index_success_with_refresh_invalid(self, es):
-        bulk_response = {
-            "errors": False,
-            "took": 8,
-            "items": [{"create": {"_index": "test", "result": "created", "status": 201}}],
-        }
-        es.bulk = mock.AsyncMock(return_value=bulk_response)
-
-        bulk = runner.BulkIndex()
-
         bulk_params = {
             "body": _build_bulk_body("index_line"),
             "index": "test",
@@ -1380,26 +1371,13 @@ class TestBulkIndexRunner:
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
-            "refresh": "notvalid",
+            "refresh": "invalidvalue",
         }
+        bulk = runner.BulkIndex()
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await bulk(es, dict(bulk_params))
 
-        result = await bulk(es, dict(bulk_params))
-
-        assert result == {
-            "took": 8,
-            "index": "test",
-            "weight": 1,
-            "unit": "docs",
-            "success": True,
-            "success-count": 1,
-            "error-count": 0,
-            "bulk-request-size-bytes": 10,
-            "ops": {"create": collections.Counter({"item-count": 1, "created": 1})},
-            "shards_histogram": [],
-            "total-document-size-bytes": 10,
-        }
-
-        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={})
+        assert exc.value.args[0] == ("Unsupported bulk refresh value: invalidvalue. Use one of [wait_for, true, false].")
 
 
 class TestForceMergeRunner:
