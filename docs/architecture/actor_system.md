@@ -53,7 +53,9 @@ You'll notice that `DriverActor` and `Driver` are tightly coupled. While
 
 ### PrepareBenchmark
 
-Here's the sequence diagram for benchmark preparation:
+Here's the sequence diagram for benchmark preparation. Dotted lines
+means messages sent with the actor systems, while plain lines are
+function calls.
 
 ```mermaid
 sequenceDiagram
@@ -85,15 +87,16 @@ sequenceDiagram
 ### StartBenchmark
 
 Once the preparation is complete, `BenchmarkActor` starts the
-benchmark.
+benchmark. As above, dotted lines means messages sent with the actor
+systems, while plain lines are function calls.
 
 ```mermaid
 sequenceDiagram
     BenchmarkActor -->> DriverActor: StartBenchmark
     loop
         DriverActor -->> DriverActor: WakeupMessage
-        DriverActor -->> Driver: post_process_samples
-        DriverActor -->> Driver: update_progress_messages
+        DriverActor ->> Driver: post_process_samples
+        DriverActor ->> Driver: update_progress_messages
     end
     DriverActor ->> Driver: start_benchmark
     Driver ->> DriverActor: create_client
