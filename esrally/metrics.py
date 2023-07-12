@@ -62,12 +62,14 @@ class EsClient:
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
     def delete(self, index, id):
+        # ignore 404 status code (NotFoundError) when index does not exist
         return self.guarded(self._client.delete, index=index, id=id, ignore=404)
 
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
     def create_index(self, index):
+        # ignore 400 status code (BadRequestError) when index already exists
         return self.guarded(self._client.indices.create, index=index, ignore=400)
 
     def exists(self, index):
