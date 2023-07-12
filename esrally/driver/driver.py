@@ -227,24 +227,24 @@ class DriverActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
         self.start_sender = None
-        self.coordinator = None
+        self.driver = None
         self.status = "init"
         self.post_process_timer = 0
         self.cluster_details = {}
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
-        self.coordinator.close()
+        self.driver.close()
         self.send(self.start_sender, actor.BenchmarkFailure("Fatal track or load generator indication", poisonmsg.details))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
-        self.coordinator.close()
+        self.driver.close()
         self.send(self.start_sender, msg)
 
     def receiveMsg_BenchmarkCancelled(self, msg, sender):
         self.logger.info("Main driver received a notification that the benchmark has been cancelled.")
-        self.coordinator.close()
+        self.driver.close()
         self.send(self.start_sender, msg)
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
@@ -253,8 +253,8 @@ class DriverActor(actor.RallyActor):
 
     def receiveMsg_ChildActorExited(self, msg, sender):
         # is it a worker?
-        if msg.childAddress in self.coordinator.workers:
-            worker_index = self.coordinator.workers.index(msg.childAddress)
+        if msg.childAddress in self.driver.workers:
+            worker_index = self.driver.workers.index(msg.childAddress)
             if self.status == "exiting":
                 self.logger.debug("Worker [%d] has exited.", worker_index)
             else:
@@ -269,13 +269,13 @@ class DriverActor(actor.RallyActor):
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareBenchmark(self, msg, sender):
         self.start_sender = sender
-        self.coordinator = Driver(self, msg.config)
-        self.coordinator.prepare_benchmark(msg.track)
+        self.driver = Driver(self, msg.config)
+        self.driver.prepare_benchmark(msg.track)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartBenchmark(self, msg, sender):
         self.start_sender = sender
-        self.coordinator.start_benchmark()
+        self.driver.start_benchmark()
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
@@ -286,22 +286,22 @@ class DriverActor(actor.RallyActor):
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_JoinPointReached(self, msg, sender):
-        self.coordinator.joinpoint_reached(msg.worker_id, msg.worker_timestamp, msg.task)
+        self.driver.joinpoint_reached(msg.worker_id, msg.worker_timestamp, msg.task)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_UpdateSamples(self, msg, sender):
-        self.coordinator.update_samples(msg.samples)
+        self.driver.update_samples(msg.samples)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WakeupMessage(self, msg, sender):
         if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
-            self.coordinator.reset_relative_time()
-        elif not self.coordinator.finished():
+            self.driver.reset_relative_time()
+        elif not self.driver.finished():
             self.post_process_timer += DriverActor.WAKEUP_INTERVAL_SECONDS
             if self.post_process_timer >= DriverActor.POST_PROCESS_INTERVAL_SECONDS:
                 self.post_process_timer = 0
-                self.coordinator.post_process_samples()
-            self.coordinator.update_progress_message()
+                self.driver.post_process_samples()
+            self.driver.update_progress_message()
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     def create_client(self, host, cfg):
@@ -322,7 +322,7 @@ class DriverActor(actor.RallyActor):
         if next_task_scheduled_in > 0:
             self.wakeupAfter(datetime.timedelta(seconds=next_task_scheduled_in), payload=DriverActor.RESET_RELATIVE_TIME_MARKER)
         else:
-            self.coordinator.reset_relative_time()
+            self.driver.reset_relative_time()
         self.send(self.start_sender, TaskFinished(metrics, next_task_scheduled_in))
 
     def _requirements(self, host):
