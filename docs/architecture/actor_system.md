@@ -21,7 +21,7 @@ While it is not without its rough edges, it is [well
 documented](https://thespianpy.com/doc/using.html) and battle tested.
 Additionally, the maintainer has always been responsive and helpful.
 
-## Sequence diagram
+## Sequence diagrams
 
 Rally has a number of actors that all inherit from `actor.RallyActor`. This
 document focuses on the actors needed to *prepare* and *run* a benchmark, with
@@ -51,15 +51,12 @@ You'll notice that `DriverActor` and `Driver` are tightly coupled. While
  * `Driver` can be unit-tested without bringing the actor system
  * An earlier attempt at removing the actor system failed.
 
+### PrepareBenchmark
+
+Here's the sequence diagram for benchmark preparation:
+
 ```mermaid
 sequenceDiagram
-    participant BenchmarkActor
-    participant DriverActor
-    participant Driver
-    participant TrackPreparator
-    participant TaskExecutionActor
-    participant Worker
-
     BenchmarkActor ->> DriverActor: __init__
     BenchmarkActor -->> DriverActor: PrepareBenchmark
     DriverActor ->> Driver: __init__
@@ -83,6 +80,15 @@ sequenceDiagram
     DriverActor -->> TrackPreparator: ActorExitRequest
     TrackPreparator -->> TaskExecutionActor: ActorExitRequest
     Driver -->> BenchmarkActor: PreparationComplete
+```
+
+### StartBenchmark
+
+Once the preparation is complete, `BenchmarkActor` starts the
+benchmark.
+
+```mermaid
+sequenceDiagram
     BenchmarkActor -->> DriverActor: StartBenchmark
     loop
         DriverActor -->> DriverActor: WakeupMessage
