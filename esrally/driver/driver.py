@@ -1739,7 +1739,7 @@ class AsyncIoAdapter:
         runner.enable_assertions(self.assertions_enabled)
 
         clients = []
-        aws = []
+        awaitables = []
         # A parameter source should only be created once per task - it is partitioned later on per client.
         params_per_task = {}
         for client_id, task_allocation in self.task_allocations:
@@ -1759,12 +1759,12 @@ class AsyncIoAdapter:
                 client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.abort_on_error)
             )
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
-            aws.append(final_executor())
+            awaitables.append(final_executor())
         task_names = [t.task.task.name for t in self.task_allocations]
         self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
         run_start = time.perf_counter()
         try:
-            _ = await asyncio.gather(*aws)
+            _ = await asyncio.gather(*awaitables)
         finally:
             run_end = time.perf_counter()
             self.logger.info(
