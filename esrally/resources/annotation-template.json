@@ -1,6 +1,8 @@
 {
+  "index_patterns": ["rally-annotations"],
   "settings": {
-    "number_of_shards": 1
+    "index":{
+    }
   },
   "mappings": {
     "dynamic_templates": [

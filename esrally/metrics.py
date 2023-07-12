@@ -67,8 +67,8 @@ class EsClient:
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
-    def create_index(self, index, body=None):
-        return self.guarded(self._client.indices.create, index=index, body=body, ignore=400)
+    def create_index(self, index):
+        return self.guarded(self._client.indices.create, index=index, ignore=400)
 
     def exists(self, index):
         return self.guarded(self._client.indices.exists, index=index)
@@ -94,6 +94,7 @@ class EsClient:
     def guarded(self, target, *args, **kwargs):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+        import elasticsearch.helpers
         from elastic_transport import ApiError, TransportError
 
         max_execution_count = 10
@@ -1773,8 +1774,9 @@ class EsRaceStore(RaceStore):
             )
         else:
             if not self.client.exists(index="rally-annotations"):
-                body = self.index_template_provider.annotations_template()
-                self.client.create_index(index="rally-annotations", body=body)
+                # create or overwrite template on index creation
+                self.client.put_template("rally-annotations", self.index_template_provider.annotations_template())
+                self.client.create_index(index="rally-annotations")
             self.client.index(
                 index="rally-annotations",
                 id=annotation_id,
