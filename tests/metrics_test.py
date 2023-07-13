@@ -2607,6 +2607,7 @@ class TestIndexTemplateProvider:
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
         templates = [
+            _index_template_provider.annotations_template(),
             _index_template_provider.metrics_template(),
             _index_template_provider.races_template(),
             _index_template_provider.results_template(),
@@ -2627,6 +2628,7 @@ class TestIndexTemplateProvider:
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
         templates = [
+            _index_template_provider.annotations_template(),
             _index_template_provider.metrics_template(),
             _index_template_provider.races_template(),
             _index_template_provider.results_template(),
@@ -2649,6 +2651,7 @@ class TestIndexTemplateProvider:
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
         templates = [
+            _index_template_provider.annotations_template(),
             _index_template_provider.metrics_template(),
             _index_template_provider.races_template(),
             _index_template_provider.results_template(),
@@ -2672,6 +2675,7 @@ class TestIndexTemplateProvider:
         with pytest.raises(exceptions.SystemSetupError) as ctx:
             # pylint: disable=unused-variable
             templates = [
+                _index_template_provider.annotations_template(),
                 _index_template_provider.metrics_template(),
                 _index_template_provider.races_template(),
                 _index_template_provider.results_template(),
@@ -2693,6 +2697,7 @@ class TestIndexTemplateProvider:
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
         templates = [
+            _index_template_provider.annotations_template(),
             _index_template_provider.metrics_template(),
             _index_template_provider.races_template(),
             _index_template_provider.results_template(),
