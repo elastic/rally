@@ -37,7 +37,7 @@ The sequence diagram below starts with `BenchmarkActor` defined in
 
  * Setup the Elasticsearch cluster if the pipeline requires it (not covered
    here)
- * Prepare the benchmark which involves the `TrackPreparator` and
+ * Prepare the benchmark which involves the `TrackPreparationActor` and
    `TaskExecutionActor` actors.
  * Start the benchmark, which will involve the `Worker` actor that will
    delegate the actual work to `AsyncIoAdapter`, which will run an asyncio loop
@@ -64,23 +64,23 @@ sequenceDiagram
     DriverActor ->> Driver: __init__
     DriverActor ->> Driver: prepare_benchmark
     Driver ->> DriverActor: prepare_track
-    DriverActor ->> TrackPreparator: __init__
-    DriverActor -->> TrackPreparator: Bootstrap
-    TrackPreparator -->> DriverActor: ReadyForWork
-    DriverActor -->> TrackPreparator: PrepareTrack
-    TrackPreparator ->> TaskExecutionActor: __init__
-    TrackPreparator -->> TaskExecutionActor: StartTaskLoop
+    DriverActor ->> TrackPreparationActor: __init__
+    DriverActor -->> TrackPreparationActor: Bootstrap
+    TrackPreparationActor -->> DriverActor: ReadyForWork
+    DriverActor -->> TrackPreparationActor: PrepareTrack
+    TrackPreparationActor ->> TaskExecutionActor: __init__
+    TrackPreparationActor -->> TaskExecutionActor: StartTaskLoop
     loop
-        TaskExecutionActor -->> TrackPreparator: ReadyForWork
-        TrackPreparator -->> TaskExecutionActor: DoTask
+        TaskExecutionActor -->> TrackPreparationActor: ReadyForWork
+        TrackPreparationActor -->> TaskExecutionActor: DoTask
         loop
             TaskExecutionActor -->> TaskExecutionActor: WakeupMessage
         end
     end
-    TaskExecutionActor -->> TrackPreparator: WorkerIdle
-    TrackPreparator -->> DriverActor: TrackPrepared
-    DriverActor -->> TrackPreparator: ActorExitRequest
-    TrackPreparator -->> TaskExecutionActor: ActorExitRequest
+    TaskExecutionActor -->> TrackPreparationActor: WorkerIdle
+    TrackPreparationActor -->> DriverActor: TrackPrepared
+    DriverActor -->> TrackPreparationActor: ActorExitRequest
+    TrackPreparationActor -->> TaskExecutionActor: ActorExitRequest
     Driver -->> BenchmarkActor: PreparationComplete
 ```
 
