@@ -3,7 +3,7 @@
 At its heart, Rally is a distributed system. It has been designed that way to
 allow using multiple load drivers in the same benchmark, to ensure that Rally
 is never a bottleneck. In the vast majority of cases, using a powerful load
-driver is enough, but benchmarks large Elasticsearch clusters containing tens
+driver is enough, but benchmarking large Elasticsearch clusters containing tens
 or hundreds of nodes can require more load drivers.
 
 ## Thespian
@@ -11,7 +11,7 @@ or hundreds of nodes can require more load drivers.
 Actors are managed by [Thespian](https://thespianpy.com/doc/) which provide us
 with the following features:
 
- * Works with Linux and macOS (and Windows, but Rally does not need that)
+ * Works with Linux and macOS (and Windows, though Rally does not support Windows)
  * Handles the communication between actors regardless of their locations
  * Scales from running Rally and Elasticsearch on one workstation to
    benchmarking large Elasticsearch clusters with multiple load drivers,
@@ -27,7 +27,7 @@ Rally has a number of actors that all inherit from `actor.RallyActor`. This
 document focuses on the actors needed to *prepare* and *run* a benchmark, with
 the following limitations:
 
- * The mechanic actors that can setup an Elasticsearch cluster are not covered
+ * The mechanic actors that can set up an Elasticsearch cluster are not covered
  * Failure and cancellation are ignored, this is about the happy path
  * This pretends that we are benchmarking on a single machine with a single
    core.
@@ -40,7 +40,7 @@ The sequence diagram below starts with `BenchmarkActor` defined in
  * Prepare the benchmark which involves the `TrackPreparator` and
    `TaskExecutionActor` actors.
  * Start the benchmark, which will involve the `Worker` actor that will
-   delegate the actual work to `AsyncIoAdapter`, that will run an asyncio loop
+   delegate the actual work to `AsyncIoAdapter`, which will run an asyncio loop
    in a thread, which is how `AsyncExecutor` runs many Elasticsearch async
    clients.
 
@@ -54,7 +54,7 @@ You'll notice that `DriverActor` and `Driver` are tightly coupled. While
 ### PrepareBenchmark
 
 Here's the sequence diagram for benchmark preparation. Dotted lines
-means messages sent with the actor systems, while plain lines are
+mean messages sent with the actor systems, while plain lines are
 function calls.
 
 ```mermaid
