@@ -1,10 +1,11 @@
 # Rally Actor System
 
 At its heart, Rally is a distributed system. It has been designed that way to
-allow using multiple load drivers in the same benchmark, to ensure that Rally
-is never a bottleneck. In the vast majority of cases, using a powerful load
-driver is enough, but benchmarking large Elasticsearch clusters containing tens
-or hundreds of nodes can require more load drivers.
+allow using both multiple target hosts and load drivers in the same benchmark.
+The latter ensures that Rally is never a bottleneck. In the vast majority of
+cases, using a powerful load driver is enough, but benchmarking large
+Elasticsearch clusters containing tens or hundreds of nodes can require more
+load drivers.
 
 ## Thespian
 
@@ -46,10 +47,8 @@ The sequence diagram below starts with `BenchmarkActor` defined in
 
 You'll notice that `DriverActor` and `Driver` are tightly coupled. While
 `Driver` contains most of the logic, it is not an actor, so it relies on
-`DriverActor` to send and receive messages. This was done for two reasons:
-
- * `Driver` can be unit-tested without bringing the actor system
- * An earlier attempt at removing the actor system failed.
+`DriverActor` to send and receive messages. This was done mainly to enable
+`Driver` unit testing without bringing the actor system up.
 
 ### PrepareBenchmark
 
@@ -59,6 +58,8 @@ function calls.
 
 ```mermaid
 sequenceDiagram
+    BenchmarkActor ->> BenchmarkCoordinator: __init__
+    BenchmarkActor ->> BenchmarkCoordinator: setup
     BenchmarkActor ->> DriverActor: __init__
     BenchmarkActor -->> DriverActor: PrepareBenchmark
     DriverActor ->> Driver: __init__
@@ -90,27 +91,43 @@ Once the preparation is complete, `BenchmarkActor` starts the
 benchmark. As above, dotted lines means messages sent with the actor
 systems, while plain lines are function calls.
 
+Note: The `WakeupMessage` loop in `DriverActor` denoted with `(*)` continues in
+parallel until all steps of the benchmark are done but it is kept short in the
+diagram for clarity.
+
 ```mermaid
 sequenceDiagram
+    participant BenchmarkActor
+    participant BenchmarkCoordinator
     BenchmarkActor -->> DriverActor: StartBenchmark
+    DriverActor ->> Driver: start_benchmark
     loop
-        DriverActor -->> DriverActor: WakeupMessage
+        DriverActor -->> DriverActor: WakeupMessage (*)
         DriverActor ->> Driver: post_process_samples
         DriverActor ->> Driver: update_progress_messages
     end
-    DriverActor ->> Driver: start_benchmark
     Driver ->> DriverActor: create_client
     DriverActor ->> Worker: __init__
+    DriverActor -->> Worker: Bootstrap
     Driver ->> DriverActor: start_worker
     DriverActor -->> Worker: StartWorker
     loop
+        DriverActor -->> Worker: Drive
         loop
+            Worker ->> Worker: drive
             Worker ->> AsyncIoAdapter: __init__
             AsyncIoAdapter ->> Worker: "thread finished"
             Worker -->> Worker: WakeupMessage
+            Worker -->> DriverActor: UpdateSamples
+            DriverActor ->> Driver: update_samples
         end
+        Worker -->> DriverActor: UpdateSamples
+        DriverActor ->> Driver: update_samples
         Worker -->> DriverActor: JoinPointReached
         DriverActor ->> Driver: joinpoint_reached
+        Driver ->> DriverActor: on_task_finished
+        DriverActor -->> BenchmarkActor: TaskFinished
+        BenchmarkActor ->> BenchmarkCoordinator: on_task_finished
     end
     Driver ->> DriverActor: on_benchmark_complete
     DriverActor -->> BenchmarkActor: BenchmarkComplete
