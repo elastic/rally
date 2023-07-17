@@ -732,13 +732,13 @@ class TemplateSource:
         return ",\n".join(source)
 
 
-def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock):
+def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock, build_flavor=None):
     """
     Dict of internal global variables used by our jinja2 renderers
     """
-
     return {
         "globals": {
+            "build_flavor": build_flavor,
             "now": clock.now(),
             "glob": glob_helper,
         },
@@ -806,7 +806,7 @@ def register_all_params_in_track(assembled_source, complete_track_params=None):
         complete_track_params.populate_track_defined_params(j2_variables)
 
 
-def render_template_from_file(template_file_name, template_vars, complete_track_params=None):
+def render_template_from_file(template_file_name, template_vars, complete_track_params=None, build_flavor=None):
     def relative_glob(start, f):
         result = glob.glob(os.path.join(start, f))
         if result:
@@ -823,7 +823,7 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
         loader=jinja2.FileSystemLoader(base_path),
         template_source=template_source.assembled_source,
         template_vars=template_vars,
-        template_internal_vars=default_internal_template_vars(glob_helper=lambda f: relative_glob(base_path, f)),
+        template_internal_vars=default_internal_template_vars(glob_helper=lambda f: relative_glob(base_path, f), build_flavor=build_flavor),
     )
 
 
@@ -971,6 +971,11 @@ class CompleteTrackParams:
         self.track_defined_params = set()
         self.user_specified_track_params = user_specified_track_params if user_specified_track_params else {}
 
+    def internal_user_defined_track_params(self):
+        set_user_params = set(list(self.user_specified_track_params.keys()))
+        set_internal_params = set(default_internal_template_vars()["globals"].keys())
+        return list(set_user_params & set_internal_params)
+
     def populate_track_defined_params(self, list_of_track_params=None):
         self.track_defined_params.update(set(list_of_track_params))
 
@@ -996,12 +1001,14 @@ class TrackFileReader:
         track_schema_file = os.path.join(cfg.opts("node", "rally.root"), "resources", "track-schema.json")
         with open(track_schema_file, encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
+        self.build_flavor = cfg.opts("mechanic", "distribution.flavor", default_value="default", mandatory=False)
         self.track_params = cfg.opts("track", "params", mandatory=False)
         self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
         self.read_track = TrackSpecificationReader(
             track_params=self.track_params,
             complete_track_params=self.complete_track_params,
             selected_challenge=cfg.opts("track", "challenge.name", mandatory=False),
+            build_flavor=self.build_flavor,
         )
         self.logger = logging.getLogger(__name__)
 
@@ -1020,7 +1027,9 @@ class TrackFileReader:
         # involving lines numbers and it also does not bloat Rally's log file so much.
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
             try:
-                rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
+                rendered = render_template_from_file(
+                    track_spec_file, self.track_params, complete_track_params=self.complete_track_params, build_flavor=self.build_flavor
+                )
                 with open(tmp.name, "w", encoding="utf-8") as f:
                     f.write(rendered)
                 self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
@@ -1075,6 +1084,17 @@ class TrackFileReader:
             )
 
         current_track = self.read_track(track_name, track_spec, mapping_dir, track_spec_file)
+
+        internal_user_defined_track_params = self.complete_track_params.internal_user_defined_track_params()
+        if len(internal_user_defined_track_params) > 0:
+            err_msg = "Some of your track parameter(s) {} are defined by Rally and cannot be modified.\n".format(
+                ",".join(opts.double_quoted_list_of(sorted(internal_user_defined_track_params)))
+            )
+
+            self.logger.critical(err_msg)
+            # also dump the message on the console
+            console.println(err_msg)
+            raise exceptions.TrackConfigError(f"Reserved track parameters {sorted(internal_user_defined_track_params)}.")
 
         unused_user_defined_track_params = self.complete_track_params.unused_user_defined_track_params()
         if len(unused_user_defined_track_params) > 0:
@@ -1161,9 +1181,10 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self, track_params=None, complete_track_params=None, selected_challenge=None, source=io.FileSource):
+    def __init__(self, track_params=None, complete_track_params=None, selected_challenge=None, source=io.FileSource, build_flavor=None):
         self.name = None
         self.base_path = None
+        self.build_flavor = build_flavor
         self.track_params = track_params if track_params else {}
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
@@ -1291,7 +1312,11 @@ class TrackSpecificationReader:
         self.logger.info("Loading template [%s].", description)
         register_all_params_in_track(contents, self.complete_track_params)
         try:
-            rendered = render_template(template_source=contents, template_vars=self.track_params)
+            rendered = render_template(
+                template_source=contents,
+                template_vars=self.track_params,
+                template_internal_vars={"globals": {"build_flavor": self.build_flavor}},
+            )
             return json.loads(rendered)
         except Exception as e:
             self.logger.exception("Could not load file template for %s.", description)

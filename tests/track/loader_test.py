@@ -955,13 +955,14 @@ def assert_equal_ignore_whitespace(expected, actual):
 
 
 class TestTemplateRender:
-    unittest_template_internal_vars = loader.default_internal_template_vars(clock=StaticClock)
+    unittest_template_internal_vars = loader.default_internal_template_vars(clock=StaticClock, build_flavor="test")
 
     def test_render_simple_template(self):
         template = """
         {
             "key": {{'01-01-2000' | days_ago(now)}},
-            "key2": "static value"
+            "key2": "static value",
+            "key3": "{{build_flavor}}"
         }
         """
 
@@ -970,7 +971,8 @@ class TestTemplateRender:
         expected = """
         {
             "key": 5864,
-            "key2": "static value"
+            "key2": "static value",
+            "key3": "test"
         }
         """
         assert rendered == expected
@@ -1063,6 +1065,29 @@ class TestTemplateRender:
         """
         assert_equal_ignore_whitespace(expected, rendered)
 
+    def test_render_template_with_conditions(self):
+        template = """
+        {
+            {%- if build_flavor != "test" %}
+            "key1": "build_flavor"
+            {%- elif lifecycle == "ilm" %}
+            "key1": "ilm"
+            {%- else %}
+            "key1": "else"
+            {%- endif %}
+        }
+        """
+        rendered = loader.render_template(
+            template, template_vars={"lifecycle": "ilm"}, template_internal_vars=self.unittest_template_internal_vars
+        )
+
+        expected = """
+        {
+            "key1": "ilm"
+        }
+        """
+        assert_equal_ignore_whitespace(expected, rendered)
+
 
 class TestCompleteTrackParams:
     assembled_source = textwrap.dedent(
@@ -1071,6 +1096,7 @@ class TestCompleteTrackParams:
         "key2": {{ value2 | default(3) }},
         "key3": {{ value3 | default("default_value3") }}
         "key4": {{ value2 | default(3) }}
+        "key5": {{ build_flavor }}
     """
     )
 
@@ -1085,6 +1111,13 @@ class TestCompleteTrackParams:
         loader.register_all_params_in_track("{}", complete_track_params)
 
         assert complete_track_params.sorted_track_defined_params == []
+
+    def test_internal_user_defined_track_params(self):
+        # track params that deliberatly collide with internal variables
+        track_params = {"now": "test", "build_flavor": "test"}
+        complete_track_params = loader.CompleteTrackParams(user_specified_track_params=track_params)
+
+        assert sorted(complete_track_params.internal_user_defined_track_params()) == ["build_flavor", "now"]
 
     def test_unused_user_defined_track_params(self):
         track_params = {"number_of_repliacs": 1, "enable_source": True, "number_of_shards": 5}  # deliberate typo  # unknown parameter
@@ -2960,7 +2993,11 @@ class TestTrackSpecificationReader:
                         {
                             "template": {
                                 "settings": {
+                                  {%- if build_flavor == "test" %}
                                   "index.number_of_replicas": {{ number_of_replicas }}
+                                  {%- else %}
+                                  "index.number_of_replicas": 99
+                                  {%- endif %}
                                 },
                                 "mappings": {
                                   "properties": {
@@ -2975,6 +3012,7 @@ class TestTrackSpecificationReader:
                     ],
                 }
             ),
+            build_flavor="test",
         )
         resulting_track = reader("unittest", track_specification, "/mappings")
         assert ["index_pattern", "number_of_replicas", "number_of_shards"] == complete_track_params.sorted_track_defined_params
