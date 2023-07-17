@@ -83,6 +83,7 @@ sequenceDiagram
     DriverActor -->> TrackPreparationActor: ActorExitRequest
     TrackPreparationActor -->> TaskExecutionActor: ActorExitRequest
     Driver -->> BenchmarkActor: PreparationComplete
+    BenchmarkActor ->> BenchmarkCoordinator: on_preparation_complete
 ```
 
 ### StartBenchmark
@@ -131,4 +132,5 @@ sequenceDiagram
     end
     Driver ->> DriverActor: on_benchmark_complete
     DriverActor -->> BenchmarkActor: BenchmarkComplete
+    BenchmarkActor ->> BenchmarkCoordinator: on_benchmark_complete
 ```
