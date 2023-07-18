@@ -1087,9 +1087,8 @@ class TrackFileReader:
 
         internal_user_defined_track_params = self.complete_track_params.internal_user_defined_track_params()
         if len(internal_user_defined_track_params) > 0:
-            err_msg = "Some of your track parameter(s) {} are defined by Rally and cannot be modified.\n".format(
-                ",".join(opts.double_quoted_list_of(sorted(internal_user_defined_track_params)))
-            )
+            params_list = ",".join(opts.double_quoted_list_of(sorted(internal_user_defined_track_params)))
+            err_msg = f"Some of your track parameter(s) {params_list} are defined by Rally and cannot be modified.\n"
 
             self.logger.critical(err_msg)
             # also dump the message on the console
