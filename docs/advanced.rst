@@ -10,12 +10,15 @@ Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as a template language s
 
 Elasticsearch utilizes Mustache formatting in a few places, notably in `search templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.4/search-template.html>`_ and `Watcher templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.4/actions-email.html>`_. If you are using Mustache in your Rally tracks you must `escape them properly <https://jinja.palletsprojects.com/en/2.10.x/templates/#escaping>`_. See :ref:`put_pipeline` for an example.
 
+.. _advanced_extensions:
+
 Extensions
 """"""""""
 
 Rally also provides a few extensions to Jinja2:
 
 * ``now``: a global variable that represents the current date and time when the template is evaluated by Rally.
+* ``build_flavor``: a global variable that holds build flavor reported by Elasticsearch cluster targetted by Rally.
 * ``days_ago()``: a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
 
 You can find an example in the ``http_logs`` track::
