@@ -18,7 +18,6 @@ Extensions
 Rally also provides a few extensions to Jinja2:
 
 * ``now``: a global variable that represents the current date and time when the template is evaluated by Rally.
-* ``build_flavor``: a global variable that holds build flavor reported by Elasticsearch cluster targetted by Rally.
 * ``days_ago()``: a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
 
 You can find an example in the ``http_logs`` track::
@@ -87,6 +86,8 @@ Assuming we pass ``--track-params="es_snapshot_restore_recovery_max_bytes_per_se
 
 
 The parameter ``default_value`` controls the value to use for the setting if it is undefined. If the setting is undefined and there is no default value, nothing will be added.
+
+* ``build_flavor``: a global variable that holds build flavor reported by Elasticsearch cluster targetted by Rally.
 
 .. _adding_tracks_custom_param_sources:
 
