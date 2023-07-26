@@ -10,6 +10,8 @@ Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as a template language s
 
 Elasticsearch utilizes Mustache formatting in a few places, notably in `search templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.4/search-template.html>`_ and `Watcher templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.4/actions-email.html>`_. If you are using Mustache in your Rally tracks you must `escape them properly <https://jinja.palletsprojects.com/en/2.10.x/templates/#escaping>`_. See :ref:`put_pipeline` for an example.
 
+.. _advanced_extensions:
+
 Extensions
 """"""""""
 
@@ -84,6 +86,8 @@ Assuming we pass ``--track-params="es_snapshot_restore_recovery_max_bytes_per_se
 
 
 The parameter ``default_value`` controls the value to use for the setting if it is undefined. If the setting is undefined and there is no default value, nothing will be added.
+
+* ``build_flavor``: a global variable that holds build flavor reported by Elasticsearch cluster targetted by Rally.
 
 .. _adding_tracks_custom_param_sources:
 
