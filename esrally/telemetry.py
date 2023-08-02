@@ -2359,3 +2359,143 @@ class DiskUsageStats(TelemetryDevice):
                 knn_vectors = field_info.get("knn_vectors_in_bytes", 0)
                 if knn_vectors > 0:
                     self.metrics_store.put_value_cluster_level("disk_usage_knn_vectors", knn_vectors, meta_data=meta, unit="byte")
+
+
+class BlobStoreStats(TelemetryDevice):
+    internal = False
+    command = "blob-store-stats"
+    human_name = "Blob Store Stats"
+    help = "Regularly samples blob store stats, only applicable to serverless Elasticsearch"
+
+    """
+    Gathers blob snapshots stats on both a cluster and node level
+    """
+
+    def __init__(self, telemetry_params, clients, metrics_store):
+        """
+        :param telemetry_params: The configuration object for telemetry_params.
+            ``searchable-snapshots-stats-sample-interval``: positive integer controlling the sampling interval.
+            Default: 1 second.
+        :param clients: A dict of clients to all clusters.
+        :param metrics_store: The configured metrics store we write to.
+        """
+        super().__init__()
+
+        self.telemetry_params = telemetry_params
+        self.clients = clients
+        self.sample_interval = telemetry_params.get("blob-store-stats-sample-interval", 1)
+        if self.sample_interval <= 0:
+            raise exceptions.SystemSetupError(
+                f"The telemetry parameter 'blob-store-stats-sample-interval' must be greater than zero " f"but was {self.sample_interval}."
+            )
+        self.specified_cluster_names = self.clients.keys()
+        self.metrics_store = metrics_store
+        self.samplers = []
+
+    def __str__(self):
+        return "blob-store-stats"
+
+    def on_benchmark_start(self):
+        for cluster_name in self.specified_cluster_names:
+            if not self.clients[cluster_name].is_serverless:
+                self.logger.warning(
+                    "Cannot attach telemetry device [%s] to cluster [%s], [%s] is only supported with serverless Elasticsearch",
+                    self,
+                    cluster_name,
+                    self,
+                )
+                continue
+
+            self.logger.debug("Gathering [%s] for [%s]", self, cluster_name)
+            recorder = BlobStoreStatsRecorder(
+                cluster_name,
+                self.clients[cluster_name],
+                self.metrics_store,
+                self.sample_interval,
+            )
+            sampler = SamplerThread(recorder)
+            self.samplers.append(sampler)
+            sampler.daemon = True
+            # we don't require starting recorders precisely at the same time
+            sampler.start()
+
+    def on_benchmark_stop(self):
+        if self.samplers:
+            for sampler in self.samplers:
+                sampler.finish()
+
+
+class BlobStoreStatsRecorder:
+    """
+    Collects and pushes blob store stats for the specified cluster to the metric store.
+    """
+
+    def __init__(self, cluster_name, client, metrics_store, sample_interval):
+        """
+        :param cluster_name: The cluster_name that the client connects to, as specified in target.hosts. This may differ
+         from the actual cluster name deployed.
+        :param client: The Elasticsearch client for this cluster.
+        :param metrics_store: The configured metrics store we write to.
+        :param sample_interval: integer controlling the interval, in seconds, between collecting samples.
+        """
+
+        self.rally_cluster_name = cluster_name
+        self.client = client
+        self.metrics_store = metrics_store
+        self.sample_interval = sample_interval
+        self.logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return "blob-store-stats"
+
+    def record(self):
+        """
+        Collect blob store stats at a per cluster and node level and push to metrics store.
+        """
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        try:
+            stats_api_endpoint = "/_internal/blob_store/stats"
+            stats = self.client.perform_request(method="GET", path=stats_api_endpoint, params={})
+        except elasticsearch.ApiError as e:
+            msg = f"An API error [{e}] occurred while collecting [{self}] on cluster [{self.rally_cluster_name}]"
+            self.logger.error(msg)
+            return
+        except elasticsearch.TransportError as e:
+            msg = f"A transport error [{e}] occurred while collecting [{self}] on cluster [{self.rally_cluster_name}]"
+            self.logger.error(msg)
+            return
+
+        self._push_stats(stats)
+
+    def _push_stats(self, stats):
+        stats_meta_data = {key: value for key, value in stats.items() if key == "_nodes"}
+        meta_data = {"cluster": stats.get("cluster_name", self.rally_cluster_name), **stats_meta_data}
+
+        if cluster_stats := self._extract_blob_store_stats(stats.get("_all")):
+            self.metrics_store.put_doc(
+                {
+                    "name": "blob-store-stats",
+                    "node": "_all",
+                    **cluster_stats,
+                },
+                level=MetaInfoScope.cluster,
+                meta_data=meta_data,
+            )
+
+        for node_id, node_stats in stats.get("nodes", {}).items():
+            if ns := self._extract_blob_store_stats(node_stats):
+                self.metrics_store.put_doc(
+                    {
+                        "name": "blob-store-stats",
+                        "node": node_id,
+                        **ns,
+                    },
+                    level=MetaInfoScope.node,
+                    node_name=node_id,
+                    meta_data=meta_data,
+                )
+
+    def _extract_blob_store_stats(self, stats):
+        return stats.get("object_store_stats", {})

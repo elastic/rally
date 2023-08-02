@@ -20,6 +20,7 @@ import copy
 import logging
 import random
 from collections import namedtuple
+from dataclasses import dataclass
 from unittest import mock
 from unittest.mock import call
 
@@ -150,7 +151,7 @@ class TestStartupTime:
 
 
 class Client:
-    def __init__(self, *, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None):
+    def __init__(self, *, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None, is_serverless=None):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
@@ -158,6 +159,7 @@ class Client:
         self.cluster = cluster
         if transport_client:
             self.transport = transport_client
+        self.is_serverless = is_serverless
 
     def info(self):
         return self._info()
@@ -204,6 +206,22 @@ class ResponseSupplier:
 
     def __call__(self, *args, **kwargs):
         return self.response
+
+
+class ApiErrorSupplier:
+    @dataclass
+    class ApiResponseMeta:
+        status: int
+
+    def __call__(self, status=None, body=None, message=None):
+        return elasticsearch.ApiError(
+            meta=self.ApiResponseMeta(status=status),
+            body=body,
+            message=message,
+        )
+
+
+raiseApiError = ApiErrorSupplier()
 
 
 class TransportErrorSupplier:
@@ -4937,3 +4955,122 @@ class TestDiskUsageStats:
 
     def _mock_store(self, name, size, field):
         return mock.call(name, size, meta_data={"index": "foo", "field": field}, unit="byte")
+
+
+class TestBlobStoreStats:
+    def test_negative_sample_interval_forbidden(self):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"blob-store-stats-sample-interval": -1}
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match=r"The telemetry parameter 'blob-store-stats-sample-interval' must be greater than zero but was .*\.",
+        ):
+            telemetry.BlobStoreStats(telemetry_params, Client(), metrics_store)
+
+    def test_non_serverless_is_skipped_and_serverless_is_not_skipped(self, caplog):
+        caplog.set_level(logging.DEBUG)
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"blob-store-stats-sample-interval": 1}
+
+        clients = {
+            "default": Client(is_serverless=False),
+            "cluster_b": Client(is_serverless=True),
+        }
+        t = telemetry.BlobStoreStats(telemetry_params, clients, metrics_store)
+        t.on_benchmark_start()
+
+        assert (
+            "Cannot attach telemetry device [blob-store-stats] to cluster [default],"
+            " [blob-store-stats] is only supported with serverless Elasticsearch" in caplog.text
+        )
+
+        assert "Gathering [blob-store-stats] for [cluster_b]" in caplog.text
+
+
+class TestBlobStoreStatsRecorder:
+    blob_store_stats_response = {
+        "_nodes": {"total": 2, "successful": 2, "failed": 0},
+        "cluster_name": "es",
+        "_all": {"object_store_stats": {"ListObjects": 5, "PutMultipartObject": 3, "PutObject": 161, "GetObject": 54}},
+        "nodes": {
+            "xwc71ug5QtOYWrEkNiVgYw": {"object_store_stats": {"ListObjects": 1, "PutMultipartObject": 0, "PutObject": 0, "GetObject": 5}},
+            "qRu2kq0_RnyVn-xmLIN5ZA": {
+                "object_store_stats": {"ListObjects": 4, "PutMultipartObject": 3, "PutObject": 161, "GetObject": 49}
+            },
+        },
+    }
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_store_blob_store_stats(self, metrics_store_put_doc):
+        client = Client(transport_client=TransportClient(response=self.blob_store_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.BlobStoreStatsRecorder(cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder.record()
+
+        metrics_store_put_doc.assert_has_calls(
+            [
+                mock.call(
+                    {
+                        "name": "blob-store-stats",
+                        "node": "_all",
+                        "ListObjects": 5,
+                        "PutMultipartObject": 3,
+                        "PutObject": 161,
+                        "GetObject": 54,
+                    },
+                    level=MetaInfoScope.cluster,
+                    meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
+                ),
+                mock.call(
+                    {
+                        "name": "blob-store-stats",
+                        "node": "xwc71ug5QtOYWrEkNiVgYw",
+                        "ListObjects": 1,
+                        "PutMultipartObject": 0,
+                        "PutObject": 0,
+                        "GetObject": 5,
+                    },
+                    level=MetaInfoScope.node,
+                    node_name="xwc71ug5QtOYWrEkNiVgYw",
+                    meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
+                ),
+                mock.call(
+                    {
+                        "name": "blob-store-stats",
+                        "node": "qRu2kq0_RnyVn-xmLIN5ZA",
+                        "ListObjects": 4,
+                        "PutMultipartObject": 3,
+                        "PutObject": 161,
+                        "GetObject": 49,
+                    },
+                    level=MetaInfoScope.node,
+                    node_name="qRu2kq0_RnyVn-xmLIN5ZA",
+                    meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
+                ),
+            ],
+        )
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_raises_exception_on_api_error(self, metrics_store_put_doc, caplog):
+        client = Client(transport_client=TransportClient(error=raiseApiError(status=429, body={}, message="api error"), force_error=True))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+
+        recorder = telemetry.BlobStoreStatsRecorder(cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder.record()
+        assert "An API error [ApiError(429, 'api error')] occurred while collecting [blob-store-stats] on cluster [default]" in caplog.text
+        assert metrics_store_put_doc.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_raises_exception_on_transport_error(self, metrics_store_put_doc, caplog):
+        client = Client(transport_client=TransportClient(response={}, force_error=True))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+
+        recorder = telemetry.BlobStoreStatsRecorder(cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder.record()
+        assert "A transport error [transport error] occurred while collecting [blob-store-stats] on cluster [default]" in caplog.text
+        assert metrics_store_put_doc.call_count == 0
