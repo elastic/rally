@@ -47,7 +47,7 @@ from esrally import (
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
-from esrally.utils import console, convert, net
+from esrally.utils import console, convert, net, versions
 
 
 ##################################
@@ -661,6 +661,16 @@ class Driver:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
+    def retrieve_build_hash_from_nodes_info(self, es):
+        try:
+            nodes_info = es["default"].nodes.info(filter_path="**.build_hash")
+            nodes = list(nodes_info["nodes"].keys())
+            # assumption: build hash is the same across all the nodes
+            return nodes_info["nodes"][nodes[0]]["build_hash"]
+        except BaseException:
+            self.logger.exception("Could not retrieve build hash from nodes info")
+            return None
+
     def create_api_key(self, es, client_id):
         self.logger.debug("Creating ES API key for client [%s].", client_id)
         try:
@@ -696,6 +706,12 @@ class Driver:
         else:
             self.wait_for_rest_api(es_clients)
             self.target.cluster_details = self.retrieve_cluster_info(es_clients)
+            serverless_mode = self.config.opts("driver", "serverless.mode", default_value=False)
+            serverless_operator = self.config.opts("driver", "serverless.operator", default_value=False)
+            if serverless_mode and serverless_operator:
+                build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
+                self.logger.info(f"Retrieved actual build hash [{build_hash}] from serverless cluster.")
+                self.target.cluster_details["version"]["build_hash"] = build_hash
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
