@@ -706,8 +706,8 @@ class Driver:
         else:
             self.wait_for_rest_api(es_clients)
             self.target.cluster_details = self.retrieve_cluster_info(es_clients)
-            serverless_mode = self.config.opts("driver", "serverless.mode", default_value=False)
-            serverless_operator = self.config.opts("driver", "serverless.operator", default_value=False)
+            serverless_mode = self.config.opts("driver", "serverless.mode", default_value=False, mandatory=False)
+            serverless_operator = self.config.opts("driver", "serverless.operator", default_value=False, mandatory=False)
             if serverless_mode and serverless_operator:
                 build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
                 self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
