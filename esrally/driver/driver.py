@@ -47,7 +47,7 @@ from esrally import (
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
-from esrally.utils import console, convert, net, versions
+from esrally.utils import console, convert, net
 
 
 ##################################
@@ -710,7 +710,7 @@ class Driver:
             serverless_operator = self.config.opts("driver", "serverless.operator", default_value=False)
             if serverless_mode and serverless_operator:
                 build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
-                self.logger.info(f"Retrieved actual build hash [{build_hash}] from serverless cluster.")
+                self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
                 self.target.cluster_details["version"]["build_hash"] = build_hash
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
