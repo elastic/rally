@@ -615,7 +615,7 @@ class Driver:
             ).create()
         return es
 
-    def prepare_telemetry(self, es, enable, index_names, data_stream_names):
+    def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
@@ -626,7 +626,7 @@ class Driver:
             devices = [
                 telemetry.NodeStats(telemetry_params, es, self.metrics_store),
                 telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
-                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
+                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, build_hash),
                 telemetry.JvmStatsSummary(es_default, self.metrics_store),
                 telemetry.IndexStats(es_default, self.metrics_store),
                 telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
@@ -700,6 +700,7 @@ class Driver:
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
+        build_hash = None
         if skip_rest_api_check:
             self.logger.info("Skipping REST API check as requested explicitly.")
         elif uses_static_responses:
@@ -721,6 +722,7 @@ class Driver:
             enable=not uses_static_responses,
             index_names=self.track.index_names(),
             data_stream_names=self.track.data_stream_names(),
+            build_hash=build_hash,
         )
 
         for host in self.config.opts("driver", "load_driver_hosts"):

@@ -3256,7 +3256,7 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(nodes=SubClient(info=nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
         calls = [
@@ -3282,7 +3282,7 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(nodes=SubClient(stats=raiseTransportError, info=raiseTransportError), info=raiseTransportError)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
