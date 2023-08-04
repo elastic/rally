@@ -1776,6 +1776,7 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
             return
         distribution_flavor = client_info["version"].get("build_flavor", "oss")
         # serverless returns dummy build hash which gets overridden when running with operator privileges
+        # TODO: refactor if config object gets included in telemetry base class (ES-6459)
         revision = client_info["version"].get("build_hash", distribution_flavor)
         if self.revision_override:
             revision = self.revision_override
