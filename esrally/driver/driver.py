@@ -664,9 +664,10 @@ class Driver:
     def retrieve_build_hash_from_nodes_info(self, es):
         try:
             nodes_info = es["default"].nodes.info(filter_path="**.build_hash")
-            nodes = list(nodes_info["nodes"].keys())
+            nodes = nodes_info["nodes"]
             # assumption: build hash is the same across all the nodes
-            return nodes_info["nodes"][nodes[0]]["build_hash"]
+            first_node_id = next(iter(nodes))
+            return nodes[first_node_id]["build_hash"]
         except BaseException:
             self.logger.exception("Could not retrieve build hash from nodes info")
             return None
