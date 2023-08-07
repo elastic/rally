@@ -87,6 +87,43 @@ class TestDriver:
         def close(cls):
             TestDriver.StaticClientFactory.PATCHER.stop()
 
+    class StaticServerlessClientFactory:
+        PATCHER = None
+
+        def __init__(self, *args, **kwargs):
+            TestDriver.StaticClientFactory.PATCHER = mock.patch("elasticsearch.Elasticsearch")
+            self.es = TestDriver.StaticClientFactory.PATCHER.start()
+            self.es.info.return_value = {
+                "name": "serverless",
+                "cluster_name": "serverless",
+                "cluster_uuid": "4bbPT0Z6SsuODSz_vG1umA",
+                "version": {
+                    "number": "8.10.0",
+                    "build_flavor": "serverless",
+                    "build_type": "docker",
+                    "build_hash": "00000000",
+                    "build_date": "2023-10-31",
+                    "build_snapshot": False,
+                    "lucene_version": "9.7.0",
+                    "minimum_wire_compatibility_version": "8.10.0",
+                    "minimum_index_compatibility_version": "8.10.0",
+                },
+                "tagline": "You Know, for Search",
+            }
+            self.es.nodes.info.return_value = {
+                "nodes": {
+                    "PNAuTQt3Seum5BpPleo0wA": {"build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80"},
+                    "i9FafotsSSOrOZdDyhA2Ng": {"build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80"},
+                }
+            }
+
+        def create(self):
+            return self.es
+
+        @classmethod
+        def close(cls):
+            TestDriver.StaticClientFactory.PATCHER.stop()
+
     def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
@@ -100,7 +137,12 @@ class TestDriver:
         self.cfg.add(config.Scope.application, "telemetry", "devices", [])
         self.cfg.add(config.Scope.application, "telemetry", "params", {})
         self.cfg.add(config.Scope.application, "mechanic", "car.names", ["default"])
-        self.cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", True)
+        if method == self.test_prepare_serverless_benchmark:  # pylint: disable=comparison-with-callable
+            self.cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
+            self.cfg.add(config.Scope.application, "driver", "serverless.mode", True)
+            self.cfg.add(config.Scope.application, "driver", "serverless.operator", True)
+        else:
+            self.cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", True)
         self.cfg.add(config.Scope.application, "client", "hosts", self.Holder(all_hosts={"default": ["localhost:9200"]}))
         self.cfg.add(config.Scope.application, "client", "options", self.Holder(all_client_options={"default": {}}))
         self.cfg.add(config.Scope.application, "driver", "load_driver_hosts", ["localhost"])
@@ -146,6 +188,32 @@ class TestDriver:
 
         # Did we start all load generators? There is no specific mock assert for this...
         assert target.start_worker.call_count == 4
+
+    # mocking DriverActor.prepare_track() only to complete Driver.prepare_benchmark()
+    @mock.patch.object(driver.DriverActor, "prepare_track")
+    def test_prepare_serverless_benchmark(self, mock_method):
+        driver_actor = driver.DriverActor
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticServerlessClientFactory)
+        d.prepare_benchmark(t=self.track)
+
+        # was build hash determined correctly?
+        assert driver_actor.cluster_details == {
+            "name": "serverless",
+            "cluster_name": "serverless",
+            "cluster_uuid": "4bbPT0Z6SsuODSz_vG1umA",
+            "version": {
+                "number": "8.10.0",
+                "build_flavor": "serverless",
+                "build_type": "docker",
+                "build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80",  # <--- THIS
+                "build_date": "2023-10-31",
+                "build_snapshot": False,
+                "lucene_version": "9.7.0",
+                "minimum_wire_compatibility_version": "8.10.0",
+                "minimum_index_compatibility_version": "8.10.0",
+            },
+            "tagline": "You Know, for Search",
+        }
 
     def test_assign_drivers_round_robin(self):
         target = self.create_test_driver_target()

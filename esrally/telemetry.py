@@ -1761,10 +1761,11 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
     Gathers static environment information on a cluster level (e.g. version numbers).
     """
 
-    def __init__(self, client, metrics_store):
+    def __init__(self, client, metrics_store, revision_override):
         super().__init__()
         self.metrics_store = metrics_store
         self.client = client
+        self.revision_override = revision_override
 
     def on_benchmark_start(self):
         # noinspection PyBroadException
@@ -1774,8 +1775,11 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
             self.logger.exception("Could not retrieve cluster version info")
             return
         distribution_flavor = client_info["version"].get("build_flavor", "oss")
-        # build hash will only be available on serverless if the client has operator privs
+        # serverless returns dummy build hash which gets overridden when running with operator privileges
+        # TODO: refactor if config object gets included in telemetry base class (ES-6459)
         revision = client_info["version"].get("build_hash", distribution_flavor)
+        if self.revision_override:
+            revision = self.revision_override
         # build version does not exist for serverless
         distribution_version = client_info["version"].get("number", distribution_flavor)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)

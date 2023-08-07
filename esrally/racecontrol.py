@@ -205,6 +205,10 @@ class BenchmarkCoordinator:
                     raise exceptions.SystemSetupError(
                         f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]"
                     )
+            else:
+                self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+                # operator privileges assumed for now
+                self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
 
         self.current_track = track.load_track(self.cfg, install_dependencies=True)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)

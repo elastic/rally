@@ -615,7 +615,7 @@ class Driver:
             ).create()
         return es
 
-    def prepare_telemetry(self, es, enable, index_names, data_stream_names):
+    def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
@@ -626,7 +626,7 @@ class Driver:
             devices = [
                 telemetry.NodeStats(telemetry_params, es, self.metrics_store),
                 telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
-                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
+                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, build_hash),
                 telemetry.JvmStatsSummary(es_default, self.metrics_store),
                 telemetry.IndexStats(es_default, self.metrics_store),
                 telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
@@ -661,6 +661,17 @@ class Driver:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
+    def retrieve_build_hash_from_nodes_info(self, es):
+        try:
+            nodes_info = es["default"].nodes.info(filter_path="**.build_hash")
+            nodes = nodes_info["nodes"]
+            # assumption: build hash is the same across all the nodes
+            first_node_id = next(iter(nodes))
+            return nodes[first_node_id]["build_hash"]
+        except BaseException:
+            self.logger.exception("Could not retrieve build hash from nodes info")
+            return None
+
     def create_api_key(self, es, client_id):
         self.logger.debug("Creating ES API key for client [%s].", client_id)
         try:
@@ -689,6 +700,7 @@ class Driver:
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
+        build_hash = None
         if skip_rest_api_check:
             self.logger.info("Skipping REST API check as requested explicitly.")
         elif uses_static_responses:
@@ -696,6 +708,12 @@ class Driver:
         else:
             self.wait_for_rest_api(es_clients)
             self.target.cluster_details = self.retrieve_cluster_info(es_clients)
+            serverless_mode = self.config.opts("driver", "serverless.mode", default_value=False, mandatory=False)
+            serverless_operator = self.config.opts("driver", "serverless.operator", default_value=False, mandatory=False)
+            if serverless_mode and serverless_operator:
+                build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
+                self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
+                self.target.cluster_details["version"]["build_hash"] = build_hash
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
@@ -704,6 +722,7 @@ class Driver:
             enable=not uses_static_responses,
             index_names=self.track.index_names(),
             data_stream_names=self.track.data_stream_names(),
+            build_hash=build_hash,
         )
 
         for host in self.config.opts("driver", "load_driver_hosts"):
