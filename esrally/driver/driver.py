@@ -640,6 +640,7 @@ class Driver:
                 telemetry.DataStreamStats(telemetry_params, es, self.metrics_store),
                 telemetry.IngestPipelineStats(es, self.metrics_store),
                 telemetry.DiskUsageStats(telemetry_params, es_default, self.metrics_store, index_names, data_stream_names),
+                telemetry.BlobStoreStats(telemetry_params, es, self.metrics_store),
             ]
         else:
             devices = []

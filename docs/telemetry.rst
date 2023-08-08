@@ -328,3 +328,69 @@ It also works with ``esrally compare``::
 .. note::
 
     This telemetry device has no runtime overhead. It does all of it's work after the race is complete.
+
+blob-store-stats
+----------------
+
+The blob-store-stats telemetry device regularly calls the blob store stats API and records one metrics document for cluster level stats (``_all``), and one metrics document per node.
+
+Supported telemetry parameters:
+
+* ``blob-store-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+
+Example of recorded documents given two nodes in the target cluster::
+
+
+    {
+      "name": "blob-store-stats",
+      "node": "_all",
+      "meta": {
+        "cluster": "es",
+        "_nodes": {
+          "total": 2,
+          "successful": 2,
+          "failed": 0
+        }
+      },
+      "ListObjects": 30,
+      "PutMultipartObject": 0,
+      "PutObject": 0,
+      "GetObject": 2334
+    },
+    {
+      "name": "blob-store-stats",
+      "node": "OkuSgfZWSq2fprKXD6CNOw",
+      "meta": {
+        "cluster": "es",
+        "_nodes": {
+          "total": 2,
+          "successful": 2,
+          "failed": 0
+        }
+      },
+      "ListObjects": 30,
+      "PutMultipartObject": 0,
+      "PutObject": 0,
+      "GetObject": 1167
+    },
+    {
+      "name": "blob-store-stats",
+      "node": "ufg1tLOiTIiHkmgGiztW9Q",
+      "meta": {
+        "cluster": "es",
+        "_nodes": {
+          "total": 2,
+          "successful": 2,
+          "failed": 0
+        },
+        "ListObjects": 0,
+        "PutMultipartObject": 0,
+        "PutObject": 0,
+        "GetObject": 1167
+      }
+    }
+
+
+.. note::
+
+    This telemetry device is only applicable to `Stateless Elasticsearch <https://www.elastic.co/blog/stateless-your-new-state-of-find-with-elasticsearch>`_ and requires elevated privleges only available to Elastic developers.
