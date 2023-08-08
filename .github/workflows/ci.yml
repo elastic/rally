@@ -84,6 +84,7 @@ jobs:
         run: python -m pip install --upgrade nox
       - name: "Run tests"
         run: nox -s rally_tracks_compat
+        timeout-minutes: 120
         env:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
           # being rate limited
@@ -99,7 +100,9 @@ jobs:
         if: always()
         with:
           name: rally-tracks-compat-logs
-          path: /home/runner/.rally/logs/
+          path: |
+            /home/runner/.rally/logs/
+            /home/runner/.rally/benchmarks/races/**/*.log
           if-no-files-found: error
 
   install-with-pyenv:
