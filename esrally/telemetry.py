@@ -2374,7 +2374,7 @@ class BlobStoreStats(TelemetryDevice):
     def __init__(self, telemetry_params, clients, metrics_store):
         """
         :param telemetry_params: The configuration object for telemetry_params.
-            ``searchable-snapshots-stats-sample-interval``: positive integer controlling the sampling interval.
+            ``blob-store-stats-sample-interval``: positive integer controlling the sampling interval.
             Default: 1 second.
         :param clients: A dict of clients to all clusters.
         :param metrics_store: The configured metrics store we write to.
