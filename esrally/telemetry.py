@@ -2386,7 +2386,7 @@ class BlobStoreStats(TelemetryDevice):
         self.sample_interval = telemetry_params.get("blob-store-stats-sample-interval", 1)
         if self.sample_interval <= 0:
             raise exceptions.SystemSetupError(
-                f"The telemetry parameter 'blob-store-stats-sample-interval' must be greater than zero " f"but was {self.sample_interval}."
+                f"The telemetry parameter 'blob-store-stats-sample-interval' must be greater than zero but was {self.sample_interval}."
             )
         self.specified_cluster_names = self.clients.keys()
         self.metrics_store = metrics_store
