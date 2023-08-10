@@ -228,6 +228,8 @@ class BenchmarkCoordinator:
             )
         if self.current_challenge.user_info:
             console.info(self.current_challenge.user_info)
+        for message in self.current_challenge.serverless_info:
+            console.info(message)
         self.race = metrics.create_race(self.cfg, self.current_track, self.current_challenge, self.track_revision)
 
         self.metrics_store = metrics.metrics_store(
