@@ -402,13 +402,13 @@ class TaskExecutionActor(actor.RallyActor):
 
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartTaskLoop(self, msg, sender):
-        self.parent = sender
+        self.task_preparation_actor = sender
         self.track_name = msg.track_name
         self.cfg = load_local_config(msg.cfg)
         if self.cfg.opts("track", "test.mode.enabled"):
             self.wakeup_interval = 0.5
         track.load_track_plugins(self.cfg, self.track_name)
-        self.send(self.parent, ReadyForWork())
+        self.send(self.task_preparation_actor, ReadyForWork())
 
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_DoTask(self, msg, sender):
