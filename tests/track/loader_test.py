@@ -1850,10 +1850,6 @@ class TestServerlessTrackFilter:
                 "operation-type": "custom-operation-type",
             },
             {
-                "name": "shrink-index",
-                "operation-type": "shrink-index",
-            },
-            {
                 "name": "load-posts",
                 "operation-type": "composite",
                 "requests": [],
@@ -1865,6 +1861,12 @@ class TestServerlessTrackFilter:
                 "schedule": [
                     {
                         "operation": "create-index",
+                    },
+                    {
+                        "operation": {
+                            "operation-type": "bulk-index",
+                            "run-on-serverless": False,
+                        }
                     },
                     {
                         "parallel": {
@@ -1882,6 +1884,12 @@ class TestServerlessTrackFilter:
                     },
                     {
                         "operation": "shrink-index",
+                    },
+                    {
+                        "operation": {
+                            "operation-type": "create-index-template",
+                            "run-on-serverless": True,
+                        }
                     },
                     {
                         "operation": "node-stats",
@@ -1927,39 +1935,41 @@ class TestServerlessTrackFilter:
     def test_filters_tasks_operator_false(self):
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
-        assert len(full_track.challenges[0].schedule) == 6
+        assert len(full_track.challenges[0].schedule) == 8
 
         filtered = self.filter(full_track, serverless_mode=True, serverless_operator=False)
         assert filtered.challenges[0].serverless_info == [
             "Treating parallel task in challenge [default-challenge] as public.",
-            "Excluding [shrink-index], [node-stats] as challenge [default-challenge] is run on serverless.",
-        ]
-
-        schedule = filtered.challenges[0].schedule
-        assert len(schedule) == 4
-        assert schedule[0].name == "create-index"
-        assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
-        assert schedule[2].name == "cluster-stats"
-        assert schedule[3].name == "load-posts"
-
-    def test_filters_tasks_operator_true(self):
-        reader = loader.TrackSpecificationReader()
-        full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
-        assert len(full_track.challenges[0].schedule) == 6
-
-        filtered = self.filter(full_track, serverless_mode=True, serverless_operator=True)
-        assert filtered.challenges[0].serverless_info == [
-            "Treating parallel task in challenge [default-challenge] as public.",
-            "Excluding [shrink-index] as challenge [default-challenge] is run on serverless.",
+            "Excluding [bulk-index], [shrink-index], [node-stats] as challenge [default-challenge] is run on serverless.",
         ]
 
         schedule = filtered.challenges[0].schedule
         assert len(schedule) == 5
         assert schedule[0].name == "create-index"
         assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
-        assert schedule[2].name == "node-stats"
+        assert schedule[2].name == "create-index-template"
         assert schedule[3].name == "cluster-stats"
         assert schedule[4].name == "load-posts"
+
+    def test_filters_tasks_operator_true(self):
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
+        assert len(full_track.challenges[0].schedule) == 8
+
+        filtered = self.filter(full_track, serverless_mode=True, serverless_operator=True)
+        assert filtered.challenges[0].serverless_info == [
+            "Treating parallel task in challenge [default-challenge] as public.",
+            "Excluding [bulk-index], [shrink-index] as challenge [default-challenge] is run on serverless.",
+        ]
+
+        schedule = filtered.challenges[0].schedule
+        assert len(schedule) == 6
+        assert schedule[0].name == "create-index"
+        assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
+        assert schedule[2].name == "create-index-template"
+        assert schedule[3].name == "node-stats"
+        assert schedule[4].name == "cluster-stats"
+        assert schedule[5].name == "load-posts"
 
 
 # pylint: disable=too-many-public-methods

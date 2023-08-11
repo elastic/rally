@@ -1173,6 +1173,10 @@ class Operation:
     def include_in_reporting(self):
         return self.params.get("include-in-reporting", True)
 
+    @property
+    def run_on_serverless(self):
+        return self.params.get("run-on-serverless", None)
+
     def __hash__(self):
         return hash(self.name)
 
