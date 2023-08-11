@@ -469,12 +469,13 @@ class TrackPreparationActor(actor.RallyActor):
         self.send(self.driver_actor, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_Bootstrap(self, msg, driver_actor):
+    def receiveMsg_Bootstrap(self, msg, sender):
+        self.driver_actor = sender
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         # this instance of load_track occurs once per host, so install dependencies if necessary
         load_track(self.cfg, install_dependencies=False)
-        self.send(driver_actor, ReadyForWork())
+        self.send(self.driver_actor, ReadyForWork())
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
@@ -489,7 +490,6 @@ class TrackPreparationActor(actor.RallyActor):
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
-        self.driver_actor = sender
         self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
         tpr = TrackProcessorRegistry(self.cfg)
         self.track = msg.track
