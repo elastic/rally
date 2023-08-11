@@ -305,9 +305,7 @@ class DriverActor(actor.RallyActor):
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     def create_client(self, host, cfg):
-        worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
-        self.send(worker, Bootstrap(cfg))
-        return worker
+        return self.createActor(Worker, targetActorRequirements=self._requirements(host))
 
     def start_worker(self, driver, worker_id, cfg, track, allocations, client_contexts=None):
         self.send(driver, StartWorker(worker_id, cfg, track, allocations, client_contexts))
@@ -1291,10 +1289,6 @@ class Worker(actor.RallyActor):
 
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.debug("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
-
-    def receiveMsg_Bootstrap(self, msg, sender):
-        raise exceptions.RallyError(
-                "Received a Bootstrap message that wasn't being received before")
 
     def drive(self):
         task_allocations = self.current_tasks_and_advance()
