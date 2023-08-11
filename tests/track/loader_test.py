@@ -1906,6 +1906,20 @@ class TestServerlessTrackFilter:
         filtered_track = self.filter(track_specification={"foo": "bar"}, serverless_mode=False, serverless_operator=False)
         assert filtered_track == {"foo": "bar"}
 
+    def test_no_message_if_no_filter(self):
+        track_specification = {
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [],
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", copy.deepcopy(track_specification), "/mappings")
+        filtered = self.filter(full_track, serverless_mode=True, serverless_operator=True)
+        assert filtered.challenges[0].serverless_info == []
+
     def test_filters_tasks_operator_false(self):
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")

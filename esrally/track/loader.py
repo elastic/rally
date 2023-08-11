@@ -928,8 +928,10 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
                     tasks_to_remove.append(task)
             for task in tasks_to_remove:
                 challenge.remove_task(task)
-            task_str = ", ".join(f"[{task}]" for task in tasks_to_remove)
-            challenge.serverless_info.append(f"Excluding {task_str} as challenge [{challenge}] is run on serverless.")
+
+            if tasks_to_remove:
+                task_str = ", ".join(f"[{task}]" for task in tasks_to_remove)
+                challenge.serverless_info.append(f"Excluding {task_str} as challenge [{challenge}] is run on serverless.")
 
         return track
 
