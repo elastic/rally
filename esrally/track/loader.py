@@ -912,7 +912,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
                 return op.serverless_status < track.ServerlessStatus.Public
         except KeyError:
             self.logger.info("Treating user-provided operation type [%s] for operation [%s] as public.", operation.type, operation.name)
-            return True
+            return False
 
     def on_after_load_track(self, track):
         if not self.serverless_mode:

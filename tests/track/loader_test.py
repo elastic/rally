@@ -1539,6 +1539,7 @@ class TestTrackFilter:
                             "operation": "match-all",
                         },
                         {
+                            "name": "cluster-stats",
                             "operation": "cluster-stats",
                         },
                         {
@@ -1886,6 +1887,9 @@ class TestServerlessTrackFilter:
                         "operation": "node-stats",
                     },
                     {
+                        "operation": "cluster-stats",
+                    },
+                    {
                         "name": "load-posts",
                         "operation": "load-posts",
                     },
@@ -1923,7 +1927,7 @@ class TestServerlessTrackFilter:
     def test_filters_tasks_operator_false(self):
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
-        assert len(full_track.challenges[0].schedule) == 5
+        assert len(full_track.challenges[0].schedule) == 6
 
         filtered = self.filter(full_track, serverless_mode=True, serverless_operator=False)
         assert filtered.challenges[0].serverless_info == [
@@ -1932,15 +1936,16 @@ class TestServerlessTrackFilter:
         ]
 
         schedule = filtered.challenges[0].schedule
-        assert len(schedule) == 3
+        assert len(schedule) == 4
         assert schedule[0].name == "create-index"
         assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
-        assert schedule[2].name == "load-posts"
+        assert schedule[2].name == "cluster-stats"
+        assert schedule[3].name == "load-posts"
 
     def test_filters_tasks_operator_true(self):
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
-        assert len(full_track.challenges[0].schedule) == 5
+        assert len(full_track.challenges[0].schedule) == 6
 
         filtered = self.filter(full_track, serverless_mode=True, serverless_operator=True)
         assert filtered.challenges[0].serverless_info == [
@@ -1949,11 +1954,12 @@ class TestServerlessTrackFilter:
         ]
 
         schedule = filtered.challenges[0].schedule
-        assert len(schedule) == 4
+        assert len(schedule) == 5
         assert schedule[0].name == "create-index"
         assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
         assert schedule[2].name == "node-stats"
-        assert schedule[3].name == "load-posts"
+        assert schedule[3].name == "cluster-stats"
+        assert schedule[4].name == "load-posts"
 
 
 # pylint: disable=too-many-public-methods
