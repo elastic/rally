@@ -457,7 +457,7 @@ class TrackPreparationActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
         self.processors = queue.Queue()
-        self.original_sender = None
+        self.driver_actor = None
         self.logger.info("Track Preparator started")
         self.status = self.Status.INITIALIZING
         self.children = []
@@ -468,15 +468,15 @@ class TrackPreparationActor(actor.RallyActor):
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Track Preparator received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
-        self.send(self.original_sender, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
+        self.send(self.driver_actor, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_Bootstrap(self, msg, sender):
+    def receiveMsg_Bootstrap(self, msg, driver_actor):
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         # this instance of load_track occurs once per host, so install dependencies if necessary
         load_track(self.cfg, install_dependencies=False)
-        self.send(sender, ReadyForWork())
+        self.send(driver_actor, ReadyForWork())
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
@@ -487,11 +487,11 @@ class TrackPreparationActor(actor.RallyActor):
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our generic worker; forward to parent
-        self.send(self.original_sender, msg)
+        self.send(self.driver_actor, msg)
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
-        self.original_sender = sender
+        self.driver_actor = sender
         self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
         tpr = TrackProcessorRegistry(self.cfg)
         self.track = msg.track
@@ -517,7 +517,7 @@ class TrackPreparationActor(actor.RallyActor):
                 self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING
             )
         else:
-            self.send(self.original_sender, TrackPrepared())
+            self.send(self.driver_actor, TrackPrepared())
 
     def _seed_tasks(self, processor):
         self.tasks = list(WorkerTask(func, params) for func, params in processor.on_prepare_track(self.track, self.data_root_dir))
@@ -526,14 +526,14 @@ class TrackPreparationActor(actor.RallyActor):
         return self.createActor(TaskExecutionActor)
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_ReadyForWork(self, msg, sender):
+    def receiveMsg_ReadyForWork(self, msg, task_execution_actor):
         if self.tasks:
             next_task = self.tasks.pop()
         else:
             next_task = None
         new_msg = DoTask(next_task, self.cfg)
-        self.logger.debug("Track Preparator sending %s to %s", vars(new_msg), sender)
-        self.send(sender, new_msg)
+        self.logger.debug("Track Preparator sending %s to %s", vars(new_msg), task_execution_actor)
+        self.send(task_execution_actor, new_msg)
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WorkerIdle(self, msg, sender):
