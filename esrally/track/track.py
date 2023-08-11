@@ -680,6 +680,7 @@ class ServerlessStatus(IntEnum):
     Public = auto()
 
 
+@unique
 class OperationType(Enum):
     # TODO replace manual counts with auto() when we drop support for Python 3.10
     # https://docs.python.org/3/library/enum.html#enum.auto
@@ -694,18 +695,18 @@ class OperationType(Enum):
     # Public as all supported operation types are Public too (including RawRequest as
     # mentioned above)
     Composite = (8, AdminStatus.No, ServerlessStatus.Public)
-    SubmitAsyncSearch = (8, AdminStatus.No, ServerlessStatus.Public)
-    GetAsyncSearch = (9, AdminStatus.No, ServerlessStatus.Public)
-    DeleteAsyncSearch = (10, AdminStatus.No, ServerlessStatus.Public)
-    PaginatedSearch = (11, AdminStatus.No, ServerlessStatus.Public)
-    ScrollSearch = (12, AdminStatus.No, ServerlessStatus.Public)
-    OpenPointInTime = (13, AdminStatus.No, ServerlessStatus.Public)
-    ClosePointInTime = (14, AdminStatus.No, ServerlessStatus.Public)
-    Sql = (15, AdminStatus.No, ServerlessStatus.Public)
-    FieldCaps = (16, AdminStatus.No, ServerlessStatus.Public)
-    CompositeAgg = (17, AdminStatus.No, ServerlessStatus.Public)
-    WaitForCurrentSnapshotsCreate = (18, AdminStatus.No, ServerlessStatus.Internal)
-    Downsample = (19, AdminStatus.No, ServerlessStatus.Internal)
+    SubmitAsyncSearch = (9, AdminStatus.No, ServerlessStatus.Public)
+    GetAsyncSearch = (10, AdminStatus.No, ServerlessStatus.Public)
+    DeleteAsyncSearch = (11, AdminStatus.No, ServerlessStatus.Public)
+    PaginatedSearch = (12, AdminStatus.No, ServerlessStatus.Public)
+    ScrollSearch = (13, AdminStatus.No, ServerlessStatus.Public)
+    OpenPointInTime = (14, AdminStatus.No, ServerlessStatus.Public)
+    ClosePointInTime = (15, AdminStatus.No, ServerlessStatus.Public)
+    Sql = (16, AdminStatus.No, ServerlessStatus.Public)
+    FieldCaps = (17, AdminStatus.No, ServerlessStatus.Public)
+    CompositeAgg = (18, AdminStatus.No, ServerlessStatus.Public)
+    WaitForCurrentSnapshotsCreate = (19, AdminStatus.No, ServerlessStatus.Internal)
+    Downsample = (20, AdminStatus.No, ServerlessStatus.Internal)
 
     # administrative actions
     ForceMerge = (20, AdminStatus.Yes, ServerlessStatus.Internal)
