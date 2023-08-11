@@ -900,6 +900,9 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
         self.serverless_operator = cfg.opts("driver", "serverless.operator")
 
     def _is_filtered_task(self, operation):
+        if operation.type == "raw-request":
+            self.logger.info("Treating raw-request operation for operation [%s] as public.", operation.name)
+
         try:
             op = track.OperationType.from_hyphenated_string(operation.type)
             if self.serverless_operator:

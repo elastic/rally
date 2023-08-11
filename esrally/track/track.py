@@ -687,10 +687,12 @@ class OperationType(Enum):
     NodeStats = (2, AdminStatus.No, ServerlessStatus.Internal)
     Search = (3, AdminStatus.No, ServerlessStatus.Public)
     Bulk = (4, AdminStatus.No, ServerlessStatus.Public)
+    # Public as we can't verify the actual status
     RawRequest = (5, AdminStatus.No, ServerlessStatus.Public)
     WaitForRecovery = (6, AdminStatus.No, ServerlessStatus.Internal)
     WaitForSnapshotCreate = (7, AdminStatus.No, ServerlessStatus.Internal)
-    # Public as all supported operation types are Public too
+    # Public as all supported operation types are Public too (including RawRequest as
+    # mentioned above)
     Composite = (8, AdminStatus.No, ServerlessStatus.Public)
     SubmitAsyncSearch = (8, AdminStatus.No, ServerlessStatus.Public)
     GetAsyncSearch = (9, AdminStatus.No, ServerlessStatus.Public)
