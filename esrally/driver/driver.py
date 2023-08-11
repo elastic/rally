@@ -321,7 +321,7 @@ class DriverActor(actor.RallyActor):
             self.wakeupAfter(datetime.timedelta(seconds=next_task_scheduled_in), payload=DriverActor.RESET_RELATIVE_TIME_MARKER)
         else:
             self.driver.reset_relative_time()
-        self.send(self.start_sender, TaskFinished(metrics, next_task_scheduled_in))
+        self.send(self.benchmark_actor, TaskFinished(metrics, next_task_scheduled_in))
 
     def _requirements(self, host):
         if host == "localhost":
@@ -362,7 +362,7 @@ class DriverActor(actor.RallyActor):
         )
 
     def on_benchmark_complete(self, metrics):
-        self.send(self.start_sender, BenchmarkComplete(metrics))
+        self.send(self.benchmark_actor, BenchmarkComplete(metrics))
 
 
 def load_local_config(coordinator_config):
