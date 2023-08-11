@@ -1292,6 +1292,10 @@ class Worker(actor.RallyActor):
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.debug("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
 
+    def receiveMsg_Bootstrap(self, msg, sender):
+        raise exceptions.RallyError(
+                "Received a Bootstrap message that wasn't being received before")
+
     def drive(self):
         task_allocations = self.current_tasks_and_advance()
         # skip non-tasks in the task list
