@@ -1193,6 +1193,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             tracker.create_track(cfg)
         elif sub_command == "info":
             configure_track_params(arg_parser, args, cfg)
+            configure_default_serverless_params(cfg)
             track.track_info(cfg)
         else:
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
