@@ -395,7 +395,7 @@ class TaskExecutionActor(actor.RallyActor):
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.executor_future = None
         self.wakeup_interval = 5
-        self.parent = None
+        self.task_preparation_actor = None
         self.logger = logging.getLogger(__name__)
         self.track_name = None
         self.cfg = None
@@ -413,15 +413,15 @@ class TaskExecutionActor(actor.RallyActor):
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_DoTask(self, msg, sender):
         # actor can arbitrarily execute code based on these messages. if anyone besides our parent sends a task, ignore
-        if sender != self.parent:
-            msg = f"TaskExecutionActor expected message from [{self.parent}] but the received the following from [{sender}]: {vars(msg)}"
+        if sender != self.task_preparation_actor:
+            msg = f"TaskExecutionActor expected message from [{self.task_preparation_actor}] but the received the following from [{sender}]: {vars(msg)}"
             raise exceptions.RallyError(msg)
         task = msg.task
         if self.executor_future is not None:
             msg = f"TaskExecutionActor received DoTask message [{vars(msg)}], but was already busy"
             raise exceptions.RallyError(msg)
         if task is None:
-            self.send(self.parent, WorkerIdle())
+            self.send(self.task_preparation_actor, WorkerIdle())
         else:
             # this is a potentially long-running operation so we offload it a background thread so we don't block
             # the actor (e.g. logging works properly as log messages are forwarded timely).
@@ -436,16 +436,16 @@ class TaskExecutionActor(actor.RallyActor):
                 self.logger.exception("Worker failed. Notifying parent...", exc_info=e)
                 # the exception might be user-defined and not be on the load path of the original sender. Hence, it
                 # cannot be deserialized on the receiver so we convert it here to a plain string.
-                self.send(self.parent, actor.BenchmarkFailure("Error in task executor", str(e)))
+                self.send(self.task_preparation_actor, actor.BenchmarkFailure("Error in task executor", str(e)))
             else:
                 self.executor_future = None
-                self.send(self.parent, ReadyForWork())
+                self.send(self.task_preparation_actor, ReadyForWork())
         else:
             self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our no_retry infrastructure; forward to master
-        self.send(self.parent, msg)
+        self.send(self.task_preparation_actor, msg)
 
 
 class TrackPreparationActor(actor.RallyActor):
