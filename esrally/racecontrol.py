@@ -180,9 +180,6 @@ class BenchmarkCoordinator:
         self.current_challenge = None
 
     def setup(self, sources=False):
-        serverless_mode = False
-        serverless_operator = False
-
         # to load the track we need to know the correct cluster distribution version. Usually, this value should be set
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
         # to derive it ourselves. For source builds we always assume "main"
@@ -202,9 +199,9 @@ class BenchmarkCoordinator:
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.flavor", distribution_flavor)
             if versions.is_serverless(distribution_flavor):
-                serverless_mode = True
+                self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
                 # operator privileges assumed for now
-                serverless_operator = True
+                self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
             else:
                 min_es_version = versions.Version.from_string(version.minimum_es_version())
                 specified_version = versions.Version.from_string(distribution_version)
@@ -212,9 +209,6 @@ class BenchmarkCoordinator:
                     raise exceptions.SystemSetupError(
                         f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]"
                     )
-
-        self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", serverless_mode)
-        self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", serverless_operator)
 
         self.current_track = track.load_track(self.cfg, install_dependencies=True)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)

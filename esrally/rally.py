@@ -1063,6 +1063,11 @@ def configure_reporting_params(args, cfg):
     cfg.add(config.Scope.applicationOverride, "reporting", "numbers.align", args.report_numbers_align)
 
 
+def configure_default_serverless_params(cfg):
+    cfg.add(config.Scope.benchmark, "driver", "serverless.mode", False)
+    cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
+
+
 def dispatch_sub_command(arg_parser, args, cfg):
     sub_command = args.subcommand
 
@@ -1083,6 +1088,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
+            configure_default_serverless_params(cfg)
             dispatch_list(cfg)
         elif sub_command == "delete":
             cfg.add(config.Scope.applicationOverride, "system", "delete.config.option", args.configuration)
@@ -1159,6 +1165,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             configure_connection_params(arg_parser, args, cfg)
             configure_telemetry_params(args, cfg)
             configure_mechanic_params(args, cfg)
+            configure_default_serverless_params(cfg)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
