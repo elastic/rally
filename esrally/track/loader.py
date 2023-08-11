@@ -905,6 +905,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
 
         try:
             op = track.OperationType.from_hyphenated_string(operation.type)
+            # Comparisons rely on the ordering of auto() in track.ServerlessStatus which is an IntEnum
             if self.serverless_operator:
                 return op.serverless_status < track.ServerlessStatus.Internal
             else:
