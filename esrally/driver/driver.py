@@ -226,7 +226,7 @@ class DriverActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.start_sender = None
+        self.benchmark_actor = None
         self.driver = None
         self.status = "init"
         self.post_process_timer = 0
@@ -235,17 +235,17 @@ class DriverActor(actor.RallyActor):
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
         self.driver.close()
-        self.send(self.start_sender, actor.BenchmarkFailure("Fatal track or load generator indication", poisonmsg.details))
+        self.send(self.benchmark_actor, actor.BenchmarkFailure("Fatal track or load generator indication", poisonmsg.details))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
         self.driver.close()
-        self.send(self.start_sender, msg)
+        self.send(self.benchmark_actor, msg)
 
     def receiveMsg_BenchmarkCancelled(self, msg, sender):
         self.logger.info("Main driver received a notification that the benchmark has been cancelled.")
         self.driver.close()
-        self.send(self.start_sender, msg)
+        self.send(self.benchmark_actor, msg)
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
         self.logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
@@ -259,7 +259,7 @@ class DriverActor(actor.RallyActor):
                 self.logger.debug("Worker [%d] has exited.", worker_index)
             else:
                 self.logger.error("Worker [%d] has exited prematurely. Aborting benchmark.", worker_index)
-                self.send(self.start_sender, actor.BenchmarkFailure(f"Worker [{worker_index}] has exited prematurely."))
+                self.send(self.benchmark_actor, actor.BenchmarkFailure(f"Worker [{worker_index}] has exited prematurely."))
         else:
             self.logger.debug("A track preparator has exited.")
 
@@ -268,20 +268,20 @@ class DriverActor(actor.RallyActor):
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareBenchmark(self, msg, sender):
-        self.start_sender = sender
+        self.benchmark_actor = sender
         self.driver = Driver(self, msg.config)
         self.driver.prepare_benchmark(msg.track)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartBenchmark(self, msg, sender):
-        self.start_sender = sender
+        self.benchmark_actor = sender
         self.driver.start_benchmark()
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_TrackPrepared(self, msg, sender):
+    def receiveMsg_TrackPrepared(self, msg, track_preparation_actor):
         self.transition_when_all_children_responded(
-            sender, msg, expected_status=None, new_status=None, transition=self._after_track_prepared
+            track_preparation_actor, msg, expected_status=None, new_status=None, transition=self._after_track_prepared
         )
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
@@ -340,9 +340,9 @@ class DriverActor(actor.RallyActor):
             self.send(child, msg)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_ReadyForWork(self, msg, sender):
+    def receiveMsg_ReadyForWork(self, msg, task_preparation_actor):
         msg = PrepareTrack(self.track)
-        self.send(sender, msg)
+        self.send(task_preparation_actor, msg)
 
     def _create_track_preparator(self, host):
         return self.createActor(TrackPreparationActor, targetActorRequirements=self._requirements(host))
@@ -353,7 +353,7 @@ class DriverActor(actor.RallyActor):
             self.send(child, thespian.actors.ActorExitRequest())
         self.children = []
         self.send(
-            self.start_sender,
+            self.benchmark_actor,
             PreparationComplete(
                 # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
                 # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
