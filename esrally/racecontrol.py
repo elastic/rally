@@ -60,7 +60,7 @@ class Pipeline:
         :param name: A short name of the pipeline. This name will be used to reference it from the command line.
         :param description: A human-readable description what the pipeline does.
         :param target: A function that implements this pipeline
-        :param stable True iff the pipeline is considered production quality.
+        :param stable True if the pipeline is considered production quality.
         """
         self.name = name
         self.description = description
