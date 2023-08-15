@@ -2152,12 +2152,7 @@ class TestNodeStatsRecorder:
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="default", client=client, metrics_store=metrics_store)
 
     def test_flatten_indices_fields(self):
-        client = Client(nodes=SubClient(stats=self.node_stats_response))
-        cfg = create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {}
-        recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
-        flattened_fields = recorder.flatten_stats_fields(
+        flattened_fields = telemetry.flatten_stats_fields(
             prefix="indices",
             stats=self.node_stats_response["nodes"]["Zbl_e8EyRXmiR47gbHgPfg"]["indices"],
         )
