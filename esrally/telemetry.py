@@ -2478,29 +2478,28 @@ class BlobStoreStatsRecorder:
         stats_meta_data = {key: value for key, value in stats.items() if key == "_nodes"}
         meta_data = {"cluster": stats.get("cluster_name", self.rally_cluster_name), **stats_meta_data}
 
-        if cluster_stats := self._extract_blob_store_stats(stats.get("_all")):
-            self.metrics_store.put_doc(
-                {
-                    "name": "blob-store-stats",
-                    "node": "_all",
-                    **cluster_stats,
-                },
-                level=MetaInfoScope.cluster,
-                meta_data=meta_data,
-            )
+        if cluster_stats := self._get_stats(stats, "_all"):
+            self.metrics_store.put_doc(cluster_stats, level=MetaInfoScope.cluster, meta_data=meta_data)
 
-        for node_id, node_stats in stats.get("nodes", {}).items():
-            if ns := self._extract_blob_store_stats(node_stats):
-                self.metrics_store.put_doc(
-                    {
-                        "name": "blob-store-stats",
-                        "node": node_id,
-                        **ns,
-                    },
-                    level=MetaInfoScope.node,
-                    node_name=node_id,
-                    meta_data=meta_data,
-                )
+        for node_id in stats.get("nodes", {}):
+            if ns := self._get_stats(stats.get("nodes", {}), node_id):
+                self.metrics_store.put_doc(ns, level=MetaInfoScope.node, node_name=node_id, meta_data=meta_data)
 
-    def _extract_blob_store_stats(self, stats):
-        return stats.get("object_store_stats", {})
+    def _get_stats(self, stats, node):
+        doc = collections.OrderedDict()
+        obj_stats = self.object_store_stats(stats.get(node, {}))
+        obs_stats = self.operational_backup_service_stats(stats.get(node, {}))
+
+        if obj_stats or obs_stats:
+            doc["name"] = "blob-store-stats"
+            doc["node"] = node
+            doc.update(obj_stats)
+            doc.update(obs_stats)
+
+        return doc
+
+    def object_store_stats(self, stats):
+        return flatten_stats_fields(prefix="object_store", stats=stats.get("object_store_stats", {}))
+
+    def operational_backup_service_stats(self, stats):
+        return flatten_stats_fields(prefix="operational_backup", stats=stats.get("operational_backup_service_stats", {}))

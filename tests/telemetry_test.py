@@ -4988,11 +4988,67 @@ class TestBlobStoreStatsRecorder:
     blob_store_stats_response = {
         "_nodes": {"total": 2, "successful": 2, "failed": 0},
         "cluster_name": "es",
-        "_all": {"object_store_stats": {"ListObjects": 5, "PutMultipartObject": 3, "PutObject": 161, "GetObject": 54}},
+        "_all": {
+            "object_store_stats": {
+                "request_counts": {
+                    "ListObjects": 20,
+                    "PutMultipartObject": 20,
+                    "DeleteObjects": 20,
+                    "AbortMultipartObject": 20,
+                    "PutObject": 20,
+                    "GetObject": 20,
+                }
+            },
+            "operational_backup_service_stats": {
+                "request_counts": {
+                    "ListObjects": 22,
+                    "PutMultipartObject": 22,
+                    "DeleteObjects": 22,
+                    "AbortMultipartObject": 22,
+                    "PutObject": 22,
+                    "GetObject": 22,
+                }
+            },
+        },
         "nodes": {
-            "xwc71ug5QtOYWrEkNiVgYw": {"object_store_stats": {"ListObjects": 1, "PutMultipartObject": 0, "PutObject": 0, "GetObject": 5}},
-            "qRu2kq0_RnyVn-xmLIN5ZA": {
-                "object_store_stats": {"ListObjects": 4, "PutMultipartObject": 3, "PutObject": 161, "GetObject": 49}
+            "PaIdh023RvS0J99uWF_A7Q": {
+                "object_store_stats": {
+                    "request_counts": {
+                        "ListObjects": 10,
+                        "PutMultipartObject": 10,
+                        "DeleteObjects": 10,
+                        "AbortMultipartObject": 10,
+                        "PutObject": 10,
+                        "GetObject": 10,
+                    }
+                },
+                "operational_backup_service_stats": {
+                    "request_counts": {
+                        "ListObjects": 22,
+                        "PutMultipartObject": 22,
+                        "DeleteObjects": 22,
+                        "AbortMultipartObject": 22,
+                        "PutObject": 22,
+                        "GetObject": 22,
+                    }
+                },
+            },
+            "4RKUvXhKTMOoslA9V_4EmA": {
+                "object_store_stats": {
+                    "request_counts": {
+                        "ListObjects": 10,
+                        "PutMultipartObject": 10,
+                        "DeleteObjects": 10,
+                        "AbortMultipartObject": 10,
+                        "PutObject": 10,
+                        "GetObject": 10,
+                    }
+                },
+                "operational_backup_service_stats": {"request_counts": {}},
+            },
+            "ufg1tLOiTIiHkmgGiztW9Q": {
+                "object_store_stats": {"request_counts": {}},
+                "operational_backup_service_stats": {"request_counts": {}},
             },
         },
     }
@@ -5011,10 +5067,18 @@ class TestBlobStoreStatsRecorder:
                     {
                         "name": "blob-store-stats",
                         "node": "_all",
-                        "ListObjects": 5,
-                        "PutMultipartObject": 3,
-                        "PutObject": 161,
-                        "GetObject": 54,
+                        "object_store_request_counts_ListObjects": 20,
+                        "object_store_request_counts_PutMultipartObject": 20,
+                        "object_store_request_counts_DeleteObjects": 20,
+                        "object_store_request_counts_AbortMultipartObject": 20,
+                        "object_store_request_counts_PutObject": 20,
+                        "object_store_request_counts_GetObject": 20,
+                        "operational_backup_request_counts_ListObjects": 22,
+                        "operational_backup_request_counts_PutMultipartObject": 22,
+                        "operational_backup_request_counts_DeleteObjects": 22,
+                        "operational_backup_request_counts_AbortMultipartObject": 22,
+                        "operational_backup_request_counts_PutObject": 22,
+                        "operational_backup_request_counts_GetObject": 22,
                     },
                     level=MetaInfoScope.cluster,
                     meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
@@ -5022,27 +5086,37 @@ class TestBlobStoreStatsRecorder:
                 mock.call(
                     {
                         "name": "blob-store-stats",
-                        "node": "xwc71ug5QtOYWrEkNiVgYw",
-                        "ListObjects": 1,
-                        "PutMultipartObject": 0,
-                        "PutObject": 0,
-                        "GetObject": 5,
+                        "node": "PaIdh023RvS0J99uWF_A7Q",
+                        "object_store_request_counts_ListObjects": 10,
+                        "object_store_request_counts_PutMultipartObject": 10,
+                        "object_store_request_counts_DeleteObjects": 10,
+                        "object_store_request_counts_AbortMultipartObject": 10,
+                        "object_store_request_counts_PutObject": 10,
+                        "object_store_request_counts_GetObject": 10,
+                        "operational_backup_request_counts_ListObjects": 22,
+                        "operational_backup_request_counts_PutMultipartObject": 22,
+                        "operational_backup_request_counts_DeleteObjects": 22,
+                        "operational_backup_request_counts_AbortMultipartObject": 22,
+                        "operational_backup_request_counts_PutObject": 22,
+                        "operational_backup_request_counts_GetObject": 22,
                     },
                     level=MetaInfoScope.node,
-                    node_name="xwc71ug5QtOYWrEkNiVgYw",
+                    node_name="PaIdh023RvS0J99uWF_A7Q",
                     meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
                 ),
                 mock.call(
                     {
                         "name": "blob-store-stats",
-                        "node": "qRu2kq0_RnyVn-xmLIN5ZA",
-                        "ListObjects": 4,
-                        "PutMultipartObject": 3,
-                        "PutObject": 161,
-                        "GetObject": 49,
+                        "node": "4RKUvXhKTMOoslA9V_4EmA",
+                        "object_store_request_counts_ListObjects": 10,
+                        "object_store_request_counts_PutMultipartObject": 10,
+                        "object_store_request_counts_DeleteObjects": 10,
+                        "object_store_request_counts_AbortMultipartObject": 10,
+                        "object_store_request_counts_PutObject": 10,
+                        "object_store_request_counts_GetObject": 10,
                     },
                     level=MetaInfoScope.node,
-                    node_name="qRu2kq0_RnyVn-xmLIN5ZA",
+                    node_name="4RKUvXhKTMOoslA9V_4EmA",
                     meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
                 ),
             ],
