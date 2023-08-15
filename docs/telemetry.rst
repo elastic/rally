@@ -352,10 +352,18 @@ Example of recorded documents given two nodes in the target cluster::
           "failed": 0
         }
       },
-      "ListObjects": 30,
-      "PutMultipartObject": 0,
-      "PutObject": 0,
-      "GetObject": 2334
+      "object_store_request_counts_ListObjects": 20,
+      "object_store_request_counts_PutMultipartObject": 20,
+      "object_store_request_counts_DeleteObjects": 20,
+      "object_store_request_counts_AbortMultipartObject": 20,
+      "object_store_request_counts_PutObject": 20,
+      "object_store_request_counts_GetObject": 20,
+      "operational_backup_request_counts_ListObjects": 22,
+      "operational_backup_request_counts_PutMultipartObject": 22,
+      "operational_backup_request_counts_DeleteObjects": 22,
+      "operational_backup_request_counts_AbortMultipartObject": 22,
+      "operational_backup_request_counts_PutObject": 22,
+      "operational_backup_request_counts_GetObject": 22
     },
     {
       "name": "blob-store-stats",
@@ -368,10 +376,18 @@ Example of recorded documents given two nodes in the target cluster::
           "failed": 0
         }
       },
-      "ListObjects": 30,
-      "PutMultipartObject": 0,
-      "PutObject": 0,
-      "GetObject": 1167
+      "object_store_request_counts_ListObjects": 10,
+      "object_store_request_counts_PutMultipartObject": 10,
+      "object_store_request_counts_DeleteObjects": 10,
+      "object_store_request_counts_AbortMultipartObject": 10,
+      "object_store_request_counts_PutObject": 10,
+      "object_store_request_counts_GetObject": 10,
+      "operational_backup_request_counts_ListObjects": 22,
+      "operational_backup_request_counts_PutMultipartObject": 22,
+      "operational_backup_request_counts_DeleteObjects": 22,
+      "operational_backup_request_counts_AbortMultipartObject": 22,
+      "operational_backup_request_counts_PutObject": 22,
+      "operational_backup_request_counts_GetObject": 22
     },
     {
       "name": "blob-store-stats",
@@ -383,10 +399,12 @@ Example of recorded documents given two nodes in the target cluster::
           "successful": 2,
           "failed": 0
         },
-        "ListObjects": 0,
-        "PutMultipartObject": 0,
-        "PutObject": 0,
-        "GetObject": 1167
+      "object_store_request_counts_ListObjects": 10,
+      "object_store_request_counts_PutMultipartObject": 10,
+      "object_store_request_counts_DeleteObjects": 10,
+      "object_store_request_counts_AbortMultipartObject": 10,
+      "object_store_request_counts_PutObject": 10,
+      "object_store_request_counts_GetObject": 10
       }
     }
 
