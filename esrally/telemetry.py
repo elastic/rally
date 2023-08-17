@@ -866,74 +866,49 @@ class NodeStatsRecorder:
                 dict(collected_node_stats), level=MetaInfoScope.node, node_name=node_name, meta_data=metrics_store_meta_data
             )
 
-    def flatten_stats_fields(self, prefix=None, stats=None):
-        """
-        Flatten provided dict using an optional prefix and top level key filters.
-
-        :param prefix: The prefix for all flattened values. Defaults to None.
-        :param stats: Dict with values to be flattened, using _ as a separator. Defaults to {}.
-        :return: Return flattened dictionary, separated by _ and prefixed with prefix.
-        """
-
-        def iterate():
-            for section_name, section_value in stats.items():
-                if isinstance(section_value, dict):
-                    new_prefix = f"{prefix}_{section_name}"
-                    # https://www.python.org/dev/peps/pep-0380/
-                    yield from self.flatten_stats_fields(prefix=new_prefix, stats=section_value).items()
-                # Avoid duplication for metric fields that have unit embedded in value as they are also recorded elsewhere
-                # example: `breakers_parent_limit_size_in_bytes` vs `breakers_parent_limit_size`
-                elif isinstance(section_value, (int, float)) and not isinstance(section_value, bool):
-                    yield "{}{}".format(prefix + "_" if prefix else "", section_name), section_value
-
-        if stats:
-            return dict(iterate())
-        else:
-            return {}
-
     def indices_stats(self, node_name, node_stats, include):
         idx_stats = node_stats["indices"]
         ordered_results = collections.OrderedDict()
         for section in include:
             if section in idx_stats:
-                ordered_results.update(self.flatten_stats_fields(prefix="indices_" + section, stats=idx_stats[section]))
+                ordered_results.update(flatten_stats_fields(prefix="indices_" + section, stats=idx_stats[section]))
 
         return ordered_results
 
     def thread_pool_stats(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="thread_pool", stats=node_stats["thread_pool"])
+        return flatten_stats_fields(prefix="thread_pool", stats=node_stats["thread_pool"])
 
     def circuit_breaker_stats(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="breakers", stats=node_stats["breakers"])
+        return flatten_stats_fields(prefix="breakers", stats=node_stats["breakers"])
 
     def jvm_buffer_pool_stats(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="jvm_buffer_pools", stats=node_stats["jvm"]["buffer_pools"])
+        return flatten_stats_fields(prefix="jvm_buffer_pools", stats=node_stats["jvm"]["buffer_pools"])
 
     def jvm_mem_stats(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="jvm_mem", stats=node_stats["jvm"]["mem"])
+        return flatten_stats_fields(prefix="jvm_mem", stats=node_stats["jvm"]["mem"])
 
     def os_mem_stats(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="os_mem", stats=node_stats["os"]["mem"])
+        return flatten_stats_fields(prefix="os_mem", stats=node_stats["os"]["mem"])
 
     def os_cgroup_stats(self, node_name, node_stats):
         cgroup_stats = {}
         try:
-            cgroup_stats = self.flatten_stats_fields(prefix="os_cgroup", stats=node_stats["os"]["cgroup"])
+            cgroup_stats = flatten_stats_fields(prefix="os_cgroup", stats=node_stats["os"]["cgroup"])
         except KeyError:
             self.logger.debug("Node cgroup stats requested with none present.")
         return cgroup_stats
 
     def jvm_gc_stats(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
+        return flatten_stats_fields(prefix="jvm_gc", stats=node_stats["jvm"]["gc"])
 
     def network_stats(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="transport", stats=node_stats.get("transport"))
+        return flatten_stats_fields(prefix="transport", stats=node_stats.get("transport"))
 
     def process_stats(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="process_cpu", stats=node_stats["process"]["cpu"])
+        return flatten_stats_fields(prefix="process_cpu", stats=node_stats["process"]["cpu"])
 
     def indexing_pressure(self, node_name, node_stats):
-        return self.flatten_stats_fields(prefix="indexing_pressure", stats=node_stats["indexing_pressure"])
+        return flatten_stats_fields(prefix="indexing_pressure", stats=node_stats["indexing_pressure"])
 
     def sample(self):
         # pylint: disable=import-outside-toplevel
@@ -1756,6 +1731,32 @@ def extract_value(node, path, fallback="unknown"):
     return value
 
 
+def flatten_stats_fields(prefix=None, stats=None):
+    """
+    Flatten provided dict using an optional prefix and top level key filters.
+
+    :param prefix: The prefix for all flattened values. Defaults to None.
+    :param stats: Dict with values to be flattened, using _ as a separator. Defaults to {}.
+    :return: Return flattened dictionary, separated by _ and prefixed with prefix.
+    """
+
+    def iterate():
+        for section_name, section_value in stats.items():
+            if isinstance(section_value, dict):
+                new_prefix = f"{prefix}_{section_name}"
+                # https://www.python.org/dev/peps/pep-0380/
+                yield from flatten_stats_fields(prefix=new_prefix, stats=section_value).items()
+            # Avoid duplication for metric fields that have unit embedded in value as they are also recorded elsewhere
+            # example: `breakers_parent_limit_size_in_bytes` vs `breakers_parent_limit_size`
+            elif isinstance(section_value, (int, float)) and not isinstance(section_value, bool):
+                yield "{}{}".format(prefix + "_" if prefix else "", section_name), section_value
+
+    if stats:
+        return dict(iterate())
+    else:
+        return {}
+
+
 class ClusterEnvironmentInfo(InternalTelemetryDevice):
     """
     Gathers static environment information on a cluster level (e.g. version numbers).
@@ -2477,29 +2478,28 @@ class BlobStoreStatsRecorder:
         stats_meta_data = {key: value for key, value in stats.items() if key == "_nodes"}
         meta_data = {"cluster": stats.get("cluster_name", self.rally_cluster_name), **stats_meta_data}
 
-        if cluster_stats := self._extract_blob_store_stats(stats.get("_all")):
-            self.metrics_store.put_doc(
-                {
-                    "name": "blob-store-stats",
-                    "node": "_all",
-                    **cluster_stats,
-                },
-                level=MetaInfoScope.cluster,
-                meta_data=meta_data,
-            )
+        if cluster_stats := self._get_stats(stats, "_all"):
+            self.metrics_store.put_doc(cluster_stats, level=MetaInfoScope.cluster, meta_data=meta_data)
 
-        for node_id, node_stats in stats.get("nodes", {}).items():
-            if ns := self._extract_blob_store_stats(node_stats):
-                self.metrics_store.put_doc(
-                    {
-                        "name": "blob-store-stats",
-                        "node": node_id,
-                        **ns,
-                    },
-                    level=MetaInfoScope.node,
-                    node_name=node_id,
-                    meta_data=meta_data,
-                )
+        for node_id in stats.get("nodes", {}):
+            if ns := self._get_stats(stats.get("nodes", {}), node_id):
+                self.metrics_store.put_doc(ns, level=MetaInfoScope.node, node_name=node_id, meta_data=meta_data)
 
-    def _extract_blob_store_stats(self, stats):
-        return stats.get("object_store_stats", {})
+    def _get_stats(self, stats, node):
+        doc = collections.OrderedDict()
+        obj_stats = self.object_store_stats(stats.get(node, {}))
+        obs_stats = self.operational_backup_service_stats(stats.get(node, {}))
+
+        if obj_stats or obs_stats:
+            doc["name"] = "blob-store-stats"
+            doc["node"] = node
+            doc.update(obj_stats)
+            doc.update(obs_stats)
+
+        return doc
+
+    def object_store_stats(self, stats):
+        return flatten_stats_fields(prefix="object_store", stats=stats.get("object_store_stats", {}))
+
+    def operational_backup_service_stats(self, stats):
+        return flatten_stats_fields(prefix="operational_backup", stats=stats.get("operational_backup_service_stats", {}))
