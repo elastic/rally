@@ -24,6 +24,7 @@ import logging
 import math
 import multiprocessing
 import queue
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -305,7 +306,9 @@ class DriverActor(actor.RallyActor):
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     def create_client(self, host, cfg):
-        return self.createActor(Worker, targetActorRequirements=self._requirements(host))
+        worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
+        self.send(worker, Bootstrap(cfg))
+        return worker
 
     def start_worker(self, driver, worker_id, cfg, track, allocations, client_contexts=None):
         self.send(driver, StartWorker(worker_id, cfg, track, allocations, client_contexts))
@@ -1209,6 +1212,14 @@ class Worker(actor.RallyActor):
         self.start_driving = False
         self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
         self.sample_queue_size = None
+
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_Bootstrap(self, msg, sender):
+        self.driver_actor = sender
+        # load node-specific config to have correct paths available
+        self.cfg = load_local_config(msg.config)
+        load_track(self.cfg, install_dependencies=False)
+        self.logger.debug("Worker[%d] has Python load path %s after bootstrap.", msg.worker_id, sys.path)
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
