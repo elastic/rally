@@ -1189,7 +1189,7 @@ class Worker(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.master = None
+        self.driver_actor = None
         self.worker_id = None
         self.config = None
         self.track = None
@@ -1213,7 +1213,7 @@ class Worker(actor.RallyActor):
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
         self.logger.info("Worker[%d] is about to start.", msg.worker_id)
-        self.master = sender
+        self.driver_actor = sender
         self.worker_id = msg.worker_id
         self.config = load_local_config(msg.config)
         self.on_error = self.config.opts("driver", "on.error")
@@ -1271,7 +1271,7 @@ class Worker(actor.RallyActor):
             current_samples = self.send_samples()
             if self.cancel.is_set():
                 self.logger.info("Worker[%s] has detected that benchmark has been cancelled. Notifying master...", str(self.worker_id))
-                self.send(self.master, actor.BenchmarkCancelled())
+                self.send(self.driver_actor, actor.BenchmarkCancelled())
             elif self.executor_future is not None and self.executor_future.done():
                 e = self.executor_future.exception(timeout=0)
                 if e:
@@ -1280,7 +1280,7 @@ class Worker(actor.RallyActor):
                     )
                     # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
                     # deserialized on the receiver so we convert it here to a plain string.
-                    self.send(self.master, actor.BenchmarkFailure(f"Error in load generator [{self.worker_id}]", str(e)))
+                    self.send(self.driver_actor, actor.BenchmarkFailure(f"Error in load generator [{self.worker_id}]", str(e)))
                 else:
                     self.logger.debug("Worker[%s] is ready for the next task.", str(self.worker_id))
                     self.executor_future = None
@@ -1313,7 +1313,7 @@ class Worker(actor.RallyActor):
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our no_retry infrastructure; forward to master
-        self.send(self.master, msg)
+        self.send(self.driver_actor, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.debug("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
@@ -1334,7 +1334,7 @@ class Worker(actor.RallyActor):
             self.complete.clear()
             self.executor_future = None
             self.sampler = None
-            self.send(self.master, JoinPointReached(self.worker_id, task_allocations))
+            self.send(self.driver_actor, JoinPointReached(self.worker_id, task_allocations))
         else:
             # There may be a situation where there are more (parallel) tasks than workers. If we were asked to complete all tasks, we not
             # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
@@ -1376,7 +1376,7 @@ class Worker(actor.RallyActor):
         if self.sampler:
             samples = self.sampler.samples
             if len(samples) > 0:
-                self.send(self.master, UpdateSamples(self.worker_id, samples))
+                self.send(self.driver_actor, UpdateSamples(self.worker_id, samples))
             return samples
         return None
 
