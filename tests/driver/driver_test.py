@@ -166,6 +166,7 @@ class TestDriver:
 
     @mock.patch("esrally.utils.net.resolve")
     def test_start_benchmark_and_prepare_track(self, resolve):
+        worker_id = [0, 1, 2, 3]
         # override load driver host
         self.cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", ["10.5.5.1", "10.5.5.2"])
         resolve.side_effect = ["10.5.5.1", "10.5.5.2"]
@@ -179,10 +180,10 @@ class TestDriver:
 
         target.create_client.assert_has_calls(
             calls=[
-                mock.call("10.5.5.1", d.config),
-                mock.call("10.5.5.1", d.config),
-                mock.call("10.5.5.2", d.config),
-                mock.call("10.5.5.2", d.config),
+                mock.call("10.5.5.1", d.config, worker_id[0]),
+                mock.call("10.5.5.1", d.config, worker_id[1]),
+                mock.call("10.5.5.2", d.config, worker_id[2]),
+                mock.call("10.5.5.2", d.config, worker_id[3]),
             ]
         )
 
@@ -216,6 +217,7 @@ class TestDriver:
         }
 
     def test_assign_drivers_round_robin(self):
+        worker_id = [0, 1, 2, 3]
         target = self.create_test_driver_target()
         d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
@@ -227,10 +229,10 @@ class TestDriver:
 
         target.create_client.assert_has_calls(
             calls=[
-                mock.call("localhost", d.config),
-                mock.call("localhost", d.config),
-                mock.call("localhost", d.config),
-                mock.call("localhost", d.config),
+                mock.call("localhost", d.config, worker_id[0]),
+                mock.call("localhost", d.config, worker_id[1]),
+                mock.call("localhost", d.config, worker_id[2]),
+                mock.call("localhost", d.config, worker_id[3]),
             ]
         )
 
