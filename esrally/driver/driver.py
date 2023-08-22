@@ -24,6 +24,7 @@ import logging
 import math
 import multiprocessing
 import queue
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -78,8 +79,9 @@ class Bootstrap:
     Prompts loading of track code on new actors
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, worker_id=None):
         self.config = cfg
+        self.worker_id = worker_id
 
 
 class PrepareTrack:
@@ -304,8 +306,10 @@ class DriverActor(actor.RallyActor):
             self.driver.update_progress_message()
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    def create_client(self, host, cfg):
-        return self.createActor(Worker, targetActorRequirements=self._requirements(host))
+    def create_client(self, host, cfg, worker_id):
+        worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
+        self.send(worker, Bootstrap(cfg, worker_id))
+        return worker
 
     def start_worker(self, driver, worker_id, cfg, track, allocations, client_contexts=None):
         self.send(driver, StartWorker(worker_id, cfg, track, allocations, client_contexts))
@@ -768,7 +772,7 @@ class Driver:
                 # don't assign workers without any clients
                 if len(clients) > 0:
                     self.logger.debug("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
-                    worker = self.target.create_client(host, self.config)
+                    worker = self.target.create_client(host, self.config, worker_id)
 
                     client_allocations = ClientAllocations()
                     worker_client_contexts = {}
@@ -1211,11 +1215,17 @@ class Worker(actor.RallyActor):
         self.sample_queue_size = None
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_StartWorker(self, msg, sender):
-        self.logger.info("Worker[%d] is about to start.", msg.worker_id)
+    def receiveMsg_Bootstrap(self, msg, sender):
         self.driver_actor = sender
         self.worker_id = msg.worker_id
+        # load node-specific config to have correct paths available
         self.config = load_local_config(msg.config)
+        load_track(self.config, install_dependencies=False)
+        self.logger.debug("Worker[%d] has Python load path %s after bootstrap.", self.worker_id, sys.path)
+
+    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_StartWorker(self, msg, sender):
+        self.logger.info("Worker[%d] is about to start.", msg.worker_id)
         self.on_error = self.config.opts("driver", "on.error")
         self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
         self.track = msg.track
