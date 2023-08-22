@@ -199,9 +199,12 @@ class BenchmarkCoordinator:
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.flavor", distribution_flavor)
             if versions.is_serverless(distribution_flavor):
-                self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
-                # operator privileges assumed for now
-                self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+                if not self.cfg.exists("driver", "serverless.mode"):
+                    self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+
+                if not self.cfg.exists("driver", "serverless.operator"):
+                    # operator privileges assumed for now
+                    self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
             else:
                 min_es_version = versions.Version.from_string(version.minimum_es_version())
                 specified_version = versions.Version.from_string(distribution_version)

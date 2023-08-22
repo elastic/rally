@@ -896,8 +896,8 @@ class TaskFilterTrackProcessor(TrackProcessor):
 class ServerlessFilterTrackProcessor(TrackProcessor):
     def __init__(self, cfg):
         self.logger = logging.getLogger(__name__)
-        self.serverless_mode = cfg.opts("driver", "serverless.mode")
-        self.serverless_operator = cfg.opts("driver", "serverless.operator")
+        self.serverless_mode = convert.to_bool(cfg.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+        self.serverless_operator = convert.to_bool(cfg.opts("driver", "serverless.operator", mandatory=False, default_value=False))
 
     def _is_filtered_task(self, operation):
         if operation.run_on_serverless is not None:
