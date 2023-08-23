@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import copy
 import os
 import random
 import re
@@ -1452,7 +1453,7 @@ class TestTrackPath:
 
 
 class TestTrackFilter:
-    def filter(self, track_specification, include_tasks=None, exclude_tasks=None):
+    def filter(self, track_specification, *, include_tasks=None, exclude_tasks=None):
         cfg = config.Config()
         cfg.add(config.Scope.application, "track", "include.tasks", include_tasks)
         cfg.add(config.Scope.application, "track", "exclude.tasks", exclude_tasks)
@@ -1538,6 +1539,7 @@ class TestTrackFilter:
                             "operation": "match-all",
                         },
                         {
+                            "name": "cluster-stats",
                             "operation": "cluster-stats",
                         },
                         {
@@ -1573,7 +1575,7 @@ class TestTrackFilter:
         full_track = reader("unittest", track_specification, "/mappings")
         assert len(full_track.challenges[0].schedule) == 7
 
-        filtered = self.filter(
+        filtered_track = self.filter(
             full_track,
             include_tasks=[
                 "index-3",
@@ -1584,7 +1586,7 @@ class TestTrackFilter:
             ],
         )
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert len(schedule) == 5
         assert [t.name for t in schedule[0].tasks] == ["index-3", "match-all-parallel"]
         assert schedule[1].name == "match-all-serial"
@@ -1675,9 +1677,9 @@ class TestTrackFilter:
         full_track = reader("unittest", track_specification, "/mappings")
         assert len(full_track.challenges[0].schedule) == 5
 
-        filtered = self.filter(full_track, exclude_tasks=["index-3", "type:search", "create-index"])
+        filtered_track = self.filter(full_track, exclude_tasks=["index-3", "type:search", "create-index"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert len(schedule) == 3
         assert [t.name for t in schedule[0].tasks] == ["index-1", "index-2"]
         assert schedule[1].name == "node-stats"
@@ -1749,9 +1751,9 @@ class TestTrackFilter:
         assert len(full_track.challenges[0].schedule) == 5
 
         expected_schedule = full_track.challenges[0].schedule.copy()
-        filtered = self.filter(full_track, exclude_tasks=["nothing"])
+        filtered_track = self.filter(full_track, exclude_tasks=["nothing"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert schedule == expected_schedule
 
     def test_unmatched_include_runs_nothing(self):
@@ -1820,10 +1822,154 @@ class TestTrackFilter:
         assert len(full_track.challenges[0].schedule) == 5
 
         expected_schedule = []
-        filtered = self.filter(full_track, include_tasks=["nothing"])
+        filtered_track = self.filter(full_track, include_tasks=["nothing"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert schedule == expected_schedule
+
+
+class TestServerlessTrackFilter:
+    TRACK_SPECIFICATION = {
+        "description": "description for unit test",
+        "indices": [{"name": "test-index", "auto-managed": False}],
+        "operations": [
+            {
+                "name": "create-index",
+                "operation-type": "create-index",
+            },
+            {
+                "name": "bulk-index",
+                "operation-type": "bulk",
+            },
+            {
+                "name": "node-stats",
+                "operation-type": "node-stats",
+            },
+            {
+                "name": "cluster-stats",
+                "operation-type": "custom-operation-type",
+            },
+            {
+                "name": "load-posts",
+                "operation-type": "composite",
+                "requests": [],
+            },
+        ],
+        "challenges": [
+            {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "create-index",
+                    },
+                    {
+                        "operation": {
+                            "operation-type": "bulk-index",
+                            "run-on-serverless": False,
+                        }
+                    },
+                    {
+                        "parallel": {
+                            "tasks": [
+                                {
+                                    "name": "index-1",
+                                    "operation": "bulk-index",
+                                },
+                                {
+                                    "name": "match-all-parallel",
+                                    "operation": "match-all",
+                                },
+                            ]
+                        }
+                    },
+                    {
+                        "operation": "shrink-index",
+                    },
+                    {
+                        "operation": {
+                            "operation-type": "create-index-template",
+                            "run-on-serverless": True,
+                        }
+                    },
+                    {
+                        "operation": "node-stats",
+                    },
+                    {
+                        "operation": "cluster-stats",
+                    },
+                    {
+                        "name": "load-posts",
+                        "operation": "load-posts",
+                    },
+                ],
+            }
+        ],
+    }
+
+    def filter(self, track_specification, *, serverless_mode, serverless_operator):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "driver", "serverless.mode", serverless_mode)
+        cfg.add(config.Scope.application, "driver", "serverless.operator", serverless_operator)
+
+        processor = loader.ServerlessFilterTrackProcessor(cfg)
+        return processor.on_after_load_track(track_specification)
+
+    def test_noop_if_not_serverless(self):
+        filtered_track = self.filter(track_specification={"foo": "bar"}, serverless_mode=False, serverless_operator=False)
+        assert filtered_track == {"foo": "bar"}
+
+    def test_no_message_if_no_filter(self):
+        track_specification = {
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [],
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", copy.deepcopy(track_specification), "/mappings")
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=True)
+        assert filtered_track.challenges[0].serverless_info == []
+
+    def test_filters_tasks_operator_false(self):
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
+        assert len(full_track.challenges[0].schedule) == 8
+
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=False)
+        assert filtered_track.challenges[0].serverless_info == [
+            "Treating parallel task in challenge [default-challenge] as public.",
+            "Excluding [bulk-index], [shrink-index], [node-stats] as challenge [default-challenge] is run on serverless.",
+        ]
+
+        schedule = filtered_track.challenges[0].schedule
+        assert len(schedule) == 5
+        assert schedule[0].name == "create-index"
+        assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
+        assert schedule[2].name == "create-index-template"
+        assert schedule[3].name == "cluster-stats"
+        assert schedule[4].name == "load-posts"
+
+    def test_filters_tasks_operator_true(self):
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
+        assert len(full_track.challenges[0].schedule) == 8
+
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=True)
+        assert filtered_track.challenges[0].serverless_info == [
+            "Treating parallel task in challenge [default-challenge] as public.",
+            "Excluding [bulk-index], [shrink-index] as challenge [default-challenge] is run on serverless.",
+        ]
+
+        schedule = filtered_track.challenges[0].schedule
+        assert len(schedule) == 6
+        assert schedule[0].name == "create-index"
+        assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
+        assert schedule[2].name == "create-index-template"
+        assert schedule[3].name == "node-stats"
+        assert schedule[4].name == "cluster-stats"
+        assert schedule[5].name == "load-posts"
 
 
 # pylint: disable=too-many-public-methods
@@ -4088,25 +4234,41 @@ class TestTrackProcessorRegistry:
     def test_default_track_processors(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "offline.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.operator", False)
         tpr = loader.TrackProcessorRegistry(cfg)
-        expected_defaults = [loader.TaskFilterTrackProcessor, loader.TestModeTrackProcessor, loader.DefaultTrackPreparator]
+        expected_defaults = [
+            loader.TaskFilterTrackProcessor,
+            loader.ServerlessFilterTrackProcessor,
+            loader.TestModeTrackProcessor,
+            loader.DefaultTrackPreparator,
+        ]
         actual_defaults = [proc.__class__ for proc in tpr.processors]
         assert len(expected_defaults) == len(actual_defaults)
 
     def test_override_default_preparator(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "offline.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.operator", False)
         tpr = loader.TrackProcessorRegistry(cfg)
         # call this once beforehand to make sure we don't "harden" the default in case calls are made out of order
         tpr.processors  # pylint: disable=pointless-statement
         tpr.register_track_processor(MyMockTrackProcessor())
-        expected_processors = [loader.TaskFilterTrackProcessor, loader.TestModeTrackProcessor, MyMockTrackProcessor]
+        expected_processors = [
+            loader.TaskFilterTrackProcessor,
+            loader.ServerlessFilterTrackProcessor,
+            loader.TestModeTrackProcessor,
+            MyMockTrackProcessor,
+        ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
 
     def test_allow_to_specify_default_preparator(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "offline.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.operator", False)
         tpr = loader.TrackProcessorRegistry(cfg)
         tpr.register_track_processor(MyMockTrackProcessor())
         # should be idempotent now that we have a custom config
@@ -4114,6 +4276,7 @@ class TestTrackProcessorRegistry:
         tpr.register_track_processor(loader.DefaultTrackPreparator())
         expected_processors = [
             loader.TaskFilterTrackProcessor,
+            loader.ServerlessFilterTrackProcessor,
             loader.TestModeTrackProcessor,
             MyMockTrackProcessor,
             loader.DefaultTrackPreparator,

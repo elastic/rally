@@ -34,6 +34,7 @@ from jinja2 import meta
 
 from esrally import PROGRAM_NAME, config, exceptions, paths, time, version
 from esrally.track import params, track
+from esrally.track.track import Parallel
 from esrally.utils import collections, console, convert, io, modules, net, opts, repo
 
 
@@ -79,7 +80,7 @@ class TrackProcessor(abc.ABC):
 
 class TrackProcessorRegistry:
     def __init__(self, cfg):
-        self.required_processors = [TaskFilterTrackProcessor(cfg), TestModeTrackProcessor(cfg)]
+        self.required_processors = [TaskFilterTrackProcessor(cfg), ServerlessFilterTrackProcessor(cfg), TestModeTrackProcessor(cfg)]
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
         self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
@@ -888,6 +889,52 @@ class TaskFilterTrackProcessor(TrackProcessor):
             for task in tasks_to_remove:
                 self.logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
                 challenge.remove_task(task)
+
+        return track
+
+
+class ServerlessFilterTrackProcessor(TrackProcessor):
+    def __init__(self, cfg):
+        self.logger = logging.getLogger(__name__)
+        self.serverless_mode = convert.to_bool(cfg.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+        self.serverless_operator = convert.to_bool(cfg.opts("driver", "serverless.operator", mandatory=False, default_value=False))
+
+    def _is_filtered_task(self, operation):
+        if operation.run_on_serverless is not None:
+            return not operation.run_on_serverless
+
+        if operation.type == "raw-request":
+            self.logger.info("Treating raw-request operation for operation [%s] as public.", operation.name)
+
+        try:
+            op = track.OperationType.from_hyphenated_string(operation.type)
+            # Comparisons rely on the ordering of auto() in track.ServerlessStatus which is an IntEnum
+            if self.serverless_operator:
+                return op.serverless_status < track.ServerlessStatus.Internal
+            else:
+                return op.serverless_status < track.ServerlessStatus.Public
+        except KeyError:
+            self.logger.info("Treating user-provided operation type [%s] for operation [%s] as public.", operation.type, operation.name)
+            return False
+
+    def on_after_load_track(self, track):
+        if not self.serverless_mode:
+            return track
+
+        for challenge in track.challenges:
+            # don't modify the schedule while iterating over it
+            tasks_to_remove = []
+            for task in challenge.schedule:
+                if isinstance(task, Parallel):
+                    challenge.serverless_info.append(f"Treating parallel task in challenge [{challenge}] as public.")
+                elif self._is_filtered_task(task.operation):
+                    tasks_to_remove.append(task)
+            for task in tasks_to_remove:
+                challenge.remove_task(task)
+
+            if tasks_to_remove:
+                task_str = ", ".join(f"[{task}]" for task in tasks_to_remove)
+                challenge.serverless_info.append(f"Excluding {task_str} as challenge [{challenge}] is run on serverless.")
 
         return track
 
