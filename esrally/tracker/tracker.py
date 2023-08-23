@@ -78,7 +78,7 @@ def create_track(cfg):
     client_options = cfg.opts("client", "options").default
     data_streams = cfg.opts("generator", "data_streams")
 
-    distribution_flavor, distribution_version, _ = factory.cluster_distribution_version(target_hosts, client_options)
+    distribution_flavor, distribution_version, _, _ = factory.cluster_distribution_version(target_hosts, client_options)
     client = factory.EsClientFactory(
         hosts=target_hosts,
         client_options=client_options,

@@ -186,9 +186,12 @@ class BenchmarkCoordinator:
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
             hosts = self.cfg.opts("client", "hosts").default
             client_options = self.cfg.opts("client", "options").default
-            distribution_flavor, distribution_version, distribution_build_hash = client.factory.cluster_distribution_version(
-                hosts, client_options
-            )
+            (
+                distribution_flavor,
+                distribution_version,
+                distribution_build_hash,
+                serverless_operator,
+            ) = client.factory.cluster_distribution_version(hosts, client_options)
 
             self.logger.info(
                 "Automatically derived distribution flavor [%s], version [%s], and build hash [%s]",
@@ -203,8 +206,8 @@ class BenchmarkCoordinator:
                     self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
 
                 if not self.cfg.exists("driver", "serverless.operator"):
-                    # operator privileges assumed for now
-                    self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+                    self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", serverless_operator)
+                console.info(f"Detected Elasticsearch Serverless mode with operator=[{serverless_operator}].")
             else:
                 min_es_version = versions.Version.from_string(version.minimum_es_version())
                 specified_version = versions.Version.from_string(distribution_version)
