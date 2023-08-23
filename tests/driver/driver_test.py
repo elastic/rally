@@ -159,7 +159,7 @@ class TestDriver:
     def teardown_method(self):
         self.StaticClientFactory.close()
 
-    def create_test_driver_target(self):
+    def create_test_driver_actor(self):
         client = "client_marker"
         attrs = {"create_client.return_value": client}
         return mock.Mock(**attrs)
@@ -171,14 +171,14 @@ class TestDriver:
         self.cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", ["10.5.5.1", "10.5.5.2"])
         resolve.side_effect = ["10.5.5.1", "10.5.5.2"]
 
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
         d.prepare_benchmark(t=self.track)
 
-        target.prepare_track.assert_called_once_with(["10.5.5.1", "10.5.5.2"], self.cfg, self.track)
+        driver_actor.prepare_track.assert_called_once_with(["10.5.5.1", "10.5.5.2"], self.cfg, self.track)
         d.start_benchmark()
 
-        target.create_client.assert_has_calls(
+        driver_actor.create_client.assert_has_calls(
             calls=[
                 mock.call("10.5.5.1", d.config, worker_id[0]),
                 mock.call("10.5.5.1", d.config, worker_id[1]),
@@ -188,7 +188,7 @@ class TestDriver:
         )
 
         # Did we start all load generators? There is no specific mock assert for this...
-        assert target.start_worker.call_count == 4
+        assert driver_actor.start_worker.call_count == 4
 
     # mocking DriverActor.prepare_track() only to complete Driver.prepare_benchmark()
     @mock.patch.object(driver.DriverActor, "prepare_track")
@@ -218,16 +218,16 @@ class TestDriver:
 
     def test_assign_drivers_round_robin(self):
         worker_id = [0, 1, 2, 3]
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
 
-        target.prepare_track.assert_called_once_with(["localhost"], self.cfg, self.track)
+        driver_actor.prepare_track.assert_called_once_with(["localhost"], self.cfg, self.track)
 
         d.start_benchmark()
 
-        target.create_client.assert_has_calls(
+        driver_actor.create_client.assert_has_calls(
             calls=[
                 mock.call("localhost", d.config, worker_id[0]),
                 mock.call("localhost", d.config, worker_id[1]),
@@ -237,11 +237,11 @@ class TestDriver:
         )
 
         # Did we start all load generators? There is no specific mock assert for this...
-        assert target.start_worker.call_count == 4
+        assert driver_actor.start_worker.call_count == 4
 
     def test_client_reaches_join_point_others_still_executing(self):
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
@@ -254,12 +254,12 @@ class TestDriver:
 
         assert len(d.workers_completed_current_step) == 1
 
-        assert target.on_task_finished.call_count == 0
-        assert target.drive_at.call_count == 0
+        assert driver_actor.on_task_finished.call_count == 0
+        assert driver_actor.drive_at.call_count == 0
 
     def test_client_reaches_join_point_which_completes_parent(self):
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
@@ -275,7 +275,7 @@ class TestDriver:
         assert d.current_step == -1
         assert len(d.workers_completed_current_step) == 1
         # notified all drivers that they should complete the current task ASAP
-        assert target.complete_current_task.call_count == 4
+        assert driver_actor.complete_current_task.call_count == 4
 
         # awaiting responses of other clients
         d.joinpoint_reached(
@@ -305,8 +305,8 @@ class TestDriver:
         assert d.current_step == 0
         assert len(d.workers_completed_current_step) == 0
 
-        assert target.on_task_finished.call_count == 1
-        assert target.drive_at.call_count == 4
+        assert driver_actor.on_task_finished.call_count == 1
+        assert driver_actor.drive_at.call_count == 4
 
     @mock.patch("esrally.driver.driver.delete_api_keys")
     def test_creates_api_keys_on_start_and_deletes_on_end(self, delete):
@@ -314,8 +314,8 @@ class TestDriver:
             "create_api_key_per_client": True,
         }
         self.cfg.add(config.Scope.application, "client", "options", self.Holder(all_client_options={"default": client_opts}))
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
 
@@ -331,8 +331,8 @@ class TestDriver:
 
         # Were workers started with the correct client API keys?
         expected_context_kwargs = [ctx for _, ctx in expected_client_contexts.items()]
-        actual_context_kwargs = [kwargs["client_contexts"] for _, kwargs in target.start_worker.call_args_list]
-        assert target.start_worker.call_count == 4
+        actual_context_kwargs = [kwargs["client_contexts"] for _, kwargs in driver_actor.start_worker.call_args_list]
+        assert driver_actor.start_worker.call_count == 4
         assert expected_context_kwargs == actual_context_kwargs
 
         # Set up some state so that one call to joinpoint_reached() will consider the benchmark done
