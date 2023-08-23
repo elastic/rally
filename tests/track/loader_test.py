@@ -1575,7 +1575,7 @@ class TestTrackFilter:
         full_track = reader("unittest", track_specification, "/mappings")
         assert len(full_track.challenges[0].schedule) == 7
 
-        filtered = self.filter(
+        filtered_track = self.filter(
             full_track,
             include_tasks=[
                 "index-3",
@@ -1586,7 +1586,7 @@ class TestTrackFilter:
             ],
         )
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert len(schedule) == 5
         assert [t.name for t in schedule[0].tasks] == ["index-3", "match-all-parallel"]
         assert schedule[1].name == "match-all-serial"
@@ -1677,9 +1677,9 @@ class TestTrackFilter:
         full_track = reader("unittest", track_specification, "/mappings")
         assert len(full_track.challenges[0].schedule) == 5
 
-        filtered = self.filter(full_track, exclude_tasks=["index-3", "type:search", "create-index"])
+        filtered_track = self.filter(full_track, exclude_tasks=["index-3", "type:search", "create-index"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert len(schedule) == 3
         assert [t.name for t in schedule[0].tasks] == ["index-1", "index-2"]
         assert schedule[1].name == "node-stats"
@@ -1751,9 +1751,9 @@ class TestTrackFilter:
         assert len(full_track.challenges[0].schedule) == 5
 
         expected_schedule = full_track.challenges[0].schedule.copy()
-        filtered = self.filter(full_track, exclude_tasks=["nothing"])
+        filtered_track = self.filter(full_track, exclude_tasks=["nothing"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert schedule == expected_schedule
 
     def test_unmatched_include_runs_nothing(self):
@@ -1822,9 +1822,9 @@ class TestTrackFilter:
         assert len(full_track.challenges[0].schedule) == 5
 
         expected_schedule = []
-        filtered = self.filter(full_track, include_tasks=["nothing"])
+        filtered_track = self.filter(full_track, include_tasks=["nothing"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert schedule == expected_schedule
 
 
@@ -1929,21 +1929,21 @@ class TestServerlessTrackFilter:
         }
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", copy.deepcopy(track_specification), "/mappings")
-        filtered = self.filter(full_track, serverless_mode=True, serverless_operator=True)
-        assert filtered.challenges[0].serverless_info == []
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=True)
+        assert filtered_track.challenges[0].serverless_info == []
 
     def test_filters_tasks_operator_false(self):
         reader = loader.TrackSpecificationReader()
         full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
         assert len(full_track.challenges[0].schedule) == 8
 
-        filtered = self.filter(full_track, serverless_mode=True, serverless_operator=False)
-        assert filtered.challenges[0].serverless_info == [
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=False)
+        assert filtered_track.challenges[0].serverless_info == [
             "Treating parallel task in challenge [default-challenge] as public.",
             "Excluding [bulk-index], [shrink-index], [node-stats] as challenge [default-challenge] is run on serverless.",
         ]
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert len(schedule) == 5
         assert schedule[0].name == "create-index"
         assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
@@ -1956,13 +1956,13 @@ class TestServerlessTrackFilter:
         full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
         assert len(full_track.challenges[0].schedule) == 8
 
-        filtered = self.filter(full_track, serverless_mode=True, serverless_operator=True)
-        assert filtered.challenges[0].serverless_info == [
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=True)
+        assert filtered_track.challenges[0].serverless_info == [
             "Treating parallel task in challenge [default-challenge] as public.",
             "Excluding [bulk-index], [shrink-index] as challenge [default-challenge] is run on serverless.",
         ]
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert len(schedule) == 6
         assert schedule[0].name == "create-index"
         assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
