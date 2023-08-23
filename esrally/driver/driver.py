@@ -564,7 +564,7 @@ class ClientContext:
 
 
 class Driver:
-    def __init__(self, target, config, es_client_factory_class=client.EsClientFactory):
+    def __init__(self, driver_actor, config, es_client_factory_class=client.EsClientFactory):
         """
         Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
         we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
@@ -574,7 +574,7 @@ class Driver:
         :param config: The current config object.
         """
         self.logger = logging.getLogger(__name__)
-        self.target = target
+        self.driver_actor = driver_actor
         self.config = config
         self.es_client_factory = es_client_factory_class
         self.default_sync_es_client = None
@@ -713,13 +713,13 @@ class Driver:
             self.logger.info("Skipping REST API check as static responses are used.")
         else:
             self.wait_for_rest_api(es_clients)
-            self.target.cluster_details = self.retrieve_cluster_info(es_clients)
+            self.driver_actor.cluster_details = self.retrieve_cluster_info(es_clients)
             serverless_mode = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
             serverless_operator = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
             if serverless_mode and serverless_operator:
                 build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
                 self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
-                self.target.cluster_details["version"]["build_hash"] = build_hash
+                self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
@@ -743,7 +743,7 @@ class Driver:
 
             self.load_driver_hosts.append(host_config)
 
-        self.target.prepare_track([h["host"] for h in self.load_driver_hosts], self.config, self.track)
+        self.driver_actor.prepare_track([h["host"] for h in self.load_driver_hosts], self.config, self.track)
 
     def start_benchmark(self):
         self.logger.info("Benchmark is about to start.")
@@ -772,7 +772,7 @@ class Driver:
                 # don't assign workers without any clients
                 if len(clients) > 0:
                     self.logger.debug("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
-                    worker = self.target.create_client(host, self.config, worker_id)
+                    worker = self.driver_actor.create_client(host, self.config, worker_id)
 
                     client_allocations = ClientAllocations()
                     worker_client_contexts = {}
@@ -787,7 +787,7 @@ class Driver:
 
                         worker_client_contexts[client_id] = client_context
                         self.client_contexts[worker_id] = worker_client_contexts
-                    self.target.start_worker(
+                    self.driver_actor.start_worker(
                         worker, worker_id, self.config, self.track, client_allocations, client_contexts=worker_client_contexts
                     )
                     self.workers.append(worker)
@@ -840,7 +840,7 @@ class Driver:
                             "Please check the logs for details."
                         )
                 self.logger.debug("Sending benchmark results...")
-                self.target.on_benchmark_complete(m)
+                self.driver_actor.on_benchmark_complete(m)
             else:
                 self.move_to_next_task(workers_curr_step)
         else:
@@ -859,7 +859,7 @@ class Driver:
         # Some metrics store implementations return None because no external representation is required.
         # pylint: disable=assignment-from-none
         m = self.metrics_store.to_externalizable(clear=True)
-        self.target.on_task_finished(m, waiting_period)
+        self.driver_actor.on_task_finished(m, waiting_period)
         # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
         # a relative instead of an absolute value.
         start_next_task = time.perf_counter() + waiting_period
@@ -872,7 +872,7 @@ class Driver:
                 worker_start_timestamp,
                 start_next_task,
             )
-            self.target.drive_at(worker, worker_start_timestamp)
+            self.driver_actor.drive_at(worker, worker_start_timestamp)
 
     def may_complete_current_task(self, task_allocations):
         any_joinpoints_completing_parent = [a for a in task_allocations if a.task.any_task_completes_parent]
@@ -903,7 +903,7 @@ class Driver:
 
             self.complete_current_task_sent = True
             for worker in self.workers:
-                self.target.complete_current_task(worker)
+                self.driver_actor.complete_current_task(worker)
 
         # If we have a specific 'completed-by' task specified, then we want to make sure that all clients for that task
         # are able to complete their runners as expected before completing the parent
@@ -931,7 +931,7 @@ class Driver:
                 self.complete_current_task_sent = True
                 self.logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
                 for worker in self.workers:
-                    self.target.complete_current_task(worker)
+                    self.driver_actor.complete_current_task(worker)
             else:
                 if len(pending_client_ids) > 32:
                     self.logger.info("[%d] clients did not yet finish.", len(pending_client_ids))
