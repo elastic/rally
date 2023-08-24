@@ -1,3 +1,29 @@
+### 2.9.0
+
+#### Highlights
+
+* [#1760](https://github.com/elastic/rally/pull/1760): Exclude tasks based on serverless status
+* [#1750](https://github.com/elastic/rally/pull/1750) (Breaking): Inject build_flavor in track templates
+
+#### Enhancements
+
+* [#1756](https://github.com/elastic/rally/pull/1756): Retrieve serverless build hash from nodes info API
+* [#1755](https://github.com/elastic/rally/pull/1755): Add blob-store-stats telemetry device and tests
+* [#1743](https://github.com/elastic/rally/pull/1743): Bulk action refresh param
+
+#### Bug Fixes
+
+* [#1763](https://github.com/elastic/rally/pull/1763): Fix running tracks across multiple load driver machines
+* [#1747](https://github.com/elastic/rally/pull/1747): Fix rally-annotations index creation
+
+#### Doc Changes
+
+* [#1748](https://github.com/elastic/rally/pull/1748): Document actor system
+
+#### Miscellaneous Changes
+
+* [#1759](https://github.com/elastic/rally/pull/1759): Ensure serverless.mode/operator are always set
+
 ### 2.8.0
 
 #### Highlights
