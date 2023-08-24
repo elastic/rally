@@ -332,7 +332,7 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
     :param client_options: The client options to customize the Elasticsearch client.
     :param client_factory: Factory class that creates the Elasticsearch client.
     :return: The cluster's build flavor, version number, and build hash. For Serverless Elasticsearch these may all be
-      the build flavor value.
+      the build flavor value. Also returns the operator status (always False for stateful).
     """
     # no way for us to know whether we're talking to a serverless elasticsearch or not, so we default to the sync client
     es = client_factory(hosts, client_options).create()
