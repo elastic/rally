@@ -18,7 +18,6 @@
 
 #### Doc Changes
 
-* [#1761](https://github.com/elastic/rally/pull/1761): Update blob store stats telemetry device
 * [#1748](https://github.com/elastic/rally/pull/1748): Document actor system
 
 #### Miscellaneous Changes
