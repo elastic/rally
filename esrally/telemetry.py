@@ -25,7 +25,7 @@ import tabulate
 
 from esrally import exceptions, metrics, time
 from esrally.metrics import MetaInfoScope
-from esrally.utils import console, io, opts, process, sysstats
+from esrally.utils import console, io, opts, process, serverless, sysstats
 from esrally.utils.versions import Version
 
 
@@ -55,13 +55,15 @@ def list_telemetry():
 
 
 class Telemetry:
-    def __init__(self, enabled_devices=None, devices=None):
+    def __init__(self, enabled_devices=None, devices=None, serverless_mode=False, serverless_operator=False):
         if devices is None:
             devices = []
         if enabled_devices is None:
             enabled_devices = []
         self.enabled_devices = enabled_devices
         self.devices = devices
+        self.serverless_mode = serverless_mode
+        self.serverless_operator = serverless_operator
 
     def instrument_candidate_java_opts(self):
         opts = []
@@ -103,7 +105,20 @@ class Telemetry:
                 device.store_system_metrics(node, metrics_store)
 
     def _enabled(self, device):
-        return device.internal or device.command in self.enabled_devices
+        enabled = device.internal or device.command in self.enabled_devices
+        if self.serverless_mode:
+            available_on_serverless = self._available_on_serverless(device)
+            if not device.internal and device.command in self.enabled_devices and not available_on_serverless:
+                console.info(f"Excluding telemetry device [{device.command}] as it is unavailable on serverless.")
+
+            enabled = enabled and available_on_serverless
+        return enabled
+
+    def _available_on_serverless(self, device):
+        if self.serverless_operator:
+            return device.serverless_status >= serverless.Status.Internal
+        else:
+            return device.serverless_status == serverless.Status.Public
 
 
 ########################################################################################
@@ -340,6 +355,7 @@ class Heapdump(TelemetryDevice):
 
 class SegmentStats(TelemetryDevice):
     internal = False
+    serverless_status = serverless.Status.Internal
     command = "segment-stats"
     human_name = "Segment Stats"
     help = "Determines segment stats at the end of the benchmark."
@@ -363,6 +379,7 @@ class SegmentStats(TelemetryDevice):
 
 class CcrStats(TelemetryDevice):
     internal = False
+    serverless_status = serverless.Status.Blocked
     command = "ccr-stats"
     human_name = "CCR Stats"
     help = "Regularly samples Cross Cluster Replication (CCR) related stats"
@@ -507,6 +524,7 @@ class CcrStatsRecorder:
 
 class RecoveryStats(TelemetryDevice):
     internal = False
+    serverless_status = serverless.Status.Internal
     command = "recovery-stats"
     human_name = "Recovery Stats"
     help = "Regularly samples shard recovery stats"
@@ -633,6 +651,7 @@ class ShardStats(TelemetryDevice):
     """
 
     internal = False
+    serverless_status = serverless.Status.Internal
     command = "shard-stats"
     human_name = "Shard Stats"
     help = "Regularly samples nodes stats at shard level"
@@ -740,6 +759,7 @@ class NodeStats(TelemetryDevice):
     """
 
     internal = False
+    serverless_status = serverless.Status.Internal
     command = "node-stats"
     human_name = "Node Stats"
     help = "Regularly samples node stats"
@@ -924,6 +944,7 @@ class NodeStatsRecorder:
 
 class TransformStats(TelemetryDevice):
     internal = False
+    serverless_status = serverless.Status.Public
     command = "transform-stats"
     human_name = "Transform Stats"
     help = "Regularly samples transform stats"
@@ -1102,6 +1123,7 @@ class TransformStatsRecorder:
 
 class SearchableSnapshotsStats(TelemetryDevice):
     internal = False
+    serverless_status = serverless.Status.Blocked
     command = "searchable-snapshots-stats"
     human_name = "Searchable Snapshots Stats"
     help = "Regularly samples searchable snapshots stats"
@@ -1297,6 +1319,7 @@ class DataStreamStats(TelemetryDevice):
     """
 
     internal = False
+    serverless_status = serverless.Status.Public
     command = "data-stream-stats"
     human_name = "Data Stream Stats"
     help = "Regularly samples data stream stats"
@@ -1415,6 +1438,7 @@ class DataStreamStatsRecorder:
 
 class IngestPipelineStats(InternalTelemetryDevice):
     command = "ingest-pipeline-stats"
+    serverless_status = serverless.Status.Internal
     human_name = "Ingest Pipeline Stats"
     help = "Reports Ingest Pipeline stats at the end of the benchmark."
 
@@ -1762,6 +1786,8 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
     Gathers static environment information on a cluster level (e.g. version numbers).
     """
 
+    serverless_status = serverless.Status.Public
+
     def __init__(self, client, metrics_store, revision_override):
         super().__init__()
         self.metrics_store = metrics_store
@@ -1818,6 +1844,8 @@ class ExternalEnvironmentInfo(InternalTelemetryDevice):
     Gathers static environment information for externally provisioned clusters.
     """
 
+    serverless_status = serverless.Status.Internal
+
     def __init__(self, client, metrics_store):
         super().__init__()
         self.metrics_store = metrics_store
@@ -1861,6 +1889,8 @@ class JvmStatsSummary(InternalTelemetryDevice):
     """
     Gathers a summary of various JVM statistics during the whole race.
     """
+
+    serverless_status = serverless.Status.Internal
 
     def __init__(self, client, metrics_store):
         super().__init__()
@@ -1949,6 +1979,8 @@ class IndexStats(InternalTelemetryDevice):
     """
     Gathers statistics via the Elasticsearch index stats API
     """
+
+    serverless_status = serverless.Status.Internal
 
     def __init__(self, client, metrics_store):
         super().__init__()
@@ -2078,6 +2110,8 @@ class IndexStats(InternalTelemetryDevice):
 
 
 class MlBucketProcessingTime(InternalTelemetryDevice):
+    serverless_status = serverless.Status.Public
+
     def __init__(self, client, metrics_store):
         super().__init__()
         self.client = client
@@ -2176,6 +2210,7 @@ class MasterNodeStats(InternalTelemetryDevice):
     Collects and pushes the current master node name to the metric store.
     """
 
+    serverless_status = serverless.Status.Internal
     command = "master-node-stats"
     human_name = "Master Node Stats"
     help = "Regularly samples master node name"
@@ -2266,6 +2301,7 @@ class DiskUsageStats(TelemetryDevice):
     """
 
     internal = False
+    serverless_status = serverless.Status.Internal
     command = "disk-usage-stats"
     human_name = "Disk usage of each field"
     help = "Runs the indices disk usage API after benchmarking"
@@ -2368,6 +2404,7 @@ class DiskUsageStats(TelemetryDevice):
 
 class BlobStoreStats(TelemetryDevice):
     internal = False
+    serverless_status = serverless.Status.Internal
     command = "blob-store-stats"
     human_name = "Blob Store Stats"
     help = "Regularly samples blob store stats, only applicable to serverless Elasticsearch"
