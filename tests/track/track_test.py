@@ -19,6 +19,7 @@ import pytest
 
 from esrally import exceptions
 from esrally.track import track
+from esrally.utils import serverless
 
 
 class TestTrack:
@@ -274,15 +275,15 @@ class TestOperationType:
     def test_attributes(self):
         create_ilm_policy = track.OperationType.CreateIlmPolicy
         assert create_ilm_policy.admin_op is True
-        assert create_ilm_policy.serverless_status == track.ServerlessStatus.Blocked
+        assert create_ilm_policy.serverless_status == serverless.Status.Blocked
 
         node_stats = track.OperationType.NodeStats
         assert node_stats.admin_op is False
-        assert node_stats.serverless_status == track.ServerlessStatus.Internal
+        assert node_stats.serverless_status == serverless.Status.Internal
 
         bulk = track.OperationType.Bulk
         assert bulk.admin_op is False
-        assert bulk.serverless_status == track.ServerlessStatus.Public
+        assert bulk.serverless_status == serverless.Status.Public
 
 
 class TestTaskFilter:
