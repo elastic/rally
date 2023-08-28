@@ -332,12 +332,13 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
     :param client_options: The client options to customize the Elasticsearch client.
     :param client_factory: Factory class that creates the Elasticsearch client.
     :return: The cluster's build flavor, version number, and build hash. For Serverless Elasticsearch these may all be
-      the build flavor value.
+      the build flavor value. Also returns the operator status (always False for stateful).
     """
     # no way for us to know whether we're talking to a serverless elasticsearch or not, so we default to the sync client
     es = client_factory(hosts, client_options).create()
-    # unconditionally wait for the REST layer - if it's not up by then, we'll intentionally raise the original error
-    wait_for_rest_layer(es)
+
+    # wait_for_rest_layer  calls the Cluster Health API, which is not available for unprivileged users on Serverless
+    # As a result, we need to call the info API first to know if we can call wait_for_rest_layer().
     version = es.info()["version"]
 
     version_build_flavor = version.get("build_flavor", "oss")
@@ -346,7 +347,16 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
     # version number does not exist for serverless
     version_number = version.get("number", version_build_flavor)
 
-    return version_build_flavor, version_number, version_build_hash
+    serverless_operator = False
+    if versions.is_serverless(version_build_flavor):
+        authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
+        serverless_operator = authentication_info.body.get("operator", False)
+
+    if not versions.is_serverless(version_build_flavor) or serverless_operator is True:
+        # if available, unconditionally wait for the REST layer - if it's not up, we'll intentionally raise the original error
+        wait_for_rest_layer(es)
+
+    return version_build_flavor, version_number, version_build_hash, serverless_operator
 
 
 def create_api_key(es, client_id, max_attempts=5):

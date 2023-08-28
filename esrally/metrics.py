@@ -264,7 +264,9 @@ class EsClientFactory:
 
         # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
         if self.probe_version:
-            distribution_flavor, distribution_version, _ = client.cluster_distribution_version(hosts=hosts, client_options=client_options)
+            distribution_flavor, distribution_version, _, _ = client.cluster_distribution_version(
+                hosts=hosts, client_options=client_options
+            )
             self._cluster_version = distribution_version
 
         factory = client.EsClientFactory(
