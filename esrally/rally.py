@@ -98,6 +98,9 @@ def create_arg_parser():
                 raise argparse.ArgumentTypeError(f"must be at least {min_es_version} but was {v}")
         return v
 
+    def strip_whitespace(v):
+        return str(v).strip()
+
     def add_track_source(subparser):
         track_source_group = subparser.add_mutually_exclusive_group()
         track_source_group.add_argument(
@@ -114,6 +117,7 @@ def create_arg_parser():
             "--track-revision",
             help="Define a specific revision in the track repository that Rally should use.",
             default=None,
+            type=strip_whitespace,
         )
 
     # try to preload configurable defaults, but this does not work together with `--configuration-name` (which is undocumented anyway)
@@ -295,6 +299,7 @@ def create_arg_parser():
         'e.g. "@2013-07-27T10:37:00Z" (default: current). A combination of branch and timestamp is also possible,'
         'e.g. "@feature-branch@2023-04-06T14:52:31Z".',
         default="current",
+        type=strip_whitespace,
     )  # optimized for local usage, don't fetch sources
     build_parser.add_argument(
         "--target-os",
@@ -313,6 +318,7 @@ def create_arg_parser():
         "--team-revision",
         help="Define a specific revision in the team repository that Rally should use.",
         default=None,
+        type=strip_whitespace,
     )
     build_parser.add_argument(
         "--team-path",
@@ -355,6 +361,7 @@ def create_arg_parser():
         "--team-revision",
         help="Define a specific revision in the team repository that Rally should use.",
         default=None,
+        type=strip_whitespace,
     )
     download_parser.add_argument(
         "--team-path",
@@ -399,6 +406,7 @@ def create_arg_parser():
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current).',
         default="current",
+        type=strip_whitespace,
     )  # optimized for local usage, don't fetch sources
     # Intentionally undocumented as we do not consider Docker a fully supported option.
     install_parser.add_argument(
@@ -416,6 +424,7 @@ def create_arg_parser():
         "--team-revision",
         help="Define a specific revision in the team repository that Rally should use.",
         default=None,
+        type=strip_whitespace,
     )
     install_parser.add_argument(
         "--team-path",
@@ -571,6 +580,7 @@ def create_arg_parser():
             "--team-revision",
             help="Define a specific revision in the team repository that Rally should use.",
             default=None,
+            type=strip_whitespace,
         )
 
     race_parser.add_argument(
@@ -591,6 +601,7 @@ def create_arg_parser():
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current).',
         default="current",
+        type=strip_whitespace,
     )  # optimized for local usage, don't fetch sources
     add_track_source(race_parser)
     race_parser.add_argument(
