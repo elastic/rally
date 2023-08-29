@@ -99,7 +99,7 @@ def create_arg_parser():
         return v
 
     def strip_whitespace(v):
-        return str(v).strip()
+        return v.strip()
 
     def add_track_source(subparser):
         track_source_group = subparser.add_mutually_exclusive_group()
