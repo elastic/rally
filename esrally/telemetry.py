@@ -93,6 +93,8 @@ class Telemetry:
         for device in self.devices:
             if self._enabled(device):
                 device.on_benchmark_start()
+            if self._excluded_on_serverless(device):
+                console.info(f"Excluding telemetry device [{device.command}] as it is unavailable on serverless.")
 
     def on_benchmark_stop(self):
         for device in self.devices:
@@ -105,14 +107,15 @@ class Telemetry:
                 device.store_system_metrics(node, metrics_store)
 
     def _enabled(self, device):
-        enabled = device.internal or device.command in self.enabled_devices
-        if self.serverless_mode:
-            available_on_serverless = self._available_on_serverless(device)
-            if not device.internal and device.command in self.enabled_devices and not available_on_serverless:
-                console.info(f"Excluding telemetry device [{device.command}] as it is unavailable on serverless.")
+        return device.internal or device.command in self.enabled_devices
 
-            enabled = enabled and available_on_serverless
-        return enabled
+    def _excluded_on_serverless(self, device):
+        return (
+            self.serverless_mode
+            and not device.internal
+            and device.command in self.enabled_devices
+            and not self._available_on_serverless(device)
+        )
 
     def _available_on_serverless(self, device):
         if self.serverless_operator:
