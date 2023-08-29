@@ -114,10 +114,11 @@ target/
 NOTICE.txt
 recipes/ccr/ccr-target-hosts.json
 
-# Emacs backup files
+# Editors
 *~
 /.project
 /.pydevproject
+/.vscode
 
 # Tracker tracks
 tracks/
