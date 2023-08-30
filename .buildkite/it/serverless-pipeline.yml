@@ -1,0 +1,3 @@
+steps:
+  - label: "Run IT Serverless tests"
+    command: echo "TODO"
