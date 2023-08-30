@@ -30,7 +30,7 @@ import pytest
 from esrally import config, exceptions, metrics, telemetry
 from esrally.mechanic import cluster
 from esrally.metrics import MetaInfoScope
-from esrally.utils import console
+from esrally.utils import console, serverless
 
 
 class TestSamplerThread:
@@ -102,13 +102,25 @@ def create_config():
     return cfg
 
 
-class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
+class MockJavaOptsTelemetryDevice(telemetry.InternalTelemetryDevice):
     def __init__(self, mock_java_opts):
         super().__init__()
         self.mock_java_opts = mock_java_opts
 
     def instrument_java_opts(self):
         return self.mock_java_opts
+
+
+class MockTelemetryDevice(telemetry.TelemetryDevice):
+    def __init__(self, *, internal: bool, serverless_status: serverless.Status):
+        super().__init__()
+        self.internal = internal
+        self.serverless_status = serverless_status
+        self.command = f"{'default' if internal else 'optional'}-{serverless_status.name.lower()}"
+        self.on_benchmark_start_called = False
+
+    def on_benchmark_start(self):
+        self.on_benchmark_start_called = True
 
 
 class TestTelemetry:
@@ -119,9 +131,9 @@ class TestTelemetry:
         cfg.add(config.Scope.application, "benchmarks", "metrics.log.dir", "telemetry")
 
         devices = [
-            MockTelemetryDevice(["-Xms256M"]),
-            MockTelemetryDevice(["-Xmx512M"]),
-            MockTelemetryDevice(["-Des.network.host=127.0.0.1"]),
+            MockJavaOptsTelemetryDevice(["-Xms256M"]),
+            MockJavaOptsTelemetryDevice(["-Xmx512M"]),
+            MockJavaOptsTelemetryDevice(["-Des.network.host=127.0.0.1"]),
         ]
 
         t = telemetry.Telemetry(enabled_devices=None, devices=devices)
@@ -129,6 +141,54 @@ class TestTelemetry:
         opts = t.instrument_candidate_java_opts()
 
         assert opts == ["-Xms256M", "-Xmx512M", "-Des.network.host=127.0.0.1"]
+
+
+@pytest.mark.parametrize(
+    ["enabled_devices", "serverless_mode", "serverless_operator", "started", "expected_msgs"],
+    [
+        (["optional-blocked"], False, False, {"default-public", "default-internal", "default-blocked", "optional-blocked"}, []),
+        ([], True, False, {"default-public"}, []),
+        ([], True, True, {"default-public", "default-internal"}, []),
+        (
+            ["optional-public", "optional-internal"],
+            True,
+            False,
+            {"default-public", "optional-public"},
+            ["Excluding telemetry device [optional-internal] as it is unavailable on serverless."],
+        ),
+    ],
+)
+def test_serverless_exclusion(enabled_devices, serverless_mode, serverless_operator, started, expected_msgs, monkeypatch):
+    info_msg = []
+
+    def console_info(msg):
+        nonlocal info_msg
+        info_msg.append(msg)
+
+    monkeypatch.setattr(telemetry.console, "info", console_info)
+    devices = {
+        "default-public": MockTelemetryDevice(internal=True, serverless_status=serverless.Status.Public),
+        "default-internal": MockTelemetryDevice(internal=True, serverless_status=serverless.Status.Internal),
+        "default-blocked": MockTelemetryDevice(internal=True, serverless_status=serverless.Status.Blocked),
+        "optional-public": MockTelemetryDevice(internal=False, serverless_status=serverless.Status.Public),
+        "optional-internal": MockTelemetryDevice(internal=False, serverless_status=serverless.Status.Internal),
+        "optional-blocked": MockTelemetryDevice(internal=False, serverless_status=serverless.Status.Blocked),
+    }
+
+    t = telemetry.Telemetry(
+        enabled_devices=enabled_devices,
+        devices=devices.values(),
+        serverless_mode=serverless_mode,
+        serverless_operator=serverless_operator,
+    )
+    t.on_benchmark_start()
+    actually_started = set()
+    for device_key, device in devices.items():
+        if device.on_benchmark_start_called:
+            actually_started.add(device_key)
+
+    assert actually_started == started
+    assert info_msg == expected_msgs
 
 
 class TestStartupTime:
