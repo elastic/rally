@@ -93,6 +93,7 @@ class Telemetry:
         for device in self.devices:
             if self._enabled(device):
                 if self.serverless_mode and not self._available_on_serverless(device):
+                    # Only inform about exclusion if the user explicitly asked for this device
                     if getattr(device, "command", None) in self.enabled_devices:
                         console.info(f"Excluding telemetry device [{device.command}] as it is unavailable on serverless.")
                     continue
