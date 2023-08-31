@@ -620,7 +620,7 @@ class Driver:
             ).create()
         return es
 
-    def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash):
+    def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash, serverless_mode, serverless_operator):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
@@ -649,7 +649,12 @@ class Driver:
             ]
         else:
             devices = []
-        self.telemetry = telemetry.Telemetry(enabled_devices, devices=devices)
+        self.telemetry = telemetry.Telemetry(
+            enabled_devices,
+            devices=devices,
+            serverless_mode=serverless_mode,
+            serverless_operator=serverless_operator,
+        )
 
     def wait_for_rest_api(self, es):
         es_default = es["default"]
@@ -706,6 +711,8 @@ class Driver:
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
+        serverless_mode = False
+        serverless_operator = False
         build_hash = None
         if skip_rest_api_check:
             self.logger.info("Skipping REST API check as requested explicitly.")
@@ -729,6 +736,8 @@ class Driver:
             index_names=self.track.index_names(),
             data_stream_names=self.track.data_stream_names(),
             build_hash=build_hash,
+            serverless_mode=serverless_mode,
+            serverless_operator=serverless_operator,
         )
 
         for host in self.config.opts("driver", "load_driver_hosts"):

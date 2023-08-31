@@ -35,7 +35,17 @@ from jinja2 import meta
 from esrally import PROGRAM_NAME, config, exceptions, paths, time, version
 from esrally.track import params, track
 from esrally.track.track import Parallel
-from esrally.utils import collections, console, convert, io, modules, net, opts, repo
+from esrally.utils import (
+    collections,
+    console,
+    convert,
+    io,
+    modules,
+    net,
+    opts,
+    repo,
+    serverless,
+)
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
@@ -908,11 +918,11 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
 
         try:
             op = track.OperationType.from_hyphenated_string(operation.type)
-            # Comparisons rely on the ordering of auto() in track.ServerlessStatus which is an IntEnum
+            # Comparisons rely on the ordering in serverless.Status which is an IntEnum
             if self.serverless_operator:
-                return op.serverless_status < track.ServerlessStatus.Internal
+                return op.serverless_status < serverless.Status.Internal
             else:
-                return op.serverless_status < track.ServerlessStatus.Public
+                return op.serverless_status < serverless.Status.Public
         except KeyError:
             self.logger.info("Treating user-provided operation type [%s] for operation [%s] as public.", operation.type, operation.name)
             return False

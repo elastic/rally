@@ -2575,7 +2575,7 @@ class Composite(Runner):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Since Composite is marked as ServerlessStatus.Public, only add public
+        # Since Composite is marked as serverless.Status.Public, only add public
         # operation types here.
         self.supported_op_types = [
             "open-point-in-time",
