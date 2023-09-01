@@ -25,6 +25,7 @@ spec:
   lifecycle: production
   dependsOn:
     - resource:rally-it-pipeline
+    - resource:rally-it-serverless-pipeline
     - resource:rally-releaser-docker-pipeline
 
 
@@ -59,6 +60,42 @@ spec:
           branch: master
           cronline: "0 14 * * *"
           message: periodic it
+      teams:
+        es-perf: {}
+        everyone:
+          access_level: READ_ONLY
+
+# Declare Rally's Buildkite IT pipeline.
+# yaml-language-server: $schema=https://gist.githubusercontent.com/elasticmachine/988b80dae436cafea07d9a4a460a011d/raw/e57ee3bed7a6f73077a3f55a38e76e40ec87a7cf/rre.schema.json
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: rally-it-serverless-pipeline
+  description: Run Rally Serverless integration tests
+  links:
+    - title: Pipeline
+      url: https://buildkite.com/elastic/rally-it-serverless
+
+spec:
+  type: buildkite-pipeline
+  owner: group:es-perf
+  system: buildkite
+
+  implementation:
+    apiVersion: buildkite.elastic.dev/v1
+    kind: Pipeline
+    metadata:
+      name: Rally - IT Serverless
+      description:  Macrobenchmarking framework for Elasticsearch
+    spec:
+      pipeline_file: .buildkite/it/serverless-pipeline.yml
+      repository: elastic/rally
+      schedules:
+        Daily:
+          branch: master
+          cronline: "0 14 * * *"
+          message: periodic it serverless
       teams:
         es-perf: {}
         everyone:
