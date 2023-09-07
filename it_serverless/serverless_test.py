@@ -67,7 +67,7 @@ def serverless_project_config(serverless_project):
     es_hostname = urllib.parse.urlparse(es_endpoint).hostname
     rally_target_host = f"{es_hostname}:443"
 
-    print("Waiting DNS propagation")
+    print("Waiting for DNS propagation")
     while True:
         time.sleep(10)
         with contextlib.suppress(subprocess.CalledProcessError):
