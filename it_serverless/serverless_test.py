@@ -40,7 +40,7 @@ def serverless_api(method, endpoint, json=None):
 
 @pytest.fixture(scope="session")
 def serverless_project():
-    print("Creating project")
+    print("\nCreating project")
     created_project = serverless_api(
         "POST",
         "/api/v1/serverless/projects/elasticsearch",
@@ -68,14 +68,16 @@ def serverless_project_config(serverless_project):
     rally_target_host = f"{es_hostname}:443"
 
     print("Waiting for DNS propagation")
-    while True:
+    for _ in range(30):
         time.sleep(10)
         with contextlib.suppress(subprocess.CalledProcessError):
             subprocess.run(["nslookup", es_hostname, "8.8.8.8"], check=True)
             break
+    else:
+        raise ValueError("Timed out waiting for DNS propagation")
 
     print("Waiting for Elasticsearch")
-    while True:
+    for _ in range(30):
         try:
             es = Elasticsearch(
                 f"https://{rally_target_host}",
@@ -97,6 +99,8 @@ def serverless_project_config(serverless_project):
         except Exception as e:
             print(f"GET / Failed with {type(e)}")
             time.sleep(10)
+    else:
+        raise ValueError("Timed out waiting for Elasticsearch")
 
     yield ServerlessProjectConfig(rally_target_host, credentials["username"], credentials["password"])
 
