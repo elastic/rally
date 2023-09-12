@@ -717,6 +717,7 @@ Here are a few common examples:
 
 * Enable HTTP compression: ``--client-options="http_compress:true"``
 * Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
+* Enable API key authentication: ``--client-options="api_key:'a0V...2dw=='"``
 
 **TLS/SSL**
 

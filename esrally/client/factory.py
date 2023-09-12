@@ -52,6 +52,8 @@ class EsClientFactory:
             masked_client_options["basic_auth_password"] = "*****"
         if "http_auth" in masked_client_options:
             masked_client_options["http_auth"] = (masked_client_options["http_auth"][0], "*****")
+        if "api_key" in masked_client_options:
+            masked_client_options["api_key"] = "*****"
         self.logger.info("Creating ES client connected to %s with options [%s]", hosts, masked_client_options)
 
         # we're using an SSL context now and it is not allowed to have use_ssl present in client options anymore
@@ -139,6 +141,11 @@ class EsClientFactory:
             self.logger.debug("HTTP basic authentication: on")
         else:
             self.logger.debug("HTTP basic authentication: off")
+
+        if self._is_set(self.client_options, "api_key"):
+            self.logger.debug("API key authentication: on")
+        else:
+            self.logger.debug("API key authentication: off")
 
         if self._is_set(self.client_options, "compressed"):
             console.warn("You set the deprecated client option 'compressed‘. Please use 'http_compress' instead.", logger=self.logger)
