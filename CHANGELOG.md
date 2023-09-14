@@ -1,3 +1,15 @@
+### 2.9.1
+
+#### Enhancements
+
+* [#1778](https://github.com/elastic/rally/pull/1778): Support API key authentication
+* [#1770](https://github.com/elastic/rally/pull/1770): Exclude telemetry devices based on serverless status
+* [#1768](https://github.com/elastic/rally/pull/1768): Detect serverless operator status automatically
+
+#### Bug Fixes
+
+* [#1772](https://github.com/elastic/rally/pull/1772): Fix "Could not checkout. Do you have uncommitted changes?" error
+
 ### 2.9.0
 
 #### Highlights
