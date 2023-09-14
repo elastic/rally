@@ -1707,7 +1707,7 @@ class DiskIo(InternalTelemetryDevice):
 
 
 def store_node_attribute_metadata(metrics_store, nodes_info):
-    # push up all node level attributes to cluster level if the values are identical for all nodes
+    # push up all node level attributes to cluster level iff the values are identical for all nodes
     pseudo_cluster_attributes = {}
     for node in nodes_info:
         if "attributes" in node:
