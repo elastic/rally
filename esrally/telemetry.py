@@ -1802,7 +1802,6 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
             return
         distribution_flavor = client_info["version"].get("build_flavor", "oss")
         # serverless returns dummy build hash which gets overridden when running with operator privileges
-        # TODO: refactor if config object gets included in telemetry base class (ES-6459)
         revision = client_info["version"].get("build_hash", distribution_flavor)
         if self.revision_override:
             revision = self.revision_override
@@ -1811,18 +1810,6 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)
-
-        info = self.client.nodes.info(node_id="_all")
-        nodes_info = info["nodes"].values()
-        for node in nodes_info:
-            node_name = node["name"]
-            # while we could determine this for bare-metal nodes that are provisioned by Rally, there are other cases (Docker, externally
-            # provisioned clusters) where it's not that easy.
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_vendor", extract_value(node, ["jvm", "vm_vendor"]))
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, node_name, "jvm_version", extract_value(node, ["jvm", "version"]))
-
-        store_plugin_metadata(self.metrics_store, nodes_info)
-        store_node_attribute_metadata(self.metrics_store, nodes_info)
 
 
 def add_metadata_for_node(metrics_store, node_name, host_name):
