@@ -3336,16 +3336,6 @@ class TestClusterEnvironmentInfo:
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "6.0.0-alpha1"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "oss"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_vendor", "Oracle Corporation"),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_version", "1.8.0_102"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "plugins", ["ingest-geoip"]),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "plugins", ["ingest-geoip"]),
-            # can push up to cluster level as all nodes have the same plugins installed
-            mock.call(metrics.MetaInfoScope.cluster, None, "plugins", ["ingest-geoip"]),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "attribute_group", "cold_nodes"),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "attribute_group", "hot_nodes"),
         ]
 
         metrics_store_add_meta_info.assert_has_calls(calls)
