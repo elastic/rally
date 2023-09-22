@@ -19,7 +19,7 @@ TRACKS = ["nyc_taxis", "pmc", "elastic/logs"]
 
 ServerlessProjectConfig = collections.namedtuple(
     "ServerlessProjectConfig",
-    ["target_host", "username", "password"],
+    ["target_host", "username", "password", "api_key"],
 )
 
 
@@ -102,4 +102,12 @@ def serverless_project_config(serverless_project):
     else:
         raise ValueError("Timed out waiting for Elasticsearch")
 
-    yield ServerlessProjectConfig(rally_target_host, credentials["username"], credentials["password"])
+    # Create API key to test Rally with a public user
+    api_key = es.security.create_api_key(name="public-api-key")
+
+    yield ServerlessProjectConfig(
+        rally_target_host,
+        credentials["username"],
+        credentials["password"],
+        api_key.body["encoded"],
+    )
