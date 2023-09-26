@@ -16,6 +16,7 @@
 # under the License.
 
 import asyncio
+import contextlib
 import contextvars
 import json
 import logging
@@ -1409,12 +1410,22 @@ class DeleteIndex(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
         ops = 0
 
         indices = mandatory(params, "indices", self)
         only_if_exists = params.get("only-if-exists", False)
         request_params = params.get("request-params", {})
-        prior_destructive_setting = await set_destructive_requires_name(es, False)
+
+        # bypassing action.destructive_requires_name cluster setting mangling for serverless clusters
+        prior_destructive_setting = None
+        cluster_settings_available = False
+        with contextlib.suppress(elasticsearch.exceptions.NotFoundError):
+            prior_destructive_setting = await set_destructive_requires_name(es, False)
+            cluster_settings_available = True
+
         try:
             for index_name in indices:
                 if not only_if_exists:
@@ -1425,7 +1436,8 @@ class DeleteIndex(Runner):
                     await es.indices.delete(index=index_name, params=request_params)
                     ops += 1
         finally:
-            await set_destructive_requires_name(es, prior_destructive_setting)
+            if cluster_settings_available:
+                await set_destructive_requires_name(es, prior_destructive_setting)
         return {
             "weight": ops,
             "unit": "ops",

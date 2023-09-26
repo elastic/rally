@@ -711,18 +711,18 @@ class Driver:
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
-        serverless_mode = False
-        serverless_operator = False
+        serverless_mode = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+        serverless_operator = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
         build_hash = None
         if skip_rest_api_check:
             self.logger.info("Skipping REST API check as requested explicitly.")
         elif uses_static_responses:
             self.logger.info("Skipping REST API check as static responses are used.")
+        elif serverless_mode and not serverless_operator:
+            self.logger.info("Skipping REST API check while targetting serverless cluster with a public user.")
         else:
             self.wait_for_rest_api(es_clients)
             self.driver_actor.cluster_details = self.retrieve_cluster_info(es_clients)
-            serverless_mode = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
-            serverless_operator = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
             if serverless_mode and serverless_operator:
                 build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
                 self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
