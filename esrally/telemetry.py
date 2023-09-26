@@ -103,6 +103,9 @@ class Telemetry:
     def on_benchmark_stop(self):
         for device in self.devices:
             if self._enabled(device):
+                if self.serverless_mode and not self._available_on_serverless(device):
+                    # Not informing the user the second time, see on_benchmark_start()
+                    continue
                 device.on_benchmark_stop()
 
     def store_system_metrics(self, node, metrics_store):
