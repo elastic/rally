@@ -53,6 +53,7 @@ class TestIo:
     def test_archive(self):
         assert io.is_archive("/tmp/some-archive.tar.gz")
         assert io.is_archive("/tmp/some-archive.tgz")
+        assert io.is_archive("/tmp/some-archive.zst")
         # Rally does not recognize .7z
         assert not io.is_archive("/tmp/some-archive.7z")
         assert not io.is_archive("/tmp/some.log")
@@ -68,9 +69,9 @@ class TestIo:
 
 class TestDecompression:
     def test_decompresses_supported_file_formats(self):
-        for ext in ["zip", "gz", "bz2", "tgz", "tar.bz2", "tar.gz"]:
+        for ext in io.SUPPORTED_ARCHIVE_FORMATS:
             tmp_dir = tempfile.mkdtemp()
-            archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"test.txt.{ext}")
+            archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"test.txt{ext}")
             decompressed_path = os.path.join(tmp_dir, "test.txt")
 
             io.decompress(archive_path, target_directory=tmp_dir)
@@ -84,9 +85,9 @@ class TestDecompression:
 
     @mock.patch.object(io, "is_executable", return_value=False)
     def test_decompresses_supported_file_formats_with_lib_as_failover(self, mocked_is_executable):
-        for ext in ["zip", "gz", "bz2", "tgz", "tar.bz2", "tar.gz"]:
+        for ext in io.SUPPORTED_ARCHIVE_FORMATS:
             tmp_dir = tempfile.mkdtemp()
-            archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"test.txt.{ext}")
+            archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"test.txt{ext}")
             decompressed_path = os.path.join(tmp_dir, "test.txt")
 
             logger = logging.getLogger("esrally.utils.io")
@@ -100,7 +101,7 @@ class TestDecompression:
                     self.read(decompressed_path) == "Sample text for DecompressionTests\n"
                 ), f"Could not decompress [{archive_path}] to [{decompressed_path}] (target file is corrupt)"
 
-            if ext in ["bz2", "gz"]:
+            if ext in ["bz2", "gz", "zst"]:
                 assert "not found in PATH. Using standard library, decompression will take longer." in mocked_console_warn.call_args[0][0]
 
     @mock.patch("subprocess.run")
