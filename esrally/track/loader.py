@@ -743,13 +743,14 @@ class TemplateSource:
         return ",\n".join(source)
 
 
-def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock, build_flavor=None):
+def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock, build_flavor=None, serverless_operator=None):
     """
     Dict of internal global variables used by our jinja2 renderers
     """
     return {
         "globals": {
             "build_flavor": build_flavor,
+            "serverless_operator": serverless_operator,
             "now": clock.now(),
             "glob": glob_helper,
         },
@@ -817,7 +818,7 @@ def register_all_params_in_track(assembled_source, complete_track_params=None):
         complete_track_params.populate_track_defined_params(j2_variables)
 
 
-def render_template_from_file(template_file_name, template_vars, complete_track_params=None, build_flavor=None):
+def render_template_from_file(template_file_name, template_vars, complete_track_params=None, build_flavor=None, serverless_operator=None):
     def relative_glob(start, f):
         result = glob.glob(os.path.join(start, f))
         if result:
@@ -834,7 +835,9 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
         loader=jinja2.FileSystemLoader(base_path),
         template_source=template_source.assembled_source,
         template_vars=template_vars,
-        template_internal_vars=default_internal_template_vars(glob_helper=lambda f: relative_glob(base_path, f), build_flavor=build_flavor),
+        template_internal_vars=default_internal_template_vars(
+            glob_helper=lambda f: relative_glob(base_path, f), build_flavor=build_flavor, serverless_operator=serverless_operator
+        ),
     )
 
 
@@ -1059,6 +1062,7 @@ class TrackFileReader:
         with open(track_schema_file, encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
         self.build_flavor = cfg.opts("mechanic", "distribution.flavor", default_value="default", mandatory=False)
+        self.serverless_operator = cfg.opts("driver", "serverless.operator", default_value=False, mandatory=False)
         self.track_params = cfg.opts("track", "params", mandatory=False)
         self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
         self.read_track = TrackSpecificationReader(
@@ -1066,6 +1070,7 @@ class TrackFileReader:
             complete_track_params=self.complete_track_params,
             selected_challenge=cfg.opts("track", "challenge.name", mandatory=False),
             build_flavor=self.build_flavor,
+            serverless_operator=self.serverless_operator,
         )
         self.logger = logging.getLogger(__name__)
 
@@ -1085,7 +1090,11 @@ class TrackFileReader:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
             try:
                 rendered = render_template_from_file(
-                    track_spec_file, self.track_params, complete_track_params=self.complete_track_params, build_flavor=self.build_flavor
+                    track_spec_file,
+                    self.track_params,
+                    complete_track_params=self.complete_track_params,
+                    build_flavor=self.build_flavor,
+                    serverless_operator=self.serverless_operator,
                 )
                 with open(tmp.name, "w", encoding="utf-8") as f:
                     f.write(rendered)
@@ -1237,10 +1246,19 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self, track_params=None, complete_track_params=None, selected_challenge=None, source=io.FileSource, build_flavor=None):
+    def __init__(
+        self,
+        track_params=None,
+        complete_track_params=None,
+        selected_challenge=None,
+        source=io.FileSource,
+        build_flavor=None,
+        serverless_operator=None,
+    ):
         self.name = None
         self.base_path = None
         self.build_flavor = build_flavor
+        self.serverless_operator = serverless_operator
         self.track_params = track_params if track_params else {}
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
@@ -1371,7 +1389,7 @@ class TrackSpecificationReader:
             rendered = render_template(
                 template_source=contents,
                 template_vars=self.track_params,
-                template_internal_vars={"globals": {"build_flavor": self.build_flavor}},
+                template_internal_vars={"globals": {"build_flavor": self.build_flavor, "serverless_operator": self.serverless_operator}},
             )
             return json.loads(rendered)
         except Exception as e:
