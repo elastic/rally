@@ -27,7 +27,11 @@ import subprocess
 import tarfile
 import zipfile
 
+import zstandard
+
 from esrally.utils import console
+
+SUPPORTED_ARCHIVE_FORMATS = [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".zst"]
 
 
 class FileSource:
@@ -218,6 +222,24 @@ class StringAsFileSource:
         return "StringAsFileSource"
 
 
+class ZstAdapter:
+    """
+    Adapter class to make the zstandard API work with Rally's decompression abstractions
+    """
+
+    def __init__(self, path):
+        self.fh = open(path, "rb")
+        self.dctx = zstandard.ZstdDecompressor()
+        self.reader = self.dctx.stream_reader(self.fh)
+
+    def read(self, size):
+        return self.reader.read(size)
+
+    def close(self):
+        self.reader.close()
+        self.fh.close()
+
+
 def ensure_dir(directory, mode=0o777):
     """
     Ensure that the provided directory and all of its parent directories exist.
@@ -245,7 +267,7 @@ def is_archive(name):
     :return: True iff the given file name is an archive that is also recognized for decompression by Rally.
     """
     _, ext = splitext(name)
-    return ext in [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2"]
+    return ext in SUPPORTED_ARCHIVE_FORMATS
 
 
 def is_executable(name):
@@ -279,6 +301,7 @@ def decompress(zip_name, target_directory):
     * tar.gz
     * tgz
     * tar.bz2
+    * zst
 
     The decompression method is chosen based on the file extension.
 
@@ -292,6 +315,10 @@ def decompress(zip_name, target_directory):
     elif extension == ".bz2":
         decompressor_args = ["pbzip2", "-d", "-k", "-m10000", "-c"]
         decompressor_lib = bz2.open
+        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
+    elif extension == ".zst":
+        decompressor_args = ["pzstd", "-f", "-d", "-c"]
+        decompressor_lib = ZstAdapter
         _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
     elif extension == ".gz":
         decompressor_args = ["pigz", "-d", "-k", "-c"]
