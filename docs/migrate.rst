@@ -1,6 +1,14 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.10.0
+-------------------------
+
+``serverless_operator`` becomes a global variable in track templates
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally now treats ``serverless_operator`` as a :ref:`global variable<advanced_extensions>` in Jinja2 templates. The variable equals ``true`` if Rally targets serverless cluster with operator privileges, and ``false`` otherwise. The ``serverless_operator`` becomes a reserved name so user-supplied track parameters must be named differently. Rename your track parameters before upgrading if needed.
+
 Migrating to Rally 2.9.0
 ------------------------
 
@@ -8,7 +16,7 @@ Migrating to Rally 2.9.0
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Rally now treats ``build_flavor`` as a :ref:`global variable<advanced_extensions>` in Jinja2 templates. The value of the variable depends on the build flavor reported by Elasticsearch cluster targetted by Rally.
-The ``build_flavor`` becomes a reserved name so user-supplied track parameters must be named differently. Rename your track parameters before upgrade if needed.
+The ``build_flavor`` becomes a reserved name so user-supplied track parameters must be named differently. Rename your track parameters before upgrading if needed.
 
 Example error when running with ``--track-params="build_flavor:test"``::
 

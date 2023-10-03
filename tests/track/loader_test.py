@@ -956,14 +956,17 @@ def assert_equal_ignore_whitespace(expected, actual):
 
 
 class TestTemplateRender:
-    unittest_template_internal_vars = loader.default_internal_template_vars(clock=StaticClock, build_flavor="test")
+    unittest_template_internal_vars = loader.default_internal_template_vars(
+        clock=StaticClock, build_flavor="test", serverless_operator=False
+    )
 
     def test_render_simple_template(self):
         template = """
         {
             "key": {{'01-01-2000' | days_ago(now)}},
             "key2": "static value",
-            "key3": "{{build_flavor}}"
+            "key3": "{{build_flavor}}",
+            "key4": {{serverless_operator}}
         }
         """
 
@@ -973,7 +976,8 @@ class TestTemplateRender:
         {
             "key": 5864,
             "key2": "static value",
-            "key3": "test"
+            "key3": "test",
+            "key4": False
         }
         """
         assert rendered == expected
@@ -1071,6 +1075,8 @@ class TestTemplateRender:
         {
             {%- if build_flavor != "test" %}
             "key1": "build_flavor"
+            {%- elif serverless_operator %}
+            "key1": "serverless_operator"
             {%- elif lifecycle == "ilm" %}
             "key1": "ilm"
             {%- else %}
