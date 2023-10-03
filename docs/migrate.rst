@@ -16,7 +16,7 @@ Migrating to Rally 2.9.0
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Rally now treats ``build_flavor`` as a :ref:`global variable<advanced_extensions>` in Jinja2 templates. The value of the variable depends on the build flavor reported by Elasticsearch cluster targetted by Rally.
-The ``build_flavor`` becomes a reserved name so user-supplied track parameters must be named differently. Rename your track parameters before upgrade if needed.
+The ``build_flavor`` becomes a reserved name so user-supplied track parameters must be named differently. Rename your track parameters before upgrading if needed.
 
 Example error when running with ``--track-params="build_flavor:test"``::
 
