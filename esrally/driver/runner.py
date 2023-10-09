@@ -47,10 +47,10 @@ def register_default_runners(config=None):
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
-    register_runner(track.OperationType.Search, Query(config), async_runner=True)
-    register_runner(track.OperationType.PaginatedSearch, Query(config), async_runner=True)
-    register_runner(track.OperationType.CompositeAgg, Query(config), async_runner=True)
-    register_runner(track.OperationType.ScrollSearch, Query(config), async_runner=True)
+    register_runner(track.OperationType.Search, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.PaginatedSearch, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.CompositeAgg, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.ScrollSearch, Query(config=config), async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
     register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
@@ -72,11 +72,11 @@ def register_default_runners(config=None):
     register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
     register_runner(track.OperationType.Refresh, Retry(Refresh()), async_runner=True)
     register_runner(track.OperationType.CreateIndex, Retry(CreateIndex()), async_runner=True)
-    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex(config)), async_runner=True)
+    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex(config=config)), async_runner=True)
     register_runner(track.OperationType.CreateComponentTemplate, Retry(CreateComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.DeleteComponentTemplate, Retry(DeleteComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.CreateComposableTemplate, Retry(CreateComposableTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate(config)), async_runner=True)
+    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate(config=config)), async_runner=True)
     register_runner(track.OperationType.CreateDataStream, Retry(CreateDataStream()), async_runner=True)
     register_runner(track.OperationType.DeleteDataStream, Retry(DeleteDataStream()), async_runner=True)
     register_runner(track.OperationType.CreateIndexTemplate, Retry(CreateIndexTemplate()), async_runner=True)
@@ -168,9 +168,14 @@ class Runner:
     Base class for all operations against Elasticsearch.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, config=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
+        self.serverless_mode = False
+        self.serverless_operator = False
+        if config:
+            self.serverless_mode = config.opts("driver", "serverless.mode", mandatory=False, default_value=False)
+            self.serverless_operator = config.opts("driver", "serverless.operator", mandatory=False, default_value=False)
 
     async def __aenter__(self):
         return self
@@ -227,20 +232,6 @@ class Runner:
             headers.update({"x-opaque-id": opaque_id})
 
         return params, request_params, transport_params, headers
-
-
-class Configurator:
-    """
-    Mixin to create configuration-aware runners
-    """
-
-    def __init__(self, config, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.serverless_mode = False
-        self.serverless_operator = False
-        if config:
-            self.serverless_mode = config.opts("driver", "serverless.mode", mandatory=False, default_value=False)
-            self.serverless_operator = config.opts("driver", "serverless.operator", mandatory=False, default_value=False)
 
 
 class Delegator:
@@ -832,7 +823,7 @@ def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: Lis
     return parsed
 
 
-class Query(Runner, Configurator):
+class Query(Runner):
     """
     Runs a request body search against Elasticsearch.
 
@@ -1420,13 +1411,10 @@ async def set_destructive_requires_name(es, value):
     return prior_value
 
 
-class DeleteIndex(Runner, Configurator):
+class DeleteIndex(Runner):
     """
     Execute the `delete index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_.
     """
-
-    def __init__(self, config=None):
-        super().__init__(config=config)
 
     async def __call__(self, es, params):
         ops = 0
@@ -1565,13 +1553,10 @@ class CreateComposableTemplate(Runner):
         return "create-composable-template"
 
 
-class DeleteComposableTemplate(Runner, Configurator):
+class DeleteComposableTemplate(Runner):
     """
     Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-template.html>`_.
     """
-
-    def __init__(self, config=None):
-        super().__init__(config=config)
 
     async def __call__(self, es, params):
         templates = mandatory(params, "templates", self)

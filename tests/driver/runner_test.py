@@ -3040,7 +3040,7 @@ class TestDeleteIndexRunner:
         es.cluster.put_settings = mock.AsyncMock()
 
         cfg = config.Config()
-        r = runner.DeleteIndex(cfg)
+        r = runner.DeleteIndex(config=cfg)
 
         params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
 
@@ -3071,7 +3071,7 @@ class TestDeleteIndexRunner:
         cfg = config.Config()
         cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
         cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
-        r = runner.DeleteIndex(cfg)
+        r = runner.DeleteIndex(config=cfg)
 
         params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
 
@@ -3098,7 +3098,7 @@ class TestDeleteIndexRunner:
         cfg = config.Config()
         cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
         cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
-        r = runner.DeleteIndex(cfg)
+        r = runner.DeleteIndex(config=cfg)
 
         params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
 
@@ -3126,7 +3126,7 @@ class TestDeleteIndexRunner:
         es.cluster.put_settings = mock.AsyncMock()
 
         cfg = config.Config()
-        r = runner.DeleteIndex(cfg)
+        r = runner.DeleteIndex(config=cfg)
 
         params = {
             "indices": ["indexA", "indexB"],
@@ -3573,7 +3573,7 @@ class TestDeleteComposableTemplateRunner:
         es.cluster.put_settings = mock.AsyncMock()
 
         cfg = config.Config()
-        r = runner.DeleteComposableTemplate(cfg)
+        r = runner.DeleteComposableTemplate(config=cfg)
 
         params = {
             "templates": [
@@ -3624,7 +3624,7 @@ class TestDeleteComposableTemplateRunner:
         cfg = config.Config()
         cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
         cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
-        r = runner.DeleteComposableTemplate(cfg)
+        r = runner.DeleteComposableTemplate(config=cfg)
 
         params = {
             "templates": [
@@ -3665,7 +3665,7 @@ class TestDeleteComposableTemplateRunner:
         cfg = config.Config()
         cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
         cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
-        r = runner.DeleteComposableTemplate(cfg)
+        r = runner.DeleteComposableTemplate(config=cfg)
 
         params = {
             "templates": [
