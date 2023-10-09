@@ -2554,7 +2554,7 @@ class TestQueryRunner:
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         cfg = config.Config()
-        query_runner = runner.Query(cfg)
+        query_runner = runner.Query(config=cfg)
 
         params = {
             "operation-type": "search",
@@ -2605,7 +2605,7 @@ class TestQueryRunner:
         cfg = config.Config()
         cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
         cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
-        query_runner = runner.Query(cfg)
+        query_runner = runner.Query(config=cfg)
 
         params = {
             "operation-type": "search",
@@ -2657,7 +2657,7 @@ class TestQueryRunner:
         cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
         cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
 
-        query_runner = runner.Query(cfg)
+        query_runner = runner.Query(config=cfg)
 
         params = {
             "operation-type": "search",
