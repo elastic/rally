@@ -61,6 +61,7 @@ def register_default_runners():
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
+    register_runner(track.OperationType.Esql, Esql(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -2827,6 +2828,23 @@ class FieldCaps(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "field-caps"
+
+
+class Esql(Runner):
+    async def __call__(self, es, params):
+        query = mandatory(params, "query", self)
+        body = params.get("body", {})
+        body["query"] = query
+        query_filter = params.get("filter")
+        if query_filter:
+            body["filter"] = query_filter
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
+        await es.perform_request(method="POST", path="/_query", headers=None, body=body, params=None)
+        return {"success": True, "unit": "ops", "weight": 1}
+
+    def __repr__(self, *args, **kwargs):
+        return "esql"
 
 
 class RequestTiming(Runner, Delegator):
