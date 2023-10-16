@@ -16,7 +16,6 @@
 # under the License.
 
 import asyncio
-import contextlib
 import contextvars
 import json
 import logging
@@ -43,15 +42,15 @@ from esrally.utils.versions import Version
 __RUNNERS = {}
 
 
-def register_default_runners():
+def register_default_runners(config=None):
     register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
-    register_runner(track.OperationType.Search, Query(), async_runner=True)
-    register_runner(track.OperationType.PaginatedSearch, Query(), async_runner=True)
-    register_runner(track.OperationType.CompositeAgg, Query(), async_runner=True)
-    register_runner(track.OperationType.ScrollSearch, Query(), async_runner=True)
+    register_runner(track.OperationType.Search, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.PaginatedSearch, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.CompositeAgg, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.ScrollSearch, Query(config=config), async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
     register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
@@ -73,11 +72,11 @@ def register_default_runners():
     register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
     register_runner(track.OperationType.Refresh, Retry(Refresh()), async_runner=True)
     register_runner(track.OperationType.CreateIndex, Retry(CreateIndex()), async_runner=True)
-    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex()), async_runner=True)
+    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex(config=config)), async_runner=True)
     register_runner(track.OperationType.CreateComponentTemplate, Retry(CreateComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.DeleteComponentTemplate, Retry(DeleteComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.CreateComposableTemplate, Retry(CreateComposableTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate(config=config)), async_runner=True)
     register_runner(track.OperationType.CreateDataStream, Retry(CreateDataStream()), async_runner=True)
     register_runner(track.OperationType.DeleteDataStream, Retry(DeleteDataStream()), async_runner=True)
     register_runner(track.OperationType.CreateIndexTemplate, Retry(CreateIndexTemplate()), async_runner=True)
@@ -169,9 +168,14 @@ class Runner:
     Base class for all operations against Elasticsearch.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, config=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
+        self.serverless_mode = False
+        self.serverless_operator = False
+        if config:
+            self.serverless_mode = config.opts("driver", "serverless.mode", mandatory=False, default_value=False)
+            self.serverless_operator = config.opts("driver", "serverless.operator", mandatory=False, default_value=False)
 
     async def __aenter__(self):
         return self
@@ -865,8 +869,8 @@ class Query(Runner):
     * ``pages``: Total number of pages that have been retrieved.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config=None):
+        super().__init__(config=config)
         self._search_after_extractor = SearchAfterExtractor()
         self._composite_agg_extractor = CompositeAggExtractor()
 
@@ -890,6 +894,8 @@ class Query(Runner):
         cache = params.get("cache")
         if cache is not None:
             request_params["request_cache"] = str(cache).lower()
+        elif self.serverless_mode and not self.serverless_operator:
+            request_params["request_cache"] = "false"
         if not bool(headers):
             # counter-intuitive but preserves prior behavior
             headers = None
@@ -1118,11 +1124,12 @@ class Query(Runner):
                         took = props.get("took", 0)
                         all_results_collected = (size is not None and hits < size) or hits == 0
                     else:
+                        # /_search/scroll does not accept request_cache so not providing params
                         r = await es.perform_request(
                             method="GET",
                             path="/_search/scroll",
                             body={"scroll_id": scroll_id, "scroll": "10s"},
-                            params=request_params,
+                            params=None,
                             headers=headers,
                         )
                         props = parse(r, ["timed_out", "took"], ["hits.hits"])
@@ -1410,21 +1417,16 @@ class DeleteIndex(Runner):
     """
 
     async def __call__(self, es, params):
-        # pylint: disable=import-outside-toplevel
-        import elasticsearch
-
         ops = 0
 
         indices = mandatory(params, "indices", self)
         only_if_exists = params.get("only-if-exists", False)
         request_params = params.get("request-params", {})
 
-        # bypassing action.destructive_requires_name cluster setting mangling for serverless clusters
+        # bypass cluster settings access for serverless
         prior_destructive_setting = None
-        cluster_settings_available = False
-        with contextlib.suppress(elasticsearch.exceptions.NotFoundError):
+        if not self.serverless_mode or self.serverless_operator:
             prior_destructive_setting = await set_destructive_requires_name(es, False)
-            cluster_settings_available = True
 
         try:
             for index_name in indices:
@@ -1436,7 +1438,7 @@ class DeleteIndex(Runner):
                     await es.indices.delete(index=index_name, params=request_params)
                     ops += 1
         finally:
-            if cluster_settings_available:
+            if not self.serverless_mode or self.serverless_operator:
                 await set_destructive_requires_name(es, prior_destructive_setting)
         return {
             "weight": ops,
@@ -1573,16 +1575,18 @@ class DeleteComposableTemplate(Runner):
                     self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
                     await es.indices.delete_index_template(name=template_name, params=request_params)
                     ops_count += 1
-                # ensure that we do not provide an empty index pattern by accident
-                if delete_matching_indices and index_pattern:
-                    # only set if really required
-                    if current_destructive_setting is None:
-                        current_destructive_setting = False
-                        prior_destructive_setting = await set_destructive_requires_name(es, current_destructive_setting)
-                        ops_count += 1
+                # 1. Ignore delete matching indices in serverless as wildcard deletes are not supported
+                # 2. Ensure that we do not provide an empty index pattern by accident
+                if not self.serverless_mode or self.serverless_operator:
+                    if delete_matching_indices and index_pattern:
+                        # only set if really required
+                        if current_destructive_setting is None:
+                            current_destructive_setting = False
+                            prior_destructive_setting = await set_destructive_requires_name(es, current_destructive_setting)
+                            ops_count += 1
 
-                    await es.indices.delete(index=index_pattern)
-                    ops_count += 1
+                        await es.indices.delete(index=index_pattern)
+                        ops_count += 1
         finally:
             if current_destructive_setting is not None:
                 await set_destructive_requires_name(es, prior_destructive_setting)

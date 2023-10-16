@@ -28,7 +28,7 @@ import elastic_transport
 import elasticsearch
 import pytest
 
-from esrally import client, exceptions
+from esrally import client, config, exceptions
 from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.driver import runner
 
@@ -2535,6 +2535,160 @@ class TestQueryRunner:
             await query_runner(es, params)
         assert exc.value.args[0] == "No runner available for operation-type: [unknown]"
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_no_request_cache_by_default(self, es):
+        es.options.return_value = es
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "hits": {
+                "total": {
+                    "value": 0,
+                    "relation": "eq",
+                },
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        cfg = config.Config()
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "hits": 0,
+            "hits_relation": "eq",
+            "timed_out": False,
+            "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+        }
+
+        es.perform_request.assert_awaited_once_with(method="GET", path="/_all/_search", params={}, body=params["body"], headers=None)
+        es.clear_scroll.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_no_request_cache_in_serverless_with_operator(self, es):
+        es.options.return_value = es
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "hits": {
+                "total": {
+                    "value": 0,
+                    "relation": "eq",
+                },
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "hits": 0,
+            "hits_relation": "eq",
+            "timed_out": False,
+            "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+        }
+
+        es.perform_request.assert_awaited_once_with(method="GET", path="/_all/_search", params={}, body=params["body"], headers=None)
+        es.clear_scroll.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_request_cache_false_in_serverless(self, es):
+        es.options.return_value = es
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "hits": {
+                "total": {
+                    "value": 0,
+                    "relation": "eq",
+                },
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
+
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "hits": 0,
+            "hits_relation": "eq",
+            "timed_out": False,
+            "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+        }
+
+        es.perform_request.assert_awaited_once_with(
+            method="GET", path="/_all/_search", params={"request_cache": "false"}, body=params["body"], headers=None
+        )
+        es.clear_scroll.assert_not_called()
+
 
 class TestPutPipelineRunner:
     @mock.patch("elasticsearch.Elasticsearch")
@@ -2884,7 +3038,67 @@ class TestDeleteIndexRunner:
         es.indices.delete = mock.AsyncMock()
         es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
         es.cluster.put_settings = mock.AsyncMock()
-        r = runner.DeleteIndex()
+
+        cfg = config.Config()
+        r = runner.DeleteIndex(config=cfg)
+
+        params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
+
+        result = await r(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+        }
+
+        es.cluster.put_settings.assert_has_awaits(
+            [
+                mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+                mock.call(body={"transient": {"action.destructive_requires_name": True}}),
+            ]
+        )
+        es.indices.delete.assert_awaited_once_with(index="indexB", params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_deletes_existing_indices_in_serverless(self, es):
+        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
+        r = runner.DeleteIndex(config=cfg)
+
+        params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
+
+        result = await r(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+        }
+
+        es.cluster.get_settings.assert_not_awaited()
+        es.cluster.put_settings.assert_not_awaited()
+        es.indices.delete.assert_awaited_once_with(index="indexB", params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_deletes_existing_indices_in_serverless_with_operator(self, es):
+        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        r = runner.DeleteIndex(config=cfg)
 
         params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
 
@@ -2910,7 +3124,9 @@ class TestDeleteIndexRunner:
         es.indices.delete = mock.AsyncMock()
         es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {}})
         es.cluster.put_settings = mock.AsyncMock()
-        r = runner.DeleteIndex()
+
+        cfg = config.Config()
+        r = runner.DeleteIndex(config=cfg)
 
         params = {
             "indices": ["indexA", "indexB"],
@@ -3356,7 +3572,100 @@ class TestDeleteComposableTemplateRunner:
         es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
         es.cluster.put_settings = mock.AsyncMock()
 
-        r = runner.DeleteComposableTemplate()
+        cfg = config.Config()
+        r = runner.DeleteComposableTemplate(config=cfg)
+
+        params = {
+            "templates": [
+                ("templateA", False, None),
+                ("templateB", True, "logs-*"),
+                ("templateC", True, "metrics-*"),
+            ],
+            "request-params": {"timeout": 60},
+            "only-if-exists": False,
+        }
+        result = await r(es, params)
+
+        # 3 times delete index template, 2 times to set/reset transient cluster settings, 2 times delete matching indices
+        assert result == {
+            "weight": 7,
+            "unit": "ops",
+            "success": True,
+        }
+
+        es.indices.delete_index_template.assert_has_awaits(
+            [
+                mock.call(name="templateA", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateB", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateC", params=params["request-params"], ignore=[404]),
+            ]
+        )
+        es.cluster.put_settings.assert_has_awaits(
+            [
+                mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+                mock.call(body={"transient": {"action.destructive_requires_name": True}}),
+            ]
+        )
+        es.indices.delete.assert_has_awaits(
+            [
+                mock.call(index="logs-*"),
+                mock.call(index="metrics-*"),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_deletes_all_index_templates_in_serverless(self, es):
+        es.indices.delete_index_template = mock.AsyncMock()
+        es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
+        r = runner.DeleteComposableTemplate(config=cfg)
+
+        params = {
+            "templates": [
+                ("templateA", False, None),
+                ("templateB", True, "logs-*"),
+                ("templateC", True, "metrics-*"),
+            ],
+            "request-params": {"timeout": 60},
+            "only-if-exists": False,
+        }
+        result = await r(es, params)
+
+        # 3 times delete index template
+        assert result == {
+            "weight": 3,
+            "unit": "ops",
+            "success": True,
+        }
+
+        es.indices.delete_index_template.assert_has_awaits(
+            [
+                mock.call(name="templateA", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateB", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateC", params=params["request-params"], ignore=[404]),
+            ]
+        )
+        es.cluster.put_settings.assert_not_awaited()
+        es.indices.delete.assert_not_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_deletes_all_index_templates_in_serverless_with_operator(self, es):
+        es.indices.delete_index_template = mock.AsyncMock()
+        es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        r = runner.DeleteComposableTemplate(config=cfg)
 
         params = {
             "templates": [
