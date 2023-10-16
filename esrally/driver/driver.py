@@ -718,10 +718,11 @@ class Driver:
             self.logger.info("Skipping REST API check as requested explicitly.")
         elif uses_static_responses:
             self.logger.info("Skipping REST API check as static responses are used.")
-        elif serverless_mode and not serverless_operator:
-            self.logger.info("Skipping REST API check while targetting serverless cluster with a public user.")
         else:
-            self.wait_for_rest_api(es_clients)
+            if serverless_mode and not serverless_operator:
+                self.logger.info("Skipping REST API check while targetting serverless cluster with a public user.")
+            else:
+                self.wait_for_rest_api(es_clients)
             self.driver_actor.cluster_details = self.retrieve_cluster_info(es_clients)
             if serverless_mode and serverless_operator:
                 build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
