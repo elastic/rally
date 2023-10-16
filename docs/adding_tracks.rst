@@ -304,7 +304,9 @@ You can check your track very quickly for syntax errors when you invoke Rally wi
 * Iteration-based tasks run at most one warmup iteration and one measurement iteration.
 * Time-period-based tasks run at most for 10 seconds without warmup.
 
-Rally also postprocesses all data file names. Instead of ``documents.json``, Rally expects ``documents-1k.json`` and assumes the file contains 1.000 documents. You need to prepare these data files though. Pick 1.000 documents for every data file in your track and store them in a file with the suffix ``-1k``. We choose the first 1.000 with ``head -n 1000 documents.json > documents-1k.json``.
+Rally also post-processes all data file names. Instead of ``documents.json``, Rally expects ``documents-1k.json`` and assumes the file contains 1.000 documents. You need to prepare these data files though. Pick 1.000 documents for every data file in your track and store them in a file with the suffix ``-1k``. We choose the first 1.000 with ``head -n 1000 documents.json > documents-1k.json``.
+
+If your file has 1000 and less documents, you can skip creation of ``-1k`` variant. Rally will use the original file in such case.
 
 Challenges
 ----------

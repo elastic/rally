@@ -1251,7 +1251,18 @@ class TestTrackPostProcessing:
             ],
             "corpora": [
                 {
-                    "name": "unittest",
+                    "name": "unittest-more-than-1k-documents",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 1001,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                        }
+                    ],
+                },
+                {
+                    "name": "unittest-less-than-1k-documents",
                     "documents": [
                         {
                             "source-file": "documents.json.bz2",
@@ -1260,7 +1271,7 @@ class TestTrackPostProcessing:
                             "uncompressed-bytes": 10000,
                         }
                     ],
-                }
+                },
             ],
             "operations": [
                 {
@@ -1327,9 +1338,20 @@ class TestTrackPostProcessing:
             ],
             "corpora": [
                 {
-                    "name": "unittest",
+                    "name": "unittest-more-than-1k-documents",
                     "documents": [
                         {"source-file": "documents-1k.json.bz2", "document-count": 1000},
+                    ],
+                },
+                {
+                    "name": "unittest-less-than-1k-documents",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                        },
                     ],
                 },
             ],
