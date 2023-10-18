@@ -3132,6 +3132,40 @@ Meta-data
 
 The operation returns no meta-data.
 
+esql
+~~~~~~~~~~~~~
+
+With the operation type ``esql`` you can execute `ES|QL query <https://www.elastic.co/guide/en/elasticsearch/reference/master/esql.html>`_.
+
+Properties
+""""""""""
+
+* ``query`` (mandatory): An ES|QL query starts with a source command followed processing commands.
+* ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
+* ``body`` (optional): The query body.
+
+Example::
+
+    {
+      "name": "default",
+      "operation-type": "esql",
+      "query": "FROM logs-* | STATS count=count(*) BY agent.hostname | SORT count DESC | LIMIT 20",
+      "filter": {
+        "range": {
+          "timestamp": {
+            "gte": "now-1d/d",
+            "lte": "now/d"
+          }
+        }
+      }
+    }
+
+Meta-data
+"""""""""
+
+* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
+* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
+* ``success``: A boolean indicating whether the query has succeeded.
 
 .. _track_dependencies:
 

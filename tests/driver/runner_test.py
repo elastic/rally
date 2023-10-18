@@ -7537,3 +7537,41 @@ class TestFieldCapsRunner:
 
         expected_body = {"index_filter": index_filter}
         es.field_caps.assert_awaited_once_with(index="_all", fields="time-*", body=expected_body, params=None)
+
+
+class TestEsqlRunner:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_without_query_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock()
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from logs-* | stats c = count(*)"})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from logs-* | stats c = count(*)"}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_with_query_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock()
+        esql = runner.Esql()
+        query_filter = {"range": {"@timestamp": {"gte": "2023"}}}
+        result = await esql(es, params={"query": "from * | limit 1", "filter": query_filter})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from * | limit 1", "filter": query_filter}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_with_body(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock()
+        esql = runner.Esql()
+        pragma = {"data_partitioning": "doc"}
+        result = await esql(es, params={"query": "from * | limit 1", "body": {"pragma": pragma}})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+
+        expected_body = {"pragma": pragma, "query": "from * | limit 1"}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
