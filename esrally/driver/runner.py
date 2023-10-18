@@ -2832,15 +2832,20 @@ class FieldCaps(Runner):
 
 class Esql(Runner):
     async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
         query = mandatory(params, "query", self)
         body = params.get("body", {})
         body["query"] = query
         query_filter = params.get("filter")
         if query_filter:
             body["filter"] = query_filter
+        if not bool(headers):
+            # counter-intuitive, but preserves prior behavior
+            headers = None
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
-        await es.perform_request(method="POST", path="/_query", headers=None, body=body, params=None)
+        await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
         return {"success": True, "unit": "ops", "weight": 1}
 
     def __repr__(self, *args, **kwargs):
