@@ -15,14 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from enum import StrEnum, auto
+from enum import Enum, auto
 
 try:
     from enum import EnumType
 except ImportError:
     from enum import EnumMeta as EnumType
-finally:
-    assert EnumType
 
 try:
     from enum import member
@@ -31,15 +29,12 @@ except ImportError:
     def member(enum):
         return enum
 
-finally:
-    assert member
-
 
 class PropEnumType(EnumType):
     __iter__ = None
 
 
-class PropEnum(StrEnum, metaclass=PropEnumType):
+class PropEnum(str, Enum, metaclass=PropEnumType):
     def __new__(cls, value):
         if isinstance(value, PropEnumType):
             return value
@@ -50,6 +45,10 @@ class PropEnum(StrEnum, metaclass=PropEnumType):
             return member
         else:
             raise TypeError(f"{value!r} is not a string or enum")
+
+    @staticmethod
+    def _generate_next_value_(name, *_):
+        return name.lower()
 
 
 class Property(PropEnum):
