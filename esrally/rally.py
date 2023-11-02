@@ -1090,7 +1090,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.CONFIG.OPTION, args.configuration)
             cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.MAX_RESULTS, args.limit)
             cfg.add(config.Scope.applicationOverride, *props.SYSTEM.ADMIN.TRACK, args.track)
-            cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.RACES.BANCHMARK_NAME, args.benchmark_name)
+            cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.RACES.BENCHMARK_NAME, args.benchmark_name)
             cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.FROM_DATE, args.from_date)
             cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.TO_DATE, args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)

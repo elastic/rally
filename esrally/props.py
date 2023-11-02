@@ -111,4 +111,4 @@ class SYSTEM(Section):
 
         @member
         class RACES(Key):
-            BANCHMARK_NAME = desc()
+            BENCHMARK_NAME = desc()

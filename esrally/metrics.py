@@ -1601,7 +1601,7 @@ class RaceStore:
         return self.cfg.opts(*props.SYSTEM.ADMIN.TRACK, mandatory=False)
 
     def _benchmark_name(self):
-        return self.cfg.opts(*props.SYSTEM.LIST.RACES.BANCHMARK_NAME, mandatory=False)
+        return self.cfg.opts(*props.SYSTEM.LIST.RACES.BENCHMARK_NAME, mandatory=False)
 
     def _race_timestamp(self):
         return self.cfg.opts("system", "add.race_timestamp")
