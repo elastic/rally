@@ -15,7 +15,24 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from enum import EnumType, StrEnum, auto, member
+from enum import StrEnum, auto
+
+try:
+    from enum import EnumType
+except ImportError:
+    from enum import EnumMeta as EnumType
+finally:
+    assert EnumType
+
+try:
+    from enum import member
+except ImportError:
+
+    def member(enum):
+        return enum
+
+finally:
+    assert member
 
 
 class PropEnumType(EnumType):
@@ -47,7 +64,7 @@ class Property(PropEnum):
 
     @property
     def __section(self):
-        return '.'.join(map(str.lower, self.__sections()))
+        return ".".join(map(str.lower, self.__sections()))
 
     @property
     def __key(self):
@@ -78,7 +95,6 @@ def desc(*_):
 
 
 class SYSTEM(Section):
-
     @member
     class ADMIN(Key):
         TRACK = desc()
