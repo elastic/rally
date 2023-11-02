@@ -33,7 +33,7 @@ from enum import Enum, IntEnum
 
 import tabulate
 
-from esrally import client, config, exceptions, paths, time, version
+from esrally import client, config, exceptions, paths, props, time, version
 from esrally.utils import console, convert, io, versions
 
 
@@ -1595,13 +1595,13 @@ class RaceStore:
         raise NotImplementedError("abstract method")
 
     def _max_results(self):
-        return int(self.cfg.opts("system", "list.max_results"))
+        return int(self.cfg.opts(*props.SYSTEM.LIST.MAX_RESULTS))
 
     def _track(self):
-        return self.cfg.opts("system", "admin.track", mandatory=False)
+        return self.cfg.opts(*props.SYSTEM.ADMIN.TRACK, mandatory=False)
 
     def _benchmark_name(self):
-        return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
+        return self.cfg.opts(*props.SYSTEM.LIST.RACES.BANCHMARK_NAME, mandatory=False)
 
     def _race_timestamp(self):
         return self.cfg.opts("system", "add.race_timestamp")
@@ -1616,10 +1616,10 @@ class RaceStore:
         return self.cfg.opts("system", "add.chart_name", mandatory=False)
 
     def _from_date(self):
-        return self.cfg.opts("system", "list.from_date", mandatory=False)
+        return self.cfg.opts(*props.SYSTEM.LIST.FROM_DATE, mandatory=False)
 
     def _to_date(self):
-        return self.cfg.opts("system", "list.to_date", mandatory=False)
+        return self.cfg.opts(*props.SYSTEM.LIST.TO_DATE, mandatory=False)
 
     def _dry_run(self):
         return self.cfg.opts("system", "admin.dry_run", mandatory=False)

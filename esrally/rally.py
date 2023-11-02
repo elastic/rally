@@ -41,6 +41,7 @@ from esrally import (
     log,
     metrics,
     paths,
+    props,
     racecontrol,
     reporter,
     telemetry,
@@ -1086,12 +1087,12 @@ def dispatch_sub_command(arg_parser, args, cfg):
             configure_reporting_params(args, cfg)
             reporter.compare(cfg, args.baseline, args.contender)
         elif sub_command == "list":
-            cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
-            cfg.add(config.Scope.applicationOverride, "system", "list.max_results", args.limit)
-            cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
-            cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
-            cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
+            cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.CONFIG.OPTION, args.configuration)
+            cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.MAX_RESULTS, args.limit)
+            cfg.add(config.Scope.applicationOverride, *props.SYSTEM.ADMIN.TRACK, args.track)
+            cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.RACES.BANCHMARK_NAME, args.benchmark_name)
+            cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.FROM_DATE, args.from_date)
+            cfg.add(config.Scope.applicationOverride, *props.SYSTEM.LIST.TO_DATE, args.to_date)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
