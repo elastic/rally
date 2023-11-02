@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from enum import auto, EnumType, member, StrEnum
+from enum import EnumType, StrEnum, auto, member
 
 
 class PropEnumType(EnumType):
@@ -38,7 +38,7 @@ class PropEnum(StrEnum, metaclass=PropEnumType):
 class Property(PropEnum):
     def __sections(self):
         node = globals()
-        for name in type(self).__qualname__.split('.'):
+        for name in type(self).__qualname__.split("."):
             node = node[name]
             if issubclass(node, Section):
                 yield name
@@ -54,7 +54,12 @@ class Property(PropEnum):
         return self.value.replace(f"{self.__section}.", "", 1)
 
     def __iter__(self):
-        return iter((self.__section, self.__key, ))
+        return iter(
+            (
+                self.__section,
+                self.__key,
+            )
+        )
 
     def __repr__(self):
         return f"<{type(self).__qualname__}.{self.name}: {self.value}>"
