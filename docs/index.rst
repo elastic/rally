@@ -1,6 +1,14 @@
 Rally |release|
 ===============
 
+
+.. ifconfig:: release.endswith('.dev0')
+
+    .. warning::
+
+        This documentation is for the version of Rally currently under development.
+        Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
+
 You want to benchmark Elasticsearch? Then Rally is for you. It can help you with the following tasks:
 
 * Setup and teardown of an Elasticsearch cluster for benchmarking
