@@ -88,7 +88,7 @@ Assuming we pass ``--track-params="es_snapshot_restore_recovery_max_bytes_per_se
 The parameter ``default_value`` controls the value to use for the setting if it is undefined. If the setting is undefined and there is no default value, nothing will be added.
 
 * ``build_flavor``: a global variable that holds build flavor reported by Elasticsearch cluster targetted by Rally.
-* ``serverless_operator``: a global variable that holds ``true`` when Rally targets serverless cluster with operator privileges, and ``false`` otherwise.
+* ``serverless_operator`` (reserved for Elastic internal use): a global variable that holds ``true`` when Rally targets serverless cluster with operator privileges, and ``false`` otherwise.
 
 .. _adding_tracks_custom_param_sources:
 

@@ -411,4 +411,4 @@ Example of recorded documents given two nodes in the target cluster::
 
 .. note::
 
-    This telemetry device is only applicable to `Stateless Elasticsearch <https://www.elastic.co/blog/stateless-your-new-state-of-find-with-elasticsearch>`_ and requires elevated privleges only available to Elastic developers.
+    This telemetry device is only applicable to `Elastic Serverless <https://docs.elastic.co/serverless>`_ and requires elevated privleges only available to Elastic developers.
