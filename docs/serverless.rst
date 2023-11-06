@@ -60,7 +60,7 @@ Furthermore, some operations behave differently when used in the Serverless cont
 
 Tracks
 ------
-Track files use Jinja2 as a template language with a few :ref:`extensions<advanced_extensions>`. To accommodate for Serverless, ``build_flavor`` global variable was added. It resolves to ``serverless`` when benchmarking a Serverless cluster. The primary use case for this variable is conditional exclusion of index settings which are unavailable or hidden from users in Serverless.
+Track files use Jinja2 as a template language with a few :ref:`extensions<advanced_extensions>`. To accommodate for Serverless, the ``build_flavor`` global variable was added. It resolves to ``serverless`` when benchmarking a Serverless cluster. The primary use case for this variable is conditional exclusion of index settings that are unavailable or hidden from users in Serverless.
 
 .. note::
 
