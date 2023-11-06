@@ -64,7 +64,12 @@ class StaticTransport:
 
 
 class StaticConnector(BaseConnector):
-    async def _create_connection(self, req: "ClientRequest", traces: List["Trace"], timeout: "ClientTimeout") -> ResponseHandler:  # type: ignore[name-defined]
+    async def _create_connection(
+        self,
+        req: "ClientRequest",  # type: ignore[name-defined]
+        traces: List["Trace"],  # type: ignore[name-defined]
+        timeout: "ClientTimeout",  # type: ignore[name-defined]
+    ) -> ResponseHandler:
         handler = ResponseHandler(self._loop)
         handler.transport = StaticTransport()
         handler.protocol = ""
