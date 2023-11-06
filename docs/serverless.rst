@@ -19,7 +19,7 @@ Rally determines if it is benchmarking a Serverless cluster by looking at the ``
 
 .. note::
 
-    Elasticsearch Serverless API is not publicly documented yet. Today, the ultimate documentation is Elasticsearch `source code <https://github.com/elastic/elasticsearch>`_. Please look for ``@ServerlessScope(Scope.PUBLIC)`` annotation to determine if a given REST action is available in Serverless.
+    The Elasticsearch Serverless API is not yet publicly documented. Today, the ultimate documentation is Elasticsearch `source code <https://github.com/elastic/elasticsearch>`_. Please look for the ``@ServerlessScope(Scope.PUBLIC)`` annotation to determine if a given REST action is available in Serverless.
 
 The automatic task skip can be overridden through :ref:`run-on-serverless<track_schedule>` property::
 
