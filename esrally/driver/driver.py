@@ -30,7 +30,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-from typing import Callable
+from typing import Callable, Optional
 
 import thespian.actors
 
@@ -560,7 +560,7 @@ ApiKey = collections.namedtuple("ApiKey", ["id", "secret"])
 class ClientContext:
     client_id: int
     parent_worker_id: int
-    api_key: ApiKey = None
+    api_key: Optional[ApiKey] = None
 
 
 class Driver:

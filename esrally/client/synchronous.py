@@ -16,7 +16,7 @@
 # under the License.
 
 import warnings
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, MutableMapping, Optional
 
 from elastic_transport import (
     ApiResponse,
@@ -73,8 +73,7 @@ class _ProductChecker:
         raise UnsupportedProductError(message, meta=meta, body=body)
 
     @classmethod
-    def check_product(cls, headers, response):
-        # type: (dict[str, str], dict[str, str]) -> int
+    def check_product(cls, headers: Mapping[str, str], response: Mapping[str, Any]):
         """
         Verifies that the server we're talking to is Elasticsearch.
         Does this by checking HTTP headers and the deserialized
@@ -145,7 +144,7 @@ class RallySyncElasticsearch(Elasticsearch):
         path: str,
         *,
         params: Optional[Mapping[str, Any]] = None,
-        headers: Optional[Mapping[str, str]] = None,
+        headers: Optional[MutableMapping[str, str]] = None,
         body: Optional[Any] = None,
     ) -> ApiResponse[Any]:
         # We need to ensure that we provide content-type and accept headers

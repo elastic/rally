@@ -30,7 +30,7 @@ from enum import Enum
 from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import ijson
 
@@ -765,7 +765,7 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: List[str] = None) -> dict:
+def parse(text: BytesIO, props: List[str], lists: Optional[List[str]] = None, objects: Optional[List[str]] = None) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -1207,7 +1207,7 @@ class SearchAfterExtractor:
         # extracts e.g. '[1609780186, "2"]' from '"sort": [1609780186, "2"]'
         self.sort_pattern = re.compile(r"sort\":([^\]]*])")
 
-    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, List):
+    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> Tuple[dict, List]:
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
