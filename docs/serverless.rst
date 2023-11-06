@@ -4,7 +4,7 @@ Rally and Elastic Serverless
 Overview
 --------
 
-`Elastic Serverless <https://docs.elastic.co/serverless>`_ (later called "Serverless") is a fully managed solution hiding the complexity of Elasticsearch clusters including details such as nodes, shards, data tiers and scaling. Elasticsearch API used in Serverless is a subset of the API available in traditional Elasticsearch installations so Rally had to be modified to support it.
+`Elastic Serverless <https://docs.elastic.co/serverless>`_ (later called "Serverless") is a fully managed solution hiding the complexity of Elasticsearch clusters including details such as nodes, shards, data tiers, and scaling. The Elasticsearch API used in Serverless is a subset of the API available in traditional Elasticsearch installations, requiring Rally modifications to support it.
 
 This section explains what was changed in Rally, and what track modifications are required to move existing workloads to Serverless.
 
