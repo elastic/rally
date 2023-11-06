@@ -17,7 +17,6 @@ git clone https://github.com/elastic/rally
 pushd rally
 git checkout "${RELEASE_VERSION}"
 git --no-pager show
-exit 0
 
 set -x
 export TERM=dumb
