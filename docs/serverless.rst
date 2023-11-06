@@ -29,7 +29,7 @@ The automatic task skip can be overridden through :ref:`run-on-serverless<track_
       {
         "operation": "node-stats",
         "clients": 1,
-        "run-on-serverless": True
+        "run-on-serverless": true
       },
       [..]
     ]
