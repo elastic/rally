@@ -11,6 +11,14 @@ DOCKER_PASSWORD=$(vault read -field token /secret/ci/elastic-rally/release/docke
 retry 5 docker login -u elasticmachine -p $DOCKER_PASSWORD
 unset DOCKER_PASSWORD
 
+tmp_dir=$(mktemp --directory)
+pushd "$tmp_dir"
+git clone https://github.com/elastic/rally
+pushd rally
+git checkout "${RELEASE_VERSION}"
+git --no-pager show
+exit 0
+
 set -x
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
