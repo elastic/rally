@@ -1896,7 +1896,7 @@ If you want it to delete one specific index template instead, you can specify th
 * ``template`` (mandatory): The name of the composable template that should be deleted.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
 * ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern. This setting is ignored in `Elastic Serverless <https://docs.elastic.co/serverless>`_ - please use data streams and the ``delete-data-stream`` operation instead.
-* ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
+* ``index-pattern`` (mandatory if ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
 * ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 **Examples**
