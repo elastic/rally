@@ -40,7 +40,87 @@ class Scope(Enum):
     invocation = 5
 
 
-Section = Literal["system", "mechanic"]
+Section = Literal[
+    "client",
+    "driver",
+    "generator",
+    "mechanic",
+    "race",
+    "reporting",
+    "system",
+    "telemetry",
+    "track",
+]
+Key = Literal[
+    "add.chart_name",
+    "add.chart_type",
+    "add.config.option",
+    "add.message",
+    "add.race_timestamp",
+    "admin.dry_run",
+    "admin.track",
+    "assertions",
+    "async.debug",
+    "build.type",
+    "car.names",
+    "car.params",
+    "car.plugins",
+    "challenge.name",
+    "cluster.name",
+    "data_streams",
+    "delete.config.option",
+    "delete.id",
+    "devices",
+    "distribution.repository",
+    "distribution.version",
+    "env.name",
+    "exclude.tasks",
+    "format",
+    "hosts",
+    "include.tasks",
+    "indices",
+    "install.id",
+    "list.config.option",
+    "list.from_date",
+    "list.max_results",
+    "list.races.benchmark_name",
+    "list.to_date",
+    "load_driver_hosts",
+    "master.nodes",
+    "network.host",
+    "network.http.port",
+    "node.name",
+    "numbers.align",
+    "offline.mode",
+    "on.error",
+    "options",
+    "output.path",
+    "params",
+    "passenv",
+    "pipeline",
+    "plugin.params",
+    "preserve.install",
+    "profiling",
+    "quiet.mode",
+    "race.id",
+    "remote.benchmarking.supported",
+    "repository.name",
+    "repository.revision",
+    "runtime.jdk",
+    "seed.hosts",
+    "skip.rest.api.check",
+    "source.build.method",
+    "source.revision",
+    "target.arch",
+    "target.os",
+    "team.path",
+    "test.mode.enabled",
+    "time.start",
+    "track.name",
+    "track.path",
+    "user.tags",
+    "values",
+]
 
 
 class ConfigFile:
@@ -142,7 +222,7 @@ class Config:
         self._opts = {}
         self._clear_config()
 
-    def add(self, scope, section: Section, key, value):
+    def add(self, scope, section: Section, key: Key, value):
         """
         Adds or overrides a new configuration property.
 
@@ -166,7 +246,7 @@ class Config:
             if source_section == section:
                 self.add(scope, source_section, key, v)
 
-    def opts(self, section: Section, key, default_value=None, mandatory=True):
+    def opts(self, section: Section, key: Key, default_value=None, mandatory=True):
         """
         Resolves a configuration property.
 
@@ -204,7 +284,7 @@ class Config:
                     scopes_per_key[key] = scope
         return opts_in_section
 
-    def exists(self, section: Section, key):
+    def exists(self, section: Section, key: Key):
         """
         :param section: The configuration section.
         :param key: The configuration key.
@@ -265,7 +345,7 @@ class Config:
         return int(self.opts("meta", "config.version", default_value=0, mandatory=False))
 
     # recursively find the most narrow scope for a key
-    def _resolve_scope(self, section: Section, key, start_from=Scope.invocation):
+    def _resolve_scope(self, section: Section, key: Key, start_from=Scope.invocation):
         if self._k(start_from, section, key) in self._opts:
             return start_from
         elif start_from == Scope.application:
@@ -274,7 +354,7 @@ class Config:
             # continue search in the enclosing scope
             return self._resolve_scope(section, key, Scope(start_from.value - 1))
 
-    def _k(self, scope, section: Section, key):
+    def _k(self, scope, section: Section, key: Key):
         if scope is None or scope == Scope.application:
             return Scope.application, section, key
         else:

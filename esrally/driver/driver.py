@@ -30,7 +30,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import thespian.actors
 
@@ -102,13 +102,13 @@ class TrackPrepared:
 
 
 class StartTaskLoop:
-    def __init__(self, track_name, cfg):
+    def __init__(self, track_name, cfg: config.Config):
         self.track_name = track_name
         self.cfg = cfg
 
 
 class DoTask:
-    def __init__(self, task, cfg):
+    def __init__(self, task, cfg: config.Config):
         self.task = task
         self.cfg = cfg
 
@@ -404,7 +404,7 @@ class TaskExecutionActor(actor.RallyActor):
         self.task_preparation_actor = None
         self.logger = logging.getLogger(__name__)
         self.track_name = None
-        self.cfg = None
+        self.cfg: Union[config.Config, None] = None
 
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartTaskLoop(self, msg, sender):
@@ -471,7 +471,7 @@ class TrackPreparationActor(actor.RallyActor):
         self.status = self.Status.INITIALIZING
         self.children = []
         self.tasks = []
-        self.cfg = None
+        self.cfg: Union[config.Config, None] = None
         self.data_root_dir = None
         self.track = None
 
@@ -1738,7 +1738,7 @@ class ThroughputCalculator:
 
 
 class AsyncIoAdapter:
-    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
+    def __init__(self, cfg: config.Config, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
         self.cfg = cfg
         self.track = track
         self.task_allocations = task_allocations

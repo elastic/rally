@@ -23,6 +23,7 @@ import pickle
 import sys
 import traceback
 from collections import defaultdict
+from typing import Union
 
 import thespian.actors
 
@@ -183,7 +184,7 @@ def _delete_node_file(root_path):
 
 
 class StartEngine:
-    def __init__(self, cfg, open_metrics_context, sources, distribution, external, docker, ip=None, port=None, node_id=None):
+    def __init__(self, cfg: config.Config, open_metrics_context, sources, distribution, external, docker, ip=None, port=None, node_id=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.sources = sources
@@ -245,7 +246,20 @@ class ResetRelativeTime:
 
 
 class StartNodes:
-    def __init__(self, cfg, open_metrics_context, sources, distribution, external, docker, all_node_ips, all_node_ids, ip, port, node_ids):
+    def __init__(
+        self,
+        cfg: config.Config,
+        open_metrics_context,
+        sources,
+        distribution,
+        external,
+        docker,
+        all_node_ips,
+        all_node_ids,
+        ip,
+        port,
+        node_ids,
+    ):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.sources = sources
@@ -322,7 +336,7 @@ class MechanicActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.cfg = None
+        self.cfg: Union[config.Config, None] = None
         self.race_control = None
         self.cluster_launcher = None
         self.cluster = None
@@ -681,7 +695,7 @@ class Mechanic:
     running the benchmark).
     """
 
-    def __init__(self, cfg, metrics_store, supply, provisioners, launcher):
+    def __init__(self, cfg: config.Config, metrics_store, supply, provisioners, launcher):
         self.cfg = cfg
         self.preserve_install = cfg.opts("mechanic", "preserve.install")
         self.metrics_store = metrics_store

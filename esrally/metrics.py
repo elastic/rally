@@ -1568,7 +1568,7 @@ class Race:
 
 
 class RaceStore:
-    def __init__(self, cfg):
+    def __init__(self, cfg: config.Config):
         self.cfg = cfg
         self.environment_name = cfg.opts("system", "env.name")
 
@@ -1959,7 +1959,7 @@ class EsResultsStore:
 
     INDEX_PREFIX = "rally-results-"
 
-    def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: config.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
         Creates a new results store.
 

@@ -19,6 +19,7 @@ import collections
 import logging
 import os
 import sys
+from typing import Union
 
 import tabulate
 import thespian.actors
@@ -73,7 +74,7 @@ class Pipeline:
 
 
 class Setup:
-    def __init__(self, cfg, sources=False, distribution=False, external=False, docker=False):
+    def __init__(self, cfg: config.Config, sources=False, distribution=False, external=False, docker=False):
         self.cfg = cfg
         self.sources = sources
         self.distribution = distribution
@@ -88,7 +89,7 @@ class Success:
 class BenchmarkActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
-        self.cfg = None
+        self.cfg: Union[config.Config, None] = None
         self.start_sender = None
         self.mechanic = None
         self.main_driver = None
@@ -167,7 +168,7 @@ class BenchmarkActor(actor.RallyActor):
 
 
 class BenchmarkCoordinator:
-    def __init__(self, cfg):
+    def __init__(self, cfg: config.Config):
         self.logger = logging.getLogger(__name__)
         self.cfg = cfg
         self.race = None
