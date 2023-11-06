@@ -26,14 +26,13 @@ import pickle
 import random
 import statistics
 import sys
-import time
 import uuid
 import zlib
 from enum import Enum, IntEnum
 
 import tabulate
 
-from esrally import client, config, exceptions, paths, version
+from esrally import client, config, exceptions, paths, time, version
 from esrally.utils import console, convert, io, versions
 
 
