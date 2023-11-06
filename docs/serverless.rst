@@ -64,7 +64,7 @@ Track files use Jinja2 as a template language with a few :ref:`extensions<advanc
 
 .. note::
 
-    The index setting status in Serverless is not publicly documented yet. Today, the ultimate documentation is Elasticsearch `source code <https://github.com/elastic/elasticsearch>`_. Please look for ``Property.ServerlessPublic`` property to determine if a given index setting is publicly available in Serverless.
+    The index setting status in Serverless is not publicly documented yet. Today, the ultimate documentation is Elasticsearch `source code <https://github.com/elastic/elasticsearch>`_. Please look for the ``Property.ServerlessPublic`` property to determine if a given index setting is publicly available in Serverless.
 
 In the following example index JSON file, index settings are only applied when non-Serverless cluster is benchmarked::
 
