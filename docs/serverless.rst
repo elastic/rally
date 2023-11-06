@@ -15,7 +15,7 @@ This section explains what was changed in Rally, and what track modifications ar
 Rally
 -----
 
-Rally determines if it is benchmarking a Serverless cluster looking at ``version.build_flavor`` attribute returned by Elasticsearch root endpoint (``/``). If Serverless is confirmed, Rally *automatically* skips all tasks based on :ref:`operations<track_operations>` status in Serverless. For instance, a task with :ref:`node-stats<operation_node_stats>` operation is skipped because ``/_nodes/stats`` Elasticsearch API is not available in Serverless. The status determination is hardcoded into Rally, so if the API status changes in Elasticsearch, Rally needs to be updated too. The same skip logic applies to :doc:`/telemetry`.
+Rally determines if it is benchmarking a Serverless cluster by looking at the ``version.build_flavor`` attribute returned by Elasticsearch root endpoint (``/``). If Serverless is confirmed, Rally *automatically* skips all tasks based on :ref:`operations<track_operations>` status in Serverless. For instance, a task with :ref:`node-stats<operation_node_stats>` operation is skipped because ``/_nodes/stats`` Elasticsearch API is unavailable in Serverless. The status determination is hardcoded into Rally, so if the API status changes in Elasticsearch, Rally needs to be updated too. The same skip logic applies to :doc:`/telemetry`.
 
 .. note::
 
