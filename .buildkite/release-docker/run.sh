@@ -22,3 +22,7 @@ set -x
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
 ./release-docker.sh "$RELEASE_VERSION"
+
+popd
+popd
+rm -rf "$tmp_dir"
