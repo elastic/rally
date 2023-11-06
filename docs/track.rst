@@ -2003,7 +2003,7 @@ If you want it to delete one specific index template instead, you can specify th
 * ``template`` (mandatory): The name of the index that should be deleted.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
 * ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
-* ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
+* ``index-pattern`` (mandatory if ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
 * ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 **Examples**
