@@ -32,7 +32,7 @@ echo "Preparing ${__NOTICE_OUTPUT_FILE}"
 source create-notice.sh
 
 echo "Updating author information"
-git log --format='%aN' | LC_ALL=en_US.UTF-8 sort -u > AUTHORS
+git log --format='%aN' | sort -fu > AUTHORS
 # This will produce a non-zero exit code iff there are changes.
 # Obviously we should disable exiting on error temporarily.
 set +e
