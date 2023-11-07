@@ -1,3 +1,26 @@
+### 2.10.0
+
+#### Highlights
+
+* [#1797](https://github.com/elastic/rally/pull/1797): Document Rally use with Elastic Serverless
+
+#### Enhancements
+
+* [#1791](https://github.com/elastic/rally/pull/1791): Add ESQL operator
+* [#1789](https://github.com/elastic/rally/pull/1789): Add serverless-aware runners
+* [#1787](https://github.com/elastic/rally/pull/1787) (Breaking): Inject serverless_operator in track templates
+* [#1786](https://github.com/elastic/rally/pull/1786): Add support for zstd-compression
+* [#1785](https://github.com/elastic/rally/pull/1785): Fix serverless public use in trivial tracks
+
+#### Bug Fixes
+
+* [#1790](https://github.com/elastic/rally/pull/1790): Retrieve cluster info in serverless public mode
+* [#1784](https://github.com/elastic/rally/pull/1784): Fix crash on too many consecutive errors
+
+#### Miscellaneous Changes
+
+* [#1793](https://github.com/elastic/rally/pull/1793): Bump urllib3 from 1.26.9 to 1.26.18
+
 ### 2.9.1
 
 #### Enhancements
