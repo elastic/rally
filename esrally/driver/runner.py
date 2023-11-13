@@ -2682,7 +2682,11 @@ class CreateIlmPolicy(Runner):
     async def __call__(self, es, params):
         policy_name = mandatory(params, "policy-name", self)
         body = mandatory(params, "body", self)
-        policy = mandatory(body, "policy", self)
+        # The elasticsearch-py client automatically inserts the runner's 'body' parameter value inside a 'policy' field,
+        # so if a user also provides a 'body' containing a 'policy' field the request fails with status code 400 due to
+        # the duplicate 'policy' fields.
+        if policy := body.get("policy", {}):
+            body = policy
         request_params = params.get("request-params", {})
         error_trace = request_params.get("error_trace", None)
         filter_path = request_params.get("filter_path", None)
@@ -2691,7 +2695,7 @@ class CreateIlmPolicy(Runner):
 
         await es.ilm.put_lifecycle(
             name=policy_name,
-            policy=policy,
+            policy=body,
             error_trace=error_trace,
             filter_path=filter_path,
             master_timeout=master_timeout,

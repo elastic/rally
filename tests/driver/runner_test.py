@@ -5600,6 +5600,10 @@ class TestCreateIlmPolicyRunner:
     params = {
         "policy-name": "my-ilm-policy",
         "request-params": {"master_timeout": "30s", "timeout": "30s"},
+    }
+
+    params_with_body_policy = {
+        **params,
         "body": {
             "policy": {
                 "phases": {"hot": {"min_age": "0ms", "actions": {"rollover": {"max_age": "30d"}, "set_priority": {"priority": 100}}}}
@@ -5607,12 +5611,18 @@ class TestCreateIlmPolicyRunner:
         },
     }
 
+    params_without_body_policy = {
+        **params,
+        "body": {"phases": {"hot": {"min_age": "0ms", "actions": {"rollover": {"max_age": "30d"}, "set_priority": {"priority": 100}}}}},
+    }
+
+    @pytest.mark.parametrize("params", [params_with_body_policy, params_without_body_policy])
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_create_ilm_policy_with_request_params(self, es):
+    async def test_create_ilm_policy_with_request_params(self, es, params):
         es.ilm.put_lifecycle = mock.AsyncMock(return_value={})
         create_ilm_policy = runner.CreateIlmPolicy()
-        result = await create_ilm_policy(es, params=self.params)
+        result = await create_ilm_policy(es, params=params)
 
         assert result == {
             "weight": 1,
@@ -5622,19 +5632,20 @@ class TestCreateIlmPolicyRunner:
 
         es.ilm.put_lifecycle.assert_awaited_once_with(
             name=self.params["policy-name"],
-            policy=self.params["body"]["policy"],
+            policy=self.params_without_body_policy["body"],
             master_timeout=self.params["request-params"].get("master_timeout"),
             timeout=self.params["request-params"].get("timeout"),
             error_trace=None,
             filter_path=None,
         )
 
+    @pytest.mark.parametrize("params", [params_with_body_policy, params_without_body_policy])
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_create_ilm_policy_without_request_params(self, es):
+    async def test_create_ilm_policy_without_request_params(self, es, params):
         es.ilm.put_lifecycle = mock.AsyncMock(return_value={})
         create_ilm_policy = runner.CreateIlmPolicy()
-        params = copy.deepcopy(self.params)
+        params = copy.deepcopy(params)
         del params["request-params"]
         result = await create_ilm_policy(es, params=params)
         assert result == {
@@ -5644,27 +5655,28 @@ class TestCreateIlmPolicyRunner:
         }
 
         es.ilm.put_lifecycle.assert_awaited_once_with(
-            name=params["policy-name"],
-            policy=self.params["body"]["policy"],
+            name=self.params["policy-name"],
+            policy=self.params_without_body_policy["body"],
             master_timeout=None,
             timeout=None,
             error_trace=None,
             filter_path=None,
         )
 
+    @pytest.mark.parametrize("params", [params_with_body_policy, params_without_body_policy])
     @mock.patch("esrally.client.asynchronous.IlmClient")
     @pytest.mark.asyncio
-    async def test_RallyIlmClient_rewrites_kwargs(self, es_ilm):
+    async def test_RallyIlmClient_rewrites_kwargs(self, es_ilm, params):
         es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
         es_ilm.put_lifecycle = mock.AsyncMock(return_value={})
 
         # simulating a custom runner that hasn't been refactored
         # to suit the new 'elasticsearch-py' 8.x kwarg only method signature
-        await es.ilm.put_lifecycle("test-name", body=self.params["body"])
+        await es.ilm.put_lifecycle("test-name", body=params["body"])
 
         es_ilm.put_lifecycle.assert_awaited_once_with(
             es.ilm,
-            policy=self.params["body"]["policy"],
+            policy=self.params_without_body_policy["body"],
             name="test-name",
         )
 
