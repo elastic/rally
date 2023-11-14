@@ -19,8 +19,7 @@ import asyncio
 import json
 import logging
 import warnings
-from abc import ABC, abstractmethod
-from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Union
+from typing import Any, Iterable, List, Mapping, Optional
 
 import aiohttp
 from aiohttp import BaseConnector, RequestInfo
@@ -64,28 +63,17 @@ class StaticTransport:
 
 
 class StaticConnector(BaseConnector):
-    async def _create_connection(
-        self,
-        req: "ClientRequest",  # type: ignore[name-defined]
-        traces: List["Trace"],  # type: ignore[name-defined]
-        timeout: "ClientTimeout",  # type: ignore[name-defined]
-    ) -> ResponseHandler:
+    async def _create_connection(self, req: "ClientRequest", traces: List["Trace"], timeout: "ClientTimeout") -> ResponseHandler:
         handler = ResponseHandler(self._loop)
         handler.transport = StaticTransport()
         handler.protocol = ""
         return handler
 
 
-class ResponseMatcherABC(ABC):
-    @abstractmethod
-    def response(self, path):
-        return NotImplemented
-
-
 class StaticRequest(aiohttp.ClientRequest):
-    RESPONSES: Union[ResponseMatcherABC, None] = None
+    RESPONSES = None
 
-    async def send(self, conn: "Connection") -> "ClientResponse":  # type: ignore[name-defined]
+    async def send(self, conn: "Connection") -> "ClientResponse":
         self.response = self.response_class(
             self.method,
             self.original_url,
@@ -98,8 +86,7 @@ class StaticRequest(aiohttp.ClientRequest):
             session=self._session,
         )
         path = self.original_url.path
-        if StaticRequest.RESPONSES:
-            self.response.static_body = StaticRequest.RESPONSES.response(path)
+        self.response.static_body = StaticRequest.RESPONSES.response(path)
         return self.response
 
 
@@ -113,9 +100,9 @@ class StaticResponse(aiohttp.ClientResponse):
         continue100: Optional["asyncio.Future[bool]"],
         timer: BaseTimerContext,
         request_info: RequestInfo,
-        traces: List["Trace"],  # type: ignore[name-defined]
+        traces: List["Trace"],
         loop: asyncio.AbstractEventLoop,
-        session: "ClientSession",  # type: ignore[name-defined]
+        session: "ClientSession",
     ) -> None:
         super().__init__(
             method,
@@ -130,7 +117,7 @@ class StaticResponse(aiohttp.ClientResponse):
         )
         self.static_body = None
 
-    async def start(self, connection: "Connection") -> "ClientResponse":  # type: ignore[name-defined]
+    async def start(self, connection: "Connection") -> "ClientResponse":
         self._closed = False
         self._protocol = connection.protocol
         self._connection = connection
@@ -142,7 +129,7 @@ class StaticResponse(aiohttp.ClientResponse):
         return self.static_body.encode("utf-8")
 
 
-class ResponseMatcher(ResponseMatcherABC):
+class ResponseMatcher:
     def __init__(self, responses):
         self.logger = logging.getLogger(__name__)
         self.responses = []
@@ -328,7 +315,7 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         path: str,
         *,
         params: Optional[Mapping[str, Any]] = None,
-        headers: Optional[MutableMapping[str, str]] = None,
+        headers: Optional[Mapping[str, str]] = None,
         body: Optional[Any] = None,
     ) -> ApiResponse[Any]:
         # We need to ensure that we provide content-type and accept headers

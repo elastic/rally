@@ -455,7 +455,7 @@ class ElasticsearchSourceSupplier:
         if major_version:
             logger.info("Setting build JDK major release version to [%s].", major_version)
         else:
-            major_version = "17"
+            major_version = 17
             logger.info("Unable to resolve build JDK major release version. Defaulting to version [%s].", major_version)
         return int(major_version)
 
