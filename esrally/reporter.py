@@ -666,11 +666,16 @@ class ComparisonReporter:
         totals.sort()
 
         lines = []
+        skip = 0
         for index, _total, field in totals:
             for stat in disk_usage_fields(baseline_stats):
-                baseline_value = collated_baseline[index].get(field, {}).get(stat, 0)
-                contender_value = collated_contender[index].get(field, {}).get(stat, 0)
-                if baseline_value == 0 and contender_value == 0:
+                if index in collated_baseline and index in collated_contender:
+                    baseline_value = collated_baseline[index].get(field, {}).get(stat, 0)
+                    contender_value = collated_contender[index].get(field, {}).get(stat, 0)
+                    if baseline_value == 0 and contender_value == 0:
+                        continue
+                else:
+                    skip += 1
                     continue
                 unit = convert.bytes_to_human_unit(min(baseline_value, contender_value))
                 lines.append(
@@ -684,6 +689,8 @@ class ComparisonReporter:
                         formatter=partial(convert.bytes_to_unit, unit),
                     )
                 )
+        if total > 0:
+            print_internal(f"Skipped {skip} statistics as missing from either baseline or contender")
         return lines
 
     def _report_total_times(self, baseline_stats, contender_stats):
