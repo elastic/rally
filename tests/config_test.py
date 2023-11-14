@@ -318,20 +318,19 @@ class TestLiteralArgs:
             assert tuple(args) == tuple(sorted(args)), "Literal args are not sorted"
 
     def test_uniqueness_of_literal_args(self):
-        def _excerpt(iterable, fn_start, fn_stop):
+        def _excerpt(lines, startline, stopline):
             started = False
-            for item in iterable:
-                if not started and fn_start(item):
+            for line in lines:
+                if not started and startline in line:
                     started = True
-                elif started and fn_stop(item):
+                elif started and stopline in line:
                     break
                 elif started:
-                    yield item
+                    yield line
 
         for name in ("Section", "Key"):
             sourcelines, _ = getsourcelines(config)
-            startline, stopline = f"{name} = Literal[", "]"
-            args = tuple(sorted(_excerpt(sourcelines, lambda s: s.startswith(startline), lambda s: s.startswith(stopline))))
+            args = tuple(sorted(_excerpt(sourcelines, f"{name} = Literal[", "]")))
             assert args == tuple(sorted(set(args))), "Literal args are duplicate"
 
     def test_appearance_of_literal_args(self):
