@@ -516,14 +516,14 @@ class TrackPreparationActor(actor.RallyActor):
             self.processors.put(processor)
         self._seed_tasks(self.processors.get())
         self.send_to_children_and_transition(
-            self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING, self.Status.PROCESSOR_RUNNING
+            self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING, self.Status.PROCESSOR_RUNNING  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
         )
 
     def resume(self):
         if not self.processors.empty():
             self._seed_tasks(self.processors.get())
             self.send_to_children_and_transition(
-                self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING
+                self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
             )
         else:
             self.send(self.driver_actor, TrackPrepared())
@@ -540,7 +540,7 @@ class TrackPreparationActor(actor.RallyActor):
             next_task = self.tasks.pop()
         else:
             next_task = None
-        new_msg = DoTask(next_task, self.cfg)
+        new_msg = DoTask(next_task, self.cfg)  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
         self.logger.debug("Track Preparator sending %s to %s", vars(new_msg), task_execution_actor)
         self.send(task_execution_actor, new_msg)
 
@@ -1368,7 +1368,7 @@ class Worker(actor.RallyActor):
                 self.logger.debug("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
                 self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=self.sample_queue_size)
                 executor = AsyncIoAdapter(
-                    self.config,
+                    self.config,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
                     self.track,
                     task_allocations,
                     self.sampler,

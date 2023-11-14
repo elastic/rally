@@ -115,7 +115,7 @@ class BenchmarkActor(actor.RallyActor):
         self.send(
             self.mechanic,
             mechanic.StartEngine(
-                self.cfg, self.coordinator.metrics_store.open_context, msg.sources, msg.distribution, msg.external, msg.docker
+                self.cfg, self.coordinator.metrics_store.open_context, msg.sources, msg.distribution, msg.external, msg.docker  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
             ),
         )
 

@@ -925,7 +925,7 @@ class Query(Runner):
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), results.get("hits"))
+                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), results.get("hits"))  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -982,7 +982,7 @@ class Query(Runner):
 
                 body_to_send = tree_copy_composite_agg(body, path_to_composite)
                 response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
-                parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, results.get("hits"))
+                parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, results.get("hits"))  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -1251,7 +1251,7 @@ class CompositeAggExtractor:
 
         after_key = "aggregations." + (".".join(path_to_composite_agg)) + ".after_key"
 
-        parsed = parse(response, properties, None, [after_key])
+        parsed = parse(response, properties, None, [after_key])  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
 
         if get_point_in_time and not parsed.get("pit_id"):
             raise exceptions.RallyAssertionError("Paginated query failure: pit_id was expected but not found in the response.")
@@ -2552,7 +2552,7 @@ class CompositeContext:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        CompositeContext.ctx.reset(self.token)
+        CompositeContext.ctx.reset(self.token)  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
         return False
 
     @staticmethod

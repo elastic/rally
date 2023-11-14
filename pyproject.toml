@@ -150,14 +150,18 @@ check_untyped_defs = true
 disable_error_code = [
     "assignment",
     "attr-defined",
+    "call-arg",
     "call-overload",
     "dict-item",
     "import-not-found",
     "import-untyped",
     "index",
+    "list-item",
     "misc",
+    "name-defined",
     "operator",
     "str-bytes-safe",
+    "syntax",
     "union-attr",
     "var-annotated",
 ]

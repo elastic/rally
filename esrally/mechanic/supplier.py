@@ -116,7 +116,7 @@ def create(cfg, sources, distribution, car, plugins=None):
         repo = DistributionRepository(
             name=cfg.opts("mechanic", "distribution.repository"), distribution_config=dist_cfg, template_renderer=template_renderer
         )
-        suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))
+        suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
 
     for plugin in plugins:
         if plugin.moved_to_module:
@@ -154,11 +154,11 @@ def create(cfg, sources, distribution, car, plugins=None):
             if caching_enabled:
                 plugin_file_resolver = PluginFileNameResolver(plugin.name, plugin_version)
                 plugin_supplier = CachedSourceSupplier(source_distributions_root, plugin_supplier, plugin_file_resolver)
-            suppliers.append(plugin_supplier)
+            suppliers.append(plugin_supplier)  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
         else:
             logger.info("Adding plugin distribution supplier for [%s].", plugin.name)
             assert repo is not None, "Cannot benchmark plugin %s from a distribution version but Elasticsearch from sources" % plugin.name
-            suppliers.append(PluginDistributionSupplier(repo, plugin))
+            suppliers.append(PluginDistributionSupplier(repo, plugin))  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
 
     return CompositeSupplier(suppliers)
 
@@ -457,7 +457,7 @@ class ElasticsearchSourceSupplier:
         else:
             major_version = 17
             logger.info("Unable to resolve build JDK major release version. Defaulting to version [%s].", major_version)
-        return int(major_version)
+        return int(major_version)  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
 
     def resolve_binary(self):
         try:

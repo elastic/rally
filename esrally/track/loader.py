@@ -864,9 +864,9 @@ class TaskFilterTrackProcessor(TrackProcessor):
                     filters.append(track.TaskNameFilter(spec[0]))
                 elif len(spec) == 2:
                     if spec[0] == "type":
-                        filters.append(track.TaskOpTypeFilter(spec[1]))
+                        filters.append(track.TaskOpTypeFilter(spec[1]))  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
                     elif spec[0] == "tag":
-                        filters.append(track.TaskTagFilter(spec[1]))
+                        filters.append(track.TaskTagFilter(spec[1]))  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
                     else:
                         raise exceptions.SystemSetupError(f"Invalid format for filtered tasks: [{t}]. Expected [type] but got [{spec[0]}].")
                 else:
