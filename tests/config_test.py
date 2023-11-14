@@ -16,6 +16,9 @@
 # under the License.
 
 import configparser
+from inspect import getsourcelines
+from pathlib import Path
+from typing import get_args
 
 import pytest
 
@@ -306,3 +309,45 @@ class TestConfigMigration:
         if config.Config.EARLIEST_SUPPORTED_VERSION < config.Config.CURRENT_CONFIG_VERSION:
             assert config_file.backup_created
         assert config_file.config["meta"]["config.version"] == str(config.Config.CURRENT_CONFIG_VERSION)
+
+
+class TestLiteralArgs:
+    def test_order_of_literal_args(self):
+        for literal in (config.Section, config.Key):
+            args = get_args(literal)
+            assert tuple(args) == tuple(sorted(args)), "Literal args are not sorted"
+
+    def test_uniqueness_of_literal_args(self):
+        def _excerpt(iterable, fn_start, fn_stop):
+            started = False
+            for item in iterable:
+                if not started and fn_start(item):
+                    started = True
+                elif started and fn_stop(item):
+                    break
+                elif started:
+                    yield item
+
+        for name in ("Section", "Key"):
+            sourcelines, _ = getsourcelines(config)
+            startline, stopline = f"{name} = Literal[", "]"
+            args = tuple(sorted(_excerpt(sourcelines, lambda s: s.startswith(startline), lambda s: s.startswith(stopline))))
+            assert args == tuple(sorted(set(args))), "Literal args are duplicate"
+
+    def test_appearance_of_literal_args(self):
+        args = {f'"{arg}"' for arg in get_args(config.Section) + get_args(config.Key)}
+
+        project_root = Path(__file__).parent / ".."
+        for pyfile in project_root.glob("[!.]*/**/*.py"):
+            if pyfile == project_root / "esrally" / "config.py":
+                continue  # Should skip esrally.config module
+
+            source = pyfile.read_text(encoding="utf-8", errors="replace")  # No need to be so strict
+            for arg in args.copy():
+                if arg in source:
+                    args.remove(arg)  # Keep only args that have not been found in any .py files
+
+            if not args:
+                break  # No need to look at more .py files because all args are already found
+
+        assert not args, "some literal args are not found in any .py files"
