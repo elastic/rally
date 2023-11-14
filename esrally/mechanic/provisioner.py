@@ -289,7 +289,7 @@ class ElasticsearchInstaller:
         self.data_paths = self._data_paths()
 
     def delete_pre_bundled_configuration(self):
-        config_path = os.path.join(self.es_home_path, "config")  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+        config_path = os.path.join(self.es_home_path, "config")  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
         self.logger.info("Deleting pre-bundled Elasticsearch configuration at [%s]", config_path)
         shutil.rmtree(config_path)
 
@@ -342,7 +342,7 @@ class ElasticsearchInstaller:
             else:
                 raise exceptions.SystemSetupError("Expected [data_paths] to be either a string or a list but was [%s]." % type(data_paths))
         else:
-            return [os.path.join(self.es_home_path, "data")]  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            return [os.path.join(self.es_home_path, "data")]  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
 
 
 class PluginInstaller:

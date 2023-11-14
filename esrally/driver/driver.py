@@ -516,14 +516,14 @@ class TrackPreparationActor(actor.RallyActor):
             self.processors.put(processor)
         self._seed_tasks(self.processors.get())
         self.send_to_children_and_transition(
-            self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING, self.Status.PROCESSOR_RUNNING  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING, self.Status.PROCESSOR_RUNNING  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
         )
 
     def resume(self):
         if not self.processors.empty():
             self._seed_tasks(self.processors.get())
             self.send_to_children_and_transition(
-                self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+                self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
             )
         else:
             self.send(self.driver_actor, TrackPrepared())

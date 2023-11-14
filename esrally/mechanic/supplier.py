@@ -116,7 +116,7 @@ def create(cfg, sources, distribution, car, plugins=None):
         repo = DistributionRepository(
             name=cfg.opts("mechanic", "distribution.repository"), distribution_config=dist_cfg, template_renderer=template_renderer
         )
-        suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+        suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
 
     for plugin in plugins:
         if plugin.moved_to_module:
@@ -158,7 +158,7 @@ def create(cfg, sources, distribution, car, plugins=None):
         else:
             logger.info("Adding plugin distribution supplier for [%s].", plugin.name)
             assert repo is not None, "Cannot benchmark plugin %s from a distribution version but Elasticsearch from sources" % plugin.name
-            suppliers.append(PluginDistributionSupplier(repo, plugin))  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            suppliers.append(PluginDistributionSupplier(repo, plugin))  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
 
     return CompositeSupplier(suppliers)
 
