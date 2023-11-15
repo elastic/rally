@@ -319,6 +319,7 @@ class TestLiteralArgs:
 
     def test_uniqueness_of_literal_args(self):
         def _excerpt(lines, start, stop):
+            """Yields lines between start and stop markers not including both ends"""
             started = False
             for line in lines:
                 if not started and start in line:
@@ -328,8 +329,8 @@ class TestLiteralArgs:
                 elif started:
                     yield line
 
+        sourcelines, _ = getsourcelines(config)
         for name in ("Section", "Key"):
-            sourcelines, _ = getsourcelines(config)
             args = tuple(sorted(_excerpt(sourcelines, f"{name} = Literal[", "]")))
             assert args == tuple(sorted(set(args))), "Literal args are duplicate"
 
@@ -349,4 +350,4 @@ class TestLiteralArgs:
             if not args:
                 break  # No need to look at more .py files because all args are already found
 
-        assert not args, "some literal args are not found in any .py files"
+        assert not args, "literal args are not found in any .py files"
