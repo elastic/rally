@@ -2682,11 +2682,17 @@ class CreateIlmPolicy(Runner):
     async def __call__(self, es, params):
         policy_name = mandatory(params, "policy-name", self)
         body = mandatory(params, "body", self)
-        # The elasticsearch-py client automatically inserts the runner's 'body' parameter value inside a 'policy' field,
-        # so if a user also provides a 'body' containing a 'policy' field the request fails with status code 400 due to
-        # the duplicate 'policy' fields.
-        if policy := body.get("policy", {}):
-            body = policy
+        policy = body.get("policy", {})
+
+        if not policy:
+            # The es client automatically inserts the runner's 'body' within a top level a 'policy' field, so if a user
+            # provides a 'body' missing the 'policy' field, the request fails with a misleading exception message, so
+            # let's raise a more helpful error message.
+            raise exceptions.DataError(
+                "Request body does not contain the expected root field [policy]. Please ensure that the request body contains "
+                "a top-level 'policy' field and try again."
+            )
+
         request_params = params.get("request-params", {})
         error_trace = request_params.get("error_trace", None)
         filter_path = request_params.get("filter_path", None)
@@ -2695,7 +2701,7 @@ class CreateIlmPolicy(Runner):
 
         await es.ilm.put_lifecycle(
             name=policy_name,
-            policy=body,
+            policy=policy,
             error_trace=error_trace,
             filter_path=filter_path,
             master_timeout=master_timeout,

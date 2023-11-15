@@ -277,12 +277,7 @@ class RallyIlmClient(IlmClient):
             kwargs["name"] = args[0]
 
         if body := kwargs.pop("body", None):
-            # body may contain a nested 'policy' field, if so, remove it
-            if policy := body.get("policy", {}):
-                kwargs["policy"] = policy
-            else:
-                kwargs["policy"] = body
-
+            kwargs["policy"] = body.get("policy", {})
         # pylint: disable=missing-kwoa
         return await IlmClient.put_lifecycle(self, **kwargs)
 
