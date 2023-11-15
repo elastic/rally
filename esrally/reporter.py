@@ -668,9 +668,12 @@ class ComparisonReporter:
         lines = []
         for index, _total, field in totals:
             for stat in disk_usage_fields(baseline_stats):
-                baseline_value = collated_baseline[index].get(field, {}).get(stat, 0)
-                contender_value = collated_contender[index].get(field, {}).get(stat, 0)
-                if baseline_value == 0 and contender_value == 0:
+                if index in collated_baseline and index in collated_contender:
+                    baseline_value = collated_baseline[index].get(field, {}).get(stat, 0)
+                    contender_value = collated_contender[index].get(field, {}).get(stat, 0)
+                    if baseline_value == 0 and contender_value == 0:
+                        continue
+                else:
                     continue
                 unit = convert.bytes_to_human_unit(min(baseline_value, contender_value))
                 lines.append(
