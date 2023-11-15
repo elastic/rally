@@ -318,12 +318,12 @@ class TestLiteralArgs:
             assert tuple(args) == tuple(sorted(args)), "Literal args are not sorted"
 
     def test_uniqueness_of_literal_args(self):
-        def _excerpt(lines, startline, stopline):
+        def _excerpt(lines, start, stop):
             started = False
             for line in lines:
-                if not started and startline in line:
+                if not started and start in line:
                     started = True
-                elif started and stopline in line:
+                elif started and stop in line:
                     break
                 elif started:
                     yield line
