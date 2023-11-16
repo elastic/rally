@@ -28,7 +28,7 @@ except ImportError:
 
 
 class PropEnumType(EnumType):
-    __iter__ = None  # Disallows unintentional dot notation
+    __iter__ = None  # Disallows erroneous unpack by star expansion
 
 
 class PropEnum(str, Enum, metaclass=PropEnumType):
