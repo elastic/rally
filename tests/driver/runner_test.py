@@ -27,9 +27,9 @@ from unittest import mock
 import elastic_transport
 import elasticsearch
 import pytest
+from elastic_transport import ApiResponseMeta
 
 from esrally import client, config, exceptions
-from elastic_transport import ApiResponseMeta
 from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.driver import runner
 
@@ -1550,7 +1550,7 @@ class TestForceMergeRunner:
             await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
         assert exc.value.args[0] == "ApiError"
         assert exc.value.status_code == 400
-        assert (f"Received API error when fetching force-merge task list: [{exc.value.args[0]}: {exc.value.status_code}]" in caplog.text)
+        assert f"Received API error when fetching force-merge task list: [{exc.value.args[0]}: {exc.value.status_code}]" in caplog.text
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1562,7 +1562,7 @@ class TestForceMergeRunner:
         with pytest.raises(elasticsearch.exceptions.TransportError) as exc:
             await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
         assert exc.value.message == "TransportError"
-        assert (f"Received transport error when fetching force-merge task list: [{exc.value.message}]" in caplog.text)
+        assert f"Received transport error when fetching force-merge task list: [{exc.value.message}]" in caplog.text
 
 
 class TestIndicesStatsRunner:
