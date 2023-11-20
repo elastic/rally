@@ -693,7 +693,16 @@ class ForceMerge(Runner):
                 pass
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
-                tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
+
+                try:
+                    tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
+                except elasticsearch.ApiError as e:
+                    self.logger.exception("Received API error when fetching force-merge task list: [%s: %s]", e.message, e.status_code)
+                    raise e
+                except elasticsearch.exceptions.TransportError as e:
+                    self.logger.exception("Received transport error when fetching force-merge task list: [%s]", e)
+                    raise e
+
                 if len(tasks["nodes"]) == 0:
                     # empty nodes response indicates no tasks
                     complete = True

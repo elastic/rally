@@ -29,6 +29,7 @@ import elasticsearch
 import pytest
 
 from esrally import client, config, exceptions
+from elastic_transport import ApiResponseMeta
 from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.driver import runner
 
@@ -1533,6 +1534,35 @@ class TestForceMergeRunner:
             },
         )
         es.indices.forcemerge.assert_awaited_once_with(index="_all", max_num_segments=1, request_timeout=50000)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling_api_error(self, es, caplog):
+        es.indices.forcemerge = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
+        es.tasks.list = mock.AsyncMock(
+            side_effect=elasticsearch.ApiError(
+                "ApiError", ApiResponseMeta(status=400, http_version="1.1", headers={}, duration=0.0, node=None), None
+            )
+        )
+        force_merge = runner.ForceMerge()
+
+        with pytest.raises(elasticsearch.ApiError) as exc:
+            await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
+        assert exc.value.args[0] == "ApiError"
+        assert exc.value.status_code == 400
+        assert (f"Received API error when fetching force-merge task list: [{exc.value.args[0]}: {exc.value.status_code}]" in caplog.text)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling_transport_error(self, es, caplog):
+        es.indices.forcemerge = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
+        es.tasks.list = mock.AsyncMock(side_effect=elasticsearch.exceptions.TransportError("TransportError"))
+        force_merge = runner.ForceMerge()
+
+        with pytest.raises(elasticsearch.exceptions.TransportError) as exc:
+            await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
+        assert exc.value.message == "TransportError"
+        assert (f"Received transport error when fetching force-merge task list: [{exc.value.message}]" in caplog.text)
 
 
 class TestIndicesStatsRunner:
