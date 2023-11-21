@@ -24,7 +24,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
-from typing import Callable, Generator, Tuple, Union
+from typing import Callable, Generator, Optional, Tuple
 
 import jinja2
 import jinja2.exceptions
@@ -451,7 +451,7 @@ class DefaultTrackPreparator(TrackProcessor):
     def __init__(self):
         super().__init__()
         # just declare here, will be injected later
-        self.cfg: Union[config.Config, None] = None
+        self.cfg: Optional[config.Config] = None
         self.downloader = None
         self.decompressor = None
         self.track = None

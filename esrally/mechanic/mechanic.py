@@ -23,7 +23,7 @@ import pickle
 import sys
 import traceback
 from collections import defaultdict
-from typing import Union
+from typing import Optional
 
 import thespian.actors
 
@@ -336,7 +336,7 @@ class MechanicActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.cfg: Union[config.Config, None] = None
+        self.cfg: Optional[config.Config] = None
         self.race_control = None
         self.cluster_launcher = None
         self.cluster = None

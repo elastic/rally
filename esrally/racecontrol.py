@@ -19,7 +19,7 @@ import collections
 import logging
 import os
 import sys
-from typing import Union
+from typing import Optional
 
 import tabulate
 import thespian.actors
@@ -89,7 +89,7 @@ class Success:
 class BenchmarkActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
-        self.cfg: Union[config.Config, None] = None
+        self.cfg: Optional[config.Config] = None
         self.start_sender = None
         self.mechanic = None
         self.main_driver = None

@@ -30,7 +30,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 
 import thespian.actors
 
@@ -404,7 +404,7 @@ class TaskExecutionActor(actor.RallyActor):
         self.task_preparation_actor = None
         self.logger = logging.getLogger(__name__)
         self.track_name = None
-        self.cfg: Union[config.Config, None] = None
+        self.cfg: Optional[config.Config] = None
 
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartTaskLoop(self, msg, sender):
@@ -471,7 +471,7 @@ class TrackPreparationActor(actor.RallyActor):
         self.status = self.Status.INITIALIZING
         self.children = []
         self.tasks = []
-        self.cfg: Union[config.Config, None] = None
+        self.cfg: Optional[config.Config] = None
         self.data_root_dir = None
         self.track = None
 
