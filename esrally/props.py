@@ -38,7 +38,7 @@ class PropEnum(str, Enum, metaclass=PropEnumType):
         if isinstance(value, PropEnumType):
             return value  # Nested Enum should stay original
         elif isinstance(value, str):
-            # This prefixing lets A.B.C.D value not just "d" but "a.b.c.d"
+            # String member A.B.C.D value is prefixed to obtain "a.b.c.d" instead of "d"
             value = f"{cls.__qualname__.lower()}.{value}"
             member = str.__new__(cls, value)
             member._value_ = value
