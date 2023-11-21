@@ -111,23 +111,9 @@ class SYSTEM(Section):
 
     @member
     class LIST(Key):
-        FROM_DATE = desc(
-            """
-            list records only from this date
-            """
-        )
-
-        MAX_RESULTS = desc(
-            """
-            the limit of the number of records to return
-            """
-        )
-
-        TO_DATE = desc(
-            """
-            list records only to this date
-            """
-        )
+        FROM_DATE = desc("list records only from this date")
+        MAX_RESULTS = desc("the limit of the number of records to return")
+        TO_DATE = desc("list records only to this date")
 
         @member
         class CONFIG(Key):
