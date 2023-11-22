@@ -2234,7 +2234,8 @@ class TestNodeStatsRecorder:
 
         expected_doc = collections.OrderedDict()
         expected_doc["name"] = "node-stats"
-        expected_doc.update(self.default_stats_response_flattened)  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
+        # TODO remove the below ignore when introducing type hints
+        expected_doc.update(self.default_stats_response_flattened)  # type: ignore[arg-type]
 
         metrics_store_put_doc.assert_called_once_with(
             expected_doc, level=MetaInfoScope.node, node_name="rally0", meta_data=metrics_store_meta_data

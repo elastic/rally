@@ -27,14 +27,14 @@ from typing import Optional
 
 import thespian.actors
 
-from esrally import PROGRAM_NAME, actor, config, exceptions, metrics, paths
+from esrally import PROGRAM_NAME, actor, config, exceptions, metrics, paths, types
 from esrally.mechanic import launcher, provisioner, supplier, team
 from esrally.utils import console, net
 
 METRIC_FLUSH_INTERVAL_SECONDS = 30
 
 
-def build(cfg):
+def build(cfg: types.Config):
     car, plugins = load_team(cfg, external=False)
 
     s = supplier.create(cfg, sources=True, distribution=False, car=car, plugins=plugins)
@@ -42,7 +42,7 @@ def build(cfg):
     console.println(json.dumps(binaries, indent=2), force=True)
 
 
-def download(cfg):
+def download(cfg: types.Config):
     car, plugins = load_team(cfg, external=False)
 
     s = supplier.create(cfg, sources=False, distribution=True, car=car, plugins=plugins)
@@ -50,7 +50,7 @@ def download(cfg):
     console.println(json.dumps(binaries, indent=2), force=True)
 
 
-def install(cfg):
+def install(cfg: types.Config):
     root_path = paths.install_root(cfg)
     car, plugins = load_team(cfg, external=False)
 
@@ -93,7 +93,7 @@ def install(cfg):
     console.println(json.dumps({"installation-id": cfg.opts("system", "install.id")}, indent=2), force=True)
 
 
-def start(cfg):
+def start(cfg: types.Config):
     root_path = paths.install_root(cfg)
     race_id = cfg.opts("system", "race.id")
     # avoid double-launching - we expect that the node file is absent
@@ -117,7 +117,7 @@ def start(cfg):
     _store_node_file(root_path, (nodes, race_id))
 
 
-def stop(cfg):
+def stop(cfg: types.Config):
     root_path = paths.install_root(cfg)
     node_config = provisioner.load_node_configuration(root_path)
     if node_config.build_type == "tar":
@@ -184,7 +184,7 @@ def _delete_node_file(root_path):
 
 
 class StartEngine:
-    def __init__(self, cfg: config.Config, open_metrics_context, sources, distribution, external, docker, ip=None, port=None, node_id=None):
+    def __init__(self, cfg: types.Config, open_metrics_context, sources, distribution, external, docker, ip=None, port=None, node_id=None):
         self.cfg = cfg
         self.open_metrics_context = open_metrics_context
         self.sources = sources
@@ -248,7 +248,7 @@ class ResetRelativeTime:
 class StartNodes:
     def __init__(
         self,
-        cfg: config.Config,
+        cfg: types.Config,
         open_metrics_context,
         sources,
         distribution,
@@ -336,7 +336,7 @@ class MechanicActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.cfg: Optional[config.Config] = None
+        self.cfg: Optional[types.Config] = None
         self.race_control = None
         self.cluster_launcher = None
         self.cluster = None
@@ -370,6 +370,7 @@ class MechanicActor(actor.RallyActor):
         self.logger.info("Received signal from race control to start engine.")
         self.race_control = sender
         self.cfg = msg.cfg
+        assert self.cfg is not None
         self.car, _ = load_team(self.cfg, msg.external)
         # TODO: This is implicitly set by #load_team() - can we gather this elsewhere?
         self.team_revision = self.cfg.opts("mechanic", "repository.revision")
@@ -636,7 +637,7 @@ class NodeMechanicActor(actor.RallyActor):
 #####################################################
 
 
-def load_team(cfg, external):
+def load_team(cfg: types.Config, external):
     # externally provisioned clusters do not support cars / plugins
     if external:
         car = None
@@ -651,7 +652,16 @@ def load_team(cfg, external):
 
 
 def create(
-    cfg, metrics_store, node_ip, node_http_port, all_node_ips, all_node_ids, sources=False, distribution=False, external=False, docker=False
+    cfg: types.Config,
+    metrics_store,
+    node_ip,
+    node_http_port,
+    all_node_ips,
+    all_node_ids,
+    sources=False,
+    distribution=False,
+    external=False,
+    docker=False,
 ):
     race_root_path = paths.race_root(cfg)
     node_ids = cfg.opts("provisioning", "node.ids", mandatory=False)
@@ -695,7 +705,7 @@ class Mechanic:
     running the benchmark).
     """
 
-    def __init__(self, cfg: config.Config, metrics_store, supply, provisioners, launcher):
+    def __init__(self, cfg: types.Config, metrics_store, supply, provisioners, launcher):
         self.cfg = cfg
         self.preserve_install = cfg.opts("mechanic", "preserve.install")
         self.metrics_store = metrics_store

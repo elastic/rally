@@ -17,7 +17,7 @@
 
 from configparser import ConfigParser
 from importlib import import_module
-from inspect import isclass, getsourcelines, signature
+from inspect import getsourcelines, isclass, signature
 from os.path import sep
 from pathlib import Path as _Path
 from types import FunctionType
@@ -27,8 +27,8 @@ from esrally import types
 
 
 class Path(_Path):
-    # populates _flavour manually because Path.__new__() doesn't for subclasses
-    _flavour = _Path()._flavour
+    # needs to populate _flavour manually because Path.__new__() doesn't for subclasses
+    _flavour = _Path()._flavour  # pylint: disable=W0212
 
     def glob_modules(self, pattern, *args, **kwargs):
         for file in self.glob(pattern, *args, **kwargs):
@@ -36,7 +36,7 @@ class Path(_Path):
                 continue
             pyfile = file.relative_to(self)
             modpath = pyfile.parent if pyfile.name == "__init__.py" else pyfile.with_suffix("")
-            yield import_module(str(modpath).replace(sep, '.'))
+            yield import_module(str(modpath).replace(sep, "."))
 
 
 project_root = Path(__file__).parent / ".."
@@ -83,13 +83,13 @@ class TestLiteralArgs:
         assert not args, "literal args are not found in any .py files"
 
 
-def assert_params(fn, identifer, *types):
+def check_parameter_annotations(fn, identifer, *types):
     for param in signature(fn).parameters.values():
         if identifer == param.name:
             assert param.annotation in types, f"parameter annotation of '{identifer}' is wrong at {fn.__name__}()"
 
 
-def assert_return(fn, identifer, *types):
+def check_return_annotation(fn, identifer, *types):
     return_annotation = signature(fn).return_annotation
     sourcelines, _ = getsourcelines(fn)
     for line in sourcelines:
@@ -97,7 +97,7 @@ def assert_return(fn, identifer, *types):
             assert return_annotation in types, f"return annotation is wrong at {fn.__name__}()"
 
 
-def assert_annotations(obj, identifer, *types):
+def check_annotations(obj, identifer, *types):
     for name in dir(obj):
         if name.startswith("_"):
             continue
@@ -110,14 +110,14 @@ def assert_annotations(obj, identifer, *types):
             except AttributeError:
                 if not attr.__module__.startswith(obj.__name__):
                     continue
-            assert_annotations(attr, identifer, *types)
-        elif type(attr) is FunctionType:
-            assert_params(attr, identifer, *types)
-            assert_return(attr, identifer, *types)
+            check_annotations(attr, identifer, *types)
+        elif isinstance(attr, FunctionType):
+            check_parameter_annotations(attr, identifer, *types)
+            check_return_annotation(attr, identifer, *types)
 
 
 class TestConfigTypeHint:
     def test_esrally_module(self):
         for module in project_root.glob_modules("esrally/**/*.py"):
-            assert_annotations(module, "cfg", types.Config)
-            assert_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)
+            check_annotations(module, "cfg", types.Config)
+            check_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)

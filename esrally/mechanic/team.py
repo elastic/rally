@@ -22,7 +22,7 @@ from enum import Enum
 
 import tabulate
 
-from esrally import PROGRAM_NAME, config, exceptions
+from esrally import PROGRAM_NAME, config, exceptions, types
 from esrally.utils import console, io, modules, repo
 
 TEAM_FORMAT_VERSION = 1
@@ -35,7 +35,7 @@ def _path_for(team_root_path, team_member_type):
     return root_path
 
 
-def list_cars(cfg):
+def list_cars(cfg: types.Config):
     loader = CarLoader(team_path(cfg))
     cars = []
     for name in loader.car_names():
@@ -85,7 +85,7 @@ def load_car(repo, name, car_params=None):
     return Car(name, root_path, all_config_paths, variables)
 
 
-def list_plugins(cfg):
+def list_plugins(cfg: types.Config):
     plugins = PluginLoader(team_path(cfg)).plugins()
     if plugins:
         console.println("Available Elasticsearch plugins:\n")
@@ -94,8 +94,8 @@ def list_plugins(cfg):
         console.println("No Elasticsearch plugins are available.\n")
 
 
-def load_plugin(repo, name, config, plugin_params=None):
-    return PluginLoader(repo).load_plugin(name, config, plugin_params)
+def load_plugin(repo, name, config_names, plugin_params=None):
+    return PluginLoader(repo).load_plugin(name, config_names, plugin_params)
 
 
 def load_plugins(repo, plugin_names, plugin_params=None):
@@ -116,7 +116,7 @@ def load_plugins(repo, plugin_names, plugin_params=None):
     return plugins
 
 
-def team_path(cfg):
+def team_path(cfg: types.Config):
     root_path = cfg.opts("mechanic", "team.path", mandatory=False)
     if root_path:
         return root_path
@@ -125,7 +125,8 @@ def team_path(cfg):
         repo_name = cfg.opts("mechanic", "repository.name")
         repo_revision = cfg.opts("mechanic", "repository.revision")
         offline = cfg.opts("system", "offline.mode")
-        remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)
+        # TODO remove the below ignore when introducing LiteralString on Python 3.11+
+        remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)  # type: ignore[arg-type]
         root = cfg.opts("node", "root.dir")
         team_repositories = cfg.opts("mechanic", "team.repository.dir")
         teams_dir = os.path.join(root, team_repositories)

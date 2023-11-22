@@ -151,8 +151,8 @@ class TestConfig:
         assert target_cfg.opts("tests", "sample.key") == "value"
         assert target_cfg.opts("no_copy", "other.key", mandatory=False) is None
 
-        # nonexisting key will not throw an error
-        target_cfg.add_all(source=source_cfg, section="this section does not exist")  # type: ignore[arg-type]  # pylint: disable=C0301  # intentional use of nonexistent section
+        # nonexisting key will not throw an error; intentional use of nonexistent section
+        target_cfg.add_all(source=source_cfg, section="this section does not exist")  # type: ignore[arg-type]
 
 
 class TestAutoLoadConfig:

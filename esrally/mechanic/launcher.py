@@ -21,7 +21,7 @@ import subprocess
 
 import psutil
 
-from esrally import config, exceptions, telemetry, time
+from esrally import exceptions, telemetry, time, types
 from esrally.mechanic import cluster, java_resolver
 from esrally.utils import io, opts, process
 
@@ -30,7 +30,7 @@ class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
 
-    def __init__(self, cfg: config.Config, clock=time.Clock):
+    def __init__(self, cfg: types.Config, clock=time.Clock):
         self.cfg = cfg
         self.clock = clock
         self.logger = logging.getLogger(__name__)
@@ -122,7 +122,7 @@ class ProcessLauncher:
 
     PROCESS_WAIT_TIMEOUT_SECONDS = 90.0
 
-    def __init__(self, cfg: config.Config, clock=time.Clock):
+    def __init__(self, cfg: types.Config, clock=time.Clock):
         self.cfg = cfg
         self._clock = clock
         self.logger = logging.getLogger(__name__)

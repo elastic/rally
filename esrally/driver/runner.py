@@ -23,18 +23,18 @@ import random
 import re
 import sys
 import time
-import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
 from enum import Enum
 from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
+from types import FunctionType
 from typing import List, Optional
 
 import ijson
 
-from esrally import exceptions, track
+from esrally import exceptions, track, types
 from esrally.utils.versions import Version
 
 # Mapping from operation type to specific runner
@@ -42,7 +42,7 @@ from esrally.utils.versions import Version
 __RUNNERS = {}
 
 
-def register_default_runners(config=None):
+def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
@@ -143,7 +143,7 @@ def register_runner(operation_type, runner, **kwargs):
                 logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
             cluster_aware_runner = _multi_cluster_runner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
-    elif isinstance(runner, types.FunctionType):
+    elif isinstance(runner, FunctionType):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
         cluster_aware_runner = _single_cluster_runner(runner, runner.__name__)
@@ -925,7 +925,8 @@ class Query(Runner):
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), results.get("hits"))  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
+                # TODO remove the below ignore when introducing type hints
+                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), results.get("hits"))  # type: ignore[arg-type]
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -982,7 +983,12 @@ class Query(Runner):
 
                 body_to_send = tree_copy_composite_agg(body, path_to_composite)
                 response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
-                parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, results.get("hits"))  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
+                parsed = self._composite_agg_extractor(
+                    response,
+                    bool(pit_op),
+                    path_to_composite,
+                    results.get("hits"),  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+                )
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -1251,7 +1257,8 @@ class CompositeAggExtractor:
 
         after_key = "aggregations." + (".".join(path_to_composite_agg)) + ".after_key"
 
-        parsed = parse(response, properties, None, [after_key])  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
+        # TODO remove the below ignore when introducing type hints
+        parsed = parse(response, properties, None, [after_key])  # type: ignore[arg-type]
 
         if get_point_in_time and not parsed.get("pit_id"):
             raise exceptions.RallyAssertionError("Paginated query failure: pit_id was expected but not found in the response.")

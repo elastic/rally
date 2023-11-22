@@ -21,7 +21,7 @@ import os
 from elastic_transport import ApiError, TransportError
 from jinja2 import Environment, FileSystemLoader
 
-from esrally import PROGRAM_NAME
+from esrally import PROGRAM_NAME, types
 from esrally.client import factory
 from esrally.tracker import corpus, index
 from esrally.utils import console, io
@@ -68,7 +68,7 @@ def extract_mappings_and_corpora(client, output_path, indices_to_extract):
     return indices, corpora
 
 
-def create_track(cfg):
+def create_track(cfg: types.Config):
     logger = logging.getLogger(__name__)
 
     track_name = cfg.opts("track", "track.name")

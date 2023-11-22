@@ -32,7 +32,7 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import PROGRAM_NAME, config, exceptions, paths, time, version
+from esrally import PROGRAM_NAME, config, exceptions, paths, time, types, version
 from esrally.track import params, track
 from esrally.track.track import Parallel
 from esrally.utils import (
@@ -89,7 +89,7 @@ class TrackProcessor(abc.ABC):
 
 
 class TrackProcessorRegistry:
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self.required_processors = [TaskFilterTrackProcessor(cfg), ServerlessFilterTrackProcessor(cfg), TestModeTrackProcessor(cfg)]
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
@@ -119,7 +119,7 @@ class TrackProcessorRegistry:
         return [*self.required_processors, *self.track_processors]
 
 
-def tracks(cfg):
+def tracks(cfg: types.Config):
     """
 
     Lists all known tracks. Note that users can specify a distribution version so if different tracks are available for
@@ -132,7 +132,7 @@ def tracks(cfg):
     return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]
 
 
-def list_tracks(cfg):
+def list_tracks(cfg: types.Config):
     available_tracks = tracks(cfg)
     only_auto_generated_challenges = all(t.default_challenge.auto_generated for t in available_tracks)
 
@@ -159,7 +159,7 @@ def list_tracks(cfg):
     console.println(tabulate.tabulate(tabular_data=data, headers=headers))
 
 
-def track_info(cfg):
+def track_info(cfg: types.Config):
     def format_task(t, indent="", num="", suffix=""):
         msg = f"{indent}{num}{str(t)}"
         if t.clients > 1:
@@ -203,7 +203,7 @@ def track_info(cfg):
             console.println("")
 
 
-def load_track(cfg, install_dependencies=False):
+def load_track(cfg: types.Config, install_dependencies=False):
     """
 
     Loads a track
@@ -230,7 +230,7 @@ def _install_dependencies(dependencies):
             raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
 
 
-def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
+def _load_single_track(cfg: types.Config, track_repository, track_name, install_dependencies=False):
     try:
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
@@ -254,7 +254,7 @@ def _load_single_track(cfg, track_repository, track_name, install_dependencies=F
 
 
 def load_track_plugins(
-    cfg,
+    cfg: types.Config,
     track_name,
     register_runner=None,
     register_scheduler=None,
@@ -285,7 +285,7 @@ def load_track_plugins(
         return False
 
 
-def set_absolute_data_path(cfg, t):
+def set_absolute_data_path(cfg: types.Config, t):
     """
     Sets an absolute data path on all document files in this track. Internally we store only relative paths in the track as long as possible
     as the data root directory may be different on each host. In the end we need to have an absolute path though when we want to read the
@@ -312,18 +312,18 @@ def set_absolute_data_path(cfg, t):
                 document_set.document_file = first_existing(data_root, document_set.document_file)
 
 
-def is_simple_track_mode(cfg):
+def is_simple_track_mode(cfg: types.Config):
     return cfg.exists("track", "track.path")
 
 
-def track_path(cfg):
+def track_path(cfg: types.Config):
     repo = track_repo(cfg)
     track_name = repo.track_name
     track_dir = repo.track_dir(track_name)
     return track_dir
 
 
-def track_repo(cfg, fetch=True, update=True):
+def track_repo(cfg: types.Config, fetch=True, update=True):
     if is_simple_track_mode(cfg):
         track_path = cfg.opts("track", "track.path")
         return SimpleTrackRepository(track_path)
@@ -331,7 +331,7 @@ def track_repo(cfg, fetch=True, update=True):
         return GitTrackRepository(cfg, fetch, update)
 
 
-def data_dir(cfg, track_name, corpus_name):
+def data_dir(cfg: types.Config, track_name, corpus_name):
     """
     Determines potential data directories for the provided track and corpus name.
 
@@ -352,14 +352,15 @@ def data_dir(cfg, track_name, corpus_name):
 
 
 class GitTrackRepository:
-    def __init__(self, cfg, fetch, update, repo_class=repo.RallyRepository):
+    def __init__(self, cfg: types.Config, fetch, update, repo_class=repo.RallyRepository):
         # current track name (if any)
         self.track_name = cfg.opts("track", "track.name", mandatory=False)
         distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         repo_name = cfg.opts("track", "repository.name")
         repo_revision = cfg.opts("track", "repository.revision", mandatory=False)
         offline = cfg.opts("system", "offline.mode")
-        remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)
+        # TODO remove the below ignore when introducing LiteralString on Python 3.11+
+        remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)  # type: ignore[arg-type]
         root = cfg.opts("node", "root.dir")
         track_repositories = cfg.opts("benchmarks", "track.repository.dir")
         tracks_dir = os.path.join(root, track_repositories)
@@ -451,13 +452,13 @@ class DefaultTrackPreparator(TrackProcessor):
     def __init__(self):
         super().__init__()
         # just declare here, will be injected later
-        self.cfg: Optional[config.Config] = None
+        self.cfg: Optional[types.Config] = None
         self.downloader = None
         self.decompressor = None
         self.track = None
 
     @staticmethod
-    def prepare_docs(cfg, track, corpus, preparator):
+    def prepare_docs(cfg: types.Config, track, corpus, preparator):
         for document_set in corpus.documents:
             if document_set.is_bulk:
                 data_root = data_dir(cfg, track.name, corpus.name)
@@ -842,7 +843,7 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
 
 
 class TaskFilterTrackProcessor(TrackProcessor):
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self.logger = logging.getLogger(__name__)
         include_tasks = cfg.opts("track", "include.tasks", mandatory=False)
         exclude_tasks = cfg.opts("track", "exclude.tasks", mandatory=False)
@@ -864,9 +865,11 @@ class TaskFilterTrackProcessor(TrackProcessor):
                     filters.append(track.TaskNameFilter(spec[0]))
                 elif len(spec) == 2:
                     if spec[0] == "type":
-                        filters.append(track.TaskOpTypeFilter(spec[1]))  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
+                        # TODO remove the below ignore when introducing type hints
+                        filters.append(track.TaskOpTypeFilter(spec[1]))  # type: ignore[arg-type]
                     elif spec[0] == "tag":
-                        filters.append(track.TaskTagFilter(spec[1]))  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
+                        # TODO remove the below ignore when introducing type hints
+                        filters.append(track.TaskTagFilter(spec[1]))  # type: ignore[arg-type]
                     else:
                         raise exceptions.SystemSetupError(f"Invalid format for filtered tasks: [{t}]. Expected [type] but got [{spec[0]}].")
                 else:
@@ -907,7 +910,7 @@ class TaskFilterTrackProcessor(TrackProcessor):
 
 
 class ServerlessFilterTrackProcessor(TrackProcessor):
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self.logger = logging.getLogger(__name__)
         self.serverless_mode = convert.to_bool(cfg.opts("driver", "serverless.mode", mandatory=False, default_value=False))
         self.serverless_operator = convert.to_bool(cfg.opts("driver", "serverless.operator", mandatory=False, default_value=False))
@@ -953,7 +956,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
 
 
 class TestModeTrackProcessor(TrackProcessor):
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self.test_mode_enabled = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
         self.logger = logging.getLogger(__name__)
 
@@ -1057,7 +1060,7 @@ class TrackFileReader:
     Creates a track from a track file.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         track_schema_file = os.path.join(cfg.opts("node", "rally.root"), "resources", "track-schema.json")
         with open(track_schema_file, encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())

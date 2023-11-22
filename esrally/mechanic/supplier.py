@@ -25,7 +25,7 @@ import shutil
 import urllib.error
 
 import docker
-from esrally import PROGRAM_NAME, exceptions, paths
+from esrally import PROGRAM_NAME, exceptions, paths, types
 from esrally.exceptions import BuildError, SystemSetupError
 from esrally.utils import console, convert, git, io, jvm, net, process, sysstats
 
@@ -33,7 +33,7 @@ DEFAULT_ELASTICSEARCH_BRANCH = "main"
 DEFAULT_PLUGIN_BRANCH = "main"
 
 
-def create(cfg, sources, distribution, car, plugins=None):
+def create(cfg: types.Config, sources, distribution, car, plugins=None):
     logger = logging.getLogger(__name__)
     if plugins is None:
         plugins = []
@@ -116,7 +116,8 @@ def create(cfg, sources, distribution, car, plugins=None):
         repo = DistributionRepository(
             name=cfg.opts("mechanic", "distribution.repository"), distribution_config=dist_cfg, template_renderer=template_renderer
         )
-        suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
+        # TODO remove the below ignore when introducing type hints
+        suppliers.append(ElasticsearchDistributionSupplier(repo, es_version, distributions_root))  # type: ignore[arg-type]
 
     for plugin in plugins:
         if plugin.moved_to_module:
@@ -158,7 +159,8 @@ def create(cfg, sources, distribution, car, plugins=None):
         else:
             logger.info("Adding plugin distribution supplier for [%s].", plugin.name)
             assert repo is not None, "Cannot benchmark plugin %s from a distribution version but Elasticsearch from sources" % plugin.name
-            suppliers.append(PluginDistributionSupplier(repo, plugin))  # type: ignore[arg-type]  # pylint: disable=C0301  # TODO remove this ignore when introducing type hints
+            # TODO remove the below ignore when introducing type hints
+            suppliers.append(PluginDistributionSupplier(repo, plugin))  # type: ignore[arg-type]
 
     return CompositeSupplier(suppliers)
 
@@ -221,7 +223,7 @@ def _supply_requirements(sources, distribution, plugins, revisions, distribution
     return supply_requirements
 
 
-def _src_dir(cfg, mandatory=True):
+def _src_dir(cfg: types.Config, mandatory=True):
     # Don't let this spread across the whole module
     try:
         return cfg.opts("node", "src.root.dir", mandatory=mandatory)
