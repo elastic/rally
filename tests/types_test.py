@@ -103,13 +103,12 @@ def check_annotations(obj, identifer, *types):
             continue
 
         attr = getattr(obj, name)
+        if not getattr(attr, "__module__", None):
+            continue  # attr is probably built-in types such as int
+        elif not attr.__module__.startswith(getattr(obj, "__module__", "") or getattr(obj, "__name__", "")):
+            continue  # attr is probably imported from somewhere else
+
         if isclass(attr):
-            try:
-                if not attr.__module__.startswith(obj.__module__):
-                    continue
-            except AttributeError:
-                if not attr.__module__.startswith(obj.__name__):
-                    continue
             check_annotations(attr, identifer, *types)
         elif isinstance(attr, FunctionType):
             check_parameter_annotations(attr, identifer, *types)
