@@ -925,8 +925,11 @@ class Query(Runner):
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                # TODO remove the below ignore when introducing type hints
-                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), results.get("hits"))  # type: ignore[arg-type]
+                parsed, last_sort = self._search_after_extractor(
+                    response,
+                    bool(pit_op),
+                    results.get("hits"),  # type: ignore[arg-type]  # TODO remove the below ignore when introducing type hints
+                )
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
