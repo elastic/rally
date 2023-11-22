@@ -772,8 +772,11 @@ class Driver:
         self.number_of_steps = len(allocator.join_points) - 1
         self.tasks_per_join_point = allocator.tasks_per_joinpoint
 
-        # TODO remove the below ignore when introducing type hints
-        self.logger.info("Benchmark consists of [%d] steps executed by [%d] clients.", self.number_of_steps, len(self.allocations))  # type: ignore[arg-type]
+        self.logger.info(
+            "Benchmark consists of [%d] steps executed by [%d] clients.",
+            self.number_of_steps,
+            len(self.allocations),  # type: ignore[arg-type]  # TODO remove the below ignore when introducing type hints
+        )
         # avoid flooding the log if there are too many clients
         if allocator.clients < 128:
             self.logger.debug("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))

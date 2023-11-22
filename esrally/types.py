@@ -17,7 +17,6 @@
 
 from typing import Any, Literal, Protocol, TypeVar
 
-
 Section = Literal[
     "benchmarks",
     "client",
