@@ -21,9 +21,8 @@ import os.path
 import shutil
 from enum import Enum
 from string import Template
-from typing import Literal
 
-from esrally import PROGRAM_NAME, exceptions, paths
+from esrally import PROGRAM_NAME, exceptions, paths, types
 from esrally.utils import io
 
 
@@ -40,138 +39,6 @@ class Scope(Enum):
     invocation = 5
 
 
-Section = Literal[
-    "benchmarks",
-    "client",
-    "defaults",
-    "distributions",
-    "driver",
-    "generator",
-    "mechanic",
-    "meta",
-    "no_copy",
-    "node",
-    "provisioning",
-    "race",
-    "reporting",
-    "source",
-    "system",
-    "teams",
-    "telemetry",
-    "tests",
-    "track",
-    "tracks",
-    "unit-test",
-]
-Key = Literal[
-    "add.chart_name",
-    "add.chart_type",
-    "add.config.option",
-    "add.message",
-    "add.race_timestamp",
-    "admin.dry_run",
-    "admin.track",
-    "assertions",
-    "async.debug",
-    "available.cores",
-    "build.type",
-    "car.names",
-    "car.params",
-    "car.plugins",
-    "challenge.name",
-    "challenge.root.dir",
-    "cluster.name",
-    "config.version",
-    "data_streams",
-    "datastore.host",
-    "datastore.number_of_replicas",
-    "datastore.number_of_shards",
-    "datastore.password",
-    "datastore.port",
-    "datastore.probe.cluster_version",
-    "datastore.secure",
-    "datastore.ssl.verification_mode",
-    "datastore.type",
-    "datastore.user",
-    "delete.config.option",
-    "delete.id",
-    "devices",
-    "distribution.flavor",
-    "distribution.repository",
-    "distribution.version",
-    "elasticsearch.src.subdir",
-    "env.name",
-    "exclude.tasks",
-    "format",
-    "hosts",
-    "include.tasks",
-    "indices",
-    "install.id",
-    "list.config.option",
-    "list.from_date",
-    "list.max_results",
-    "list.races.benchmark_name",
-    "list.to_date",
-    "load_driver_hosts",
-    "local.dataset.cache",
-    "master.nodes",
-    "metrics.log.dir",
-    "metrics.url",
-    "network.host",
-    "network.http.port",
-    "node.name",
-    "node.name.prefix",
-    "numbers.align",
-    "offline.mode",
-    "on.error",
-    "options",
-    "other.key",
-    "output.path",
-    "params",
-    "passenv",
-    "pipeline",
-    "plugin.community-plugin.src.dir",
-    "plugin.community-plugin.src.subdir",
-    "plugin.params",
-    "preserve.install",
-    "preserve_benchmark_candidate",
-    "private.url",
-    "profiling",
-    "quiet.mode",
-    "race.id",
-    "rally.cwd",
-    "rally.root",
-    "release.cache",
-    "release.url",
-    "remote.benchmarking.supported",
-    "remote.repo.url",
-    "repository.name",
-    "repository.revision",
-    "root.dir",
-    "runtime.jdk",
-    "sample.key",
-    "sample.property",
-    "seed.hosts",
-    "serverless.mode",
-    "serverless.operator",
-    "skip.rest.api.check",
-    "snapshot.cache",
-    "source.build.method",
-    "source.revision",
-    "src.root.dir",
-    "target.arch",
-    "target.os",
-    "team.path",
-    "test.mode.enabled",
-    "time.start",
-    "track.name",
-    "track.path",
-    "track.repository.dir",
-    "user.tags",
-    "values",
-]
-
-
 class ConfigFile:
     def __init__(self, config_name=None, **kwargs):
         self.config_name = config_name
@@ -183,7 +50,7 @@ class ConfigFile:
         """
         return os.path.isfile(self.location)
 
-    def load(self):
+    def load(self) -> configparser.ConfigParser:
         config = configparser.ConfigParser()
         config.read(self.location, encoding="utf-8")
         return config
@@ -199,7 +66,7 @@ class ConfigFile:
                 contents = src.read()
                 target.write(Template(contents).substitute(CONFIG_DIR=self.config_dir))
 
-    def store(self, config):
+    def store(self, config: configparser.ConfigParser):
         io.ensure_dir(self.config_dir)
         with open(self.location, "w", encoding="utf-8") as configfile:
             config.write(configfile)
@@ -222,7 +89,7 @@ class ConfigFile:
         return os.path.join(self.config_dir, f"rally{config_name_suffix}.ini")
 
 
-def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs):
+def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs) -> types.Config:
     """
     Loads a node-local configuration based on a ``base_config``. If an appropriate node-local configuration file is present, it will be
     used (and potentially upgraded to the newest config version). Otherwise, a new one will be created and as many settings as possible
@@ -271,7 +138,7 @@ class Config:
         self._opts = {}
         self._clear_config()
 
-    def add(self, scope, section: Section, key: Key, value):
+    def add(self, scope, section: types.Section, key: types.Key, value):
         """
         Adds or overrides a new configuration property.
 
@@ -282,7 +149,7 @@ class Config:
         """
         self._opts[self._k(scope, section, key)] = value
 
-    def add_all(self, source, section: Section):
+    def add_all(self, source, section: types.Section):
         """
         Adds all config items within the given `section` from the `source` config object.
 
@@ -295,7 +162,7 @@ class Config:
             if source_section == section:
                 self.add(scope, source_section, key, v)
 
-    def opts(self, section: Section, key: Key, default_value=None, mandatory=True):
+    def opts(self, section: types.Section, key: types.Key, default_value=None, mandatory=True):
         """
         Resolves a configuration property.
 
@@ -315,7 +182,7 @@ class Config:
             else:
                 raise exceptions.ConfigError(f"No value for mandatory configuration: section='{section}', key='{key}'")
 
-    def all_opts(self, section: Section):
+    def all_opts(self, section: types.Section):
         """
         Finds all options in a section and returns them in a dict.
 
@@ -333,7 +200,7 @@ class Config:
                     scopes_per_key[key] = scope
         return opts_in_section
 
-    def exists(self, section: Section, key: Key):
+    def exists(self, section: types.Section, key: types.Key):
         """
         :param section: The configuration section.
         :param key: The configuration key.
@@ -394,7 +261,7 @@ class Config:
         return int(self.opts("meta", "config.version", default_value=0, mandatory=False))
 
     # recursively find the most narrow scope for a key
-    def _resolve_scope(self, section: Section, key: Key, start_from=Scope.invocation):
+    def _resolve_scope(self, section: types.Section, key: types.Key, start_from=Scope.invocation):
         if self._k(start_from, section, key) in self._opts:
             return start_from
         elif start_from == Scope.application:
@@ -403,7 +270,7 @@ class Config:
             # continue search in the enclosing scope
             return self._resolve_scope(section, key, Scope(start_from.value - 1))
 
-    def _k(self, scope, section: Section, key: Key):
+    def _k(self, scope, section: types.Section, key: types.Key):
         if scope is None or scope == Scope.application:
             return Scope.application, section, key
         else:
