@@ -194,8 +194,13 @@ def _download_http(url, local_path, expected_size_in_bytes=None, progress_indica
         "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
     ) as r, open(local_path, "wb") as out_file:
         if r.status > 299:
-            # TODO remove the below ignore when introducing type hints
-            raise urllib.error.HTTPError(url, r.status, "", None, None)  # type: ignore[arg-type]
+            raise urllib.error.HTTPError(
+                url,
+                r.status,
+                "",
+                None,  # type: ignore[arg-type]  # TODO remove the below ignore when introducing type hints
+                None,
+            )
         try:
             size_from_content_header = int(r.getheader("Content-Length", ""))
             if expected_size_in_bytes is None:
