@@ -86,7 +86,7 @@ class TestLiteralArgs:
 
 def assert_fn_param_annotations(fn, ident, *expects):
     for param in signature(fn).parameters.values():
-        if ident == param.name:
+        if param.name == ident:
             assert param.annotation in expects, f"'{ident}' of {fn.__name__}() is not annotated expectedly"
 
 
