@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import builtins
 from configparser import ConfigParser
 from importlib import import_module
 from inspect import getsourcelines, isclass, signature
@@ -83,40 +84,47 @@ class TestLiteralArgs:
         assert not args, "literal args are not found in any .py files"
 
 
-def check_parameter_annotations(fn, identifer, *types):
+def assert_fn_param_annotations(fn, ident, *expects):
     for param in signature(fn).parameters.values():
-        if identifer == param.name:
-            assert param.annotation in types, f"parameter annotation of '{identifer}' is wrong at {fn.__name__}()"
+        if ident == param.name:
+            assert param.annotation in expects, f"'{ident}' of {fn.__name__}() is not annotated expectedly"
 
 
-def check_return_annotation(fn, identifer, *types):
-    return_annotation = signature(fn).return_annotation
+def assert_fn_return_annotation(fn, ident, *expects):
     sourcelines, _ = getsourcelines(fn)
     for line in sourcelines:
-        if line.endswith(f"    return {identifer}"):
-            assert return_annotation in types, f"return annotation is wrong at {fn.__name__}()"
+        if line.endswith(f"    return {ident}"):
+            assert signature(fn).return_annotation in expects, f"return of {fn.__name__}() is not annotated expectedly"
 
 
-def check_annotations(obj, identifer, *types):
+def assert_annotations(obj, ident, *expects):
+    """Asserts annotations recursively in the object"""
     for name in dir(obj):
         if name.startswith("_"):
             continue
 
         attr = getattr(obj, name)
-        if not getattr(attr, "__module__", None):
-            continue  # attr is probably built-in types such as int
-        elif not attr.__module__.startswith(getattr(obj, "__module__", "") or getattr(obj, "__name__", "")):
-            continue  # attr is probably imported from somewhere else
+        if attr in vars(builtins).values() or type(attr) in vars(builtins).values():
+            continue  # skip builtins
+
+        obj_path = getattr(obj, "__module__", getattr(obj, "__qualname__", obj.__name__))
+        try:
+            attr_path = getattr(attr, "__module__", getattr(attr, "__qualname__", attr.__name__))
+        except AttributeError:
+            pass
+        else:
+            if attr_path and not attr_path.startswith(obj_path):
+                continue  # the attribute is brought from outside of the object
 
         if isclass(attr):
-            check_annotations(attr, identifer, *types)
+            assert_annotations(attr, ident, *expects)
         elif isinstance(attr, FunctionType):
-            check_parameter_annotations(attr, identifer, *types)
-            check_return_annotation(attr, identifer, *types)
+            assert_fn_param_annotations(attr, ident, *expects)
+            assert_fn_return_annotation(attr, ident, *expects)
 
 
 class TestConfigTypeHint:
-    def test_esrally_module(self):
+    def test_esrally_module_annotations(self):
         for module in project_root.glob_modules("esrally/**/*.py"):
-            check_annotations(module, "cfg", types.Config)
-            check_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)
+            assert_annotations(module, "cfg", types.Config)
+            assert_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)
