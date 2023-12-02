@@ -50,7 +50,7 @@ class EsClient:
 
     def put_template(self, name, template):
         tmpl = json.loads(template)
-        return self.guarded(self._client.indices.put_template, name=name, **tmpl)
+        return self.guarded(self._client.indices.put_index_template, name=name, **tmpl)
 
     def template_exists(self, name):
         return self.guarded(self._client.indices.exists_template, name=name)

@@ -1,5 +1,6 @@
 {
   "index_patterns": ["rally-results-*"],
+  "template": {
   "settings": {
     "index": {
     }
@@ -103,4 +104,5 @@
       }
     }
   }
+}
 }
