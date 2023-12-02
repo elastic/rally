@@ -314,9 +314,9 @@ class IndexTemplateProvider:
                         f"The setting: datastore.number_of_shards must be >= 1. Please "
                         f"check the configuration in {self._config.config_file.location}"
                     )
-                template["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
+                template["template"]["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:
-                template["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
+                template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
             return json.dumps(template)
 
 
