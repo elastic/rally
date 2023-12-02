@@ -2615,8 +2615,8 @@ class TestIndexTemplateProvider:
 
         for template in templates:
             t = json.loads(template)
-            assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
-            assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+            assert t["template"]["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+            assert t["template"]["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
 
     def test_primary_shard_count_specified_index_template_update(self):
         _datastore_type = "elasticsearch"
@@ -2636,10 +2636,10 @@ class TestIndexTemplateProvider:
 
         for template in templates:
             t = json.loads(template)
-            assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+            assert t["template"]["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
             with pytest.raises(KeyError):
                 # pylint: disable=unused-variable
-                number_of_replicas = t["settings"]["index"]["number_of_replicas"]
+                number_of_replicas = t["template"]["settings"]["index"]["number_of_replicas"]
 
     def test_replica_shard_count_specified_index_template_update(self):
         _datastore_type = "elasticsearch"
@@ -2659,10 +2659,10 @@ class TestIndexTemplateProvider:
 
         for template in templates:
             t = json.loads(template)
-            assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+            assert t["template"]["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
             with pytest.raises(KeyError):
                 # pylint: disable=unused-variable
-                number_of_shards = t["settings"]["index"]["number_of_shards"]
+                number_of_shards = t["template"]["settings"]["index"]["number_of_shards"]
 
     def test_primary_shard_count_less_than_one(self):
         _datastore_type = "elasticsearch"
@@ -2705,5 +2705,5 @@ class TestIndexTemplateProvider:
 
         for template in templates:
             t = json.loads(template)
-            assert t["settings"]["index"]["number_of_shards"] == 200
-            assert t["settings"]["index"]["number_of_replicas"] == 1
+            assert t["template"]["settings"]["index"]["number_of_shards"] == 200
+            assert t["template"]["settings"]["index"]["number_of_replicas"] == 1
