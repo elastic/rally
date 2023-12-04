@@ -53,10 +53,10 @@ class EsClient:
         return self.guarded(self._client.indices.put_index_template, name=name, **tmpl)
 
     def template_exists(self, name):
-        return self.guarded(self._client.indices.exists_template, name=name)
+        return self.guarded(self._client.indices.exists_index_template, name=name)
 
     def delete_template(self, name):
-        self.guarded(self._client.indices.delete_template, name=name)
+        self.guarded(self._client.indices.delete_index_template, name=name)
 
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
