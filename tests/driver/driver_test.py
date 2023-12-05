@@ -1901,8 +1901,35 @@ class TestAsyncExecutor:
         with pytest.raises(exceptions.RallyAssertionError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
         assert exc.value.args[0] == (
-            "Request returned an error. Error type: api, Description: not found (the requested document could not be found)"
+            "Request returned an error. Error type: api, Description: not found (the requested document could not be found),"
+            " HTTP Status: 404"
         )
+
+    @pytest.mark.asyncio
+    async def test_execute_single_with_http_400_with_empty_raw_response_body(self):
+        es = None
+        params = None
+        empty_body = io.BytesIO(b"")
+        str_literal_empty_body = str(empty_body)
+        error_meta = elastic_transport.ApiResponseMeta(status=413, http_version="1.1", headers={}, duration=0.0, node=None)
+        runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal_empty_body, meta=error_meta, body=empty_body))
+
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
+        assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: None, HTTP Status: 413")
+
+    @pytest.mark.asyncio
+    async def test_execute_single_with_http_400_with_raw_response_body(self):
+        es = None
+        params = None
+        body = io.BytesIO(b"Huge error")
+        str_literal = str(body)
+        error_meta = elastic_transport.ApiResponseMeta(status=499, http_version="1.1", headers={}, duration=0.0, node=None)
+        runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal, meta=error_meta, body=body))
+
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
+        assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: Huge error, HTTP Status: 499")
 
     @pytest.mark.asyncio
     async def test_execute_single_with_http_400(self):
