@@ -13,10 +13,18 @@ def it(session: nox.Session) -> None:
     session.run("pytest", "-s", "it")
 
 
-@nox.session(python="3")
+@nox.session(python="3.11")
 def it_serverless(session: nox.Session) -> None:
     session.install(".[develop]")
-    session.run("pytest", "-s", "it_serverless", *session.posargs)
+    session.install("pytest-rally @ git+https://github.com/elastic/pytest-rally.git")
+    session.run(
+        "pytest",
+        "-s",
+        "it/track_repo_compatibility",
+        "--log-cli-level=INFO",
+        "--track-repository-test-directory=it_serverless",
+        *session.posargs,
+    )
 
 
 @nox.session(python="3")
