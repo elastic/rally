@@ -12,16 +12,24 @@ export DEBIAN_FRONTEND=noninteractive
 sudo mkdir -p /etc/needrestart
 echo "\$nrconf{restart} = 'a';" | sudo tee -a /etc/needrestart/needrestart.conf > /dev/null
 
+PYTHON_VERSION="$1"
+TEST_NAME="$2"
+
 echo "--- System dependencies"
 
-PYTHON_VERSION="$1"
 retry 5 sudo add-apt-repository --yes ppa:deadsnakes/ppa
 retry 5 sudo apt-get update
 retry 5 sudo apt-get install -y \
     "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-dev" "python${PYTHON_VERSION}-venv" \
     dnsutils  # provides nslookup
 
-echo "--- Run IT test :pytest:"
+echo "--- Python modules"
+
+"python${PYTHON_VERSION}" -m venv .venv
+source .venv/bin/activate
+pip install nox
+
+echo "--- Run IT serverless test \"$TEST_NAME\" :pytest:"
 
 export RALLY_HOME=$HOME
 export THESPLOG_FILE="${THESPLOG_FILE:-${RALLY_HOME}/.rally/logs/actor-system-internal.log}"
@@ -30,8 +38,15 @@ export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
 # adjust the default log level from WARNING
 export THESPLOG_THRESHOLD="INFO"
 
-"python${PYTHON_VERSION}" -m venv .venv
-source .venv/bin/activate
-
-pip install nox
-nox -s it_serverless
+case $TEST_NAME in
+    "user")
+        nox -s it_serverless
+        ;;
+    "operator")
+        nox -s it_serverless -- --operator
+        ;;
+    *)
+        echo "Unknown test type."
+        exit 1
+        ;;
+esac
