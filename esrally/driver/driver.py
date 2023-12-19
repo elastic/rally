@@ -1203,26 +1203,17 @@ class Worker(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.driver_actor = None
-        self.worker_id = None
-        self.config = None
-        self.track = None
-        self.client_allocations = None
-        self.client_contexts = None
         self.current_task_index = 0
         self.next_task_index = 0
-        self.on_error = None
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
         self.cancel = threading.Event()
         # used to indicate that we want to prematurely consider this completed. This is *not* due to cancellation
         # but a regular event in a benchmark and used to model task dependency of parallel tasks.
         self.complete = threading.Event()
-        self.executor_future = None
-        self.sampler = None
+        self.sample_queue_size = self.sampler = self.executor_future = self.on_error = self.client_contexts = self.client_allocations = self.track = self.config = self.worker_id = self.driver_actor = None
         self.start_driving = False
         self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
-        self.sample_queue_size = None
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Bootstrap(self, msg, sender):
