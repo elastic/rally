@@ -50,13 +50,10 @@ class EsClient:
 
     def put_template(self, name, template):
         tmpl = json.loads(template)
-        return self.guarded(self._client.indices.put_template, name=name, **tmpl)
+        return self.guarded(self._client.indices.put_index_template, name=name, **tmpl)
 
     def template_exists(self, name):
-        return self.guarded(self._client.indices.exists_template, name=name)
-
-    def delete_template(self, name):
-        self.guarded(self._client.indices.delete_template, name=name)
+        return self.guarded(self._client.indices.exists_index_template, name=name)
 
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
@@ -314,9 +311,9 @@ class IndexTemplateProvider:
                         f"The setting: datastore.number_of_shards must be >= 1. Please "
                         f"check the configuration in {self._config.config_file.location}"
                     )
-                template["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
+                template["template"]["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:
-                template["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
+                template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
             return json.dumps(template)
 
 

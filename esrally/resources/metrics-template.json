@@ -1,93 +1,97 @@
 {
-  "index_patterns": ["rally-metrics-*"],
-  "settings": {
-    "index": {
-      "mapping.total_fields.limit": 2000
-    }
-  },
-  "mappings": {
-    "date_detection": false,
-    "dynamic_templates": [
-      {
-        "strings": {
-          "match": "*",
-          "match_mapping_type": "string",
-          "mapping": {
-            "type": "keyword"
-          }
-        }
+  "index_patterns": [
+    "rally-metrics-*"
+  ],
+  "template": {
+    "settings": {
+      "index": {
+        "mapping.total_fields.limit": 2000
       }
-    ],
-    "_source": {
-      "enabled": true
     },
-    "properties": {
-      "@timestamp": {
-        "type": "date",
-        "format": "epoch_millis"
-      },
-      "relative-time": {
-        "type": "float"
-      },
-      "race-id": {
-        "type": "keyword"
-      },
-      "race-timestamp": {
-        "type": "date",
-        "format": "basic_date_time_no_millis",
-        "fields": {
-          "raw": {
-            "type": "keyword"
+    "mappings": {
+      "date_detection": false,
+      "dynamic_templates": [
+        {
+          "strings": {
+            "match": "*",
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
           }
         }
+      ],
+      "_source": {
+        "enabled": true
       },
-      "environment": {
-        "type": "keyword"
-      },
-      "track": {
-        "type": "keyword"
-      },
-      "challenge": {
-        "type": "keyword"
-      },
-      "car": {
-        "type": "keyword"
-      },
-      "name": {
-        "type": "keyword"
-      },
-      "value": {
-        "type": "float"
-      },
-      "min": {
-        "type": "float"
-      },
-      "max": {
-        "type": "float"
-      },
-      "mean": {
-        "type": "float"
-      },
-      "median": {
-        "type": "float"
-      },
-      "unit": {
-        "type": "keyword"
-      },
-      "sample-type": {
-        "type": "keyword"
-      },
-      "task": {
-        "type": "keyword"
-      },
-      "operation": {
-        "type": "keyword"
-      },
-      "operation-type": {
-        "type": "keyword"
-      },
-      "job": {
-        "type": "keyword"
+      "properties": {
+        "@timestamp": {
+          "type": "date",
+          "format": "epoch_millis"
+        },
+        "relative-time": {
+          "type": "float"
+        },
+        "race-id": {
+          "type": "keyword"
+        },
+        "race-timestamp": {
+          "type": "date",
+          "format": "basic_date_time_no_millis",
+          "fields": {
+            "raw": {
+              "type": "keyword"
+            }
+          }
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "track": {
+          "type": "keyword"
+        },
+        "challenge": {
+          "type": "keyword"
+        },
+        "car": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "float"
+        },
+        "min": {
+          "type": "float"
+        },
+        "max": {
+          "type": "float"
+        },
+        "mean": {
+          "type": "float"
+        },
+        "median": {
+          "type": "float"
+        },
+        "unit": {
+          "type": "keyword"
+        },
+        "sample-type": {
+          "type": "keyword"
+        },
+        "task": {
+          "type": "keyword"
+        },
+        "operation": {
+          "type": "keyword"
+        },
+        "operation-type": {
+          "type": "keyword"
+        },
+        "job": {
+          "type": "keyword"
+        }
       }
     }
   }
