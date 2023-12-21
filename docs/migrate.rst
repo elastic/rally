@@ -7,7 +7,7 @@ Migrating to Rally 2.10.1
 The metrics store now uses composable templates 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Existing legacy index templates will are not removed, however, composable templates take precedence (applies to races, results, and metrics).
+* Existing legacy index templates are not removed, however, composable templates take precedence (applies to races, results, and metrics).
 * The new templates will be applied when new races, results, and metrics indices are created.
 * The index template for annotations will only be applied if the ``rally-annotations`` index is not present.
 
