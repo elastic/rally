@@ -42,7 +42,7 @@ The Serverless detection and the skip manifests through the following messages o
   [INFO] Race id is [d9d82d3f-dd74-4af0-90ea-8bdd449c824c]
   [INFO] Detected Elasticsearch Serverless mode with operator=[False].
   [INFO] Excluding [check-cluster-health], [force-merge], [wait-until-merges-finish], [index-stats], [node-stats] as challenge [append-no-conflicts] is run on serverless.
-  [INFO] Racing on track [geonames], challenge [append-no-conflicts] and car ['external'] with version [8.11.0].
+  [INFO] Racing on track [geonames], challenge [append-no-conflicts] and car ['external'] with version [serverless].
   [..]
 
 The automatic skip does not apply to the following tasks:

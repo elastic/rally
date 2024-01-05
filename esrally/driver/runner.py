@@ -35,6 +35,7 @@ from typing import List, Optional
 import ijson
 
 from esrally import exceptions, track
+from esrally.utils import convert
 from esrally.utils.versions import Version
 
 # Mapping from operation type to specific runner
@@ -175,8 +176,8 @@ class Runner:
         self.serverless_mode = False
         self.serverless_operator = False
         if config:
-            self.serverless_mode = config.opts("driver", "serverless.mode", mandatory=False, default_value=False)
-            self.serverless_operator = config.opts("driver", "serverless.operator", mandatory=False, default_value=False)
+            self.serverless_mode = convert.to_bool(config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+            self.serverless_operator = convert.to_bool(config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
 
     async def __aenter__(self):
         return self

@@ -724,10 +724,14 @@ class Driver:
             else:
                 self.wait_for_rest_api(es_clients)
             self.driver_actor.cluster_details = self.retrieve_cluster_info(es_clients)
-            if serverless_mode and serverless_operator:
-                build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
-                self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
-                self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
+            if serverless_mode:
+                # overwrite static serverless version number
+                self.driver_actor.cluster_details["version"]["number"] = "serverless"
+                if serverless_operator:
+                    # overwrite build hash if running as operator
+                    build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
+                    self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
+                    self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
