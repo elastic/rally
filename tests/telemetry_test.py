@@ -2087,6 +2087,41 @@ class TestNodeStatsRecorder:
                         },
                     }
                 },
+                "fs": {
+                    "timestamp": 1704343978936,
+                    "total": {"total_in_bytes": 1055735832576, "free_in_bytes": 105574690816, "available_in_bytes": 105557913600},
+                    "data": [
+                        {
+                            "path": "/usr/share/elasticsearch/data",
+                            "mount": "/usr/share/elasticsearch/data (/dev/sdc)",
+                            "type": "ext4",
+                            "total_in_bytes": 1055735832576,
+                            "free_in_bytes": 105574690816,
+                            "available_in_bytes": 105557913600,
+                        }
+                    ],
+                    "io_stats": {
+                        "devices": [
+                            {
+                                "device_name": "sdc",
+                                "operations": 31184,
+                                "read_operations": 6,
+                                "write_operations": 31178,
+                                "read_kilobytes": 104,
+                                "write_kilobytes": 30343968,
+                                "io_time_in_millis": 58668,
+                            }
+                        ],
+                        "total": {
+                            "operations": 31184,
+                            "read_operations": 6,
+                            "write_operations": 31178,
+                            "read_kilobytes": 104,
+                            "write_kilobytes": 30343968,
+                            "io_time_in_millis": 58668,
+                        },
+                    },
+                },
             }
         },
     }
@@ -2197,6 +2232,16 @@ class TestNodeStatsRecorder:
             "indexing_pressure_memory_total_coordinating_rejections": 0,
             "indexing_pressure_memory_total_primary_rejections": 0,
             "indexing_pressure_memory_total_replica_rejections": 0,
+            "fs_timestamp": 1704343978936,
+            "fs_total_total_in_bytes": 1055735832576,
+            "fs_total_free_in_bytes": 105574690816,
+            "fs_total_available_in_bytes": 105557913600,
+            "fs_io_stats_total_operations": 31184,
+            "fs_io_stats_total_read_operations": 6,
+            "fs_io_stats_total_write_operations": 31178,
+            "fs_io_stats_total_read_kilobytes": 104,
+            "fs_io_stats_total_write_kilobytes": 30343968,
+            "fs_io_stats_total_io_time_in_millis": 58668,
         }
     )
 
@@ -2471,6 +2516,41 @@ class TestNodeStatsRecorder:
                             },
                         }
                     },
+                    "fs": {
+                        "timestamp": 1704343978936,
+                        "total": {"total_in_bytes": 1055735832576, "free_in_bytes": 105574690816, "available_in_bytes": 105557913600},
+                        "data": [
+                            {
+                                "path": "/usr/share/elasticsearch/data",
+                                "mount": "/usr/share/elasticsearch/data (/dev/sdc)",
+                                "type": "ext4",
+                                "total_in_bytes": 1055735832576,
+                                "free_in_bytes": 105574690816,
+                                "available_in_bytes": 105557913600,
+                            }
+                        ],
+                        "io_stats": {
+                            "devices": [
+                                {
+                                    "device_name": "sdc",
+                                    "operations": 31184,
+                                    "read_operations": 6,
+                                    "write_operations": 31178,
+                                    "read_kilobytes": 104,
+                                    "write_kilobytes": 30343968,
+                                    "io_time_in_millis": 58668,
+                                }
+                            ],
+                            "total": {
+                                "operations": 31184,
+                                "read_operations": 6,
+                                "write_operations": 31178,
+                                "read_kilobytes": 104,
+                                "write_kilobytes": 30343968,
+                                "io_time_in_millis": 58668,
+                            },
+                        },
+                    },
                 }
             },
         }
@@ -2596,6 +2676,16 @@ class TestNodeStatsRecorder:
                 "indexing_pressure_memory_total_coordinating_rejections": 0,
                 "indexing_pressure_memory_total_primary_rejections": 0,
                 "indexing_pressure_memory_total_replica_rejections": 0,
+                "fs_timestamp": 1704343978936,
+                "fs_total_total_in_bytes": 1055735832576,
+                "fs_total_free_in_bytes": 105574690816,
+                "fs_total_available_in_bytes": 105557913600,
+                "fs_io_stats_total_operations": 31184,
+                "fs_io_stats_total_read_operations": 6,
+                "fs_io_stats_total_write_operations": 31178,
+                "fs_io_stats_total_read_kilobytes": 104,
+                "fs_io_stats_total_write_kilobytes": 30343968,
+                "fs_io_stats_total_io_time_in_millis": 58668,
             },
             level=MetaInfoScope.node,
             node_name="rally0",
