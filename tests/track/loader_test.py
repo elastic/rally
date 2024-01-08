@@ -1251,7 +1251,7 @@ class TestTrackPostProcessing:
             ],
             "corpora": [
                 {
-                    "name": "unittest-more-than-1k-documents",
+                    "name": "unittest-reduce-to-1k-documents",
                     "documents": [
                         {
                             "source-file": "documents.json.bz2",
@@ -1262,7 +1262,7 @@ class TestTrackPostProcessing:
                     ],
                 },
                 {
-                    "name": "unittest-less-than-1k-documents",
+                    "name": "unittest-keep-less-than-1k-documents",
                     "documents": [
                         {
                             "source-file": "documents.json.bz2",
@@ -1338,13 +1338,13 @@ class TestTrackPostProcessing:
             ],
             "corpora": [
                 {
-                    "name": "unittest-more-than-1k-documents",
+                    "name": "unittest-reduce-to-1k-documents",
                     "documents": [
                         {"source-file": "documents-1k.json.bz2", "document-count": 1000},
                     ],
                 },
                 {
-                    "name": "unittest-less-than-1k-documents",
+                    "name": "unittest-keep-less-than-1k-documents",
                     "documents": [
                         {
                             "source-file": "documents.json.bz2",
