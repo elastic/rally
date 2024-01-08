@@ -299,12 +299,14 @@ Congratulations, you have created your first track! You can test it with ``esral
 Adding support for test mode
 ----------------------------
 
-You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``. Rally postprocesses its internal track representation as follows:
+You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``.
+
+In test mode Rally postprocesses its internal track representation as follows:
 
 * Iteration-based tasks run at most one warmup iteration and one measurement iteration.
 * Time-period-based tasks run at most for 10 seconds without warmup.
 
-Rally also post-processes all data file names in the internal track representation:
+In test mode Rally also post-processes all data file names:
 
 * If ``documents.json`` has 1000 documents or fewer, Rally uses it (no modifications).
 * If ``documents.json`` has more than 1000 documents, Rally assumes an additional ``documents-1k.json`` file is present and uses it. You need to prepare these additional files manually. Pick 1000 documents for every data file in your track and store them in a file with the ``-1k`` suffix. On Linux you can do it as follows: ``head -n 1000 documents.json > documents-1k.json``.
