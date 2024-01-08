@@ -197,13 +197,13 @@ class TestDriver:
         d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticServerlessClientFactory)
         d.prepare_benchmark(t=self.track)
 
-        # was build hash determined correctly?
+        # was build hash and version determined correctly?
         assert driver_actor.cluster_details == {
             "name": "serverless",
             "cluster_name": "serverless",
             "cluster_uuid": "4bbPT0Z6SsuODSz_vG1umA",
             "version": {
-                "number": "8.10.0",
+                "number": "serverless",  # <--- THIS
                 "build_flavor": "serverless",
                 "build_type": "docker",
                 "build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80",  # <--- THIS
