@@ -3441,6 +3441,54 @@ class TestClusterEnvironmentInfo:
 
         assert metrics_store_add_meta_info.call_count == 0
 
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_static_serverless_version_overwrite(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "00000000",
+                "number": "8.11.0",
+                "build_flavor": "serverless",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+        calls = [
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "00000000"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "serverless"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "serverless"),
+        ]
+
+        metrics_store_add_meta_info.assert_has_calls(calls)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_revision_override(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "00000000",
+                "number": "8.11.0",
+                "build_flavor": "serverless",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, "abc123")
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+        calls = [
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "serverless"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "serverless"),
+        ]
+
+        metrics_store_add_meta_info.assert_has_calls(calls)
+
 
 class TestNodeEnvironmentInfo:
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")

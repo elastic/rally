@@ -25,7 +25,7 @@ import tabulate
 
 from esrally import exceptions, metrics, time
 from esrally.metrics import MetaInfoScope
-from esrally.utils import console, io, opts, process, serverless, sysstats
+from esrally.utils import console, io, opts, process, serverless, sysstats, versions
 from esrally.utils.versions import Version
 
 
@@ -1814,8 +1814,11 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         revision = client_info["version"].get("build_hash", distribution_flavor)
         if self.revision_override:
             revision = self.revision_override
-        # build version does not exist for serverless
+        # if version number is not available default to build flavor
         distribution_version = client_info["version"].get("number", distribution_flavor)
+        # overwrite static serverless version number
+        if versions.is_serverless(distribution_flavor):
+            distribution_version = "serverless"
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)
