@@ -1,69 +1,72 @@
 {
-  "index_patterns": ["rally-races-*"],
-  "settings": {
-    "index": {
-    }
-  },
-  "mappings": {
-    "date_detection": false,
-    "dynamic_templates": [
-      {
-        "strings": {
-          "match": "*",
-          "match_mapping_type": "string",
-          "mapping": {
-            "type": "keyword"
-          }
-        }
-      }
-    ],
-    "_source": {
-      "enabled": true
+  "index_patterns": [
+    "rally-races-*"
+  ],
+  "template": {
+    "settings": {
+      "index": {}
     },
-    "properties": {
-      "race-id": {
-        "type": "keyword"
-      },
-      "race-timestamp": {
-        "type": "date",
-        "format": "basic_date_time_no_millis",
-        "fields": {
-          "raw": {
-            "type": "keyword"
+    "mappings": {
+      "date_detection": false,
+      "dynamic_templates": [
+        {
+          "strings": {
+            "match": "*",
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
           }
         }
+      ],
+      "_source": {
+        "enabled": true
       },
-      "rally-version": {
-        "type": "keyword"
-      },
-      "rally-revision": {
-        "type": "keyword"
-      },
-      "environment": {
-        "type": "keyword"
-      },
-      "pipeline": {
-        "type": "keyword"
-      },
-      "track": {
-        "type": "keyword"
-      },
-      "challenge": {
-        "type": "keyword"
-      },
-      "car": {
-        "type": "keyword"
-      },
-      "node-count": {
-        "type": "short"
-      },
-      "plugins": {
-        "type": "keyword"
-      },
-      "results": {
-        "properties": {
-          "op_metrics": {
-            "type": "nested"
+      "properties": {
+        "race-id": {
+          "type": "keyword"
+        },
+        "race-timestamp": {
+          "type": "date",
+          "format": "basic_date_time_no_millis",
+          "fields": {
+            "raw": {
+              "type": "keyword"
+            }
+          }
+        },
+        "rally-version": {
+          "type": "keyword"
+        },
+        "rally-revision": {
+          "type": "keyword"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "pipeline": {
+          "type": "keyword"
+        },
+        "track": {
+          "type": "keyword"
+        },
+        "challenge": {
+          "type": "keyword"
+        },
+        "car": {
+          "type": "keyword"
+        },
+        "node-count": {
+          "type": "short"
+        },
+        "plugins": {
+          "type": "keyword"
+        },
+        "results": {
+          "properties": {
+            "op_metrics": {
+              "type": "nested"
+            }
           }
         }
       }

@@ -728,10 +728,14 @@ class Driver:
             else:
                 self.wait_for_rest_api(es_clients)
             self.driver_actor.cluster_details = self.retrieve_cluster_info(es_clients)
-            if serverless_mode and serverless_operator:
-                build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
-                self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
-                self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
+            if serverless_mode:
+                # overwrite static serverless version number
+                self.driver_actor.cluster_details["version"]["number"] = "serverless"
+                if serverless_operator:
+                    # overwrite build hash if running as operator
+                    build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
+                    self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
+                    self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
@@ -2063,28 +2067,51 @@ async def execute_single(runner, es, params, on_error):
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {"success": False, "error-type": "api"}
+        error_message = ""
 
-        if isinstance(e.error, bytes):
-            error_message = e.error.decode("utf-8")
-        elif isinstance(e.error, BytesIO):
-            error_message = e.error.read().decode("utf-8")
+        # Some runners return a raw response, causing the 'error' property to be a string literal of the bytes/BytesIO object,
+        # we should avoid bubbling that up
+        # e.g. ApiError(413, '<_io.BytesIO object at 0xffffaf146a70>')
+        if isinstance(e.body, bytes):
+            # could be an empty body
+            if error_body := e.body.decode("utf-8"):
+                error_message = error_body
+            else:
+                # to be consistent with an empty 'e.error'
+                error_message = str(None)
+        elif isinstance(e.body, BytesIO):
+            # could be an empty body
+            if error_body := e.body.read().decode("utf-8"):
+                error_message = error_body
+            else:
+                # to be consistent with an empty 'e.error'
+                error_message = str(None)
+        # fallback to 'error' property if the body isn't bytes/BytesIO
         else:
-            error_message = e.error
+            if isinstance(e.error, bytes):
+                error_message = e.error.decode("utf-8")
+            elif isinstance(e.error, BytesIO):
+                error_message = e.error.read().decode("utf-8")
+            else:
+                # if the 'error' is empty, we get back str(None)
+                error_message = e.error
 
         if isinstance(e.info, bytes):
-            error_body = e.info.decode("utf-8")
+            error_info = e.info.decode("utf-8")
         elif isinstance(e.info, BytesIO):
-            error_body = e.info.read().decode("utf-8")
+            error_info = e.info.read().decode("utf-8")
         else:
-            error_body = e.info
+            error_info = e.info
 
-        if error_body:
-            error_message += f" ({error_body})"
+        if error_info:
+            error_message += f" ({error_info})"
+
         error_description = error_message
 
         request_meta_data["error-description"] = error_description
         if e.status_code:
             request_meta_data["http-status"] = e.status_code
+
     except KeyError as e:
         logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters.", str(runner))
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
@@ -2093,10 +2120,15 @@ async def execute_single(runner, es, params, on_error):
     if not request_meta_data["success"]:
         if on_error == "abort" or fatal_error:
             msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
-            description = request_meta_data.get("error-description")
-            if description:
-                msg += ", Description: %s" % description
+
+            if description := request_meta_data.get("error-description"):
+                msg += f", Description: {description}"
+
+            if http_status := request_meta_data.get("http-status"):
+                msg += f", HTTP Status: {http_status}"
+
             raise exceptions.RallyAssertionError(msg)
+
     return total_ops, total_ops_unit, request_meta_data
 
 

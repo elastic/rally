@@ -46,6 +46,7 @@ def pytest_addoption(parser):
         default="it",
         help="Name of the directory containing the track repo's integration tests\n(default: `it`)",
     )
+    group.addoption("--operator", action="store_true", help="run as operator (used in serverless testing)")
 
 
 def pytest_cmdline_main(config):
@@ -66,4 +67,6 @@ def pytest_cmdline_main(config):
 
 
 def pytest_report_header(config):
-    return f"rally: track-repository={config.option.track_repository}, track-revision={config.option.track_revision}"
+    header = f"rally: track-repository={config.option.track_repository}, track-revision={config.option.track_revision},"
+    header += f" track-repository-test-directory={config.option.track_repo_test_dir}"
+    return header

@@ -25,7 +25,7 @@ import tabulate
 
 from esrally import exceptions, metrics, time
 from esrally.metrics import MetaInfoScope
-from esrally.utils import console, io, opts, process, serverless, sysstats
+from esrally.utils import console, io, opts, process, serverless, sysstats, versions
 from esrally.utils.versions import Version
 
 
@@ -846,6 +846,7 @@ class NodeStatsRecorder:
         self.include_cgroup_stats = telemetry_params.get("node-stats-include-cgroup", True)
         self.include_gc_stats = telemetry_params.get("node-stats-include-gc", True)
         self.include_indexing_pressure = telemetry_params.get("node-stats-include-indexing-pressure", True)
+        self.include_fs_stats = telemetry_params.get("node-stats-include-fs", True)
         self.client = client
         self.metrics_store = metrics_store
         self.cluster_name = cluster_name
@@ -883,6 +884,8 @@ class NodeStatsRecorder:
                 collected_node_stats.update(self.process_stats(node_name, node_stats))
             if self.include_indexing_pressure:
                 collected_node_stats.update(self.indexing_pressure(node_name, node_stats))
+            if self.include_fs_stats:
+                collected_node_stats.update(self.fs_stats(node_name, node_stats))
 
             self.metrics_store.put_doc(
                 dict(collected_node_stats), level=MetaInfoScope.node, node_name=node_name, meta_data=metrics_store_meta_data
@@ -931,6 +934,9 @@ class NodeStatsRecorder:
 
     def indexing_pressure(self, node_name, node_stats):
         return flatten_stats_fields(prefix="indexing_pressure", stats=node_stats["indexing_pressure"])
+
+    def fs_stats(self, node_name, node_stats):
+        return flatten_stats_fields(prefix="fs", stats=node_stats.get("fs"))
 
     def sample(self):
         # pylint: disable=import-outside-toplevel
@@ -1808,8 +1814,11 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         revision = client_info["version"].get("build_hash", distribution_flavor)
         if self.revision_override:
             revision = self.revision_override
-        # build version does not exist for serverless
+        # if version number is not available default to build flavor
         distribution_version = client_info["version"].get("number", distribution_flavor)
+        # overwrite static serverless version number
+        if versions.is_serverless(distribution_flavor):
+            distribution_version = "serverless"
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)

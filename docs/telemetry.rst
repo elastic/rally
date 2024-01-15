@@ -120,6 +120,7 @@ The node-stats telemetry device regularly calls the `cluster node-stats API <htt
 * Circuit breaker stats (key ``breakers`` in the node-stats API)
 * Network-related stats (key ``transport`` in the node-stats API)
 * Process cpu stats (key ``process.cpu`` in the node-stats API)
+* Filesystem stats (key ``fs`` in the node-stats API)
 
 Supported telemetry parameters:
 
@@ -136,7 +137,8 @@ Supported telemetry parameters:
 * ``node-stats-include-cgroup`` (default: ``true``): A boolean to include operating system cgroup stats. Memory stats are omitted since Elasticsearch emits them as string values. Use ``os_mem_*`` fields instead.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
 * ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
-* ``node-stats-include-indexing-pressure`` (default: ``true``): A boolean indicating whether indexing pressuer stats should be included.
+* ``node-stats-include-indexing-pressure`` (default: ``true``): A boolean indicating whether indexing pressure stats should be included.
+* ``node-stats-include-fs`` (default: ``true``): A boolean indicating whether overall filesystem stats should be included. Per-device filesystem metrics are not included.
 
 recovery-stats
 --------------
@@ -411,4 +413,4 @@ Example of recorded documents given two nodes in the target cluster::
 
 .. note::
 
-    This telemetry device is only applicable to `Stateless Elasticsearch <https://www.elastic.co/blog/stateless-your-new-state-of-find-with-elasticsearch>`_ and requires elevated privleges only available to Elastic developers.
+    This telemetry device is only applicable to `Elastic Serverless <https://docs.elastic.co/serverless>`_ and requires elevated privleges only available to Elastic developers.

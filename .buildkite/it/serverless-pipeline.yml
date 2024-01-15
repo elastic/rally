@@ -1,20 +1,32 @@
+common:
+  plugins:
+    - elastic/vault-secrets#v0.0.2: &vault-base_url
+        path: "secret/ci/elastic-rally/employees/cloud/it-serverless"
+        field: "base_url"
+        env_var: "RALLY_IT_SERVERLESS_BASE_URL"
+    - elastic/vault-secrets#v0.0.2: &vault-get_credentials_endpoint
+        path: "secret/ci/elastic-rally/employees/cloud/it-serverless"
+        field: "get_credentials_endpoint"
+        env_var: "RALLY_IT_SERVERLESS_GET_CREDENTIALS_ENDPOINT"
+    - elastic/vault-secrets#v0.0.2: &vault-api_key
+        path: "secret/ci/elastic-rally/employees/cloud/it-serverless"
+        field: "api_key"
+        env_var: "RALLY_IT_SERVERLESS_API_KEY"
+
 agents:
   provider: "gcp"
   image: family/core-ubuntu-2204
 
 steps:
-  - label: "Run IT Serverless tests"
+  - label: "Run IT serverless tests with user privileges"
     plugins:
-      - elastic/vault-secrets#v0.0.2:
-          path: "secret/ci/elastic-rally/employees/cloud/it-serverless"
-          field: "base_url"
-          env_var: "RALLY_IT_SERVERLESS_BASE_URL"
-      - elastic/vault-secrets#v0.0.2:
-          path: "secret/ci/elastic-rally/employees/cloud/it-serverless"
-          field: "get_credentials_endpoint"
-          env_var: "RALLY_IT_SERVERLESS_GET_CREDENTIALS_ENDPOINT"
-      - elastic/vault-secrets#v0.0.2:
-          path: "secret/ci/elastic-rally/employees/cloud/it-serverless"
-          field: "api_key"
-          env_var: "RALLY_IT_SERVERLESS_API_KEY"
-    command: bash .buildkite/it/run_serverless.sh 3.11
+      - elastic/vault-secrets#v0.0.2: *vault-base_url
+      - elastic/vault-secrets#v0.0.2: *vault-get_credentials_endpoint
+      - elastic/vault-secrets#v0.0.2: *vault-api_key
+    command: bash .buildkite/it/run_serverless.sh 3.11 user
+  - label: "Run IT serverless tests with operator privileges"
+    plugins:
+      - elastic/vault-secrets#v0.0.2: *vault-base_url
+      - elastic/vault-secrets#v0.0.2: *vault-get_credentials_endpoint
+      - elastic/vault-secrets#v0.0.2: *vault-api_key
+    command: bash .buildkite/it/run_serverless.sh 3.11 operator

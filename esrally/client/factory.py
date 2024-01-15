@@ -349,13 +349,15 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
     version = es.info()["version"]
 
     version_build_flavor = version.get("build_flavor", "oss")
-    # build hash will only be available for serverless if the client has operator privs
+    # if build hash is not available default to build flavor
     version_build_hash = version.get("build_hash", version_build_flavor)
-    # version number does not exist for serverless
+    # if version number is not available default to build flavor
     version_number = version.get("number", version_build_flavor)
 
     serverless_operator = False
     if versions.is_serverless(version_build_flavor):
+        # overwrite static serverless version number
+        version_number = "serverless"
         authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
         serverless_operator = authentication_info.body.get("operator", False)
 

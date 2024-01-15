@@ -16,6 +16,8 @@ Check the :doc:`installation guide </install>` for detailed installation instruc
 
 Rally does not support Windows and is only actively tested on macOS and Linux.
 
+.. _dev_installation_instructions:
+
 Installation Instructions for Development
 -----------------------------------------
 
