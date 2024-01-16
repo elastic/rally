@@ -45,6 +45,7 @@ from esrally import (
     reporter,
     telemetry,
     track,
+    types,
     version,
 )
 from esrally.mechanic import mechanic, team
@@ -850,7 +851,7 @@ def create_arg_parser():
     return parser
 
 
-def dispatch_list(cfg):
+def dispatch_list(cfg: types.Config):
     what = cfg.opts("system", "list.config.option")
     if what == "telemetry":
         telemetry.list_telemetry()
@@ -870,7 +871,7 @@ def dispatch_list(cfg):
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
 
-def dispatch_add(cfg):
+def dispatch_add(cfg: types.Config):
     what = cfg.opts("system", "add.config.option")
     if what == "annotation":
         metrics.add_annotation(cfg)
@@ -878,7 +879,7 @@ def dispatch_add(cfg):
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
 
-def dispatch_delete(cfg):
+def dispatch_delete(cfg: types.Config):
     what = cfg.opts("system", "delete.config.option")
     if what == "race":
         metrics.delete_race(cfg)
@@ -901,7 +902,7 @@ def print_help_on_errors():
     )
 
 
-def race(cfg, kill_running_processes=False):
+def race(cfg: types.Config, kill_running_processes=False):
     logger = logging.getLogger(__name__)
 
     if kill_running_processes:
@@ -931,7 +932,7 @@ def race(cfg, kill_running_processes=False):
     with_actor_system(racecontrol.run, cfg)
 
 
-def with_actor_system(runnable, cfg):
+def with_actor_system(runnable, cfg: types.Config):
     logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
     logger.info("Actor system already running locally? [%s]", str(already_running))
@@ -1005,12 +1006,12 @@ def with_actor_system(runnable, cfg):
                 )
 
 
-def configure_telemetry_params(args, cfg):
+def configure_telemetry_params(args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", opts.csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "telemetry", "params", opts.to_dict(args.telemetry_params))
 
 
-def configure_track_params(arg_parser, args, cfg, command_requires_track=True):
+def configure_track_params(arg_parser, args, cfg: types.Config, command_requires_track=True):
     cfg.add(config.Scope.applicationOverride, "track", "repository.revision", args.track_revision)
     # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
     # its default value)
@@ -1037,7 +1038,7 @@ def configure_track_params(arg_parser, args, cfg, command_requires_track=True):
         cfg.add(config.Scope.applicationOverride, "track", "exclude.tasks", opts.csv_to_list(args.exclude_tasks))
 
 
-def configure_mechanic_params(args, cfg, command_requires_car=True):
+def configure_mechanic_params(args, cfg: types.Config, command_requires_car=True):
     if args.team_path:
         cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
@@ -1057,7 +1058,7 @@ def configure_mechanic_params(args, cfg, command_requires_car=True):
         cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
 
 
-def configure_connection_params(arg_parser, args, cfg):
+def configure_connection_params(arg_parser, args, cfg: types.Config):
     # Also needed by mechanic (-> telemetry) - duplicate by module?
     target_hosts = opts.TargetHosts(args.target_hosts)
     cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
@@ -1067,14 +1068,14 @@ def configure_connection_params(arg_parser, args, cfg):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
 
 
-def configure_reporting_params(args, cfg):
+def configure_reporting_params(args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
     cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
     cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
     cfg.add(config.Scope.applicationOverride, "reporting", "numbers.align", args.report_numbers_align)
 
 
-def dispatch_sub_command(arg_parser, args, cfg):
+def dispatch_sub_command(arg_parser, args, cfg: types.Config):
     sub_command = args.subcommand
 
     cfg.add(config.Scope.application, "system", "quiet.mode", args.quiet)

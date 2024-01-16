@@ -24,12 +24,12 @@ import uuid
 
 import jinja2
 
-from esrally import exceptions
+from esrally import exceptions, types
 from esrally.mechanic import java_resolver, team
 from esrally.utils import console, convert, io, process
 
 
-def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
+def local(cfg: types.Config, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     cluster_name = cfg.opts("mechanic", "cluster.name")
 
@@ -47,7 +47,7 @@ def local(cfg, car, plugins, ip, http_port, all_node_ips, all_node_names, target
     return BareProvisioner(es_installer, plugin_installers, distribution_version=distribution_version)
 
 
-def docker(cfg, car, ip, http_port, target_root, node_name):
+def docker(cfg: types.Config, car, ip, http_port, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     cluster_name = cfg.opts("mechanic", "cluster.name")
     rally_root = cfg.opts("node", "rally.root")
@@ -289,7 +289,8 @@ class ElasticsearchInstaller:
         self.data_paths = self._data_paths()
 
     def delete_pre_bundled_configuration(self):
-        config_path = os.path.join(self.es_home_path, "config")
+        # TODO remove the below ignore when introducing type hints
+        config_path = os.path.join(self.es_home_path, "config")  # type: ignore[arg-type]
         self.logger.info("Deleting pre-bundled Elasticsearch configuration at [%s]", config_path)
         shutil.rmtree(config_path)
 
@@ -342,7 +343,8 @@ class ElasticsearchInstaller:
             else:
                 raise exceptions.SystemSetupError("Expected [data_paths] to be either a string or a list but was [%s]." % type(data_paths))
         else:
-            return [os.path.join(self.es_home_path, "data")]
+            # TODO remove the below ignore when introducing type hints
+            return [os.path.join(self.es_home_path, "data")]  # type: ignore[arg-type]
 
 
 class PluginInstaller:

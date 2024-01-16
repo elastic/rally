@@ -139,3 +139,29 @@ junit_family = "xunit2"
 junit_logging = "all"
 asyncio_mode = "strict"
 xfail_strict = true
+
+# With rare exceptions, Rally does not use type hints. The intention of the
+# following largely reduced mypy configuration scope is verification of argument
+# types in config.Config methods while introducing configuration properties
+# (props). The error we are after here is "arg-type".
+[tool.mypy]
+python_version = 3.8
+check_untyped_defs = true
+disable_error_code = [
+    "assignment",
+    "attr-defined",
+    "call-arg",
+    "call-overload",
+    "dict-item",
+    "import-not-found",
+    "import-untyped",
+    "index",
+    "list-item",
+    "misc",
+    "name-defined",
+    "operator",
+    "str-bytes-safe",
+    "syntax",
+    "union-attr",
+    "var-annotated",
+]

@@ -511,7 +511,11 @@ class TestTrackPreparation:
         is_file.return_value = False
 
         download.side_effect = urllib.error.HTTPError(
-            "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json", 404, "", None, None
+            "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
+            404,
+            "",
+            None,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            None,
         )
 
         p = loader.DocumentSetPreparator(
@@ -545,7 +549,11 @@ class TestTrackPreparation:
         is_file.return_value = False
 
         download.side_effect = urllib.error.HTTPError(
-            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", 500, "Internal Server Error", None, None
+            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
+            500,
+            "Internal Server Error",
+            None,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            None,
         )
 
         p = loader.DocumentSetPreparator(
