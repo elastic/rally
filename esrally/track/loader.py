@@ -965,30 +965,44 @@ class TestModeTrackProcessor(TrackProcessor):
             return track
         self.logger.info("Preparing track [%s] for test mode.", str(track))
         for corpus in track.corpora:
-            if self.logger.isEnabledFor(logging.DEBUG):
-                self.logger.debug("Reducing corpus size to 1000 documents for [%s]", corpus.name)
             for document_set in corpus.documents:
                 # TODO #341: Should we allow this for snapshots too?
                 if document_set.is_bulk:
-                    document_set.number_of_documents = 1000
+                    if document_set.number_of_documents > 1000:
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug(
+                                "Reducing corpus size to 1000 documents in corpus [%s], uncompressed source file [%s]",
+                                corpus.name,
+                                document_set.document_file,
+                            )
 
-                    if document_set.has_compressed_corpus():
-                        path, ext = io.splitext(document_set.document_archive)
-                        path_2, ext_2 = io.splitext(path)
+                        document_set.number_of_documents = 1000
 
-                        document_set.document_archive = f"{path_2}-1k{ext_2}{ext}"
-                        document_set.document_file = f"{path_2}-1k{ext_2}"
-                    elif document_set.has_uncompressed_corpus():
-                        path, ext = io.splitext(document_set.document_file)
-                        document_set.document_file = f"{path}-1k{ext}"
+                        if document_set.has_compressed_corpus():
+                            path, ext = io.splitext(document_set.document_archive)
+                            path_2, ext_2 = io.splitext(path)
+
+                            document_set.document_archive = f"{path_2}-1k{ext_2}{ext}"
+                            document_set.document_file = f"{path_2}-1k{ext_2}"
+                        elif document_set.has_uncompressed_corpus():
+                            path, ext = io.splitext(document_set.document_file)
+                            document_set.document_file = f"{path}-1k{ext}"
+                        else:
+                            raise exceptions.RallyAssertionError(
+                                f"Document corpus [{corpus.name}] has neither compressed nor uncompressed corpus."
+                            )
+
+                        # we don't want to check sizes
+                        document_set.compressed_size_in_bytes = None
+                        document_set.uncompressed_size_in_bytes = None
                     else:
-                        raise exceptions.RallyAssertionError(
-                            f"Document corpus [{corpus.name}] has neither compressed nor uncompressed corpus."
-                        )
-
-                    # we don't want to check sizes
-                    document_set.compressed_size_in_bytes = None
-                    document_set.uncompressed_size_in_bytes = None
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug(
+                                "Maintaining existing size of %d documents in corpus [%s], uncompressed source file [%s]",
+                                document_set.number_of_documents,
+                                corpus.name,
+                                document_set.document_file,
+                            )
 
         for challenge in track.challenges:
             for task in challenge.schedule:
