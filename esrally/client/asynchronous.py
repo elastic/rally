@@ -90,6 +90,17 @@ class StaticRequest(aiohttp.ClientRequest):
         return self.response
 
 
+# we use EmptyStreamReader here because it overrides all methods with
+# no-op implementations that we need.
+class StaticStreamReader(aiohttp.streams.EmptyStreamReader):
+    def __init__(self, body):
+        super().__init__()
+        self.body = body
+
+    async def read(self, n: int = -1) -> bytes:
+        return self.body.encode("utf-8")
+
+
 class StaticResponse(aiohttp.ClientResponse):
     def __init__(
         self,
@@ -122,11 +133,9 @@ class StaticResponse(aiohttp.ClientResponse):
         self._protocol = connection.protocol
         self._connection = connection
         self._headers = CIMultiDictProxy(CIMultiDict())
+        self.content = StaticStreamReader(self.static_body)
         self.status = 200
         return self
-
-    async def read(self):
-        return self.static_body.encode("utf-8")
 
 
 class ResponseMatcher:

@@ -225,7 +225,16 @@ class EsClientFactory:
 
         trace_config = aiohttp.TraceConfig()
         trace_config.on_request_start.append(on_request_start)
-        trace_config.on_request_end.append(on_request_end)
+        # It is tempting to register this callback on `TraceConfig.on_request_end()`. However, aiohttp will call
+        # `TraceConfig.on_request_end()` when the *first* chunk of the response has been received. However, this can
+        # skew service time significantly if the response is large *and* it is streamed by Elasticsearch
+        # (see ChunkedToXContent in the Elasticsearch code base).
+        #
+        # Therefore, we register for `TraceConfig.on_response_chunk_received()` which is called multiple times. As
+        # Rally's implementation of the `on_request_end` callback handler updates the timestamp on every call, Rally
+        # will ultimately record the time when it received the *last* chunk. This is what we want because any code
+        # that is using the Elasticsearch client library can only act on the response once it is fully received.
+        trace_config.on_response_chunk_received.append(on_request_end)
         # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
         trace_config.on_request_exception.append(on_request_end)
 
