@@ -283,21 +283,31 @@ class JitCompiler(TelemetryDevice):
     human_name = "JIT Compiler Profiler"
     help = "Enables JIT compiler logs."
 
-    def __init__(self, log_root):
+    def __init__(self, log_root, java_major_version):
         super().__init__()
         self.log_root = log_root
+        self.java_major_version = java_major_version
 
     def instrument_java_opts(self):
         io.ensure_dir(self.log_root)
         log_file = os.path.join(self.log_root, "jit.log")
         console.info("%s: Writing JIT compiler log to [%s]" % (self.human_name, log_file), logger=self.logger)
-        return [
-            "-XX:+UnlockDiagnosticVMOptions",
-            "-XX:+TraceClassLoading",
-            "-XX:+LogCompilation",
-            f"-XX:LogFile={log_file}",
-            "-XX:+PrintAssembly",
-        ]
+        if self.java_major_version < 9:
+            return [
+                "-XX:+UnlockDiagnosticVMOptions",
+                "-XX:+TraceClassLoading",
+                "-XX:+LogCompilation",
+                f"-XX:LogFile={log_file}",
+                "-XX:+PrintAssembly",
+            ]
+        else:
+            return [
+                "-XX:+UnlockDiagnosticVMOptions",
+                "-Xlog:class+load=info",
+                "-XX:+LogCompilation",
+                f"-XX:LogFile={log_file}",
+                "-XX:+PrintAssembly",
+            ]
 
 
 class Gc(TelemetryDevice):
