@@ -44,6 +44,7 @@ All telemetry devices with a ``-stats`` suffix can be used even with a cluster t
 The remaining telemetry devices i.e. ``jit``, ``gc``, ``jfr`` and ``heapdump`` can only be used when Rally provisions the cluster itself (i.e. won't work with ``--pipeline=benchmark-only``) and are **setup level** telemetry devices.
 
 .. note::
+
     If you are using the experimental :doc:`cluster management commands </cluster_management>`_, setup level telemetry devices (and their parameters) should only be specified via the ``start`` subcommand and not via the ``race`` subcommand. For more details check ``esrally start --help``.
 
 jfr
