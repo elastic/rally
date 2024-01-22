@@ -45,7 +45,7 @@ The remaining telemetry devices i.e. ``jit``, ``gc``, ``jfr`` and ``heapdump`` c
 
 .. note::
 
-    If you are using the experimental :doc:`cluster management commands </cluster_management>`_, setup level telemetry devices (and their parameters) should only be specified via the ``start`` subcommand and not via the ``race`` subcommand. For more details check ``esrally start --help``.
+    If you are using the experimental :doc:`cluster management commands </cluster_management>`, setup level telemetry devices (and their parameters) should only be specified via the ``start`` subcommand and not via the ``race`` subcommand. For more details check ``esrally start --help``.
 
 jfr
 ---
