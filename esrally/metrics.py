@@ -1332,26 +1332,31 @@ def list_races(cfg: types.Config):
             ]
         )
 
+    headers = [
+        "Race ID",
+        "Race Timestamp",
+        "Track",
+        "Challenge",
+        "Car",
+        "ES Version",
+        "Revision",
+        "Rally Version",
+        "Track Revision",
+        "Team Revision",
+        "User Tags"
+    ]
     if len(races) > 0:
-        console.println("\nRecent races:\n")
-        console.println(
-            tabulate.tabulate(
-                races,
-                headers=[
-                    "Race ID",
-                    "Race Timestamp",
-                    "Track",
-                    "Challenge",
-                    "Car",
-                    "ES Version",
-                    "Revision",
-                    "Rally Version",
-                    "Track Revision",
-                    "Team Revision",
-                    "User Tags",
-                ],
+        if cfg.opts("system", "list.output_format") == "json":
+            data_rows = [dict(filter(lambda metric: metric[1], dict(zip(headers, race)).items())) for race in races]
+            console.println(json.dumps(data_rows, indent=2))
+        else:
+            console.println("\nRecent races:\n")
+            console.println(
+                tabulate.tabulate(
+                    races,
+                    headers
+                )
             )
-        )
     else:
         console.println("")
         console.println("No recent races found.")
@@ -1598,6 +1603,12 @@ class RaceStore:
 
     def _benchmark_name(self):
         return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
+
+    def _revision(self):
+        return self.cfg.opts("system", "admin.revision", mandatory=False)
+
+    def _env_id(self):
+        return self.cfg.opts("system", "admin.env_id", mandatory=False)
 
     def _race_timestamp(self):
         return self.cfg.opts("system", "add.race_timestamp")
@@ -1877,6 +1888,8 @@ class EsRaceStore(RaceStore):
 
     def list(self):
         track = self._track()
+        env_id = self._env_id()
+        revision = self._revision()
         name = self._benchmark_name()
         from_date = self._from_date()
         to_date = self._to_date()
@@ -1907,6 +1920,10 @@ class EsRaceStore(RaceStore):
         }
         if track:
             query["query"]["bool"]["filter"].append({"term": {"track": track}})
+        if env_id:
+            query["query"]["bool"]["filter"].append({"term": {"user-tags.env-id": env_id}})
+        if revision:
+            query["query"]["bool"]["filter"].append({"term": {"cluster.revision": revision}})
         if name:
             query["query"]["bool"]["filter"].append(
                 {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}

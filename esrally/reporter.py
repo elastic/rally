@@ -19,11 +19,12 @@ import csv
 import io
 import logging
 import sys
+import json
 from functools import partial
 
 import tabulate
 
-from esrally import exceptions, metrics, types
+from esrally import exceptions, metrics, types, config
 from esrally.utils import console, convert
 from esrally.utils import io as rio
 
@@ -49,6 +50,15 @@ def compare(cfg: types.Config, baseline_id, contender_id):
     ComparisonReporter(cfg).report(race_store.find_by_race_id(baseline_id), race_store.find_by_race_id(contender_id))
 
 
+def summarize_by_id(cfg: types.Config, race_id):
+    if race_id:
+        race = metrics.race_store(cfg).find_by_race_id(race_id)
+    else:
+        cfg.add(config.Scope.applicationOverride, "system", "list.max_results", 1)
+        race = metrics.race_store(cfg).list()[0]
+    SummaryReporter(metrics.GlobalStats(race.results), cfg).report()
+
+
 def print_internal(message):
     console.println(message, logger=logging.getLogger(__name__).info)
 
@@ -62,6 +72,8 @@ def write_single_report(report_file, report_format, cwd, numbers_align, headers,
         formatter = partial(format_as_markdown, numbers_align=numbers_align)
     elif report_format == "csv":
         formatter = format_as_csv
+    elif report_format == "json":
+        formatter = format_as_json
     else:
         raise exceptions.SystemSetupError("Unknown report format '%s'" % report_format)
     print_internal(formatter(headers, data_rich))
@@ -86,6 +98,11 @@ def format_as_csv(headers, data):
             writer.writerow(metric_record)
         return out.getvalue()
 
+
+def format_as_json(headers, data):
+    data_rows = [dict(filter(lambda metric: metric[1] != "", dict(zip(headers, d)).items())) for d in data]
+    rendered = json.dumps(data_rows, indent=2)
+    return rendered + "\n"
 
 def disk_usage_fields(stats):
     return {
