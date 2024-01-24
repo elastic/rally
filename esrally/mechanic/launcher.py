@@ -149,7 +149,7 @@ class ProcessLauncher:
         telemetry_params = self.cfg.opts("telemetry", "params")
         node_telemetry = [
             telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
-            telemetry.JitCompiler(node_telemetry_dir),
+            telemetry.JitCompiler(node_telemetry_dir, java_major_version),
             telemetry.Gc(telemetry_params, node_telemetry_dir, java_major_version),
             telemetry.Heapdump(node_telemetry_dir),
             telemetry.DiskIo(node_count_on_host),
