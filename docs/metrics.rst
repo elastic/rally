@@ -150,6 +150,7 @@ Rally stores the following metrics:
 * ``flush_total_time``: Cumulative time used for index flush of primary shards, as reported by the index stats API. Note that this is not Wall clock time.  These metrics records also have a ``per-shard`` property that contains the times across primary shards in an array.
 * ``flush_total_count``: Cumulative number of flushes of primary shards, as reported by index stats API under ``_all/primaries``.
 * ``final_index_size_bytes``: Final resulting index size on the file system after all nodes have been shutdown at the end of the benchmark. It includes all files in the nodes' data directories (actual index files and translog).
+* ``dataset_size_in_bytes``: Total data set size in bytes of the index. This includes the size of shards not stored fully on nodes, such as the cache for partially mounted indices.
 * ``store_size_in_bytes``: The size in bytes of the index (excluding the translog), as reported by the index stats API.
 * ``translog_size_in_bytes``: The size in bytes of the translog, as reported by the index stats API.
 * ``ml_processing_time``: A structure containing the minimum, mean, median and maximum bucket processing time in milliseconds per machine learning job. These metrics are only available if a machine learning job has been created in the respective benchmark.

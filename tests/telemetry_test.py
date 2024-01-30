@@ -4025,6 +4025,7 @@ class TestIndexStats:
                 "total": {
                     "store": {
                         "size_in_bytes": 2113867510,
+                        "total_data_set_size_in_bytes": 112113867510,
                     },
                     "translog": {
                         "operations": 6840000,
@@ -4208,6 +4209,7 @@ class TestIndexStats:
                 mock.call("segments_terms_memory_in_bytes", 256, "byte"),
                 # we don't have norms, so nothing should have been called
                 mock.call("store_size_in_bytes", 2113867510, "byte"),
+                mock.call("dataset_size_in_bytes", 112113867510, "byte"),
                 mock.call("translog_size_in_bytes", 2647984713, "byte"),
             ],
             any_order=True,

@@ -2078,6 +2078,7 @@ class GlobalStatsCalculator:
         result.memory_norms = self.median("segments_norms_memory_in_bytes")
         result.memory_points = self.median("segments_points_memory_in_bytes")
         result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
+        result.dataset_size = self.sum("dataset_size_in_bytes")
         result.store_size = self.sum("store_size_in_bytes")
         result.translog_size = self.sum("translog_size_in_bytes")
 
@@ -2264,6 +2265,7 @@ class GlobalStats:
         self.memory_norms = self.v(d, "memory_norms")
         self.memory_points = self.v(d, "memory_points")
         self.memory_stored_fields = self.v(d, "memory_stored_fields")
+        self.dataset_size = self.v(d, "dataset_size")
         self.store_size = self.v(d, "store_size")
         self.translog_size = self.v(d, "translog_size")
         self.segment_count = self.v(d, "segment_count")

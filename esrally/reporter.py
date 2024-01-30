@@ -292,6 +292,7 @@ class SummaryReporter:
 
     def _report_disk_usage(self, stats):
         return self._join(
+            self._line("Dataset size", "", stats.dataset_size, "GB", convert.bytes_to_gb),
             self._line("Store size", "", stats.store_size, "GB", convert.bytes_to_gb),
             self._line("Translog size", "", stats.translog_size, "GB", convert.bytes_to_gb),
         )
@@ -886,6 +887,15 @@ class ComparisonReporter:
 
     def _report_disk_usage(self, baseline_stats, contender_stats):
         return self._join(
+            self._line(
+                "Dataset size",
+                baseline_stats.dataset_size,
+                contender_stats.dataset_size,
+                "",
+                "GB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_gb,
+            ),
             self._line(
                 "Store size",
                 baseline_stats.store_size,
