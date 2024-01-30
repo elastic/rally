@@ -808,7 +808,7 @@ class Builder:
         console.info("Creating installable binary from source files")
         self.logger.info("Running build command [%s]", build_cmd)
 
-        if process.run_subprocess(build_cmd):
+        if process.run_subprocess(build_cmd).returncode != 0:
             msg = f"Executing '{command}' failed. The last 20 lines in the build log file are:\n"
             msg += "=========================================================================================================\n"
             with open(log_file, encoding="utf-8") as f:

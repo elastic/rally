@@ -25,7 +25,7 @@ import psutil
 
 
 def run_subprocess(command_line):
-    return subprocess.call(command_line, shell=True)
+    return subprocess.run(command_line, shell=True, capture_output=True, check=False)
 
 
 def run_subprocess_with_output(command_line, env=None):
