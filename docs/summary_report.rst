@@ -151,6 +151,12 @@ Total ZGC Pauses GC count
 * **Definition**: The total number of Stop-The-World pauses performed by ZGC across the whole cluster as reported by the node stats API.
 * **Corresponding metrics key**: ``node_total_zgc_pauses_gc_count``
 
+Dataset size
+------------
+
+* **Definition**: Total data set size in bytes of the index. This includes the size of shards not stored fully on nodes, such as the cache for partially mounted indices.
+* **Corresponding metrics key**: ``dataset_size_in_bytes``
+
 Store size
 ----------
 
