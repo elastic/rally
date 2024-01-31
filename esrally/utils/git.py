@@ -51,13 +51,14 @@ def is_working_copy(src):
 @probed
 def is_branch(src_dir, identifier):
     show_ref_cmd = f"git -C {src_dir} show-ref {identifier}"
+    completed_process = process.run_subprocess(show_ref_cmd)
 
     # if we get an non-zero exit code, we know that the identifier is not a branch (local or remote)
-    if not process.exit_status_as_bool(lambda: process.run_subprocess_with_logging(show_ref_cmd)):
+    if not process.exit_status_as_bool(lambda: completed_process.returncode):
         return False
 
     # it's possible the identifier could be a tag, so we explicitly check that here
-    ref = process.run_subprocess_with_output(show_ref_cmd)
+    ref = completed_process.stdout.decode("utf-8").split("\n")
     if "refs/tags" in ref[0]:
         return False
 
