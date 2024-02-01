@@ -138,9 +138,9 @@ def wait_until_port_is_free(port_number=39200, timeout=120):
 
 
 def check_prerequisites():
-    if process.run_subprocess_with_logging("docker ps") != 0:
+    if process.run_subprocess_with_logging("docker ps").returncode != 0:
         raise AssertionError("Docker must be installed and the daemon must be up and running to run integration tests.")
-    if process.run_subprocess_with_logging("docker-compose --help") != 0:
+    if process.run_subprocess_with_logging("docker-compose --help").returncode != 0:
         raise AssertionError("Docker Compose is required to run integration tests.")
 
 
@@ -253,7 +253,7 @@ def build_docker_image():
         f"-f {ROOT_DIR}/docker/Dockerfiles/Dockerfile-dev {ROOT_DIR}"
     )
 
-    if process.run_subprocess_with_logging(command, env=env_variables) != 0:
+    if process.run_subprocess_with_logging(command, env=env_variables).returncode != 0:
         raise AssertionError("It was not possible to build the docker image from Dockerfile-dev")
 
 

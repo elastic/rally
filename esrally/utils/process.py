@@ -20,15 +20,22 @@ import os
 import shlex
 import subprocess
 import time
+from typing import Callable, Dict, List
 
 import psutil
 
 
-def run_subprocess(command_line):
-    return subprocess.run(command_line, shell=True, capture_output=True, check=False)
+def run_subprocess(command_line: str) -> subprocess.CompletedProcess:
+    """
+    Runs the provided command line in a subprocess. All output will be returned in the `CompletedProcess.stdout` field.
+
+    :param command_line: The command line of the subprocess to launch.
+    :return: The `CompletedProcess` object for the subprocess. `.returncode` contains the process' return code
+    """
+    return subprocess.run(command_line, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
 
 
-def run_subprocess_with_output(command_line, env=None):
+def run_subprocess_with_output(command_line: str, env: Dict[str, str] = None) -> List[str]:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
@@ -44,7 +51,7 @@ def run_subprocess_with_output(command_line, env=None):
     return lines
 
 
-def exit_status_as_bool(runnable, quiet=False):
+def exit_status_as_bool(runnable: Callable[[], int], quiet: bool = False) -> bool:
     """
 
     :param runnable: A runnable returning an int as exit status assuming ``0`` is meaning success.
@@ -60,7 +67,18 @@ def exit_status_as_bool(runnable, quiet=False):
         return False
 
 
-def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, stdin=None, env=None, detach=False):
+LogLevel = int
+FileId = int
+
+
+def run_subprocess_with_logging(
+    command_line: str,
+    header: str = None,
+    level: LogLevel = logging.INFO,
+    stdin: FileId = None,
+    env: Dict[str, str] = None,
+    detach: bool = False,
+) -> subprocess.Popen:
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
 
@@ -71,7 +89,7 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, s
       (default: None).
     :param env: Use specific environment variables (default: None).
     :param detach: Whether to detach this process from its parent process (default: False).
-    :return: The process exit code as an int.
+    :return: The `Popen` object for the subprocess. `.returncode` contains the process' return code
     """
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
@@ -95,10 +113,10 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, s
             logger.log(level=level, msg=stdout)
 
     logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
-    return command_line_process.returncode
+    return command_line_process
 
 
-def is_rally_process(p):
+def is_rally_process(p: psutil.Process) -> bool:
     return (
         p.name() == "esrally"
         or p.name() == "rally"
@@ -110,14 +128,14 @@ def is_rally_process(p):
     )
 
 
-def find_all_other_rally_processes():
+def find_all_other_rally_processes() -> List[psutil.Process]:
     others = []
     for_all_other_processes(is_rally_process, others.append)
     return others
 
 
-def kill_all(predicate):
-    def kill(p):
+def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
+    def kill(p: psutil.Process):
         logging.getLogger(__name__).info("Killing lingering process with PID [%s] and command line [%s].", p.pid, p.cmdline())
         p.kill()
         # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
@@ -132,7 +150,7 @@ def kill_all(predicate):
     for_all_other_processes(predicate, kill)
 
 
-def for_all_other_processes(predicate, action):
+def for_all_other_processes(predicate: Callable[[psutil.Process], bool], action: Callable[[psutil.Process], None]) -> None:
     # no harakiri please
     my_pid = os.getpid()
     for p in psutil.process_iter():
@@ -143,8 +161,8 @@ def for_all_other_processes(predicate, action):
             pass
 
 
-def kill_running_rally_instances():
-    def rally_process(p):
+def kill_running_rally_instances() -> None:
+    def rally_process(p: psutil.Process) -> bool:
         return (
             p.name() == "esrally"
             or p.name() == "rally"

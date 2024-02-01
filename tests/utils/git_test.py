@@ -133,7 +133,7 @@ class TestGit:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_git_version_too_old(self, run_subprocess_with_logging, run_subprocess):
         # any non-zero return value will do
-        run_subprocess_with_logging.return_value = 64
+        run_subprocess_with_logging.return_value.returncode = 64
         run_subprocess.return_value = "1.0.0"
 
         with pytest.raises(exceptions.SystemSetupError) as exc:

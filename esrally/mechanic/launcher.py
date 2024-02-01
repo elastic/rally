@@ -55,7 +55,7 @@ class DockerLauncher:
     def _start_process(self, binary_path):
         compose_cmd = self._docker_compose(binary_path, "up -d")
 
-        ret = process.run_subprocess_with_logging(compose_cmd)
+        ret = process.run_subprocess_with_logging(compose_cmd).returncode
         if ret != 0:
             msg = f"Docker daemon startup failed with exit code [{ret}]"
             logging.error(msg)

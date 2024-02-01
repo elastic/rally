@@ -351,7 +351,7 @@ class Heapdump(TelemetryDevice):
             heap_dump_file = os.path.join(self.log_root, f"heap_at_exit_{node.pid}.hprof")
             console.info(f"{self.human_name}: Writing heap dump to [{heap_dump_file}]", logger=self.logger)
             cmd = f"jmap -dump:format=b,file={heap_dump_file} {node.pid}"
-            if process.run_subprocess_with_logging(cmd):
+            if process.run_subprocess_with_logging(cmd).returncode:
                 self.logger.warning("Could not write heap dump to [%s]", heap_dump_file)
 
 

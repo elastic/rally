@@ -418,7 +418,7 @@ class TestGc:
 class TestHeapdump:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_generates_heap_dump(self, run_subprocess_with_logging):
-        run_subprocess_with_logging.return_value = 0
+        run_subprocess_with_logging.return_value.returncode = 0
         heapdump = telemetry.Heapdump("/var/log")
         t = telemetry.Telemetry(enabled_devices=[heapdump.command], devices=[heapdump])
         node = cluster.Node(pid="1234", binary_path="/bin", host_name="localhost", node_name="rally0", telemetry=t)
