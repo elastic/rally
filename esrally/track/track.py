@@ -701,7 +701,7 @@ class OperationType(Enum):
     CompositeAgg = (18, AdminStatus.No, serverless.Status.Public)
     WaitForCurrentSnapshotsCreate = (19, AdminStatus.No, serverless.Status.Internal)
     Downsample = (20, AdminStatus.No, serverless.Status.Internal)
-    Esql = (21, AdminStatus.No, serverless.Status.Blocked)
+    Esql = (21, AdminStatus.No, serverless.Status.Internal)
 
     # administrative actions
     ForceMerge = (22, AdminStatus.Yes, serverless.Status.Internal)
