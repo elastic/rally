@@ -433,7 +433,7 @@ class TestElasticsearchInstaller:
 class TestPluginInstaller:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_plugin_successfully(self, installer_subprocess):
-        installer_subprocess.return_value.returncode = 0
+        installer_subprocess.return_value = 0
 
         plugin = team.PluginDescriptor(
             name="unit-test-plugin",
@@ -453,7 +453,7 @@ class TestPluginInstaller:
 
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_plugin_with_bundled_jdk(self, installer_subprocess):
-        installer_subprocess.return_value.returncode = 0
+        installer_subprocess.return_value = 0
 
         plugin = team.PluginDescriptor(
             name="unit-test-plugin",
@@ -479,7 +479,7 @@ class TestPluginInstaller:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_unknown_plugin(self, installer_subprocess):
         # unknown plugin
-        installer_subprocess.return_value.returncode = 64
+        installer_subprocess.return_value = 64
 
         plugin = team.PluginDescriptor(name="unknown")
         installer = provisioner.PluginInstaller(plugin, java_home="/usr/local/javas/java8", hook_handler_class=NoopHookHandler)
@@ -496,7 +496,7 @@ class TestPluginInstaller:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_plugin_with_io_error(self, installer_subprocess):
         # I/O error
-        installer_subprocess.return_value.returncode = 74
+        installer_subprocess.return_value = 74
 
         plugin = team.PluginDescriptor(name="simple")
         installer = provisioner.PluginInstaller(plugin, java_home="/usr/local/javas/java8", hook_handler_class=NoopHookHandler)
@@ -513,7 +513,7 @@ class TestPluginInstaller:
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_install_plugin_with_unknown_error(self, installer_subprocess):
         # some other error
-        installer_subprocess.return_value.returncode = 12987
+        installer_subprocess.return_value = 12987
 
         plugin = team.PluginDescriptor(name="simple")
         installer = provisioner.PluginInstaller(plugin, java_home="/usr/local/javas/java8", hook_handler_class=NoopHookHandler)

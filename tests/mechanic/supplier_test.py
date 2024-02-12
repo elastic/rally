@@ -182,7 +182,7 @@ class TestBuilder:
     @mock.patch("esrally.utils.jvm.resolve_path")
     def test_build_on_jdk_8(self, jvm_resolve_path, mock_run_subprocess):
         jvm_resolve_path.return_value = (8, "/opt/jdk8")
-        mock_run_subprocess.return_value = mock.Mock(returncode=0)
+        mock_run_subprocess.return_value = False
 
         b = supplier.Builder(src_dir="/src", build_jdk=8, log_dir="logs")
         b.build(["./gradlew clean", "./gradlew assemble"])
@@ -200,7 +200,7 @@ class TestBuilder:
     @mock.patch("esrally.utils.jvm.resolve_path")
     def test_build_on_jdk_10(self, jvm_resolve_path, mock_run_subprocess):
         jvm_resolve_path.return_value = (10, "/opt/jdk10")
-        mock_run_subprocess.return_value = mock.Mock(returncode=0)
+        mock_run_subprocess.return_value = False
 
         b = supplier.Builder(src_dir="/src", build_jdk=8, log_dir="logs")
         b.build(["./gradlew clean", "./gradlew assemble"])

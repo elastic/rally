@@ -25,14 +25,14 @@ from typing import Callable, Dict, List
 import psutil
 
 
-def run_subprocess(command_line: str) -> subprocess.CompletedProcess:
+def run_subprocess(command_line: str) -> int:
     """
     Runs the provided command line in a subprocess. All output will be returned in the `CompletedProcess.stdout` field.
 
     :param command_line: The command line of the subprocess to launch.
-    :return: The `CompletedProcess` object for the subprocess. `.returncode` contains the process' return code
+    :return: The process' return code
     """
-    return subprocess.run(command_line, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+    return subprocess.call(command_line, shell=True)
 
 
 def run_subprocess_with_output(command_line: str, env: Dict[str, str] = None) -> List[str]:
@@ -78,7 +78,7 @@ def run_subprocess_with_logging(
     stdin: FileId = None,
     env: Dict[str, str] = None,
     detach: bool = False,
-) -> subprocess.CompletedProcess:
+) -> int:
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
 
@@ -89,7 +89,7 @@ def run_subprocess_with_logging(
       (default: None).
     :param env: Use specific environment variables (default: None).
     :param detach: Whether to detach this process from its parent process (default: False).
-    :return: The `CompletedProcess` object for the subprocess. `.returncode` contains the process' return code
+    :return: The process exit code as an int.
     """
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
@@ -99,22 +99,21 @@ def run_subprocess_with_logging(
         logger.info(header)
 
     # pylint: disable=subprocess-popen-preexec-fn
-    completed = subprocess.run(
+    with subprocess.Popen(
         command_line_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
+        universal_newlines=True,
         env=env,
         stdin=stdin if stdin else None,
-        check=False,
         preexec_fn=pre_exec,
-    )
+    ) as command_line_process:
+        stdout, _ = command_line_process.communicate()
+        if stdout:
+            logger.log(level=level, msg=stdout)
 
-    for line in completed.stdout.splitlines():
-        logger.log(level=level, msg=line)
-
-    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(completed.returncode))
-    return completed
+    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
+    return command_line_process.returncode
 
 
 def is_rally_process(p: psutil.Process) -> bool:
