@@ -202,7 +202,7 @@ class TestProcess:
 
 def test_run_subprocess():
     cmd = "ls . not-a-file"
-    completed_process = process.run_subprocess_with_logging(cmd)
+    completed_process = process.run_subprocess_with_logging_and_output(cmd)
 
     assert completed_process.returncode != 0
     assert completed_process.stdout != ""

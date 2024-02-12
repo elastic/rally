@@ -116,6 +116,52 @@ def run_subprocess_with_logging(
     return command_line_process.returncode
 
 
+def run_subprocess_with_logging_and_output(
+    command_line: str,
+    header: str = None,
+    level: LogLevel = logging.INFO,
+    stdin: FileId = None,
+    env: Dict[str, str] = None,
+    detach: bool = False,
+) -> subprocess.CompletedProcess:
+    """
+    Runs the provided command line in a subprocess. All output will be captured by a logger.
+
+    :param command_line: The command line of the subprocess to launch.
+    :param header: An optional header line that should be logged (this will be logged on info level, regardless of the defined log level).
+    :param level: The log level to use for output (default: logging.INFO).
+    :param stdin: The stdout object returned by subprocess.Popen(stdout=PIPE) allowing chaining of shell operations with pipes
+      (default: None).
+    :param env: Use specific environment variables (default: None).
+    :param detach: Whether to detach this process from its parent process (default: False).
+    :return: The process exit code as an int.
+    """
+    logger = logging.getLogger(__name__)
+    logger.debug("Running subprocess [%s] with logging.", command_line)
+    command_line_args = shlex.split(command_line)
+    pre_exec = os.setpgrp if detach else None
+    if header is not None:
+        logger.info(header)
+
+    # pylint: disable=subprocess-popen-preexec-fn
+    completed = subprocess.run(
+        command_line_args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+        check=False,
+        stdin=stdin if stdin else None,
+        preexec_fn=pre_exec,
+    )
+
+    for stdout in completed.stdout.splitlines():
+        logger.log(level=level, msg=stdout)
+
+    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(completed.returncode))
+    return completed
+
+
 def is_rally_process(p: psutil.Process) -> bool:
     return (
         p.name() == "esrally"
