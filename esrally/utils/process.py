@@ -24,10 +24,13 @@ from typing import Callable, Dict, List
 
 import psutil
 
+LogLevel = int
+FileId = int
+
 
 def run_subprocess(command_line: str) -> int:
     """
-    Runs the provided command line in a subprocess. All output will be returned in the `CompletedProcess.stdout` field.
+    Runs the provided command line in a subprocess.
 
     :param command_line: The command line of the subprocess to launch.
     :return: The process' return code
@@ -65,10 +68,6 @@ def exit_status_as_bool(runnable: Callable[[], int], quiet: bool = False) -> boo
         if not quiet:
             logging.getLogger(__name__).exception("Could not execute command.")
         return False
-
-
-LogLevel = int
-FileId = int
 
 
 def run_subprocess_with_logging(
