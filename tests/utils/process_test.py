@@ -198,3 +198,12 @@ class TestProcess:
         assert rally_process_mac.killed
         assert not own_rally_process.killed
         assert not night_rally_process.killed
+
+
+def test_run_subprocess():
+    cmd = "ls . not-a-file"
+    completed_process = process.run_subprocess_with_logging_and_output(cmd)
+
+    assert completed_process.returncode != 0
+    assert completed_process.stdout != ""
+    assert completed_process.stderr is None
