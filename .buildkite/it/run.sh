@@ -40,3 +40,7 @@ source .venv/bin/activate
 
 pip install nox
 nox -s "it-${PYTHON_VERSION}"
+
+echo "--- Upload artifacts"
+
+buildkite-agent artifact upload "${RALLY_HOME}/.rally/logs/*.log"
