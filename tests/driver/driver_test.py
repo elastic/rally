@@ -407,14 +407,14 @@ class TestSamplePostprocessor:
         ]
 
         post_process(samples)
-
+        meta_data = {"client_id": 0}
         calls = [
-            self.latency(38598, 24, 10.0),
-            self.service_time(38598, 24, 7.0),
-            self.processing_time(38598, 24, 9.0),
-            self.latency(38599, 25, 10.0),
-            self.service_time(38599, 25, 7.0),
-            self.processing_time(38599, 25, 9.0),
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
+            self.latency(38599, 25, 10.0, meta_data),
+            self.service_time(38599, 25, 7.0, meta_data),
+            self.processing_time(38599, 25, 9.0, meta_data),
             self.throughput(38598, 24, 5000),
             self.throughput(38599, 25, 5000),
         ]
@@ -432,12 +432,12 @@ class TestSamplePostprocessor:
         ]
 
         post_process(samples)
-
+        meta_data = {"client_id": 0}
         calls = [
             # only the first out of two request samples is included, throughput metrics are still complete
-            self.latency(38598, 24, 10.0),
-            self.service_time(38598, 24, 7.0),
-            self.processing_time(38598, 24, 9.0),
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
             self.throughput(38598, 24, 5000),
             self.throughput(38599, 25, 5000),
         ]
@@ -491,14 +491,15 @@ class TestSamplePostprocessor:
         ]
 
         post_process(samples)
-        meta_data = {"meta_key": "meta_value"}
+        meta_data = {"client_id": 0}
+        meta_data_with_key = {"client_id": 0, "meta_key": "meta_value"}
         calls = [
-            self.latency(38598, 24, 10.0),
-            self.service_time(38598, 24, 7.0),
-            self.processing_time(38598, 24, 9.0),
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
             # dependent timings
-            self.service_time(38601, 25, 50.0, meta_data),
-            self.service_time(38602, 26, 80.0, meta_data),
+            self.service_time(38601, 25, 50.0, meta_data_with_key),
+            self.service_time(38602, 26, 80.0, meta_data_with_key),
             # we don't currently calculate dependent throughput
             self.throughput(38598, 24, 5000),
         ]
