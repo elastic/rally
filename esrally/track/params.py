@@ -635,6 +635,7 @@ class BulkIndexParamSource(ParamSource):
 
         self.ingest_percentage = self.float_param(params, name="ingest-percentage", default_value=100, min_value=0, max_value=100)
         self.refresh = params.get("refresh")
+        self.looped = params.get("looped", False)
         self.param_source = PartitionBulkIndexParamSource(
             self.corpora,
             self.batch_size,
@@ -646,6 +647,7 @@ class BulkIndexParamSource(ParamSource):
             self.recency,
             self.pipeline,
             self.refresh,
+            self.looped,
             self._params,
         )
 
@@ -708,6 +710,7 @@ class PartitionBulkIndexParamSource:
         recency,
         pipeline=None,
         refresh=None,
+        looped: bool = False,
         original_params=None,
     ):
         """
@@ -726,6 +729,7 @@ class PartitionBulkIndexParamSource:
                         If "true", Elasticsearch refreshes the affected shards in the background.
                         If "wait_for", the client is blocked until Elasticsearch finishes the refresh operation.
                         If "false", Elasticsearch will use the default refresh behavior.
+        :param looped: Set to True for looped mode where bulk requests are repeated from the beginning when entire corpus was ingested.
         :param original_params: The original dict passed to the parent parameter source.
         """
         self.corpora = corpora
@@ -740,6 +744,7 @@ class PartitionBulkIndexParamSource:
         self.recency = recency
         self.pipeline = pipeline
         self.refresh = refresh
+        self.looped = looped
         self.original_params = original_params
         # this is only intended for unit-testing
         self.create_reader = original_params.pop("__create_reader", create_default_reader)
@@ -763,7 +768,12 @@ class PartitionBulkIndexParamSource:
         # self.internal_params always reads all files. This is necessary to ensure we terminate early in case
         # the user has specified ingest percentage.
         if self.current_bulk == self.total_bulks:
-            raise StopIteration()
+            # start from the beginning in looped mode, otherwise stop the run
+            if self.looped:
+                self.current_bulk = 0
+                self._init_internal_params()
+            else:
+                raise StopIteration()
         self.current_bulk += 1
         return next(self.internal_params)
 
