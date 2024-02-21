@@ -12,6 +12,11 @@ export DEBIAN_FRONTEND=noninteractive
 sudo mkdir -p /etc/needrestart
 echo "\$nrconf{restart} = 'a';" | sudo tee -a /etc/needrestart/needrestart.conf > /dev/null
 
+echo "--- Check resources"
+
+free
+cat /proc/cpuinfo
+
 echo "--- System dependencies"
 
 PYTHON_VERSION="$1"
