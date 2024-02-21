@@ -1278,6 +1278,51 @@ class TestBulkIndexParamSource:
         assert partition.total_bulks == 3
         assert len(list(schedule(partition))) == 3
 
+    def test_looped_mode(self):
+        def create_unit_test_reader(*args):
+            return StaticBulkReader(
+                "idx",
+                "doc",
+                bulks=[
+                    ['{"location" : [-0.1485188, 51.5250666]}'],
+                    ['{"location" : [-0.1479949, 51.5252071]}'],
+                ],
+            )
+
+        corpora = [
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=2,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 2,
+                "looped": True,
+                "__create_reader": create_unit_test_reader,
+            },
+        )
+
+        partition = source.partition(0, 1)
+        partition.params()
+        # should issue 1 bulk with the size of 2
+        assert partition.total_bulks == 1
+        assert partition.current_bulk == 1
+
+        partition.params()
+        # should have looped back to the beginning
+        assert partition.total_bulks == 1
+        assert partition.current_bulk == 1
+
     def test_create_with_conflict_probability_zero(self):
         corpus = track.DocumentCorpus(
             name="default",
