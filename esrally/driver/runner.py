@@ -667,7 +667,7 @@ class BulkIndex(Runner):
         """
         error_descriptions = []
         is_truncated = False
-        for count, error_detail in enumerate(error_details):
+        for count, error_detail in enumerate(sorted(error_details)):
             status, reason = error_detail
             if count < 5:
                 if reason:
@@ -677,7 +677,7 @@ class BulkIndex(Runner):
             else:
                 is_truncated = True
                 break
-        description = " | ".join(sorted(error_descriptions))
+        description = " | ".join(error_descriptions)
         if is_truncated:
             description = description + " | <TRUNCATED>"
         return description
