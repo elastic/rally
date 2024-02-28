@@ -1245,6 +1245,131 @@ class TestBulkIndexRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
+    async def test_bulk_index_error_produces_detailed_stats_body_with_limit(self, es):
+        es.bulk = mock.AsyncMock(
+            return_value={
+                "took": 5,
+                "errors": True,
+                "items": [
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[1]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[2]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[3]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[4]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[5]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[6]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                ],
+            }
+        )
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body(
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #1"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #2"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #3"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #4"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #5"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #6"}',
+            ),
+            "action-metadata-present": True,
+            "bulk-size": 6,
+            "unit": "docs",
+            "detailed-results": True,
+            "index": "test",
+        }
+
+        with mock.patch.object(bulk.logger, "warning") as mocked_warning_logger:
+            result = await bulk(es, bulk_params)
+            mocked_warning_logger.assert_has_calls([mock.call("Bulk request failed: [%s]", result["error-description"])])
+
+        assert result == {
+            "took": 5,
+            "index": "test",
+            "weight": 6,
+            "unit": "docs",
+            "success": False,
+            "success-count": 0,
+            "error-count": 6,
+            "error-type": "bulk",
+            "error-description": (
+                "HTTP status: 409, message: [1]: version conflict, document already exists (current version [1]) | "
+                "HTTP status: 409, message: [2]: version conflict, document already exists (current version [1]) | "
+                "HTTP status: 409, message: [3]: version conflict, document already exists (current version [1]) | "
+                "HTTP status: 409, message: [4]: version conflict, document already exists (current version [1]) | "
+                "HTTP status: 409, message: [5]: version conflict, document already exists (current version [1]) | "
+                "<TRUNCATED>"
+            ),
+            "ops": {"create": collections.Counter({"item-count": 6})},
+            "shards_histogram": [],
+            "total-document-size-bytes": 180,
+            "bulk-request-size-bytes": 390,
+        }
+
+        es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
     async def test_bulk_index_success_with_refresh_default(self, es):
         bulk_response = {
             "errors": False,

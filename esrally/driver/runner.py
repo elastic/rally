@@ -659,13 +659,28 @@ class BulkIndex(Runner):
             error_details.add((data["status"], None))
 
     def error_description(self, error_details):
+        """
+        Generates error description with an arbitrary limit of 5 errors.
+
+        :param error_details: accumulated error details
+        :return: error description
+        """
         error_descriptions = []
-        for status, reason in error_details:
-            if reason:
-                error_descriptions.append(f"HTTP status: {status}, message: {reason}")
+        is_truncated = False
+        for count, error_detail in enumerate(error_details):
+            status, reason = error_detail
+            if count < 5:
+                if reason:
+                    error_descriptions.append(f"HTTP status: {status}, message: {reason}")
+                else:
+                    error_descriptions.append(f"HTTP status: {status}")
             else:
-                error_descriptions.append(f"HTTP status: {status}")
-        return " | ".join(sorted(error_descriptions))
+                is_truncated = True
+                break
+        description = " | ".join(sorted(error_descriptions))
+        if is_truncated:
+            description = description + " | <TRUNCATED>"
+        return description
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"
