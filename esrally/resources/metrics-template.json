@@ -17,7 +17,7 @@
             "match_mapping_type": "string",
             "mapping": {
               "type": "keyword",
-              "ignore_above": 32766
+              "ignore_above": 8191
             }
           }
         }
