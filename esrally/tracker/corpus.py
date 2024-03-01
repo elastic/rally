@@ -42,7 +42,7 @@ def get_doc_outpath(outdir, name, suffix=""):
     return os.path.join(outdir, f"{name}-documents{suffix}.json")
 
 
-def extract(client, output_path, index):
+def extract(client, output_path, index, batch_size=1000):
     """
     Scroll an index with a match-all query, dumping document source to ``outdir/documents.json``.
 
@@ -58,15 +58,15 @@ def extract(client, output_path, index):
     if total_docs > 0:
         logger.info("[%d] total docs in index [%s].", total_docs, index)
         docs_path = get_doc_outpath(output_path, index)
-        dump_documents(client, index, get_doc_outpath(output_path, index, "-1k"), min(total_docs, 1000), " for test mode")
-        dump_documents(client, index, docs_path, total_docs)
+        dump_documents(client, index, get_doc_outpath(output_path, index, "-1k"), min(total_docs, 1000), batch_size, " for test mode")
+        dump_documents(client, index, docs_path, total_docs, batch_size)
         return template_vars(index, docs_path, total_docs)
     else:
         logger.info("Skipping corpus extraction fo index [%s] as it contains no documents.", index)
         return None
 
 
-def dump_documents(client, index, out_path, total_docs, progress_message_suffix=""):
+def dump_documents(client, index, out_path, total_docs, batch_size=1000, progress_message_suffix=""):
     # pylint: disable=import-outside-toplevel
     from elasticsearch import helpers
 
@@ -80,7 +80,7 @@ def dump_documents(client, index, out_path, total_docs, progress_message_suffix=
         with open(comp_outpath, "wb") as comp_outfile:
             logger.info("Dumping corpus for index [%s] to [%s].", index, out_path)
             query = {"query": {"match_all": {}}}
-            for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
+            for n, doc in enumerate(helpers.scan(client, query=query, index=index, size=batch_size)):
                 if n >= total_docs:
                     break
                 data = (json.dumps(doc["_source"], separators=(",", ":")) + "\n").encode("utf-8")
