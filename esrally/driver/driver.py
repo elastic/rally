@@ -1936,7 +1936,10 @@ class AsyncExecutor:
                     request_end = request_context.request_end
 
                 processing_end = time.perf_counter()
-                service_time = request_end - request_start
+                if isinstance(request_end, float) and isinstance(request_start, float):
+                    service_time = request_end - request_start
+                else:
+                    service_time = -1
                 processing_time = processing_end - processing_start
                 time_period = request_end - total_start
                 self.schedule_handle.after_request(processing_end, total_ops, total_ops_unit, request_meta_data)
