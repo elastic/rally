@@ -1940,6 +1940,7 @@ class AsyncExecutor:
                     service_time = request_end - request_start
                 else:
                     service_time = -1
+                    self.logger.warn(f"Encountered incorrect type. request_start:{type(request_start)}, request_end:{type(request_end)}")
                 processing_time = processing_end - processing_start
                 time_period = request_end - total_start
                 self.schedule_handle.after_request(processing_end, total_ops, total_ops_unit, request_meta_data)
