@@ -1311,6 +1311,17 @@ class TestBulkIndexRunner:
                             },
                         }
                     },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 429,
+                            "error": {
+                                "type": "cluster_block_exception",
+                                "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
+                                "flood-stage watermark, index has read-only-allow-delete block];",
+                            },
+                        }
+                    },
                 ],
             }
         )
@@ -1331,9 +1342,11 @@ class TestBulkIndexRunner:
                 '{"message" : "in a bottle #5"}',
                 '{ "index" : { "_index" : "test" } }',
                 '{"message" : "in a bottle #6"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #7"}',
             ),
             "action-metadata-present": True,
-            "bulk-size": 6,
+            "bulk-size": 7,
             "unit": "docs",
             "detailed-results": True,
             "index": "test",
@@ -1346,11 +1359,11 @@ class TestBulkIndexRunner:
         assert result == {
             "took": 5,
             "index": "test",
-            "weight": 6,
+            "weight": 7,
             "unit": "docs",
             "success": False,
             "success-count": 0,
-            "error-count": 6,
+            "error-count": 7,
             "error-type": "bulk",
             "error-description": (
                 "HTTP status: 409, message: [1]: version conflict, document already exists (current version [1]) | "
@@ -1358,12 +1371,12 @@ class TestBulkIndexRunner:
                 "HTTP status: 409, message: [3]: version conflict, document already exists (current version [1]) | "
                 "HTTP status: 409, message: [4]: version conflict, document already exists (current version [1]) | "
                 "HTTP status: 409, message: [5]: version conflict, document already exists (current version [1]) | "
-                "<TRUNCATED>"
+                "TRUNCATED 6x409, 1x429"
             ),
-            "ops": {"create": collections.Counter({"item-count": 6})},
+            "ops": {"create": collections.Counter({"item-count": 7})},
             "shards_histogram": [],
-            "total-document-size-bytes": 180,
-            "bulk-request-size-bytes": 390,
+            "total-document-size-bytes": 210,
+            "bulk-request-size-bytes": 455,
         }
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
