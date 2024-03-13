@@ -658,14 +658,44 @@ class BulkIndex(Runner):
         else:
             error_details.add((data["status"], None))
 
+    def _error_status_summary(self, error_details):
+        """
+        Generates error status code summary.
+
+        :param error_details: accumulated error details
+        :return: error status summary
+        """
+        status_counts = {}
+        for status, _ in error_details:
+            status_counts[status] = status_counts.get(status, 0) + 1
+        status_summaries = []
+        for status in sorted(status_counts.keys()):
+            status_summaries.append(f"{status_counts[status]}x{status}")
+        return ", ".join(status_summaries)
+
     def error_description(self, error_details):
+        """
+        Generates error description with an arbitrary limit of 5 errors.
+
+        :param error_details: accumulated error details
+        :return: error description
+        """
         error_descriptions = []
-        for status, reason in error_details:
-            if reason:
-                error_descriptions.append(f"HTTP status: {status}, message: {reason}")
+        is_truncated = False
+        for count, error_detail in enumerate(sorted(error_details)):
+            status, reason = error_detail
+            if count < 5:
+                if reason:
+                    error_descriptions.append(f"HTTP status: {status}, message: {reason}")
+                else:
+                    error_descriptions.append(f"HTTP status: {status}")
             else:
-                error_descriptions.append(f"HTTP status: {status}")
-        return " | ".join(sorted(error_descriptions))
+                is_truncated = True
+                break
+        description = " | ".join(error_descriptions)
+        if is_truncated:
+            description = description + " | TRUNCATED " + self._error_status_summary(error_details)
+        return description
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"

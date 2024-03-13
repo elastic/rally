@@ -16,7 +16,8 @@
             "match": "*",
             "match_mapping_type": "string",
             "mapping": {
-              "type": "keyword"
+              "type": "keyword",
+              "ignore_above": 8191
             }
           }
         }
@@ -29,8 +30,45 @@
           "type": "date",
           "format": "epoch_millis"
         },
-        "relative-time": {
+        "car": {
+          "type": "keyword"
+        },
+        "challenge": {
+          "type": "keyword"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "job": {
+          "type": "keyword"
+        },
+        "max": {
           "type": "float"
+        },
+        "mean": {
+          "type": "float"
+        },
+        "median": {
+          "type": "float"
+        },
+        "meta": {
+          "properties": {
+            "error-description": {
+              "type": "wildcard"
+            }
+          }
+        },
+        "min": {
+          "type": "float"
+        },
+        "name": {
+          "type": "keyword"
+        },
+        "operation": {
+          "type": "keyword"
+        },
+        "operation-type": {
+          "type": "keyword"
         },
         "race-id": {
           "type": "keyword"
@@ -44,38 +82,8 @@
             }
           }
         },
-        "environment": {
-          "type": "keyword"
-        },
-        "track": {
-          "type": "keyword"
-        },
-        "challenge": {
-          "type": "keyword"
-        },
-        "car": {
-          "type": "keyword"
-        },
-        "name": {
-          "type": "keyword"
-        },
-        "value": {
+        "relative-time": {
           "type": "float"
-        },
-        "min": {
-          "type": "float"
-        },
-        "max": {
-          "type": "float"
-        },
-        "mean": {
-          "type": "float"
-        },
-        "median": {
-          "type": "float"
-        },
-        "unit": {
-          "type": "keyword"
         },
         "sample-type": {
           "type": "keyword"
@@ -83,14 +91,14 @@
         "task": {
           "type": "keyword"
         },
-        "operation": {
+        "track": {
           "type": "keyword"
         },
-        "operation-type": {
+        "unit": {
           "type": "keyword"
         },
-        "job": {
-          "type": "keyword"
+        "value": {
+          "type": "float"
         }
       }
     }
