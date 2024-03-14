@@ -1025,12 +1025,14 @@ class SamplePostprocessor:
         for idx, sample in enumerate(raw_samples):
             if idx % self.downsample_factor == 0:
                 final_sample_count += 1
+                client_id_meta_data = {"client_id": sample.client_id}
                 meta_data = self.merge(
                     self.track_meta_data,
                     self.challenge_meta_data,
                     sample.operation_meta_data,
                     sample.task.meta_data,
                     sample.request_meta_data,
+                    client_id_meta_data,
                 )
 
                 self.metrics_store.put_value_cluster_level(
@@ -1083,7 +1085,7 @@ class SamplePostprocessor:
                         sample_type=timing.sample_type,
                         absolute_time=timing.absolute_time,
                         relative_time=timing.relative_time,
-                        meta_data=timing.request_meta_data,
+                        meta_data=self.merge(timing.request_meta_data, client_id_meta_data),
                     )
 
         end = time.perf_counter()
