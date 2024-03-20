@@ -48,7 +48,7 @@ def extract_indices_from_data_streams(client, data_streams_to_extract):
     return indices
 
 
-def extract_mappings_and_corpora(client, output_path, indices_to_extract):
+def extract_mappings_and_corpora(client, output_path, indices_to_extract, batch_size):
     indices = []
     corpora = []
     # first extract index metadata (which is cheap) and defer extracting data to reduce the potential for
@@ -61,7 +61,7 @@ def extract_mappings_and_corpora(client, output_path, indices_to_extract):
 
     # That list only contains valid indices (with index patterns already resolved)
     for i in indices:
-        c = corpus.extract(client, output_path, i["name"])
+        c = corpus.extract(client, output_path, i["name"], batch_size)
         if c:
             corpora.append(c)
 
@@ -77,6 +77,7 @@ def create_track(cfg: types.Config):
     target_hosts = cfg.opts("client", "hosts").default
     client_options = cfg.opts("client", "options").default
     data_streams = cfg.opts("generator", "data_streams")
+    batch_size = cfg.opts("generator", "batch_size")
 
     distribution_flavor, distribution_version, _, _ = factory.cluster_distribution_version(target_hosts, client_options)
     client = factory.EsClientFactory(
@@ -90,6 +91,10 @@ def create_track(cfg: types.Config):
 
     output_path = os.path.abspath(os.path.join(io.normalize_path(root_path), track_name))
     io.ensure_dir(output_path)
+    challenge_path = os.path.abspath(os.path.join(output_path, "challenges"))
+    io.ensure_dir(challenge_path)
+    operations_path = os.path.abspath(os.path.join(output_path, "operations"))
+    io.ensure_dir(operations_path)
 
     if data_streams is not None:
         logger.info("Creating track [%s] matching data streams [%s]", track_name, data_streams)
@@ -97,15 +102,19 @@ def create_track(cfg: types.Config):
         indices = extracted_indices
     logger.info("Creating track [%s] matching indices [%s]", track_name, indices)
 
-    indices, corpora = extract_mappings_and_corpora(client, output_path, indices)
+    indices, corpora = extract_mappings_and_corpora(client, output_path, indices, batch_size)
     if len(indices) == 0:
         raise RuntimeError("Failed to extract any indices for track!")
 
     template_vars = {"track_name": track_name, "indices": indices, "corpora": corpora}
 
     track_path = os.path.join(output_path, "track.json")
+    default_challenges = os.path.join(challenge_path, "default.json")
+    default_operations = os.path.join(operations_path, "default.json")
     templates_path = os.path.join(cfg.opts("node", "rally.root"), "resources")
     process_template(templates_path, "track.json.j2", template_vars, track_path)
+    process_template(templates_path, "challenges.json.j2", template_vars, default_challenges)
+    process_template(templates_path, "operations.json.j2", template_vars, default_operations)
 
     console.println("")
-    console.info(f"Track {track_name} has been created. Run it with: {PROGRAM_NAME} --track-path={output_path}")
+    console.info(f"Track {track_name} has been created. Run it with: {PROGRAM_NAME} race --track-path={output_path}")

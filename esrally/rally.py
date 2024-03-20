@@ -199,7 +199,7 @@ def create_arg_parser():
     add_track_source(info_parser)
     info_parser.add_argument(
         "--track",
-        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`."
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`.",
         # we set the default value later on because we need to determine whether the user has provided this value.
         # default="geonames"
     )
@@ -228,6 +228,11 @@ def create_arg_parser():
         "--track",
         required=True,
         help="Name of the generated track",
+    )
+    create_track_parser.add_argument(
+        "--batch-size",
+        default=1000,
+        help="Number of documents to collect per call to Elasticsearch.",
     )
     indices_or_data_streams_group = create_track_parser.add_mutually_exclusive_group(required=True)
     indices_or_data_streams_group.add_argument(
@@ -1188,11 +1193,13 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
                 cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+                cfg.add(config.Scope.applicationOverride, "generator", "batch_size", args.batch_size)
             elif args.indices is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
                 cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+                cfg.add(config.Scope.applicationOverride, "generator", "batch_size", args.batch_size)
             configure_connection_params(arg_parser, args, cfg)
 
             tracker.create_track(cfg)

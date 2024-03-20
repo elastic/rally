@@ -51,6 +51,7 @@ Key = Literal[
     "assertions",
     "async.debug",
     "available.cores",
+    "batch_size",
     "build.type",
     "cache",
     "cache.days",
