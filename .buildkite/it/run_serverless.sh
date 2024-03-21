@@ -4,6 +4,11 @@ set -eo pipefail
 
 source .buildkite/retry.sh
 
+function upload_logs {
+    echo "--- Upload artifacts"
+    buildkite-agent artifact upload "${RALLY_HOME}/.rally/logs/*.log"
+}
+
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
 export TZ=Etc/UTC
@@ -38,6 +43,8 @@ export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
 # adjust the default log level from WARNING
 export THESPLOG_THRESHOLD="INFO"
 
+trap upload_logs ERR
+
 case $TEST_NAME in
     "user")
         nox -s it_serverless
@@ -50,3 +57,5 @@ case $TEST_NAME in
         exit 1
         ;;
 esac
+
+upload_logs

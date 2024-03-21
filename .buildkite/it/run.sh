@@ -4,6 +4,11 @@ set -eo pipefail
 
 source .buildkite/retry.sh
 
+function upload_logs {
+    echo "--- Upload artifacts"
+    buildkite-agent artifact upload "${RALLY_HOME}/.rally/logs/*.log"
+}
+
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
 export TZ=Etc/UTC
@@ -44,8 +49,8 @@ export LC_ALL=en_US.UTF-8
 source .venv/bin/activate
 
 pip install nox
+
+trap upload_logs ERR
 nox -s "it-${PYTHON_VERSION}"
 
-echo "--- Upload artifacts"
-
-buildkite-agent artifact upload "${RALLY_HOME}/.rally/logs/*.log"
+upload_logs
