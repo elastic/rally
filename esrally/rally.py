@@ -1266,7 +1266,7 @@ def main():
     # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
     logger.info("Cleaning track dependency directory [%s]...", paths.libs())
 
-    if sys.version.major == 3 and sys.version.minor <= 11:
+    if sys.version_info.major == 3 and sys.version_info.minor <= 11:
         # pylint: disable=deprecated-argument
         shutil.rmtree(paths.libs(), onerror=_trap)
     else:
