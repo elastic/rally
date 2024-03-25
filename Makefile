@@ -65,6 +65,7 @@ check-venv:
 	fi
 
 install-user: venv-create
+	. $(VENV_ACTIVATE_FILE); $(PY_BIN) -m ensurepip --upgrade --default-pip 
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade hatch==$(HATCH_VERSION) hatchling==$(HATCHLING_VERSION) pip==$(PIP_VERSION) wheel==$(WHEEL_VERSION)
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 
