@@ -1256,6 +1256,13 @@ def main():
     # Configure networking
     net.init()
 
+    def _trap_exc(function, path, exc_info):
+        if type(exc_info) == FileNotFoundError:
+            # couldn't delete because it was already clean
+            return
+        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
+        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
+    
     def _trap(function, path, exc_info):
         if exc_info[0] == FileNotFoundError:
             # couldn't delete because it was already clean
@@ -1270,7 +1277,7 @@ def main():
         # pylint: disable=deprecated-argument
         shutil.rmtree(paths.libs(), onerror=_trap)
     else:
-        shutil.rmtree(paths.libs(), onexc=_trap)
+        shutil.rmtree(paths.libs(), onexc=_trap_exc)
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 
