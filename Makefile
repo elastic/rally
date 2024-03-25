@@ -44,7 +44,7 @@ prereq:
 	pyenv install --skip-existing $(PY310)
 	pyenv install --skip-existing $(PY311)
 	pyenv install --skip-existing $(PY312)
-	pyenv local $(PY38)
+	pyenv local $(PY312)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
