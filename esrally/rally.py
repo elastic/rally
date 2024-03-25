@@ -1262,7 +1262,7 @@ def main():
             return
         logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
         raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
-    
+
     def _trap(function, path, exc_info):
         if exc_info[0] == FileNotFoundError:
             # couldn't delete because it was already clean
