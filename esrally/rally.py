@@ -1257,7 +1257,7 @@ def main():
     net.init()
 
     def _trap_exc(function, path, exc_info):
-        if type(exc_info) == FileNotFoundError:
+        if isinstance(exc_info, FileNotFoundError):
             # couldn't delete because it was already clean
             return
         logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
