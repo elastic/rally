@@ -80,6 +80,7 @@ def run_subprocess_with_logging(command_line, header=None, level=logging.INFO, s
     if header is not None:
         logger.info(header)
 
+    # pylint: disable=subprocess-popen-preexec-fn
     with subprocess.Popen(
         command_line_args,
         stdout=subprocess.PIPE,
