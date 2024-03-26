@@ -576,16 +576,16 @@ class TestApiKeys:
                 {"invalidated_api_keys": ["baz"]},
             ]
             calls = [
-                mock.call({"id": "baz"}),
-                mock.call({"id": "bar"}),
-                mock.call({"id": "foo"}),
+                mock.call(id="baz"),
+                mock.call(id="bar"),
+                mock.call(id="foo"),
             ]
         else:
             es.security.invalidate_api_key.return_value = {"invalidated_api_keys": ["foo", "bar", "baz"], "error_count": 0}
             calls = [mock.call(ids=ids)]
 
         assert client.delete_api_keys(es, ids, max_attempts=3)
-        assert es.security.invalidate_api_key.has_calls(calls, any_order=True)
+        es.security.invalidate_api_key.assert_has_calls(calls, any_order=True)
 
     @pytest.mark.parametrize("version", ["7.9.0", "7.10.0"])
     @mock.patch("time.sleep")

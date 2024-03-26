@@ -23,10 +23,10 @@ steps:
       - elastic/vault-secrets#v0.0.2: *vault-base_url
       - elastic/vault-secrets#v0.0.2: *vault-get_credentials_endpoint
       - elastic/vault-secrets#v0.0.2: *vault-api_key
-    command: bash .buildkite/it/run_serverless.sh 3.11 user
+    command: bash .buildkite/it/run_serverless.sh 3.12 user
   - label: "Run IT serverless tests with operator privileges"
     plugins:
       - elastic/vault-secrets#v0.0.2: *vault-base_url
       - elastic/vault-secrets#v0.0.2: *vault-get_credentials_endpoint
       - elastic/vault-secrets#v0.0.2: *vault-api_key
-    command: bash .buildkite/it/run_serverless.sh 3.11 operator
+    command: bash .buildkite/it/run_serverless.sh 3.12 operator

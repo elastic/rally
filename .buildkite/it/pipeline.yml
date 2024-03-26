@@ -6,5 +6,5 @@ agents:
 steps:
   - label: "Run 3.8 integration tests :test_tube:"
     command: bash .buildkite/it/run.sh 3.8
-  - label: "Run 3.11 integration tests :test_tube:"
-    command: bash .buildkite/it/run.sh 3.11
+  - label: "Run 3.12 integration tests :test_tube:"
+    command: bash .buildkite/it/run.sh 3.12

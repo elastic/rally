@@ -25,6 +25,7 @@ export PY38 := $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 := $(shell jq -r '.python_versions.PY39' .ci/variables.json)
 export PY310 := $(shell jq -r '.python_versions.PY310' .ci/variables.json)
 export PY311 := $(shell jq -r '.python_versions.PY311' .ci/variables.json)
+export PY312 := $(shell jq -r '.python_versions.PY312' .ci/variables.json)
 export HATCH_VERSION := $(shell jq -r '.prerequisite_versions.HATCH' .ci/variables.json)
 export HATCHLING_VERSION := $(shell jq -r '.prerequisite_versions.HATCHLING' .ci/variables.json)
 export PIP_VERSION := $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
@@ -42,7 +43,8 @@ prereq:
 	pyenv install --skip-existing $(PY39)
 	pyenv install --skip-existing $(PY310)
 	pyenv install --skip-existing $(PY311)
-	pyenv local $(PY38)
+	pyenv install --skip-existing $(PY312)
+	pyenv local $(PY312)
 	@# Ensure all Python versions are registered for this project
 	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
 	-@ printf $(PYENV_PREREQ_HELP)
@@ -63,6 +65,7 @@ check-venv:
 	fi
 
 install-user: venv-create
+	. $(VENV_ACTIVATE_FILE); $(PY_BIN) -m ensurepip --upgrade --default-pip 
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade hatch==$(HATCH_VERSION) hatchling==$(HATCHLING_VERSION) pip==$(PIP_VERSION) wheel==$(WHEEL_VERSION)
 	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
 
@@ -98,12 +101,12 @@ serve-docs: check-venv
 
 test: check-venv
 	. $(VENV_ACTIVATE_FILE); nox -s test-3.8
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.11
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.12
 
 # checks min and max python versions
 it: check-venv python-caches-clean
 	. $(VENV_ACTIVATE_FILE); nox -s it-3.8
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.11
+	. $(VENV_ACTIVATE_FILE); nox -s it-3.12
 
 check-all: lint test it
 
