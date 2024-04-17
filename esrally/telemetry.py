@@ -2553,6 +2553,7 @@ class BlobStoreStatsRecorder:
     def operational_backup_service_stats(self, stats):
         return flatten_stats_fields(prefix="operational_backup", stats=stats.get("operational_backup_service_stats", {}))
 
+
 class GeoIpStats(TelemetryDevice):
     internal = False
     serverless_status = serverless.Status.Internal
