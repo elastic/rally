@@ -37,6 +37,7 @@ If you invoke ``esrally list telemetry``, it will show which telemetry devices a
    data-stream-stats           Data Stream Stats           Regularly samples data stream stats
    ingest-pipeline-stats       Ingest Pipeline Stats       Reports Ingest Pipeline stats at the end of the benchmark.
    disk-usage-stats            Disk usage of each field    Runs the indices disk usage API after benchmarking
+   geoip-stats                 GeoIp Stats                 Writes geo ip stats to the metrics store at the end of the benchmark.
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -414,3 +415,15 @@ Example of recorded documents given two nodes in the target cluster::
 .. note::
 
     This telemetry device is only applicable to `Elastic Serverless <https://docs.elastic.co/serverless>`_ and requires elevated privleges only available to Elastic developers.
+
+geoip-stats
+----------------
+
+The geoip-stats telemetry device fetches data from the `GeoIP Stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/geoip-stats-api.html>`_ at the end of the run, and stores geoip cache stats as metrics for the run. This is available only in Elasticsearch 8.14.0 and higher. Stored metrics include:
+
+* ``geoip_cache_count``: The number of items in the cache.
+* ``geoip_cache_hits``: The number of times an IP address was found in the cache.
+* ``geoip_cache_misses``: The number of times an IP address was not found in the cache.
+* ``geoip_cache_evictions``: The number of times an entry was evicted from the cache because the max cache size had been reached.
+* ``geoip_cache_hits_time_in_millis``: The total amount of time spent fetching data from the cache, for cache hits only.
+* ``geoip_cache_misses_time_in_millis``: The total amount of time spent fetching data from the cache, for cache misses only. This includes time spent fetching data from the geoip database.
