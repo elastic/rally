@@ -2577,7 +2577,7 @@ class GeoIpStats(TelemetryDevice):
         node_id_to_name_dict = {}
         for node_id, node in nodes_info:
             node_id_to_name_dict[node_id] = node["name"]
-        geoip_stats = self.client.perform_request("GET", "/_ingest/geoip/stats")
+        geoip_stats = self.client.ingest.geo_ip_stats()
         stats_dict = geoip_stats.body
         nodes_dict = stats_dict["nodes"]
         for node_id, node in nodes_dict.items():
