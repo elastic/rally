@@ -48,6 +48,7 @@ def list_telemetry():
             DataStreamStats,
             IngestPipelineStats,
             DiskUsageStats,
+            GeoIpStats,
         ]
     ]
     console.println(tabulate.tabulate(devices, ["Command", "Name", "Description"]))
@@ -2551,3 +2552,40 @@ class BlobStoreStatsRecorder:
 
     def operational_backup_service_stats(self, stats):
         return flatten_stats_fields(prefix="operational_backup", stats=stats.get("operational_backup_service_stats", {}))
+
+
+class GeoIpStats(TelemetryDevice):
+    internal = False
+    serverless_status = serverless.Status.Internal
+    command = "geoip-stats"
+    human_name = "GeoIp Stats"
+    help = "Writes geo ip stats to the metrics store at the end of the benchmark."
+
+    def __init__(self, client, metrics_store):
+        super().__init__()
+        self.client = client
+        self.metrics_store = metrics_store
+
+    def on_benchmark_stop(self):
+        self.logger.info("Gathering GeoIp stats at benchmark end")
+        # First, build a map of node id to node name, because the geoip stats API doesn't return node name:
+        try:
+            nodes_info = self.client.nodes.info(node_id="_all")["nodes"].items()
+        except BaseException:
+            self.logger.exception("Could not retrieve nodes info")
+            nodes_info = {}
+        node_id_to_name_dict = {}
+        for node_id, node in nodes_info:
+            node_id_to_name_dict[node_id] = node["name"]
+        geoip_stats = self.client.ingest.geo_ip_stats()
+        stats_dict = geoip_stats.body
+        nodes_dict = stats_dict["nodes"]
+        for node_id, node in nodes_dict.items():
+            node_name = node_id_to_name_dict[node_id]
+            cache_stats = node["cache_stats"]
+            self.metrics_store.put_value_node_level(node_name, "geoip_cache_count", cache_stats["count"])
+            self.metrics_store.put_value_node_level(node_name, "geoip_cache_hits", cache_stats["hits"])
+            self.metrics_store.put_value_node_level(node_name, "geoip_cache_misses", cache_stats["misses"])
+            self.metrics_store.put_value_node_level(node_name, "geoip_cache_evictions", cache_stats["evictions"])
+            self.metrics_store.put_value_node_level(node_name, "geoip_cache_hits_time_in_millis", cache_stats["hits_time_in_millis"])
+            self.metrics_store.put_value_node_level(node_name, "geoip_cache_misses_time_in_millis", cache_stats["misses_time_in_millis"])
