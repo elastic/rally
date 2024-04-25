@@ -41,11 +41,11 @@ jobs:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
         os:
-          - macos-latest
+          - macos-13
           - ubuntu-latest
 
     runs-on: ${{ matrix.os }}
-    name: unit ${{ fromJson('{"macos-latest":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
+    name: unit ${{ fromJson('{"macos-13":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
