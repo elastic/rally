@@ -1009,13 +1009,13 @@ The number of records to request per batch when generating a track with the ``cr
 
 **Example**
 
-Target a single data stream::
+Run with 10000 records per batch::
 
     esrally create-track --track=acme --batch-size 10000 --target-hosts=127.0.0.1:9200 --output-path=~/tracks
 
 
 .. note::
-   The larger the batch size, the more data will be downloaded in one go. As such, you should ensure that you have a stable network connection between where you are running rally and the Elasticsearch cluster.
+   The larger the batch size, the more data will be downloaded per call to Elasticsearch. As such, you should ensure that you have a stable network connection between where you are running rally and the Elasticsearch cluster.
 
 .. _command_line_reference_advanced_topics:
 
