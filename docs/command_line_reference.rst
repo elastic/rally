@@ -1002,6 +1002,20 @@ Use index patterns::
 .. note::
    If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
 
+  ``batch-size``
+~~~~~~~~~~~~~~~~
+
+The number of records to request per batch when generating a track with the ``create-track`` subcommand. The default value is 1000
+
+**Example**
+
+Target a single data stream::
+
+    esrally create-track --track=acme --batch-size 10000 --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+.. note::
+   The larger the batch size, the more data will be downloaded in one go. As such, you should ensure that you have a stable network connection between where you are running rally and the Elasticsearch cluster.
+
 .. _command_line_reference_advanced_topics:
 
 Advanced topics
