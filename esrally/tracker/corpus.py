@@ -71,7 +71,7 @@ def dump_documents(client, index, out_path, total_docs, batch_size=1000, progres
     from elasticsearch import helpers
 
     logger = logging.getLogger(__name__)
-    freq = max(1, total_docs // 1000)
+    freq = max(1, total_docs // batch_size)
 
     progress = console.progress()
     compressor = DOCS_COMPRESSOR()
