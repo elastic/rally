@@ -50,7 +50,7 @@ dependencies = [
     "urllib3==1.26.18",
     "docker==6.0.0",
     # avoid specific requests version to fix bug in docker-py
-    "requests > 2.26.0, != 2.32.0",
+    "requests<2.32.0",
     # License: BSD
     "psutil==5.9.4",
     # License: MIT
