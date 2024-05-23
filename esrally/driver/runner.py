@@ -2892,7 +2892,6 @@ class Esql(Runner):
         query = mandatory(params, "query", self)
         body = params.get("body", {})
         body["query"] = query
-        body["version"] = params.get("version", "2024.04.01")
         query_filter = params.get("filter")
         if query_filter:
             body["filter"] = query_filter

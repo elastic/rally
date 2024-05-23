@@ -3138,13 +3138,12 @@ The operation returns no meta-data.
 esql
 ~~~~~~~~~~~~~
 
-With the operation type ``esql`` you can execute an `ES|QL query <https://www.elastic.co/guide/en/elasticsearch/reference/current/esql.html>`_.
+With the operation type ``esql`` you can execute `ES|QL query <https://www.elastic.co/guide/en/elasticsearch/reference/master/esql.html>`_.
 
 Properties
 """"""""""
 
-* ``query`` (mandatory): An ES|QL query which starts with a source command followed by processing commands.
-* ``version`` (optional): The version of the ES|QL query language. Defaults to the first released version, ``2024.04.01``. See the docs for `available versions <https://www.elastic.co/guide/en/elasticsearch/reference/master/esql-version.html>`_.
+* ``query`` (mandatory): An ES|QL query starts with a source command followed processing commands.
 * ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
 * ``body`` (optional): The query body.
 
@@ -3154,7 +3153,6 @@ Example::
       "name": "default",
       "operation-type": "esql",
       "query": "FROM logs-* | STATS count=count(*) BY agent.hostname | SORT count DESC | LIMIT 20",
-      "version": "2024.04.01",
       "filter": {
         "range": {
           "timestamp": {
