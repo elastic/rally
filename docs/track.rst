@@ -3138,12 +3138,12 @@ The operation returns no meta-data.
 esql
 ~~~~~~~~~~~~~
 
-With the operation type ``esql`` you can execute `ES|QL query <https://www.elastic.co/guide/en/elasticsearch/reference/master/esql.html>`_.
+With the operation type ``esql`` you can execute an `ES|QL query <https://www.elastic.co/guide/en/elasticsearch/reference/current/esql.html>`_.
 
 Properties
 """"""""""
 
-* ``query`` (mandatory): An ES|QL query starts with a source command followed processing commands.
+* ``query`` (mandatory): An ES|QL query which starts with a source command followed by processing commands.
 * ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
 * ``body`` (optional): The query body.
 
