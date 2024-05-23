@@ -27,11 +27,15 @@ The track generator will create a folder with the track's name in the specified 
 
     > find tracks/acme
     tracks/acme
+    tracks/acme/challenges
+    tracks/acme/challenges/default.json
     tracks/acme/companies-documents.json
     tracks/acme/companies-documents.json.bz2
     tracks/acme/companies-documents-1k.json
     tracks/acme/companies-documents-1k.json.bz2
     tracks/acme/companies.json
+    tracks/acme/operations
+    tracks/acme/operations/default.json
     tracks/acme/products-documents.json
     tracks/acme/products-documents.json.bz2
     tracks/acme/products-documents-1k.json
@@ -39,11 +43,15 @@ The track generator will create a folder with the track's name in the specified 
     tracks/acme/products.json
     tracks/acme/track.json
 
+
 The files are organized as follows:
 
 * ``track.json`` contains the actual Rally track. For details see the :doc:`track reference<track>`.
 * ``companies.json`` and ``products.json`` contain the mapping and settings for the extracted indices.
 * ``*-documents.json(.bz2)`` contains the sources of all the documents from the extracted indices. The files suffixed with ``-1k`` contain a smaller version of the document corpus to support :ref:`test mode <add_track_test_mode>`.
+* ``operations/default.json`` contains a sample operation that can be used when adding search requests to the track.
+* ``challenges/default.json`` contains the initial actions for the default challenge - delete index, create, and bulk-index.
+
 
 Creating a track from scratch
 -----------------------------
