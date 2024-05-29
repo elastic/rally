@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import contextlib
 import logging
 import time
 
@@ -363,12 +364,19 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
     # if version number is not available default to build flavor
     version_number = version.get("number", version_build_flavor)
 
+    # assume non-operator serverless privileges by default
     serverless_operator = False
     if versions.is_serverless(version_build_flavor):
         # overwrite static serverless version number
         version_number = "serverless"
-        authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
-        serverless_operator = authentication_info.body.get("operator", False)
+
+        # determine serverless operator status if security enabled
+        # pylint: disable=import-outside-toplevel
+        from elasticsearch.exceptions import ApiError
+
+        with contextlib.suppress(ApiError):
+            authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
+            serverless_operator = authentication_info.body.get("operator", False)
 
     if not versions.is_serverless(version_build_flavor) or serverless_operator is True:
         # if available, unconditionally wait for the REST layer - if it's not up, we'll intentionally raise the original error
