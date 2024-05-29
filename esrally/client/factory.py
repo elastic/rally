@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import contextlib
 import logging
 import time
 
@@ -363,12 +364,13 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
     # if version number is not available default to build flavor
     version_number = version.get("number", version_build_flavor)
 
+    # assume non-operator serverless privileges by default
     serverless_operator = False
     if versions.is_serverless(version_build_flavor):
         # overwrite static serverless version number
         version_number = "serverless"
 
-        # determine operator status if security enabled, otherwise assume operator privileges
+        # determine serverless operator status if security enabled
         # pylint: disable=import-outside-toplevel
         from elasticsearch.exceptions import ApiError
 
