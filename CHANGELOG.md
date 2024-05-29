@@ -6,6 +6,7 @@
 
 #### Enhancements
 
+* [#1851](https://github.com/elastic/rally/pull/1851): Assume no operator if security not enabled in serverless
 * [#1846](https://github.com/elastic/rally/pull/1846): Update create track
 * [#1845](https://github.com/elastic/rally/pull/1845): Allow rally to run ESQL operations on serverless for benchmarks
 * [#1831](https://github.com/elastic/rally/pull/1831): Add client ID to metrics
