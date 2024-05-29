@@ -372,11 +372,9 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
         # pylint: disable=import-outside-toplevel
         from elasticsearch.exceptions import ApiError
 
-        try:
+        with contextlib.suppress(ApiError):
             authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
             serverless_operator = authentication_info.body.get("operator", False)
-        except ApiError:
-            serverless_operator = False
 
     if not versions.is_serverless(version_build_flavor) or serverless_operator is True:
         # if available, unconditionally wait for the REST layer - if it's not up, we'll intentionally raise the original error
