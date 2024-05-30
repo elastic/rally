@@ -6,6 +6,34 @@ Metrics Records
 
 At the end of a race, Rally stores all metrics records in its metrics store. Metrics can be kept in memory or written to a dedicated Elasticsearch cluster (not the cluster where Rally ran its benchmarks). This can be configured in the `[reporting] section <https://esrally.readthedocs.io/en/stable/configuration.html#reporting>`_.
 
+Rally writes data to the following indices in the Elasticsearch metrics store:
+
+* ``rally-races-*``: Contains the metadata of a benchmark. This is a subset of the metrics records but only contains the metadata of a benchmark.
+* ``rally-metrics-*``: Contains all metrics records.
+* ``rally-results-*``: Contains the results of a benchmark. This is a subset of the metrics records but only contains the final results of a benchmark.
+* ``rally-annotations-*``: Contains annotations that can be added to a benchmark. This is a subset of the metrics records but only contains the annotations of a benchmark.
+
+Changing index settings, like number of shards and `ILM policies <https://www.elastic.co/guide/en/elasticsearch/reference/master/index-lifecycle-management.html#index-lifecycle-management>`_, can be performed by creating component templates matching the index template name with the ``@custom`` suffix. For example, to add an ILM policy named ``rally-metrics`` to ``rally-metrics-*`` indices, create a component template named ``rally-metrics@custom``:
+
+
+    PUT /_index_template/rally-metrics@custom
+    {
+      "template": {
+        "settings": {
+          "index.lifecycle.name": "rally-metrics"
+        }
+      }
+    }
+
+Supported metrics store custom component template names:
+
+* ``rally-races@custom``
+* ``rally-metrics@custom``
+* ``rally-results@custom``
+* ``rally-annotations@custom``
+
+Custom component templates with the ``@custom`` suffix will not be overwritten by Rally. Settings in custom component templates will override datastore shard settings in rally.ini.
+
 Rally stores the metrics in the indices ``rally-metrics-*``. It will create a new index for each month. Here is a typical metrics record::
 
 
