@@ -2,6 +2,8 @@
   "index_patterns": [
     "rally-metrics-*"
   ],
+  "composed_of": ["rally-metrics@custom"],
+  "ignore_missing_component_templates": ["rally-metrics@custom"],
   "template": {
     "settings": {
       "index": {

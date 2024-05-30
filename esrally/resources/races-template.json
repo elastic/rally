@@ -2,6 +2,8 @@
   "index_patterns": [
     "rally-races-*"
   ],
+  "composed_of": ["rally-races@custom"],
+  "ignore_missing_component_templates": ["rally-races@custom"],
   "template": {
     "settings": {
       "index": {}

@@ -1,108 +1,111 @@
 {
-  "index_patterns": ["rally-results-*"],
+  "index_patterns": [
+    "rally-results-*"
+  ],
+  "composed_of": ["rally-results@custom"],
+  "ignore_missing_component_templates": ["rally-results@custom"],
   "template": {
-  "settings": {
-    "index": {
-    }
-  },
-  "mappings": {
-    "date_detection": false,
-    "dynamic_templates": [
-      {
-        "strings": {
-          "match": "*",
-          "match_mapping_type": "string",
-          "mapping": {
-            "type": "keyword"
-          }
-        }
-      }
-    ],
-    "_source": {
-      "enabled": true
+    "settings": {
+      "index": {}
     },
-    "properties": {
-      "race-id": {
-        "type": "keyword"
-      },
-      "race-timestamp": {
-        "type": "date",
-        "format": "basic_date_time_no_millis",
-        "fields": {
-          "raw": {
-            "type": "keyword"
+    "mappings": {
+      "date_detection": false,
+      "dynamic_templates": [
+        {
+          "strings": {
+            "match": "*",
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
           }
         }
+      ],
+      "_source": {
+        "enabled": true
       },
-      "active": {
-        "type": "boolean"
-      },
-      "rally-version": {
-        "type": "keyword"
-      },
-      "rally-revision": {
-        "type": "keyword"
-      },
-      "environment": {
-        "type": "keyword"
-      },
-      "track": {
-        "type": "keyword"
-      },
-      "challenge": {
-        "type": "keyword"
-      },
-      "car": {
-        "type": "keyword"
-      },
-      "node-count": {
-        "type": "short"
-      },
-      "plugins": {
-        "type": "keyword"
-      },
-      "distribution-flavor": {
-        "type": "keyword"
-      },
-      "distribution-version": {
-        "type": "keyword"
-      },
-      "distribution-major-version": {
-        "type": "short"
-      },
-      "task": {
-        "type": "keyword"
-      },
-      "operation": {
-        "type": "keyword"
-      },
-      "job": {
-        "type": "keyword"
-      },
-      "name": {
-        "type": "keyword"
-      },
-      "value": {
-        "type": "object",
-        "properties": {
-          "single": {
-            "type": "double"
-          },
-          "min": {
-            "type": "double"
-          },
-          "mean": {
-            "type": "double"
-          },
-          "median": {
-            "type": "double"
-          },
-          "max": {
-            "type": "double"
+      "properties": {
+        "race-id": {
+          "type": "keyword"
+        },
+        "race-timestamp": {
+          "type": "date",
+          "format": "basic_date_time_no_millis",
+          "fields": {
+            "raw": {
+              "type": "keyword"
+            }
+          }
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "rally-version": {
+          "type": "keyword"
+        },
+        "rally-revision": {
+          "type": "keyword"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "track": {
+          "type": "keyword"
+        },
+        "challenge": {
+          "type": "keyword"
+        },
+        "car": {
+          "type": "keyword"
+        },
+        "node-count": {
+          "type": "short"
+        },
+        "plugins": {
+          "type": "keyword"
+        },
+        "distribution-flavor": {
+          "type": "keyword"
+        },
+        "distribution-version": {
+          "type": "keyword"
+        },
+        "distribution-major-version": {
+          "type": "short"
+        },
+        "task": {
+          "type": "keyword"
+        },
+        "operation": {
+          "type": "keyword"
+        },
+        "job": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "keyword"
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "single": {
+              "type": "double"
+            },
+            "min": {
+              "type": "double"
+            },
+            "mean": {
+              "type": "double"
+            },
+            "median": {
+              "type": "double"
+            },
+            "max": {
+              "type": "double"
+            }
           }
         }
       }
     }
   }
-}
 }

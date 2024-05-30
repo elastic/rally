@@ -2,6 +2,8 @@
   "index_patterns": [
     "rally-annotations"
   ],
+  "composed_of": ["rally-annotations@custom"],
+  "ignore_missing_component_templates": ["rally-annotations@custom"],
   "template": {
     "settings": {
       "index": {}
