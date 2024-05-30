@@ -1,3 +1,33 @@
+### 2.11.0
+
+#### Highlights
+
+* [#1839](https://github.com/elastic/rally/pull/1839): Add support for Python 3.12
+
+#### Enhancements
+
+* [#1851](https://github.com/elastic/rally/pull/1851): Assume no operator if security not enabled in serverless
+* [#1846](https://github.com/elastic/rally/pull/1846): Update create track
+* [#1845](https://github.com/elastic/rally/pull/1845): Allow rally to run ESQL operations on serverless for benchmarks
+* [#1831](https://github.com/elastic/rally/pull/1831): Add client ID to metrics
+* [#1830](https://github.com/elastic/rally/pull/1830): Add looped mode to bulk operation
+* [#1827](https://github.com/elastic/rally/pull/1827): Track dataset size
+* [#1819](https://github.com/elastic/rally/pull/1819): Override serverless cluster version in telemetry
+* [#1818](https://github.com/elastic/rally/pull/1818): Override serverless cluster version
+* [#1816](https://github.com/elastic/rally/pull/1816): Add FS metrics to node-stats telemetry device
+
+#### Bug Fixes
+
+* [#1835](https://github.com/elastic/rally/pull/1835): Avoid immense term error in metrics metadata fields
+* [#1825](https://github.com/elastic/rally/pull/1825): Make Jit telelmetry compatible with JDK 9+
+* [#1823](https://github.com/elastic/rally/pull/1823): Measure time until last response chunk
+* [#1805](https://github.com/elastic/rally/pull/1805): Handle raw response exceptions
+
+#### Doc Changes
+
+* [#1824](https://github.com/elastic/rally/pull/1824): Fix telemetry docs 
+* [#1811](https://github.com/elastic/rally/pull/1811): Use composable index templates for metric indices
+
 ### 2.10.0
 
 #### Highlights
