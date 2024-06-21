@@ -19,8 +19,8 @@ import configparser
 import logging
 import os
 from enum import Enum
-from typing import Any, Collection, Mapping, Union
 from types import ModuleType
+from typing import Any, Collection, Mapping, Union
 
 import tabulate
 
@@ -49,7 +49,7 @@ def list_cars(cfg: types.Config):
     console.println(tabulate.tabulate([[c.name, c.type, c.description] for c in cars], headers=["Name", "Type", "Description"]))
 
 
-def load_car(repo: str, name: Collection[str], car_params: Mapping=None) -> "Car":
+def load_car(repo: str, name: Collection[str], car_params: Mapping = None) -> "Car":
     class Component:
         def __init__(self, root_path, entry_point):
             self.root_path = root_path
@@ -240,7 +240,7 @@ class Car:
     def __init__(
         self,
         names: Collection[str],
-        root_path: Union[str, Collection[str]],
+        root_path: Union[None, str, Collection[str]],
         config_paths: Collection[str],
         variables: Mapping[str, Any] = None,
     ):
@@ -259,7 +259,9 @@ class Car:
         else:
             self.names = names
 
-        if isinstance(root_path, str):
+        if root_path is None:
+            self.root_path = []
+        elif isinstance(root_path, str):
             self.root_path = [root_path]
         else:
             self.root_path = root_path

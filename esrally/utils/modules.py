@@ -19,8 +19,8 @@ import importlib.machinery
 import logging
 import os
 import sys
-from typing import Collection, Union
 from types import ModuleType
+from typing import Collection, Union
 
 from esrally import exceptions
 from esrally.utils import io
@@ -65,7 +65,7 @@ class ComponentLoader:
         # precondition: A module with this name has to exist provided that the caller has called #can_load() before.
         root_module_name = "%s.%s" % (component_name, self.component_entry_point)
         for name, p in self._modules(module_dirs, component_name, root_path):
-            self.logger.debug(f"Loading module [{name}]: {p}")
+            self.logger.debug("Loading module [%s]: %s", name, p)
             spec = importlib.util.spec_from_file_location(name, p)
             m = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(m)
@@ -118,6 +118,5 @@ class ComponentLoader:
             except BaseException:
                 msg = f"Could not load component [{component_name}]"
                 self.logger.exception(msg)
-                raise
-                # raise exceptions.SystemSetupError(msg)
+                raise exceptions.SystemSetupError(msg)
         return root_modules

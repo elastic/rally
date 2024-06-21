@@ -42,7 +42,7 @@ class TestBareProvisioner:
         installer = provisioner.ElasticsearchInstaller(
             car=team.Car(
                 names="unit-test-car",
-                root_path=None,  # type: ignore
+                root_path=None,
                 config_paths=[HOME_DIR + "/.rally/benchmarks/teams/default/my-car"],
                 variables={
                     "heap": "4g",

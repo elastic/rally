@@ -142,7 +142,6 @@ def run_subprocess_with_logging_and_output(
     if header is not None:
         logger.info(header)
 
-    # pylint: disable=subprocess-popen-preexec-fn
     completed = subprocess.run(
         command_line_args,
         stdout=subprocess.PIPE,
