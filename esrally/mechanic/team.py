@@ -19,6 +19,8 @@ import configparser
 import logging
 import os
 from enum import Enum
+from typing import Any, Collection, Mapping, Union
+from types import ModuleType
 
 import tabulate
 
@@ -53,7 +55,7 @@ def load_car(repo, name, car_params=None):
             self.root_path = root_path
             self.entry_point = entry_point
 
-    root_path = None
+    root_paths = []
     # preserve order as we append to existing config files later during provisioning.
     all_config_paths = []
     all_config_base_vars = {}
@@ -67,11 +69,11 @@ def load_car(repo, name, car_params=None):
         for p in descriptor.root_paths:
             # probe whether we have a root path
             if BootstrapHookHandler(Component(root_path=p, entry_point=Car.entry_point)).can_load():
-                if not root_path:
-                    root_path = p
+                if p not in root_paths:
+                    root_paths.append(p)
                 # multiple cars are based on the same hook
-                elif root_path != p:
-                    raise exceptions.SystemSetupError(f"Invalid car: {name}. Multiple bootstrap hooks are forbidden.")
+                # elif root_paths != p:
+                #     raise exceptions.SystemSetupError(f"Invalid car: {name}. Multiple bootstrap hooks are forbidden.")
         all_config_base_vars.update(descriptor.config_base_variables)
         all_car_vars.update(descriptor.variables)
 
@@ -82,7 +84,7 @@ def load_car(repo, name, car_params=None):
     variables.update(all_config_base_vars)
     variables.update(all_car_vars)
 
-    return Car(name, root_path, all_config_paths, variables)
+    return Car(name, root_paths, all_config_paths, variables)
 
 
 def list_plugins(cfg: types.Config):
@@ -235,12 +237,18 @@ class Car:
     # name of the initial Python file to load for cars.
     entry_point = "config"
 
-    def __init__(self, names, root_path, config_paths, variables=None):
+    def __init__(
+        self,
+        names: Collection[str],
+        root_path: Union[str, Collection[str]],
+        config_paths: Collection[str],
+        variables: Mapping[str, Any] = None,
+    ):
         """
         Creates new settings for a benchmark candidate.
 
         :param names: Descriptive name(s) for this car.
-        :param root_path: The root path from which bootstrap hooks should be loaded if any. May be ``None``.
+        :param root_path: The root path(s) from which bootstrap hooks should be loaded if any. May be ``[]``.
         :param config_paths: A non-empty list of paths where the raw config can be found.
         :param variables: A dict containing variable definitions that need to be replaced.
         """
@@ -250,7 +258,11 @@ class Car:
             self.names = [names]
         else:
             self.names = names
-        self.root_path = root_path
+
+        if isinstance(root_path, str):
+            self.root_path = [root_path]
+        else:
+            self.root_path = root_path
         self.config_paths = config_paths
         self.variables = variables
 
@@ -481,7 +493,11 @@ class BootstrapHookHandler:
         self.component = component
         # Don't allow the loader to recurse. The subdirectories may contain Elasticsearch specific files which we do not want to add to
         # Rally's Python load path. We may need to define a more advanced strategy in the future.
-        self.loader = loader_class(root_path=self.component.root_path, component_entry_point=self.component.entry_point, recurse=False)
+        if isinstance(self.component.root_path, list):
+            root_path = self.component.root_path
+        else:
+            root_path = [self.component.root_path]
+        self.loader = loader_class(root_path=root_path, component_entry_point=self.component.entry_point, recurse=False)
         self.hooks = {}
         self.logger = logging.getLogger(__name__)
 
@@ -489,17 +505,19 @@ class BootstrapHookHandler:
         return self.loader.can_load()
 
     def load(self):
-        root_module = self.loader.load()
+        root_modules: Collection[ModuleType] = self.loader.load()
         try:
             # every module needs to have a register() method
-            root_module.register(self)
+            for module in root_modules:
+                module.register(self)
         except exceptions.RallyError:
             # just pass our own exceptions transparently.
             raise
         except BaseException:
             msg = f"Could not load bootstrap hooks in [{self.loader.root_path}]"
             self.logger.exception(msg)
-            raise exceptions.SystemSetupError(msg)
+            raise
+            # raise exceptions.SystemSetupError(msg)
 
     def register(self, phase, hook):
         self.logger.info("Registering bootstrap hook [%s] for phase [%s] in component [%s]", hook.__name__, phase, self.component.name)

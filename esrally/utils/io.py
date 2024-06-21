@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import tarfile
 import zipfile
+from typing import AnyStr
 
 import zstandard
 
@@ -379,15 +380,15 @@ def _do_decompress(target_directory, compressed_file):
 
 
 # just in a dedicated method to ease mocking
-def dirname(path):
+def dirname(path: AnyStr):
     return os.path.dirname(path)
 
 
-def basename(path):
+def basename(path: AnyStr):
     return os.path.basename(path)
 
 
-def exists(path):
+def exists(path: AnyStr):
     return os.path.exists(path)
 
 

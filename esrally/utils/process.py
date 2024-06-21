@@ -20,7 +20,7 @@ import os
 import shlex
 import subprocess
 import time
-from typing import Callable, Dict, List
+from typing import IO, Callable, Dict, List, Optional, Union
 
 import psutil
 
@@ -74,7 +74,7 @@ def run_subprocess_with_logging(
     command_line: str,
     header: str = None,
     level: LogLevel = logging.INFO,
-    stdin: FileId = None,
+    stdin: Optional[Union[FileId, IO[bytes]]] = None,
     env: Dict[str, str] = None,
     detach: bool = False,
 ) -> int:
