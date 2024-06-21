@@ -49,7 +49,7 @@ def list_cars(cfg: types.Config):
     console.println(tabulate.tabulate([[c.name, c.type, c.description] for c in cars], headers=["Name", "Type", "Description"]))
 
 
-def load_car(repo, name, car_params=None):
+def load_car(repo: str, name: Collection[str], car_params: Mapping=None) -> "Car":
     class Component:
         def __init__(self, root_path, entry_point):
             self.root_path = root_path

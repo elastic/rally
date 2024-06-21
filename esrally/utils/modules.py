@@ -77,7 +77,7 @@ class ComponentLoader:
         """
         :return: True iff the component entry point could be found.
         """
-        return self.root_path and all(
+        return all(self.root_path) and all(
             os.path.exists(os.path.join(root_path, "%s.py" % self.component_entry_point)) for root_path in self.root_path
         )
 
