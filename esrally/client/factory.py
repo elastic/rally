@@ -236,6 +236,7 @@ class EsClientFactory:
         # will ultimately record the time when it received the *last* chunk. This is what we want because any code
         # that is using the Elasticsearch client library can only act on the response once it is fully received.
         trace_config.on_response_chunk_received.append(on_request_end)
+        trace_config.on_request_end.append(on_request_end)
         # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
         trace_config.on_request_exception.append(on_request_end)
 
