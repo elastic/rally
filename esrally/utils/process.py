@@ -17,6 +17,7 @@
 
 import logging
 import os
+import re
 import shlex
 import subprocess
 import time
@@ -181,7 +182,13 @@ def find_all_other_rally_processes() -> List[psutil.Process]:
 
 def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
     def kill(p: psutil.Process):
-        logging.getLogger(__name__).info("Killing lingering process with PID [%s] and command line [%s].", p.pid, p.cmdline())
+        # Do not leak Elasticsearch authentication credentials to the log
+        p_cmdline = p.cmdline()
+        for i, s in enumerate(p_cmdline):
+            if "--client-options" in s:
+                p_cmdline[i] = re.sub(r"basic_auth_password:'.+'", "basic_auth_password:'*****'", s)
+                p_cmdline[i] = re.sub(r"api_key:'.+'", "api_key:'*****'", s)
+        logging.getLogger(__name__).info("Killing lingering process with PID [%s] and command line [%s].", p.pid, p_cmdline)
         p.kill()
         # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
         # sockets that are still open.
