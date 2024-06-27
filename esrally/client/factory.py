@@ -235,6 +235,11 @@ class EsClientFactory:
         # Rally's implementation of the `on_request_end` callback handler updates the timestamp on every call, Rally
         # will ultimately record the time when it received the *last* chunk. This is what we want because any code
         # that is using the Elasticsearch client library can only act on the response once it is fully received.
+        #
+        # We also keep registering for `TraceConfig.on_request_end()` instead of relying on
+        # `TraceConfig.on_response_chunk_received()` only to handle corner cases during client timeout when aiohttp does
+        # not call request exception handler, but does call request end handler. See
+        # https://github.com/elastic/rally/issues/1860 for details.
         trace_config.on_response_chunk_received.append(on_request_end)
         trace_config.on_request_end.append(on_request_end)
         # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
