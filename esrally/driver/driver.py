@@ -1937,6 +1937,11 @@ class AsyncExecutor:
                     total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                     request_start = request_context.request_start
                     request_end = request_context.request_end
+                    if request_end == None and not request_meta_data["success"]:
+                        # this shouldn't happen; request_context.request_end should always be set, even on errors...
+                        # but we see it under specific high-load scenarios, and it is non-fatal, so move on...
+                        self.logger.warn("task failed, but request_end is unexpectedly not set")
+                        request_end = time.perf_counter()
 
                 processing_end = time.perf_counter()
                 service_time = request_end - request_start
