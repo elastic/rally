@@ -67,6 +67,8 @@ class ComponentLoader:
         for name, p in self._modules(module_dirs, component_name, root_path):
             self.logger.debug("Loading module [%s]: %s", name, p)
             spec = importlib.util.spec_from_file_location(name, p)
+            if spec is None:
+                raise exceptions.SystemSetupError(f"Could not load module [{name}]")
             m = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(m)
             if name == root_module_name:
