@@ -71,9 +71,6 @@ def load_car(repo: str, name: Collection[str], car_params: Mapping = None) -> "C
             if BootstrapHookHandler(Component(root_path=p, entry_point=Car.entry_point)).can_load():
                 if p not in root_paths:
                     root_paths.append(p)
-                # multiple cars are based on the same hook
-                # elif root_paths != p:
-                #     raise exceptions.SystemSetupError(f"Invalid car: {name}. Multiple bootstrap hooks are forbidden.")
         all_config_base_vars.update(descriptor.config_base_variables)
         all_car_vars.update(descriptor.variables)
 
@@ -518,8 +515,7 @@ class BootstrapHookHandler:
         except BaseException:
             msg = f"Could not load bootstrap hooks in [{self.loader.root_path}]"
             self.logger.exception(msg)
-            raise
-            # raise exceptions.SystemSetupError(msg)
+            raise exceptions.SystemSetupError(msg)
 
     def register(self, phase, hook):
         self.logger.info("Registering bootstrap hook [%s] for phase [%s] in component [%s]", hook.__name__, phase, self.component.name)

@@ -111,7 +111,6 @@ class ComponentLoader:
             component_root_path = os.path.abspath(os.path.join(root_path, os.pardir))
             self.logger.debug("Adding [%s] to Python load path.", component_root_path)
             # needs to be at the beginning of the system path, otherwise import machinery tries to load application-internal modules
-            sys.path.insert(0, component_root_path)
             try:
                 root_module = self._load_component(component_name, module_dirs, root_path)
                 root_modules.append(root_module)
