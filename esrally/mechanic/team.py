@@ -20,7 +20,7 @@ import logging
 import os
 from enum import Enum
 from types import ModuleType
-from typing import Any, Collection, Mapping, Union
+from typing import Any, Collection, Mapping, Optional, Union
 
 import tabulate
 
@@ -49,7 +49,7 @@ def list_cars(cfg: types.Config):
     console.println(tabulate.tabulate([[c.name, c.type, c.description] for c in cars], headers=["Name", "Type", "Description"]))
 
 
-def load_car(repo: str, name: Collection[str], car_params: Mapping = None) -> "Car":
+def load_car(repo: str, name: Collection[str], car_params: Optional[Mapping] = None) -> "Car":
     class Component:
         def __init__(self, root_path, entry_point):
             self.root_path = root_path
@@ -165,7 +165,7 @@ class CarLoader:
         config = self._config_loader(car_config_file)
         root_paths = []
         config_paths = []
-        config_base_vars = {}
+        config_base_vars: Mapping[str, Any] = {}
         description = self._value(config, ["meta", "description"], default="")
         car_type = self._value(config, ["meta", "type"], default="car")
         config_bases = self._value(config, ["config", "base"], default="").split(",")
@@ -192,7 +192,7 @@ class CarLoader:
     def _config_loader(self, file_name):
         config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
         # Do not modify the case of option keys but read them as is
-        config.optionxform = lambda option: option
+        config.optionxform = lambda optionstr: optionstr  # type: ignore[method-assign]
         config.read(file_name)
         return config
 
@@ -239,7 +239,7 @@ class Car:
         names: Collection[str],
         root_path: Union[None, str, Collection[str]],
         config_paths: Collection[str],
-        variables: Mapping[str, Any] = None,
+        variables: Optional[Mapping[str, Any]] = None,
     ):
         """
         Creates new settings for a benchmark candidate.
@@ -252,12 +252,12 @@ class Car:
         if variables is None:
             variables = {}
         if isinstance(names, str):
-            self.names = [names]
+            self.names: Collection[str] = [names]
         else:
             self.names = names
 
         if root_path is None:
-            self.root_path = []
+            self.root_path: Collection[str] = []
         elif isinstance(root_path, str):
             self.root_path = [root_path]
         else:
@@ -393,7 +393,7 @@ class PluginLoader:
 
                 config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
                 # Do not modify the case of option keys but read them as is
-                config.optionxform = lambda option: option
+                config.optionxform = lambda optionstr: optionstr  # type: ignore[method-assign]
                 config.read(config_file)
                 if "config" in config and "base" in config["config"]:
                     config_bases = config["config"]["base"].split(",")

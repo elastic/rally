@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import importlib.machinery
+import importlib.util
 import logging
 import os
 import sys
@@ -45,7 +45,7 @@ class ComponentLoader:
         ``root_path``.
         :param recurse: Search recursively for modules but ignore modules starting with "_" (Default: ``True``).
         """
-        self.root_path: Collection[str] = root_path if isinstance(root_path, list) else [root_path]
+        self.root_path: Collection[str] = root_path if isinstance(root_path, list) else [str(root_path)]
         self.component_entry_point = component_entry_point
         self.recurse = recurse
         self.logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class ComponentLoader:
         for name, p in self._modules(module_dirs, component_name, root_path):
             self.logger.debug("Loading module [%s]: %s", name, p)
             spec = importlib.util.spec_from_file_location(name, p)
-            if spec is None:
+            if spec is None or spec.loader is None:
                 raise exceptions.SystemSetupError(f"Could not load module [{name}]")
             m = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(m)
