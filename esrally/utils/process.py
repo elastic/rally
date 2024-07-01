@@ -181,7 +181,7 @@ def find_all_other_rally_processes() -> List[psutil.Process]:
 
 def redact_cmdline(cmdline: list) -> List[str]:
     """
-    Redact client options in p.cmdline as it contains sensitive information like passwords
+    Redact client options in cmdline as it contains sensitive information like passwords
     """
 
     return ["=".join((value.split("=")[0], '"*****"')) if "--client-options" in value else value for value in cmdline]
@@ -189,7 +189,9 @@ def redact_cmdline(cmdline: list) -> List[str]:
 
 def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
     def kill(p: psutil.Process):
-        logging.getLogger(__name__).info("Killing lingering process with PID [%s] and command line [%s].", p.pid, redact_cmdline(p.cmdline))
+        logging.getLogger(__name__).info(
+            "Killing lingering process with PID [%s] and command line [%s].", p.pid, redact_cmdline(p.cmdline())
+        )
         p.kill()
         # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
         # sockets that are still open.
