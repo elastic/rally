@@ -66,6 +66,8 @@ class ComponentLoader:
         root_module_name = "%s.%s" % (component_name, self.component_entry_point)
         for name, p in self._modules(module_dirs, component_name, root_path):
             self.logger.debug("Loading module [%s]: %s", name, p)
+            # Use the util methods instead of `importlib.import_module` to allow for more fine-grained control over the import process.
+            # in particular, we want to be able to import multiple modules that use the same name, but are from different directories.
             spec = importlib.util.spec_from_file_location(name, p)
             if spec is None or spec.loader is None:
                 raise exceptions.SystemSetupError(f"Could not load module [{name}]")
