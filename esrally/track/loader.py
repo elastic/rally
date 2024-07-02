@@ -1226,10 +1226,11 @@ class TrackPluginReader:
         # get dependent libraries installed in a prior step. ensure dir exists to make sure loading works correctly.
         os.makedirs(paths.libs(), exist_ok=True)
         sys.path.insert(0, paths.libs())
-        root_module = self.loader.load()
+        root_modules = self.loader.load()
         try:
             # every module needs to have a register() method
-            root_module.register(self)
+            for module in root_modules:
+                module.register(self)
         except BaseException:
             msg = "Could not register track plugin at [%s]" % self.loader.root_path
             logging.getLogger(__name__).exception(msg)

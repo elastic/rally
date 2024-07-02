@@ -20,7 +20,7 @@ import os
 import shlex
 import subprocess
 import time
-from typing import Callable, Dict, List
+from typing import IO, Callable, List, Mapping, Optional, Union
 
 import psutil
 
@@ -38,7 +38,7 @@ def run_subprocess(command_line: str) -> int:
     return subprocess.call(command_line, shell=True)
 
 
-def run_subprocess_with_output(command_line: str, env: Dict[str, str] = None) -> List[str]:
+def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str]] = None) -> List[str]:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
@@ -46,6 +46,7 @@ def run_subprocess_with_output(command_line: str, env: Dict[str, str] = None) ->
         has_output = True
         lines = []
         while has_output:
+            assert command_line_process.stdout is not None, "stdout is None"
             line = command_line_process.stdout.readline()
             if line:
                 lines.append(line.decode("UTF-8").strip())
@@ -72,10 +73,10 @@ def exit_status_as_bool(runnable: Callable[[], int], quiet: bool = False) -> boo
 
 def run_subprocess_with_logging(
     command_line: str,
-    header: str = None,
+    header: Optional[str] = None,
     level: LogLevel = logging.INFO,
-    stdin: FileId = None,
-    env: Dict[str, str] = None,
+    stdin: Optional[Union[FileId, IO[bytes]]] = None,
+    env: Optional[Mapping[str, str]] = None,
     detach: bool = False,
 ) -> int:
     """
@@ -117,10 +118,10 @@ def run_subprocess_with_logging(
 
 def run_subprocess_with_logging_and_output(
     command_line: str,
-    header: str = None,
+    header: Optional[str] = None,
     level: LogLevel = logging.INFO,
-    stdin: FileId = None,
-    env: Dict[str, str] = None,
+    stdin: Optional[Union[FileId, IO[bytes]]] = None,
+    env: Optional[Mapping[str, str]] = None,
     detach: bool = False,
 ) -> subprocess.CompletedProcess:
     """
@@ -142,7 +143,6 @@ def run_subprocess_with_logging_and_output(
     if header is not None:
         logger.info(header)
 
-    # pylint: disable=subprocess-popen-preexec-fn
     completed = subprocess.run(
         command_line_args,
         stdout=subprocess.PIPE,
@@ -174,7 +174,7 @@ def is_rally_process(p: psutil.Process) -> bool:
 
 
 def find_all_other_rally_processes() -> List[psutil.Process]:
-    others = []
+    others: List[psutil.Process] = []
     for_all_other_processes(is_rally_process, others.append)
     return others
 
@@ -188,7 +188,7 @@ def redact_cmdline(cmdline: list) -> List[str]:
 
 
 def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
-    def kill(p: psutil.Process):
+    def kill(p: psutil.Process) -> None:
         logging.getLogger(__name__).info(
             "Killing lingering process with PID [%s] and command line [%s].", p.pid, redact_cmdline(p.cmdline())
         )

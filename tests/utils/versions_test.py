@@ -18,7 +18,7 @@
 import random
 import re
 
-import pytest  # type: ignore
+import pytest
 
 from esrally import exceptions
 from esrally.utils import versions

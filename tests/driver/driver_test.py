@@ -1894,7 +1894,13 @@ class TestAsyncExecutor:
     async def test_execute_single_with_http_400_aborts_when_specified(self):
         es = None
         params = None
-        error_meta = elastic_transport.ApiResponseMeta(status=404, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=404,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(
             side_effect=elasticsearch.NotFoundError(message="not found", meta=error_meta, body="the requested document could not be found")
         )
@@ -1912,7 +1918,13 @@ class TestAsyncExecutor:
         params = None
         empty_body = io.BytesIO(b"")
         str_literal_empty_body = str(empty_body)
-        error_meta = elastic_transport.ApiResponseMeta(status=413, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=413,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal_empty_body, meta=error_meta, body=empty_body))
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
@@ -1925,7 +1937,13 @@ class TestAsyncExecutor:
         params = None
         body = io.BytesIO(b"Huge error")
         str_literal = str(body)
-        error_meta = elastic_transport.ApiResponseMeta(status=499, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=499,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal, meta=error_meta, body=body))
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
@@ -1936,7 +1954,13 @@ class TestAsyncExecutor:
     async def test_execute_single_with_http_400(self):
         es = None
         params = None
-        error_meta = elastic_transport.ApiResponseMeta(status=404, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=404,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(
             side_effect=elasticsearch.NotFoundError(message="not found", meta=error_meta, body="the requested document could not be found")
         )
@@ -1956,7 +1980,13 @@ class TestAsyncExecutor:
     async def test_execute_single_with_http_413(self):
         es = None
         params = None
-        error_meta = elastic_transport.ApiResponseMeta(status=413, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=413,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(message="", meta=error_meta, body=""))
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")

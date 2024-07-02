@@ -18,7 +18,7 @@
 import random
 from typing import Any, Mapping
 
-import pytest  # type: ignore
+import pytest
 
 from esrally.utils import collections
 

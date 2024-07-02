@@ -48,17 +48,17 @@ class TestCarLoader:
         car = team.load_car(self.team_dir, ["default"], car_params={"data_paths": ["/mnt/disk0", "/mnt/disk1"]})
         assert car.name == "default"
         assert car.config_paths == [os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")]
-        assert car.root_path is None
+        assert car.root_path == []
         assert car.variables == {"heap_size": "1g", "clean_command": "./gradlew clean", "data_paths": ["/mnt/disk0", "/mnt/disk1"]}
-        assert car.root_path is None
+        assert car.root_path == []
 
     def test_load_car_with_mixin_single_config_base(self):
         car = team.load_car(self.team_dir, ["32gheap", "ea"])
         assert car.name == "32gheap+ea"
         assert car.config_paths == [os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates")]
-        assert car.root_path is None
+        assert car.root_path == []
         assert car.variables == {"heap_size": "32g", "clean_command": "./gradlew clean", "assertions": "true"}
-        assert car.root_path is None
+        assert car.root_path == []
 
     def test_load_car_with_mixin_multiple_config_bases(self):
         car = team.load_car(self.team_dir, ["32gheap", "ea", "verbose"])
@@ -67,7 +67,7 @@ class TestCarLoader:
             os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "verbose_logging", "templates"),
         ]
-        assert car.root_path is None
+        assert car.root_path == []
         assert car.variables == {"heap_size": "32g", "clean_command": "./gradlew clean", "verbose_logging": "true", "assertions": "true"}
 
     def test_load_car_with_install_hook(self):
@@ -77,7 +77,7 @@ class TestCarLoader:
             os.path.join(current_dir, "data", "cars", "v1", "vanilla", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "with_hook", "templates"),
         ]
-        assert car.root_path == os.path.join(current_dir, "data", "cars", "v1", "with_hook")
+        assert car.root_path == [os.path.join(current_dir, "data", "cars", "v1", "with_hook")]
         assert car.variables == {"heap_size": "1g", "clean_command": "./gradlew clean", "data_paths": ["/mnt/disk0", "/mnt/disk1"]}
 
     def test_load_car_with_multiple_bases_referring_same_install_hook(self):
@@ -88,7 +88,7 @@ class TestCarLoader:
             os.path.join(current_dir, "data", "cars", "v1", "with_hook", "templates"),
             os.path.join(current_dir, "data", "cars", "v1", "verbose_logging", "templates"),
         ]
-        assert car.root_path == os.path.join(current_dir, "data", "cars", "v1", "with_hook")
+        assert car.root_path == [os.path.join(current_dir, "data", "cars", "v1", "with_hook")]
         assert car.variables == {"heap_size": "16g", "clean_command": "./gradlew clean", "verbose_logging": "true"}
 
     def test_raises_error_on_unknown_car(self):
@@ -112,12 +112,10 @@ class TestCarLoader:
         ):
             team.load_car(self.team_dir, ["missing_cfg_base"])
 
-    def test_raises_error_if_more_than_one_different_install_hook(self):
-        with pytest.raises(
-            exceptions.SystemSetupError,
-            match=r"Invalid car: \['multi_hook'\]. Multiple bootstrap hooks are forbidden.",
-        ):
-            team.load_car(self.team_dir, ["multi_hook"])
+    def test_doesnt_raise_error_if_more_than_one_different_install_hook(self):
+        car = team.load_car(self.team_dir, ["multi_hook"])
+        assert isinstance(car.root_path, list)
+        assert len(car.root_path) == 2
 
 
 class TestPluginLoader:
@@ -229,7 +227,7 @@ class TestBootstrapHookHandler:
         hook = self.UnitTestHook()
         handler = team.BootstrapHookHandler(plugin, loader_class=self.UnitTestComponentLoader)
 
-        handler.loader.registration_function = hook
+        handler.loader.registration_function = [hook]
         handler.load()
 
         handler.invoke("post_install", variables={"increment": 4})
@@ -242,7 +240,7 @@ class TestBootstrapHookHandler:
         hook = self.UnitTestHook(phase="this_is_an_unknown_install_phase")
         handler = team.BootstrapHookHandler(plugin, loader_class=self.UnitTestComponentLoader)
 
-        handler.loader.registration_function = hook
+        handler.loader.registration_function = [hook]
         with pytest.raises(exceptions.SystemSetupError) as exc:
             handler.load()
         assert exc.value.args[0] == "Unknown bootstrap phase [this_is_an_unknown_install_phase]. Valid phases are: ['post_install']."

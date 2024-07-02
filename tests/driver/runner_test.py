@@ -3905,8 +3905,14 @@ class TestCreateMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
         body = {"job_id": "total-requests", "indices": ["server-metrics"]}
@@ -3935,8 +3941,16 @@ class TestDeleteMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.delete_datafeed = mock.AsyncMock(
+            side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request")
+        )
 
         es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
@@ -3969,8 +3983,14 @@ class TestStartMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_body_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
         body = {"end": "now"}
         params = {"datafeed-id": "some-data-feed", "body": body}
@@ -4018,8 +4038,14 @@ class TestStopMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_stop_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         params = {
@@ -4070,8 +4096,14 @@ class TestCreateMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         body = {
@@ -4113,8 +4145,14 @@ class TestDeleteMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -4145,8 +4183,14 @@ class TestOpenMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_open_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -4177,8 +4221,14 @@ class TestCloseMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_close_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         params = {
@@ -7399,7 +7449,7 @@ class TestRetry:
 
     @pytest.mark.asyncio
     async def test_is_transparent_on_exception_when_no_retries(self):
-        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionError(message="no route to host"))
         es = None
         params = {
             # no retries
@@ -7537,7 +7587,7 @@ class TestRetry:
 
     @pytest.mark.asyncio
     async def test_does_not_retry_on_timeout_if_not_wanted(self):
-        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(408, "timed out"))
+        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="timed out"))
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": False, "retry-on-error": True}
         retrier = runner.Retry(delegate)

@@ -77,7 +77,7 @@ class StaticRequest(aiohttp.ClientRequest):
         self.response = self.response_class(
             self.method,
             self.original_url,
-            writer=self._writer,
+            writer=self._writer,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
             continue100=self._continue,
             timer=self._timer,
             request_info=self.request_info,
@@ -223,7 +223,7 @@ class RallyAiohttpHttpNode(AiohttpHttpNode):
         self._loop = None
         self.client_id = None
         self.trace_configs = None
-        self.enable_cleanup_closed = None
+        self.enable_cleanup_closed = False
         self._static_responses = None
         self._request_class = aiohttp.ClientRequest
         self._response_class = aiohttp.ClientResponse
