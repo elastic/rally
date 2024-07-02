@@ -25,7 +25,7 @@ repos:
         additional_dependencies: [
           "elasticsearch[async]==8.6.1",
           "elastic-transport==8.4.1",
-          "types-tabulate",
+          "types-tabulate==0.8.9",
         ]
         args: [
           "--ignore-missing-imports",
