@@ -120,7 +120,7 @@ def run_subprocess_with_logging_and_output(
     command_line: str,
     header: Optional[str] = None,
     level: LogLevel = logging.INFO,
-    stdin: Optional[FileId] = None,
+    stdin: Optional[Union[FileId, IO[bytes]]] = None,
     env: Optional[Mapping[str, str]] = None,
     detach: bool = False,
 ) -> subprocess.CompletedProcess:
