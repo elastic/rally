@@ -26,7 +26,22 @@ import shutil
 import subprocess
 import tarfile
 import zipfile
-from typing import AnyStr
+from types import TracebackType
+from typing import (
+    IO,
+    Any,
+    AnyStr,
+    Callable,
+    Collection,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
 
 import zstandard
 
@@ -40,27 +55,31 @@ class FileSource:
     FileSource is a wrapper around a plain file which simplifies testing of file I/O calls.
     """
 
-    def __init__(self, file_name, mode, encoding="utf-8"):
+    def __init__(self, file_name: str, mode: str, encoding: str = "utf-8"):
         self.file_name = file_name
         self.mode = mode
         self.encoding = encoding
-        self.f = None
+        self.f: Optional[IO[Any]] = None
 
-    def open(self):
+    def open(self) -> "FileSource":
         self.f = open(self.file_name, mode=self.mode, encoding=self.encoding)
         # allow for chaining
         return self
 
-    def seek(self, offset):
+    def seek(self, offset: int) -> None:
+        assert self.f is not None, "File is not open"
         self.f.seek(offset)
 
-    def read(self):
+    def read(self) -> bytes:
+        assert self.f is not None, "File is not open"
         return self.f.read()
 
-    def readline(self):
+    def readline(self) -> bytes:
+        assert self.f is not None, "File is not open"
         return self.f.readline()
 
-    def readlines(self, num_lines):
+    def readlines(self, num_lines: int) -> Sequence[bytes]:
+        assert self.f is not None, "File is not open"
         lines = []
         f = self.f
         for _ in range(num_lines):
@@ -70,19 +89,22 @@ class FileSource:
             lines.append(line)
         return lines
 
-    def close(self):
+    def close(self) -> None:
+        assert self.f is not None, "File is not open"
         self.f.close()
         self.f = None
 
-    def __enter__(self):
+    def __enter__(self) -> "FileSource":
         self.open()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
+    ) -> Literal[False]:
         self.close()
         return False
 
-    def __str__(self, *args, **kwargs):
+    def __str__(self, *args: Collection[Any], **kwargs: Mapping[str, Any]) -> str:
         return self.file_name
 
 
@@ -91,14 +113,14 @@ class MmapSource:
     MmapSource is a wrapper around a memory-mapped file which simplifies testing of file I/O calls.
     """
 
-    def __init__(self, file_name, mode, encoding="utf-8"):
+    def __init__(self, file_name: str, mode: str, encoding: str = "utf-8"):
         self.file_name = file_name
         self.mode = mode
         self.encoding = encoding
-        self.f = None
-        self.mm = None
+        self.f: Optional[IO[Any]] = None
+        self.mm: Optional[mmap.mmap] = None
 
-    def open(self):
+    def open(self) -> "MmapSource":
         self.f = open(self.file_name, mode="r+b")
         self.mm = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
         self.mm.madvise(mmap.MADV_SEQUENTIAL)
@@ -106,16 +128,20 @@ class MmapSource:
         # allow for chaining
         return self
 
-    def seek(self, offset):
+    def seek(self, offset: int) -> None:
+        assert self.mm is not None, "Source is not open"
         self.mm.seek(offset)
 
-    def read(self):
+    def read(self) -> bytes:
+        assert self.mm is not None, "Source is not open"
         return self.mm.read()
 
-    def readline(self):
+    def readline(self) -> bytes:
+        assert self.mm is not None, "Source is not open"
         return self.mm.readline()
 
-    def readlines(self, num_lines):
+    def readlines(self, num_lines: int) -> Sequence[bytes]:
+        assert self.mm is not None, "Source is not open"
         lines = []
         mm = self.mm
         for _ in range(num_lines):
@@ -125,21 +151,25 @@ class MmapSource:
             lines.append(line)
         return lines
 
-    def close(self):
+    def close(self) -> None:
+        assert self.mm is not None, "Source is not open"
         self.mm.close()
         self.mm = None
+        assert self.f is not None, "File is not open"
         self.f.close()
         self.f = None
 
-    def __enter__(self):
+    def __enter__(self) -> "MmapSource":
         self.open()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
+    ) -> Literal[False]:
         self.close()
         return False
 
-    def __str__(self, *args, **kwargs):
+    def __str__(self, *args: Collection[Any], **kwargs: Mapping[str, Any]) -> str:
         return self.file_name
 
 
@@ -150,10 +180,10 @@ class DictStringFileSourceFactory:
     It is intended for scenarios where multiple files may be read by client code.
     """
 
-    def __init__(self, name_to_contents):
+    def __init__(self, name_to_contents: Mapping[str, Sequence[str]]):
         self.name_to_contents = name_to_contents
 
-    def __call__(self, name, mode, encoding="utf-8"):
+    def __call__(self, name: str, mode: str, encoding: str = "utf-8") -> "StringAsFileSource":
         return StringAsFileSource(self.name_to_contents[name], mode, encoding)
 
 
@@ -163,7 +193,7 @@ class StringAsFileSource:
      be used in production code.
     """
 
-    def __init__(self, contents, mode, encoding="utf-8"):
+    def __init__(self, contents: Sequence[str], mode: str, encoding: str = "utf-8"):
         """
         :param contents: The file contents as an array of strings. Each item in the array should correspond to one line.
         :param mode: The file mode. It is ignored in this implementation but kept to implement the same interface as ``FileSource``.
@@ -173,20 +203,20 @@ class StringAsFileSource:
         self.current_index = 0
         self.opened = False
 
-    def open(self):
+    def open(self) -> "StringAsFileSource":
         self.opened = True
         return self
 
-    def seek(self, offset):
+    def seek(self, offset: int) -> None:
         self._assert_opened()
         if offset != 0:
             raise AssertionError("StringAsFileSource does not support random seeks")
 
-    def read(self):
+    def read(self) -> str:
         self._assert_opened()
         return "\n".join(self.contents)
 
-    def readline(self):
+    def readline(self) -> str:
         self._assert_opened()
         if self.current_index >= len(self.contents):
             return ""
@@ -194,7 +224,7 @@ class StringAsFileSource:
         self.current_index += 1
         return line
 
-    def readlines(self, num_lines):
+    def readlines(self, num_lines: int) -> Sequence[str]:
         lines = []
         for _ in range(num_lines):
             line = self.readline()
@@ -203,23 +233,25 @@ class StringAsFileSource:
             lines.append(line)
         return lines
 
-    def close(self):
+    def close(self) -> None:
         self._assert_opened()
-        self.contents = None
+        self.contents = []
         self.opened = False
 
-    def _assert_opened(self):
+    def _assert_opened(self) -> None:
         assert self.opened
 
-    def __enter__(self):
+    def __enter__(self) -> "StringAsFileSource":
         self.open()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
+    ) -> Literal[False]:
         self.close()
         return False
 
-    def __str__(self, *args, **kwargs):
+    def __str__(self, *args: Collection[Any], **kwargs: Mapping[str, Any]) -> str:
         return "StringAsFileSource"
 
 
@@ -228,20 +260,20 @@ class ZstAdapter:
     Adapter class to make the zstandard API work with Rally's decompression abstractions
     """
 
-    def __init__(self, path):
+    def __init__(self, path: str):
         self.fh = open(path, "rb")
         self.dctx = zstandard.ZstdDecompressor()
         self.reader = self.dctx.stream_reader(self.fh)
 
-    def read(self, size):
+    def read(self, size: int) -> bytes:
         return self.reader.read(size)
 
-    def close(self):
+    def close(self) -> None:
         self.reader.close()
         self.fh.close()
 
 
-def ensure_dir(directory, mode=0o777):
+def ensure_dir(directory: str, mode: int = 0o777) -> None:
     """
     Ensure that the provided directory and all of its parent directories exist.
     This function is safe to execute on existing directories (no op).
@@ -253,7 +285,7 @@ def ensure_dir(directory, mode=0o777):
         os.makedirs(directory, mode, exist_ok=True)
 
 
-def _zipdir(source_directory, archive):
+def _zipdir(source_directory: str, archive: zipfile.ZipFile) -> None:
     for root, _, files in os.walk(source_directory):
         for file in files:
             archive.write(
@@ -262,7 +294,7 @@ def _zipdir(source_directory, archive):
             )
 
 
-def is_archive(name):
+def is_archive(name: str) -> bool:
     """
     :param name: File name to check. Can be either just the file name or optionally also an absolute path.
     :return: True iff the given file name is an archive that is also recognized for decompression by Rally.
@@ -271,7 +303,7 @@ def is_archive(name):
     return ext in SUPPORTED_ARCHIVE_FORMATS
 
 
-def is_executable(name):
+def is_executable(name: str) -> bool:
     """
     :param name: File name to check.
     :return: True iff given file name is executable and in PATH, all other cases False.
@@ -280,7 +312,7 @@ def is_executable(name):
     return shutil.which(name) is not None
 
 
-def compress(source_directory, archive_name):
+def compress(source_directory: str, archive_name: str) -> None:
     """
     Compress a directory tree.
 
@@ -291,7 +323,7 @@ def compress(source_directory, archive_name):
     _zipdir(source_directory, archive)
 
 
-def decompress(zip_name, target_directory):
+def decompress(zip_name: str, target_directory: str) -> None:
     """
     Decompresses the provided archive to the target directory. The following file extensions are supported:
 
@@ -315,23 +347,23 @@ def decompress(zip_name, target_directory):
         _do_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
         decompressor_args = ["pbzip2", "-d", "-k", "-m10000", "-c"]
-        decompressor_lib = bz2.open
-        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
+        decompressor_lib_bz2 = bz2.open
+        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib_bz2)
     elif extension == ".zst":
         decompressor_args = ["pzstd", "-f", "-d", "-c"]
-        decompressor_lib = ZstAdapter
-        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
+        decompressor_lib_zst = ZstAdapter
+        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib_zst)
     elif extension == ".gz":
         decompressor_args = ["pigz", "-d", "-k", "-c"]
-        decompressor_lib = gzip.open
-        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib)
+        decompressor_lib_gzip = gzip.open
+        _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib_gzip)
     elif extension in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
         _do_decompress(target_directory, tarfile.open(zip_name))
     else:
         raise RuntimeError("Unsupported file extension [%s]. Cannot decompress [%s]" % (extension, zip_name))
 
 
-def _do_decompress_manually(target_directory, filename, decompressor_args, decompressor_lib):
+def _do_decompress_manually(target_directory: str, filename: str, decompressor_args: List[str], decompressor_lib: Callable) -> None:
     decompressor_bin = decompressor_args[0]
     base_path_without_extension = basename(splitext(filename)[0])
 
@@ -346,7 +378,9 @@ def _do_decompress_manually(target_directory, filename, decompressor_args, decom
     _do_decompress_manually_with_lib(target_directory, filename, decompressor_lib(filename))
 
 
-def _do_decompress_manually_external(target_directory, filename, base_path_without_extension, decompressor_args):
+def _do_decompress_manually_external(
+    target_directory: str, filename: str, base_path_without_extension: str, decompressor_args: List[str]
+) -> bool:
     with open(os.path.join(target_directory, base_path_without_extension), "wb") as new_file:
         try:
             subprocess.run(decompressor_args + [filename], stdout=new_file, stderr=subprocess.PIPE, check=True)
@@ -358,7 +392,7 @@ def _do_decompress_manually_external(target_directory, filename, base_path_witho
     return True
 
 
-def _do_decompress_manually_with_lib(target_directory, filename, compressed_file):
+def _do_decompress_manually_with_lib(target_directory: str, filename: str, compressed_file: IO[Any]) -> None:
     path_without_extension = basename(splitext(filename)[0])
 
     ensure_dir(target_directory)
@@ -370,29 +404,34 @@ def _do_decompress_manually_with_lib(target_directory, filename, compressed_file
         compressed_file.close()
 
 
-def _do_decompress(target_directory, compressed_file):
+def _do_decompress(target_directory: str, compressed_file: Union[zipfile.ZipFile, tarfile.TarFile]) -> None:
     try:
         compressed_file.extractall(path=target_directory)
     except BaseException:
-        raise RuntimeError("Could not decompress provided archive [%s]" % compressed_file.filename)
+        if isinstance(compressed_file, zipfile.ZipFile):
+            raise RuntimeError(
+                f"Could not decompress provided archive [{compressed_file.filename}]. Please check if it is a valid zip file."
+            )
+        if isinstance(compressed_file, tarfile.TarFile):
+            raise RuntimeError(f"Could not decompress provided archive [{compressed_file.name!r}]. Please check if it is a valid tar file.")
     finally:
         compressed_file.close()
 
 
 # just in a dedicated method to ease mocking
-def dirname(path: AnyStr):
+def dirname(path: AnyStr) -> AnyStr:
     return os.path.dirname(path)
 
 
-def basename(path: AnyStr):
+def basename(path: AnyStr) -> AnyStr:
     return os.path.basename(path)
 
 
-def exists(path: AnyStr):
+def exists(path: AnyStr) -> bool:
     return os.path.exists(path)
 
 
-def normalize_path(path, cwd="."):
+def normalize_path(path: AnyStr, cwd: Any = ".") -> AnyStr:
     """
     Normalizes a path by removing redundant "../" and also expanding the "~" character to the user home directory.
     :param path: A possibly non-normalized path.
@@ -407,7 +446,7 @@ def normalize_path(path, cwd="."):
         return normalized
 
 
-def escape_path(path):
+def escape_path(path: str) -> str:
     """
     Escapes any characters that might be problematic in shell interactions.
 
@@ -417,7 +456,7 @@ def escape_path(path):
     return path.replace("\\", "\\\\")
 
 
-def splitext(file_name):
+def splitext(file_name: str) -> Tuple[str, str]:
     if file_name.endswith(".tar.gz"):
         return file_name[0:-7], file_name[-7:]
     elif file_name.endswith(".tar.bz2"):
@@ -426,7 +465,7 @@ def splitext(file_name):
         return os.path.splitext(file_name)
 
 
-def has_extension(file_name, extension):
+def has_extension(file_name: str, extension: str) -> bool:
     """
     Checks whether the given file name has the given extension.
 
@@ -444,7 +483,7 @@ class FileOffsetTable:
     data file. This helps bulk-indexing clients to advance quickly to a certain position in a large data file.
     """
 
-    def __init__(self, data_file_path, offset_table_path, mode):
+    def __init__(self, data_file_path: str, offset_table_path: str, mode: str):
         """
         Creates a new FileOffsetTable instance. The constructor should not be called directly but instead the
         respective factory methods should be used.
@@ -457,34 +496,35 @@ class FileOffsetTable:
         self.data_file_path = data_file_path
         self.offset_table_path = offset_table_path
         self.mode = mode
-        self.offset_file = None
+        self.offset_file: Optional[IO[Any]] = None
 
-    def exists(self):
+    def exists(self) -> bool:
         """
         :return: True iff the file offset table already exists.
         """
         return os.path.exists(self.offset_table_path)
 
-    def is_valid(self):
+    def is_valid(self) -> bool:
         """
         :return: True iff the file offset table exists and it is up-to-date.
         """
         return self.exists() and os.path.getmtime(self.offset_table_path) >= os.path.getmtime(self.data_file_path)
 
-    def __enter__(self):
+    def __enter__(self) -> "FileOffsetTable":
         self.offset_file = open(self.offset_table_path, self.mode)
         return self
 
-    def add_offset(self, line_number, offset):
+    def add_offset(self, line_number: int, offset: int) -> None:
         """
         Adds a new offset mapping to the file offset table. This method has to be called inside a context-manager block.
 
         :param line_number: A line number to add.
         :param offset: The corresponding offset in bytes.
         """
+        assert self.offset_file is not None, "File offset table must be opened in a context manager block."
         print(f"{line_number};{offset}", file=self.offset_file)
 
-    def find_closest_offset(self, target_line_number):
+    def find_closest_offset(self, target_line_number: int) -> Tuple[int, int]:
         """
         Determines the offset in bytes for the line L in the corresponding data file with the following properties:
 
@@ -498,6 +538,7 @@ class FileOffsetTable:
         prior_offset = 0
         prior_remaining_lines = target_line_number
 
+        assert self.offset_file is not None, "File offset table must be opened in a context manager block."
         for line in self.offset_file:
             line_number, offset_in_bytes = (int(i) for i in line.strip().split(";"))
             if line_number <= target_line_number:
@@ -508,13 +549,16 @@ class FileOffsetTable:
 
         return prior_offset, prior_remaining_lines
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
+    ) -> Literal[False]:
+        assert self.offset_file is not None, "File offset table must be opened in a context manager block."
         self.offset_file.close()
         self.offset_file = None
         return False
 
     @classmethod
-    def create_for_data_file(cls, data_file_path):
+    def create_for_data_file(cls, data_file_path: str) -> "FileOffsetTable":
         """
         Factory method to create a new file offset table.
 
@@ -523,7 +567,7 @@ class FileOffsetTable:
         return cls(data_file_path, f"{data_file_path}.offset", "wt")
 
     @classmethod
-    def read_for_data_file(cls, data_file_path):
+    def read_for_data_file(cls, data_file_path: str) -> "FileOffsetTable":
         """
 
         Factory method to read from an existing file offset table.
@@ -533,7 +577,7 @@ class FileOffsetTable:
         return cls(data_file_path, f"{data_file_path}.offset", "rt")
 
     @staticmethod
-    def remove(data_file_path):
+    def remove(data_file_path: str) -> None:
         """
         Removes a file offset table for the provided data path.
 
@@ -542,7 +586,7 @@ class FileOffsetTable:
         os.remove(f"{data_file_path}.offset")
 
 
-def prepare_file_offset_table(data_file_path):
+def prepare_file_offset_table(data_file_path: str) -> Optional[int]:
     """
     Creates a file that contains a mapping from line numbers to file offsets for the provided path. This file is used internally by
     #skip_lines(data_file_path, data_file) to speed up line skipping.
@@ -569,7 +613,7 @@ def prepare_file_offset_table(data_file_path):
         return None
 
 
-def remove_file_offset_table(data_file_path):
+def remove_file_offset_table(data_file_path: str) -> None:
     """
 
     Attempts to remove the file offset table for the provided data path.
@@ -579,7 +623,7 @@ def remove_file_offset_table(data_file_path):
     FileOffsetTable.remove(data_file_path)
 
 
-def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
+def skip_lines(data_file_path: str, data_file: IO[Any], number_of_lines_to_skip: int) -> None:
     """
     Skips the first `number_of_lines_to_skip` lines in `data_file` as a side effect.
 
@@ -607,7 +651,7 @@ def skip_lines(data_file_path, data_file, number_of_lines_to_skip):
             data_file.readline()
 
 
-def get_size(start_path="."):
+def get_size(start_path: str = ".") -> int:
     total_size = 0
     for dirpath, _, filenames in os.walk(start_path):
         for f in filenames:

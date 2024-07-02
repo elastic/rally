@@ -10,13 +10,13 @@ path = "esrally/_version.py"
 name = "esrally"
 dynamic = ["version"]
 authors = [
-  {name="Daniel Mitterdorfer", email="daniel.mitterdorfer@gmail.com"},
+    { name = "Daniel Mitterdorfer", email = "daniel.mitterdorfer@gmail.com" },
 ]
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
-license = {text = "Apache License 2.0"}
+license = { text = "Apache License 2.0" }
 requires-python = ">=3.8"
-classifiers=[
+classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: Apache Software License",
@@ -81,7 +81,7 @@ dependencies = [
     # License: Apache 2.0
     "google-auth==1.22.1",
     # License: BSD
-    "zstandard==0.21.0"
+    "zstandard==0.21.0",
 ]
 
 [project.optional-dependencies]
@@ -112,6 +112,9 @@ develop = [
     "pylint==3.1.0",
     "trustme==0.9.0",
     "GitPython==3.1.30",
+    # mypy
+    "types-psutil==5.9.4",
+    "types-tabulate==0.8.9",
 ]
 
 [project.scripts]
@@ -181,17 +184,16 @@ disable_error_code = [
     "union-attr",
     "var-annotated",
 ]
-files = [
-    "esrally/",
-    "it/",
-    "tests/",
-]
+files = ["esrally/", "it/", "tests/"]
 
 [[tool.mypy.overrides]]
 module = [
     "esrally.mechanic.team",
     "esrally.utils.modules",
+    "esrally.utils.io",
+    "esrally.utils.process",
 ]
+disallow_incomplete_defs = true
 # this should be a copy of disabled_error_code from above
 enable_error_code = [
     "assignment",

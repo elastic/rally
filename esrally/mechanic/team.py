@@ -20,7 +20,18 @@ import logging
 import os
 from enum import Enum
 from types import ModuleType
-from typing import Any, Collection, Mapping, Optional, Union
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Iterator,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import tabulate
 
@@ -30,14 +41,14 @@ from esrally.utils import console, io, modules, repo
 TEAM_FORMAT_VERSION = 1
 
 
-def _path_for(team_root_path, team_member_type):
+def _path_for(team_root_path: str, team_member_type: str) -> str:
     root_path = os.path.join(team_root_path, team_member_type, f"v{TEAM_FORMAT_VERSION}")
     if not os.path.exists(root_path):
         raise exceptions.SystemSetupError(f"Path {root_path} for {team_member_type} does not exist.")
     return root_path
 
 
-def list_cars(cfg: types.Config):
+def list_cars(cfg: types.Config) -> None:
     loader = CarLoader(team_path(cfg))
     cars = []
     for name in loader.car_names():
@@ -51,15 +62,15 @@ def list_cars(cfg: types.Config):
 
 def load_car(repo: str, name: Collection[str], car_params: Optional[Mapping] = None) -> "Car":
     class Component:
-        def __init__(self, root_path, entry_point):
+        def __init__(self, root_path: str, entry_point: str):
             self.root_path = root_path
             self.entry_point = entry_point
 
     root_paths = []
     # preserve order as we append to existing config files later during provisioning.
     all_config_paths = []
-    all_config_base_vars = {}
-    all_car_vars = {}
+    all_config_base_vars: MutableMapping[str, str] = {}
+    all_car_vars: MutableMapping[str, str] = {}
 
     for n in name:
         descriptor = CarLoader(repo).load_car(n, car_params)
@@ -76,7 +87,7 @@ def load_car(repo: str, name: Collection[str], car_params: Optional[Mapping] = N
 
     if len(all_config_paths) == 0:
         raise exceptions.SystemSetupError(f"At least one config base is required for car {name}")
-    variables = {}
+    variables: MutableMapping[str, str] = {}
     # car variables *always* take precedence over config base variables
     variables.update(all_config_base_vars)
     variables.update(all_car_vars)
@@ -84,7 +95,7 @@ def load_car(repo: str, name: Collection[str], car_params: Optional[Mapping] = N
     return Car(name, root_paths, all_config_paths, variables)
 
 
-def list_plugins(cfg: types.Config):
+def list_plugins(cfg: types.Config) -> None:
     plugins = PluginLoader(team_path(cfg)).plugins()
     if plugins:
         console.println("Available Elasticsearch plugins:\n")
@@ -93,12 +104,16 @@ def list_plugins(cfg: types.Config):
         console.println("No Elasticsearch plugins are available.\n")
 
 
-def load_plugin(repo, name, config_names, plugin_params=None):
+def load_plugin(
+    repo: str, name: str, config_names: Optional[Collection[str]], plugin_params: Optional[Mapping[str, str]] = None
+) -> "PluginDescriptor":
     return PluginLoader(repo).load_plugin(name, config_names, plugin_params)
 
 
-def load_plugins(repo, plugin_names, plugin_params=None):
-    def name_and_config(p):
+def load_plugins(
+    repo: str, plugin_names: Collection[str], plugin_params: Optional[Mapping[str, str]] = None
+) -> Collection["PluginDescriptor"]:
+    def name_and_config(p: str) -> Tuple[str, Optional[Collection[str]]]:
         plugin_spec = p.split(":")
         if len(plugin_spec) == 1:
             return plugin_spec[0], None
@@ -115,7 +130,7 @@ def load_plugins(repo, plugin_names, plugin_params=None):
     return plugins
 
 
-def team_path(cfg: types.Config):
+def team_path(cfg: types.Config) -> str:
     root_path = cfg.opts("mechanic", "team.path", mandatory=False)
     if root_path:
         return root_path
@@ -140,35 +155,38 @@ def team_path(cfg: types.Config):
 
 
 class CarLoader:
-    def __init__(self, team_root_path):
+    def __init__(self, team_root_path: str):
         self.cars_dir = _path_for(team_root_path, "cars")
         self.logger = logging.getLogger(__name__)
 
-    def car_names(self):
-        def __car_name(path):
+    def car_names(self) -> Iterator[str]:
+        def __car_name(path: str) -> str:
             p, _ = io.splitext(path)
             return io.basename(p)
 
-        def __is_car(path):
+        def __is_car(path: str) -> bool:
             _, extension = io.splitext(path)
             return extension == ".ini"
 
         return map(__car_name, filter(__is_car, os.listdir(self.cars_dir)))
 
-    def _car_file(self, name):
+    def _car_file(self, name: str) -> str:
         return os.path.join(self.cars_dir, f"{name}.ini")
 
-    def load_car(self, name, car_params=None):
+    def load_car(self, name: str, car_params: Optional[Mapping[str, Any]] = None) -> "CarDescriptor":
         car_config_file = self._car_file(name)
         if not io.exists(car_config_file):
             raise exceptions.SystemSetupError(f"Unknown car [{name}]. List the available cars with {PROGRAM_NAME} list cars.")
         config = self._config_loader(car_config_file)
-        root_paths = []
-        config_paths = []
+        root_paths: List[str] = []
+        config_paths: List[str] = []
         config_base_vars: Mapping[str, Any] = {}
         description = self._value(config, ["meta", "description"], default="")
         car_type = self._value(config, ["meta", "type"], default="car")
-        config_bases = self._value(config, ["config", "base"], default="").split(",")
+        config_base = self._value(config, ["config", "base"], default="")
+        assert config_base is not None, f"Car [{name}] does not define a config base."
+        assert isinstance(config_base, str), f"Car [{name}] defines an invalid config base [{config_base}]."
+        config_bases = config_base.split(",")
         for base in config_bases:
             if base:
                 root_path = os.path.join(self.cars_dir, base)
@@ -189,24 +207,27 @@ class CarLoader:
 
         return CarDescriptor(name, description, car_type, root_paths, config_paths, config_base_vars, variables)
 
-    def _config_loader(self, file_name):
+    def _config_loader(self, file_name: str) -> "configparser.ConfigParser":
         config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
         # Do not modify the case of option keys but read them as is
         config.optionxform = lambda optionstr: optionstr  # type: ignore[method-assign]
         config.read(file_name)
         return config
 
-    def _value(self, cfg, section_path, default=None):
-        path = [section_path] if (isinstance(section_path, str)) else section_path
+    def _value(
+        self, cfg: "configparser.ConfigParser", section_path: Union[str, Collection[str]], default: Optional[str] = None
+    ) -> Optional[Mapping[str, Any]]:
+        path: Collection[str] = [section_path] if (isinstance(section_path, str)) else section_path
         current_cfg = cfg
         for k in path:
+            assert isinstance(current_cfg, dict), f"Expected a dict but got [{current_cfg}] instead."
             if k in current_cfg:
                 current_cfg = current_cfg[k]
             else:
                 return default
         return current_cfg
 
-    def _copy_section(self, cfg, section, target):
+    def _copy_section(self, cfg: "configparser.ConfigParser", section: str, target: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
         if section in cfg.sections():
             for k, v in cfg[section].items():
                 target[k] = v
@@ -214,7 +235,16 @@ class CarLoader:
 
 
 class CarDescriptor:
-    def __init__(self, name, description, type, root_paths, config_paths, config_base_variables, variables):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        type: str,
+        root_paths: Collection[str],
+        config_paths: Collection[str],
+        config_base_variables: Mapping[str, str],
+        variables: Mapping[str, str],
+    ):
         self.name = name
         self.description = description
         self.type = type
@@ -223,10 +253,10 @@ class CarDescriptor:
         self.config_base_variables = config_base_variables
         self.variables = variables
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         return isinstance(other, type(self)) and self.name == other.name
 
 
@@ -265,40 +295,40 @@ class Car:
         self.config_paths = config_paths
         self.variables = variables
 
-    def mandatory_var(self, name):
+    def mandatory_var(self, name: str) -> str:
         try:
             return self.variables[name]
         except KeyError:
             raise exceptions.SystemSetupError(f'Car "{self.name}" requires config key "{name}"')
 
     @property
-    def name(self):
+    def name(self) -> str:
         return "+".join(self.names)
 
     # Adapter method for BootstrapHookHandler
     @property
-    def config(self):
+    def config(self) -> str:
         return self.name
 
     @property
-    def safe_name(self):
+    def safe_name(self) -> str:
         return "_".join(self.names)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
 class PluginLoader:
-    def __init__(self, team_root_path):
+    def __init__(self, team_root_path: str):
         self.plugins_root_path = _path_for(team_root_path, "plugins")
         self.logger = logging.getLogger(__name__)
 
-    def plugins(self, variables=None):
+    def plugins(self, variables: Optional[Mapping[str, str]] = None) -> List["PluginDescriptor"]:
         known_plugins = self._core_plugins(variables) + self._configured_plugins(variables)
         sorted(known_plugins, key=lambda p: p.name)
         return known_plugins
 
-    def _core_plugins(self, variables=None):
+    def _core_plugins(self, variables: Optional[Mapping[str, str]] = None) -> List["PluginDescriptor"]:
         core_plugins = []
         core_plugins_path = os.path.join(self.plugins_root_path, "core-plugins.txt")
         if os.path.exists(core_plugins_path):
@@ -310,7 +340,7 @@ class PluginLoader:
                         core_plugins.append(PluginDescriptor(name=values[0], core_plugin=True, variables=variables))
         return core_plugins
 
-    def _configured_plugins(self, variables=None):
+    def _configured_plugins(self, variables: Optional[Mapping[str, str]] = None) -> List["PluginDescriptor"]:
         configured_plugins = []
         # each directory is a plugin, each .ini is a config (just go one level deep)
         for entry in os.listdir(self.plugins_root_path):
@@ -324,10 +354,10 @@ class PluginLoader:
                         configured_plugins.append(PluginDescriptor(name=plugin_name, config=config, variables=variables))
         return configured_plugins
 
-    def _plugin_file(self, name, config):
+    def _plugin_file(self, name: str, config: str) -> str:
         return os.path.join(self._plugin_root_path(name), "%s.ini" % config)
 
-    def _plugin_root_path(self, name):
+    def _plugin_root_path(self, name: str) -> str:
         return os.path.join(self.plugins_root_path, self._plugin_name_to_file(name))
 
     # As we allow to store Python files in the plugin directory and the plugin directory also serves as the root path of the corresponding
@@ -335,16 +365,18 @@ class PluginLoader:
     # need to switch from underscores to hyphens and vice versa.
     #
     # We are implicitly assuming that plugin names stick to the convention of hyphen separation to simplify implementation and usage a bit.
-    def _file_to_plugin_name(self, file_name):
+    def _file_to_plugin_name(self, file_name: str) -> str:
         return file_name.replace("_", "-")
 
-    def _plugin_name_to_file(self, plugin_name):
+    def _plugin_name_to_file(self, plugin_name: str) -> str:
         return plugin_name.replace("-", "_")
 
-    def _core_plugin(self, name, variables=None):
+    def _core_plugin(self, name: str, variables: Optional[Mapping[str, str]] = None) -> Optional["PluginDescriptor"]:
         return next((p for p in self._core_plugins(variables) if p.name == name and p.config is None), None)
 
-    def load_plugin(self, name, config_names, plugin_params=None):
+    def load_plugin(
+        self, name: str, config_names: Optional[Collection[str]], plugin_params: Optional[Mapping[str, str]] = None
+    ) -> "PluginDescriptor":
         if config_names is not None:
             self.logger.info("Loading plugin [%s] with configuration(s) [%s].", name, config_names)
         else:
@@ -426,7 +458,15 @@ class PluginDescriptor:
     # name of the initial Python file to load for plugins.
     entry_point = "plugin"
 
-    def __init__(self, name, core_plugin=False, config=None, root_path=None, config_paths=None, variables=None):
+    def __init__(
+        self,
+        name: str,
+        core_plugin: bool = False,
+        config: Optional[Collection[str]] = None,
+        root_path: Optional[str] = None,
+        config_paths: Optional[Collection[str]] = None,
+        variables: Optional[Mapping[str, Any]] = None,
+    ):
         if config_paths is None:
             config_paths = []
         if variables is None:
@@ -438,27 +478,27 @@ class PluginDescriptor:
         self.config_paths = config_paths
         self.variables = variables
 
-    def __str__(self):
-        return "Plugin descriptor for [%s]" % self.name
+    def __str__(self) -> str:
+        return f"Plugin descriptor for [{self.name}]"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         r = []
         for prop, value in vars(self).items():
             r.append("%s = [%s]" % (prop, repr(value)))
         return ", ".join(r)
 
     @property
-    def moved_to_module(self):
+    def moved_to_module(self) -> bool:
         # For a BWC escape hatch we first check if the plugin is listed in rally-teams' "core-plugin.txt",
         # thus allowing users to override the teams path or revision to include the repository-s3/azure/gcs plugins in
         # "core-plugin.txt"
         # TODO: https://github.com/elastic/rally/issues/1622
         return self.name in ["repository-s3", "repository-gcs", "repository-azure"] and not self.core_plugin
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name) ^ hash(self.config) ^ hash(self.core_plugin)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         return isinstance(other, type(self)) and (self.name, self.config, self.core_plugin) == (other.name, other.config, other.core_plugin)
 
 
@@ -466,14 +506,14 @@ class BootstrapPhase(Enum):
     post_install = 10
 
     @classmethod
-    def valid(cls, name):
+    def valid(cls, name: str) -> bool:
         for n in BootstrapPhase.names():
             if n == name:
                 return True
         return False
 
     @classmethod
-    def names(cls):
+    def names(cls) -> Collection[str]:
         return [p.name for p in list(BootstrapPhase)]
 
 
@@ -482,7 +522,7 @@ class BootstrapHookHandler:
     Responsible for loading and executing component-specific intitialization code.
     """
 
-    def __init__(self, component, loader_class=modules.ComponentLoader):
+    def __init__(self, component: Any, loader_class: Callable = modules.ComponentLoader):
         """
         Creates a new BootstrapHookHandler.
 
@@ -497,13 +537,13 @@ class BootstrapHookHandler:
         else:
             root_path = [self.component.root_path]
         self.loader = loader_class(root_path=root_path, component_entry_point=self.component.entry_point, recurse=False)
-        self.hooks = {}
+        self.hooks: MutableMapping[str, List[Callable]] = {}
         self.logger = logging.getLogger(__name__)
 
-    def can_load(self):
+    def can_load(self) -> bool:
         return self.loader.can_load()
 
-    def load(self):
+    def load(self) -> None:
         root_modules: Collection[ModuleType] = self.loader.load()
         try:
             # every module needs to have a register() method
@@ -517,15 +557,16 @@ class BootstrapHookHandler:
             self.logger.exception(msg)
             raise exceptions.SystemSetupError(msg)
 
-    def register(self, phase, hook):
+    def register(self, phase: str, hook: Callable) -> None:
         self.logger.info("Registering bootstrap hook [%s] for phase [%s] in component [%s]", hook.__name__, phase, self.component.name)
         if not BootstrapPhase.valid(phase):
             raise exceptions.SystemSetupError(f"Unknown bootstrap phase [{phase}]. Valid phases are: {BootstrapPhase.names()}.")
         if phase not in self.hooks:
-            self.hooks[phase] = []
+            empty: List[Callable] = []
+            self.hooks[phase] = empty
         self.hooks[phase].append(hook)
 
-    def invoke(self, phase, **kwargs):
+    def invoke(self, phase: str, **kwargs: Mapping[str, Any]) -> None:
         if phase in self.hooks:
             self.logger.info("Invoking phase [%s] for component [%s] in config [%s]", phase, self.component.name, self.component.config)
             for hook in self.hooks[phase]:
