@@ -180,13 +180,19 @@ class CarLoader:
         config = self._config_loader(car_config_file)
         root_paths: List[str] = []
         config_paths: List[str] = []
-        config_base_vars: Mapping[str, Any] = {}
+        config_base_vars: MutableMapping[str, Any] = {}
+
         description = self._value(config, ["meta", "description"], default="")
+        assert isinstance(description, str), f"Car [{name}] defines an invalid description [{description}]."
+
         car_type = self._value(config, ["meta", "type"], default="car")
+        assert isinstance(car_type, str), f"Car [{name}] defines an invalid type [{car_type}]."
+
         config_base = self._value(config, ["config", "base"], default="")
         assert config_base is not None, f"Car [{name}] does not define a config base."
         assert isinstance(config_base, str), f"Car [{name}] defines an invalid config base [{config_base}]."
         config_bases = config_base.split(",")
+
         for base in config_bases:
             if base:
                 root_path = os.path.join(self.cars_dir, base)
@@ -216,12 +222,11 @@ class CarLoader:
 
     def _value(
         self, cfg: "configparser.ConfigParser", section_path: Union[str, Collection[str]], default: Optional[str] = None
-    ) -> Optional[Mapping[str, Any]]:
+    ) -> Optional[Union[str, Mapping[str, Any]]]:
         path: Collection[str] = [section_path] if (isinstance(section_path, str)) else section_path
-        current_cfg = cfg
+        current_cfg: Union["configparser.ConfigParser", Mapping[str, Any], str] = cfg
         for k in path:
-            assert isinstance(current_cfg, dict), f"Expected a dict but got [{current_cfg}] instead."
-            if k in current_cfg:
+            if not isinstance(current_cfg, str) and k in current_cfg:
                 current_cfg = current_cfg[k]
             else:
                 return default
