@@ -82,6 +82,8 @@ dependencies = [
     "google-auth==1.22.1",
     # License: BSD
     "zstandard==0.21.0",
+    # License: Python Software Foundation License
+    "typing-extensions==4.12.2",
 ]
 
 [project.optional-dependencies]
@@ -120,7 +122,6 @@ develop = [
     "types-urllib3==1.26.19",
     "types-requests<2.32.0",
     "types-jsonschema==3.2.0",
-    "typing-extensions==4.12.2",
 ]
 
 [project.scripts]

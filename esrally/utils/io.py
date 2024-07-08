@@ -47,7 +47,7 @@ from typing import (
 
 import zstandard
 
-# This was introduced in Python 3.11 to `typing` older versions need `typing_extensions`
+# This was introduced in Python 3.11 to `typing`; older versions need `typing_extensions`
 # but they are treated the same by mypy, so I'm not going to use conditional imports here
 from typing_extensions import Self
 
