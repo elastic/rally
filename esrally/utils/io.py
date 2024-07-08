@@ -47,6 +47,10 @@ from typing import (
 
 import zstandard
 
+# This was introduced in Python 3.11 to `typing` older versions need `typing_extensions`
+# but they are treated the same by mypy, so I'm not going to use conditional imports here
+from typing_extensions import Self
+
 from esrally.utils import console
 
 SUPPORTED_ARCHIVE_FORMATS = [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".zst"]
@@ -63,7 +67,7 @@ class FileSource(Generic[AnyStr]):
         self.encoding = encoding
         self.f: Optional[IO[AnyStr]] = None
 
-    def open(self) -> "FileSource":
+    def open(self) -> Self:
         self.f = open(self.file_name, mode=self.mode, encoding=self.encoding)
         # allow for chaining
         return self
@@ -96,7 +100,7 @@ class FileSource(Generic[AnyStr]):
         self.f.close()
         self.f = None
 
-    def __enter__(self) -> "FileSource":
+    def __enter__(self) -> Self:
         self.open()
         return self
 
@@ -122,7 +126,7 @@ class MmapSource:
         self.f: Optional[IO[bytes]] = None
         self.mm: Optional[mmap.mmap] = None
 
-    def open(self) -> "MmapSource":
+    def open(self) -> Self:
         self.f = open(self.file_name, mode="r+b")
         self.mm = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
         self.mm.madvise(mmap.MADV_SEQUENTIAL)
@@ -161,7 +165,7 @@ class MmapSource:
         self.f.close()
         self.f = None
 
-    def __enter__(self) -> "MmapSource":
+    def __enter__(self) -> Self:
         self.open()
         return self
 
@@ -205,7 +209,7 @@ class StringAsFileSource:
         self.current_index = 0
         self.opened = False
 
-    def open(self) -> "StringAsFileSource":
+    def open(self) -> Self:
         self.opened = True
         return self
 
@@ -243,7 +247,7 @@ class StringAsFileSource:
     def _assert_opened(self) -> None:
         assert self.opened
 
-    def __enter__(self) -> "StringAsFileSource":
+    def __enter__(self) -> Self:
         self.open()
         return self
 
@@ -521,7 +525,7 @@ class FileOffsetTable:
         """
         return self.exists() and os.path.getmtime(self.offset_table_path) >= os.path.getmtime(self.data_file_path)
 
-    def __enter__(self) -> "FileOffsetTable":
+    def __enter__(self) -> Self:
         self.offset_file = open(self.offset_table_path, self.mode)
         return self
 
@@ -569,7 +573,7 @@ class FileOffsetTable:
         return False
 
     @classmethod
-    def create_for_data_file(cls, data_file_path: str) -> "FileOffsetTable":
+    def create_for_data_file(cls, data_file_path: str) -> Self:
         """
         Factory method to create a new file offset table.
 
@@ -578,7 +582,7 @@ class FileOffsetTable:
         return cls(data_file_path, f"{data_file_path}.offset", "wt")
 
     @classmethod
-    def read_for_data_file(cls, data_file_path: str) -> "FileOffsetTable":
+    def read_for_data_file(cls, data_file_path: str) -> Self:
         """
 
         Factory method to read from an existing file offset table.

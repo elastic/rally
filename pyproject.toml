@@ -120,6 +120,7 @@ develop = [
     "types-urllib3==1.26.19",
     "types-requests<2.32.0",
     "types-jsonschema==3.2.0",
+    "typing-extensions==4.12.2",
 ]
 
 [project.scripts]
