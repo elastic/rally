@@ -119,6 +119,7 @@ develop = [
     "types-tabulate==0.8.9",
     "types-urllib3==1.26.19",
     "types-requests<2.32.0",
+    "types-jsonschema==3.2.0",
 ]
 
 [project.scripts]

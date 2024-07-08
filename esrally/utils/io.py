@@ -33,6 +33,7 @@ from typing import (
     AnyStr,
     Callable,
     Collection,
+    Generic,
     List,
     Literal,
     Mapping,
@@ -51,7 +52,7 @@ from esrally.utils import console
 SUPPORTED_ARCHIVE_FORMATS = [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".zst"]
 
 
-class FileSource:
+class FileSource(Generic[AnyStr]):
     """
     FileSource is a wrapper around a plain file which simplifies testing of file I/O calls.
     """
@@ -60,7 +61,7 @@ class FileSource:
         self.file_name = file_name
         self.mode = mode
         self.encoding = encoding
-        self.f: Optional[IO[Any]] = None
+        self.f: Optional[IO[AnyStr]] = None
 
     def open(self) -> "FileSource":
         self.f = open(self.file_name, mode=self.mode, encoding=self.encoding)
@@ -71,15 +72,15 @@ class FileSource:
         assert self.f is not None, "File is not open"
         self.f.seek(offset)
 
-    def read(self) -> bytes:
+    def read(self) -> AnyStr:
         assert self.f is not None, "File is not open"
         return self.f.read()
 
-    def readline(self) -> bytes:
+    def readline(self) -> AnyStr:
         assert self.f is not None, "File is not open"
         return self.f.readline()
 
-    def readlines(self, num_lines: int) -> Sequence[bytes]:
+    def readlines(self, num_lines: int) -> Sequence[AnyStr]:
         assert self.f is not None, "File is not open"
         lines = []
         f = self.f
@@ -118,7 +119,7 @@ class MmapSource:
         self.file_name = file_name
         self.mode = mode
         self.encoding = encoding
-        self.f: Optional[IO[Any]] = None
+        self.f: Optional[IO[bytes]] = None
         self.mm: Optional[mmap.mmap] = None
 
     def open(self) -> "MmapSource":
@@ -393,7 +394,7 @@ def _do_decompress_manually_external(
     return True
 
 
-def _do_decompress_manually_with_lib(target_directory: str, filename: str, compressed_file: IO[Any]) -> None:
+def _do_decompress_manually_with_lib(target_directory: str, filename: str, compressed_file: IO[bytes]) -> None:
     path_without_extension = basename(splitext(filename)[0])
 
     ensure_dir(target_directory)
@@ -506,7 +507,7 @@ class FileOffsetTable:
         self.data_file_path = data_file_path
         self.offset_table_path = offset_table_path
         self.mode = mode
-        self.offset_file: Optional[IO[Any]] = None
+        self.offset_file: Optional[IO[bytes]] = None
 
     def exists(self) -> bool:
         """
@@ -550,7 +551,7 @@ class FileOffsetTable:
 
         assert self.offset_file is not None, "File offset table must be opened in a context manager block."
         for line in self.offset_file:
-            line_number, offset_in_bytes = (int(i) for i in line.strip().split(";"))
+            line_number, offset_in_bytes = (int(i) for i in line.strip().split(b";"))
             if line_number <= target_line_number:
                 prior_offset = offset_in_bytes
                 prior_remaining_lines = target_line_number - line_number
@@ -633,7 +634,7 @@ def remove_file_offset_table(data_file_path: str) -> None:
     FileOffsetTable.remove(data_file_path)
 
 
-def skip_lines(data_file_path: str, data_file: IO[Any], number_of_lines_to_skip: int) -> None:
+def skip_lines(data_file_path: str, data_file: IO[AnyStr], number_of_lines_to_skip: int) -> None:
     """
     Skips the first `number_of_lines_to_skip` lines in `data_file` as a side effect.
 
