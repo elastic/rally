@@ -18,17 +18,14 @@ repos:
     hooks:
       - id: isort
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.6.1
+  - repo: local
     hooks:
       - id: mypy
-        additional_dependencies: [
-          "elasticsearch[async]==8.6.1",
-          "elastic-transport==8.4.1",
-          "types-tabulate==0.8.9",
-        ]
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
         args: [
-          "--ignore-missing-imports",
           "--config",
           "pyproject.toml"
         ]
