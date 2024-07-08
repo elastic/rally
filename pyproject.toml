@@ -157,7 +157,6 @@ xfail_strict = true
 # is to keep "arg-type" error code, while disabling other error codes.
 # Ref: https://github.com/elastic/rally/pull/1798
 [tool.mypy]
-python_executable="$VIRTUAL_ENV/bin/python"
 python_version = "3.8"
 # subset of "strict", kept at global config level as some of the options are
 # supported only at this level
