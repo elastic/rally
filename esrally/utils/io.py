@@ -41,6 +41,7 @@ from typing import (
     Tuple,
     Type,
     Union,
+    overload,
 )
 
 import zstandard
@@ -431,7 +432,16 @@ def exists(path: AnyStr) -> bool:
     return os.path.exists(path)
 
 
-def normalize_path(path: AnyStr, cwd: Any = ".") -> AnyStr:
+@overload
+def normalize_path(path: str) -> str: ...
+@overload
+def normalize_path(path: str, cwd: str = ".") -> str: ...
+@overload
+def normalize_path(path: bytes) -> bytes: ...
+@overload
+def normalize_path(path: bytes, cwd: bytes = b".") -> bytes: ...
+def normalize_path(path, cwd="."):
+    # This is a bug in mypy, see https://github.com/python/mypy/issues/3737
     """
     Normalizes a path by removing redundant "../" and also expanding the "~" character to the user home directory.
     :param path: A possibly non-normalized path.
