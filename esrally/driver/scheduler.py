@@ -166,8 +166,7 @@ def remove_scheduler(name):
 
 class SimpleScheduler(ABC):
     @abstractmethod
-    def next(self, current):
-        ...
+    def next(self, current): ...
 
 
 class Scheduler(ABC):
@@ -178,8 +177,7 @@ class Scheduler(ABC):
         pass
 
     @abstractmethod
-    def next(self, current):
-        ...
+    def next(self, current): ...
 
 
 # Deprecated

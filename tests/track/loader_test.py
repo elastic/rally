@@ -2758,7 +2758,7 @@ class TestTrackSpecificationReader:
             "indices": [
                 {
                     "name": "index-historical",
-                    "body": "body.json"
+                    "body": "body.json",
                     # no type information here
                 }
             ],
