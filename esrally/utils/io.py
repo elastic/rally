@@ -511,7 +511,7 @@ class FileOffsetTable:
         self.data_file_path = data_file_path
         self.offset_table_path = offset_table_path
         self.mode = mode
-        self.offset_file: Optional[IO[bytes]] = None
+        self.offset_file: Optional[IO[str]] = None
 
     def exists(self) -> bool:
         """
@@ -555,7 +555,7 @@ class FileOffsetTable:
 
         assert self.offset_file is not None, "File offset table must be opened in a context manager block."
         for line in self.offset_file:
-            line_number, offset_in_bytes = (int(i) for i in line.strip().split(b";"))
+            line_number, offset_in_bytes = (int(i) for i in line.strip().split(";"))
             if line_number <= target_line_number:
                 prior_offset = offset_in_bytes
                 prior_remaining_lines = target_line_number - line_number
