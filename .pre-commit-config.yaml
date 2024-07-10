@@ -9,7 +9,7 @@ repos:
         ]
 
   - repo: https://github.com/psf/black
-    rev: 23.3.0
+    rev: 24.4.2
     hooks:
       - id: black
 
@@ -18,10 +18,13 @@ repos:
     hooks:
       - id: isort
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.6.1
+  - repo: local
     hooks:
       - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
         args: [
           "--config",
           "pyproject.toml"

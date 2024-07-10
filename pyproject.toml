@@ -10,13 +10,13 @@ path = "esrally/_version.py"
 name = "esrally"
 dynamic = ["version"]
 authors = [
-  {name="Daniel Mitterdorfer", email="daniel.mitterdorfer@gmail.com"},
+    { name = "Daniel Mitterdorfer", email = "daniel.mitterdorfer@gmail.com" },
 ]
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
-license = {text = "Apache License 2.0"}
+license = { text = "Apache License 2.0" }
 requires-python = ">=3.8"
-classifiers=[
+classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: Apache Software License",
@@ -81,7 +81,9 @@ dependencies = [
     # License: Apache 2.0
     "google-auth==1.22.1",
     # License: BSD
-    "zstandard==0.21.0"
+    "zstandard==0.21.0",
+    # License: Python Software Foundation License
+    "typing-extensions==4.12.2",
 ]
 
 [project.optional-dependencies]
@@ -112,6 +114,14 @@ develop = [
     "pylint==3.1.0",
     "trustme==0.9.0",
     "GitPython==3.1.30",
+    # mypy
+    "boto3-stubs==1.26.125",
+    "mypy==1.10.1",
+    "types-psutil==5.9.4",
+    "types-tabulate==0.8.9",
+    "types-urllib3==1.26.19",
+    "types-requests<2.32.0",
+    "types-jsonschema==3.2.0",
 ]
 
 [project.scripts]
@@ -143,14 +153,56 @@ junit_logging = "all"
 asyncio_mode = "strict"
 xfail_strict = true
 
-# With rare exceptions, Rally does not use type hints. The intention of the
-# following largely reduced mypy configuration scope is verification of argument
-# types in config.Config methods while introducing configuration properties
-# (props). The error we are after here is "arg-type".
+# With exceptions specified in mypy override section, Rally does not use type
+# hints (they were a novelty when Rally came to be). Hints are being slowly and
+# opportunistically introduced whenever we revisit a group of modules.
+#
+# The intention of the following largely reduced global config scope is
+# verification of argument types in config.Config methods while introducing
+# configuration properties (props). The intention of "disable_error_code" option
+# is to keep "arg-type" error code, while disabling other error codes.
+# Ref: https://github.com/elastic/rally/pull/1798
 [tool.mypy]
-python_version = 3.8
+python_version = "3.8"
+# subset of "strict", kept at global config level as some of the options are
+# supported only at this level
+# https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+extra_checks = true
 check_untyped_defs = true
 disable_error_code = [
+    "assignment",
+    "attr-defined",
+    "call-arg",
+    "call-overload",
+    "dict-item",
+    "import-not-found",
+    "import-untyped",
+    "index",
+    "list-item",
+    "misc",
+    "name-defined",
+    "operator",
+    "str-bytes-safe",
+    "syntax",
+    "union-attr",
+    "var-annotated",
+]
+files = ["esrally/", "it/", "tests/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "esrally.mechanic.team",
+    "esrally.utils.modules",
+    "esrally.utils.io",
+    "esrally.utils.process",
+]
+disallow_incomplete_defs = true
+# this should be a copy of disabled_error_code from above
+enable_error_code = [
     "assignment",
     "attr-defined",
     "call-arg",

@@ -242,7 +242,7 @@ class ProcessLauncher:
                 stop_watch.start()
                 try:
                     es.terminate()
-                    es.wait(10.0)
+                    es.wait(10)
                     stopped_nodes.append(node)
                 except psutil.NoSuchProcess:
                     self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)

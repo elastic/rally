@@ -234,7 +234,12 @@ class TestEsClient:
                 return logging_statements
 
             def raise_error(self):
-                err = elasticsearch.exceptions.ApiError("unit-test", meta=TestEsClient.ApiResponseMeta(status=self.status_code), body={})
+                err = elasticsearch.exceptions.ApiError(
+                    "unit-test",
+                    # TODO remove this ignore when introducing type hints
+                    meta=TestEsClient.ApiResponseMeta(status=self.status_code),  # type: ignore[arg-type]
+                    body={},
+                )
                 raise err
 
         class BulkIndexError:
@@ -321,7 +326,9 @@ class TestEsClient:
 
     def test_raises_sytem_setup_error_on_authentication_problems(self):
         def raise_authentication_error():
-            raise elasticsearch.exceptions.AuthenticationException(meta=None, body=None, message="unit-test")
+            raise elasticsearch.exceptions.AuthenticationException(
+                meta=None, body=None, message="unit-test"  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            )
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -334,7 +341,9 @@ class TestEsClient:
 
     def test_raises_sytem_setup_error_on_authorization_problems(self):
         def raise_authorization_error():
-            raise elasticsearch.exceptions.AuthorizationException(meta=None, body=None, message="unit-test")
+            raise elasticsearch.exceptions.AuthorizationException(
+                meta=None, body=None, message="unit-test"  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            )
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from unittest import mock
 from unittest.mock import call
 
+import elastic_transport
 import elasticsearch
 import pytest
 
@@ -275,7 +276,8 @@ class ApiErrorSupplier:
 
     def __call__(self, status=None, body=None, message=None):
         return elasticsearch.ApiError(
-            meta=self.ApiResponseMeta(status=status),
+            # TODO remove this ignore when introducing type hints
+            meta=self.ApiResponseMeta(status=status),  # type: ignore[arg-type]
             body=body,
             message=message,
         )
@@ -1751,7 +1753,18 @@ class TestSearchableSnapshotsStats:
         metrics_store = metrics.EsMetricsStore(cfg)
         client = Client(
             transport_client=TransportClient(
-                force_error=True, error=elasticsearch.NotFoundError("", "", {"error": {"reason": "No searchable snapshots indices found"}})
+                force_error=True,
+                error=elasticsearch.NotFoundError(
+                    message="",
+                    meta=elastic_transport.ApiResponseMeta(
+                        status=404,
+                        http_version="1.1",
+                        headers=elastic_transport.HttpHeaders(),
+                        duration=0,
+                        node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+                    ),
+                    body={"error": {"reason": "No searchable snapshots indices found"}},
+                ),
             )
         )
         recorder = telemetry.SearchableSnapshotsStatsRecorder(
@@ -4885,7 +4898,17 @@ class TestDiskUsageStats:
     def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.side_effect = elasticsearch.RequestError(message="error", meta=None, body=None)
+        es.indices.disk_usage.side_effect = elasticsearch.RequestError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=400,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
+        )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4916,7 +4939,17 @@ class TestDiskUsageStats:
     def test_missing_all_fails(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.side_effect = elasticsearch.NotFoundError(message="error", meta=None, body=None)
+        es.indices.disk_usage.side_effect = elasticsearch.NotFoundError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=404,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
+        )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4933,7 +4966,17 @@ class TestDiskUsageStats:
     def test_some_mising_succeeds(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        not_found_response = elasticsearch.NotFoundError(message="error", meta=None, body=None)
+        not_found_response = elasticsearch.NotFoundError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=404,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
+        )
         successful_response = {
             "_shards": {"failed": 0},
             "foo": {
