@@ -180,6 +180,11 @@ def create_arg_parser():
         type=valid_date,
         default=None,
     )
+    list_parser.add_argument(
+        "--challenge",
+        help="Show only records from this challenge",
+        default=None,
+    )
     add_track_source(list_parser)
 
     delete_parser = subparsers.add_parser("delete", help="Delete records")
@@ -1098,6 +1103,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
             cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
             cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.challenge", args.challenge)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)

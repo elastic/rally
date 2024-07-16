@@ -89,6 +89,7 @@ Key = Literal[
     "include.tasks",
     "indices",
     "install.id",
+    "list.challenge",
     "list.config.option",
     "list.from_date",
     "list.max_results",

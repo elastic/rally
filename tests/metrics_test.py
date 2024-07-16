@@ -1921,6 +1921,8 @@ class TestFileRaceStore:
         assert len(self.race_store.list()) == 1
         self.cfg.add(config.Scope.application, "system", "list.from_date", "20160131")
         assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.challenge", t.default_challenge.name)
+        assert len(self.race_store.list()) == 1
 
     def test_delete_race(self):
         self.cfg.add(config.Scope.application, "system", "delete.id", "0101")

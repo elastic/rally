@@ -1623,6 +1623,9 @@ class RaceStore:
     def _id(self):
         return self.cfg.opts("system", "delete.id")
 
+    def _challenge(self):
+        return self.cfg.opts("system", "list.challenge", mandatory=False)
+
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
 class CompositeRaceStore:
@@ -1880,6 +1883,7 @@ class EsRaceStore(RaceStore):
         name = self._benchmark_name()
         from_date = self._from_date()
         to_date = self._to_date()
+        challenge = self._challenge()
 
         filters = [
             {
@@ -1911,6 +1915,8 @@ class EsRaceStore(RaceStore):
             query["query"]["bool"]["filter"].append(
                 {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}
             )
+        if challenge:
+            query["query"]["bool"]["filter"].append({"bool": {"should": [{"term": {"challenge": challenge}}]}})
 
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
