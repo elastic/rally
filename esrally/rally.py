@@ -180,6 +180,13 @@ def create_arg_parser():
         type=valid_date,
         default=None,
     )
+    list_parser.add_argument(
+        "--format",
+        help="Print results as text or json",
+        choices=["text", "json"],
+        default="text",
+        dest="output_format"
+    )
     add_track_source(list_parser)
 
     delete_parser = subparsers.add_parser("delete", help="Delete records")
@@ -262,6 +269,44 @@ def create_arg_parser():
         help="Track output directory (default: tracks/)",
     )
 
+    show_parser = subparsers.add_parser("show", help="Show records for a particular race")
+    show_parser.add_argument(
+        "--report-format",
+        help="Define the output format for the command line report (default: markdown).",
+        choices=["markdown", "csv", "json"],
+        default="markdown",
+    )
+    show_parser.add_argument(
+        "--report-numbers-align",
+        help="Define the output column number alignment for the command line report (default: decimal).",
+        choices=["right", "center", "left", "decimal"],
+        default="decimal",
+    )
+    show_parser.add_argument(
+        "--report-file",
+        help="Write the command line report also to the provided file.",
+        default="",
+    )
+    show_parser.add_argument(
+        "--show-in-report",
+        help="Whether to include the comparison in the results file.",
+        default=True,
+    )
+    show_parser.add_argument(
+        "--race-id",
+        default=None,
+        help="Show records for this Race ID. "
+    )
+    show_parser.add_argument(
+        "--env-id",
+        default=None,
+        help="Show records for race with this env-id user tag. "
+    )
+    show_parser.add_argument(
+        "--revision",
+        default=None,
+        help="Show records for races with this revision. "
+    )
     compare_parser = subparsers.add_parser("compare", help="Compare two races")
     compare_parser.add_argument(
         "--baseline",
@@ -826,6 +871,7 @@ def create_arg_parser():
         add_parser,
         race_parser,
         compare_parser,
+        show_parser,
         build_parser,
         download_parser,
         install_parser,
@@ -844,6 +890,12 @@ def create_arg_parser():
             "--quiet",
             help="Suppress as much as output as possible (default: false).",
             default=False,
+            action="store_true",
+        )
+        p.add_argument(
+            "--output-format",
+            help="Suppress as much as output as possible (default: false).",
+            default="text",
             action="store_true",
         )
         p.add_argument(
@@ -1091,6 +1143,11 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
         if sub_command == "compare":
             configure_reporting_params(args, cfg)
             reporter.compare(cfg, args.baseline, args.contender)
+        elif sub_command == "show":
+            configure_reporting_params(args, cfg)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.env_id", args.env_id)
+            cfg.add(config.Scope.applicationOverride, "system", "admin.revision", args.revision)
+            reporter.summarize_by_id(cfg, args.race_id)
         elif sub_command == "list":
             cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
             cfg.add(config.Scope.applicationOverride, "system", "list.max_results", args.limit)
@@ -1098,6 +1155,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
             cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
             cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.output_format", args.output_format)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
@@ -1245,7 +1303,7 @@ def main():
         sys.exit(0)
 
     console.init(quiet=args.quiet)
-    console.println(BANNER)
+    #console.println(BANNER)
 
     cfg = config.Config(config_name=args.configuration_name)
     if not cfg.config_present():
@@ -1289,17 +1347,18 @@ def main():
     result = dispatch_sub_command(arg_parser, args, cfg)
 
     end = time.time()
-    if result == ExitStatus.SUCCESSFUL:
-        console.println("")
-        console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
-    elif result == ExitStatus.INTERRUPTED:
-        console.println("")
-        console.info("ABORTED (took %d seconds)" % (end - start), overline="-", underline="-")
-        sys.exit(130)
-    elif result == ExitStatus.ERROR:
-        console.println("")
-        console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
-        sys.exit(64)
+    if args.output_format != "json":
+        if result == ExitStatus.SUCCESSFUL:
+             console.println("")
+             console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
+        elif result == ExitStatus.INTERRUPTED:
+             console.println("")
+             console.info("ABORTED (took %d seconds)" % (end - start), overline="-", underline="-")
+             sys.exit(130)
+        elif result == ExitStatus.ERROR:
+             console.println("")
+             console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
+             sys.exit(64)
 
 
 if __name__ == "__main__":
