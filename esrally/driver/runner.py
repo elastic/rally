@@ -562,6 +562,7 @@ class BulkIndex(Runner):
         total_document_size_bytes = 0
         with_action_metadata = mandatory(params, "action-metadata-present", self)
 
+        request_status = response.meta.status
         if isinstance(params["body"], bytes):
             bulk_lines = params["body"].split(b"\n")
         elif isinstance(params["body"], str):
@@ -598,6 +599,7 @@ class BulkIndex(Runner):
                 shards_histogram[sk]["item-count"] += 1
             if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                 bulk_error_count += 1
+                request_status = max(request_status, data["status"])
                 self.extract_error_details(error_details, data)
             else:
                 bulk_success_count += 1
@@ -610,6 +612,7 @@ class BulkIndex(Runner):
             "shards_histogram": list(shards_histogram.values()),
             "bulk-request-size-bytes": bulk_request_size_bytes,
             "total-document-size-bytes": total_document_size_bytes,
+            "http-status": request_status,
         }
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
@@ -624,6 +627,7 @@ class BulkIndex(Runner):
         bulk_success_count = bulk_size if unit == "docs" else None
         bulk_error_count = 0
         error_details = set()
+        request_status = response.meta.status
         # parse lazily on the fast path
         props = parse(response, ["errors", "took"])
 
@@ -635,6 +639,7 @@ class BulkIndex(Runner):
             for item in parsed_response["items"]:
                 data = next(iter(item.values()))
                 if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
+                    request_status = max(request_status, data["status"])
                     bulk_error_count += 1
                     self.extract_error_details(error_details, data)
                 else:
@@ -644,6 +649,7 @@ class BulkIndex(Runner):
             "success": bulk_error_count == 0,
             "success-count": bulk_success_count,
             "error-count": bulk_error_count,
+            "http-status": request_status,
         }
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
