@@ -32,6 +32,7 @@ from os.path import commonprefix
 from types import FunctionType
 from typing import List, Optional
 
+from elastic_transport import ApiResponse
 import ijson
 
 from esrally import exceptions, track, types
@@ -562,7 +563,10 @@ class BulkIndex(Runner):
         total_document_size_bytes = 0
         with_action_metadata = mandatory(params, "action-metadata-present", self)
 
-        request_status = response.meta.status
+        if isinstance(response, ApiResponse):
+            request_status = response.meta.status
+        else:
+            request_status = -1
         if isinstance(params["body"], bytes):
             bulk_lines = params["body"].split(b"\n")
         elif isinstance(params["body"], str):
@@ -627,7 +631,10 @@ class BulkIndex(Runner):
         bulk_success_count = bulk_size if unit == "docs" else None
         bulk_error_count = 0
         error_details = set()
-        request_status = response.meta.status
+        if isinstance(response, ApiResponse):
+            request_status = response.meta.status
+        else:
+            request_status = -1
         # parse lazily on the fast path
         props = parse(response, ["errors", "took"])
 
