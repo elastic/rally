@@ -32,7 +32,6 @@ from os.path import commonprefix
 from types import FunctionType
 from typing import List, Optional
 
-from elastic_transport import ApiResponse
 import ijson
 
 from esrally import exceptions, track, types
@@ -506,7 +505,6 @@ class BulkIndex(Runner):
         """
         detailed_results = params.get("detailed-results", False)
         api_kwargs = self._default_kw_params(params)
-
         bulk_params = {}
         if "timeout" in params:
             bulk_params["timeout"] = params["timeout"]
@@ -534,8 +532,23 @@ class BulkIndex(Runner):
             response = await es.bulk(params=bulk_params, **api_kwargs)
         else:
             response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
-
-        stats = self.detailed_stats(params, response) if detailed_results else self.simple_stats(bulk_size, unit, response)
+        retry_stats = {}
+        for i in range(3):  # this can be configurable later
+            stats, lines_to_retry = (
+                self.detailed_stats(params, response) if detailed_results else self.simple_stats(bulk_size, unit, response, params)
+            )
+            if len(lines_to_retry) == 0:
+                stats.update(retry_stats)
+                break
+            if len(lines_to_retry) % 2 > 0:
+                self.logger.warn(f"Lines to retry was not divisible by 2. Actual: {lines_to_retry}")
+            retry_stats[f"attempt_{i}"] = stats
+            api_kwargs["body"] = lines_to_retry
+            bulk_size = len(lines_to_retry) / 2
+            response = await es.bulk(params=bulk_params, **api_kwargs)
+            request_status = response.meta.status
+            if request_status == 400:
+                self.logger.warn(f"400 after retry. Payload: {lines_to_retry}")
 
         meta_data = {
             "index": params.get("index"),
@@ -562,11 +575,7 @@ class BulkIndex(Runner):
         bulk_request_size_bytes = 0
         total_document_size_bytes = 0
         with_action_metadata = mandatory(params, "action-metadata-present", self)
-
-        if isinstance(response, ApiResponse):
-            request_status = response.meta.status
-        else:
-            request_status = -1
+        request_status = response.meta.status
         if isinstance(params["body"], bytes):
             bulk_lines = params["body"].split(b"\n")
         elif isinstance(params["body"], str):
@@ -627,27 +636,38 @@ class BulkIndex(Runner):
 
         return stats
 
-    def simple_stats(self, bulk_size, unit, response):
+    def simple_stats(self, bulk_size, unit, response, params):
         bulk_success_count = bulk_size if unit == "docs" else None
         bulk_error_count = 0
         error_details = set()
-        if isinstance(response, ApiResponse):
-            request_status = response.meta.status
-        else:
-            request_status = -1
+        request_status = response.meta.status
         # parse lazily on the fast path
         props = parse(response, ["errors", "took"])
-
+        if isinstance(params["body"], bytes):
+            bulk_lines = params["body"].split(b"\n")
+        elif isinstance(params["body"], str):
+            bulk_lines = params["body"].split("\n")
+        elif isinstance(params["body"], list):
+            bulk_lines = params["body"]
+        else:
+            raise exceptions.DataError("bulk body is not of type bytes, string, or list")
+        lines_to_retry = []
         if props.get("errors", False):
             # determine success count regardless of unit because we need to iterate through all items anyway
             bulk_success_count = 0
             # Reparse fully in case of errors - this will be slower
             parsed_response = json.loads(response.getvalue())
-            for item in parsed_response["items"]:
+            for i, item in enumerate(parsed_response["items"]):
                 data = next(iter(item.values()))
                 if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                     request_status = max(request_status, data["status"])
                     bulk_error_count += 1
+                    if data["status"] == 429:  # don't retry other statuses right now.
+                        possible_failed_item = bulk_lines[
+                            (i * 2)
+                        ]  # this is for the "action" line - its possible sometimes this may not be here, we will need to take account of that probably in main function
+                        possible_failed_item = bulk_lines[(i * 2) + 1]
+                        lines_to_retry.append(possible_failed_item)
                     self.extract_error_details(error_details, data)
                 else:
                     bulk_success_count += 1
@@ -661,7 +681,7 @@ class BulkIndex(Runner):
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
-        return stats
+        return stats, lines_to_retry
 
     def extract_error_details(self, error_details, data):
         error_data = data.get("error", {})
