@@ -532,21 +532,32 @@ class BulkIndex(Runner):
             response = await es.bulk(params=bulk_params, **api_kwargs)
         else:
             response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
-        retry_stats = {}
+        retry_stats = []
+        total_success = total_error = total_time = 0
         for i in range(3):  # this can be configurable later
             stats, lines_to_retry = (
                 self.detailed_stats(params, response) if detailed_results else self.simple_stats(bulk_size, unit, response, api_kwargs)
             )
+            retry_stats.append(stats)
             if len(lines_to_retry) == 0:
-                stats.update(retry_stats)
                 break
-            retry_stats[f"attempt_{i}"] = stats
             api_kwargs["body"] = lines_to_retry
             bulk_size = len(lines_to_retry) / 2
             response = await es.bulk(params=bulk_params, **api_kwargs)
             request_status = response.meta.status
             if request_status == 400:
                 self.logger.warn(f"400 after retry. Payload: {lines_to_retry}")
+        if len(retry_stats) == 1:
+            stats = retry_stats[0]
+        else:
+            for stats in retry_stats:
+                total_success += stats["success-count"]
+                total_error += stats["error-count"]
+                total_time += stats["took"]
+            retry_count = len(retry_stats)
+
+            stats = {"success-count": total_success, "error-count": total_error, "retry-count": retry_count, "took": total_time, "success": True, "retried": True}
+
         meta_data = {
             "index": params.get("index"),
             "weight": bulk_size,
