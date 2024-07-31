@@ -535,13 +535,11 @@ class BulkIndex(Runner):
         retry_stats = {}
         for i in range(3):  # this can be configurable later
             stats, lines_to_retry = (
-                self.detailed_stats(params, response) if detailed_results else self.simple_stats(bulk_size, unit, response, params)
+                self.detailed_stats(params, response) if detailed_results else self.simple_stats(bulk_size, unit, response, api_kwargs)
             )
             if len(lines_to_retry) == 0:
                 stats.update(retry_stats)
                 break
-            if len(lines_to_retry) % 2 > 0:
-                self.logger.warn(f"Lines to retry was not divisible by 2. Actual: {lines_to_retry}")
             retry_stats[f"attempt_{i}"] = stats
             api_kwargs["body"] = lines_to_retry
             bulk_size = len(lines_to_retry) / 2
@@ -549,7 +547,6 @@ class BulkIndex(Runner):
             request_status = response.meta.status
             if request_status == 400:
                 self.logger.warn(f"400 after retry. Payload: {lines_to_retry}")
-
         meta_data = {
             "index": params.get("index"),
             "weight": bulk_size,
@@ -641,6 +638,7 @@ class BulkIndex(Runner):
         bulk_error_count = 0
         error_details = set()
         request_status = response.meta.status
+        doc_status = -1
         # parse lazily on the fast path
         props = parse(response, ["errors", "took"])
         if isinstance(params["body"], bytes):
@@ -660,14 +658,11 @@ class BulkIndex(Runner):
             for i, item in enumerate(parsed_response["items"]):
                 data = next(iter(item.values()))
                 if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
-                    request_status = max(request_status, data["status"])
+                    doc_status = max(doc_status, data["status"])
                     bulk_error_count += 1
                     if data["status"] == 429:  # don't retry other statuses right now.
-                        possible_failed_item = bulk_lines[
-                            (i * 2)
-                        ]  # this is for the "action" line - its possible sometimes this may not be here, we will need to take account of that probably in main function
-                        possible_failed_item = bulk_lines[(i * 2) + 1]
-                        lines_to_retry.append(possible_failed_item)
+                        lines_to_retry.append(bulk_lines[(i * 2)])
+                        lines_to_retry.append(bulk_lines[(i * 2) + 1])
                     self.extract_error_details(error_details, data)
                 else:
                     bulk_success_count += 1
@@ -676,8 +671,11 @@ class BulkIndex(Runner):
             "success": bulk_error_count == 0,
             "success-count": bulk_success_count,
             "error-count": bulk_error_count,
-            "http-status": request_status,
+            "request-status": request_status,
         }
+        if doc_status > 0:
+            stats["doc-status"] = doc_status  # if we have not encountered any errors, we will never have inspected the status for each doc
+            # alternatively we could set it to the same as request-status, even though in reality they tend to be status 201 rather than 200
         if bulk_error_count > 0:
             stats["error-type"] = "bulk"
             stats["error-description"] = self.error_description(error_details)
