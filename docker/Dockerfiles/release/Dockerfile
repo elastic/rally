@@ -39,6 +39,9 @@ RUN mkdir -p /rally/.rally && \
 
 USER 1000
 
+RUN python3 -m pip install --user --upgrade hatch hatchling pip wheel
+RUN python3 -m pip install --user esrally==$RALLY_VERSION
+
 RUN python3 -m venv /rally/venv
 ENV PATH=/rally/venv/bin:$PATH
 
