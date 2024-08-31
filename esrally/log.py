@@ -95,14 +95,27 @@ def install_default_log_config():
         source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
         with open(log_config, "w", encoding="UTF-8") as target:
             with open(source_path, encoding="UTF-8") as src:
-                # Ensure we have a trailing path separator as after LOG_PATH there will only be the file name
-                log_path = os.path.join(paths.logs(), "")
-                # the logging path might contain backslashes that we need to escape
-                log_path = io.escape_path(log_path)
-                contents = src.read().replace("${LOG_PATH}", log_path)
+                contents = src.read()
                 target.write(contents)
     add_missing_loggers_to_config()
     io.ensure_dir(paths.logs())
+
+
+# pylint: disable=unused-argument
+def configure_file_handler(*args, **kwargs) -> logging.Handler:
+    """
+    Configures the WatchedFileHandler supporting expansion of `~` and `${LOG_PATH}` to the user's home and the log path respectively.
+    """
+    filename = kwargs.pop("filename").replace("${LOG_PATH}", paths.logs())
+    return logging.handlers.WatchedFileHandler(filename=filename, encoding=kwargs["encoding"], delay=kwargs.get("delay", False))
+
+
+def configure_profile_file_handler(*args, **kwargs) -> logging.Handler:
+    """
+    Configures the FileHandler supporting expansion of `~` and `${LOG_PATH}` to the user's home and the log path respectively.
+    """
+    filename = kwargs.pop("filename").replace("${LOG_PATH}", paths.logs())
+    return logging.FileHandler(filename=filename, encoding=kwargs["encoding"], delay=kwargs.get("delay", False))
 
 
 def load_configuration():

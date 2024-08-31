@@ -1,54 +1,31 @@
-################################################################################
-# Build stage 0 `builder`:
-# Install Rally from source inside a virtualenv
-################################################################################
-
-FROM python:3.8.13-slim-bullseye as builder
-
-RUN apt-get -y update && \
-    apt-get install -y curl git gcc && \
-    apt-get -y upgrade && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN mkdir -p /rally/esrally
-COPY pyproject.toml /rally/
-COPY README.md /rally/
-COPY esrally/ /rally/esrally/
-
-RUN python3 -m venv /rally/venv
-ENV PATH="/rally/venv/bin:$PATH"
-
-WORKDIR /rally
-# Wipe away any lingering caches, copied over from the local machine
-RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN pip3 install --upgrade hatch hatchling pip wheel
-RUN pip3 install /rally
-
-################################################################################
-# Build stage 1 (the actual Rally image):
-# Copy Rally from stage 0 and fix permissions to support randomized UIDs
-# Define VOLUME for ~/.rally
-# Add entrypoint
-################################################################################
-
-FROM python:3.8.12-slim-bullseye
+FROM cgr.dev/chainguard/wolfi-base
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
-ENV RALLY_RUNNING_IN_DOCKER True
 
-RUN apt-get -y update && \
-    apt-get install -y curl git pbzip2 pigz && \
-    apt-get -y upgrade && \
-    rm -rf /var/lib/apt/lists/*
+ENV RALLY_RUNNING_IN_DOCKER=True
 
-RUN groupadd --gid 1000 rally && \
-    useradd -d /rally -m -k /dev/null -g 1000 -N -u 1000 -l -s /bin/bash rally
+RUN apk update 
+RUN apk add curl git gcc pigz bash
 
-COPY --chown=1000:0 --from=builder /rally/venv /rally/venv
+# pbzip2 doesn't have a package for wolfi, so we build it from source
+RUN apk add bzip2-dev make wget glibc-dev zlib-dev openssl-dev libffi-dev \
+    bzip2-dev gdbm-dev ncurses-dev nss \
+    readline-dev sqlite-dev openssl-dev llvm16
+
+
+RUN cd /tmp && \
+  wget -q https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz && \
+  tar -xzf pbzip2-1.1.13.tar.gz && \
+  cd pbzip2-1.1.13/ && \
+  make install && \
+  rm -r /tmp/pbzip2-1.1.13/
+
+
+RUN addgroup --gid 1001 rally && \
+    adduser --system --home /rally --ingroup rally --no-create-home --uid 1001 --shell /bin/bash rally
 
 WORKDIR /rally
-COPY --chown=1000:0 docker/bin/entrypoint.sh /entrypoint.sh
+COPY --chown=1001:0 docker/bin/entrypoint.sh /entrypoint.sh
 
 # Openshift overrides USER and uses random ones with uid>1024 and gid=0
 # Allow ENTRYPOINT (and Rally) to run even with a different user
@@ -57,9 +34,29 @@ RUN chgrp 0 /entrypoint.sh && \
     chmod 0775 /entrypoint.sh
 
 RUN mkdir -p /rally/.rally && \
-    chown -R 1000:0 /rally/.rally
+    chown -R 1001:0 /rally/
 
-USER 1000
+USER 1001
+
+# Install pyenv
+RUN git clone --depth=1 https://github.com/pyenv/pyenv.git /rally/.pyenv
+ENV PYENV_ROOT="/rally/.pyenv"
+ENV PATH=/rally/.local/bin:$PATH
+ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+
+RUN pyenv install 3.11.7
+RUN pyenv global 3.11.7
+
+RUN mkdir -p /rally/esrally
+COPY pyproject.toml /rally/
+COPY README.md /rally/
+COPY esrally/ /rally/esrally/
+
+# Wipe away any lingering caches, copied over from the local machine
+RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
+RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
+RUN python3 -m pip install --user --upgrade hatch hatchling pip wheel
+RUN python3 -m pip install --user /rally
 
 ENV PATH=/rally/venv/bin:$PATH
 

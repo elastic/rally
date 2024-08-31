@@ -52,7 +52,10 @@ class ConfigFile:
 
     def load(self) -> configparser.ConfigParser:
         config = configparser.ConfigParser()
-        config.read(self.location, encoding="utf-8")
+        with open(self.location, encoding="utf-8") as src:
+            contents = src.read()
+        contents = Template(contents).substitute(CONFIG_DIR=self.config_dir)
+        config.read_string(contents, source=self.location)
         return config
 
     def store_default_config(self, template_path=None):
@@ -64,7 +67,7 @@ class ConfigFile:
         with open(self.location, "w", encoding="utf-8") as target:
             with open(source_path, encoding="utf-8") as src:
                 contents = src.read()
-                target.write(Template(contents).substitute(CONFIG_DIR=self.config_dir))
+                target.write(contents)
 
     def store(self, config: configparser.ConfigParser):
         io.ensure_dir(self.config_dir)
