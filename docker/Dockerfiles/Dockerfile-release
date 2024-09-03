@@ -1,9 +1,11 @@
-FROM cgr.dev/chainguard/wolfi-base
+FROM docker.elastic.co/wolfi/python:3.11.7-dev
 
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
 
 ENV RALLY_RUNNING_IN_DOCKER=True
+
+USER root
 
 RUN apk update 
 RUN apk add curl git gcc pigz bash
@@ -40,15 +42,6 @@ RUN mkdir -p /rally/.rally && \
     chown -R 1001:0 /rally/
 
 USER 1001
-
-# Install pyenv
-RUN git clone --depth=1 https://github.com/pyenv/pyenv.git /rally/.pyenv
-ENV PYENV_ROOT="/rally/.pyenv"
-ENV PATH=/rally/.local/bin:$PATH
-ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
-
-RUN pyenv install 3.11.7
-RUN pyenv global 3.11.7
 
 RUN python3 -m pip install --user --upgrade hatch hatchling pip wheel
 RUN python3 -m pip install --user esrally==$RALLY_VERSION
