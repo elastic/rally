@@ -43,10 +43,12 @@ RUN mkdir -p /rally/.rally && \
 
 USER 1001
 
-RUN python3 -m pip install --user --upgrade hatch hatchling pip wheel
-RUN python3 -m pip install --user esrally==$RALLY_VERSION
-
+RUN python3 -m venv /rally/venv
 ENV PATH=/rally/venv/bin:$PATH
+
+RUN python3 -m pip install --upgrade hatch hatchling pip wheel
+RUN python3 -m pip install esrally==$RALLY_VERSION
+
 
 LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vendor="Elastic" \

@@ -45,13 +45,14 @@ COPY pyproject.toml /rally/
 COPY README.md /rally/
 COPY esrally/ /rally/esrally/
 
+RUN python3 -m venv /rally/venv
+ENV PATH=/rally/venv/bin:$PATH
+
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN python3 -m pip install --user --upgrade hatch hatchling pip wheel
-RUN python3 -m pip install --user /rally
-
-ENV PATH=/rally/venv/bin:$PATH
+RUN python3 -m pip install --upgrade hatch hatchling pip wheel
+RUN python3 -m pip install /rally
 
 LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vendor="Elastic" \
