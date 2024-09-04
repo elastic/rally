@@ -308,7 +308,7 @@ def create_arg_parser():
         " 'latest' fetches the latest version on the main branch. It is also possible to specify a commit id or a timestamp."
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current). A combination of branch and timestamp is also possible,'
-        'e.g. "@feature-branch@2023-04-06T14:52:31Z".',
+        'e.g. "feature-branch@2023-04-06T14:52:31Z".',
         default="current",
         type=revision,
     )  # optimized for local usage, don't fetch sources
