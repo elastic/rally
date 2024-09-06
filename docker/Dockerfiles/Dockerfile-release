@@ -8,7 +8,7 @@ ENV RALLY_RUNNING_IN_DOCKER=True
 USER root
 
 RUN apk update 
-RUN apk add curl git gcc pigz bash
+RUN apk add curl git gcc pigz bash zstd
 
 # pbzip2 doesn't have a package for wolfi, so we build it from source
 RUN apk add bzip2-dev make wget glibc-dev zlib-dev openssl-dev libffi-dev \
