@@ -250,7 +250,7 @@ def build_docker_image():
 
     command = (
         f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE "
-        f"-f {ROOT_DIR}/docker/Dockerfiles/Dockerfile-dev {ROOT_DIR}"
+        f"-f {ROOT_DIR}/docker/Dockerfiles/dev/Dockerfile {ROOT_DIR}"
     )
 
     if process.run_subprocess_with_logging(command, env=env_variables) != 0:

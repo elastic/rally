@@ -22,7 +22,7 @@
 # Logged in on Docker Hub (docker login)
 
 # fail this script immediately if any command fails with a non-zero exit code
-set -eu
+set -eu -eE -o functrace
 
 function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
@@ -30,23 +30,35 @@ function push_failed {
 
 if [[ $# -eq 0 ]] ; then
     echo "ERROR: $0 requires the Rally version to push as a command line argument and you didn't supply it."
-    echo "For example: $0 1.1.0"
+    echo "For example: $0 master"
     exit 1
 fi
-export RALLY_VERSION=$1
+export RALLY_BRANCH=$1
 export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
 
+export GIT_SHA=$(git rev-parse --short HEAD)
+export DATE=$(date +%Y%m%d)
+
+export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}"
+export MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+
+if [[ $RALLY_BRANCH == $MAIN_BRANCH ]]; then
+    export DOCKER_TAG_LATEST="dev-latest"
+else
+    export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest"
+fi
+
 echo "========================================================"
-echo "Building Docker image for Rally release $RALLY_VERSION  "
+echo "Building Docker image for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker build -t elastic/rally:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/release/Dockerfile $PWD
+docker buildx build -t elastic/rally:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE --platform=linux/amd64,linux/arm64 -f docker/Dockerfiles/dev/Dockerfile $PWD
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
 echo "======================================================="
 
-./release-docker-test.sh
+./release-docker-test.sh dev
 
 echo "======================================================="
 echo "Publishing Docker image elastic/rally:$RALLY_VERSION   "
@@ -59,7 +71,7 @@ echo "============================================"
 echo "Publishing Docker image elastic/rally:latest"
 echo "============================================"
 
-docker tag elastic/rally:${RALLY_VERSION} elastic/rally:latest
-docker push elastic/rally:latest
+docker tag elastic/rally:${RALLY_VERSION} elastic/rally:${DOCKER_TAG_LATEST}
+docker push elastic/rally:${DOCKER_TAG_LATEST}
 
 trap - ERR

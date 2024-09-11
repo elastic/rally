@@ -101,7 +101,11 @@ function test_docker_release_image {
     docker_compose down
 
     info "Testing Rally docker image uses the right version"
-    actual_version=$(docker run --rm elastic/rally:${RALLY_VERSION} esrally --version | cut -d ' ' -f 2,2)
+    if [[ "${DEVELOPMENT}" == "YES" ]]; then
+        actual_version=${RALLY_VERSION}
+    else
+        actual_version=$(docker run --rm elastic/rally:${RALLY_VERSION} esrally --version | cut -d ' ' -f 2,2)
+    fi
     if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
         echo "Rally version in Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
         exit 1
@@ -158,5 +162,11 @@ function tear_down {
 }
 
 trap "tear_down" EXIT
+
+if [[ $# -gt 0 && $1 -eq "dev" ]] ; then
+    export DEVELOPMENT="YES"
+else 
+    export DEVELOPMENT="NO"
+fi
 
 main
