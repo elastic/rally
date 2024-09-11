@@ -1,0 +1,3 @@
+steps:
+  - label: ":wave: Greetings"            # Label (with rich emojis https://ela.st/bk-emoji).
+    command: "echo 'My first pipeline!'" # Command to run (evaluated by Bash).
