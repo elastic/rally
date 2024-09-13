@@ -28,31 +28,32 @@ function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
 }
 
-if [[ $# -eq 0 ]] ; then
+if [[ $# -ne 2 ]] ; then
     echo "ERROR: $0 requires the Rally version to push as a command line argument and you didn't supply it."
-    echo "For example: $0 master"
+    echo "For example: $0 master amd64"
     exit 1
 fi
 export RALLY_BRANCH=$1
+export ARCH=$2
 export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
 
 export GIT_SHA=$(git rev-parse --short HEAD)
 export DATE=$(date +%Y%m%d)
 
-export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}"
+export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}-${ARCH}"
 export MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
 if [[ $RALLY_BRANCH == $MAIN_BRANCH ]]; then
-    export DOCKER_TAG_LATEST="dev-latest"
+    export DOCKER_TAG_LATEST="dev-latest-${ARCH}"
 else
-    export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest"
+    export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest-${ARCH}"
 fi
 
 echo "========================================================"
 echo "Building Docker image for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker buildx build -t elastic/rally:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE --platform=linux/amd64,linux/arm64 -f docker/Dockerfiles/dev/Dockerfile $PWD
+docker build -t elastic/rally:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile $PWD
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "

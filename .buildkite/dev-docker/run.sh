@@ -6,9 +6,14 @@ source .buildkite/retry.sh
 
 set +x
 
-buildkite-agent meta-data keys
-
 BUILD_FROM_BRANCH=$(buildkite-agent meta-data get BUILD_FROM_BRANCH)
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <arch>"
+    exit 1
+fi
+
+ARCH="$1"
 
 # login to docker registry
 DOCKER_PASSWORD=$(vault read -field token /secret/ci/elastic-rally/release/docker-hub-rally)
@@ -23,9 +28,11 @@ git checkout "${BUILD_FROM_BRANCH}"
 git --no-pager show
 
 set -x
+# FIXME: remove this if we can figure out current git branch
+buildkite-agent meta-data keys
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
-./build-dev-docker.sh "$BUILD_FROM_BRANCH"
+./build-dev-docker.sh "$BUILD_FROM_BRANCH" "$ARCH"
 
 popd
 popd
