@@ -7,6 +7,7 @@ source .buildkite/retry.sh
 set +x
 
 BUILD_FROM_BRANCH=$(buildkite-agent meta-data get BUILD_FROM_BRANCH)
+PUSH_LATEST=$(buildkite-agent meta-data get PUSH_LATEST)
 
 if [[ $# -ne 1 ]]; then
     echo "Usage: $0 <arch>"
@@ -30,7 +31,7 @@ git --no-pager show
 set -x
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
-./build-dev-docker.sh "$BUILD_FROM_BRANCH" "$ARCH"
+./build-dev-docker.sh "$BUILD_FROM_BRANCH" "$ARCH" "$PUSH_LATEST"
 
 popd
 popd

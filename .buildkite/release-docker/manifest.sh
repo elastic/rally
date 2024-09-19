@@ -6,7 +6,7 @@ source .buildkite/retry.sh
 
 set +x
 
-BUILD_FROM_BRANCH=$(buildkite-agent meta-data get BUILD_FROM_BRANCH)
+RELEASE_VERSION=$(buildkite-agent meta-data get RELEASE_VERSION)
 PUSH_LATEST=$(buildkite-agent meta-data get PUSH_LATEST)
 
 # login to docker registry
@@ -17,4 +17,4 @@ unset DOCKER_PASSWORD
 set -x
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
-./build-dev-docker-manifest.sh "$BUILD_FROM_BRANCH" "$PUSH_LATEST"
+./release-docker-manifest.sh "$RELEASE_VERSION" "$PUSH_LATEST"

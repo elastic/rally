@@ -30,49 +30,42 @@ function push_failed {
 
 if [[ $# -eq 0 ]] ; then
     echo "ERROR: $0 requires the Rally version to push as a command line argument and you didn't supply it."
-    echo "For example: $0 master"
+    echo "For example: $0 master true"
     exit 1
 fi
-export RALLY_BRANCH=$1
+export RALLY_VERSION=$1
 export PUSH_LATEST=$2
 export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
 
 export GIT_SHA=$(git rev-parse --short HEAD)
 export DATE=$(date +%Y%m%d)
 
-export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}"
-export MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
-
-if [[ $RALLY_BRANCH == $MAIN_BRANCH ]]; then
-    export DOCKER_TAG_LATEST="dev-latest"
-else
-    export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest"
-fi
+export RALLY_VERSION_TAG="${RALLY_VERSION}-${DATE}"
+export DOCKER_TAG_LATEST="latest"
 
 echo "========================================================"
-echo "Pulling Docker images for Rally $RALLY_VERSION          "
+echo "Pulling Docker images for Rally $RALLY_VERSION_TAG          "
 echo "========================================================"
 
-docker pull elastic/rally:${RALLY_VERSION}-amd64
-docker pull elastic/rally:${RALLY_VERSION}-arm64
+docker pull elastic/rally:${RALLY_VERSION_TAG}-amd64
+docker pull elastic/rally:${RALLY_VERSION_TAG}-arm64
 
 echo "======================================================="
-echo "Creating Docker manifest image for Rally $RALLY_VERSION"
+echo "Creating Docker manifest image for Rally $RALLY_VERSION_TAG"
 echo "======================================================="
 
-docker manifest create elastic/rally:${RALLY_VERSION} \
-    --amend elastic/rally:${RALLY_VERSION}-amd64 \
-    --amend elastic/rally:${RALLY_VERSION}-arm64
-
-trap push_failed ERR
-echo "======================================================="
-echo "Publishing Docker image elastic/rally:$RALLY_VERSION   "
-echo "======================================================="
-docker manifest push elastic/rally:${RALLY_VERSION}
-
-trap - ERR
+docker manifest create elastic/rally:${RALLY_VERSION_TAG} \
+    --amend elastic/rally:${RALLY_VERSION_TAG}-amd64 \
+    --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
 if [[ $PUSH_LATEST == "true" ]]; then
+    trap push_failed ERR
+    echo "======================================================="
+    echo "Publishing Docker image elastic/rally:$RALLY_VERSION_TAG"
+    echo "======================================================="
+    docker manifest push elastic/rally:${RALLY_VERSION_TAG}
+    trap - ERR
+
     echo "======================================================="
     echo "Creating Docker manifest image for Rally $DOCKER_TAG_LATEST"
     echo "======================================================="
@@ -81,11 +74,13 @@ if [[ $PUSH_LATEST == "true" ]]; then
         --amend elastic/rally:${DOCKER_TAG_LATEST}-amd64 \
         --amend elastic/rally:${DOCKER_TAG_LATEST}-arm64
 
-    trap push_failed ERR
     echo "======================================================="
     echo "Publishing Docker image elastic/rally:${DOCKER_TAG_LATEST}"
     echo "======================================================="
+
+    trap push_failed ERR
     docker manifest push elastic/rally:${DOCKER_TAG_LATEST}
 fi
 
 trap - ERR
+

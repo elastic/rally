@@ -22,25 +22,29 @@
 # Logged in on Docker Hub (docker login)
 
 # fail this script immediately if any command fails with a non-zero exit code
-set -eu -eE -o functrace
+set -eu
 
 function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
 }
 
-if [[ $# -ne 2 ]] ; then
-    echo "ERROR: $0 requires the Rally version to push as a command line argument and you didn't supply it."
-    echo "For example: $0 master amd64"
+if [[ $# -ne 3 ]] ; then
+    echo "ERROR: $0 requires the Rally branch to build, the architecture, and whether to push the latest \
+        as command line arguments and they weren't supplied."
+    echo "For example: $0 master amd64 true"
     exit 1
 fi
 export RALLY_BRANCH=$1
 export ARCH=$2
+export PUSH_LATEST=$3
+
 export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
 
 export GIT_SHA=$(git rev-parse --short HEAD)
 export DATE=$(date +%Y%m%d)
 
 export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}-${ARCH}"
+export RALLY_VERSION_TAG="${RALLY_VERSION}"
 export MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
 if [[ $RALLY_BRANCH == $MAIN_BRANCH ]]; then
@@ -68,11 +72,13 @@ echo "======================================================="
 trap push_failed ERR
 docker push elastic/rally:${RALLY_VERSION}
 
-echo "============================================"
-echo "Publishing Docker image elastic/rally:latest"
-echo "============================================"
+if [[ $PUSH_LATEST == "true" ]]; then
+    echo "============================================"
+    echo "Publishing Docker image elastic/rally:${DOCKER_TAG_LATEST}"
+    echo "============================================"
 
-docker tag elastic/rally:${RALLY_VERSION} elastic/rally:${DOCKER_TAG_LATEST}
-docker push elastic/rally:${DOCKER_TAG_LATEST}
+    docker tag elastic/rally:${RALLY_VERSION} elastic/rally:${DOCKER_TAG_LATEST}
+    docker push elastic/rally:${DOCKER_TAG_LATEST}
+fi
 
 trap - ERR
