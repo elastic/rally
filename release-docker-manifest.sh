@@ -41,6 +41,7 @@ export GIT_SHA=$(git rev-parse --short HEAD)
 export DATE=$(date +%Y%m%d)
 
 export RALLY_VERSION_TAG="${RALLY_VERSION}-${DATE}"
+export DOCKER_TAG_VERSION="${RALLY_VERSION}"
 export DOCKER_TAG_LATEST="latest"
 
 echo "========================================================"
@@ -58,27 +59,36 @@ docker manifest create elastic/rally:${RALLY_VERSION_TAG} \
     --amend elastic/rally:${RALLY_VERSION_TAG}-amd64 \
     --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
+trap push_failed ERR
+echo "======================================================="
+echo "Publishing Docker image elastic/rally:$RALLY_VERSION_TAG"
+echo "======================================================="
+docker manifest push elastic/rally:${RALLY_VERSION_TAG}
+trap - ERR
+
 if [[ $PUSH_LATEST == "true" ]]; then
-    trap push_failed ERR
     echo "======================================================="
-    echo "Publishing Docker image elastic/rally:$RALLY_VERSION_TAG"
+    echo "Creating Docker manifest image for Rally $DOCKER_TAG_VERSION"
     echo "======================================================="
-    docker manifest push elastic/rally:${RALLY_VERSION_TAG}
-    trap - ERR
+
+    docker manifest create elastic/rally:${DOCKER_TAG_VERSION} \
+        --amend elastic/rally:${RALLY_VERSION_TAG}-amd64 \
+        --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
     echo "======================================================="
     echo "Creating Docker manifest image for Rally $DOCKER_TAG_LATEST"
     echo "======================================================="
 
     docker manifest create elastic/rally:${DOCKER_TAG_LATEST} \
-        --amend elastic/rally:${DOCKER_TAG_LATEST}-amd64 \
-        --amend elastic/rally:${DOCKER_TAG_LATEST}-arm64
+        --amend elastic/rally:${RALLY_VERSION_TAG}-amd64 \
+        --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
     echo "======================================================="
     echo "Publishing Docker image elastic/rally:${DOCKER_TAG_LATEST}"
     echo "======================================================="
 
     trap push_failed ERR
+    docker manifest push elastic/rally:${DOCKER_TAG_VERSION}
     docker manifest push elastic/rally:${DOCKER_TAG_LATEST}
 fi
 
