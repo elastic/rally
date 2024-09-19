@@ -38,3 +38,6 @@ steps:
     depends_on:
       - "amd64"
       - "arm64"
+    agents:
+      zone: "us-central1-a"
+      provider: "gcp"

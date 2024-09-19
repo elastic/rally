@@ -25,7 +25,12 @@ tmp_dir=$(mktemp --directory)
 pushd "$tmp_dir"
 git clone https://github.com/elastic/rally
 pushd rally
-git checkout "${BUILD_FROM_BRANCH}"
+# checkout the version from the buildkite branch, but build it from the branch we specified
+if [[ ! -z "${BUILDKITE_BRANCH}" ]]; then
+    git checkout "${BUILDKITE_BRANCH}"
+else
+    git checkout "${BUILD_FROM_BRANCH}"
+fi
 git --no-pager show
 
 set -x
