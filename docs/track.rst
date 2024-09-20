@@ -2295,11 +2295,11 @@ In the following example we show how Rally can be used to benchmark a hypothetic
             "body": {
               "include-metrics": ["system", "jvm"],
               "exclude-metrics": ["hardware"]
-            },
-            "warmup-iterations": 100,
-            "iterations": 100,
-            "target-throughput": 10
-          }
+            }
+          },
+          "warmup-iterations": 100,
+          "iterations": 100,
+          "target-throughput": 10
         }
       ]
     }
