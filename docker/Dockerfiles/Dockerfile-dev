@@ -24,11 +24,11 @@ ENV RALLY_RUNNING_IN_DOCKER=True
 USER root
 COPY --from=builder /usr/bin/ /usr/bin/
 
-RUN addgroup --gid 1001 rally && \
-    adduser --system --home /rally --ingroup rally --no-create-home --uid 1001 --shell /bin/bash rally
+RUN addgroup --gid 1000 rally && \
+    adduser --system --home /rally --ingroup rally --no-create-home --uid 1000 --shell /bin/bash rally
 
 WORKDIR /rally
-COPY --chown=1001:0 docker/bin/entrypoint.sh /entrypoint.sh
+COPY --chown=1000:0 docker/bin/entrypoint.sh /entrypoint.sh
 
 # Openshift overrides USER and uses random ones with uid>1024 and gid=0
 # Allow ENTRYPOINT (and Rally) to run even with a different user
@@ -37,9 +37,9 @@ RUN chgrp 0 /entrypoint.sh && \
     chmod 0775 /entrypoint.sh
 
 RUN mkdir -p /rally/.rally && \
-    chown -R 1001:0 /rally/
+    chown -R 1000:0 /rally/
 
-USER 1001
+USER 1000
 
 RUN mkdir -p /rally/esrally
 COPY pyproject.toml /rally/
