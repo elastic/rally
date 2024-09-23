@@ -245,7 +245,7 @@ With the following configuration Rally will log all output to standard error::
     }
 
 Portability
-~~~~~~~~~~
+~~~~~~~~~~~
 
 You can also use ``${LOG_PATH}`` in the ``"filename"`` value of the handler you are configuring to make the log configuration more portable.
 Rally will substitute ``${LOG_PATH}`` with the path to the directory where Rally stores its log files. By default, this is ``~/.rally/logs``. 
