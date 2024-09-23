@@ -247,13 +247,13 @@ With the following configuration Rally will log all output to standard error::
 Portability
 ~~~~~~~~~~
 
-You can also use `${LOG_PATH}` in the `"filename"` value of the handler you are configuring to make the log configuration more portable.
-Rally will substitute `${LOG_PATH}` with the path to the directory where Rally stores its log files. By default, this is `~/.rally/logs`. 
-But this can be overridden by setting the `RALLY_HOME` environment variable in your shell, and logs will be stored in `${RALLY_HOME}/logs`.
+You can also use ``${LOG_PATH}`` in the ``"filename"`` value of the handler you are configuring to make the log configuration more portable.
+Rally will substitute ``${LOG_PATH}`` with the path to the directory where Rally stores its log files. By default, this is ``~/.rally/logs``. 
+But this can be overridden by setting the ``RALLY_HOME`` environment variable in your shell, and logs will be stored in ``${RALLY_HOME}/logs``.
 
-NOTE:: This is only supported with the `esrally.log.configure_file_handler` and `esrally.log.configure_profile_file_handler` handlers.
+NOTE:: This is only supported with the ``esrally.log.configure_file_handler`` and ``esrally.log.configure_profile_file_handler`` handlers.
 
-Here is an example of a logging configuration that uses `${LOG_PATH}`::
+Here is an example of a logging configuration that uses ``${LOG_PATH}``::
 
     {
       "version": 1,
