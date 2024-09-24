@@ -40,7 +40,15 @@ echo "========================================================"
 echo "Building Docker image for Rally release $RALLY_VERSION  "
 echo "========================================================"
 
-docker build -t elastic/rally:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/Dockerfile-release $PWD
+# Create builder that supports QEMU emulation (needed for linux/arm64)
+docker buildx rm --force rally-multiarch-builder || true
+docker buildx create --name rally-multiarch-builder --bootstrap --use
+docker buildx build --load \
+  --tag elastic/rally:${RALLY_VERSION} \
+  --build-arg RALLY_VERSION --build-arg RALLY_LICENSE \
+  --file docker/Dockerfiles/Dockerfile-release \
+  --platform linux/amd64 \
+  "$PWD"
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
@@ -48,18 +56,21 @@ echo "======================================================="
 
 ./release-docker-test.sh
 
-echo "======================================================="
-echo "Publishing Docker image elastic/rally:$RALLY_VERSION   "
-echo "======================================================="
+echo "======================="
+echo "Publishing Docker image"
+echo "======================="
 
 trap push_failed ERR
-docker push elastic/rally:${RALLY_VERSION}
 
-echo "============================================"
-echo "Publishing Docker image elastic/rally:latest"
-echo "============================================"
-
-docker tag elastic/rally:${RALLY_VERSION} elastic/rally:latest
-docker push elastic/rally:latest
+# Multi-arch images have to be pushed immediately forcing us to rebuild here to
+# add arm64 - https://github.com/docker/buildx/issues/59
+docker buildx build \
+  --push \
+  --tag elastic/rally:${RALLY_VERSION} \
+  --tag elastic/rally:latest \
+  --build-arg RALLY_VERSION --build-arg RALLY_LICENSE \
+  --file docker/Dockerfiles/Dockerfile-release \
+  --platform linux/amd64,linux/arm64 \
+  "$PWD"
 
 trap - ERR
