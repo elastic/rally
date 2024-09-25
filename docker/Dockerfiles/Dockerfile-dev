@@ -1,4 +1,4 @@
-FROM docker.elastic.co/wolfi/python:3.11.7-dev AS builder
+FROM docker.elastic.co/wolfi/python:3.12.3-dev AS builder
 
 USER root
 
@@ -15,7 +15,7 @@ RUN cd /tmp && \
   make install && \
   rm -r /tmp/pbzip2-1.1.13/
 
-FROM docker.elastic.co/wolfi/python:3.11.7-dev
+FROM docker.elastic.co/wolfi/python:3.12.3-dev
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
 
