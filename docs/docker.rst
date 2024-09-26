@@ -71,7 +71,7 @@ To customize Rally you can create your own ``rally.ini`` and bind mount it using
     docker run -v /home/<myuser>/custom_rally.ini:/rally/.rally/rally.ini elastic/rally ...
 
 As a quality of life improvement, the ``rally.ini`` and ``logging.json`` files can use ``${CONFIG_DIR}`` in ``rally.ini`` and ``${LOG_PATH}`` in ``logging.json`` in order to
-make the files more portable. For example::
+make the files more portable. For example:
 
 * In ``rally.ini``, you can set ``root.dir = ${CONFIG_DIR}/benchmarks`` instead of hard-coding the path as ``/rally/.rally/benchmarks``
 * In ``logging.json``, you can set ``"filename":: "${LOG_PATH}/rally.log"`` instead of hard-coding the path as ``"filename":: "/rally/.rally/logs/rally.log"``
