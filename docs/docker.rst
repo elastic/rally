@@ -74,7 +74,7 @@ As a quality of life improvement, the ``rally.ini`` and ``logging.json`` files c
 make the files more portable. For example::
 
 * In ``rally.ini``, you can set ``root.dir = ${CONFIG_DIR}/benchmarks`` instead of hard-coding the path as ``/rally/.rally/benchmarks``
-* In ``logging.json``, you can set ``"filename": "${LOG_PATH}/rally.log"`` instead of hard-coding the path as ``"filename": "/rally/.rally/logs/rally.log"``
+* In ``logging.json``, you can set ``"filename":: "${LOG_PATH}/rally.log"`` instead of hard-coding the path as ``"filename":: "/rally/.rally/logs/rally.log"``
 
 These files can then be used with the docker image, with the entire local ``~/.rally`` directory mounted as follows::
 
