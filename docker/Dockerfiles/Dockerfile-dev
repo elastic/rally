@@ -1,51 +1,31 @@
-################################################################################
-# Build stage 0 `builder`:
-# Install Rally from source inside a virtualenv
-################################################################################
+FROM docker.elastic.co/wolfi/python:3.12.3-dev AS builder
 
-FROM python:3.8.13-slim-bullseye as builder
+USER root
 
-RUN apt-get -y update && \
-    apt-get install -y curl git gcc && \
-    apt-get -y upgrade && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk update 
+RUN apk add curl git gcc pigz bash zstd bzip2 gzip
 
-RUN mkdir -p /rally/esrally
-COPY pyproject.toml /rally/
-COPY README.md /rally/
-COPY esrally/ /rally/esrally/
+# pbzip2 doesn't have a package for wolfi, so we build it from source
+RUN apk add bzip2-dev make wget 
 
-RUN python3 -m venv /rally/venv
-ENV PATH="/rally/venv/bin:$PATH"
+RUN cd /tmp && \
+  wget -q https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz && \
+  tar -xzf pbzip2-1.1.13.tar.gz && \
+  cd pbzip2-1.1.13/ && \
+  make install && \
+  rm -r /tmp/pbzip2-1.1.13/
 
-WORKDIR /rally
-# Wipe away any lingering caches, copied over from the local machine
-RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN pip3 install --upgrade hatch hatchling pip wheel
-RUN pip3 install /rally
-
-################################################################################
-# Build stage 1 (the actual Rally image):
-# Copy Rally from stage 0 and fix permissions to support randomized UIDs
-# Define VOLUME for ~/.rally
-# Add entrypoint
-################################################################################
-
-FROM python:3.8.12-slim-bullseye
+FROM docker.elastic.co/wolfi/python:3.12.3-dev
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
-ENV RALLY_RUNNING_IN_DOCKER True
 
-RUN apt-get -y update && \
-    apt-get install -y curl git pbzip2 pigz && \
-    apt-get -y upgrade && \
-    rm -rf /var/lib/apt/lists/*
+ENV RALLY_RUNNING_IN_DOCKER=True
 
-RUN groupadd --gid 1000 rally && \
-    useradd -d /rally -m -k /dev/null -g 1000 -N -u 1000 -l -s /bin/bash rally
+USER root
+COPY --from=builder /usr/bin/ /usr/bin/
 
-COPY --chown=1000:0 --from=builder /rally/venv /rally/venv
+RUN addgroup --gid 1000 rally && \
+    adduser --system --home /rally --ingroup rally --no-create-home --uid 1000 --shell /bin/bash rally
 
 WORKDIR /rally
 COPY --chown=1000:0 docker/bin/entrypoint.sh /entrypoint.sh
@@ -57,11 +37,23 @@ RUN chgrp 0 /entrypoint.sh && \
     chmod 0775 /entrypoint.sh
 
 RUN mkdir -p /rally/.rally && \
-    chown -R 1000:0 /rally/.rally
+    chown -R 1000:0 /rally/
 
 USER 1000
 
+RUN mkdir -p /rally/esrally
+COPY pyproject.toml /rally/
+COPY README.md /rally/
+COPY esrally/ /rally/esrally/
+
+RUN python3 -m venv /rally/venv
 ENV PATH=/rally/venv/bin:$PATH
+
+# Wipe away any lingering caches, copied over from the local machine
+RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
+RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
+RUN python3 -m pip install --upgrade hatch hatchling pip wheel
+RUN python3 -m pip install /rally
 
 LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vendor="Elastic" \

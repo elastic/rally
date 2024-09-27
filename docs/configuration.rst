@@ -6,6 +6,10 @@ Rally Configuration
 
 Rally stores its configuration in the file ``~/.rally/rally.ini`` which is automatically created the first time Rally is executed. It comprises the following sections.
 
+.. note:: 
+    The configuration file can use `${CONFIG_DIR}` to refer to the directory where Rally stores its configuration files. This is useful for configuring Rally in a portable way.
+    This defaults to `~/.rally`, but can be overridden by setting the `RALLY_HOME` environment variable in your shell.
+
 meta
 ~~~~
 
@@ -234,6 +238,47 @@ With the following configuration Rally will log all output to standard error::
       "loggers": {
         "elasticsearch": {
           "handlers": ["console_log_handler"],
+          "level": "WARNING",
+          "propagate": false
+        }
+      }
+    }
+
+Portability
+~~~~~~~~~~~
+
+You can also use ``${LOG_PATH}`` in the ``"filename"`` value of the handler you are configuring to make the log configuration more portable.
+Rally will substitute ``${LOG_PATH}`` with the path to the directory where Rally stores its log files. By default, this is ``~/.rally/logs``. 
+But this can be overridden by setting the ``RALLY_HOME`` environment variable in your shell, and logs will be stored in ``${RALLY_HOME}/logs``.
+
+NOTE:: This is only supported with the ``esrally.log.configure_file_handler`` and ``esrally.log.configure_profile_file_handler`` handlers.
+
+Here is an example of a logging configuration that uses ``${LOG_PATH}``::
+
+    {
+      "version": 1,
+      "formatters": {
+        "normal": {
+          "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
+          "datefmt": "%Y-%m-%d %H:%M:%S",
+          "()": "esrally.log.configure_utc_formatter"
+        }
+      },
+      "handlers": {
+        "rally_log_handler": {
+          "()": "esrally.log.configure_file_handler", # <-- use configure_file_handler or configure_profile_file_handler
+          "filename": "${LOG_PATH}/rally.log", # <-- use ${LOG_PATH} here
+          "encoding": "UTF-8",
+          "formatter": "normal"
+        }
+      },
+      "root": {
+        "handlers": ["rally_log_handler"],
+        "level": "INFO"
+      },
+      "loggers": {
+        "elasticsearch": {
+          "handlers": ["rally_log_handler"],
           "level": "WARNING",
           "propagate": false
         }

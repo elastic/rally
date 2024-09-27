@@ -19,15 +19,15 @@
   },
   "handlers": {
     "rally_log_handler": {
-      "class": "logging.handlers.WatchedFileHandler",
-      "filename": "${LOG_PATH}rally.log",
+      "()": "esrally.log.configure_file_handler",
+      "filename": "${LOG_PATH}/rally.log",
       "encoding": "UTF-8",
       "formatter": "normal",
       "filters": ["isActorLog"]
     },
     "rally_profile_handler": {
-      "class": "logging.FileHandler",
-      "filename": "${LOG_PATH}profile.log",
+      "()": "esrally.log.configure_profile_file_handler",
+      "filename": "${LOG_PATH}/profile.log",
       "delay": true,
       "encoding": "UTF-8",
       "formatter": "profile"
