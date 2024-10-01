@@ -105,10 +105,14 @@ def pull(src_dir, *, remote, branch):
 
 
 @probed
-def pull_ts(src_dir, ts, *, remote, branch):
+def pull_ts(src_dir, ts, *, remote, branch, default_branch):
     fetch(src_dir, remote=remote)
     clean_src = io.escape_path(src_dir)
-    rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
+    # non-default ES branches might receive merges from default ES branch which we want to filter out
+    if branch != default_branch:
+        rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{default_branch}..{remote}/{branch}'
+    else:
+        rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
     revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
     if process.run_subprocess_with_logging(f"git -C {clean_src} checkout {revision}"):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)

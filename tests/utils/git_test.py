@@ -42,6 +42,7 @@ def setup(request, tmp_path_factory):
     cls.local_remote_name = "remote_repo"
     cls.local_branch = "rally-unit-test-local-only-branch"
     cls.remote_branch = "rally-unit-test-remote-only-branch"
+    cls.remote_branch_non_master = "rally-unit-test-remote-only-branch-non-master"
     cls.rebase_branch = "rally-unit-test-rebase-branch"
 
     cls.local_tmp_src_dir = str(tmp_path_factory.mktemp("rally-unit-test-local-dir"))
@@ -70,8 +71,16 @@ def setup(request, tmp_path_factory):
     cls.old_revision = cls.remote_repo.heads["master"].commit.hexsha
     commit(cls.remote_repo)
     cls.remote_branch_hash = cls.remote_repo.heads["master"].commit.hexsha
-
     cls.remote_repo.create_head(cls.remote_branch, "HEAD")
+
+    # create branch not aligned with master
+    non_master_branch = cls.remote_repo.create_head(cls.remote_branch_non_master, cls.old_revision)
+    cls.remote_repo.head.reference = non_master_branch
+    cls.remote_repo.head.reset(index=True, working_tree=True)
+    commit(cls.remote_repo, date="2016-01-01 01:00:00+0000")
+    cls.remote_branch_non_master_hash = cls.remote_repo.heads[cls.remote_branch_non_master].commit.hexsha
+    commit(cls.remote_repo)
+
     cls.local_repo.create_remote(cls.local_remote_name, cls.remote_tmp_src_dir)
     cls.local_repo.remotes[cls.local_remote_name].fetch()
 
@@ -185,8 +194,14 @@ class TestGit:
 
     def test_pull_ts(self):
         # minimum 'core.abbrev' is to return 7 char prefixes
-        git.pull_ts(self.local_tmp_src_dir, "2016-01-01T110000Z", remote=self.local_remote_name, branch=self.remote_branch)
-        assert git.head_revision(self.local_tmp_src_dir).startswith(self.old_revision)
+        git.pull_ts(
+            self.local_tmp_src_dir,
+            "2016-01-01T110000Z",
+            remote=self.local_remote_name,
+            branch=self.remote_branch_non_master,
+            default_branch="master",
+        )
+        assert git.head_revision(self.local_tmp_src_dir).startswith(self.remote_branch_non_master_hash)
 
     def test_rebase(self, setup_teardown_rebase):
         # fetch required first to get remote branch
