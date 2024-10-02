@@ -2940,6 +2940,7 @@ class TestForceMergeParamSource:
                 "max-num-segments": 1,
                 "polling-period": 20,
                 "mode": "polling",
+                "wait-for-completion": False,
             },
         )
 
@@ -2948,6 +2949,7 @@ class TestForceMergeParamSource:
         assert p["request-timeout"] == 30
         assert p["max-num-segments"] == 1
         assert p["mode"] == "polling"
+        assert p["wait-for-completion"] is False
 
 
 class TestDownsampleParamSource:
