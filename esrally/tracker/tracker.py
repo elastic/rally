@@ -77,7 +77,7 @@ def create_track(cfg: types.Config):
     target_hosts = cfg.opts("client", "hosts").default
     client_options = cfg.opts("client", "options").default
     data_streams = cfg.opts("generator", "data_streams")
-    batch_size = cfg.opts("generator", "batch_size")
+    batch_size = int(cfg.opts("generator", "batch_size"))
 
     distribution_flavor, distribution_version, _, _ = factory.cluster_distribution_version(target_hosts, client_options)
     client = factory.EsClientFactory(
