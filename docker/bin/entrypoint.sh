@@ -6,6 +6,10 @@ if [[ $1 == *"bash"* || $1 == *"sh"* ]]; then
 elif [[ $1 == "esrallyd" && $2 == "start" ]]; then
     # We want to wait for esrallyd's child processes to exit before we exit
     set -x
+    echo "Starting $1"
+    echo "$@"
+    shift
+    echo "$@"
     "$@" &
     pid=$!
     ps -e
