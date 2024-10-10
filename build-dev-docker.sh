@@ -28,47 +28,72 @@ function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
 }
 
-if [[ $# -ne 3 ]] ; then
-    echo "ERROR: $0 requires the Rally version, architecture, and whether to update the \
-        latest tag as command line arguments and you didn't supply them."
-    echo "For example: $0 1.1.0 amd64 true"
+if [[ $# -ne 4 ]] ; then
+    echo "ERROR: $0 requires the Rally branch to build, the architecture, and whether to push the latest \
+        as command line arguments and they weren't supplied."
+    echo "For example: $0 master amd64 true true"
     exit 1
 fi
-export RALLY_VERSION=$1
+export RALLY_BRANCH=$1
 export ARCH=$2
 export PUSH_LATEST=$3
+export PUBLIC_DOCKER_REPO=$4
+
+if [[ $PUBLIC_DOCKER_REPO == "true" ]]; then
+    export DOCKER_IMAGE="elastic/rally"
+else
+    export DOCKER_IMAGE="docker.elastic.co/employees/es-perf/rally"
+fi
+
 export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
+
+export GIT_SHA=$(git rev-parse --short HEAD)
 export DATE=$(date +%Y%m%d)
 
-export RALLY_VERSION_TAG="${RALLY_VERSION}-${DATE}-${ARCH}"
-export DOCKER_TAG_LATEST="latest-${ARCH}"
+export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}-${ARCH}"
+export RALLY_VERSION_TAG="${RALLY_VERSION}"
+export MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+
+if [[ $RALLY_BRANCH == $MAIN_BRANCH ]]; then
+    export DOCKER_TAG_LATEST="dev-latest-${ARCH}"
+else
+    export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest-${ARCH}"
+fi
+
+# Make new temporary directory to checkout the `RALLY_BRANCH` branch
+tmp_dir=$(mktemp --directory)
+pushd "$tmp_dir"
+git clone https://github.com/elastic/rally
+popd
+rally_dir="${tmp_dir}/rally"
+
 
 echo "========================================================"
-echo "Building Docker image Rally release $RALLY_VERSION_TAG  "
+echo "Building Docker image for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker build -t elastic/rally:${RALLY_VERSION_TAG} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/release/Dockerfile $PWD
+docker build -t ${DOCKER_IMAGE}:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile ${rally_dir}
 
 echo "======================================================="
-echo "Testing Docker image Rally release $RALLY_VERSION_TAG  "
+echo "Testing Docker image for Rally release $RALLY_VERSION  "
 echo "======================================================="
 
-./release-docker-test.sh
+./release-docker-test.sh dev
 
 echo "======================================================="
-echo "Publishing Docker image elastic/rally:$RALLY_VERSION_TAG"
+echo "Publishing Docker image ${DOCKER_IMAGE}:$RALLY_VERSION   "
 echo "======================================================="
 
 trap push_failed ERR
-docker push elastic/rally:${RALLY_VERSION_TAG}
+docker push ${DOCKER_IMAGE}:${RALLY_VERSION}
 
 if [[ $PUSH_LATEST == "true" ]]; then
     echo "============================================"
-    echo "Publishing Docker image elastic/rally:$DOCKER_TAG_LATEST"
+    echo "Publishing Docker image ${DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     echo "============================================"
 
-    docker tag elastic/rally:${RALLY_VERSION_TAG} elastic/rally:${DOCKER_TAG_LATEST}
-    docker push elastic/rally:${DOCKER_TAG_LATEST}
+    docker tag ${DOCKER_IMAGE}:${RALLY_VERSION} ${DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
+    docker push ${DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
 fi
 
 trap - ERR

@@ -60,6 +60,7 @@ def run_docker_compose_up(test_command):
     env_variables = os.environ.copy()
     env_variables["TEST_COMMAND"] = test_command
     env_variables["RALLY_VERSION"] = version.__version__
+    env_variables["RALLY_VERSION_TAG"] = version.__version__
 
     return process.run_subprocess_with_logging(
         f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml up --abort-on-container-exit", env=env_variables
