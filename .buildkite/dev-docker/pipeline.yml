@@ -6,6 +6,7 @@ steps:
         key: "BUILD_FROM_BRANCH"
         default: ""
         hint: "The branch to build from e.g. 'master'. Leave blank to build from the current branch: $BUILDKITE_BRANCH."
+        required: false
       - select: "PUBLIC_DOCKER_REPO"
         key: "PUBLIC_DOCKER_REPO"
         hint: "Push the Docker image to the public Docker registry (default: No)."
