@@ -6,10 +6,7 @@ source .buildkite/retry.sh
 
 set +x
 
-BUILD_FROM_BRANCH=$(buildkite-agent meta-data get BUILD_FROM_BRANCH)
-if [[ -z "${BUILD_FROM_BRANCH}" ]]; then
-    BUILD_FROM_BRANCH=${BUILDKITE_BRANCH}
-fi
+BUILD_FROM_BRANCH=$(buildkite-agent meta-data get BUILD_FROM_BRANCH --default "${BUILDKITE_BRANCH}")
 PUSH_LATEST=$(buildkite-agent meta-data get PUSH_LATEST)
 PUBLIC_DOCKER_REPO=$(buildkite-agent meta-data get PUBLIC_DOCKER_REPO)
 
