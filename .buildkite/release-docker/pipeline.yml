@@ -22,21 +22,21 @@ steps:
 
   - wait
   - label: "Release Docker Artifacts for Rally"
-    command: bash .buildkite/release-docker/run.sh amd64
+    command: bash .buildkite/release-docker/run.sh build amd64
     # Run on GCP to use `docker`
     key: "amd64"
     agents:
       machineType: "n2-standard-8"
       image: family/core-ubuntu-2204
   - label: "Release Docker Artifacts for Rally"
-    command: bash .buildkite/release-docker/run.sh arm64
+    command: bash .buildkite/release-docker/run.sh build arm64
     # Run on GCP to use `docker`
     key: "arm64"
     agents:
       machineType: "t2a-standard-8"
       image: family/core-ubuntu-2204-aarch64
   - label: ":docker: build docker manifest"
-    command: bash .buildkite/release-docker/manifest.sh
+    command: bash .buildkite/release-docker/run.sh manifest
     key: "manifest"
     depends_on:
       - "amd64"

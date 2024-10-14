@@ -27,7 +27,7 @@ steps:
             value: "false"
   - wait
   - label: ":docker: Build Docker Artifacts for Rally amd64"
-    command: bash .buildkite/dev-docker/run.sh amd64
+    command: bash .buildkite/dev-docker/run.sh build amd64
     key: "amd64"
     agents:
       machineType: "n2-standard-8"
@@ -35,7 +35,7 @@ steps:
       zone: "us-central1-a"
       provider: "gcp"
   - label: ":docker: Build Docker Artifacts for Rally arm64"
-    command: bash .buildkite/dev-docker/run.sh arm64
+    command: bash .buildkite/dev-docker/run.sh build arm64
     key: "arm64"
     agents:
       machineType: "t2a-standard-8"
@@ -43,7 +43,7 @@ steps:
       zone: "us-central1-a"
       provider: "gcp"
   - label: ":docker: build docker manifest"
-    command: bash .buildkite/dev-docker/manifest.sh
+    command: bash .buildkite/dev-docker/run.sh manifest both
     key: "manifest"
     depends_on:
       - "amd64"
