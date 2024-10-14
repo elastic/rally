@@ -30,14 +30,25 @@ from esrally import (
     log,
     version,
 )
-from esrally.utils import console
+from esrally.utils import console, process
 
 
 def start(args):
     if actor.actor_system_already_running():
         raise exceptions.RallyError("An actor system appears to be already running.")
     actor.bootstrap_actor_system(local_ip=args.node_ip, coordinator_ip=args.coordinator_ip)
-    console.info("Successfully started actor system on node [%s] with coordinator node IP [%s]." % (args.node_ip, args.coordinator_ip))
+    console.info(f"Successfully started actor system on node [{args.node_ip}] with coordinator node IP [{args.coordinator_ip}].")
+
+    if console.RALLY_RUNNING_IN_DOCKER:
+        import psutil
+
+        console.info(f"Running with PID: {psutil.Process().pid}")
+        while process.wait_for_child_processes(
+            callback=lambda process: console.info(f"Actor with PID [{process.pid}] terminated with status [{process.returncode}]."),
+            list_callback=lambda children: console.info(f"Waiting for child processes ({[p.pid for p in children]}) to terminate..."),
+        ):
+            pass
+        console.info("All actors terminated, exiting.")
 
 
 def stop(raise_errors=True):

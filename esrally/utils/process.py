@@ -20,7 +20,7 @@ import os
 import shlex
 import subprocess
 import time
-from typing import IO, Callable, List, Mapping, Optional, Union
+from typing import IO, Callable, Iterable, List, Mapping, Optional, Union
 
 import psutil
 
@@ -229,3 +229,28 @@ def kill_running_rally_instances() -> None:
         )
 
     kill_all(rally_process)
+
+
+def wait_for_child_processes(
+    timeout: Optional[float] = None,
+    callback: Optional[Callable[[psutil.Process], None]] = None,
+    list_callback: Optional[Callable[[Iterable[psutil.Process]], None]] = None,
+) -> bool:
+    """
+    Waits for all child processes to terminate.
+
+    :param timeout: The maximum time to wait for child processes to terminate (default: None).
+    :param callback: A callback to call as each child process terminates.
+        The callback will be passed the PID and the return code of the child process.
+    :param list_callback: A callback to tell caller about the child processes that are being waited for.
+
+    :return: True if no child processes found, False otherwise.
+    """
+    current = psutil.Process()
+    children = current.children(recursive=True)
+    if not children:
+        return False
+    if list_callback is not None:
+        list_callback(children)
+    psutil.wait_procs(children, timeout=timeout, callback=callback)
+    return True
