@@ -21,15 +21,16 @@ ACTION="$1"
 if [[ $PUBLIC_DOCKER_REPO == "true" ]]; then
     VAULT_PATH="secret/ci/elastic-rally/release/docker-hub-rally"
     DOCKER_REGISTRY="docker.io"
-    DOCKER_PASSWORD=$(vault read -field token "${VAULT_PATH}")
+    PASSWORD_FIELD="token"
 else
-    VAULT_PATH="/secret/ci/elastic-elasticsearch-benchmarks/employees/cloud/docker-registry-api-credentials"
+    VAULT_PATH="kv/ci-shared/elasticsearch-benchmarks/cloud/docker-registry-api-credentials"
     DOCKER_REGISTRY="docker.elastic.co"
-    DOCKER_PASSWORD=$(vault read -field password "${VAULT_PATH}")
+    PASSWORD_FIELD="password"
 fi
 
-DOCKER_USERNAME=$(vault read -field username "${VAULT_PATH}")
-retry 5 docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD} ${DOCKER_REGISTRY}
+DOCKER_USERNAME=$(vault kv get -field username "${VAULT_PATH}")
+DOCKER_PASSWORD=$(vault kv get -field "${PASSWORD_FIELD}" "${VAULT_PATH}")
+retry 5 docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" ${DOCKER_REGISTRY}
 unset DOCKER_PASSWORD
 unset DOCKER_USERNAME
 
@@ -44,7 +45,7 @@ build_docker_image() {
     else
         git checkout "${BUILD_FROM_BRANCH}"
     fi
-    echo "Docker commit: $(git log --oneline -n1)"
+    echo "Docker commit: $(git --no-pager log --oneline -n1)"
 
     set -x
     export TERM=dumb

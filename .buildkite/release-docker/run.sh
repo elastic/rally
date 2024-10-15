@@ -16,7 +16,7 @@ fi
 ACTION="$1"
 
 # login to docker registry
-DOCKER_PASSWORD=$(vault read -field token /secret/ci/elastic-rally/release/docker-hub-rally)
+DOCKER_PASSWORD=$(vault kv get -field token /secret/ci/elastic-rally/release/docker-hub-rally)
 retry 5 docker login -u elasticmachine -p $DOCKER_PASSWORD
 unset DOCKER_PASSWORD
 
