@@ -44,7 +44,7 @@ build_docker_image() {
     else
         git checkout "${BUILD_FROM_BRANCH}"
     fi
-    git --no-pager show
+    echo "Docker commit: $(git log --oneline -n1)"
 
     set -x
     export TERM=dumb

@@ -66,7 +66,7 @@ pushd "$tmp_dir"
 git clone https://github.com/elastic/rally
 pushd rally
 git checkout "${RALLY_BRANCH}"
-git --no-pager show
+echo "Rally commit: $(git --no-pager log --oneline -n1)"
 popd
 popd
 rally_dir="${tmp_dir}/rally"
