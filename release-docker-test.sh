@@ -20,6 +20,7 @@
 set -e
 
 readonly MIN_DOCKER_MEM_BYTES=$(expr 6 \* 1024 \* 1024 \* 1024)
+readonly DOCKER_IMAGE="${DOCKER_IMAGE:-elastic/rally}"
 
 function check_prerequisites {
     exit_if_docker_not_running
@@ -104,7 +105,7 @@ function test_docker_release_image {
     if [[ "${DEVELOPMENT}" == "YES" ]]; then
         actual_version=${RALLY_VERSION}
     else
-        actual_version=$(docker run --rm elastic/rally:${RALLY_VERSION_TAG} esrally --version | cut -d ' ' -f 2,2)
+        actual_version=$(docker run --rm ${DOCKER_IMAGE}:${RALLY_VERSION_TAG} esrally --version | cut -d ' ' -f 2,2)
     fi
     if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
         echo "Rally version in Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
@@ -112,14 +113,14 @@ function test_docker_release_image {
     fi
 
     info "Testing Rally docker image version label is correct"
-    actual_version=$(docker inspect --format '{{ index .Config.Labels "org.label-schema.version"}}' elastic/rally:${RALLY_VERSION_TAG})
+    actual_version=$(docker inspect --format '{{ index .Config.Labels "org.label-schema.version"}}' ${DOCKER_IMAGE}:${RALLY_VERSION_TAG})
     if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
         echo "org.label-schema.version label in Rally Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
         exit 1
     fi
 
     info "Testing Rally docker image license label is correct"
-    actual_license=$(docker inspect --format '{{ index .Config.Labels "license"}}' elastic/rally:${RALLY_VERSION_TAG})
+    actual_license=$(docker inspect --format '{{ index .Config.Labels "license"}}' ${DOCKER_IMAGE}:${RALLY_VERSION_TAG})
     if [[ ${actual_license} != ${RALLY_LICENSE} ]]; then
         echo "license label in Rally Docker image: [${actual_license}] doesn't match the expected license [${RALLY_LICENSE}]"
         exit 1

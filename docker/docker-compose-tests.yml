@@ -1,7 +1,7 @@
 version: '2.2'
 services:
   rally:
-    image: elastic/rally:${RALLY_VERSION_TAG}
+    image: ${DOCKER_IMAGE}:${RALLY_VERSION_TAG}
     container_name: rally
     command: ${TEST_COMMAND}
     volumes:

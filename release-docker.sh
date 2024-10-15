@@ -53,7 +53,7 @@ echo "======================================================="
 echo "Testing Docker image Rally release $RALLY_VERSION_TAG  "
 echo "======================================================="
 
-./release-docker-test.sh
+DOCKER_IMAGE="elastic/rally" ./release-docker-test.sh
 
 echo "======================================================="
 echo "Publishing Docker image elastic/rally:$RALLY_VERSION_TAG"
