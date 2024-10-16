@@ -28,8 +28,8 @@ else
     PASSWORD_FIELD="password"
 fi
 
-DOCKER_USERNAME=$(vault kv get -field username "${VAULT_PATH}")
-DOCKER_PASSWORD=$(vault kv get -field "${PASSWORD_FIELD}" "${VAULT_PATH}")
+DOCKER_USERNAME=$(retry 5 vault kv get -field username "${VAULT_PATH}")
+DOCKER_PASSWORD=$(retry 5 vault kv get -field "${PASSWORD_FIELD}" "${VAULT_PATH}")
 retry 5 docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" ${DOCKER_REGISTRY}
 unset DOCKER_PASSWORD
 unset DOCKER_USERNAME

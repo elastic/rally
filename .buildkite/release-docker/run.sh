@@ -16,7 +16,7 @@ fi
 ACTION="$1"
 
 # login to docker registry
-DOCKER_PASSWORD=$(vault kv get -field token /secret/ci/elastic-rally/release/docker-hub-rally)
+DOCKER_PASSWORD=$(retry 5 vault kv get -field token /secret/ci/elastic-rally/release/docker-hub-rally)
 retry 5 docker login -u elasticmachine -p $DOCKER_PASSWORD
 unset DOCKER_PASSWORD
 
@@ -33,7 +33,7 @@ build_docker_image() {
         git checkout "${RELEASE_VERSION}"
     fi
 
-    git --no-pager show
+    git "Docker commit: $(git --no-pager log --oneline -n1)"
 
     set -x
     export TERM=dumb
