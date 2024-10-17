@@ -2501,7 +2501,17 @@ class SubmitAsyncSearch(Runner):
         # id may be None if the operation has already returned
         search_id = response.get("id")
         CompositeContext.put(op_name, search_id)
+        
+        #track_total_hits is true by default
+        CompositeContext.put("track_total_hits", True)
+        
+        if "track_total_hits" in params.get("body").keys():
+            CompositeContext.put("track_total_hits", bool(eval(params.get("body").get("track_total_hits").capitalize())))
+            
+        if "track_total_hits" in request_params.keys():
+            CompositeContext.put("track_total_hits", bool(eval(request_params.get("track_total_hits").capitalize())))
 
+             
     def __repr__(self, *args, **kwargs):
         return "submit-async-search"
 
@@ -2527,11 +2537,14 @@ class GetAsyncSearch(Runner):
             success = success and not is_running
             if not is_running:
                 stats[search] = {
-                    "hits": response["response"]["hits"]["total"]["value"],
-                    "hits_relation": response["response"]["hits"]["total"]["relation"],
                     "timed_out": response["response"]["timed_out"],
                     "took": response["response"]["took"],
                 }
+                
+                if CompositeContext.get("track_total_hits"):
+                    stats[search]["hits"] = response["response"]["hits"]["total"]["value"]
+                    stats[search]["hits_relation"] = response["response"]["hits"]["total"]["relation"]
+            
 
         return {
             # only count completed searches - there is one key per search id in `stats`
