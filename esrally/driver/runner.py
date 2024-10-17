@@ -2506,10 +2506,10 @@ class SubmitAsyncSearch(Runner):
         CompositeContext.put("track_total_hits", True)
         
         if "track_total_hits" in params.get("body").keys():
-            CompositeContext.put("track_total_hits", bool(eval(params.get("body").get("track_total_hits").capitalize())))
+            CompositeContext.put("track_total_hits", bool(eval(params.get("body").get("track_total_hits", True).capitalize())))
             
         if "track_total_hits" in request_params.keys():
-            CompositeContext.put("track_total_hits", bool(eval(request_params.get("track_total_hits").capitalize())))
+            CompositeContext.put("track_total_hits", bool(eval(request_params.get("track_total_hits", True).capitalize())))
 
              
     def __repr__(self, *args, **kwargs):
