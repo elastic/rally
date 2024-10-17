@@ -40,9 +40,9 @@ export PUSH_LATEST=$3
 export PUBLIC_DOCKER_REPO=$4
 
 if [[ $PUBLIC_DOCKER_REPO == "true" ]]; then
-    export DOCKER_IMAGE="elastic/rally"
+    export RALLY_DOCKER_IMAGE="elastic/rally"
 else
-    export DOCKER_IMAGE="docker.elastic.co/employees/es-perf/rally"
+    export RALLY_DOCKER_IMAGE="docker.elastic.co/elastic/es-perf-ci/rally"
 fi
 
 export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
@@ -76,7 +76,7 @@ echo "========================================================"
 echo "Building Docker image for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker build -t ${DOCKER_IMAGE}:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile ${rally_dir}
+docker build -t ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile ${rally_dir}
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
@@ -85,19 +85,19 @@ echo "======================================================="
 ./release-docker-test.sh dev
 
 echo "======================================================="
-echo "Publishing Docker image ${DOCKER_IMAGE}:$RALLY_VERSION   "
+echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION   "
 echo "======================================================="
 
 trap push_failed ERR
-docker push ${DOCKER_IMAGE}:${RALLY_VERSION}
+docker push ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}
 
 if [[ $PUSH_LATEST == "true" ]]; then
     echo "============================================"
-    echo "Publishing Docker image ${DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     echo "============================================"
 
-    docker tag ${DOCKER_IMAGE}:${RALLY_VERSION} ${DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
-    docker push ${DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
+    docker tag ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION} ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
+    docker push ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
 fi
 
 trap - ERR
