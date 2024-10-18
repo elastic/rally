@@ -2501,18 +2501,9 @@ class SubmitAsyncSearch(Runner):
         response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
-        # id may be None if the operation has already returned
+        
         search_id = response.get("id")
         CompositeContext.put(op_name, search_id)
-        
-        #track_total_hits is true by default
-        CompositeContext.put("track_total_hits", True)
-        
-        if "track_total_hits" in params.get("body").keys():
-            CompositeContext.put("track_total_hits", bool(eval(params.get("body").get("track_total_hits", True).capitalize())))
-            
-        if "track_total_hits" in request_params.keys():
-            CompositeContext.put("track_total_hits", bool(eval(request_params.get("track_total_hits", True).capitalize())))
 
              
     def __repr__(self, *args, **kwargs):
@@ -2523,7 +2514,7 @@ def async_search_ids(op_names):
     subjects = [op_names] if isinstance(op_names, str) else op_names
     for subject in subjects:
         subject_id = CompositeContext.get(subject)
-        # skip empty ids, searches have already completed
+
         if subject_id:
             yield subject_id, subject
 
@@ -2534,6 +2525,7 @@ class GetAsyncSearch(Runner):
         searches = mandatory(params, "retrieve-results-for", self)
         request_params = params.get("request-params", {})
         stats = {}
+       
         for search_id, search in async_search_ids(searches):
             response = await es.async_search.get(id=search_id, params=request_params)
             is_running = response["is_running"]
@@ -2544,10 +2536,10 @@ class GetAsyncSearch(Runner):
                     "took": response["response"]["took"],
                 }
                 
-                if CompositeContext.get("track_total_hits"):
+                if "total" in response["response"]["hits"].keys():
                     stats[search]["hits"] = response["response"]["hits"]["total"]["value"]
                     stats[search]["hits_relation"] = response["response"]["hits"]["total"]["relation"]
-            
+
 
         return {
             # only count completed searches - there is one key per search id in `stats`
