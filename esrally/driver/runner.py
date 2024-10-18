@@ -2495,6 +2495,9 @@ class TransformStats(Runner):
 class SubmitAsyncSearch(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
+        
+        #enforce wait_for_completion_timeout = 0 so there is always an id associated with the async search
+        request_params['wait_for_completion_timeout'] = 0
         response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
