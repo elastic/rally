@@ -6119,7 +6119,9 @@ class TestSubmitAsyncSearch:
             # search id is registered in context
             assert runner.CompositeContext.get("search-1") == "12345"
 
-        es.async_search.submit.assert_awaited_once_with(body={"query": {"match_all": {}}}, index="_all", params={'wait_for_completion_timeout': 0})
+        es.async_search.submit.assert_awaited_once_with(
+            body={"query": {"match_all": {}}}, index="_all", params={"wait_for_completion_timeout": 0}
+        )
 
 
 class TestGetAsyncSearch:

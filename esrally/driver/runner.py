@@ -2495,17 +2495,16 @@ class TransformStats(Runner):
 class SubmitAsyncSearch(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
-        
-        #enforce wait_for_completion_timeout = 0 so there is always an id associated with the async search
-        request_params['wait_for_completion_timeout'] = 0
+
+        # enforce wait_for_completion_timeout = 0 so there is always an id associated with the async search
+        request_params["wait_for_completion_timeout"] = 0
         response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
-        
+
         search_id = response.get("id")
         CompositeContext.put(op_name, search_id)
 
-             
     def __repr__(self, *args, **kwargs):
         return "submit-async-search"
 
@@ -2525,7 +2524,7 @@ class GetAsyncSearch(Runner):
         searches = mandatory(params, "retrieve-results-for", self)
         request_params = params.get("request-params", {})
         stats = {}
-       
+
         for search_id, search in async_search_ids(searches):
             response = await es.async_search.get(id=search_id, params=request_params)
             is_running = response["is_running"]
@@ -2535,11 +2534,10 @@ class GetAsyncSearch(Runner):
                     "timed_out": response["response"]["timed_out"],
                     "took": response["response"]["took"],
                 }
-                
+
                 if "total" in response["response"]["hits"].keys():
                     stats[search]["hits"] = response["response"]["hits"]["total"]["value"]
                     stats[search]["hits_relation"] = response["response"]["hits"]["total"]["relation"]
-
 
         return {
             # only count completed searches - there is one key per search id in `stats`
@@ -3050,4 +3048,3 @@ class Retry(Runner, Delegator):
 
     def __repr__(self, *args, **kwargs):
         return "retryable %s" % repr(self.delegate)
-    
