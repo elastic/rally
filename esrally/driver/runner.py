@@ -2503,7 +2503,6 @@ class SubmitAsyncSearch(Runner):
         response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
-
         search_id = response.get("id")
         CompositeContext.put(op_name, search_id)
 
