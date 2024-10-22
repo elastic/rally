@@ -2496,7 +2496,7 @@ class SubmitAsyncSearch(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
 
-        # defaults wait_for_completion_timeout = 0 so there is always an id associated with the async search
+        # defaults wait_for_completion_timeout = 0 to avoid sync fallback for fast searches
         if "wait_for_completion_timeout" not in request_params:
             request_params["wait_for_completion_timeout"] = 0
 
