@@ -16,7 +16,7 @@
 # under the License.
 
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 def to_epoch_millis(t):
