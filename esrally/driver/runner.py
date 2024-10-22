@@ -2525,7 +2525,6 @@ class GetAsyncSearch(Runner):
         searches = mandatory(params, "retrieve-results-for", self)
         request_params = params.get("request-params", {})
         stats = {}
-
         for search_id, search in async_search_ids(searches):
             response = await es.async_search.get(id=search_id, params=request_params)
             is_running = response["is_running"]
