@@ -2499,7 +2499,7 @@ class SubmitAsyncSearch(Runner):
         # defaults wait_for_completion_timeout = 0 so there is always an id associated with the async search
         if "wait_for_completion_timeout" not in request_params:
             request_params["wait_for_completion_timeout"] = 0
-            
+
         response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
