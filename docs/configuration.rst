@@ -284,3 +284,51 @@ Here is an example of a logging configuration that uses ``${LOG_PATH}``::
         }
       }
     }
+
+
+Example
+~~~~~~~
+
+With the following configuration Rally will log to ``~/.rally/logs/rally.log`` and ``~/.rally/logs/rally.json``, the 
+latter being a JSON file::
+
+    {
+      "version": 1,
+      "formatters": {
+        "normal": {
+          "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
+          "datefmt": "%Y-%m-%d %H:%M:%S",
+          "()": "esrally.log.configure_utc_formatter"
+        },
+        "json": {
+          "datefmt": "%Y-%m-%d %H:%M:%S",
+          "class": "pythonjsonlogger.jsonlogger.JsonFormatter"
+        }
+      },
+      "handlers": {
+        "rally_log_handler": {
+          "()": "esrally.log.configure_file_handler",
+          "filename": "${LOG_PATH}/rally.log",
+          "encoding": "UTF-8",
+          "formatter": "normal"
+        },
+        "rally_json_handler": {
+          "()": "esrally.log.configure_file_handler",
+          "filename": "${LOG_PATH}/rally.json",
+          "encoding": "UTF-8",
+          "formatter": "json"
+        }
+      },
+      "root": {
+        "handlers": ["rally_log_handler", "rally_json_handler"],
+        "level": "INFO"
+      },
+      "loggers": {
+        "elasticsearch": {
+          "handlers": ["rally_log_handler", "rally_json_handler"],
+          "level": "WARNING",
+          "propagate": false
+        }
+      }
+    }
+
