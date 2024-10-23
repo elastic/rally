@@ -1,4 +1,8 @@
-FROM docker.elastic.co/wolfi/python:3.12.3-dev AS builder
+FROM docker.elastic.co/wolfi/python:3.12.3-dev
+ARG RALLY_VERSION
+ARG RALLY_LICENSE
+
+ENV RALLY_RUNNING_IN_DOCKER=True
 
 USER root
 
@@ -14,16 +18,7 @@ RUN cd /tmp && \
   tar -xzf pbzip2-1.1.13.tar.gz && \
   cd pbzip2-1.1.13/ && \
   make install && \
-  rm -r /tmp/pbzip2-1.1.13/
-
-FROM docker.elastic.co/wolfi/python:3.12.3-dev
-ARG RALLY_VERSION
-ARG RALLY_LICENSE
-
-ENV RALLY_RUNNING_IN_DOCKER=True
-
-USER root
-COPY --from=builder /usr/bin/ /usr/bin/
+  rm -r /tmp/pbzip2-1.1.13/ /tmp/pbzip2-1.1.13.tar.gz
 
 RUN addgroup --gid 1000 rally && \
     adduser --system --home /rally --ingroup rally --no-create-home --uid 1000 --shell /bin/bash rally
