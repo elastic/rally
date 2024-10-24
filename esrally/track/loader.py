@@ -757,6 +757,8 @@ def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock, b
         },
         "filters": {
             "days_ago": time.days_ago,
+            "get_start_date": time.get_start_date,
+            "get_end_date": time.get_end_date,
         },
     }
 
