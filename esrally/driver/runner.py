@@ -2495,10 +2495,14 @@ class TransformStats(Runner):
 class SubmitAsyncSearch(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
+
+        # defaults wait_for_completion_timeout = 0 to avoid sync fallback for fast searches
+        if "wait_for_completion_timeout" not in request_params:
+            request_params["wait_for_completion_timeout"] = 0
+
         response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
-        # id may be None if the operation has already returned
         search_id = response.get("id")
         CompositeContext.put(op_name, search_id)
 
@@ -2510,7 +2514,6 @@ def async_search_ids(op_names):
     subjects = [op_names] if isinstance(op_names, str) else op_names
     for subject in subjects:
         subject_id = CompositeContext.get(subject)
-        # skip empty ids, searches have already completed
         if subject_id:
             yield subject_id, subject
 
@@ -2527,11 +2530,13 @@ class GetAsyncSearch(Runner):
             success = success and not is_running
             if not is_running:
                 stats[search] = {
-                    "hits": response["response"]["hits"]["total"]["value"],
-                    "hits_relation": response["response"]["hits"]["total"]["relation"],
                     "timed_out": response["response"]["timed_out"],
                     "took": response["response"]["took"],
                 }
+
+                if "total" in response["response"]["hits"].keys():
+                    stats[search]["hits"] = response["response"]["hits"]["total"]["value"]
+                    stats[search]["hits_relation"] = response["response"]["hits"]["total"]["relation"]
 
         return {
             # only count completed searches - there is one key per search id in `stats`
