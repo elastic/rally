@@ -39,7 +39,7 @@ export PUBLIC_DOCKER_REPO=$3
 if [[ $PUBLIC_DOCKER_REPO == "true" ]]; then
     export RALLY_DOCKER_IMAGE="elastic/rally"
 else
-    export RALLY_DOCKER_IMAGE="docker.elastic.co/employees/es-perf/rally"
+    export RALLY_DOCKER_IMAGE="docker.elastic.co/es-perf/rally"
 fi
 
 export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
