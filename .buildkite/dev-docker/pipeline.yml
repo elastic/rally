@@ -1,3 +1,53 @@
 steps:
-  - label: ":wave: Greetings"            # Label (with rich emojis https://ela.st/bk-emoji).
-    command: "echo 'My first pipeline!'" # Command to run (evaluated by Bash).
+  - input: "Build parameters"
+    if: build.source != "schedule"
+    fields:
+      - text: "BUILD_FROM_BRANCH"
+        key: "BUILD_FROM_BRANCH"
+        default: ""
+        hint: "The branch to build from e.g. 'master'. Leave blank to build from the current branch: $BUILDKITE_BRANCH."
+        required: false
+      - select: "PUBLIC_DOCKER_REPO"
+        key: "PUBLIC_DOCKER_REPO"
+        hint: "Push the Docker image to the public Docker registry (default: No)."
+        default: "false"
+        options:
+          - label: "Yes"
+            value: "true"
+          - label: "No"
+            value: "false"
+      - select: "PUSH_LATEST"
+        key: "PUSH_LATEST"
+        hint: "Push the <branch>-latest tag to the registry."
+        default: "true"
+        options:
+          - label: "Yes"
+            value: "true"
+          - label: "No"
+            value: "false"
+  - wait
+  - label: ":docker: Build Docker Artifacts for Rally amd64"
+    command: bash .buildkite/dev-docker/run.sh build amd64
+    key: "amd64"
+    agents:
+      machineType: "n2-standard-8"
+      image: family/core-ubuntu-2204
+      zone: "us-central1-a"
+      provider: "gcp"
+  - label: ":docker: Build Docker Artifacts for Rally arm64"
+    command: bash .buildkite/dev-docker/run.sh build arm64
+    key: "arm64"
+    agents:
+      machineType: "t2a-standard-8"
+      image: family/core-ubuntu-2204-aarch64
+      zone: "us-central1-a"
+      provider: "gcp"
+  - label: ":docker: build docker manifest"
+    command: bash .buildkite/dev-docker/run.sh manifest both
+    key: "manifest"
+    depends_on:
+      - "amd64"
+      - "arm64"
+    agents:
+      zone: "us-central1-a"
+      provider: "gcp"

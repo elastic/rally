@@ -1,9 +1,14 @@
 FROM docker.elastic.co/wolfi/python:3.12.3-dev AS builder
+ARG RALLY_VERSION
+ARG RALLY_LICENSE
+
+ENV RALLY_RUNNING_IN_DOCKER=True
+
 
 USER root
 
 RUN apk update 
-RUN apk add curl git gcc pigz bash zstd bzip2 gzip
+RUN apk add curl git gcc pigz bash zstd bzip2 gzip openssh
 
 # pbzip2 doesn't have a package for wolfi, so we build it from source
 RUN apk add bzip2-dev make wget 
@@ -14,15 +19,6 @@ RUN cd /tmp && \
   cd pbzip2-1.1.13/ && \
   make install && \
   rm -r /tmp/pbzip2-1.1.13/
-
-FROM docker.elastic.co/wolfi/python:3.12.3-dev
-ARG RALLY_VERSION
-ARG RALLY_LICENSE
-
-ENV RALLY_RUNNING_IN_DOCKER=True
-
-USER root
-COPY --from=builder /usr/bin/ /usr/bin/
 
 RUN addgroup --gid 1000 rally && \
     adduser --system --home /rally --ingroup rally --no-create-home --uid 1000 --shell /bin/bash rally
