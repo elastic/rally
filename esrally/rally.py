@@ -1287,7 +1287,7 @@ def main():
     logger.info("Cleaning track dependency directory [%s]...", paths.libs())
 
     if sys.version_info.major == 3 and sys.version_info.minor <= 11:
-        shutil.rmtree(paths.libs(), onerror=_trap)
+        shutil.rmtree(paths.libs(), onerror=_trap)  # pylint: disable=deprecated-argument
     else:
         shutil.rmtree(paths.libs(), onexc=_trap_exc)  # pylint: disable=unexpected-keyword-arg
 
