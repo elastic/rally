@@ -231,6 +231,13 @@ def kill_running_rally_instances() -> None:
     kill_all(rally_process)
 
 
+def current_pid() -> int:
+    """
+    Returns the current process ID.
+    """
+    return os.getpid()
+
+
 def wait_for_child_processes(
     timeout: Optional[float] = None,
     callback: Optional[Callable[[psutil.Process], None]] = None,
