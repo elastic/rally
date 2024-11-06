@@ -1,3 +1,27 @@
+### 2.11.1
+
+#### Highlights
+
+* [#1875](https://github.com/elastic/rally/pull/1875): Switch to JDK 21
+
+#### Enhancements
+
+* [#1884](https://github.com/elastic/rally/pull/1884): Add Jinja filters for creating dynamic date ranges based on now()
+* [#1871](https://github.com/elastic/rally/pull/1871): [ES-8436] feat: Change Dockerfile base images to Wolfi
+* [#1865](https://github.com/elastic/rally/pull/1865): Add an option to filter by challange in list command
+* [#1859](https://github.com/elastic/rally/pull/1859): Modify rally to allow multiple cars with complex configuration
+* [#1858](https://github.com/elastic/rally/pull/1858): Bump urllib3 from 1.26.18 to 1.26.19
+
+#### Bug Fixes
+
+* [#1882](https://github.com/elastic/rally/pull/1882): fixes #1881 - composite operation failing when track_total_hits is false
+* [#1879](https://github.com/elastic/rally/pull/1879): Pull non-default branch commits selectively
+* [#1877](https://github.com/elastic/rally/pull/1877): Docs: fix level of (warmup-)interations
+* [#1876](https://github.com/elastic/rally/pull/1876): Cast batch size as int
+* [#1863](https://github.com/elastic/rally/pull/1863): Avoid logging ES credentials from running Rally processes
+* [#1861](https://github.com/elastic/rally/pull/1861): Restore time measurement on request end
+* [#1848](https://github.com/elastic/rally/pull/1848): Pin `requests` library until we fix `docker-py`
+
 ### 2.11.0
 
 #### Highlights
