@@ -33,7 +33,7 @@ build_docker_image() {
         git checkout "${RELEASE_VERSION}"
     fi
 
-    git "Docker commit: $(git --no-pager log --oneline -n1)"
+    echo "Docker commit: $(git --no-pager log --oneline -n1)"
 
     set -x
     export TERM=dumb
