@@ -231,13 +231,6 @@ def kill_running_rally_instances() -> None:
     kill_all(rally_process)
 
 
-def current_pid() -> int:
-    """
-    Returns the current process ID.
-    """
-    return os.getpid()
-
-
 def wait_for_child_processes(
     timeout: Optional[float] = None,
     callback: Optional[Callable[[psutil.Process], None]] = None,
@@ -251,7 +244,7 @@ def wait_for_child_processes(
         The callback will be passed the PID and the return code of the child process.
     :param list_callback: A callback to tell caller about the child processes that are being waited for.
 
-    :return: True if no child processes found, False otherwise.
+    :return: False if no child processes found, True otherwise.
     """
     current = psutil.Process()
     children = current.children(recursive=True)
