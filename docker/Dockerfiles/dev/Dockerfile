@@ -8,7 +8,7 @@ ENV RALLY_RUNNING_IN_DOCKER=True
 USER root
 
 RUN apk update 
-RUN apk add curl git gcc pigz bash zstd bzip2 gzip openssh
+RUN apk add curl git gcc pigz bash zstd bzip2 gzip openssh procps
 
 # pbzip2 doesn't have a package for wolfi, so we build it from source
 RUN apk add bzip2-dev make wget 
