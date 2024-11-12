@@ -26,7 +26,7 @@ spec:
   dependsOn:
     - resource:rally-it-pipeline
     - resource:rally-it-serverless-pipeline
-    - resource:rally-releaser-docker-pipeline
+    - resource:rally-release-docker-pipeline
     - resource:rally-dev-docker-build-pipeline
 
 
