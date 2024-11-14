@@ -46,7 +46,7 @@ dependencies = [
     # License: MIT
     "urllib3==1.26.19",
     # License: Apache 2.0
-    "aiohttp==3.11.0",
+    "aiohttp==3.10.8",
     "docker==6.0.0",
     # avoid specific requests version to fix bug in docker-py
     "requests<2.32.0",
