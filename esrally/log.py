@@ -20,13 +20,16 @@ import logging
 import logging.config
 import os
 import time
+import typing
+
+import ecs_logging
 
 from esrally import paths
-from esrally.utils import io
+from esrally.utils import collections, io
 
 
 # pylint: disable=unused-argument
-def configure_utc_formatter(*args, **kwargs):
+def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.Formatter:
     """
     Logging formatter that renders timestamps UTC, or in the local system time zone when the user requests it.
     """
@@ -37,6 +40,36 @@ def configure_utc_formatter(*args, **kwargs):
     else:
         formatter.converter = time.gmtime
 
+    return formatter
+
+
+class RallyEcsFormatter(ecs_logging.StdlibFormatter):
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
+        super().__init__(*args, **kwargs)
+
+    def format(self, record: logging.LogRecord) -> str:
+        result = super().format_to_ecs(record)
+        self.rename_actor_fields(result)
+        # ecs_logging._utils is a private module
+        # but we need to use it here to get the on spec JSON serialization
+        return ecs_logging._utils.json_dumps(result)  # pylint: disable=protected-access
+
+    def rename_actor_fields(self, log_record: typing.Dict[str, typing.Any]) -> None:
+        actor = {}
+        if log_record.get("actorAddress"):
+            actor["address"] = log_record.pop("actorAddress")
+        if log_record.get("taskName"):
+            actor["task"] = log_record.pop("taskName")
+        if actor:
+            collections.deep_update(log_record, {"rally": {"actor": actor}})
+
+
+def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logging.StdlibFormatter:
+    """
+    ECS Logging formatter
+    """
+    fmt = kwargs.pop("format", None)
+    formatter = RallyEcsFormatter(fmt=fmt, *args, **kwargs)
     return formatter
 
 

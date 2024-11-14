@@ -6,6 +6,10 @@
       "datefmt": "%Y-%m-%d %H:%M:%S",
       "()": "esrally.log.configure_utc_formatter"
     },
+    "json": {
+      "format": "%(message)s",
+      "()": "esrally.log.configure_ecs_formatter"
+    },
     "profile": {
       "format": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
       "datefmt": "%Y-%m-%d %H:%M:%S",
@@ -31,10 +35,17 @@
       "delay": true,
       "encoding": "UTF-8",
       "formatter": "profile"
+    },
+    "rally_json_handler": {
+      "()": "esrally.log.configure_file_handler",
+      "filename": "${LOG_PATH}/rally.json",
+      "encoding": "UTF-8",
+      "formatter": "json",
+      "filters": ["isActorLog"]
     }
   },
   "root": {
-    "handlers": ["rally_log_handler"],
+    "handlers": ["rally_log_handler", "rally_json_handler"],
     "level": "INFO"
   },
   "loggers": {

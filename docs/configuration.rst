@@ -183,7 +183,9 @@ Logging in Rally is configured in ``~/.rally/logging.json``. For more informatio
 * The Python reference documentation on the `logging configuration schema <https://docs.python.org/3/library/logging.config.html#logging-config-dictschema>`_ explains the file format.
 * The `logging handler documentation <https://docs.python.org/3/library/logging.handlers.html>`_ describes how to customize where log output is written to.
 
-By default, Rally will log all output to ``~/.rally/logs/rally.log``. The default timestamp is UTC, but users can opt for the local time by setting ``"timezone": "localtime"`` in the logging configuration file.
+By default, Rally will log all output to ``~/.rally/logs/rally.log`` in plain text format and ``~/.rally/logs/rally.json`` in JSON format.
+The default timestamp for ``rally.log`` is UTC, but users can opt for the local time by setting ``"timezone": "localtime"`` in the logging configuration file. 
+The ``rally.json`` file is formatted to the ECS format for ease of ingestion with filebeat. See the `ECS Reference <https://www.elastic.co/guide/en/ecs/current/ecs-using-ecs.html>`_ for more information.
 
 The log file will not be rotated automatically as this is problematic due to Rally's multi-process architecture. Setup an external tool like `logrotate <https://linux.die.net/man/8/logrotate>`_ to achieve that. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
 
@@ -301,8 +303,8 @@ latter being a JSON file::
           "()": "esrally.log.configure_utc_formatter"
         },
         "json": {
-          "datefmt": "%Y-%m-%d %H:%M:%S",
-          "class": "pythonjsonlogger.jsonlogger.JsonFormatter"
+          "format": "%(message)s",
+          "()": "esrally.log.configure_ecs_formatter"
         }
       },
       "handlers": {

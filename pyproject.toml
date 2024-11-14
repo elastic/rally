@@ -85,6 +85,8 @@ dependencies = [
     "typing-extensions==4.12.2",
     # License:  BSD-2-Clause license 
     "python-json-logger==2.0.7",
+    # License: Apache 2.0
+    "ecs-logging==2.2.0",
 ]
 
 [project.optional-dependencies]
