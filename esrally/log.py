@@ -20,13 +20,18 @@ import logging
 import logging.config
 import os
 import time
+import typing
+from datetime import datetime
+
+from dateutil import tz
+from pythonjsonlogger import jsonlogger
 
 from esrally import paths
 from esrally.utils import io
 
 
 # pylint: disable=unused-argument
-def configure_utc_formatter(*args, **kwargs):
+def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.Formatter:
     """
     Logging formatter that renders timestamps UTC, or in the local system time zone when the user requests it.
     """
@@ -38,6 +43,33 @@ def configure_utc_formatter(*args, **kwargs):
         formatter.converter = time.gmtime
 
     return formatter
+
+
+class RallyJsonFormatter(jsonlogger.JsonFormatter):
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
+        format = kwargs.pop("format", "%Y-%m-%d %H:%M:%S,%f")
+        datefmt = kwargs.pop("datefmt", None)
+        self.timezone = kwargs.pop("timezone", None)
+        super().__init__(fmt=format, datefmt=datefmt, *args, **kwargs)
+        if self.timezone == "localtime":
+            self.tz = tz.tzlocal()
+        elif self.timezone:
+            self.tz = tz.gettz(name=self.timezone)
+        else:
+            self.timezone = "UTC"
+            self.tz = tz.tzutc()
+        self.now_func = datetime.now(self.tz).strftime
+
+    def add_fields(
+        self, log_record: typing.Dict[str, typing.Any], record: logging.LogRecord, message_dict: typing.Dict[str, typing.Any]
+    ) -> None:
+        super().add_fields(log_record, record, message_dict)
+        self.datefmt = typing.cast(str, self.datefmt)
+        if not log_record.get("timestamp"):
+            now = self.now_func(self.datefmt)
+            log_record["timestamp"] = now
+        if not log_record.get("timezone"):
+            log_record["timezone"] = self.timezone
 
 
 def log_config_path():
