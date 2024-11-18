@@ -93,7 +93,7 @@ def get_start_date(the_date, date_format="%Y-%m-%d", default_tz=timezone.utc):
     :param default_tz: Timezone to use for dates using unix timestamp. Default: timezone.UTC
     :return: Returns a formatted date string.
     """
-    start_date = _to_datetime(the_date, default_tz)
+    start_date = _to_datetime(the_date, default_tz=default_tz)
     return start_date.strftime(date_format)
 
 
@@ -107,7 +107,7 @@ def get_end_date(start_date, duration_days=1, date_format="%Y-%m-%d", default_tz
     :param default_tz: Timezone to use for dates using unix timestamp. Default: timezone.UTC
     :return: Returns a formatted date string.
     """
-    end_date = _to_datetime(start_date, default_tz) + timedelta(days=duration_days)
+    end_date = _to_datetime(start_date, default_tz=default_tz) + timedelta(days=duration_days)
     return end_date.strftime(date_format)
 
 
