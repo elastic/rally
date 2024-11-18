@@ -75,9 +75,10 @@ class RallyJsonFormatter(jsonlogger.JsonFormatter):
 def configure_json_formatter(*args: typing.Any, **kwargs: typing.Any) -> RallyJsonFormatter:
     """
     JSON Logging formatter
-    """
-    formatter = jsonlogger.JsonFormatter(*args, **kwargs)
 
+    Renders timestamps in UTC, or in the local system time zone when the user requests it.
+    """
+    formatter = RallyJsonFormatter(*args, **kwargs)
     return formatter
 
 

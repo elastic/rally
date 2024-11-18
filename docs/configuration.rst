@@ -303,7 +303,7 @@ latter being a JSON file::
         "json": {
           "format": "%(timestamp)s %(process)d %(name)s %(levelname)s %(message)s",
           "datefmt": "%Y-%m-%d %H:%M:%S,%f",
-          "()": "esrally.log.configure_file_handler"
+          "()": "esrally.log.configure_json_formatter"
         }
       },
       "handlers": {
