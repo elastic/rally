@@ -77,7 +77,7 @@ class StaticRequest(aiohttp.ClientRequest):
         self.response = self.response_class(
             self.method,
             self.original_url,
-            writer=self._writer,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            writer=self._writer,
             continue100=self._continue,
             timer=self._timer,
             request_info=self.request_info,
