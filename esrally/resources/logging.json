@@ -7,9 +7,9 @@
       "()": "esrally.log.configure_utc_formatter"
     },
     "json": {
-      "class": "esrally.log.RallyJsonFormatter",
       "format": "%(timestamp)s %(process)d %(name)s %(levelname)s %(message)s",
-      "datefmt": "%Y-%m-%d %H:%M:%S,%f"
+      "datefmt": "%Y-%m-%d %H:%M:%S,%f",
+      "()": "esrally.log.configure_file_handler"
     },
     "profile": {
       "format": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",

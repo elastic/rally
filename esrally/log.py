@@ -72,6 +72,15 @@ class RallyJsonFormatter(jsonlogger.JsonFormatter):
             log_record["timezone"] = self.timezone
 
 
+def configure_json_formatter(*args: typing.Any, **kwargs: typing.Any) -> RallyJsonFormatter:
+    """
+    JSON Logging formatter
+    """
+    formatter = jsonlogger.JsonFormatter(*args, **kwargs)
+
+    return formatter
+
+
 def log_config_path():
     """
     :return: The absolute path to Rally's log configuration file.
