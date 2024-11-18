@@ -2,7 +2,7 @@ Migration Guide
 ===============
 
 Migrating to Rally 2.12.0
-------------------------
+-------------------------
 
 Minimum Python version is 3.9.0
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
