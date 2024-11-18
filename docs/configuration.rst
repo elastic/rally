@@ -209,7 +209,7 @@ The log file will not be rotated automatically as this is problematic due to Ral
 Example
 ~~~~~~~
 
-With the following configuration Rally will log all output to standard error::
+With the following configuration Rally will log all output to standard error, and format the timestamps in the local timezone::
 
     {
       "version": 1,

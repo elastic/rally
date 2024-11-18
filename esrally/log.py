@@ -73,6 +73,15 @@ def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logg
     return formatter
 
 
+def configure_json_formatter(*args: typing.Any, **kwargs: typing.Any) -> RallyJsonFormatter:
+    """
+    JSON Logging formatter
+    """
+    formatter = jsonlogger.JsonFormatter(*args, **kwargs)
+
+    return formatter
+
+
 def log_config_path():
     """
     :return: The absolute path to Rally's log configuration file.
