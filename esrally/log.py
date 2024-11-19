@@ -21,13 +21,14 @@ import logging.config
 import os
 import time
 import typing
+import zoneinfo
 from datetime import datetime
 
-from dateutil import tz
+import ecs_logging
 from pythonjsonlogger import jsonlogger
 
-from esrally import paths
-from esrally.utils import io
+from esrally import paths, version
+from esrally.utils import collections, io
 
 
 # pylint: disable=unused-argument
@@ -47,29 +48,43 @@ def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.
 
 class RallyJsonFormatter(jsonlogger.JsonFormatter):
     def __init__(self, *args: typing.Any, **kwargs: typing.Any):
-        format = kwargs.pop("format", "%Y-%m-%d %H:%M:%S,%f")
-        datefmt = kwargs.pop("datefmt", None)
+        format = kwargs.pop("format", None)
         self.timezone = kwargs.pop("timezone", None)
-        super().__init__(fmt=format, datefmt=datefmt, *args, **kwargs)
+        rename_fields = {"timestamp": "@timestamp"}
+
+        super().__init__(fmt=format, rename_fields=rename_fields, *args, **kwargs)
         if self.timezone == "localtime":
-            self.tz = tz.tzlocal()
+            self.tz = None
         elif self.timezone:
-            self.tz = tz.gettz(name=self.timezone)
+            self.tz = zoneinfo.ZoneInfo(self.timezone)
         else:
             self.timezone = "UTC"
-            self.tz = tz.tzutc()
-        self.now_func = datetime.now(self.tz).strftime
+            self.tz = zoneinfo.ZoneInfo("UTC")
+        self.now_func = datetime.now().astimezone(self.tz).isoformat
 
     def add_fields(
         self, log_record: typing.Dict[str, typing.Any], record: logging.LogRecord, message_dict: typing.Dict[str, typing.Any]
     ) -> None:
-        super().add_fields(log_record, record, message_dict)
-        self.datefmt = typing.cast(str, self.datefmt)
         if not log_record.get("timestamp"):
-            now = self.now_func(self.datefmt)
+            now = self.now_func()
             log_record["timestamp"] = now
-        if not log_record.get("timezone"):
-            log_record["timezone"] = self.timezone
+        if not log_record.get("process"):
+            process = {"pid": record.process, "name": record.processName, "thread": {"id": record.thread, "name": record.threadName}}
+            log_record["process"] = process
+        if not log_record.get("log"):
+            log = {
+                "level": record.levelname,
+                "logger": record.name,
+                "origin": {"file": {"name": record.filename, "line": record.lineno}, "function": record.funcName},
+            }
+            log_record["log"] = log
+        if not log_record.get("rally"):
+            rally = {
+                "taskName": record.taskName,
+                "actorAddress": record.actorAddress,
+            }
+            log_record["rally"] = rally
+        super().add_fields(log_record, record, message_dict)
 
 
 def configure_json_formatter(*args: typing.Any, **kwargs: typing.Any) -> RallyJsonFormatter:
@@ -79,6 +94,34 @@ def configure_json_formatter(*args: typing.Any, **kwargs: typing.Any) -> RallyJs
     Renders timestamps in UTC, or in the local system time zone when the user requests it.
     """
     formatter = RallyJsonFormatter(*args, **kwargs)
+    return formatter
+
+
+class RallyEcsFormatter(ecs_logging.StdlibFormatter):
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
+        super().__init__(*args, **kwargs)
+
+    def format(self, record: logging.LogRecord) -> str:
+        result = super().format_to_ecs(record)
+        self.rename_actor_fields(result)
+        return ecs_logging._utils.json_dumps(result)
+
+    def rename_actor_fields(self, log_record: typing.Dict[str, typing.Any]) -> None:
+        actor = {}
+        if log_record.get("actorAddress"):
+            actor["address"] = log_record.pop("actorAddress")
+        if log_record.get("taskName"):
+            actor["task"] = log_record.pop("taskName")
+        if actor:
+            collections.deep_update(log_record, {"rally": {"actor": actor}})
+
+
+def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logging.StdlibFormatter:
+    """
+    ECS Logging formatter
+    """
+    fmt = kwargs.pop("format", None)
+    formatter = RallyEcsFormatter(fmt=fmt, *args, **kwargs)
     return formatter
 
 
