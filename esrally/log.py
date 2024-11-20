@@ -52,7 +52,7 @@ class RallyEcsFormatter(ecs_logging.StdlibFormatter):
         self.rename_actor_fields(result)
         # ecs_logging._utils is a private module
         # but we need to use it here to get the on spec JSON serialization
-        return ecs_logging._utils.json_dumps(result)  # lint: disable=protected-access
+        return ecs_logging._utils.json_dumps(result)  # pylint: disable=protected-access
 
     def rename_actor_fields(self, log_record: typing.Dict[str, typing.Any]) -> None:
         actor = {}
