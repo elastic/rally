@@ -93,14 +93,12 @@ class TestDeepUpdate:
         assert d1 == d2
         assert d1 is not d2
 
-    def test_can_update_with_none(self):
+    def test_can_update_with_no_update(self):
         d1 = {"foo": "bar"}
-        d2 = None
 
-        collections.deep_update(d1, d2)
+        collections.deep_update(d1)
 
         assert d1 is not None
-        assert d1 is not d2
         assert d1["foo"] == "bar"
 
     def test_can_update_with_empty_dict(self):
@@ -193,7 +191,7 @@ class TestDeepUpdate:
         d2 = {"foo": {"bar": [1, 2, 3]}}
         collections.deep_update(d1, d2)
 
-        assert d1 is not d2
-        assert d1["foo"] is not d2["foo"]
-        assert d1["foo"]["bar"] is not d2["foo"]["bar"]
-        assert d1["foo"]["bar"] == [1, 2, 3]
+        assert d1 is not d2  # type: ignore[comparison-overlap]
+        assert d1["foo"] is not d2["foo"]  # type: ignore[comparison-overlap]
+        assert d1["foo"]["bar"] is not d2["foo"]["bar"]  # type: ignore[comparison-overlap]
+        assert d1["foo"]["bar"] == [1, 2, 3]  # type: ignore[comparison-overlap]

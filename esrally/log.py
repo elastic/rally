@@ -21,13 +21,10 @@ import logging.config
 import os
 import time
 import typing
-import zoneinfo
-from datetime import datetime
 
 import ecs_logging
-from pythonjsonlogger import jsonlogger
 
-from esrally import paths, version
+from esrally import paths
 from esrally.utils import collections, io
 
 
@@ -53,7 +50,9 @@ class RallyEcsFormatter(ecs_logging.StdlibFormatter):
     def format(self, record: logging.LogRecord) -> str:
         result = super().format_to_ecs(record)
         self.rename_actor_fields(result)
-        return ecs_logging._utils.json_dumps(result)
+        # ecs_logging._utils is a private module
+        # but we need to use it here to get the on spec JSON serialization
+        return ecs_logging._utils.json_dumps(result)  # lint: disable=protected-access
 
     def rename_actor_fields(self, log_record: typing.Dict[str, typing.Any]) -> None:
         actor = {}
