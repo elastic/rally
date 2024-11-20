@@ -8,7 +8,7 @@
     },
     "json": {
       "format": "%(message)s",
-      "()": "esrally.log.configure_json_formatter"
+      "()": "esrally.log.configure_ecs_formatter"
     },
     "profile": {
       "format": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
