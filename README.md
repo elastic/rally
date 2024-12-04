@@ -4,7 +4,7 @@
 
 Rally is the macrobenchmarking framework for Elasticsearch
 
-## What is Rally?
+## Project Overview
 
 You want to benchmark Elasticsearch? Then Rally is for you. It can help you with the following tasks:
 
@@ -20,16 +20,24 @@ We have also put considerable effort in Rally to ensure that benchmarking data a
 
 Rally is developed for Unix and is actively tested on Linux and macOS. Rally supports [benchmarking Elasticsearch clusters running on Windows](http://esrally.readthedocs.io/en/stable/recipes.html#benchmarking-an-existing-cluster) but Rally itself needs to be installed on machines running Unix.
 
-### Installing Rally
+### Prerequisites
+
+
+Install Python 3.8+, pip3, git 1.9+, and an appropriate JDK to run Elasticsearch. Be sure `JAVA_HOME` points to that JDK.
+
+
+### Installation Steps:
 
 **Note**: If you actively develop on Elasticsearch, we recommend that you [install Rally in development mode](https://esrally.readthedocs.io/en/latest/developing.html#installation-instructions-for-development) instead as Elasticsearch is fast moving and Rally always adapts accordingly to the latest main version.
 
-Install Python 3.8+ including `pip3`, git 1.9+ and an [appropriate JDK to run Elasticsearch](https://www.elastic.co/support/matrix#matrix_jvm). Be sure that `JAVA_HOME` points to that JDK. Then run the following command, optionally prefixed by `sudo` if necessary:
+Run the following command, optionally prefixed by `sudo` if necessary:
 
-    pip3 install esrally
+```
+pip3 install esrally
+```
 
+For detailed installation instructions, refer to the [installation guide](https://esrally.readthedocs.io/en/latest/install.html).
 
-If you have any trouble or need more detailed instructions, please look in the [detailed installation guide](https://esrally.readthedocs.io/en/latest/install.html).
 
 ## Run your first race
 
@@ -100,10 +108,12 @@ This will download Elasticsearch 6.0.0 and run Rally's default track - the [geon
 
 ## Getting help
 
-* Quick help: `esrally --help`
-* Look in [Rally's user guide](https://esrally.readthedocs.io/) for more information
-* Ask questions about Rally in the [Rally Discuss forum](https://discuss.elastic.co/tags/c/elastic-stack/elasticsearch/rally).
-* File improvements or bug reports in our [Github repo](https://github.com/elastic/rally/issues).
+For help, refer to:
+- Quick help: `esrally --help`
+- Rally user guide: [User Guide](https://esrally.readthedocs.io/)
+- Questions: [Discuss Forum](https://discuss.elastic.co/tags/c/elastic-stack/elasticsearch/rally)
+- Bug reports: [GitHub Issues](https://github.com/elastic/rally/issues)
+
 
 ## How to Contribute
 
