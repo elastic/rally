@@ -224,7 +224,7 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
     for i in range(HTTP_DOWNLOAD_RETRIES + 1):
         try:
             return _download_http(url, local_path, expected_size_in_bytes, progress_indicator)
-        except urllib3.exceptions.ProtocolError as exc:
+        except (urllib3.exceptions.ProtocolError, urllib3.exceptions.ReadTimeoutError) as exc:
             if i == HTTP_DOWNLOAD_RETRIES:
                 raise
             logger.warning("Retrying after %s", exc)
