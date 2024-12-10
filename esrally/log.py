@@ -43,11 +43,14 @@ def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.
     return formatter
 
 
+MutatorType = typing.Callable[[logging.LogRecord, typing.Dict[str, typing.Any]], None]
+
+
 class RallyEcsFormatter(ecs_logging.StdlibFormatter):
     def __init__(
         self,
-        mutators: typing.Optional[typing.List[typing.Callable[[typing.Dict[str, typing.Any]], None]]] = None,
         *args: typing.Any,
+        mutators: typing.Optional[typing.List[MutatorType]] = None,
         **kwargs: typing.Any,
     ):
         super().__init__(*args, **kwargs)
@@ -92,15 +95,6 @@ def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logg
     mutators = [fn if callable(fn) else configurator.resolve(fn) for fn in mutators]
 
     formatter = RallyEcsFormatter(fmt=fmt, mutators=mutators, *args, **kwargs)
-    return formatter
-
-
-def configure_json_formatter(*args: typing.Any, **kwargs: typing.Any) -> RallyJsonFormatter:
-    """
-    JSON Logging formatter
-    """
-    formatter = jsonlogger.JsonFormatter(*args, **kwargs)
-
     return formatter
 
 
