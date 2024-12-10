@@ -44,24 +44,42 @@ def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.
 
 
 class RallyEcsFormatter(ecs_logging.StdlibFormatter):
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
+    def __init__(
+        self,
+        mutators: typing.Optional[typing.List[typing.Callable[[typing.Dict[str, typing.Any]], None]]] = None,
+        *args: typing.Any,
+        **kwargs: typing.Any,
+    ):
         super().__init__(*args, **kwargs)
+        self.mutators = mutators or []
 
     def format(self, record: logging.LogRecord) -> str:
-        result = super().format_to_ecs(record)
-        self.rename_actor_fields(result)
+        log_dict = super().format_to_ecs(record)
+        self.apply_mutators(record, log_dict)
         # ecs_logging._utils is a private module
         # but we need to use it here to get the on spec JSON serialization
-        return ecs_logging._utils.json_dumps(result)  # pylint: disable=protected-access
+        return ecs_logging._utils.json_dumps(log_dict)  # pylint: disable=protected-access
 
-    def rename_actor_fields(self, log_record: typing.Dict[str, typing.Any]) -> None:
-        actor = {}
-        if log_record.get("actorAddress"):
-            actor["address"] = log_record.pop("actorAddress")
-        if log_record.get("taskName"):
-            actor["task"] = log_record.pop("taskName")
-        if actor:
-            collections.deep_update(log_record, {"rally": {"actor": actor}})
+    def apply_mutators(self, record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+        for mutator in self.mutators:
+            mutator(record, log_dict)
+
+
+def rename_actor_fields(record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+    fields = {}
+    if log_dict.get("actorAddress"):
+        fields["address"] = log_dict.pop("actorAddress")
+    if fields:
+        collections.deep_update(log_dict, {"rally": {"thespian": fields}})
+
+
+# Special case for asyncio fields as they are not part of the standard ECS log dict
+def rename_async_fields(record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+    fields = {}
+    if hasattr(record, "taskName") and record.taskName is not None:
+        fields["task"] = record.taskName
+    if fields:
+        collections.deep_update(log_dict, {"python": {"asyncio": fields}})
 
 
 def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logging.StdlibFormatter:
@@ -69,7 +87,11 @@ def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logg
     ECS Logging formatter
     """
     fmt = kwargs.pop("format", None)
-    formatter = RallyEcsFormatter(fmt=fmt, *args, **kwargs)
+    configurator = logging.config.BaseConfigurator({})
+    mutators = kwargs.pop("mutators", [rename_actor_fields, rename_async_fields])
+    mutators = [fn if callable(fn) else configurator.resolve(fn) for fn in mutators]
+
+    formatter = RallyEcsFormatter(fmt=fmt, mutators=mutators, *args, **kwargs)
     return formatter
 
 
