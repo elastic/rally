@@ -141,7 +141,7 @@ esrallyd = "esrally.rallyd:main"
 
 [tool.black]
 line-length = 140
-target-version = ['py39', 'py310', 'py311']
+target-version = ['py39', 'py310', 'py311', 'py312']
 
 [tool.isort]
 profile = 'black'
