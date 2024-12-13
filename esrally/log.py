@@ -56,12 +56,10 @@ class RallyEcsFormatter(ecs_logging.StdlibFormatter):
         super().__init__(*args, **kwargs)
         self.mutators = mutators or []
 
-    def format(self, record: logging.LogRecord) -> str:
+    def format_to_ecs(self, record: logging.LogRecord) -> typing.Dict[str, typing.Any]:
         log_dict = super().format_to_ecs(record)
         self.apply_mutators(record, log_dict)
-        # ecs_logging._utils is a private module
-        # but we need to use it here to get the on spec JSON serialization
-        return ecs_logging._utils.json_dumps(log_dict)  # pylint: disable=protected-access
+        return log_dict
 
     def apply_mutators(self, record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
         for mutator in self.mutators:
