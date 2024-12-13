@@ -6,9 +6,9 @@ source .buildkite/retry.sh
 
 set +x
 
-BUILD_FROM_BRANCH=$(buildkite-agent meta-data get BUILD_FROM_BRANCH --default "${BUILDKITE_BRANCH}")
-PUSH_LATEST=$(buildkite-agent meta-data get PUSH_LATEST)
-PUBLIC_DOCKER_REPO=$(buildkite-agent meta-data get PUBLIC_DOCKER_REPO)
+BUILD_FROM_BRANCH="$(buildkite-agent meta-data get BUILD_FROM_BRANCH --default ${BUILDKITE_BRANCH})"
+PUSH_LATEST="$(buildkite-agent meta-data get PUSH_LATEST)"
+PUBLIC_DOCKER_REPO="${SCHEDULED_PUBLIC_REPO:-$(buildkite-agent meta-data get PUBLIC_DOCKER_REPO)}"
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 (build|manifest) ..."
