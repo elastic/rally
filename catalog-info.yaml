@@ -174,11 +174,16 @@ spec:
       pipeline_file: .buildkite/dev-docker/pipeline.yml
       provider_settings:
         trigger_mode: code
-        filter_condition: 'build.branch == "master"'
         filter_enabled: true
+        filter_condition: 'build.branch == "master"'
         build_branches: true
         publish_commit_status: true
         build_pull_requests: false
       repository: elastic/rally
+      schedules:
+        Daily:
+          branch: master
+          cronline: "0 14 * * *"
+          message: daily dev-docker build
       teams:
         es-perf: {}
