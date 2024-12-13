@@ -58,18 +58,18 @@ function calls.
 
 ```mermaid
 sequenceDiagram
-    BenchmarkActor ->> BenchmarkCoordinator: __init__
-    BenchmarkActor ->> BenchmarkCoordinator: setup
-    BenchmarkActor ->> DriverActor: __init__
+    BenchmarkActor ->> BenchmarkCoordinator: __init__()
+    BenchmarkActor ->> BenchmarkCoordinator: setup()
+    BenchmarkActor ->> DriverActor: createActor()
     BenchmarkActor -->> DriverActor: PrepareBenchmark
-    DriverActor ->> Driver: __init__
-    DriverActor ->> Driver: prepare_benchmark
-    Driver ->> DriverActor: prepare_track
-    DriverActor ->> TrackPreparationActor: __init__
+    DriverActor ->> Driver: __init__()
+    DriverActor ->> Driver: prepare_benchmark()
+    Driver ->> DriverActor: prepare_track()
+    DriverActor ->> TrackPreparationActor: createActor()
     DriverActor -->> TrackPreparationActor: Bootstrap
     TrackPreparationActor -->> DriverActor: ReadyForWork
     DriverActor -->> TrackPreparationActor: PrepareTrack
-    TrackPreparationActor ->> TaskExecutionActor: __init__
+    TrackPreparationActor ->> TaskExecutionActor: createActor()
     TrackPreparationActor -->> TaskExecutionActor: StartTaskLoop
     loop
         TaskExecutionActor -->> TrackPreparationActor: ReadyForWork
@@ -83,7 +83,7 @@ sequenceDiagram
     DriverActor -->> TrackPreparationActor: ActorExitRequest
     TrackPreparationActor -->> TaskExecutionActor: ActorExitRequest
     Driver -->> BenchmarkActor: PreparationComplete
-    BenchmarkActor ->> BenchmarkCoordinator: on_preparation_complete
+    BenchmarkActor ->> BenchmarkCoordinator: on_preparation_complete()
 ```
 
 ### StartBenchmark
@@ -101,36 +101,36 @@ sequenceDiagram
     participant BenchmarkActor
     participant BenchmarkCoordinator
     BenchmarkActor -->> DriverActor: StartBenchmark
-    DriverActor ->> Driver: start_benchmark
+    DriverActor ->> Driver: start_benchmark()
     loop
         DriverActor -->> DriverActor: WakeupMessage (*)
-        DriverActor ->> Driver: post_process_samples
-        DriverActor ->> Driver: update_progress_messages
+        DriverActor ->> Driver: post_process_samples()
+        DriverActor ->> Driver: update_progress_messages()
     end
-    Driver ->> DriverActor: create_client
-    DriverActor ->> Worker: __init__
+    Driver ->> DriverActor: create_client()
+    DriverActor ->> Worker: createActor()
     DriverActor -->> Worker: Bootstrap
-    Driver ->> DriverActor: start_worker
+    Driver ->> DriverActor: start_worker()
     DriverActor -->> Worker: StartWorker
     loop
         DriverActor -->> Worker: Drive
         loop
-            Worker ->> Worker: drive
-            Worker ->> AsyncIoAdapter: __init__
+            Worker ->> Worker: drive()
+            Worker ->> AsyncIoAdapter: __init__()
             AsyncIoAdapter ->> Worker: "thread finished"
             Worker -->> Worker: WakeupMessage
             Worker -->> DriverActor: UpdateSamples
-            DriverActor ->> Driver: update_samples
+            DriverActor ->> Driver: update_samples()
         end
         Worker -->> DriverActor: UpdateSamples
-        DriverActor ->> Driver: update_samples
+        DriverActor ->> Driver: update_samples()
         Worker -->> DriverActor: JoinPointReached
-        DriverActor ->> Driver: joinpoint_reached
-        Driver ->> DriverActor: on_task_finished
+        DriverActor ->> Driver: joinpoint_reached()
+        Driver ->> DriverActor: on_task_finished()
         DriverActor -->> BenchmarkActor: TaskFinished
-        BenchmarkActor ->> BenchmarkCoordinator: on_task_finished
+        BenchmarkActor ->> BenchmarkCoordinator: on_task_finished()
     end
-    Driver ->> DriverActor: on_benchmark_complete
+    Driver ->> DriverActor: on_benchmark_complete()
     DriverActor -->> BenchmarkActor: BenchmarkComplete
-    BenchmarkActor ->> BenchmarkCoordinator: on_benchmark_complete
+    BenchmarkActor ->> BenchmarkCoordinator: on_benchmark_complete()
 ```
