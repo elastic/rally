@@ -329,6 +329,20 @@ class TestEsClientFactory:
         assert f.ssl_context.check_hostname is False
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
 
+    def test_create_http_connection_with_path(self):
+        hosts = [{"host": "localhost", "port": 9200, "url_prefix": "/path"}]
+        client_options = {}
+        # make a copy so we can verify later that the factory did not modify it
+        original_client_options = dict(client_options)
+
+        f = client.EsClientFactory(hosts, client_options)
+
+        assert f.hosts == ["http://localhost:9200/path"]
+        assert f.ssl_context is None
+        assert "basic_auth" not in f.client_options
+
+        assert client_options == original_client_options
+
     @mock.patch("esrally.client.asynchronous.RallyAsyncElasticsearch")
     def test_create_async_client_with_api_key_auth_override(self, es):
         hosts = [{"host": "localhost", "port": 9200}]
