@@ -20,13 +20,16 @@ import logging
 import logging.config
 import os
 import time
+import typing
+
+import ecs_logging
 
 from esrally import paths
-from esrally.utils import io
+from esrally.utils import collections, io
 
 
 # pylint: disable=unused-argument
-def configure_utc_formatter(*args, **kwargs):
+def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.Formatter:
     """
     Logging formatter that renders timestamps UTC, or in the local system time zone when the user requests it.
     """
@@ -37,6 +40,59 @@ def configure_utc_formatter(*args, **kwargs):
     else:
         formatter.converter = time.gmtime
 
+    return formatter
+
+
+MutatorType = typing.Callable[[logging.LogRecord, typing.Dict[str, typing.Any]], None]
+
+
+class RallyEcsFormatter(ecs_logging.StdlibFormatter):
+    def __init__(
+        self,
+        *args: typing.Any,
+        mutators: typing.Optional[typing.List[MutatorType]] = None,
+        **kwargs: typing.Any,
+    ):
+        super().__init__(*args, **kwargs)
+        self.mutators = mutators or []
+
+    def format_to_ecs(self, record: logging.LogRecord) -> typing.Dict[str, typing.Any]:
+        log_dict = super().format_to_ecs(record)
+        self.apply_mutators(record, log_dict)
+        return log_dict
+
+    def apply_mutators(self, record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+        for mutator in self.mutators:
+            mutator(record, log_dict)
+
+
+def rename_actor_fields(record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+    fields = {}
+    if log_dict.get("actorAddress"):
+        fields["address"] = log_dict.pop("actorAddress")
+    if fields:
+        collections.deep_update(log_dict, {"rally": {"thespian": fields}})
+
+
+# Special case for asyncio fields as they are not part of the standard ECS log dict
+def rename_async_fields(record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+    fields = {}
+    if hasattr(record, "taskName") and record.taskName is not None:
+        fields["task"] = record.taskName
+    if fields:
+        collections.deep_update(log_dict, {"python": {"asyncio": fields}})
+
+
+def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logging.StdlibFormatter:
+    """
+    ECS Logging formatter
+    """
+    fmt = kwargs.pop("format", None)
+    configurator = logging.config.BaseConfigurator({})
+    mutators = kwargs.pop("mutators", [rename_actor_fields, rename_async_fields])
+    mutators = [fn if callable(fn) else configurator.resolve(fn) for fn in mutators]
+
+    formatter = RallyEcsFormatter(fmt=fmt, mutators=mutators, *args, **kwargs)
     return formatter
 
 

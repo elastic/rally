@@ -183,7 +183,13 @@ Logging in Rally is configured in ``~/.rally/logging.json``. For more informatio
 * The Python reference documentation on the `logging configuration schema <https://docs.python.org/3/library/logging.config.html#logging-config-dictschema>`_ explains the file format.
 * The `logging handler documentation <https://docs.python.org/3/library/logging.handlers.html>`_ describes how to customize where log output is written to.
 
-By default, Rally will log all output to ``~/.rally/logs/rally.log``. The default timestamp is UTC, but users can opt for the local time by setting ``"timezone": "localtime"`` in the logging configuration file.
+By default, Rally will log all output to ``~/.rally/logs/rally.log`` in plain text format and ``~/.rally/logs/rally.json`` in ECS JSON format.
+The default timestamp for ``rally.log`` is UTC, but users can opt for the local time by setting ``"timezone": "localtime"`` in the logging configuration file. 
+The ``rally.json`` file is formatted to the ECS format for ease of ingestion with filebeat. See the `ECS Reference <https://www.elastic.co/guide/en/ecs/current/ecs-using-ecs.html>`_ for more information.
+
+There are a number of default options for the ``json`` logger that can be overridden in ``~/.rally/logging.json``. 
+First, ``exclude_fields`` will exclude ``log.original`` from the ECS defaults, since it can be quite noisy and superfluous. 
+And ``mutators`` is by default set to ``["esrally.log.rename_actor_fields", "esrally.log.rename_async_fields"]`` which will rename ``actorAddress`` and ``taskName`` to ``rally.thespian.actorAddress`` and ``python.asyncio.task`` respectively.
 
 The log file will not be rotated automatically as this is problematic due to Rally's multi-process architecture. Setup an external tool like `logrotate <https://linux.die.net/man/8/logrotate>`_ to achieve that. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
 
@@ -207,7 +213,7 @@ The log file will not be rotated automatically as this is problematic due to Ral
 Example
 ~~~~~~~
 
-With the following configuration Rally will log all output to standard error::
+With the following configuration Rally will log all output to standard error, and format the timestamps in the local timezone::
 
     {
       "version": 1,
@@ -290,7 +296,10 @@ Example
 ~~~~~~~
 
 With the following configuration Rally will log to ``~/.rally/logs/rally.log`` and ``~/.rally/logs/rally.json``, the 
-latter being a JSON file::
+latter being a JSON file. 
+
+The ``mutators`` property is optional and defaults to ``["esrally.log.rename_actor_fields", "esrally.log.rename_async_fields"]``.
+Similarly, the ``exclude_fields`` property is optional and defaults to ``["log.original"]``::
 
     {
       "version": 1,
@@ -301,8 +310,15 @@ latter being a JSON file::
           "()": "esrally.log.configure_utc_formatter"
         },
         "json": {
-          "datefmt": "%Y-%m-%d %H:%M:%S",
-          "class": "pythonjsonlogger.jsonlogger.JsonFormatter"
+          "format": "%(message)s",
+          "exclude_fields": [
+            "log.original"
+          ],
+          "mutators": [
+            "esrally.log.rename_actor_fields",
+            "esrally.log.rename_async_fields"
+          ],
+          "()": "esrally.log.configure_ecs_formatter"
         }
       },
       "handlers": {
