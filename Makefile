@@ -21,7 +21,6 @@ PYENV_REGEX := .pyenv/shims
 PY_BIN := python3
 # https://github.com/pypa/pip/issues/5599
 PIP_WRAPPER := $(PY_BIN) -m pip
-export PY38 := $(shell jq -r '.python_versions.PY38' .ci/variables.json)
 export PY39 := $(shell jq -r '.python_versions.PY39' .ci/variables.json)
 export PY310 := $(shell jq -r '.python_versions.PY310' .ci/variables.json)
 export PY311 := $(shell jq -r '.python_versions.PY311' .ci/variables.json)
@@ -39,7 +38,6 @@ PYENV_PREREQ_HELP := "\033[0;31mIMPORTANT\033[0m: please type \033[0;31mpyenv in
 VE_MISSING_HELP := "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_ENV); have you executed make venv-create?\033[0m\n"
 
 prereq:
-	pyenv install --skip-existing $(PY38)
 	pyenv install --skip-existing $(PY39)
 	pyenv install --skip-existing $(PY310)
 	pyenv install --skip-existing $(PY311)
@@ -100,12 +98,12 @@ serve-docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
 
 test: check-venv
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.8
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.9
 	. $(VENV_ACTIVATE_FILE); nox -s test-3.12
 
 # checks min and max python versions
 it: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.8
+	. $(VENV_ACTIVATE_FILE); nox -s it-3.9
 	. $(VENV_ACTIVATE_FILE); nox -s it-3.12
 
 check-all: lint test it
