@@ -2,7 +2,7 @@ steps:
   - input: "Build parameters"
     # If the build is triggered by merging a PR to master, we want to build from the master branch.
     # If the build is triggered by a schedule, we want to build from the current branch
-    if: (build.source != "webhook" && build.branch == "master") || build.source != "schedule" 
+    if: '!(build.source == "webhook" && build.branch == "master") || build.source != "schedule"'
     fields:
       - text: "BUILD_FROM_BRANCH"
         key: "BUILD_FROM_BRANCH"
