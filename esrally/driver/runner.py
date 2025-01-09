@@ -441,14 +441,6 @@ def mandatory(params, key, op):
         )
 
 
-# TODO: remove and use https://docs.python.org/3/library/stdtypes.html#str.removeprefix
-#  once Python 3.9 becomes the minimum version
-def remove_prefix(string, prefix):
-    if string.startswith(prefix):
-        return string[len(prefix) :]
-    return string
-
-
 def escape(v):
     """
     Escapes values so they can be used as query parameters
@@ -1777,7 +1769,7 @@ class ShrinkIndex(Runner):
             target_body["settings"]["index.routing.allocation.require._name"] = None
             target_body["settings"]["index.blocks.write"] = None
             # kick off the shrink operation
-            index_suffix = remove_prefix(source_index, source_indices_stem)
+            index_suffix = source_index.removeprefix(source_indices_stem)
             final_target_index = target_index if len(index_suffix) == 0 else target_index + index_suffix
             await es.indices.shrink(index=source_index, target=final_target_index, body=target_body)
 
