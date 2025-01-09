@@ -21,7 +21,7 @@ import os
 from collections.abc import Collection, Iterator, Mapping, MutableMapping
 from enum import Enum
 from types import ModuleType
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 import tabulate
 

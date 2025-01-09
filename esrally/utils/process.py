@@ -21,7 +21,7 @@ import shlex
 import subprocess
 import time
 from collections.abc import Iterable, Mapping
-from typing import IO, Callable, List, Optional, Union
+from typing import IO, Callable, Optional, Union
 
 import psutil
 

@@ -21,7 +21,7 @@ import os
 import sys
 from collections.abc import Collection, Iterator
 from types import ModuleType
-from typing import Tuple, Union
+from typing import Union
 
 from esrally import exceptions
 from esrally.utils import io

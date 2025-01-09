@@ -25,7 +25,7 @@ import sys
 import tempfile
 import urllib.error
 from collections.abc import Generator
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional
 
 import jinja2
 import jinja2.exceptions

@@ -34,11 +34,8 @@ from typing import (
     AnyStr,
     Callable,
     Generic,
-    List,
     Literal,
     Optional,
-    Tuple,
-    Type,
     Union,
     overload,
 )

@@ -20,7 +20,7 @@ import json
 import logging
 import warnings
 from collections.abc import Iterable, Mapping
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import aiohttp
 from aiohttp import BaseConnector, RequestInfo

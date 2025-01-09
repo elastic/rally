@@ -30,7 +30,7 @@ from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
 from types import FunctionType
-from typing import List, Optional
+from typing import Optional
 
 import ijson
 
