@@ -122,7 +122,7 @@ To further examine the contents we can bind mount it from another image e.g.:
 
 .. parsed-literal:: :class: literal-block highlight
 
-    $ docker run --rm -i -v=96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199:/rallyvolume -ti python:3.8.12-slim-bullseye /bin/bash
+    $ docker run --rm -i -v=96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199:/rallyvolume -ti python:3.11.11-slim-bullseye /bin/bash
     root@9a7dd7b3d8df:/# cd /rallyvolume/
     root@9a7dd7b3d8df:/rallyvolume# ls
     root@9a7dd7b3d8df:/rallyvolume/.rally# ls
