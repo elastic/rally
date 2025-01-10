@@ -20,7 +20,8 @@ import os
 import shlex
 import subprocess
 import time
-from typing import IO, Callable, Iterable, List, Mapping, Optional, Union
+from collections.abc import Iterable, Mapping
+from typing import IO, Callable, List, Optional, Union
 
 import psutil
 
@@ -38,7 +39,7 @@ def run_subprocess(command_line: str) -> int:
     return subprocess.call(command_line, shell=True)
 
 
-def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str]] = None) -> List[str]:
+def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str]] = None) -> list[str]:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
@@ -173,13 +174,13 @@ def is_rally_process(p: psutil.Process) -> bool:
     )
 
 
-def find_all_other_rally_processes() -> List[psutil.Process]:
-    others: List[psutil.Process] = []
+def find_all_other_rally_processes() -> list[psutil.Process]:
+    others: list[psutil.Process] = []
     for_all_other_processes(is_rally_process, others.append)
     return others
 
 
-def redact_cmdline(cmdline: list) -> List[str]:
+def redact_cmdline(cmdline: list) -> list[str]:
     """
     Redact client options in cmdline as it contains sensitive information like passwords
     """

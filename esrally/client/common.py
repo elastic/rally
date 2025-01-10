@@ -1,6 +1,7 @@
 import re
+from collections.abc import Mapping
 from datetime import date, datetime
-from typing import Any, Mapping
+from typing import Any
 
 from elastic_transport.client_utils import percent_encode
 from elasticsearch import VERSION

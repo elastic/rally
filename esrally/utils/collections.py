@@ -15,7 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 import copy
-from typing import Any, Generator, Mapping
+from collections.abc import Generator, Mapping
+from typing import Any
 
 
 def merge_dicts(d1: Mapping[str, Any], d2: Mapping[str, Any]) -> Generator[Any, None, Any]:
