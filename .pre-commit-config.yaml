@@ -8,10 +8,14 @@ repos:
           "--keep-percent-format"
         ]
 
-  - repo: https://github.com/psf/black
-    rev: 24.4.2
+  - repo: local
     hooks:
       - id: black
+        name: black
+        entry: black
+        language: system
+        types: [python]
+        args: []
 
   - repo: https://github.com/PyCQA/isort
     rev: 5.12.0
