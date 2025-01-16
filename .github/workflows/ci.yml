@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: "3.12"
@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: "3.12"
@@ -96,7 +96,7 @@ jobs:
           slack_channel: ${{ secrets.SLACK_CHANNEL }}
           status: FAILED
       # Artifact will show up under "Artifacts" in the "Summary" page of runs
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: rally-tracks-compat-logs
