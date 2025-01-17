@@ -18,20 +18,10 @@
 import configparser
 import logging
 import os
+from collections.abc import Collection, Iterator, Mapping, MutableMapping
 from enum import Enum
 from types import ModuleType
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    Iterator,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, Callable, Optional, Union
 
 import tabulate
 
@@ -113,7 +103,7 @@ def load_plugin(
 def load_plugins(
     repo: str, plugin_names: Collection[str], plugin_params: Optional[Mapping[str, str]] = None
 ) -> Collection["PluginDescriptor"]:
-    def name_and_config(p: str) -> Tuple[str, Optional[Collection[str]]]:
+    def name_and_config(p: str) -> tuple[str, Optional[Collection[str]]]:
         plugin_spec = p.split(":")
         if len(plugin_spec) == 1:
             return plugin_spec[0], None
@@ -178,8 +168,8 @@ class CarLoader:
         if not io.exists(car_config_file):
             raise exceptions.SystemSetupError(f"Unknown car [{name}]. List the available cars with {PROGRAM_NAME} list cars.")
         config = self._config_loader(car_config_file)
-        root_paths: List[str] = []
-        config_paths: List[str] = []
+        root_paths: list[str] = []
+        config_paths: list[str] = []
         config_base_vars: MutableMapping[str, Any] = {}
 
         description = self._value(config, ["meta", "description"], default="")
@@ -328,12 +318,12 @@ class PluginLoader:
         self.plugins_root_path = _path_for(team_root_path, "plugins")
         self.logger = logging.getLogger(__name__)
 
-    def plugins(self, variables: Optional[Mapping[str, str]] = None) -> List["PluginDescriptor"]:
+    def plugins(self, variables: Optional[Mapping[str, str]] = None) -> list["PluginDescriptor"]:
         known_plugins = self._core_plugins(variables) + self._configured_plugins(variables)
         sorted(known_plugins, key=lambda p: p.name)
         return known_plugins
 
-    def _core_plugins(self, variables: Optional[Mapping[str, str]] = None) -> List["PluginDescriptor"]:
+    def _core_plugins(self, variables: Optional[Mapping[str, str]] = None) -> list["PluginDescriptor"]:
         core_plugins = []
         core_plugins_path = os.path.join(self.plugins_root_path, "core-plugins.txt")
         if os.path.exists(core_plugins_path):
@@ -345,7 +335,7 @@ class PluginLoader:
                         core_plugins.append(PluginDescriptor(name=values[0], core_plugin=True, variables=variables))
         return core_plugins
 
-    def _configured_plugins(self, variables: Optional[Mapping[str, str]] = None) -> List["PluginDescriptor"]:
+    def _configured_plugins(self, variables: Optional[Mapping[str, str]] = None) -> list["PluginDescriptor"]:
         configured_plugins = []
         # each directory is a plugin, each .ini is a config (just go one level deep)
         for entry in os.listdir(self.plugins_root_path):
@@ -542,7 +532,7 @@ class BootstrapHookHandler:
         else:
             root_path = [self.component.root_path]
         self.loader = loader_class(root_path=root_path, component_entry_point=self.component.entry_point, recurse=False)
-        self.hooks: MutableMapping[str, List[Callable]] = {}
+        self.hooks: MutableMapping[str, list[Callable]] = {}
         self.logger = logging.getLogger(__name__)
 
     def can_load(self) -> bool:
@@ -567,7 +557,7 @@ class BootstrapHookHandler:
         if not BootstrapPhase.valid(phase):
             raise exceptions.SystemSetupError(f"Unknown bootstrap phase [{phase}]. Valid phases are: {BootstrapPhase.names()}.")
         if phase not in self.hooks:
-            empty: List[Callable] = []
+            empty: list[Callable] = []
             self.hooks[phase] = empty
         self.hooks[phase].append(hook)
 

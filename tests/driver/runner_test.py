@@ -7674,13 +7674,13 @@ class TestRetry:
 
 class TestRemovePrefix:
     def test_remove_matching_prefix(self):
-        suffix = runner.remove_prefix("index-20201117", "index")
+        suffix = "index-20201117".removeprefix("index")
 
         assert suffix == "-20201117"
 
     def test_prefix_doesnt_exit(self):
         index_name = "index-20201117"
-        suffix = runner.remove_prefix(index_name, "unrelatedprefix")
+        suffix = index_name.removeprefix("unrelatedprefix")
 
         assert index_name == suffix
 

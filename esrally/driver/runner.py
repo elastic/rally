@@ -30,7 +30,7 @@ from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
 from types import FunctionType
-from typing import List, Optional
+from typing import Optional
 
 import ijson
 
@@ -441,14 +441,6 @@ def mandatory(params, key, op):
         )
 
 
-# TODO: remove and use https://docs.python.org/3/library/stdtypes.html#str.removeprefix
-#  once Python 3.9 becomes the minimum version
-def remove_prefix(string, prefix):
-    if string.startswith(prefix):
-        return string[len(prefix) :]
-    return string
-
-
 def escape(v):
     """
     Escapes values so they can be used as query parameters
@@ -796,7 +788,7 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: List[str] = None) -> dict:
+def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -1247,7 +1239,7 @@ class SearchAfterExtractor:
         # extracts e.g. '[1609780186, "2"]' from '"sort": [1609780186, "2"]'
         self.sort_pattern = re.compile(r"sort\":([^\]]*])")
 
-    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, List):
+    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, list):
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
@@ -1280,7 +1272,7 @@ class SearchAfterExtractor:
 
 
 class CompositeAggExtractor:
-    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: List, hits_total: Optional[int]) -> dict:
+    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: list, hits_total: Optional[int]) -> dict:
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
@@ -1777,7 +1769,7 @@ class ShrinkIndex(Runner):
             target_body["settings"]["index.routing.allocation.require._name"] = None
             target_body["settings"]["index.blocks.write"] = None
             # kick off the shrink operation
-            index_suffix = remove_prefix(source_index, source_indices_stem)
+            index_suffix = source_index.removeprefix(source_indices_stem)
             final_target_index = target_index if len(index_suffix) == 0 else target_index + index_suffix
             await es.indices.shrink(index=source_index, target=final_target_index, body=target_body)
 

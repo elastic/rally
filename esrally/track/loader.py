@@ -24,7 +24,8 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
-from typing import Callable, Generator, Optional, Tuple
+from collections.abc import Generator
+from typing import Callable, Optional
 
 import jinja2
 import jinja2.exceptions
@@ -72,7 +73,7 @@ class TrackProcessor(abc.ABC):
         """
         return
 
-    def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[Tuple[Callable, dict], None, None]:
+    def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[tuple[Callable, dict], None, None]:
         """
         This method is called by Rally after the "after_load_track" phase. Here, any data that is necessary for
         benchmark execution should be prepared, e.g. by downloading data or generating it. Implementations should
@@ -471,7 +472,7 @@ class DefaultTrackPreparator(TrackProcessor):
                 elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
                     preparator.prepare_document_set(document_set, data_root[1])
 
-    def on_prepare_track(self, track, data_root_dir) -> Generator[Tuple[Callable, dict], None, None]:
+    def on_prepare_track(self, track, data_root_dir) -> Generator[tuple[Callable, dict], None, None]:
         prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
             params = {"cfg": self.cfg, "track": track, "corpus": corpus, "preparator": prep}

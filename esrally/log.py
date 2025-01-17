@@ -43,30 +43,30 @@ def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.
     return formatter
 
 
-MutatorType = typing.Callable[[logging.LogRecord, typing.Dict[str, typing.Any]], None]
+MutatorType = typing.Callable[[logging.LogRecord, dict[str, typing.Any]], None]
 
 
 class RallyEcsFormatter(ecs_logging.StdlibFormatter):
     def __init__(
         self,
         *args: typing.Any,
-        mutators: typing.Optional[typing.List[MutatorType]] = None,
+        mutators: typing.Optional[list[MutatorType]] = None,
         **kwargs: typing.Any,
     ):
         super().__init__(*args, **kwargs)
         self.mutators = mutators or []
 
-    def format_to_ecs(self, record: logging.LogRecord) -> typing.Dict[str, typing.Any]:
+    def format_to_ecs(self, record: logging.LogRecord) -> dict[str, typing.Any]:
         log_dict = super().format_to_ecs(record)
         self.apply_mutators(record, log_dict)
         return log_dict
 
-    def apply_mutators(self, record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+    def apply_mutators(self, record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
         for mutator in self.mutators:
             mutator(record, log_dict)
 
 
-def rename_actor_fields(record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+def rename_actor_fields(record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
     fields = {}
     if log_dict.get("actorAddress"):
         fields["address"] = log_dict.pop("actorAddress")
@@ -75,7 +75,7 @@ def rename_actor_fields(record: logging.LogRecord, log_dict: typing.Dict[str, ty
 
 
 # Special case for asyncio fields as they are not part of the standard ECS log dict
-def rename_async_fields(record: logging.LogRecord, log_dict: typing.Dict[str, typing.Any]) -> None:
+def rename_async_fields(record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
     fields = {}
     if hasattr(record, "taskName") and record.taskName is not None:
         fields["task"] = record.taskName

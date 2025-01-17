@@ -190,9 +190,12 @@ HTTP_DOWNLOAD_RETRIES = 10
 
 
 def _download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
-    with _request(
-        "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
-    ) as r, open(local_path, "wb") as out_file:
+    with (
+        _request(
+            "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
+        ) as r,
+        open(local_path, "wb") as out_file,
+    ):
         if r.status > 299:
             raise urllib.error.HTTPError(
                 url,
