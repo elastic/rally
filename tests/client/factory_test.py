@@ -238,6 +238,7 @@ class TestEsClientFactory:
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: off"),
+                mock.call("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark."),
                 mock.call("SSL client authentication: off"),
             ]
         )
@@ -278,6 +279,7 @@ class TestEsClientFactory:
         mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL certificate verification: off"),
+                mock.call("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark."),
                 mock.call("SSL client authentication: on"),
             ],
         )
