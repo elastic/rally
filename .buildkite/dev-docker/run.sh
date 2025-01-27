@@ -7,9 +7,9 @@ source .buildkite/retry.sh
 set +x
 
 BUILD_FROM_BRANCH="$(buildkite-agent meta-data get BUILD_FROM_BRANCH --default ${BUILDKITE_BRANCH})"
-PUSH_LATEST="$(buildkite-agent meta-data get PUSH_LATEST)"
+PUSH_LATEST="$(buildkite-agent meta-data get PUSH_LATEST --default true)"
 # SCHEDULED_PUBLIC_REPO is set by the "Daily Public" schedule in catalog-info.yaml
-PUBLIC_DOCKER_REPO="${SCHEDULED_PUBLIC_REPO:-$(buildkite-agent meta-data get PUBLIC_DOCKER_REPO)}"
+PUBLIC_DOCKER_REPO="${SCHEDULED_PUBLIC_REPO:-$(buildkite-agent meta-data get PUBLIC_DOCKER_REPO --default false)}"
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 (build|manifest) ..."
