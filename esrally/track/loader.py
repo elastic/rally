@@ -1122,8 +1122,8 @@ class TrackFileReader:
                 track_spec = json.loads(rendered)
             except jinja2.exceptions.TemplateSyntaxError as te:
                 self.logger.exception("Could not load [%s] due to Jinja Syntax Exception.", track_spec_file)
-                msg = f"Could not load '{track_spec_file}' due to Jinja Syntax Exception."
-                msg += f"The track file ({tmp.name}) likely hasn't been writen"
+                msg = f"Could not load '{track_spec_file}' due to Jinja Syntax Exception. "
+                msg += f"The track file ({tmp.name}) likely hasn't been written."
                 raise TrackSyntaxError(msg, te)
             except jinja2.exceptions.TemplateNotFound:
                 self.logger.exception("Could not load [%s]", track_spec_file)
