@@ -20,7 +20,7 @@ _COMPAT_MIMETYPE_SUB = _COMPAT_MIMETYPE_TEMPLATE % (r"\g<1>",)
 def _mimetype_header_to_compat(header, request_headers):
     # Converts all parts of a Accept/Content-Type headers
     # from application/X -> application/vnd.elasticsearch+X
-    mimetype = request_headers.get(header, None)
+    mimetype = request_headers.get(header, None) if request_headers else None
     if mimetype:
         request_headers[header] = _COMPAT_MIMETYPE_RE.sub(_COMPAT_MIMETYPE_SUB, mimetype)
 
