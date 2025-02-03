@@ -898,8 +898,12 @@ class EsMetricsStore(MetricsStore):
         self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
-            # always update the mapping to the latest version
-            self._client.put_template("rally-metrics", self._get_template())
+            overwrite_existing_templates = self._config.opts(
+                section="reporting", key="overwrite_existing_templates", default_value=False, mandatory=False
+            )
+            # update the mapping to the latest version only when required
+            if overwrite_existing_templates or not self._client.template_exists("rally-metrics"):
+                self._client.put_template("rally-metrics", self._get_template())
             if not self._client.exists(index=self._index):
                 self._client.create_index(index=self._index)
             else:

@@ -114,6 +114,7 @@ Key = Literal[
     "other.key",
     "output.path",
     "output.processingtime",
+    "overwrite_existing_templates",
     "params",
     "passenv",
     "pipeline",

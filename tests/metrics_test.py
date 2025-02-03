@@ -439,6 +439,28 @@ class TestEsMetrics:
         self.es_mock = self.metrics_store._client
         self.es_mock.exists.return_value = False
 
+    @dataclass
+    class TestOpenCase:
+        create: bool = False
+        template_exists: bool = False
+        overwrite_existing_templates: bool = False
+        want_put_template: bool = False
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            TestOpenCase(create=False),
+            TestOpenCase(create=True, want_put_template=True),
+            TestOpenCase(create=True, template_exists=True),
+            TestOpenCase(create=True, template_exists=True, want_put_template=True, overwrite_existing_templates=True),
+        ],
+    )
+    def test_open(self, case):
+        self.cfg.add(config.Scope.application, "reporting", "overwrite_existing_templates", case.overwrite_existing_templates)
+        self.metrics_store._client.template_exists.return_value = case.template_exists
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
+        assert case.want_put_template == self.metrics_store._client.put_template.called
+
     def test_put_value_without_meta_info(self):
         throughput = 5000
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
