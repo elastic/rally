@@ -14,38 +14,21 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import os
 
-from esrally import config
+from dataclasses import dataclass
 
-rally_confdir = config.rally_confdir
-
-
-def rally_root():
-    return os.path.dirname(os.path.realpath(__file__))
+from esrally.utils.cases import cases
 
 
-def races_root(cfg: config.Config):
-    return os.path.join(cfg.opts("node", "root.dir"), "races")
+@dataclass
+class SumCase:
+    values: list[int]
+    want: int
 
 
-def race_root(cfg: config.Config, race_id=None):
-    if not race_id:
-        race_id = cfg.opts("system", "race.id")
-    return os.path.join(races_root(cfg), race_id)
-
-
-def install_root(cfg: config.Config):
-    install_id = cfg.opts("system", "install.id")
-    return os.path.join(races_root(cfg), install_id)
-
-
-def libs():
-    return os.path.join(rally_confdir(), "libs")
-
-
-def logs():
-    """
-    :return: The absolute path to the directory that contains Rally's log file.
-    """
-    return os.path.join(rally_confdir(), "logs")
+@cases(
+    no_values=SumCase(values=[], want=0),
+    two_values=SumCase(values=[1, 2], want=3),
+)
+def test_sum(case: SumCase):
+    assert sum(case.values) == case.want
