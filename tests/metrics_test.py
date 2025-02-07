@@ -25,6 +25,7 @@ import string
 import tempfile
 import uuid
 from dataclasses import dataclass
+from typing import Optional
 from unittest import mock
 
 import elasticsearch.exceptions
@@ -443,7 +444,7 @@ class TestEsMetrics:
     class TestOpenCase:
         create: bool = False
         template_exists: bool = False
-        overwrite_existing_templates: bool = False
+        overwrite_existing_templates: Optional[bool] = None
         want_put_template: bool = False
 
     @pytest.mark.parametrize(
@@ -452,11 +453,13 @@ class TestEsMetrics:
             TestOpenCase(create=False),
             TestOpenCase(create=True, want_put_template=True),
             TestOpenCase(create=True, template_exists=True),
-            TestOpenCase(create=True, template_exists=True, want_put_template=True, overwrite_existing_templates=True),
+            TestOpenCase(create=True, template_exists=True, overwrite_existing_templates=True, want_put_template=True),
+            TestOpenCase(create=True, template_exists=True, overwrite_existing_templates=False),
         ],
     )
     def test_open(self, case):
-        self.cfg.add(config.Scope.application, "reporting", "overwrite_existing_templates", case.overwrite_existing_templates)
+        if case.overwrite_existing_templates is not None:
+            self.cfg.add(config.Scope.application, "reporting", "overwrite_existing_templates", str(case.overwrite_existing_templates))
         self.metrics_store._client.template_exists.return_value = case.template_exists
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
         assert case.want_put_template == self.metrics_store._client.put_template.called

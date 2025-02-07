@@ -25,7 +25,7 @@ import shutil
 import urllib.error
 
 import docker
-from esrally import PROGRAM_NAME, exceptions, paths, types
+from esrally import PROGRAM_NAME, config, exceptions, paths
 from esrally.exceptions import BuildError, SystemSetupError
 from esrally.utils import console, convert, git, io, jvm, net, process, sysstats
 
@@ -33,7 +33,7 @@ DEFAULT_ELASTICSEARCH_BRANCH = "main"
 DEFAULT_PLUGIN_BRANCH = "main"
 
 
-def create(cfg: types.Config, sources, distribution, car, plugins=None):
+def create(cfg: config.Config, sources, distribution, car, plugins=None):
     logger = logging.getLogger(__name__)
     if plugins is None:
         plugins = []
@@ -223,7 +223,7 @@ def _supply_requirements(sources, distribution, plugins, revisions, distribution
     return supply_requirements
 
 
-def _src_dir(cfg: types.Config, mandatory=True):
+def _src_dir(cfg: config.Config, mandatory=True):
     # Don't let this spread across the whole module
     try:
         return cfg.opts("node", "src.root.dir", mandatory=mandatory)

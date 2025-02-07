@@ -24,7 +24,7 @@ from pathlib import Path as _Path
 from types import FunctionType
 from typing import Optional, get_args
 
-from esrally import types
+from esrally import config
 
 
 class Path(_Path):
@@ -45,7 +45,7 @@ project_root = Path(__file__).parent / ".."
 
 class TestLiteralArgs:
     def test_order_of_literal_args(self):
-        for literal in (types.Section, types.Key):
+        for literal in (config.Section, config.Key):
             args = get_args(literal)
             assert tuple(args) == tuple(sorted(args)), "Literal args are not sorted"
 
@@ -61,13 +61,13 @@ class TestLiteralArgs:
                 elif started:
                     yield line
 
-        sourcelines, _ = getsourcelines(types)
+        sourcelines, _ = getsourcelines(config)
         for name in ("Section", "Key"):
             args = tuple(sorted(_excerpt(sourcelines, f"{name} = Literal[", "]")))
             assert args == tuple(sorted(set(args))), "Literal args are duplicate"
 
     def test_appearance_of_literal_args(self):
-        args = {f'"{arg}"' for arg in get_args(types.Section) + get_args(types.Key)}
+        args = {f'"{arg}"' for arg in get_args(config.Section) + get_args(config.Key)}
 
         for pyfile in project_root.glob("[!.]*/**/*.py"):
             if pyfile == project_root / "esrally/types.py":
@@ -126,5 +126,5 @@ def assert_annotations(obj, ident, *expects):
 class TestConfigTypeHint:
     def test_esrally_module_annotations(self):
         for module in project_root.glob_modules("esrally/**/*.py"):
-            assert_annotations(module, "cfg", types.Config)
-            assert_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)
+            assert_annotations(module, "cfg", config.Config)
+            assert_annotations(module, "config", config.Config, Optional[config.Config], ConfigParser)

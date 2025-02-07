@@ -21,8 +21,9 @@ import os.path
 import shutil
 from enum import Enum
 from string import Template
+from typing import Literal, NamedTuple, Optional, Union
 
-from esrally import PROGRAM_NAME, exceptions, paths, types
+from esrally import PROGRAM_NAME, exceptions
 from esrally.utils import io
 
 
@@ -37,6 +38,184 @@ class Scope(Enum):
     challenge = 4
     # property for every invocation, i.e. for backtesting
     invocation = 5
+
+
+Section = Literal[
+    "benchmarks",
+    "client",
+    "defaults",
+    "distributions",
+    "driver",
+    "generator",
+    "mechanic",
+    "meta",
+    "no_copy",
+    "node",
+    "provisioning",
+    "race",
+    "reporting",
+    "source",
+    "system",
+    "teams",
+    "telemetry",
+    "tests",
+    "track",
+    "tracks",
+    "unit-test",
+]
+
+
+Key = Literal[
+    "add.chart_name",
+    "add.chart_type",
+    "add.config.option",
+    "add.message",
+    "add.race_timestamp",
+    "admin.dry_run",
+    "admin.track",
+    "assertions",
+    "async.debug",
+    "available.cores",
+    "batch_size",
+    "build.type",
+    "cache",
+    "cache.days",
+    "car.names",
+    "car.params",
+    "car.plugins",
+    "challenge.name",
+    "challenge.root.dir",
+    "cluster.name",
+    "config.version",
+    "data_streams",
+    "datastore.host",
+    "datastore.number_of_replicas",
+    "datastore.number_of_shards",
+    "datastore.password",
+    "datastore.port",
+    "datastore.probe.cluster_version",
+    "datastore.secure",
+    "datastore.ssl.certificate_authorities",
+    "datastore.ssl.verification_mode",
+    "datastore.type",
+    "datastore.user",
+    "delete.config.option",
+    "delete.id",
+    "devices",
+    "distribution.dir",
+    "distribution.flavor",
+    "distribution.repository",
+    "distribution.version",
+    "elasticsearch.src.subdir",
+    "env.name",
+    "exclude.tasks",
+    "format",
+    "hosts",
+    "include.tasks",
+    "indices",
+    "install.id",
+    "list.challenge",
+    "list.config.option",
+    "list.from_date",
+    "list.max_results",
+    "list.races.benchmark_name",
+    "list.to_date",
+    "load_driver_hosts",
+    "local.dataset.cache",
+    "master.nodes",
+    "metrics.log.dir",
+    "metrics.request.downsample.factor",
+    "metrics.url",
+    "network.host",
+    "network.http.port",
+    "node.http.port",
+    "node.ids",
+    "node.name",
+    "node.name.prefix",
+    "numbers.align",
+    "offline.mode",
+    "on.error",
+    "options",
+    "other.key",
+    "output.path",
+    "output.processingtime",
+    "overwrite_existing_templates",
+    "params",
+    "passenv",
+    "pipeline",
+    "plugin.community-plugin.src.dir",
+    "plugin.community-plugin.src.subdir",
+    "plugin.params",
+    "preserve.install",
+    "preserve_benchmark_candidate",
+    "private.url",
+    "profiling",
+    "quiet.mode",
+    "race.id",
+    "rally.cwd",
+    "rally.root",
+    "release.cache",
+    "release.url",
+    "remote.benchmarking.supported",
+    "remote.repo.url",
+    "repository.name",
+    "repository.revision",
+    "root.dir",
+    "runtime.jdk",
+    "sample.key",
+    "sample.property",
+    "sample.queue.size",
+    "seed.hosts",
+    "serverless.mode",
+    "serverless.operator",
+    "skip.rest.api.check",
+    "snapshot.cache",
+    "source.build.method",
+    "source.revision",
+    "src.root.dir",
+    "target.arch",
+    "target.os",
+    "team.path",
+    "team.repository.dir",
+    "test.mode.enabled",
+    "time.start",
+    "track.name",
+    "track.path",
+    "track.repository.dir",
+    "user.tags",
+    "values",
+]
+
+Value = Union[int, str, bool]
+
+
+def value_to_string(value: Value):
+    if isinstance(value, bool):
+        return boolean_to_string(value)
+    return str(value)
+
+
+def boolean_to_string(value: bool):
+    if value:
+        return "true"
+    else:
+        return "false"
+
+
+# Copied from configparser.py
+_BOOLEAN_STATES = {"1": True, "yes": True, "true": True, "on": True, "0": False, "no": False, "false": False, "off": False}
+
+
+def boolean_from_string(value: str) -> bool:
+    value = value.strip().lower()
+    ret = _BOOLEAN_STATES.get(value)
+    if ret is None:
+        raise ValueError(f"Can't get boolean value from string: '{value}'")
+    return ret
+
+
+def integer_from_string(value: str) -> int:
+    return int(value.strip())
 
 
 class ConfigFile:
@@ -81,7 +260,7 @@ class ConfigFile:
 
     @property
     def config_dir(self):
-        return paths.rally_confdir()
+        return rally_confdir()
 
     @property
     def location(self):
@@ -92,7 +271,12 @@ class ConfigFile:
         return os.path.join(self.config_dir, f"rally{config_name_suffix}.ini")
 
 
-def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs) -> types.Config:
+def rally_confdir() -> str:
+    default_home = os.path.expanduser("~")
+    return os.path.join(os.getenv("RALLY_HOME", default_home), ".rally")
+
+
+def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs) -> "Config":
     """
     Loads a node-local configuration based on a ``base_config``. If an appropriate node-local configuration file is present, it will be
     used (and potentially upgraded to the newest config version). Otherwise, a new one will be created and as many settings as possible
@@ -124,6 +308,12 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
     return cfg
 
 
+class _ConfigKey(NamedTuple):
+    scope: Scope
+    section: Section
+    key: Key
+
+
 class Config:
     EARLIEST_SUPPORTED_VERSION = 17
 
@@ -138,10 +328,10 @@ class Config:
     def __init__(self, config_name=None, config_file_class=ConfigFile, **kwargs):
         self.name = config_name
         self.config_file = config_file_class(config_name, **kwargs)
-        self._opts = {}
+        self._opts: dict[_ConfigKey, str] = {}
         self._clear_config()
 
-    def add(self, scope, section: types.Section, key: types.Key, value):
+    def add(self, scope: Optional[Scope], section: Section, key: Key, value: Value):
         """
         Adds or overrides a new configuration property.
 
@@ -150,9 +340,9 @@ class Config:
         :param key: The configuration key within this section. Same keys in different sections will not collide.
         :param value: The associated value.
         """
-        self._opts[self._k(scope, section, key)] = value
+        self._opts[self._key(scope, section, key)] = value_to_string(value)
 
-    def add_all(self, source, section: types.Section):
+    def add_all(self, source: "Config", section: Section):
         """
         Adds all config items within the given `section` from the `source` config object.
 
@@ -165,7 +355,7 @@ class Config:
             if source_section == section:
                 self.add(scope, source_section, key, v)
 
-    def opts(self, section: types.Section, key: types.Key, default_value=None, mandatory=True):
+    def opts(self, section: Section, key: Key, default_value: Optional[Value] = None, mandatory=True) -> Optional[str]:
         """
         Resolves a configuration property.
 
@@ -176,34 +366,63 @@ class Config:
         mandatory properties. It must be ensured that a value exists. Default: True
         :return: The associated value.
         """
-        try:
-            scope = self._resolve_scope(section, key)
-            return self._opts[self._k(scope, section, key)]
-        except KeyError:
-            if not mandatory:
-                return default_value
-            else:
-                raise exceptions.ConfigError(f"No value for mandatory configuration: section='{section}', key='{key}'")
+        if mandatory and default_value is not None:
+            raise exceptions.ConfigError("Can't specify a default value when the option is mandatory")
+        default_string: Optional[str] = None
+        if default_value is not None:
+            default_string = value_to_string(default_value)
 
-    def all_opts(self, section: types.Section):
+        scope = self._resolve_scope(section, key)
+        value = self._opts.get(self._key(scope, section, key), default_string)
+        if value is None and mandatory:
+            raise exceptions.ConfigError(f"No value for mandatory configuration: section='{section}', key='{key}'")
+        return value
+
+    def string(self, section: Section, key: Key, default: Optional[str] = None) -> str:
+        ret = self.opts(section=section, key=key, default_value=default, mandatory=default is None)
+        if ret is None:
+            raise exceptions.ConfigError(f"No value for mandatory string: section='{section}', key='{key}'")
+        return ret
+
+    def boolean(self, section: Section, key: Key, default: Optional[bool] = None) -> bool:
+        default_strig: Optional[str] = None
+        if default is not None:
+            default_strig = boolean_to_string(default)
+        value_string = self.string(section, key, default_strig).strip()
+        try:
+            return boolean_from_string(value_string)
+        except ValueError:
+            raise exceptions.ConfigError(f"Can't parse boolean value of '{value_string}': section='{section}', key='{key}'") from None
+
+    def integer(self, section: Section, key: Key, default: Optional[int] = None) -> int:
+        default_string: Optional[str] = None
+        if default is not None:
+            default_string = str(default)
+        value_string = self.string(section, key, default_string).strip()
+        try:
+            return integer_from_string(value_string)
+        except ValueError:
+            raise exceptions.ConfigError(f"Can't parse integer value of '{value_string}': section='{section}', key='{key}'") from None
+
+    def all_opts(self, section: Section) -> dict[Key, str]:
         """
         Finds all options in a section and returns them in a dict.
 
         :param section: The configuration section.
         :return: A dict of matching key-value pairs. If the section is not found or no keys are in this section, an empty dict is returned.
         """
-        opts_in_section = {}
-        scopes_per_key = {}
+        opts_in_section: dict[Key, str] = {}
+        scopes_per_key: dict[Key, Scope] = {}
         for k, v in self._opts.items():
             scope, source_section, key = k
             if source_section == section:
-                # check whether it's a new key OR we need to override
-                if key not in opts_in_section or scopes_per_key[key].value < scope.value:
+                existing_scope = scopes_per_key.get(key)
+                if existing_scope is None or existing_scope.value < scope.value:
                     opts_in_section[key] = v
                     scopes_per_key[key] = scope
         return opts_in_section
 
-    def exists(self, section: types.Section, key: types.Key):
+    def exists(self, section: Section, key: Key) -> bool:
         """
         :param section: The configuration section.
         :param key: The configuration key.
@@ -261,23 +480,23 @@ class Config:
         migrate(self.config_file, self._stored_config_version(), Config.CURRENT_CONFIG_VERSION)
 
     def _stored_config_version(self):
-        return int(self.opts("meta", "config.version", default_value=0, mandatory=False))
+        value = self.opts("meta", "config.version", mandatory=False)
+        if value is None:
+            return 0
+        return int(value)
 
     # recursively find the most narrow scope for a key
-    def _resolve_scope(self, section: types.Section, key: types.Key, start_from=Scope.invocation):
-        if self._k(start_from, section, key) in self._opts:
-            return start_from
-        elif start_from == Scope.application:
-            return Scope.application
-        else:
-            # continue search in the enclosing scope
-            return self._resolve_scope(section, key, Scope(start_from.value - 1))
+    def _resolve_scope(self, section: Section, key: Key, start_from=Scope.invocation) -> Scope:
+        for v in range(start_from.value, Scope.application.value, -1):
+            scope = Scope(v)
+            if self._key(scope, section, key) in self._opts:
+                return scope
+        return Scope.application
 
-    def _k(self, scope, section: types.Section, key: types.Key):
-        if scope is None or scope == Scope.application:
-            return Scope.application, section, key
-        else:
-            return scope, section, key
+    def _key(self, scope: Optional[Scope], section: Section, key: Key) -> _ConfigKey:
+        if scope is None:
+            scope = Scope.application
+        return _ConfigKey(scope, section, key)
 
 
 def migrate(config_file, current_version, target_version, out=print, i=input):

@@ -158,13 +158,13 @@ class TestConfig:
 class TestAutoLoadConfig:
     def test_can_create_non_existing_config(self):
         base_cfg = config.Config(config_name="unittest", config_file_class=InMemoryConfigStore)
-        base_cfg.add(config.Scope.application, "meta", "config.version", config.Config.CURRENT_CONFIG_VERSION)
+        base_cfg.add(config.Scope.application, "meta", "config.version", str(config.Config.CURRENT_CONFIG_VERSION))
         base_cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/base-config/data-set-cache")
         base_cfg.add(config.Scope.application, "reporting", "datastore.type", "elasticsearch")
         base_cfg.add(config.Scope.application, "tracks", "metrics.url", "http://github.com/org/metrics")
         base_cfg.add(config.Scope.application, "teams", "private.url", "http://github.com/org/teams")
-        base_cfg.add(config.Scope.application, "distributions", "release.cache", False)
-        base_cfg.add(config.Scope.application, "defaults", "preserve_benchmark_candidate", True)
+        base_cfg.add(config.Scope.application, "distributions", "release.cache", "False")
+        base_cfg.add(config.Scope.application, "defaults", "preserve_benchmark_candidate", "True")
 
         cfg = config.auto_load_local_config(base_cfg, config_file_class=InMemoryConfigStore)
         assert cfg.config_file.present
@@ -179,7 +179,7 @@ class TestAutoLoadConfig:
 
     def test_can_load_and_amend_existing_config(self):
         base_cfg = config.Config(config_name="unittest", config_file_class=InMemoryConfigStore)
-        base_cfg.add(config.Scope.application, "meta", "config.version", config.Config.CURRENT_CONFIG_VERSION)
+        base_cfg.add(config.Scope.application, "meta", "config.version", str(config.Config.CURRENT_CONFIG_VERSION))
         base_cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/base-config/data-set-cache")
         base_cfg.add(config.Scope.application, "unit-test", "sample.property", "let me copy you")
 

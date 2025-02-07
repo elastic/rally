@@ -24,12 +24,12 @@ import uuid
 
 import jinja2
 
-from esrally import exceptions, types
+from esrally import config, exceptions
 from esrally.mechanic import java_resolver, team
 from esrally.utils import console, convert, io, process
 
 
-def local(cfg: types.Config, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
+def local(cfg: config.Config, car, plugins, ip, http_port, all_node_ips, all_node_names, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     cluster_name = cfg.opts("mechanic", "cluster.name")
 
@@ -47,7 +47,7 @@ def local(cfg: types.Config, car, plugins, ip, http_port, all_node_ips, all_node
     return BareProvisioner(es_installer, plugin_installers, distribution_version=distribution_version)
 
 
-def docker(cfg: types.Config, car, ip, http_port, target_root, node_name):
+def docker(cfg: config.Config, car, ip, http_port, target_root, node_name):
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     cluster_name = cfg.opts("mechanic", "cluster.name")
     rally_root = cfg.opts("node", "rally.root")
