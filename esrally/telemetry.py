@@ -2345,8 +2345,6 @@ class DiskUsageStats(TelemetryDevice):
             )
             self.logger.exception(msg)
             raise exceptions.RallyError(msg)
-        if isinstance(self.indices, list):
-            self.indices = ",".join(self.indices)
 
     def on_benchmark_stop(self):
         # pylint: disable=import-outside-toplevel
