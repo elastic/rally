@@ -15,11 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 import configparser
+from dataclasses import dataclass
 
 import pytest
 
 from esrally import config, exceptions
+from esrally.utils.cases import cases
 
 
 class MockInput:
@@ -240,6 +244,37 @@ class TestAutoLoadConfig:
 
     def assert_equals_base_config(self, base_config, local_config, section, key):
         assert base_config.opts(section, key) == local_config.opts(section, key)
+
+    @dataclass
+    class BooleanCase:
+        case_id: str
+        value: str | None = None
+        default: bool | None = None
+        want: bool | None = None
+        want_error: type[Exception] = None
+
+    @cases(
+        BooleanCase(
+            "no-value",
+            want_error=exceptions.ConfigError,
+        ),
+        BooleanCase("value-false", value="false", want=False),
+        BooleanCase("value-true", value="true", want=True),
+        BooleanCase("default-false", default=False, want=False),
+        BooleanCase("default-true", default=True, want=True),
+    )
+    def test_boolean(self, case):
+        cfg = config.Config()
+        if case.value is not None:
+            cfg.add(scope=None, section="reporting", key="values", value=case.value)
+        try:
+            got = cfg.boolean(section="reporting", key="values", default=case.default)
+        except Exception as ex:
+            assert isinstance(ex, case.want_error)
+            assert case.want is None
+        else:
+            assert case.want == got
+            assert case.want_error is None
 
 
 class TestConfigMigration:
