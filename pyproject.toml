@@ -62,7 +62,7 @@ dependencies = [
     "Jinja2==3.1.5",
     "markupsafe==2.0.1",
     # License: MIT
-    "thespian==3.10.7",
+    "thespian==4.0.0",
     # recommended library for thespian to identify actors more easily with `ps`
     # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
